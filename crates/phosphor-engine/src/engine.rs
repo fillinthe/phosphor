@@ -75,6 +75,63 @@ struct Pass {
     tex1: Option<wgpu::TextureView>,
     tex2: Option<wgpu::TextureView>,
     uniforms: Uniforms,
+    /// Triangles from a vertex buffer (mesh-warped surfaces, masks) instead of generated ones.
+    mesh: Option<MeshDraw>,
+}
+
+#[derive(Clone)]
+struct MeshDraw {
+    buffer: std::sync::Arc<wgpu::Buffer>,
+    vertices: u32,
+}
+
+/// Vertex buffers for meshes and masks, rebuilt only when their points change.
+#[derive(Default)]
+struct MeshCache {
+    entries: HashMap<(u64, u64), (u64, MeshDraw)>,
+    used: std::collections::HashSet<(u64, u64)>,
+}
+
+impl MeshCache {
+    /// `key` names the geometry (output, surface/mask); `hash` says whether it changed;
+    /// `build` makes the (x, y, s, t) triangles when it did.
+    fn get(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, key: (u64, u64), hash: u64, build: impl FnOnce() -> Vec<[f32; 4]>) -> Option<MeshDraw> {
+        self.used.insert(key);
+        if let Some((h, draw)) = self.entries.get(&key)
+            && *h == hash
+        {
+            return Some(draw.clone());
+        }
+        let verts = build();
+        if verts.is_empty() {
+            self.entries.remove(&key);
+            return None;
+        }
+        let bytes: Vec<u8> = verts.iter().flat_map(|v| v.iter().flat_map(|f| f.to_le_bytes())).collect();
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor { label: Some("mesh"), size: bytes.len() as u64, usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+        queue.write_buffer(&buffer, 0, &bytes);
+        let draw = MeshDraw { buffer: std::sync::Arc::new(buffer), vertices: verts.len() as u32 };
+        self.entries.insert(key, (hash, draw.clone()));
+        Some(draw)
+    }
+
+    /// Frees buffers nothing used this frame.
+    fn sweep(&mut self) {
+        let used = std::mem::take(&mut self.used);
+        self.entries.retain(|k, _| used.contains(k));
+    }
+}
+
+/// Cheap change detection for point lists.
+fn hash_points<'a>(points: impl IntoIterator<Item = &'a [f32; 2]>, extra: &[u32]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for p in points {
+        p[0].to_bits().hash(&mut h);
+        p[1].to_bits().hash(&mut h);
+    }
+    extra.hash(&mut h);
+    h.finish()
 }
 
 /// Per-frame timing reported back to the app.
@@ -96,6 +153,7 @@ pub struct Engine {
     frame_index: u64,
     /// One target per configured output, at that output's size.
     output_targets: HashMap<u64, Option<Target>>,
+    meshes: MeshCache,
     previews: Vec<(PreviewItem, bool)>,
     /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
     monitor_req: Vec<(u64, u32, u32)>,
@@ -126,6 +184,7 @@ impl Engine {
             capture: Capture::default(),
             frame_index: 0,
             output_targets: HashMap::new(),
+            meshes: MeshCache::default(),
             previews: Vec::new(),
             monitor_req: Vec::new(),
             monitor_targets: Vec::new(),
@@ -401,8 +460,7 @@ impl Engine {
                 tex0,
                 tex1: current.map(|c| self.accum[c].as_ref().unwrap().view.clone()),
                 tex2,
-                uniforms: u,
-            });
+                uniforms: u, mesh: None });
             current = Some(next);
             layers_drawn += 1;
         }
@@ -422,7 +480,7 @@ impl Engine {
                 u.resolution = [mw as f32, mh as f32];
                 u.opacity = 1.0;
                 let target = self.monitor_targets[i].as_ref().unwrap().view.clone();
-                passes.push(Pass { entry: "fs_finalize", target, tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
+                passes.push(Pass { entry: "fs_finalize", target, tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
             }
         }
         self.render_previews(&master, (w, h), time, mods, &comp.layers, &mut passes);
@@ -431,7 +489,7 @@ impl Engine {
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [w as f32, h as f32];
         u.opacity = fade;
-        passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
+        passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
 
         // Each output: its own size and mapping surfaces.
         for o in comp.outputs.iter().filter(|o| o.enabled) {
@@ -444,13 +502,27 @@ impl Engine {
             u.resolution = [ow as f32, oh as f32];
             if !o.mapping.active() {
                 u.opacity = fade;
-                passes.push(Pass { entry: "fs_finalize", target: view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
+                passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
+                self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
                 continue;
             }
             // Black, then each enabled surface blended on top.
             u.opacity = 0.0;
-            passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u });
+            passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
             for s in o.mapping.surfaces.iter().filter(|s| s.enabled) {
+                // Mesh warp: one pass drawing the cached, finely subdivided mesh.
+                if let Some(m) = &s.mesh {
+                    let hash = hash_points(&m.points, &[m.cols, m.rows]);
+                    let Some(draw) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id), hash, || m.triangles()) else { continue };
+                    let mut u = Uniforms::with_params(&[]);
+                    u.resolution = [ow as f32, oh as f32];
+                    u.opacity = s.opacity * fade;
+                    u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
+                    u.mode = o.mapping.test_pattern as u32;
+                    u.p[4] = [0.0, s.feather, 0.0, 0.0];
+                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw) });
+                    continue;
+                }
                 let Some(inv) = mapping::quad_to_square(&s.corners) else { continue };
                 let c = &s.corners;
                 let mut u = Uniforms::with_params(&[]);
@@ -463,14 +535,28 @@ impl Engine {
                 u.p[2] = [inv[0], inv[1], inv[2], inv[3]];
                 u.p[3] = [inv[4], inv[5], inv[6], inv[7]];
                 u.p[4] = [inv[8], s.feather, 0.0, 0.0];
-                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
+                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
             }
+            self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
         }
         self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
+        self.meshes.sweep();
 
         self.encode(&passes);
         self.frame_index += 1;
         FrameInfo { passes: passes.len(), layers_drawn }
+    }
+
+    /// Masks: one pass blacking out every enabled mask's shape on this output (nothing if none).
+    fn push_masks(&mut self, output: u64, mapping: &mapping::Mapping, view: &wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>) {
+        if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled) {
+            return;
+        }
+        let hash = hash_points(mapping.masks.iter().filter(|m| m.enabled).flat_map(|m| m.points.iter()), &mapping.masks.iter().filter(|m| m.enabled).map(|m| m.points.len() as u32 * 2 + m.invert as u32).collect::<Vec<_>>());
+        let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || mapping.mask_triangles()) else { return };
+        let mut u = Uniforms::with_params(&[]);
+        u.resolution = [size.0 as f32, size.1 as f32];
+        passes.push(Pass { entry: "fs_mask", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw) });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -485,7 +571,7 @@ impl Engine {
             let mut u = Uniforms::with_params(&[]);
             u.resolution = [size.0 as f32, size.1 as f32];
             u.opacity = 1.0;
-            passes.push(Pass { entry: "fs_finalize", target, tex0: src, tex1: None, tex2: None, uniforms: u });
+            passes.push(Pass { entry: "fs_finalize", target, tex0: src, tex1: None, tex2: None, uniforms: u, mesh: None });
         };
         // Source picture: the chosen layer's thumbnail, or a downscaled copy of the mix.
         let layer_thumb = (self.preview_source != MASTER_ID)
@@ -543,8 +629,7 @@ impl Engine {
             tex0,
             tex1: None,
             tex2,
-            uniforms: u,
-        });
+            uniforms: u, mesh: None });
     }
 
     /// The layer's own picture (source + effects, before blending), for UI thumbnails.
@@ -589,8 +674,7 @@ impl Engine {
                     tex0: self.gpu.blank.clone(),
                     tex1: None,
                     tex2: None,
-                    uniforms: u,
-                });
+                    uniforms: u, mesh: None });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
             SourceSpec::Image { .. } | SourceSpec::Movie { .. } => {
@@ -637,7 +721,7 @@ impl Engine {
                     let mut u = base;
                     u.resolution = [w as f32, h as f32];
                     u.yuv = 1;
-                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0: luma, tex1: None, tex2: Some(chroma), uniforms: u });
+                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0: luma, tex1: None, tex2: Some(chroma), uniforms: u, mesh: None });
                     (view, (w, h))
                 }
             }
@@ -653,7 +737,7 @@ impl Engine {
         u.mode = t.kind.shader_index();
         u.uv_xform = fit_transform(in_size, canvas, fit);
         u.p[0] = fit_transform(out_size, canvas, fit);
-        passes.push(Pass { entry: "fs_crossfade", target: result.clone(), tex0: in_view, tex1: Some(out_view), tex2: None, uniforms: u });
+        passes.push(Pass { entry: "fs_crossfade", target: result.clone(), tex0: in_view, tex1: Some(out_view), tex2: None, uniforms: u, mesh: None });
         Frame::Rgb { view: result, w, h }
     }
 
@@ -699,8 +783,7 @@ impl Engine {
                     tex0: luma,
                     tex1: None,
                     tex2: Some(chroma),
-                    uniforms: Uniforms { yuv: 1, ..base },
-                });
+                    uniforms: Uniforms { yuv: 1, ..base }, mesh: None });
                 input_idx = Some(0);
                 views[0].clone()
             }
@@ -752,14 +835,14 @@ impl Engine {
                 if k == last_index && entry == "fx_glow_add" {
                     tex1 = Some(dry.clone());
                 }
-                passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u });
+                passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u, mesh: None });
                 input = target;
                 input_idx = next_idx;
             }
             if mix < 0.999 {
                 let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
                 let u = Uniforms { opacity: mix, ..base };
-                passes.push(Pass { entry: "fs_mix", target: views[i].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u });
+                passes.push(Pass { entry: "fs_mix", target: views[i].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u, mesh: None });
                 input = views[i].clone();
                 input_idx = Some(i);
             }
@@ -818,8 +901,10 @@ impl Engine {
                     },
                 ],
             });
-            let surface = pass.entry == "fs_surface";
+            // Surfaces, meshes and masks draw on top of what the output already has.
+            let surface = matches!(pass.entry, "fs_surface" | "fs_mesh" | "fs_mask");
             let vertices = match pass.entry {
+                _ if pass.mesh.is_some() => pass.mesh.as_ref().map_or(0, |m| m.vertices),
                 "fs_surface" => 6,
                 "fs_rutt" => {
                     let rows = (pass.uniforms.p[0][0] as u32).max(2);
@@ -852,6 +937,9 @@ impl Engine {
             });
             rp.set_pipeline(&pipeline);
             rp.set_bind_group(0, &bind_group, &[(i * stride) as u32]);
+            if let Some(m) = &pass.mesh {
+                rp.set_vertex_buffer(0, m.buffer.slice(..));
+            }
             rp.draw(0..vertices, 0..1);
         }
         self.gpu.queue.submit([encoder.finish()]);
@@ -926,7 +1014,7 @@ fn push_fit_copy(target: wgpu::TextureView, frame: &Frame, canvas: (u32, u32), f
             (luma, Some(chroma))
         }
     };
-    passes.push(Pass { entry: "fs_composite", target, tex0, tex1: None, tex2, uniforms: u });
+    passes.push(Pass { entry: "fs_composite", target, tex0, tex1: None, tex2, uniforms: u, mesh: None });
 }
 
 /// Maps target uv → source uv so the source is fitted, filled, or stretched.

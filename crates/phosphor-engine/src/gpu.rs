@@ -140,7 +140,7 @@ impl Gpu {
 
     /// Compiles every pipeline up front so the first use of an effect never hitches a show.
     pub fn prewarm(&mut self) {
-        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface"];
+        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_mesh", "fs_mask"];
         let all = fixed
             .into_iter()
             .chain(shaders::all_effect_entries())
@@ -156,6 +156,8 @@ impl Gpu {
         // Mapping surfaces are real quads blended onto the output; everything else is a
         // fullscreen triangle that overwrites its target.
         let surface = entry == "fs_surface";
+        // Mesh-warped surfaces and masks draw triangles from a vertex buffer (x, y, s, t).
+        let mesh = entry == "fs_mesh" || entry == "fs_mask";
         // Rutt-Etra draws additive line lists generated in the vertex shader.
         let rutt = entry == "fs_rutt" || entry == "fs_rutt_points";
         let points = entry == "fs_rutt_points";
@@ -166,9 +168,19 @@ impl Gpu {
                 layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
                     module,
-                    entry_point: Some(if surface { "vs_surface" } else if points { "vs_rutt_points" } else if rutt { "vs_rutt" } else { "vs_fullscreen" }),
+                    entry_point: Some(if surface {
+                        "vs_surface"
+                    } else if mesh {
+                        "vs_mesh"
+                    } else if points {
+                        "vs_rutt_points"
+                    } else if rutt {
+                        "vs_rutt"
+                    } else {
+                        "vs_fullscreen"
+                    }),
                     compilation_options: Default::default(),
-                    buffers: &[],
+                    buffers: if mesh { MESH_VERTEX } else { &[] },
                 },
                 primitive: wgpu::PrimitiveState {
                     topology: if points {
@@ -188,7 +200,7 @@ impl Gpu {
                     compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: FORMAT,
-                        blend: if surface {
+                        blend: if surface || entry == "fs_mesh" {
                             Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                         } else if rutt {
                             Some(wgpu::BlendState { color: additive, alpha: additive })
@@ -204,6 +216,10 @@ impl Gpu {
         })
     }
 }
+
+const MESH_ATTRIBUTES: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
+const MESH_VERTEX: &[Option<wgpu::VertexBufferLayout<'static>>] =
+    &[Some(wgpu::VertexBufferLayout { array_stride: 16, step_mode: wgpu::VertexStepMode::Vertex, attributes: MESH_ATTRIBUTES })];
 
 pub(crate) fn texture_desc(
     label: &'static str,

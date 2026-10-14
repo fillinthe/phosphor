@@ -18,6 +18,136 @@ pub struct Surface {
     /// Soft-edge width as a fraction of the surface (0 = hard edge). Overlap two surfaces'
     /// feathered edges to blend projectors.
     pub feather: f32,
+    /// Mesh warp: a grid of points to bend the surface onto curved or uneven objects. `None` = the
+    /// plain four-corner pin (exact perspective).
+    pub mesh: Option<Mesh>,
+}
+
+/// A warp grid: `(cols + 1) × (rows + 1)` points in output space, row by row from the top-left.
+/// The picture follows a smooth curve through the points (Catmull-Rom), not straight lines.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Mesh {
+    pub cols: u32,
+    pub rows: u32,
+    pub points: Vec<[f32; 2]>,
+}
+
+impl Mesh {
+    /// A grid laid onto the four corners (following their perspective), so turning mesh on changes nothing.
+    pub fn from_corners(corners: &[[f32; 2]; 4], cols: u32, rows: u32) -> Self {
+        let (cols, rows) = (cols.clamp(1, 16), rows.clamp(1, 16));
+        let h = square_to_quad(corners);
+        let mut points = Vec::with_capacity(((cols + 1) * (rows + 1)) as usize);
+        for j in 0..=rows {
+            for i in 0..=cols {
+                let (s, t) = (i as f32 / cols as f32, j as f32 / rows as f32);
+                let w = h[6] * s + h[7] * t + h[8];
+                points.push([(h[0] * s + h[1] * t + h[2]) / w, (h[3] * s + h[4] * t + h[5]) / w]);
+            }
+        }
+        Self { cols, rows, points }
+    }
+
+    pub fn point(&self, i: u32, j: u32) -> [f32; 2] {
+        let i = i.min(self.cols);
+        let j = j.min(self.rows);
+        self.points.get((j * (self.cols + 1) + i) as usize).copied().unwrap_or([0.0, 0.0])
+    }
+
+    /// The four outer corners (TL, TR, BR, BL).
+    pub fn corners(&self) -> [[f32; 2]; 4] {
+        [self.point(0, 0), self.point(self.cols, 0), self.point(self.cols, self.rows), self.point(0, self.rows)]
+    }
+
+    /// Where surface coordinate (s, t) in 0..1 lands, on a smooth curve through the points.
+    pub fn eval(&self, s: f32, t: f32) -> [f32; 2] {
+        let fx = s.clamp(0.0, 1.0) * self.cols as f32;
+        let fy = t.clamp(0.0, 1.0) * self.rows as f32;
+        let (i, j) = ((fx.floor() as i32).min(self.cols as i32 - 1), (fy.floor() as i32).min(self.rows as i32 - 1));
+        let (u, v) = (fx - i as f32, fy - j as f32);
+        let p = |a: i32, b: i32| self.point(a.clamp(0, self.cols as i32) as u32, b.clamp(0, self.rows as i32) as u32);
+        let row = |b: i32| {
+            let q = [p(i - 1, b), p(i, b), p(i + 1, b), p(i + 2, b)];
+            [catmull(q[0][0], q[1][0], q[2][0], q[3][0], u), catmull(q[0][1], q[1][1], q[2][1], q[3][1], u)]
+        };
+        let r = [row(j - 1), row(j), row(j + 1), row(j + 2)];
+        [catmull(r[0][0], r[1][0], r[2][0], r[3][0], v), catmull(r[0][1], r[1][1], r[2][1], r[3][1], v)]
+    }
+
+    /// The same shape on a finer or coarser grid.
+    pub fn resized(&self, cols: u32, rows: u32) -> Self {
+        let (cols, rows) = (cols.clamp(1, 16), rows.clamp(1, 16));
+        let mut points = Vec::with_capacity(((cols + 1) * (rows + 1)) as usize);
+        for j in 0..=rows {
+            for i in 0..=cols {
+                points.push(self.eval(i as f32 / cols as f32, j as f32 / rows as f32));
+            }
+        }
+        Self { cols, rows, points }
+    }
+
+    /// Triangles for drawing: each vertex is (x, y, s, t). Subdivided finely enough to look smooth.
+    pub fn triangles(&self) -> Vec<[f32; 4]> {
+        let nx = (self.cols * 8).clamp(8, 96);
+        let ny = (self.rows * 8).clamp(8, 96);
+        let mut grid = Vec::with_capacity(((nx + 1) * (ny + 1)) as usize);
+        for j in 0..=ny {
+            for i in 0..=nx {
+                let (s, t) = (i as f32 / nx as f32, j as f32 / ny as f32);
+                let [x, y] = self.eval(s, t);
+                grid.push([x, y, s, t]);
+            }
+        }
+        let at = |i: u32, j: u32| grid[(j * (nx + 1) + i) as usize];
+        let mut out = Vec::with_capacity((nx * ny * 6) as usize);
+        for j in 0..ny {
+            for i in 0..nx {
+                let (a, b, c, d) = (at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1));
+                out.extend_from_slice(&[a, b, c, a, c, d]);
+            }
+        }
+        out
+    }
+}
+
+fn catmull(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
+    let t2 = t * t;
+    0.5 * (2.0 * p1 + (p2 - p0) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t2 * t)
+}
+
+/// A shape on an output that blacks out what's inside it (or, inverted, everything outside it):
+/// keeps light off doors, faces, the DJ booth…
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Mask {
+    pub id: u64,
+    pub name: String,
+    pub enabled: bool,
+    /// Polygon points in output space 0..1.
+    pub points: Vec<[f32; 2]>,
+    /// Black out everything *outside* the shape instead.
+    pub invert: bool,
+}
+
+impl Default for Mask {
+    fn default() -> Self {
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false }
+    }
+}
+
+impl Mask {
+    /// Triangles (x, y, 0, 0) covering what this mask blacks out.
+    pub fn triangles(&self) -> Vec<[f32; 4]> {
+        if self.points.len() < 3 {
+            return Vec::new();
+        }
+        let poly: Vec<f64> = self.points.iter().flat_map(|p| [p[0] as f64, p[1] as f64]).collect();
+        // Inverted: the whole output with the shape cut out as a hole.
+        let (data, holes): (Vec<f64>, Vec<usize>) =
+            if self.invert { ([0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0].into_iter().chain(poly).collect(), vec![4]) } else { (poly, Vec::new()) };
+        let Ok(idx) = earcutr::earcut(&data, &holes, 2) else { return Vec::new() };
+        idx.into_iter().map(|i| [data[i * 2] as f32, data[i * 2 + 1] as f32, 0.0, 0.0]).collect()
+    }
 }
 
 impl Default for Surface {
@@ -30,6 +160,7 @@ impl Default for Surface {
             input: [0.0, 0.0, 1.0, 1.0],
             opacity: 1.0,
             feather: 0.0,
+            mesh: None,
         }
     }
 }
@@ -52,9 +183,29 @@ impl Surface {
     }
 
     pub fn translate(&mut self, dx: f32, dy: f32) {
-        for c in &mut self.corners {
+        for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())) {
             c[0] += dx;
             c[1] += dy;
+        }
+    }
+
+    /// Turns mesh warp on (grid laid onto the current corners) or off (back to the corners).
+    pub fn set_mesh(&mut self, on: bool, cols: u32, rows: u32) {
+        match (on, &self.mesh) {
+            (true, Some(m)) => self.mesh = Some(m.resized(cols, rows)),
+            (true, None) => self.mesh = Some(Mesh::from_corners(&self.corners, cols, rows)),
+            (false, Some(m)) => {
+                self.corners = m.corners();
+                self.mesh = None;
+            }
+            (false, None) => {}
+        }
+    }
+
+    /// Keeps the corners (used for picking and moving) on the mesh's outer points.
+    pub fn sync_corners(&mut self) {
+        if let Some(m) = &self.mesh {
+            self.corners = m.corners();
         }
     }
 
@@ -69,6 +220,8 @@ impl Surface {
 pub struct Mapping {
     pub enabled: bool,
     pub surfaces: Vec<Surface>,
+    /// Blackout shapes drawn over everything on this output.
+    pub masks: Vec<Mask>,
     /// Show an alignment grid on every surface instead of the content.
     pub test_pattern: bool,
 }
@@ -83,6 +236,17 @@ impl Mapping {
     /// Surfaces are drawn when mapping is on and there is at least one enabled.
     pub fn active(&self) -> bool {
         self.enabled && self.surfaces.iter().any(|s| s.enabled)
+    }
+
+    pub fn add_mask(&mut self, id: u64) -> &mut Mask {
+        let n = self.masks.len() + 1;
+        self.masks.push(Mask { id, name: format!("Mask {n}"), ..Default::default() });
+        self.masks.last_mut().unwrap()
+    }
+
+    /// Everything the enabled masks black out, as one triangle list.
+    pub fn mask_triangles(&self) -> Vec<[f32; 4]> {
+        self.masks.iter().filter(|m| m.enabled).flat_map(Mask::triangles).collect()
     }
 }
 
@@ -164,6 +328,30 @@ mod tests {
         assert!(close(output_to_surface(&rect, [0.5, 0.5]).unwrap(), [0.5, 0.5]));
         assert!(Surface { corners: rect, ..Default::default() }.contains([0.3, 0.3]));
         assert!(!Surface { corners: rect, ..Default::default() }.contains([0.1, 0.3]));
+    }
+
+    #[test]
+    fn mesh_from_corners_matches_the_pin_and_passes_through_points() {
+        let corners = [[0.1, 0.2], [0.9, 0.05], [0.8, 0.95], [0.2, 0.7]];
+        let mut m = Mesh::from_corners(&corners, 4, 3);
+        assert_eq!(m.points.len(), 5 * 4);
+        assert!(close(m.corners()[2], corners[2]));
+        // The smooth curve goes exactly through every control point.
+        m.points[6] = [0.33, 0.42];
+        assert!(close(m.eval(1.0 / 4.0, 1.0 / 3.0), [0.33, 0.42]));
+        // Resizing keeps the outline.
+        let r = m.resized(8, 8);
+        assert!(close(r.corners()[0], corners[0]) && close(r.corners()[2], corners[2]));
+        assert_eq!(m.triangles().len() % 3, 0);
+    }
+
+    #[test]
+    fn masks_triangulate_and_invert() {
+        let square = Mask { points: vec![[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]], ..Default::default() };
+        let area = |t: &[[f32; 4]]| t.chunks(3).map(|c| ((c[1][0] - c[0][0]) * (c[2][1] - c[0][1]) - (c[2][0] - c[0][0]) * (c[1][1] - c[0][1])).abs() * 0.5).sum::<f32>();
+        assert!((area(&square.triangles()) - 0.25).abs() < 1e-4);
+        let inverted = Mask { invert: true, ..square };
+        assert!((area(&inverted.triangles()) - 0.75).abs() < 1e-4);
     }
 
     #[test]

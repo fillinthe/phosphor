@@ -33,6 +33,22 @@ fn alignment_grid(st: vec2f) -> vec3f {
     return c;
 }
 
+/// What a surface shows at surface coordinate `st` (shared by corner-pinned and mesh surfaces):
+/// its input region of the frame (or the alignment grid), feathered edges, premultiplied.
+fn surface_color(st: vec2f) -> vec4f {
+    let uv = u.uv_xform.zw + st * u.uv_xform.xy;
+    var rgb = textureSampleLevel(tex0, samp, uv, 0.0).rgb;
+    if (u.mode == 1u) {
+        rgb = alignment_grid(st);
+    }
+    let f = max(u.p[4].y, 1e-4);
+    let soft = smoothstep(0.0, f, st.x) * smoothstep(0.0, f, 1.0 - st.x)
+        * smoothstep(0.0, f, st.y) * smoothstep(0.0, f, 1.0 - st.y);
+    let inside = select(0.0, 1.0, all(st >= vec2f(-1e-4)) && all(st <= vec2f(1.0 + 1e-4)));
+    let a = u.opacity * soft * inside;
+    return vec4f(rgb * a, a);
+}
+
 @fragment
 fn fs_surface(in: VOut) -> @location(0) vec4f {
     let q = in.pos.xy / u.resolution;
@@ -42,16 +58,30 @@ fn fs_surface(in: VOut) -> @location(0) vec4f {
         vec3f(u.p[2].z, u.p[3].y, u.p[4].x),
     );
     let r = h * vec3f(q, 1.0);
-    let st = r.xy / r.z;
-    let uv = u.uv_xform.zw + st * u.uv_xform.xy;
-    var rgb = textureSampleLevel(tex0, samp, uv, 0.0).rgb;
-    if (u.mode == 1u) {
-        rgb = alignment_grid(st);
-    }
-    let f = max(u.p[4].y, 1e-4);
-    let soft = smoothstep(0.0, f, st.x) * smoothstep(0.0, f, 1.0 - st.x)
-        * smoothstep(0.0, f, st.y) * smoothstep(0.0, f, 1.0 - st.y);
-    let inside = select(0.0, 1.0, all(st >= vec2f(0.0)) && all(st <= vec2f(1.0)));
-    let a = u.opacity * soft * inside;
-    return vec4f(rgb * a, a);
+    return surface_color(r.xy / r.z);
+}
+
+// Mesh warp and masks: triangles from a vertex buffer, (x, y) in output space 0..1 (y down) and
+// (s, t) the surface coordinate.
+struct MeshIn {
+    @location(0) pos: vec2f,
+    @location(1) st: vec2f,
+};
+
+@vertex
+fn vs_mesh(v: MeshIn) -> VOut {
+    var o: VOut;
+    o.pos = vec4f(v.pos.x * 2.0 - 1.0, 1.0 - v.pos.y * 2.0, 0.0, 1.0);
+    o.uv = v.st;
+    return o;
+}
+
+@fragment
+fn fs_mesh(in: VOut) -> @location(0) vec4f {
+    return surface_color(in.uv);
+}
+
+@fragment
+fn fs_mask(in: VOut) -> @location(0) vec4f {
+    return vec4f(0.0, 0.0, 0.0, 1.0);
 }

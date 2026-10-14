@@ -5,6 +5,7 @@ edition = "2024"
 description = "Phosphor real-time video engine (wgpu: Metal natively, WebGPU in the browser)"
 
 [dependencies]
+earcutr = "0.5"
 wgpu = { version = "30", default-features = false, features = ["wgsl"] }
 bytemuck = { version = "1.25", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
