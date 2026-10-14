@@ -14,6 +14,7 @@ pub enum Tab {
     Preview,
     Layers,
     Inspector,
+    Media,
     Library,
     Presets,
     Audio,
@@ -24,10 +25,11 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: [Tab; 10] = [
+    pub const ALL: [Tab; 11] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Inspector,
+        Tab::Media,
         Tab::Library,
         Tab::Presets,
         Tab::Audio,
@@ -42,6 +44,7 @@ impl Tab {
             Tab::Preview => "Preview",
             Tab::Layers => "Layers",
             Tab::Inspector => "Inspector",
+            Tab::Media => "Media",
             Tab::Library => "Library",
             Tab::Presets => "Presets",
             Tab::Audio => "Audio",
@@ -73,6 +76,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Preview => preview(ui, self.st),
             Tab::Layers => layers(ui, self.st),
             Tab::Inspector => inspector(ui, self.st),
+            Tab::Media => media(ui, self.st),
             Tab::Library => library(ui, self.st),
             Tab::Presets => presets(ui, self.st),
             Tab::Audio => audio(ui, self.st),
@@ -192,6 +196,7 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
     let count = comp.layers.len();
     let mut action = None;
     let mut drop: Option<(u64, u64)> = None;
+    let mut media_drop: Option<(usize, usize)> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass) {
             *selected = Some(MASTER_ID);
@@ -213,9 +218,19 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
             if let Some(from) = out.dropped {
                 drop = Some((from, layer.id));
             }
+            if let Some(m) = out.dropped_media {
+                media_drop = Some((idx, m));
+            }
             ui.add_space(4.0);
         }
     });
+    if let Some((idx, m)) = media_drop
+        && let Some(item) = comp.media_bin.get(m).cloned()
+        && let Some(layer) = comp.layers.get_mut(idx)
+    {
+        layer.source = crate::media::spec_for_path(&item.path);
+        layer.name = item.name;
+    }
     if let Some((from, onto)) = drop
         && from != onto
         && let Some(a) = comp.layers.iter().position(|l| l.id == from)
@@ -267,7 +282,13 @@ struct CardOut {
     action: Option<LayerAction>,
     /// Id of a layer that was dropped onto this card.
     dropped: Option<u64>,
+    /// Media bin index dropped onto this card.
+    dropped_media: Option<usize>,
 }
+
+/// Drag payload from the media bin.
+#[derive(Clone, Copy)]
+pub struct MediaDrag(pub usize);
 
 fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
     let stroke = if is_selected { Stroke::new(1.5, ACCENT) } else { ui.visuals().widgets.noninteractive.bg_stroke };
@@ -415,12 +436,15 @@ fn layer_card(
             ui.close();
         }
     });
-    // Drop target for a dragged layer.
+    // Drop target for a dragged layer or a media bin item.
     let dropped = frame.response.dnd_release_payload::<u64>().map(|p| *p);
-    if frame.response.dnd_hover_payload::<u64>().is_some_and(|p| *p != layer.id) {
+    let dropped_media = frame.response.dnd_release_payload::<MediaDrag>().map(|p| p.0);
+    let hovering = frame.response.dnd_hover_payload::<u64>().is_some_and(|p| *p != layer.id)
+        || frame.response.dnd_hover_payload::<MediaDrag>().is_some();
+    if hovering {
         ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
     }
-    CardOut { select, action, dropped }
+    CardOut { select, action, dropped, dropped_media }
 }
 
 fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) {
@@ -690,6 +714,116 @@ fn add_effect_to(st: &mut State, target: u64, effect: &str) {
         st.comp.master_effects.push(fx);
     } else if let Some(l) = st.comp.layer_mut(target) {
         l.effects.push(fx);
+    }
+}
+
+/// Adds every supported file under `dir` (two levels deep, capped) to the bin.
+#[cfg(not(target_arch = "wasm32"))]
+fn import_folder(comp: &mut phosphor_engine::Composition, dir: &std::path::Path, depth: u32, budget: &mut usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut entries: Vec<_> = entries.flatten().collect();
+    entries.sort_by_key(|e| e.file_name());
+    for e in entries {
+        if *budget == 0 {
+            return;
+        }
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if p.is_dir() {
+            if depth > 0 && !name.starts_with('.') {
+                import_folder(comp, &p, depth - 1, budget);
+            }
+        } else if crate::media::is_supported(&name) && comp.add_media(&name, &p.to_string_lossy()) {
+            *budget -= 1;
+        }
+    }
+}
+
+fn media(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if ui.button(label(icon::FOLDER_OPEN, "Import files…")).clicked()
+                && let Some(paths) = rfd::FileDialog::new().add_filter("Media", &crate::media::dialog_extensions()).pick_files()
+            {
+                for p in paths {
+                    let path = p.to_string_lossy().to_string();
+                    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
+                    st.comp.add_media(&name, &path);
+                }
+            }
+            if ui.button(label(icon::FOLDER_OPEN, "Import folder…")).on_hover_text("Adds every image/movie in the folder (and one level of subfolders)").clicked()
+                && let Some(dir) = rfd::FileDialog::new().pick_folder()
+            {
+                let mut budget = 500;
+                import_folder(&mut st.comp, &dir, 1, &mut budget);
+            }
+        }
+        ui.weak("Click = put on selected layer · drag onto a layer · right-click to remove");
+    });
+    ui.add_space(4.0);
+    let State { comp, thumbs, selected, .. } = st;
+    let mut assign: Option<usize> = None;
+    let mut remove: Option<usize> = None;
+    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        if comp.media_bin.is_empty() {
+            ui.weak("Empty. Import files or a folder, or drop files onto the window.");
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+            for (i, item) in comp.media_bin.iter().enumerate() {
+                let size = egui::vec2(128.0, 72.0 + 18.0);
+                let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+                resp.dnd_set_drag_payload(MediaDrag(i));
+                let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(128.0, 72.0));
+                let p = ui.painter();
+                p.rect_filled(thumb_rect, 4.0, Color32::from_gray(14));
+                match thumbs.get(&item.path) {
+                    Some(tex) => paint_texture(p, tex, thumb_rect),
+                    None => {
+                        let glyph = if crate::media::is_movie(&item.name) { icon::FILM_STRIP } else { icon::IMAGE };
+                        let text = if thumbs.is_pending(&item.path) { "…" } else { glyph };
+                        p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
+                    }
+                }
+                let stroke = if resp.hovered() { Stroke::new(1.5, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(50)) };
+                p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
+                let mut name = item.name.clone();
+                if name.chars().count() > 18 {
+                    name = format!("{}…", name.chars().take(17).collect::<String>());
+                }
+                p.text(egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
+                if resp.clicked() {
+                    assign = Some(i);
+                }
+                resp.on_hover_text(&item.path).context_menu(|ui| {
+                    if ui.button(label(icon::TRASH, "Remove from bin")).clicked() {
+                        remove = Some(i);
+                        ui.close();
+                    }
+                });
+            }
+        });
+    });
+    if let Some(i) = assign
+        && let Some(item) = comp.media_bin.get(i).cloned()
+    {
+        let target = match *selected {
+            Some(id) if id != MASTER_ID && comp.layers.iter().any(|l| l.id == id) => id,
+            _ => {
+                let id = comp.add_layer().id;
+                *selected = Some(id);
+                id
+            }
+        };
+        if let Some(l) = comp.layer_mut(target) {
+            l.source = crate::media::spec_for_path(&item.path);
+            l.name = item.name;
+        }
+    }
+    if let Some(i) = remove {
+        let item = comp.media_bin.remove(i);
+        thumbs.forget(&item.path);
     }
 }
 

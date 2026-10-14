@@ -17,6 +17,7 @@ use crate::panels::{self, Tab, Viewer};
 use crate::presets::PresetStore;
 use crate::stats::{Snapshot, Stats};
 use crate::stream::Streamer;
+use crate::thumbs::Thumbs;
 use crate::theme;
 
 const KEY_COMPOSITION: &str = "composition";
@@ -62,6 +63,7 @@ pub struct State {
     pub stream: Streamer,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
+    pub thumbs: Thumbs,
     /// This frame's audio/LFO signals, also shown in the Audio panel.
     pub mod_inputs: ModInputs,
 }
@@ -148,6 +150,7 @@ impl PhosphorApp {
                 learn_pick: None,
                 stream: Streamer::new(stream_settings),
                 fx_clipboard: Vec::new(),
+                thumbs: Thumbs::new(),
                 mod_inputs: ModInputs::default(),
             },
             dock,
@@ -318,6 +321,9 @@ impl PhosphorApp {
                 ui.separator();
                 panels::project_buttons(ui, &mut self.state);
                 ui.separator();
+                if ui.button(format!("{} Reset Layout", icon::LAYOUT)).on_hover_text("Bring back every panel in the default arrangement").clicked() {
+                    self.dock = default_layout();
+                }
                 ui.menu_button("View", |ui| {
                     ui.weak("Drag any tab to move it; drag it outside to float it.");
                     ui.menu_button("Panels", |ui| {
@@ -458,6 +464,8 @@ impl eframe::App for PhosphorApp {
         let now = ctx.input(|i| i.time);
 
         self.handle_dropped_files(&ctx);
+        self.state.comp.sync_media_bin();
+        self.state.thumbs.poll(&ctx);
         self.shortcuts(&ctx);
         self.sync_mapping_from_output();
         {
@@ -529,7 +537,7 @@ fn default_layout() -> DockState<Tab> {
     let surface = dock.main_surface_mut();
     let [left, right] = surface.split_right(NodeIndex::root(), 0.64, vec![Tab::Layers]);
     surface.split_below(right, 0.5, vec![Tab::Inspector]);
-    surface.split_below(left, 0.68, vec![Tab::Library, Tab::Presets, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
+    surface.split_below(left, 0.68, vec![Tab::Media, Tab::Library, Tab::Presets, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
     dock
 }
 
