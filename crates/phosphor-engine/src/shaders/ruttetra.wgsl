@@ -5,6 +5,7 @@
 //   P(5) zoom  P(6) line width (handled by target size)  P(7) brightness  P(8) source colour
 //   P(9) perspective  P(10) draw: 0 scanlines, 1 mesh, 2 triangle mesh, 3 vertical lines
 //   P(11) displace: 0 luminance, 1 RGB -> XYZ   P(12) displace from another layer (tex2) when > 0.5
+//   P(13) lighting: shade the relief with a directional light (v002 'normals' look)
 
 struct RuttOut {
     @builtin(position) pos: vec4f,
@@ -36,9 +37,24 @@ fn rutt_vertex(row: u32, col: u32, rows: u32, cols: u32) -> RuttOut {
     p = vec3f(p.x * cy + p.z * sy, p.y, -p.x * sy + p.z * cy);
     let k = P(5u) / max(1.0 - p.z * P(9u) * 0.5, 0.2);
 
+    // Height-field normal from neighbouring samples, lit from the upper left.
+    let du = vec2f(1.0 / f32(max(cols, 2u) - 1u), 0.0);
+    let dv = vec2f(0.0, 1.0 / f32(max(rows, 2u) - 1u));
+    var dsx = textureSampleLevel(tex0, samp, uv + du, 0.0);
+    var dsy = textureSampleLevel(tex0, samp, uv + dv, 0.0);
+    if (P(12u) > 0.5) {
+        dsx = textureSampleLevel(tex2, samp, uv + du, 0.0);
+        dsy = textureSampleLevel(tex2, samp, uv + dv, 0.0);
+    }
+    let hx = (luma(dsx.rgb) - l) * P(2u) * 6.0;
+    let hy = (luma(dsy.rgb) - l) * P(2u) * 6.0;
+    let n = normalize(vec3f(-hx, hy, 1.0));
+    let light = normalize(vec3f(-0.5, 0.6, 0.65));
+    let shade = mix(1.0, 0.15 + 1.1 * max(dot(n, light), 0.0), P(13u));
+
     var o: RuttOut;
     o.pos = vec4f(p.x * k / asp * 2.0, p.y * k * 2.0, 0.0, 1.0);
-    let beam = mix(vec3f(1.0), c.rgb, P(8u)) * P(7u) * (0.3 + 0.7 * l);
+    let beam = mix(vec3f(1.0), c.rgb, P(8u)) * P(7u) * (0.3 + 0.7 * l) * shade;
     o.color = vec4f(beam, 1.0);
     return o;
 }
