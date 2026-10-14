@@ -365,7 +365,7 @@ fn compile(st: &mut State, index: usize, save: bool) {
 
 pub fn new_shader(st: &mut State, source: String) {
     let name = custom::parse_header(&source).map(|h| h.name).unwrap_or_else(|_| "shader".into());
-    let base: String = name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+    let base = custom::slug(&name);
     let base = base.trim_matches('_').to_string();
     let mut slug = if base.is_empty() { "shader".to_string() } else { base };
     let mut n = 2;

@@ -1,0 +1,437 @@
+//! Top-level app: owns the composition, engine, dockable layout, and output window.
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use eframe::egui::{self, Color32};
+use eframe::egui_wgpu;
+use egui_dock::{DockArea, DockState, NodeIndex};
+use egui_phosphor::regular as icon;
+use phosphor_engine::{Composition, Engine, Mapping, ModInputs, wgpu};
+
+use crate::audio::AudioInput;
+use crate::bench::BenchConfig;
+use crate::clock::Clock;
+use crate::control::ControlHub;
+use crate::media::{self, MediaManager};
+use crate::net::NetSession;
+use crate::panels::{self, Tab, Viewer};
+use crate::presets::PresetStore;
+use crate::stats::{Snapshot, Stats};
+use crate::stream::Streamer;
+use crate::thumbs::Thumbs;
+use crate::theme;
+
+
+mod bench_run;
+mod controls;
+mod files;
+mod frame;
+mod init;
+mod layout;
+mod menus;
+mod outputs;
+mod recovery;
+mod render;
+mod settings;
+mod show;
+
+#[allow(unused_imports)]
+pub(crate) use layout::*;
+#[allow(unused_imports)]
+pub(crate) use menus::*;
+
+const KEY_COMPOSITION: &str = "composition";
+const KEY_LAYOUTS: &str = "layouts";
+const KEY_DOCK: &str = "dock";
+const KEY_STREAM: &str = "stream";
+const KEY_KNOWN_TABS: &str = "known_tabs";
+const KEY_DETACHED: &str = "detached";
+const KEY_FAVORITES: &str = "favorites";
+const KEY_MONITORS: &str = "monitors";
+const KEY_RECENT: &str = "recent_effects";
+const KEY_REMOTE_PASSWORD: &str = "remote_password";
+const KEY_RECENT_PROJECTS: &str = "recent_projects";
+/// In-window menu clicks, queued for `menu_actions`.
+pub const MENU_REQUEST: &str = "phosphor_menu_request";
+const KEY_PROJECT_PATH: &str = "project_path";
+const KEY_WATCHED: &str = "watched_folders";
+
+/// State one output window (a separate OS window) reads each frame.
+#[derive(Default)]
+pub struct OutputShared {
+    pub open: bool,
+    pub name: String,
+    /// 1-based position in the outputs list, shown by Identify.
+    pub number: usize,
+    /// Show the big Identify overlay until this time.
+    pub identify_until: f64,
+    pub texture: Option<egui::TextureId>,
+    pub aspect: f32,
+    /// Copy of the composition's mapping; the output window edits it when `edit_mapping` is on.
+    pub mapping: Mapping,
+    pub edit_mapping: bool,
+    pub mapping_changed: bool,
+    pub selected_surface: Option<u64>,
+    /// Display the window was sent to, and whether it's fullscreen (for crash recovery).
+    pub display: Option<u32>,
+    pub fullscreen: bool,
+    /// Move the output window to this display and go fullscreen: (display, step, frames waited).
+    pub place: Option<(crate::screens::Display, u8, u32)>,
+}
+
+/// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next
+/// beat/bar, per the launch settings.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Trigger {
+    Clip { layer: u64, slot: usize },
+    Column(usize),
+    Source { layer: u64, source: phosphor_engine::SourceSpec, values: Vec<f32>, name: String },
+}
+
+/// Everything panels can read and edit. Kept separate from the dock layout so both can be
+/// borrowed mutably at once.
+pub struct State {
+    pub comp: Composition,
+    pub engine: Option<Engine>,
+    render_state: Option<egui_wgpu::RenderState>,
+    pub texture: Option<egui::TextureId>,
+    texture_generation: u64,
+    /// Per-layer thumbnail textures, keyed by layer id, with the size they were registered at.
+    pub layer_textures: HashMap<u64, (egui::TextureId, (u32, u32))>,
+    pub media: MediaManager,
+    pub stats: Stats,
+    pub selected: Option<u64>,
+    pub selected_surface: Option<u64>,
+    /// Output windows by output id.
+    pub output: Arc<Mutex<std::collections::HashMap<u64, OutputShared>>>,
+    output_textures: HashMap<u64, (egui::TextureId, (u32, u32))>,
+    /// Output being edited in the Mapping panel.
+    pub mapping_output: u64,
+    pub presets: PresetStore,
+    pub preset_name: String,
+    /// A message worth showing the user (save failed, bad preset, …).
+    pub notice: Option<String>,
+    pub audio: AudioInput,
+    pub control: ControlHub,
+    pub learn_pick: Option<phosphor_engine::ControlTarget>,
+    pub stream: Streamer,
+    pub stream_audio_devices: Vec<(i32, String)>,
+    pub net: NetSession,
+    net_audio: Vec<f32>,
+    /// Password phones need to control (viewing never needs it). Empty = no password.
+    pub remote_password: String,
+    pub require_password: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub dialogs: crate::dialogs::Dialogs,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub folders: crate::folders::FolderWatcher,
+    pub explorer: crate::explorer::ExplorerState,
+    pub editor: crate::explorer::EditorState,
+    pub palette: crate::explorer::PaletteState,
+    /// Previews requested by panels this frame (key, item); rendered on the next frame.
+    pub preview_wants: Vec<(String, phosphor_engine::PreviewItem, bool)>,
+    preview_keys: Vec<String>,
+    /// When stills were last refreshed.
+    preview_refreshed: f64,
+    preview_textures: Vec<(egui::TextureId, (u32, u32))>,
+    /// A panel to bring to the front (set by explorer actions and the palette).
+    pub open_tab: Option<Tab>,
+    pub fx_browser: Option<crate::explorer::FxBrowser>,
+    pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
+    /// Monitor pictures requested this frame: (monitor number, source, width, height).
+    pub monitor_wants: Vec<(u8, u64, u32, u32)>,
+    monitor_keys: Vec<u8>,
+    monitor_textures: Vec<(egui::TextureId, (u32, u32))>,
+    pub displays: Vec<crate::screens::Display>,
+    /// Set by panels: open a new monitor with this source.
+    pub new_monitor: Option<panels::MonitorSource>,
+    pub snapshot_requested: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub isf: crate::isf_lib::IsfLibrary,
+    /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
+    pub fx_clipboard: Vec<phosphor_engine::EffectState>,
+    pub thumbs: Thumbs,
+    pub media_view: panels::MediaView,
+    /// Map mode: click any control, then move a knob / send OSC / press a key to link them.
+    pub map_mode: bool,
+    /// Effects fading in after being added: (effect id, start time, seconds, final mix).
+    pub fx_fades: Vec<(u64, f32, f32, f32)>,
+    /// The project file being worked on (Save writes here).
+    pub project_path: Option<String>,
+    pub recent: Vec<String>,
+    pub history: crate::history::History,
+    pub export: ExportUi,
+    #[cfg(target_os = "macos")]
+    pub syphon: crate::syphon::Syphon,
+    #[cfg(target_os = "macos")]
+    pub ndi: crate::ndi::Ndi,
+    pub clock: Clock,
+    pub pending_triggers: Vec<Trigger>,
+    /// Which bank of clip columns the grid and the number keys address.
+    pub clip_page: usize,
+    /// This frame's audio/LFO signals, also shown in the Audio panel.
+    pub mod_inputs: ModInputs,
+}
+
+impl State {
+    pub fn aspect(&self) -> f32 {
+        self.comp.width as f32 / self.comp.height.max(1) as f32
+    }
+
+    pub fn add_layer(&mut self) -> u64 {
+        let id = self.comp.add_layer().id;
+        self.selected = Some(id);
+        id
+    }
+
+    /// A monitor's picture (from the previous frame).
+    pub fn monitor_tex(&self, n: u8) -> Option<egui::TextureId> {
+        let i = self.monitor_keys.iter().position(|k| *k == n)?;
+        self.monitor_textures.get(i).map(|(t, _)| *t)
+    }
+
+    /// A rendered explorer/editor preview by key (from the previous frame).
+    pub fn preview_tex(&self, key: &str) -> Option<egui::TextureId> {
+        let i = self.preview_keys.iter().position(|k| k == key)?;
+        self.preview_textures.get(i).map(|(t, _)| *t)
+    }
+
+    /// Remembers the project file (title, Save, Open Recent).
+    pub fn set_project_path(&mut self, path: &str) {
+        self.project_path = Some(path.to_string());
+        self.recent.retain(|p| p != path);
+        self.recent.insert(0, path.to_string());
+        self.recent.truncate(12);
+    }
+
+    /// Writes the project to its file, or asks where when it has none yet.
+    pub fn save_project(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        match &self.project_path {
+            Some(p) => match std::fs::write(p, self.comp.to_json()) {
+                Ok(()) => self.notice = Some(format!("Saved {}", std::path::Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned()))),
+                Err(e) => self.notice = Some(format!("Save failed: {e}")),
+            },
+            None => self.save_project_as(),
+        }
+    }
+
+    pub fn save_project_as(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let name = self
+                .project_path
+                .as_deref()
+                .and_then(|p| std::path::Path::new(p).file_name())
+                .map_or("Untitled.phosphor".to_string(), |n| n.to_string_lossy().into_owned());
+            self.dialogs.save_file(crate::dialogs::Purpose::SaveProject, ("Phosphor project", &["phosphor"]), &name);
+        }
+    }
+
+    pub fn open_project_file(&mut self, path: &str) {
+        match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
+            Ok(comp) => {
+                self.load_composition(comp);
+                self.set_project_path(path);
+            }
+            Err(e) => {
+                self.notice = Some(format!("Open failed: {e}"));
+                self.recent.retain(|p| p != path);
+            }
+        }
+    }
+
+    pub fn load_composition(&mut self, comp: Composition) {
+        self.selected = comp.layers.last().map(|l| l.id);
+        self.comp = comp;
+        self.comp.ensure_outputs();
+        self.notice = None;
+    }
+
+    /// Fires a trigger now, or queues it for the next beat when quantise is on.
+    pub fn trigger(&mut self, t: Trigger, now: f64) {
+        if self.comp.launch.timing == phosphor_engine::LaunchTiming::Now {
+            self.fire(t, now as f32);
+            return;
+        }
+        // A newer source for the same layer replaces one still waiting for the beat.
+        if let Trigger::Source { layer, .. } = &t {
+            let l = *layer;
+            self.pending_triggers.retain(|p| !matches!(p, Trigger::Source { layer, .. } if *layer == l));
+        }
+        if !self.pending_triggers.contains(&t) {
+            self.pending_triggers.push(t);
+        }
+    }
+
+    /// Carries out an app-wide control from a controller (value 0..1, or `control::FLIP`).
+    pub fn app_control(&mut self, a: phosphor_engine::AppControl, v: f32, now: f64) {
+        use crate::control::{FLIP, unit_to};
+        use phosphor_engine::AppControl as A;
+        let press = v > 0.5;
+        match a {
+            A::Tempo => self.clock.bpm = unit_to(v, 40.0, 300.0, false),
+            A::TapTempo if press => self.clock.tap(now),
+            A::Resync if press => self.clock.resync(now),
+            A::FollowAudio => self.clock.follow_audio = if v == FLIP { !self.clock.follow_audio } else { press },
+            A::AudioGain => self.audio.gain = unit_to(v, 0.1, 10.0, true),
+            A::KickThreshold => self.audio.beats.sensitivity = unit_to(v, 1.1, 3.0, false),
+            _ => {}
+        }
+    }
+
+    /// Puts a source on a layer using the launch settings (cut/fade, now/beat/bar).
+    pub fn launch_source(&mut self, layer: u64, source: phosphor_engine::SourceSpec, values: Vec<f32>, name: String, now: f64) {
+        self.trigger(Trigger::Source { layer, source, values, name }, now);
+    }
+
+    fn fire(&mut self, t: Trigger, now: f32) {
+        match t {
+            Trigger::Clip { layer, slot } => self.comp.trigger_clip(layer, slot, now),
+            Trigger::Column(col) => self.comp.trigger_column(col, now),
+            Trigger::Source { layer, source, values, name } => self.comp.set_layer_source(layer, source, values, name, now),
+        }
+    }
+
+    pub fn primary_output(&self) -> u64 {
+        self.comp.outputs.first().map_or(0, |o| o.id)
+    }
+
+    /// Opens the first output on `display`, fullscreen.
+    pub fn send_output_to(&mut self, display: crate::screens::Display) {
+        let id = self.primary_output();
+        self.send_output_id_to(id, display);
+    }
+
+    pub fn send_output_id_to(&mut self, id: u64, display: crate::screens::Display) {
+        let mut map = self.output.lock().unwrap();
+        let out = map.entry(id).or_default();
+        out.open = true;
+        out.display = Some(display.id);
+        out.place = Some((display, 0, 0));
+    }
+
+    /// Opens every enabled output's window, or closes them all if any is open.
+    pub fn toggle_output(&mut self) {
+        let mut map = self.output.lock().unwrap();
+        let any = map.values().any(|o| o.open);
+        for o in self.comp.outputs.iter().filter(|o| o.enabled) {
+            map.entry(o.id).or_default().open = !any;
+        }
+        if any {
+            map.values_mut().for_each(|o| o.open = false);
+        }
+    }
+
+    pub fn output_open(&self) -> bool {
+        self.output.lock().unwrap().values().any(|o| o.open)
+    }
+
+    pub fn output_window_open(&self, id: u64) -> bool {
+        self.output.lock().unwrap().get(&id).is_some_and(|o| o.open)
+    }
+
+    pub fn toggle_output_window(&mut self, id: u64) {
+        let mut map = self.output.lock().unwrap();
+        let o = map.entry(id).or_default();
+        o.open = !o.open;
+    }
+
+    /// Flashes each output's number on its window for a few seconds.
+    pub fn identify_outputs(&mut self, now: f64) {
+        for o in self.output.lock().unwrap().values_mut() {
+            o.identify_until = now + 3.0;
+        }
+    }
+
+    pub fn output_tex(&self, id: u64) -> Option<egui::TextureId> {
+        self.output_textures.get(&id).map(|(t, _)| *t)
+    }
+}
+
+struct BenchRun {
+    cfg: BenchConfig,
+    started: Option<f64>,
+    samples: Vec<Snapshot>,
+    /// Rebuilt the composition once imported (ISF) shaders were registered.
+    rebuilt: bool,
+}
+
+/// The Export Show window.
+#[derive(Default)]
+pub struct ExportUi {
+    pub open: bool,
+    pub name: String,
+    pub zip: bool,
+    pub autostart: bool,
+    /// (media files, bytes, missing), worked out when the window opens.
+    pub summary: Option<(usize, u64, usize)>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub progress: Option<crate::export::Shared>,
+}
+
+pub struct PhosphorApp {
+    state: State,
+    #[cfg(target_os = "macos")]
+    native_menu: Option<(muda::Menu, Vec<crate::menu::Action>)>,
+    title: String,
+    /// Exported show: open its outputs on the first frames.
+    show_start: Option<u32>,
+    dock: DockState<Tab>,
+    bench: Option<BenchRun>,
+    gather_windows: bool,
+    remote_published: f64,
+    #[cfg(not(target_arch = "wasm32"))]
+    pending_snapshot: Option<(u32, u32, Vec<u8>)>,
+    #[cfg(not(target_arch = "wasm32"))]
+    saver: crate::recovery::Saver,
+    /// Shown after restoring from an unexpected quit; `true` if a stream was live.
+    recovered: Option<bool>,
+    /// Panics caught in the last few seconds (UI keeps running instead of closing).
+    panics: Vec<f64>,
+    /// Panels living in their own OS windows.
+    detached: Vec<Tab>,
+    /// Built-in and saved layouts, and which opens at startup.
+    layouts: Layouts,
+    /// Save Layout window: (name, open at startup).
+    layout_draft: Option<(String, bool)>,
+}
+
+impl eframe::App for PhosphorApp {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        // A bug in one frame should not take the show down: skip that frame and carry on.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.ui_frame(ui, frame)));
+        if result.is_err() {
+            let now = ui.ctx().input(|i| i.time);
+            self.panics.retain(|t| now - t < 5.0);
+            self.panics.push(now);
+            self.state.notice = Some("Phosphor hit an internal error and skipped a frame (details in crash.log).".into());
+            ui.ctx().request_repaint();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let now = ui.ctx().input(|i| i.time);
+            if self.bench.is_none() && self.saver.due(now) {
+                let snap = self.snapshot();
+                self.saver.save(now, &snap);
+            }
+        }
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.save_settings(storage);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_exit(&mut self) {
+        if self.bench.is_none() {
+            let snap = self.snapshot();
+            self.saver = Default::default();
+            if let (Ok(json), Some(dir)) = (serde_json::to_string(&snap), crate::show::storage_dir()) {
+                let _ = std::fs::write(dir.join("recovery.json"), json);
+            }
+            crate::recovery::end_session();
+        }
+    }
+}

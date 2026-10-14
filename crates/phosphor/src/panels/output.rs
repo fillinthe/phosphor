@@ -1,0 +1,234 @@
+//! Outputs: sizes, windows, screens, Syphon and NDI.
+
+use super::*;
+
+pub(crate) const RESOLUTIONS: &[(u32, u32, &str)] = &[
+    (1280, 720, "1280×720 (720p)"),
+    (1920, 1080, "1920×1080 (1080p)"),
+    (2560, 1440, "2560×1440"),
+    (3840, 2160, "3840×2160 (4K)"),
+];
+
+pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Screens").strong());
+        if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+            st.displays = crate::screens::displays();
+        }
+    });
+    if st.displays.is_empty() {
+        ui.weak("No displays found.");
+    }
+    for d in st.displays.clone() {
+        ui.horizontal(|ui| {
+            let icon_name = if d.main { icon::LAPTOP } else { icon::PROJECTOR_SCREEN };
+            ui.label(format!("{icon_name} {}", d.label()));
+            if d.main {
+                ui.weak("(this screen)");
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Send Output 1 here").on_hover_text("Opens the first output fullscreen on this display, no menu bar").clicked() {
+                    st.send_output_to(d.clone());
+                }
+            });
+        });
+    }
+    ui.separator();
+    outputs_list(ui, st);
+    ui.separator();
+    egui::Grid::new("output_grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
+        ui.label("Canvas");
+        let current = format!("{}×{}", st.comp.width, st.comp.height);
+        ComboBox::from_id_salt("resolution").selected_text(current).show_ui(ui, |ui| {
+            for (w, h, label) in RESOLUTIONS {
+                if ui.selectable_label(st.comp.width == *w && st.comp.height == *h, *label).clicked() {
+                    st.comp.width = *w;
+                    st.comp.height = *h;
+                }
+            }
+        });
+        ui.end_row();
+
+        ui.label("Master");
+        guarded!(ui, st.comp.master_fade, Slider::new(&mut st.comp.master_fade, 0.0..=1.0).text("fade"));
+        ui.end_row();
+
+        ui.label("All output windows");
+        let text = if st.output_open() { "Close" } else { "Open" };
+        if ui.button(text).clicked() {
+            st.toggle_output();
+        }
+        ui.end_row();
+    });
+    ui.weak("In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
+    ui.separator();
+
+    let s = st.stats.latest;
+    egui::Grid::new("stats_grid").num_columns(2).spacing([12.0, 4.0]).show(ui, |ui| {
+        let row = |ui: &mut egui::Ui, k: &str, v: String| {
+            ui.label(k);
+            ui.monospace(v);
+            ui.end_row();
+        };
+        row(ui, "Frame rate", format!("{:.1} fps ({:.2} ms)", s.fps, s.frame_ms));
+        row(ui, "Engine CPU / frame", format!("{:.3} ms", s.render_ms));
+        row(ui, "Process CPU", format!("{:.1}% of one core", s.cpu_percent));
+        row(ui, "Memory", format!("{:.0} MB", s.memory_mb));
+        row(ui, "GPU passes / frame", s.passes.to_string());
+    });
+}
+
+// Monitors: extra preview panels showing the output, the mix, or one layer.
+
+pub(crate) const OUTPUT_SIZES: &[(u32, u32, &str)] = &[
+    (0, 0, "Same as canvas"),
+    (1280, 720, "1280×720"),
+    (1920, 1080, "1920×1080"),
+    (1920, 1200, "1920×1200"),
+    (2560, 1440, "2560×1440"),
+    (3840, 2160, "3840×2160"),
+    (1080, 1920, "1080×1920 (portrait)"),
+];
+
+/// Every output with its size, screen, window and Identify controls.
+pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
+    let now = ui.ctx().input(|i| i.time);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Outputs").strong());
+        if ui.small_button(label(icon::PLUS, "Add output")).clicked() {
+            st.mapping_output = st.comp.add_output();
+        }
+        if ui.small_button(label(icon::HASH, "Identify")).on_hover_text("Show each output's number on its window").clicked() {
+            st.identify_outputs(now);
+        }
+    });
+    #[cfg(target_os = "macos")]
+    syphon_row(ui, st);
+    #[cfg(target_os = "macos")]
+    ndi_row(ui, st);
+    let canvas = (st.comp.width, st.comp.height);
+    let mut remove = None;
+    let count = st.comp.outputs.len();
+    for i in 0..count {
+        let id = st.comp.outputs[i].id;
+        let open = st.output_window_open(id);
+        let tex = st.output_tex(id);
+        let mut toggle = false;
+        let mut send: Option<crate::screens::Display> = None;
+        let displays = st.displays.clone();
+        let o = &mut st.comp.outputs[i];
+        card_frame(ui, false).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(egui::vec2(64.0, 36.0), Sense::hover());
+                ui.painter().rect_filled(r, 3.0, Color32::BLACK);
+                if let Some(t) = tex {
+                    let (ow, oh) = o.size(canvas);
+                    paint_texture(ui.painter(), t, fit_rect(r, ow as f32 / oh.max(1) as f32));
+                }
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("{}", i + 1)).strong().color(ACCENT));
+                        ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
+                        ui.toggle_value(&mut o.enabled, RichText::new("ON").small()).on_hover_text("Render this output");
+                        #[cfg(target_os = "macos")]
+                        ui.toggle_value(&mut o.syphon, RichText::new("SYPHON").small())
+                            .on_hover_text("Also publish this output (after mapping) as a Syphon source for MadMapper, Resolume, OBS…");
+                        if o.mapping.active() {
+                            ui.label(RichText::new(format!("{} mapped", icon::PROJECTOR_SCREEN)).small().color(ACCENT));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        let current = OUTPUT_SIZES.iter().find(|(w, h, _)| *w == o.width && *h == o.height).map_or(format!("{}×{}", o.width, o.height), |(_, _, n)| n.to_string());
+                        ComboBox::from_id_salt(("out_size", id)).width(130.0).selected_text(current).show_ui(ui, |ui| {
+                            for (w, h, name) in OUTPUT_SIZES {
+                                if ui.selectable_label(o.width == *w && o.height == *h, *name).clicked() {
+                                    o.width = *w;
+                                    o.height = *h;
+                                }
+                            }
+                        });
+                        let text = if open { label(icon::STOP, "Window") } else { label(icon::PLAY, "Window") };
+                        if ui.button(text).clicked() {
+                            toggle = true;
+                        }
+                        ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send to"), |ui| {
+                            for d in &displays {
+                                if ui.button(d.label()).clicked() {
+                                    send = Some(d.clone());
+                                    ui.close();
+                                }
+                            }
+                            if displays.is_empty() {
+                                ui.weak("No displays found");
+                            }
+                        });
+                        if count > 1 && ui.small_button(icon::TRASH).on_hover_text("Remove output").clicked() {
+                            remove = Some(i);
+                        }
+                    });
+                });
+            });
+        });
+        if toggle {
+            st.toggle_output_window(id);
+        }
+        if let Some(d) = send {
+            st.send_output_id_to(id, d);
+        }
+    }
+    if let Some(i) = remove {
+        let id = st.comp.outputs.remove(i).id;
+        st.output.lock().unwrap().remove(&id);
+    }
+}
+
+/// Composition → Syphon toggle with status.
+#[cfg(target_os = "macos")]
+pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        if !st.syphon.available {
+            ui.weak("Syphon unavailable (framework missing)");
+            return;
+        }
+        let hover = "Publish the composition as \"Phosphor\" — pick it in MadMapper, Resolume, OBS (Syphon Client), VDMX…";
+        output_toggle(ui, &mut st.comp.syphon, icon::SHARE_NETWORK, "Syphon", hover, phosphor_engine::AppControl::Syphon);
+        let (servers, clients) = (st.syphon.server_count(), st.syphon.clients());
+        let waiting = format!("{servers} source(s) published, no app receiving yet");
+        output_status(ui, match (servers, clients) {
+            (0, _) => OutputStatus::Off,
+            (_, 0) => OutputStatus::Waiting(&waiting),
+            (_, n) => OutputStatus::Receiving(n),
+        });
+    });
+}
+
+/// Composition → NDI toggle, name, frame rate and status.
+#[cfg(target_os = "macos")]
+pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        let Some(lib) = crate::ndi::Ndi::library() else {
+            ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
+            ui.weak("needs the free NDI Tools");
+            if ui.small_button("Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
+                ui.ctx().open_url(egui::OpenUrl::new_tab("https://ndi.video/tools/"));
+            }
+            return;
+        };
+        let hover = format!("Send the composition over the network as NDI (MadMapper, Resolume, OBS, vMix, other computers)\nNDI library: {}", lib.display());
+        output_toggle(ui, &mut st.comp.ndi.enabled, icon::BROADCAST, "NDI", &hover, phosphor_engine::AppControl::Ndi);
+        ui.add(egui::TextEdit::singleline(&mut st.comp.ndi.name).desired_width(90.0)).on_hover_text("Name receivers see");
+        ComboBox::from_id_salt("ndi_fps").width(60.0).selected_text(format!("{} fps", st.comp.ndi.fps)).show_ui(ui, |ui| {
+            for f in [25, 30, 50, 60] {
+                ui.selectable_value(&mut st.comp.ndi.fps, f, format!("{f} fps"));
+            }
+        });
+        let status = match (&st.ndi.error, st.ndi.running(), st.ndi.connections()) {
+            (Some(e), false, _) if st.comp.ndi.enabled => OutputStatus::Error(e),
+            (_, true, 0) => OutputStatus::Waiting("on the network, nobody receiving yet"),
+            (_, true, n) => OutputStatus::Receiving(n as usize),
+            _ => OutputStatus::Off,
+        };
+        output_status(ui, status);
+    });
+}

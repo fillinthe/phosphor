@@ -683,17 +683,31 @@ impl Composition {
         }
     }
 
+    /// Every source in the project: each layer's current source and its clip slots.
+    pub fn sources(&self) -> impl Iterator<Item = &SourceSpec> {
+        self.layers.iter().flat_map(|l| std::iter::once(&l.source).chain(l.clips.iter().map(|c| &c.source)))
+    }
+
+    /// Every media file the project uses (sources, clips, media bin), sorted, no repeats.
+    pub fn media_paths(&self) -> Vec<String> {
+        let mut paths: Vec<String> = self
+            .sources()
+            .filter_map(|s| match s {
+                SourceSpec::Image { path: Some(p), .. } | SourceSpec::Movie { path: Some(p), .. } => Some(p.clone()),
+                _ => None,
+            })
+            .chain(self.media_bin.iter().map(|m| m.path.clone()))
+            .collect();
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
     /// Effect and generator ids in use (for packing shaders with a show).
     pub fn used_shader_ids(&self) -> Vec<String> {
-        let mut ids: Vec<String> = self.master_effects.iter().map(|e| e.effect.clone()).collect();
-        for l in &self.layers {
-            ids.extend(l.effects.iter().map(|e| e.effect.clone()));
-            for s in std::iter::once(&l.source).chain(l.clips.iter().map(|c| &c.source)) {
-                if let SourceSpec::Generator(g) = s {
-                    ids.push(g.clone());
-                }
-            }
-        }
+        let effects = self.master_effects.iter().chain(self.layers.iter().flat_map(|l| l.effects.iter())).map(|e| e.effect.clone());
+        let generators = self.sources().filter_map(|s| if let SourceSpec::Generator(g) = s { Some(g.clone()) } else { None });
+        let mut ids: Vec<String> = effects.chain(generators).collect();
         ids.sort();
         ids.dedup();
         ids

@@ -42,6 +42,12 @@ fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
+/// File/shader name → id-safe slug ("My Shader.fs" stem → "my_shader"). Used for ISF imports,
+/// Shader Editor files and show exports, so the same file always gets the same id.
+pub fn slug(name: &str) -> String {
+    name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect()
+}
+
 pub fn parse_header(source: &str) -> Result<Header, CompileError> {
     let mut header = Header { name: "Untitled".into(), generator: false, params: Vec::new() };
     for (i, line) in source.lines().enumerate() {

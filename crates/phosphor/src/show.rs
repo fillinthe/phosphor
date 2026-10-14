@@ -19,6 +19,9 @@ pub struct Manifest {
     pub screens: Vec<(u64, String)>,
     /// Open the output windows full screen as soon as the show starts.
     pub autostart: bool,
+    /// The panel layout at export time (opens the same way).
+    /// RON text of the app's SavedLayout.
+    pub layout: Option<String>,
 }
 
 pub struct Bundled {

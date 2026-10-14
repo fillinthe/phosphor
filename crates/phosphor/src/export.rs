@@ -31,6 +31,15 @@ pub struct Request {
     pub zip: bool,
     pub autostart: bool,
     pub screens: Vec<(u64, String)>,
+    pub layout: Option<String>,
+}
+
+/// What an export would pack: (files, bytes, missing). Reads file sizes, so call it once, not per frame.
+pub fn summary(comp: &Composition) -> (usize, u64, usize) {
+    let files = comp.media_paths();
+    let missing = files.iter().filter(|f| !Path::new(f).is_file()).count();
+    let bytes = files.iter().filter_map(|f| std::fs::metadata(f).ok()).map(|m| m.len()).sum();
+    (files.len(), bytes, missing)
 }
 
 /// Starts the export on a background thread; the UI polls the returned progress.
@@ -92,13 +101,7 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
     let mut names: HashSet<String> = HashSet::new();
     let mut failed: Vec<String> = Vec::new();
     let mut bytes = 0u64;
-    let mut paths: Vec<String> = Vec::new();
-    comp.map_paths(|path| {
-        paths.push(path.to_string());
-        path.to_string()
-    });
-    paths.sort();
-    paths.dedup();
+    let paths = comp.media_paths();
     let total = paths.len();
     for (i, path) in paths.iter().enumerate() {
         let src = Path::new(path);
@@ -153,6 +156,7 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
         phosphor_version: env!("CARGO_PKG_VERSION").into(),
         screens: req.screens,
         autostart: req.autostart,
+        layout: req.layout,
     };
     std::fs::write(show.join(MANIFEST), serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     if !failed.is_empty() {
@@ -200,8 +204,7 @@ fn find_isf(slug: &str) -> Option<PathBuf> {
             if path.extension().is_some_and(|x| x == "fs")
                 && let Some(stem) = path.file_stem()
             {
-                let s: String = stem.to_string_lossy().to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-                if s == slug {
+                if phosphor_engine::custom::slug(&stem.to_string_lossy()) == slug {
                     return Some(path);
                 }
             }

@@ -90,7 +90,7 @@ impl IsfLibrary {
                     files.sort();
                     for path in files {
                         let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
-                        let slug: String = stem.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+                        let slug = phosphor_engine::custom::slug(&stem);
                         if !seen.insert(slug.clone()) {
                             continue;
                         }

@@ -142,7 +142,7 @@ impl Drop for Running {
 #[derive(Default)]
 pub struct Ndi {
     running: Option<Running>,
-    next_frame: f64,
+    pacer: crate::pacing::FramePacer,
     pub error: Option<String>,
 }
 
@@ -234,12 +234,7 @@ impl Ndi {
 
     /// True when a frame should be captured for NDI now (only while someone is watching).
     pub fn frame_due(&mut self, now: f64, fps: u32) -> bool {
-        if self.connections() <= 0 || now < self.next_frame {
-            return false;
-        }
-        let step = 1.0 / fps.max(1) as f64;
-        self.next_frame = (self.next_frame + step).max(now - step);
-        true
+        self.connections() > 0 && self.pacer.due(now, fps)
     }
 
     /// Hands a frame to the sender; skipped if it's still busy with the last one.

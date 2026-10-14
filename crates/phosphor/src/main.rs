@@ -12,7 +12,9 @@ mod folders;
 mod isf_lib;
 mod media;
 mod net;
+mod pacing;
 mod panels;
+mod ui;
 mod presets;
 #[cfg(not(target_arch = "wasm32"))]
 mod recovery;
