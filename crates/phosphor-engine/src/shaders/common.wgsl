@@ -1,6 +1,6 @@
-// Shared by every pass. Must match `Uniforms` in gpu.rs (128 bytes).
+// Shared by every pass. Must match `Uniforms` in gpu.rs (256 bytes).
 struct U {
-    p: array<vec4f, 5>,   // up to 16 shader parameters (mapping passes use all 20 floats)
+    p: array<vec4f, 12>,  // up to 44 shader parameters; p[11] reserved (mapping passes use the first 20 floats)
     resolution: vec2f,    // target size in pixels
     time: f32,            // seconds
     opacity: f32,
@@ -9,6 +9,10 @@ struct U {
     yuv: u32,             // 1 = tex0 is luma (R8), tex2 is chroma (RG8), BT.709 video range
     _pad0: u32,
     _pad1: u32,
+    _pad2: u32,
+    _pad3: u32,
+    _pad4: u32,
+    _pad5: u32,
 };
 
 @group(0) @binding(0) var<uniform> u: U;

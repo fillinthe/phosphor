@@ -44,6 +44,7 @@ impl PhosphorApp {
             audio_level: avg(|s| s.audio_level),
         };
         println!("SUMMARY {}", summary.to_json());
+        println!("LAYERS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.enabled, l.opacity, l.source.label())).collect::<Vec<_>>());
         for (layer, e) in &self.state.media.errors {
             println!("LAYER_ERROR {layer}: {e}");
         }

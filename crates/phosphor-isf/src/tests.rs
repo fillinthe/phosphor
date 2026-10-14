@@ -144,10 +144,11 @@ fn unsupported_features_are_reported_not_errors() {
     let s = import("fb", &persistent, None).unwrap();
     assert!(s.unsupported.as_deref().unwrap_or("").contains("persistent"));
 
-    let many: String = (0..5).map(|i| format!("{{ \"NAME\": \"c{i}\", \"TYPE\": \"color\" }},")).collect();
+    // One more colour (4 floats each) than fits.
+    let many: String = (0..crate::MAX_PARAMS / 4 + 1).map(|i| format!("{{ \"NAME\": \"c{i}\", \"TYPE\": \"color\" }},")).collect();
     let too_many = GENERATOR.replace("\"INPUTS\": [", &format!("\"INPUTS\": [{many}"));
     let s = import("big", &too_many, None).unwrap();
-    assert!(s.unsupported.as_deref().unwrap_or("").contains("max 16"));
+    assert!(s.unsupported.as_deref().unwrap_or("").contains(&format!("max {}", crate::MAX_PARAMS)), "{:?}", s.unsupported);
 }
 
 #[test]
@@ -165,3 +166,4 @@ void main() { gl_FragColor = IMG_NORM_PIXEL(inputImage, off); }\n";
     let s = import("vs2", fs, Some(geometry)).unwrap();
     assert!(s.unsupported.as_deref().unwrap_or("").contains("geometry"));
 }
+
