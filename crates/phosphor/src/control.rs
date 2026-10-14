@@ -232,6 +232,7 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32)
             }
             AppControl::MasterFxBypass => comp.master_fx_bypass = toggled(comp.master_fx_bypass, v),
             AppControl::Syphon => comp.syphon = toggled(comp.syphon, v),
+            AppControl::Ndi => comp.ndi.enabled = toggled(comp.ndi.enabled, v),
             _ => return Some(Deferred::App(*a, v)),
         },
         ControlTarget::MasterFade => comp.master_fade = v.clamp(0.0, 1.0),

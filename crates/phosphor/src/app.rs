@@ -135,6 +135,8 @@ pub struct State {
     pub media_view: panels::MediaView,
     /// Map mode: click any control, then move a knob / send OSC / press a key to link them.
     pub map_mode: bool,
+    /// Effects fading in after being added: (effect id, start time, seconds, final mix).
+    pub fx_fades: Vec<(u64, f32, f32, f32)>,
     /// The project file being worked on (Save writes here).
     pub project_path: Option<String>,
     pub recent: Vec<String>,
@@ -142,6 +144,8 @@ pub struct State {
     pub export: ExportUi,
     #[cfg(target_os = "macos")]
     pub syphon: crate::syphon::Syphon,
+    #[cfg(target_os = "macos")]
+    pub ndi: crate::ndi::Ndi,
     pub clock: Clock,
     pub pending_triggers: Vec<Trigger>,
     /// Which bank of clip columns the grid and the number keys address.
@@ -468,12 +472,15 @@ impl PhosphorApp {
                 thumbs: Thumbs::new(),
                 media_view: Default::default(),
                 map_mode: false,
+                fx_fades: Vec::new(),
                 project_path: stored(KEY_PROJECT_PATH).filter(|p| !p.is_empty()),
                 recent: stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 history: Default::default(),
                 export: Default::default(),
                 #[cfg(target_os = "macos")]
                 syphon: Default::default(),
+                #[cfg(target_os = "macos")]
+                ndi: Default::default(),
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
                 clip_page: 0,
@@ -520,6 +527,9 @@ impl PhosphorApp {
         if let Some(pw) = app.bench.as_ref().and_then(|b| b.cfg.remote_password.clone()) {
             app.state.remote_password = pw;
             app.state.require_password = true;
+        }
+        if app.bench.as_ref().is_some_and(|b| b.cfg.ndi) {
+            app.state.comp.ndi.enabled = true;
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.net) {
             if let Err(e) = app.state.net.start() {
@@ -568,6 +578,8 @@ impl PhosphorApp {
             output_textures,
             #[cfg(target_os = "macos")]
             syphon,
+            #[cfg(target_os = "macos")]
+            ndi,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -635,10 +647,21 @@ impl PhosphorApp {
 
         let stream_due = stream.frame_due(now);
         let net_due = net.frame_due(now);
-        if (stream_due || net_due) && !engine.capture_frame() && stream_due {
+        #[cfg(target_os = "macos")]
+        let ndi_due = {
+            ndi.sync(comp.ndi.enabled, &comp.ndi.name);
+            ndi.frame_due(now, comp.ndi.fps)
+        };
+        #[cfg(not(target_os = "macos"))]
+        let ndi_due = false;
+        if (stream_due || net_due || ndi_due) && !engine.capture_frame() && stream_due {
             stream.repeat_last();
         }
         for f in engine.poll_captures() {
+            #[cfg(target_os = "macos")]
+            if ndi.connections() > 0 {
+                ndi.push(f.width, f.height, f.rgba.clone(), comp.ndi.fps);
+            }
             if net.running() {
                 net.push_frame(f.width, f.height, f.rgba.clone());
             }
@@ -1187,6 +1210,7 @@ impl PhosphorApp {
             A::ToggleOutput => st.toggle_output(),
             A::Identify => st.identify_outputs(now),
             A::Syphon => st.comp.syphon = !st.comp.syphon,
+            A::Ndi => st.comp.ndi.enabled = !st.comp.ndi.enabled,
             A::Notes => open_doc("NOTES.md"),
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
@@ -1201,6 +1225,22 @@ impl PhosphorApp {
                 }
             }
         }
+    }
+
+    /// Ramps newly added effects' mix up over the launch fade time.
+    fn fade_in_effects(&mut self) {
+        let st = &mut self.state;
+        if st.fx_fades.is_empty() {
+            return;
+        }
+        let now = st.mod_inputs.time;
+        st.fx_fades.retain(|(id, start, secs, target)| {
+            let Some(fx) = crate::control::find_effect_mut(&mut st.comp, *id) else { return false };
+            let t = ((now - start) / secs).clamp(0.0, 1.0);
+            // Smoothstep, so it eases in and out.
+            fx.mix = target * t * t * (3.0 - 2.0 * t);
+            t < 1.0
+        });
     }
 
     fn toggle_panel(&mut self, tab: Tab) {
@@ -1565,11 +1605,12 @@ impl PhosphorApp {
                                 Action::Undo => can_undo,
                                 Action::Redo => can_redo,
                                 Action::DuplicateLayer | Action::DeleteLayer => has_layer,
-                                Action::Syphon => cfg!(target_os = "macos"),
+                                Action::Syphon | Action::Ndi => cfg!(target_os = "macos"),
                                 _ => true,
                             };
                             let text = match a {
                                 Action::Syphon => format!("{label}  ({})", if self.state.comp.syphon { "on" } else { "off" }),
+                                Action::Ndi => format!("{label}  ({})", if self.state.comp.ndi.enabled { "on" } else { "off" }),
                                 _ => label.to_string(),
                             };
                             if ui.add_enabled(enabled, egui::Button::new(text).shortcut_text(shortcut_text(*sc))).clicked() {
@@ -1899,8 +1940,10 @@ impl PhosphorApp {
             run.rebuilt = true;
             if run.cfg.project.is_none() {
                 let bin = std::mem::take(&mut self.state.comp.media_bin);
+                let ndi = self.state.comp.ndi.clone();
                 self.state.comp = run.cfg.composition();
                 self.state.comp.media_bin = bin;
+                self.state.comp.ndi = ndi;
             }
             run.started = None;
             run.samples.clear();
@@ -1912,6 +1955,7 @@ impl PhosphorApp {
         });
         self.control_requests(&ctx);
         self.menu_actions(&ctx, now);
+        self.fade_in_effects();
         self.shortcuts(&ctx);
         let busy = ctx.input(|i| i.pointer.any_down());
         self.state.history.track(&self.state.comp, now, busy);

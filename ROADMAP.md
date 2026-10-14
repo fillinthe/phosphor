@@ -58,7 +58,7 @@ app that's much smaller and lighter on the CPU.
     unlock), Windows/Linux players, and notarized exports
 9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with
     disconnect / block / disable
-9d. ~~Syphon out~~ done — next NDI (network video to other machines/MadMapper on another Mac)
+9d. ~~Syphon out~~ ~~NDI out~~ done — next: NDI per output, NDI audio, NDI *input* (receive sources as layers), bundle the NDI SDK runtime
 9e. **Online media library on phosphorfx.com**: browse/search a hosted catalogue of clips, loops, shaders,
     ISF and presets from inside the Media panel, sorted by newest/popular; download on demand into the bin
     (cached, with thumbnails), new-drops badge; later user uploads/packs tied to the account
@@ -126,6 +126,9 @@ Legend: [x] done · [~] in progress · [ ] not started
       **Undo/Redo** (100 steps), zoom
 - [x] **Export Show**: standalone .app (+ zip) with project, media, used shaders, mappings; FFmpeg bundled in the app
 - [x] Right-click never moves sliders; app-wide controls mappable (tempo, launch, audio, bypass, Syphon, speed)
+- [x] **NDI output** (runtime-loaded, sends only while watched; verified 60 fps to a receiver)
+- [x] Effects explorer: click picks, double-click/drag adds; new effects fade in with Launch → Fade
+- [x] **Map mode** + right-click menus fixed on sliders
 - [x] **Watch folders**: every clip in a folder (+ subfolders) loads into the bin, new files appear automatically
       (rescan every 10 s, background thread); bin grouped by folder; "Fill clips of the selected layer" from a folder
 - [x] File dialogs never pause the show (sheets; results arrive next frame); images decode in the background
