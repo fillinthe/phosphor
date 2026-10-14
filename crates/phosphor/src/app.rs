@@ -56,11 +56,13 @@ pub struct OutputShared {
     pub place: Option<(crate::screens::Display, u8, u32)>,
 }
 
-/// A clip trigger, fired now or on the next beat when quantised.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next
+/// beat/bar, per the launch settings.
+#[derive(Clone, Debug, PartialEq)]
 pub enum Trigger {
     Clip { layer: u64, slot: usize },
     Column(usize),
+    Source { layer: u64, source: phosphor_engine::SourceSpec, values: Vec<f32>, name: String },
 }
 
 /// Everything panels can read and edit. Kept separate from the dock layout so both can be
@@ -126,8 +128,8 @@ pub struct State {
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
+    pub media_view: panels::MediaView,
     pub clock: Clock,
-    pub quantize: panels::Quantize,
     pub pending_triggers: Vec<Trigger>,
     /// Which bank of clip columns the grid and the number keys address.
     pub clip_page: usize,
@@ -167,23 +169,30 @@ impl State {
 
     /// Fires a trigger now, or queues it for the next beat when quantise is on.
     pub fn trigger(&mut self, t: Trigger, now: f64) {
-        if self.quantize != panels::Quantize::Off {
-            if !self.pending_triggers.contains(&t) {
-                self.pending_triggers.push(t);
-            }
-        } else {
+        if self.comp.launch.timing == phosphor_engine::LaunchTiming::Now {
             self.fire(t, now as f32);
+            return;
         }
+        // A newer source for the same layer replaces one still waiting for the beat.
+        if let Trigger::Source { layer, .. } = &t {
+            let l = *layer;
+            self.pending_triggers.retain(|p| !matches!(p, Trigger::Source { layer, .. } if *layer == l));
+        }
+        if !self.pending_triggers.contains(&t) {
+            self.pending_triggers.push(t);
+        }
+    }
+
+    /// Puts a source on a layer using the launch settings (cut/fade, now/beat/bar).
+    pub fn launch_source(&mut self, layer: u64, source: phosphor_engine::SourceSpec, values: Vec<f32>, name: String, now: f64) {
+        self.trigger(Trigger::Source { layer, source, values, name }, now);
     }
 
     fn fire(&mut self, t: Trigger, now: f32) {
         match t {
-            Trigger::Clip { layer, slot } => {
-                if let Some(l) = self.comp.layer_mut(layer) {
-                    l.trigger_clip(slot, now);
-                }
-            }
+            Trigger::Clip { layer, slot } => self.comp.trigger_clip(layer, slot, now),
             Trigger::Column(col) => self.comp.trigger_column(col, now),
+            Trigger::Source { layer, source, values, name } => self.comp.set_layer_source(layer, source, values, name, now),
         }
     }
 
@@ -362,8 +371,8 @@ impl PhosphorApp {
                 isf: crate::isf_lib::IsfLibrary::scan(),
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
+                media_view: Default::default(),
                 clock: Clock::new(comp_bpm),
-                quantize: panels::Quantize::Off,
                 pending_triggers: Vec::new(),
                 clip_page: 0,
                 mod_inputs: ModInputs::default(),
@@ -452,9 +461,13 @@ impl PhosphorApp {
             audio.push_external(net_audio);
         }
         let an = audio.update();
+        if an.beat {
+            clock.on_audio_beat(now, an.bpm, an.confidence);
+        }
         let beat_phase = clock.phase(now);
         *mod_inputs = ModInputs {
             beats: clock.beats(now) as f32,
+            audio_beat: an.beat_env,
             beat_phase,
             time: now as f32,
             audio_level: an.level,
@@ -707,10 +720,8 @@ impl PhosphorApp {
             let st = &mut self.state;
             match purpose {
                 Purpose::LayerSource(id) => {
-                    if let (Some(p), Some(l)) = (paths.first(), st.comp.layer_mut(id)) {
-                        l.start_transition(now as f32);
-                        l.source = crate::media::spec_for_path(&p.to_string_lossy());
-                        l.name = name_of(p);
+                    if let Some(p) = paths.first() {
+                        st.launch_source(id, crate::media::spec_for_path(&p.to_string_lossy()), Vec::new(), name_of(p), now);
                     }
                 }
                 Purpose::ImportFiles => {
@@ -1030,10 +1041,8 @@ impl PhosphorApp {
                 _ => self.state.add_layer(),
             };
             let path = (!cfg!(target_arch = "wasm32")).then_some(path);
-            if let Some(layer) = self.state.comp.layer_mut(target) {
-                layer.name = name.clone();
-                layer.source = media::spec_for(&name, path);
-            }
+            let now = ctx.input(|i| i.time);
+            self.state.launch_source(target, media::spec_for(&name, path), Vec::new(), name.clone(), now);
         }
     }
 
@@ -1050,6 +1059,11 @@ impl PhosphorApp {
                 if ui.button(output_label).on_hover_text("Output window. F = fullscreen, Esc = exit").clicked() {
                     self.state.toggle_output();
                 }
+                ui.menu_button(format!("{} {}", icon::LIGHTNING, launch_summary(&self.state.comp)), |ui| {
+                    ui.horizontal(|ui| panels::launch_controls(ui, &mut self.state.comp));
+                })
+                .response
+                .on_hover_text("How clips and media land: Cut/Fade, Now/On beat/On bar");
                 ui.menu_button(icon::CARET_DOWN, |ui| {
                     ui.label(egui::RichText::new("Send output to").strong());
                     if self.state.displays.is_empty() {
@@ -1260,7 +1274,7 @@ impl PhosphorApp {
         let Some(run) = &mut self.bench else { return };
         let started = *run.started.get_or_insert(now);
         if let Some(col) = run.cfg.trigger_column.take_if(|_| now - started >= run.cfg.trigger_at) {
-            self.state.comp.trigger_column(col, now as f32);
+            self.state.trigger(Trigger::Column(col), now);
             return;
         }
         if now - started < run.cfg.seconds {
@@ -1280,6 +1294,8 @@ impl PhosphorApp {
             audio_level: avg(|s| s.audio_level),
         };
         println!("SUMMARY {}", summary.to_json());
+        let an = self.state.audio.analysis();
+        println!("BEAT bpm {:.1} confidence {:.2} clock {:.1}", an.bpm, an.confidence, self.state.clock.bpm);
         println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
         if self.state.stream.running() {
             self.state.stream.stop_and_wait();
@@ -1389,14 +1405,21 @@ impl PhosphorApp {
             control.poll(comp);
             control.apply(comp, now as f32);
         }
+        for (layer, n) in std::mem::take(&mut self.state.control.triggers) {
+            let t = match layer {
+                Some(layer) => Trigger::Clip { layer, slot: n },
+                None => Trigger::Column(n),
+            };
+            self.state.trigger(t, now);
+        }
         {
             let st = &mut self.state;
             st.comp.bpm = st.clock.bpm;
             let beat = st.clock.tick(now);
-            let fire_now = match st.quantize {
-                panels::Quantize::Off => true,
-                panels::Quantize::Beat => beat,
-                panels::Quantize::Bar => beat && st.clock.beat_in_bar(now) == 0,
+            let fire_now = match st.comp.launch.timing {
+                phosphor_engine::LaunchTiming::Now => true,
+                phosphor_engine::LaunchTiming::Beat => beat,
+                phosphor_engine::LaunchTiming::Bar => beat && st.clock.beat_in_bar(now) == 0,
             };
             if fire_now {
                 for t in std::mem::take(&mut st.pending_triggers) {
@@ -1512,6 +1535,12 @@ impl PhosphorApp {
             storage.set_string(KEY_MONITORS, json);
         }
     }
+}
+
+/// Short label for the launch settings, e.g. "Fade 0.5 s · On beat".
+fn launch_summary(comp: &Composition) -> String {
+    let how = if comp.launch.fade { format!("Fade {:.1}s", comp.launch.fade_secs) } else { "Cut".to_string() };
+    format!("{how} · {}", comp.launch.timing.name())
 }
 
 /// Everything at once: preview + monitor, clips, mixer/effects along the bottom, layers and

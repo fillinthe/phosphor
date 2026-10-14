@@ -2,6 +2,8 @@
 
 pub struct Clock {
     pub bpm: f32,
+    /// Lock tempo and beat to the audio beat detector.
+    pub follow_audio: bool,
     /// Time of beat zero.
     anchor: f64,
     taps: Vec<f64>,
@@ -10,7 +12,7 @@ pub struct Clock {
 
 impl Clock {
     pub fn new(bpm: f32) -> Self {
-        Self { bpm, anchor: 0.0, taps: Vec::new(), last_beat: 0 }
+        Self { bpm, follow_audio: false, anchor: 0.0, taps: Vec::new(), last_beat: 0 }
     }
 
     pub fn beats(&self, now: f64) -> f64 {
@@ -48,6 +50,20 @@ impl Clock {
         }
         self.anchor = now;
         self.last_beat = 0;
+    }
+
+    /// Called on each detected audio beat when following audio: eases the tempo toward the
+    /// detected BPM and pulls the beat grid onto the kick.
+    pub fn on_audio_beat(&mut self, now: f64, bpm: f32, confidence: f32) {
+        if !self.follow_audio || confidence < 0.5 || bpm <= 0.0 {
+            return;
+        }
+        self.bpm += (bpm - self.bpm) * 0.35;
+        let beats = self.beats(now);
+        let target = beats.round();
+        // Shift beat zero so `now` lands on the nearest whole beat (halfway each time, no jumps).
+        let error_secs = (beats - target) * 60.0 / self.bpm.max(1.0) as f64;
+        self.anchor += error_secs * 0.5;
     }
 
     /// Realigns beat zero to now without changing the tempo.

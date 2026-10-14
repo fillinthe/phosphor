@@ -7,6 +7,97 @@ pub struct AudioAnalysis {
     pub low: f32,
     pub mid: f32,
     pub high: f32,
+    /// A beat (kick) was detected this frame.
+    pub beat: bool,
+    /// 1 on a beat, decaying over ~150 ms.
+    pub beat_env: f32,
+    /// Estimated tempo (0 until a few beats were heard) and how steady it is (0..1).
+    pub bpm: f32,
+    pub confidence: f32,
+}
+
+/// Kick/beat detection from low-frequency energy, plus a tempo estimate from the gaps between beats.
+pub struct BeatTracker {
+    /// Higher = needs a stronger kick (1.2 … 3).
+    pub sensitivity: f32,
+    avg: f32,
+    prev: f32,
+    since_last: f32,
+    intervals: std::collections::VecDeque<f32>,
+    env: f32,
+    bpm: f32,
+    confidence: f32,
+}
+
+impl Default for BeatTracker {
+    fn default() -> Self {
+        Self { sensitivity: 1.5, avg: 0.0, prev: 0.0, since_last: 0.0, intervals: Default::default(), env: 0.0, bpm: 0.0, confidence: 0.0 }
+    }
+}
+
+impl BeatTracker {
+    /// Feeds one analysis frame (`energy` = bass energy, `dt` seconds since the last call).
+    pub fn process(&mut self, energy: f32, dt: f32) -> bool {
+        self.since_last += dt;
+        let rising = energy > self.prev;
+        self.prev = energy;
+        let floor = 1e-4;
+        let beat = rising && energy > floor && energy > self.avg * self.sensitivity && self.since_last > 0.28;
+        // ~1 s running average of the bass level.
+        let a = 1.0 - (-dt / 1.0f32).exp();
+        self.avg += (energy - self.avg) * a;
+        if beat {
+            if (0.25..2.0).contains(&self.since_last) {
+                self.intervals.push_back(self.since_last);
+                if self.intervals.len() > 16 {
+                    self.intervals.pop_front();
+                }
+                self.estimate();
+            }
+            self.since_last = 0.0;
+            self.env = 1.0;
+        } else {
+            self.env *= (-dt / 0.15f32).exp();
+        }
+        beat
+    }
+
+    /// Folds the gaps into one octave (80–160 BPM), takes the median, and scores how many agree.
+    fn estimate(&mut self) {
+        if self.intervals.len() < 4 {
+            return;
+        }
+        let mut periods: Vec<f32> = self
+            .intervals
+            .iter()
+            .map(|&iv| {
+                let mut p = iv;
+                while p < 0.375 {
+                    p *= 2.0;
+                }
+                while p > 0.75 {
+                    p /= 2.0;
+                }
+                p
+            })
+            .collect();
+        periods.sort_by(|a, b| a.total_cmp(b));
+        let median = periods[periods.len() / 2];
+        let agree = periods.iter().filter(|p| ((**p - median) / median).abs() < 0.06).count();
+        self.confidence = agree as f32 / periods.len() as f32;
+        self.bpm = 60.0 / median;
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self { sensitivity: self.sensitivity, ..Default::default() };
+    }
+
+    fn fill(&self, a: &mut AudioAnalysis, beat: bool) {
+        a.beat = beat;
+        a.beat_env = self.env;
+        a.bpm = self.bpm;
+        a.confidence = self.confidence;
+    }
 }
 
 pub const FFT_SIZE: usize = 2048;
@@ -26,7 +117,7 @@ mod native {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use rustfft::{Fft, FftPlanner, num_complex::Complex};
 
-    use super::{AudioAnalysis, FFT_SIZE, SPECTRUM_BARS};
+    use super::{AudioAnalysis, BeatTracker, FFT_SIZE, SPECTRUM_BARS};
 
     type Ring = Arc<Mutex<VecDeque<f32>>>;
 
@@ -52,6 +143,7 @@ mod native {
         last_update: Option<web_time::Instant>,
         /// Analyse samples pushed from the network session instead of a device.
         network: bool,
+        pub beats: BeatTracker,
     }
 
     impl AudioInput {
@@ -73,6 +165,7 @@ mod native {
                 spectrum: vec![0.0; SPECTRUM_BARS],
                 last_update: None,
                 network: false,
+                beats: BeatTracker::default(),
             };
             input.refresh_devices();
             input
@@ -115,6 +208,10 @@ mod native {
 
         pub fn spectrum(&self) -> &[f32] {
             &self.spectrum
+        }
+
+        pub fn analysis(&self) -> AudioAnalysis {
+            self.analysis
         }
 
         pub fn refresh_devices(&mut self) {
@@ -183,6 +280,7 @@ mod native {
             self.ring.lock().unwrap().clear();
             self.analysis = AudioAnalysis::default();
             self.spectrum.iter_mut().for_each(|v| *v = 0.0);
+            self.beats.reset();
         }
 
         /// Analyses the newest samples; call once per frame.
@@ -236,6 +334,10 @@ mod native {
             for (s, v) in self.spectrum.iter_mut().zip(bars) {
                 follow(s, v);
             }
+            // Kick detection works on the raw bass energy (independent of Gain).
+            let kick = band(40.0, 130.0);
+            let hit = self.beats.process(kick * kick, dt);
+            self.beats.fill(&mut self.analysis, hit);
             self.analysis
         }
     }
@@ -249,11 +351,12 @@ mod stub {
     pub struct AudioInput {
         pub gain: f32,
         pub release: f32,
+        pub beats: super::BeatTracker,
     }
 
     impl AudioInput {
         pub fn new() -> Self {
-            Self { gain: 1.0, release: 0.15 }
+            Self { gain: 1.0, release: 0.15, beats: Default::default() }
         }
         pub fn devices(&self) -> &[String] {
             &[]
@@ -266,6 +369,9 @@ mod stub {
         }
         pub fn spectrum(&self) -> &[f32] {
             &[]
+        }
+        pub fn analysis(&self) -> AudioAnalysis {
+            AudioAnalysis::default()
         }
         pub fn refresh_devices(&mut self) {}
         pub fn open(&mut self, _name: Option<&str>) -> Result<(), String> {
@@ -280,5 +386,31 @@ mod stub {
         pub fn update(&mut self) -> AudioAnalysis {
             AudioAnalysis::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BeatTracker;
+
+    /// A kick every 0.5 s (120 BPM) at 60 fps should be found and timed.
+    #[test]
+    fn detects_120_bpm() {
+        let mut t = BeatTracker::default();
+        let dt = 1.0 / 60.0;
+        let mut hits = 0;
+        let mut a = super::AudioAnalysis::default();
+        for f in 0..(60 * 12) {
+            let time = f as f32 * dt;
+            let phase = (time % 0.5) / 0.5;
+            // Sharp attack, quick decay, with a bit of background.
+            let energy = 0.02 + if phase < 0.12 { 1.0 - phase / 0.12 } else { 0.0 };
+            let hit = t.process(energy, dt);
+            t.fill(&mut a, hit);
+            hits += hit as i32;
+        }
+        assert!((22..=26).contains(&hits), "hits {hits}");
+        assert!((a.bpm - 120.0).abs() < 3.0, "bpm {}", a.bpm);
+        assert!(a.confidence > 0.8, "confidence {}", a.confidence);
     }
 }

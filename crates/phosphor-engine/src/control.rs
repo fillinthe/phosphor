@@ -15,6 +15,8 @@ pub struct ModInputs {
     pub beat_phase: f32,
     /// Beats elapsed on the BPM clock.
     pub beats: f32,
+    /// 1 on each detected audio beat, decaying quickly.
+    pub audio_beat: f32,
 }
 
 pub fn source_value(m: &Modulation, inputs: &ModInputs) -> f32 {
@@ -35,6 +37,7 @@ pub fn source_value(m: &Modulation, inputs: &ModInputs) -> f32 {
             (n * 12.9898).sin().mul_add(43_758.547, 0.0).rem_euclid(1.0)
         }
         ModSource::Steps => m.steps[((phase * 8.0) as usize).min(7)],
+        ModSource::AudioBeat => inputs.audio_beat,
     };
     if m.invert { 1.0 - v } else { v }
 }
