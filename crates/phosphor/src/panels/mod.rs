@@ -29,6 +29,7 @@ mod output;
 mod preset_list;
 mod preview;
 mod stream;
+mod surface;
 
 pub(crate) use audio::*;
 pub(crate) use clips::*;
@@ -46,6 +47,7 @@ pub(crate) use output::*;
 pub(crate) use preset_list::*;
 pub(crate) use preview::*;
 pub(crate) use stream::*;
+pub(crate) use surface::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Tab {
@@ -67,10 +69,11 @@ pub enum Tab {
     Monitor(u8),
     Mixer,
     Devices,
+    Surface,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 16] = [
+    pub const ALL: [Tab; 17] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -87,6 +90,7 @@ impl Tab {
         Tab::ShaderEditor,
         Tab::Mixer,
         Tab::Devices,
+        Tab::Surface,
     ];
 
     pub fn title(self) -> String {
@@ -111,6 +115,7 @@ impl Tab {
             Tab::ShaderEditor => "Shader Editor",
             Tab::Mixer => "Mixer",
             Tab::Devices => "Devices",
+            Tab::Surface => "Control Surface",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -156,6 +161,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Monitor(n) => monitor(ui, self.st, *n),
             Tab::Mixer => mixer(ui, self.st),
             Tab::Devices => devices(ui, self.st),
+            Tab::Surface => surface(ui, self.st),
         }
     }
 

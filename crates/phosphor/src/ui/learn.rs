@@ -30,19 +30,11 @@ pub(crate) fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
 }
 
 /// Typed-in mapping drafts, remembered per control while the menu is open.
-#[derive(Clone, Default)]
-pub(crate) struct MapDraft {
-    osc: String,
-    channel: u8,
-    cc: u8,
-    key: String,
-}
-
 /// The "Map" section of any control's right-click menu: Learn, the built-in OSC address, typed
 /// OSC / MIDI CC / key mappings, and Forget.
 pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     ui.set_min_width(300.0);
-    if ui.button(label(icon::BROADCAST, "Learn: move a knob, send OSC, or press a key")).clicked() {
+    if ui.button(label(icon::EAR, "Listen: move a knob, send OSC, or press a key")).clicked() {
         request(ui, LEARN_REQUEST, target.clone());
         ui.close();
     }
@@ -55,38 +47,18 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
         }
     });
     ui.menu_button(label(icon::PLUG, "Map to…"), |ui| {
-        ui.set_min_width(280.0);
+        ui.set_min_width(300.0);
+        ui.weak("Type an input by hand (or use Listen above):");
         let id = egui::Id::new(("map_draft", format!("{target:?}")));
-        let mut draft: MapDraft = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(MapDraft { channel: 1, ..Default::default() });
-        let mut chosen: Option<phosphor_engine::ControlSource> = None;
-        ui.label(RichText::new("OSC address").small().color(Color32::GRAY));
+        let mut draft: phosphor_engine::ControlSource = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(phosphor_engine::ControlSource::MidiCc { channel: 0, cc: 1 });
+        let mut set = false;
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut draft.osc).hint_text("/touchosc/fader1").desired_width(190.0));
-            if ui.add_enabled(draft.osc.starts_with('/'), egui::Button::new("Set")).clicked() {
-                chosen = Some(phosphor_engine::ControlSource::Osc { address: draft.osc.trim().to_string() });
-            }
+            source_editor(ui, ("map_to", format!("{target:?}")), &mut draft);
+            set = ui.button("Map").clicked();
         });
-        ui.label(RichText::new("MIDI control change").small().color(Color32::GRAY));
-        ui.horizontal(|ui| {
-            guarded!(ui, draft.channel, egui::DragValue::new(&mut draft.channel).range(1..=16).prefix("ch "));
-            guarded!(ui, draft.cc, egui::DragValue::new(&mut draft.cc).range(0..=127).prefix("CC "));
-            if ui.button("Set").clicked() {
-                chosen = Some(phosphor_engine::ControlSource::MidiCc { channel: draft.channel - 1, cc: draft.cc });
-            }
-            if ui.button("Note").on_hover_text("Use this number as a MIDI note (pads, keys) instead of a CC").clicked() {
-                chosen = Some(phosphor_engine::ControlSource::MidiNote { channel: draft.channel - 1, note: draft.cc });
-            }
-        });
-        ui.label(RichText::new("Keyboard key").small().color(Color32::GRAY));
-        ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut draft.key).hint_text("Q").char_limit(12).desired_width(60.0));
-            if ui.add_enabled(!draft.key.trim().is_empty(), egui::Button::new("Set")).clicked() {
-                chosen = Some(phosphor_engine::ControlSource::Key { key: draft.key.trim().to_uppercase() });
-            }
-        });
-        ui.ctx().data_mut(|d| d.insert_temp(id, draft));
-        if let Some(source) = chosen {
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(MAP_REQUEST), (target.clone(), source)));
+        ui.ctx().data_mut(|d| d.insert_temp(id, draft.clone()));
+        if set {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(MAP_REQUEST), (target.clone(), draft)));
             ui.close();
         }
     });
@@ -149,7 +121,7 @@ pub(crate) fn map_overlay(ui: &egui::Ui, resp: &egui::Response, target: &Control
     let hint = if active {
         "Now move a knob, send OSC, or press a key".to_string()
     } else if sources.is_empty() {
-        "Click, then move a knob / send OSC / press a key to map".to_string()
+        "Click to listen, then move a knob / send OSC / press a key".to_string()
     } else {
         format!("Mapped to {} — click to map again, right-click to forget", sources.join(", "))
     };

@@ -85,7 +85,9 @@ impl PhosphorApp {
                 notice: None,
                 audio: AudioInput::new(),
                 control: ControlHub::new(),
-                learn_pick: None,
+                listen_for: None,
+                map_draft: None,
+                map_search: String::new(),
                 stream: Streamer::new(stream_settings),
                 stream_audio_devices: Vec::new(),
                 net: NetSession::new(),
@@ -143,7 +145,7 @@ impl PhosphorApp {
             show_start: None,
             layouts,
             layout_draft: None,
-            bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false }),
+            bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false }),
             gather_windows: false,
             remote_published: 0.0,
             #[cfg(not(target_arch = "wasm32"))]
@@ -159,6 +161,11 @@ impl PhosphorApp {
             app.restore(s);
         }
         app.install_native_menu();
+        if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.tab.clone())
+            && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)
+        {
+            app.show_tab(*tab);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if app.bench.is_none() && crate::show::bundled().is_some() {
             app.show_start = Some(0);

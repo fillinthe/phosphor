@@ -17,6 +17,10 @@ pub struct BenchConfig {
     pub snapshot: Option<String>,
     /// Export the bench project as a standalone show into this folder (tests Export Show).
     pub export: Option<String>,
+    /// Bring this panel to the front (its title, e.g. "Control Surface"), for screenshots.
+    pub tab: Option<String>,
+    /// Save a picture of the whole Phosphor window here at the end (checks UI changes).
+    pub ui_shot: Option<String>,
     /// Open the default audio input and report its level.
     pub audio: bool,
     /// A .phosphor project to load instead of building one from the flags.
@@ -57,6 +61,8 @@ impl BenchConfig {
                 ("--fx", Some(v)) => cfg.effects.push(v),
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
                 ("--export", Some(v)) => cfg.export = Some(v),
+                ("--tab", Some(v)) => cfg.tab = Some(v),
+                ("--ui-shot", Some(v)) => cfg.ui_shot = Some(v),
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
                 ("--remote-password", Some(v)) => cfg.remote_password = Some(v),

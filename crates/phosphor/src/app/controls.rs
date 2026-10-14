@@ -16,7 +16,7 @@ impl PhosphorApp {
             t
         }) {
             st.comp.control_maps.retain(|m| m.target != target);
-            st.comp.control_maps.push(phosphor_engine::ControlMap { source, target });
+            st.comp.control_maps.push(phosphor_engine::ControlMap::new(source, target));
         }
         if let Some(t) = ctx.data_mut(|d| {
             let id = egui::Id::new(panels::LEARN_REQUEST);

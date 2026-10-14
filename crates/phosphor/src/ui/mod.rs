@@ -11,10 +11,12 @@ use serde::{Deserialize, Serialize};
 use crate::app::{State, Trigger};
 use crate::theme::{ACCENT, WARN};
 
+mod binding;
 mod learn;
 mod modulation;
 mod widgets;
 
+pub(crate) use binding::*;
 pub(crate) use learn::*;
 pub(crate) use modulation::*;
 pub(crate) use widgets::*;
