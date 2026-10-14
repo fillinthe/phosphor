@@ -36,6 +36,9 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] wgpu render graph: one command encoder per frame, one submit
 - [x] 12 built-in effects (WGSL) with per-effect Mix (dry/wet), 7 generators, 10 blend modes, fit/fill/stretch
 - [x] Live thumbnails per layer, Presets panel (built-in + yours), duplicate layer, dark theme, Phosphor icon font
+- [x] Layer workflow: drag thumbnails to reorder, Solo, FX bypass, right-click menu, Space/⌫/⌘D shortcuts
+- [x] Effects workflow: collapsible cards, drag handle to reorder, copy/paste whole chains, double-click resets a slider
+- [x] Panels can be closed and reopened (View ▸ Panels), layout presets, floating windows rescued on smaller screens
 - [x] **Master effects**: a pinned MASTER card whose chain runs over the whole mix
 - [x] **Rutt-Etra** rebuilt natively (v002-style scan processor: scanlines displaced by luminance,
       3D rotate/perspective, additive beam, line width) — GPU-generated, ~0 CPU
@@ -136,8 +139,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 
 ### Phase 7: Platforms
 - [~] macOS (Apple Silicon + Intel), macOS 14+
-- [ ] Browser build (WebGPU: Chrome/Edge, Safari 26+) — code is cfg-gated for wasm already; this Mac's
-      Homebrew Rust lacks `rustup`, so the `wasm32-unknown-unknown` target must be installed first
+- [x] **Browser build runs** (WebGPU, Chrome): `cd crates/phosphor && trunk build --release --dist ../../dist`,
+      then serve `dist/`. Same engine + UI; 9 MB wasm. No video/audio/MIDI in the browser yet
 - [ ] iPadOS / iOS (same engine + UI; touch-sized controls)
 - [ ] Older macOS (11–13): test wgpu Metal backend; likely only small changes needed
 

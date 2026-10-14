@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Phosphor</title>
+  <link data-trunk rel="rust" data-wasm-opt="2" data-bin="phosphor" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0c0d0f; }
+    canvas { display: block; width: 100%; height: 100%; outline: none; }
+    #nogpu { color: #ddd; font: 15px system-ui; padding: 2rem; display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="phosphor_canvas"></canvas>
+  <div id="nogpu">Phosphor needs WebGPU. Use a current Chrome, Edge, or Safari 26+.</div>
+  <script>if (!navigator.gpu) { document.getElementById('nogpu').style.display = 'block'; }</script>
+</body>
+</html>

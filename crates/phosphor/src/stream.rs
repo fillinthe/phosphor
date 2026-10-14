@@ -1,9 +1,10 @@
 //! Live streaming and recording without OBS: output frames are piped to FFmpeg, which encodes
 //! with VideoToolbox and sends to RTMP (YouTube, Twitch, …), SRT, or a file.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{self, SyncSender, TrySendError};
+use std::sync::mpsc::{SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -140,6 +141,17 @@ impl Streamer {
 
     /// Starts FFmpeg for frames of `width`×`height` (the canvas size).
     pub fn start(&mut self, width: u32, height: u32, now: f64) -> Result<(), String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (width, height, now);
+            return Err("Streaming from the browser arrives with network sessions".into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.start_native(width, height, now)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn start_native(&mut self, width: u32, height: u32, now: f64) -> Result<(), String> {
         self.stop();
         let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found. Install it with: brew install ffmpeg")?;
         let s = &self.settings;
@@ -199,7 +211,7 @@ impl Streamer {
                 }
             });
         }
-        let (tx, rx) = mpsc::sync_channel::<Msg>(4);
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Msg>(4);
         std::thread::Builder::new()
             .name("phosphor-stream".into())
             .spawn(move || {
@@ -237,7 +249,9 @@ impl Streamer {
     pub fn stop(&mut self) {
         self.tx = None;
         self.started = None;
+        #[cfg(not(target_arch = "wasm32"))]
         let child = self.child.clone();
+        #[cfg(not(target_arch = "wasm32"))]
         std::thread::spawn(move || {
             if let Some(mut c) = child.lock().unwrap().take() {
                 let _ = c.wait();
