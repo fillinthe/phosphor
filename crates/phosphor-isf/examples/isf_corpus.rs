@@ -71,7 +71,7 @@ fn main() {
     let mut per_dir: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     let mut unsupported: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut failed: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    let mut module = String::from(phosphor_isf::TEST_PRELUDE);
+    let mut module = phosphor_isf::test_prelude();
 
     for dir in &dirs {
         let dir = PathBuf::from(dir.replace('~', &home));

@@ -1,7 +1,8 @@
 //! Built-in effect and generator catalog. Each entry maps to a WGSL fragment entry point
 //! in `shaders/effects.wgsl` or `shaders/generators.wgsl`; parameters land in `u.p[..]`.
 
-pub const MAX_PARAMS: usize = 16;
+/// Floats a shader can take: 11 of the 12 uniform vec4s (the last is reserved).
+pub const MAX_PARAMS: usize = 44;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Param {

@@ -13,14 +13,17 @@ pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Pod, Zeroable)]
 pub(crate) struct Uniforms {
-    pub p: [[f32; 4]; 5],
+    /// Shader parameters (up to `shaders::MAX_PARAMS` floats; the last vec4 is reserved for
+    /// ISF pass/frame info). Mapping passes use the first 20 floats for corners and homography.
+    pub p: [[f32; 4]; 12],
     pub resolution: [f32; 2],
     pub time: f32,
     pub opacity: f32,
     pub uv_xform: [f32; 4],
     pub mode: u32,
     pub yuv: u32,
-    pub _pad: [u32; 2],
+    /// Pads to 256 bytes, the GPU's uniform offset alignment anyway (so the larger block is free).
+    pub _pad: [u32; 6],
 }
 
 impl Uniforms {

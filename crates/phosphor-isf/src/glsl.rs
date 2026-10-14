@@ -323,10 +323,13 @@ return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y); }\n",
 
 pub(crate) fn prelude(header: &Header, inputs: &[IsfInput], dialect: Dialect) -> String {
     let mut s = String::new();
+    // The uniform block, sized from the one constant (see `UNIFORM_VEC4S`).
+    s.push_str(&format!(
+        "#version 450\nlayout(std140, binding=0) uniform phosphor_U {{ vec4 p[{}]; vec2 resolution; float time; float opacity; vec4 uv_xform; uint mode; uint yuv; uint _pad0; uint _pad1; uint _pad2; uint _pad3; uint _pad4; uint _pad5; }} phosphor_u;\n",
+        crate::UNIFORM_VEC4S
+    ));
     s.push_str(
-        "#version 450\n\
-layout(std140, binding=0) uniform phosphor_U { vec4 p[5]; vec2 resolution; float time; float opacity; vec4 uv_xform; uint mode; uint yuv; uint _pad0; uint _pad1; } phosphor_u;\n\
-layout(binding=1) uniform sampler phosphor_samp;\n\
+        "layout(binding=1) uniform sampler phosphor_samp;\n\
 layout(binding=3) uniform texture2D phosphor_tex0;\n\
 layout(binding=4) uniform texture2D phosphor_tex1;\n\
 layout(binding=5) uniform texture2D phosphor_tex2;\n\

@@ -17,7 +17,10 @@ use glsl::Dialect;
 use std::fmt;
 
 /// Maximum number of floats packed into `u.p`.
-pub const MAX_PARAMS: usize = 16;
+/// vec4s in the shared uniform block (`Uniforms::p` in the engine). Must match the engine.
+pub const UNIFORM_VEC4S: usize = 12;
+/// Must equal `phosphor_engine::shaders::MAX_PARAMS`: all but the last (reserved) vec4.
+pub const MAX_PARAMS: usize = (UNIFORM_VEC4S - 1) * 4;
 /// Number of image bindings (`tex0..tex2`).
 pub const MAX_TEXTURES: usize = 3;
 
@@ -305,9 +308,11 @@ fn glsl_to_wgsl(src: &str) -> Result<String, IsfError> {
 }
 
 /// Phosphor's common prelude declarations, for validating imported shaders in isolation.
-pub const TEST_PRELUDE: &str = r#"
-struct U {
-    p: array<vec4f, 5>,
+pub fn test_prelude() -> String {
+    format!(
+        r#"
+struct U {{
+    p: array<vec4f, {UNIFORM_VEC4S}>,
     resolution: vec2f,
     time: f32,
     opacity: f32,
@@ -316,19 +321,25 @@ struct U {
     yuv: u32,
     _pad0: u32,
     _pad1: u32,
-};
+    _pad2: u32,
+    _pad3: u32,
+    _pad4: u32,
+    _pad5: u32,
+}};
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var samp_mirror: sampler;
 @group(0) @binding(3) var tex0: texture_2d<f32>;
 @group(0) @binding(4) var tex1: texture_2d<f32>;
 @group(0) @binding(5) var tex2: texture_2d<f32>;
-struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
-"#;
+struct VOut {{ @builtin(position) pos: vec4f, @location(0) uv: vec2f }};
+"#
+    )
+}
 
-/// Parses and validates `wgsl` appended to [`TEST_PRELUDE`] with naga's WGSL frontend.
+/// Parses and validates `wgsl` appended to [`test_prelude`] with naga's WGSL frontend.
 pub fn validate_wgsl(wgsl: &str) -> Result<(), String> {
-    let src = format!("{TEST_PRELUDE}\n{wgsl}");
+    let src = format!("{}\n{wgsl}", test_prelude());
     let module = naga::front::wgsl::parse_str(&src).map_err(|e| e.emit_to_string(&src))?;
     naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all())
         .validate(&module)
