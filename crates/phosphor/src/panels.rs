@@ -394,6 +394,18 @@ struct CardOut {
 #[derive(Clone, Copy)]
 pub struct MediaDrag(pub usize);
 
+/// A click / right-click area *behind* a card, registered before the card's contents so its own
+/// buttons, menus and sliders stay clickable (egui gives clicks to the widget registered last).
+/// Uses the card's rect from the previous frame; `None` on the very first frame.
+fn card_background(ui: &mut egui::Ui, id: egui::Id) -> Option<egui::Response> {
+    let rect = ui.ctx().data(|d| d.get_temp::<egui::Rect>(id))?;
+    Some(ui.interact(rect, id.with("bg"), Sense::click()))
+}
+
+fn remember_card(ui: &egui::Ui, id: egui::Id, rect: egui::Rect) {
+    ui.ctx().data_mut(|d| d.insert_temp(id, rect));
+}
+
 fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
     let stroke = if is_selected { Stroke::new(1.5, ACCENT) } else { ui.visuals().widgets.noninteractive.bg_stroke };
     let fill = if is_selected { Color32::from_rgb(24, 34, 30) } else { ui.visuals().faint_bg_color };
@@ -410,6 +422,8 @@ fn master_card(
     bypass: &mut bool,
 ) -> (bool, Option<crate::explorer::PaletteDrag>) {
     let mut select = false;
+    let card_id = egui::Id::new("master_card");
+    let bg = card_background(ui, card_id);
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -432,7 +446,8 @@ fn master_card(
             });
         });
     });
-    if frame.response.interact(Sense::click()).clicked() {
+    remember_card(ui, card_id, frame.response.rect);
+    if bg.is_some_and(|b| b.clicked()) {
         select = true;
     }
     // Only effects make sense on MASTER.
@@ -454,6 +469,8 @@ fn layer_card(
 ) -> CardOut {
     let mut select = false;
     let mut action = None;
+    let card_id = egui::Id::new(("layer_card", layer.id));
+    let bg = card_background(ui, card_id);
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -534,7 +551,8 @@ fn layer_card(
             ui.colored_label(WARN, err);
         }
     });
-    let resp = frame.response.interact(Sense::click());
+    remember_card(ui, card_id, frame.response.rect);
+    let resp = bg.unwrap_or_else(|| frame.response.clone());
     if resp.clicked() {
         select = true;
     }
@@ -1640,6 +1658,8 @@ fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
         for (i, s) in o.mapping.surfaces.iter_mut().enumerate() {
             let is_selected = *selected_surface == Some(s.id);
+            let card_id = egui::Id::new(("surface_card", s.id));
+            let bg = card_background(ui, card_id);
             let frame = card_frame(ui, is_selected).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
@@ -1663,7 +1683,8 @@ fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     ui.add(Slider::new(&mut s.input[3], 0.05..=1.0).text("Height"));
                 });
             });
-            let resp = frame.response.interact(Sense::click());
+            remember_card(ui, card_id, frame.response.rect);
+            let resp = bg.unwrap_or_else(|| frame.response.clone());
             if resp.clicked() {
                 *selected_surface = Some(s.id);
             }
@@ -2178,6 +2199,8 @@ fn mixer(ui: &mut egui::Ui, st: &mut State) {
         ui.horizontal_top(|ui| {
             for layer in comp.layers.iter_mut() {
                 let is_sel = *selected == Some(layer.id);
+                let card_id = egui::Id::new(("mixer_strip", layer.id));
+                let bg = card_background(ui, card_id);
                 let frame = card_frame(ui, is_sel).inner_margin(egui::Margin::same(5)).show(ui, |ui| {
                     ui.set_width(78.0);
                     ui.vertical_centered(|ui| {
@@ -2205,7 +2228,8 @@ fn mixer(ui: &mut egui::Ui, st: &mut State) {
                         });
                     });
                 });
-                if frame.response.interact(Sense::click()).clicked() {
+                remember_card(ui, card_id, frame.response.rect);
+                if bg.is_some_and(|b| b.clicked()) {
                     *selected = Some(layer.id);
                 }
             }
