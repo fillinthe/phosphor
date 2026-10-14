@@ -5,6 +5,7 @@ use super::*;
 pub(crate) fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulation>, target: ControlTarget, height: f32) {
     ui.spacing_mut().slider_width = height;
     let r = guarded!(ui, *value, Slider::new(value, 0.0..=1.0).vertical().show_value(false));
+    value_bubble(ui, &r, format!("{:.0}%", *value * 100.0));
     if let Some(mm) = m.as_ref() {
         let live = phosphor_engine::control::modulate(*value, 0.0, 1.0, Some(mm), &mod_inputs(ui));
         let rr = r.rect;
@@ -43,7 +44,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                         }
                         ui.label(RichText::new(name).small().strong());
                         fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
-                        ui.monospace(format!("{:3.0}%", layer.opacity * 100.0));
+                        percent_field(ui, &mut layer.opacity);
                         ui.horizontal(|ui| {
                             let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small());
                             mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
@@ -71,7 +72,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                     }
                     ui.label(RichText::new("MASTER").small().strong().color(ACCENT));
                     fader(ui, &mut comp.master_fade, &mut comp.master_fade_mod, ControlTarget::MasterFade, height);
-                    ui.monospace(format!("{:3.0}%", comp.master_fade * 100.0));
+                    percent_field(ui, &mut comp.master_fade);
                 });
             });
         });

@@ -104,3 +104,58 @@ pub fn displays() -> Vec<Display> {
 pub fn displays() -> Vec<Display> {
     Vec::new()
 }
+
+/// The display containing a global point (points, top-left origin), e.g. a window's centre.
+pub fn display_at(x: f32, y: f32) -> Option<Display> {
+    let all = displays();
+    all.iter().find(|d| x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h).cloned().or_else(|| all.into_iter().next())
+}
+
+/// Puts the window titled `title` above the menu bar and Dock and keeps it out of Spaces
+/// (`cover`), or back to a normal window. Output windows fill a display this way instead of
+/// macOS full screen, which blacks out every other display when "Displays have separate
+/// Spaces" is off.
+#[cfg(target_os = "macos")]
+pub fn cover_window(title: &str, cover: Option<&Display>) -> bool {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject};
+    use objc2_foundation::{NSArray, NSString};
+    // NSMainMenuWindowLevel (24) + 1, so the menu bar and Dock stay underneath.
+    const COVER_LEVEL: isize = 25;
+    // canJoinAllSpaces | stationary | ignoresCycle | fullScreenAuxiliary
+    const COVER_BEHAVIOR: usize = 1 | 16 | 64 | 256;
+    let Some(app_class) = AnyClass::get(c"NSApplication") else { return false };
+    // SAFETY: AppKit calls on the main thread (the UI thread), on NSApp's own windows.
+    unsafe {
+        let app: Option<Retained<AnyObject>> = msg_send![app_class, sharedApplication];
+        let Some(app) = app else { return false };
+        let windows: Option<Retained<NSArray<AnyObject>>> = msg_send![&*app, windows];
+        for w in windows.iter().flat_map(|a| a.iter()) {
+            let t: Option<Retained<NSString>> = msg_send![&*w, title];
+            if t.is_some_and(|t| t.to_string() == title) {
+                let on = cover.is_some();
+                let _: () = msg_send![&*w, setLevel: if on { COVER_LEVEL } else { 0isize }];
+                let _: () = msg_send![&*w, setCollectionBehavior: if on { COVER_BEHAVIOR } else { 0usize }];
+                let _: () = msg_send![&*w, setHasShadow: !on];
+                if let Some(d) = cover {
+                    // Exactly the display, in AppKit coordinates (bottom-left origin, main display
+                    // height as the reference), set directly so nothing nudges it below the menu bar.
+                    let main_h = displays().iter().find(|m| m.main).map_or(d.h, |m| m.h) as f64;
+                    let frame = objc2_foundation::NSRect::new(
+                        objc2_foundation::NSPoint::new(d.x as f64, main_h - (d.y + d.h) as f64),
+                        objc2_foundation::NSSize::new(d.w as f64, d.h as f64),
+                    );
+                    let _: () = msg_send![&*w, setFrame: frame, display: true];
+                }
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn cover_window(_title: &str, _cover: Option<&Display>) -> bool {
+    false
+}

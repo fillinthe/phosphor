@@ -5,6 +5,14 @@ use super::*;
 impl PhosphorApp {
     pub(crate) fn finish_bench(&mut self, ctx: &egui::Context, now: f64) {
         let Some(run) = &mut self.bench else { return };
+        // After the project is final (bench rebuilds it once ISF shaders are in).
+        if run.rebuilt
+            && let Some(want) = run.cfg.send_output.take()
+            && let Some(d) = crate::screens::displays().into_iter().find(|d| d.name.to_lowercase().contains(&want.to_lowercase()))
+        {
+            self.state.send_output_to(d);
+            return;
+        }
         let started = *run.started.get_or_insert(now);
         if let Some(col) = run.cfg.trigger_column.take_if(|_| now - started >= run.cfg.trigger_at) {
             self.state.trigger(Trigger::Column(col), now);

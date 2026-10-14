@@ -46,28 +46,30 @@ impl PhosphorApp {
     pub(crate) fn output_window(&self, ctx: &egui::Context, oid: u64, name: &str) {
         let id = egui::ViewportId::from_hash_of(("phosphor_output", oid));
         let shared = self.state.output.clone();
+        let title = format!("Phosphor · {name}");
         ctx.show_viewport_deferred(
             id,
             // Borderless: nothing but picture, so a projector sees no title bar or menu bar.
             egui::ViewportBuilder::default()
-                .with_title(format!("Phosphor · {name}"))
+                .with_title(title.clone())
                 .with_decorations(false)
                 .with_inner_size([960.0, 540.0]),
             move |ui, _class| {
                 let ctx = ui.ctx().clone();
                 let mut map = shared.lock().unwrap();
                 let Some(out) = map.get_mut(&oid) else { return };
-                let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-                out.fullscreen = fullscreen;
+                // "Fullscreen" = this window covering one display exactly (not macOS full screen,
+                // which would black out the other displays).
+                let fullscreen = out.fullscreen;
                 if ctx.input(|i| i.key_pressed(egui::Key::E)) {
                     out.edit_mapping = !out.edit_mapping;
                 }
-                // Screen placement: leave fullscreen, move to the display, then fullscreen there.
+                // Screen placement: leave macOS full screen if somehow in it, then cover the display.
                 if let Some((d, step, wait)) = out.place.as_mut() {
                     *wait += 1;
                     match *step {
                         0 => {
-                            if fullscreen {
+                            if ctx.input(|i| i.viewport().fullscreen.unwrap_or(false)) {
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
                                 *step = 1;
                             } else {
@@ -80,13 +82,17 @@ impl PhosphorApp {
                             *wait = 0;
                         }
                         2 => {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(d.x + 40.0, d.y + 40.0)));
-                            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(d.w * 0.6, d.h * 0.6)));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(d.x, d.y)));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(d.w, d.h)));
                             *step = 3;
                             *wait = 0;
                         }
-                        3 if *wait > 10 => {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+                        3 if *wait > 2 => {
+                            if !crate::screens::cover_window(&title, Some(d)) {
+                                log::warn!("output window '{title}' not found to cover the display");
+                            }
+                            out.display = Some(d.id);
+                            out.fullscreen = true;
                             *step = 4;
                         }
                         _ => {}
@@ -98,12 +104,31 @@ impl PhosphorApp {
                 if ctx.input(|i| i.viewport().close_requested()) {
                     out.open = false;
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::F)) {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+                let toggle = ctx.input(|i| i.key_pressed(egui::Key::F));
+                let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+                // Back to a normal window on the same display.
+                let uncover = |out: &mut OutputShared| {
+                    crate::screens::cover_window(&title, None);
+                    out.fullscreen = false;
+                    if let Some(d) = out.display.and_then(|id| crate::screens::displays().into_iter().find(|d| d.id == id)) {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(960.0, 540.0)));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(d.x + 60.0, d.y + 60.0)));
+                    }
+                };
+                // Fill the display the window is on.
+                let cover_here = |out: &mut OutputShared| {
+                    let r = ctx.input(|i| i.viewport().outer_rect);
+                    let c = r.map_or(egui::pos2(0.0, 0.0), |r| r.center());
+                    if let Some(d) = crate::screens::display_at(c.x, c.y) {
+                        out.place = Some((d, 2, 0));
+                    }
+                };
+                if toggle {
+                    if fullscreen { uncover(out) } else { cover_here(out) }
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                if escape {
                     if fullscreen {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+                        uncover(out);
                     } else {
                         out.open = false;
                     }
@@ -124,7 +149,7 @@ impl PhosphorApp {
                         ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
                     if drag.double_clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+                        if fullscreen { uncover(out) } else { cover_here(out) }
                     }
                     if !fullscreen {
                         ui.painter().text(

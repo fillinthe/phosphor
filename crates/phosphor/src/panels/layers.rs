@@ -276,7 +276,8 @@ pub(crate) fn layer_card(
                     if control_menu(&r, Some(&ControlTarget::LayerOpacity(layer.id)), Some(&mut layer.opacity_mod)) {
                         layer.opacity = 1.0;
                     }
-                    ui.monospace(format!("{:3.0}%", layer.opacity * 100.0));
+                    value_bubble(ui, &r, format!("{:.0}%", layer.opacity * 100.0));
+                    percent_field(ui, &mut layer.opacity);
                     mod_button(ui, &mut layer.opacity_mod);
                 });
                 ui.horizontal(|ui| {

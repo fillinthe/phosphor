@@ -201,3 +201,28 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64) -> Option<f64> {
     }
     None
 }
+
+/// A 0..1 value as a percentage you can drag or click to type (next to sliders without a number).
+pub(crate) fn percent_field(ui: &mut egui::Ui, v: &mut f32) -> egui::Response {
+    let mut pct = (*v * 100.0).round();
+    let r = guarded!(ui, pct, egui::DragValue::new(&mut pct).range(0.0..=100.0).speed(0.5).fixed_decimals(0).suffix("%"))
+        .on_hover_text("Drag, or click to type a value");
+    if r.changed() {
+        *v = (pct / 100.0).clamp(0.0, 1.0);
+    }
+    r
+}
+
+/// While a slider is being dragged, shows its value in a small bubble at the pointer.
+pub(crate) fn value_bubble(ui: &egui::Ui, slider: &egui::Response, text: impl Into<String>) {
+    if !slider.dragged() {
+        return;
+    }
+    let Some(at) = slider.ctx.pointer_interact_pos() else { return };
+    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("value_bubble")));
+    let galley = painter.layout_no_wrap(text.into(), egui::FontId::monospace(11.0), Color32::WHITE);
+    let rect = egui::Rect::from_center_size(at - egui::vec2(0.0, 18.0), galley.size() + egui::vec2(10.0, 4.0));
+    painter.rect_filled(rect, 4.0, Color32::from_rgb(20, 22, 24));
+    painter.rect_stroke(rect, 4.0, Stroke::new(1.0, ACCENT), StrokeKind::Outside);
+    painter.galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
+}
