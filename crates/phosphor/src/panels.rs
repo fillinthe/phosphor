@@ -37,7 +37,7 @@ impl Tab {
         Tab::Output,
     ];
 
-    fn title(self) -> &'static str {
+    pub fn title(self) -> &'static str {
         match self {
             Tab::Preview => "Preview",
             Tab::Layers => "Layers",
@@ -83,8 +83,9 @@ impl egui_dock::TabViewer for Viewer<'_> {
         }
     }
 
+    /// Closed panels come back from View ▸ Panels.
     fn is_closeable(&self, _tab: &Tab) -> bool {
-        false
+        true
     }
 
     /// Panels manage their own scrolling; the dock must never pan content sideways.
@@ -173,6 +174,7 @@ enum LayerAction {
     Down,
     Duplicate,
     Remove,
+    ClearSource,
 }
 
 fn layers(ui: &mut egui::Ui, st: &mut State) {
@@ -180,16 +182,18 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
         if ui.button(label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
         }
-        ui.weak("Top of the list is the top of the stack");
+        ui.weak("Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
     });
     ui.add_space(2.0);
     let aspect = st.aspect();
     let output_tex = st.texture;
+    let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let State { comp, selected, media, layer_textures, .. } = st;
     let count = comp.layers.len();
     let mut action = None;
+    let mut drop: Option<(u64, u64)> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-        if master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects) {
+        if master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass) {
             *selected = Some(MASTER_ID);
         }
         ui.add_space(4.0);
@@ -198,37 +202,71 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
             let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
             let err = media.errors.get(&layer.id).cloned();
             let is_selected = *selected == Some(layer.id);
-            let (select, act) = layer_card(ui, layer, thumb, aspect, is_selected, err.as_deref());
-            if select {
+            let muted = any_solo && !layer.solo;
+            let out = layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref());
+            if out.select {
                 *selected = Some(layer.id);
             }
-            if let Some(a) = act {
+            if let Some(a) = out.action {
                 action = Some((idx, a));
+            }
+            if let Some(from) = out.dropped {
+                drop = Some((from, layer.id));
             }
             ui.add_space(4.0);
         }
     });
+    if let Some((from, onto)) = drop
+        && from != onto
+        && let Some(a) = comp.layers.iter().position(|l| l.id == from)
+        && let Some(b) = comp.layers.iter().position(|l| l.id == onto)
+    {
+        let moved = comp.layers.remove(a);
+        comp.layers.insert(b, moved);
+    }
     match action {
         Some((i, LayerAction::Up)) if i + 1 < count => comp.layers.swap(i, i + 1),
         Some((i, LayerAction::Down)) if i > 0 => comp.layers.swap(i, i - 1),
         Some((i, LayerAction::Duplicate)) => {
-            let mut copy = comp.layers[i].clone();
-            copy.id = comp.new_id();
-            copy.name = format!("{} copy", copy.name);
-            for fx in &mut copy.effects {
-                fx.id = comp.new_id();
-            }
-            *selected = Some(copy.id);
-            comp.layers.insert(i + 1, copy);
+            let id = comp.layers[i].id;
+            duplicate_layer(st, id);
         }
         Some((i, LayerAction::Remove)) => {
-            let removed = comp.layers.remove(i);
-            if *selected == Some(removed.id) {
-                *selected = comp.layers.last().map(|l| l.id);
-            }
+            let id = comp.layers[i].id;
+            remove_layer(st, id);
+        }
+        Some((i, LayerAction::ClearSource)) => {
+            comp.layers[i].source = SourceSpec::None;
         }
         _ => {}
     }
+}
+
+pub fn duplicate_layer(st: &mut State, id: u64) {
+    let Some(i) = st.comp.layers.iter().position(|l| l.id == id) else { return };
+    let mut copy = st.comp.layers[i].clone();
+    copy.id = st.comp.new_id();
+    copy.name = format!("{} copy", copy.name);
+    for fx in &mut copy.effects {
+        fx.id = st.comp.new_id();
+    }
+    st.selected = Some(copy.id);
+    st.comp.layers.insert(i + 1, copy);
+}
+
+pub fn remove_layer(st: &mut State, id: u64) {
+    let Some(i) = st.comp.layers.iter().position(|l| l.id == id) else { return };
+    st.comp.layers.remove(i);
+    if st.selected == Some(id) {
+        st.selected = st.comp.layers.get(i.saturating_sub(1)).or(st.comp.layers.last()).map(|l| l.id);
+    }
+}
+
+struct CardOut {
+    select: bool,
+    action: Option<LayerAction>,
+    /// Id of a layer that was dropped onto this card.
+    dropped: Option<u64>,
 }
 
 fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
@@ -238,7 +276,7 @@ fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
 }
 
 /// The pinned card for the whole mix: shows the output and the master effect count.
-fn master_card(ui: &mut egui::Ui, tex: Option<egui::TextureId>, aspect: f32, is_selected: bool, effects: &[EffectState]) -> bool {
+fn master_card(ui: &mut egui::Ui, tex: Option<egui::TextureId>, aspect: f32, is_selected: bool, effects: &[EffectState], bypass: &mut bool) -> bool {
     let mut select = false;
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -253,7 +291,11 @@ fn master_card(ui: &mut egui::Ui, tex: Option<egui::TextureId>, aspect: f32, is_
                 ui.weak("Effects here run over all layers");
                 let fx = effects.iter().filter(|e| e.enabled).count();
                 if fx > 0 {
-                    ui.label(RichText::new(format!("{fx} fx")).small().color(ACCENT));
+                    let mut active = !*bypass;
+                    let color = if active { ACCENT } else { Color32::GRAY };
+                    if ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass the master effects").changed() {
+                        *bypass = !active;
+                    }
                 }
             });
         });
@@ -270,15 +312,17 @@ fn layer_card(
     thumb: Option<egui::TextureId>,
     aspect: f32,
     is_selected: bool,
+    muted: bool,
     err: Option<&str>,
-) -> (bool, Option<LayerAction>) {
+) -> CardOut {
     let mut select = false;
     let mut action = None;
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            let r = thumbnail(ui, thumb, egui::vec2(112.0, 112.0 / aspect), layer.enabled)
-                .on_hover_text("Click to select · double-click to toggle on/off");
+            let r = thumbnail(ui, thumb, egui::vec2(112.0, 112.0 / aspect), layer.enabled && !muted)
+                .on_hover_text("Click to select · double-click to toggle · drag to reorder");
+            r.dnd_set_drag_payload(layer.id);
             if r.clicked() {
                 select = true;
             }
@@ -287,8 +331,13 @@ fn layer_card(
             }
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong()).on_hover_text("Layer on/off");
-                    if ui.selectable_label(is_selected, RichText::new(&layer.name).strong().size(14.0)).clicked() {
+                    ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong()).on_hover_text("Layer on/off (Space)");
+                    let solo_color = if layer.solo { WARN } else { Color32::GRAY };
+                    ui.toggle_value(&mut layer.solo, RichText::new("S").small().strong().color(solo_color))
+                        .on_hover_text("Solo: only soloed layers reach the mix");
+                    let name = RichText::new(&layer.name).strong().size(14.0);
+                    let name = if muted { name.color(Color32::GRAY) } else { name };
+                    if ui.selectable_label(is_selected, name).clicked() {
                         select = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -326,7 +375,11 @@ fn layer_card(
                     });
                     let fx = layer.effects.iter().filter(|e| e.enabled).count();
                     if fx > 0 {
-                        ui.label(RichText::new(format!("{fx} fx")).small().color(ACCENT));
+                        let mut active = !layer.fx_bypass;
+                        let color = if active { ACCENT } else { Color32::GRAY };
+                        if ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass this layer's effects").changed() {
+                            layer.fx_bypass = !active;
+                        }
                     }
                 });
             });
@@ -335,10 +388,39 @@ fn layer_card(
             ui.colored_label(WARN, err);
         }
     });
-    if frame.response.interact(Sense::click()).clicked() {
+    let resp = frame.response.interact(Sense::click());
+    if resp.clicked() {
         select = true;
     }
-    (select, action)
+    resp.context_menu(|ui| {
+        if ui.button(label(icon::COPY, "Duplicate (⌘D)")).clicked() {
+            action = Some(LayerAction::Duplicate);
+            ui.close();
+        }
+        if ui.button(label(icon::ARROW_UP, "Move up")).clicked() {
+            action = Some(LayerAction::Up);
+            ui.close();
+        }
+        if ui.button(label(icon::ARROW_DOWN, "Move down")).clicked() {
+            action = Some(LayerAction::Down);
+            ui.close();
+        }
+        if ui.button("Clear source").clicked() {
+            action = Some(LayerAction::ClearSource);
+            ui.close();
+        }
+        ui.separator();
+        if ui.button(label(icon::TRASH, "Delete (⌫)")).clicked() {
+            action = Some(LayerAction::Remove);
+            ui.close();
+        }
+    });
+    // Drop target for a dragged layer.
+    let dropped = frame.response.dnd_release_payload::<u64>().map(|p| *p);
+    if frame.response.dnd_hover_payload::<u64>().is_some_and(|p| *p != layer.id) {
+        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+    }
+    CardOut { select, action, dropped }
 }
 
 fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) {
@@ -371,7 +453,9 @@ fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMo
         values.resize(i + 1, p.default);
     }
     ui.horizontal(|ui| {
-        ui.add(Slider::new(&mut values[i], p.min..=p.max).text(p.name));
+        if ui.add(Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset").double_clicked() {
+            values[i] = p.default;
+        }
         let slot = mods.iter().position(|m| m.index == i);
         let mut m = slot.map(|k| mods[k].m);
         mod_button(ui, &mut m);
@@ -416,33 +500,60 @@ fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
     }
 }
 
-/// An effect chain editor. Returns the id of an effect to append, if the user picked one.
-fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>) -> Option<&'static str> {
-    let mut add: Option<&'static str> = None;
+pub enum FxAction {
+    Add(&'static str),
+    CopyChain,
+    PasteChain,
+}
+
+/// Drag payload for reordering effects (distinct from the layer payload).
+#[derive(Clone, Copy)]
+struct FxDrag(u64);
+
+/// An effect chain editor: collapsible cards, drag to reorder, copy/paste whole chains.
+fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_len: usize) -> Option<FxAction> {
+    let mut action: Option<FxAction> = None;
     ui.horizontal(|ui| {
         ui.label(RichText::new("Effects").strong());
         ui.menu_button(label(icon::PLUS, "Add effect"), |ui| {
             for e in shaders::EFFECTS {
                 if ui.button(e.name).clicked() {
-                    add = Some(e.id);
+                    action = Some(FxAction::Add(e.id));
                     ui.close();
                 }
             }
         });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.add_enabled(clipboard_len > 0, egui::Button::new(label(icon::CLIPBOARD_TEXT, "Paste"))).on_hover_text("Append the copied chain").clicked() {
+                action = Some(FxAction::PasteChain);
+            }
+            if ui.add_enabled(!effects.is_empty(), egui::Button::new(label(icon::COPY, "Copy"))).on_hover_text("Copy this whole chain").clicked() {
+                action = Some(FxAction::CopyChain);
+            }
+        });
     });
     if effects.is_empty() {
-        ui.weak("No effects yet. Effects run top to bottom.");
+        ui.weak("No effects yet. Effects run top to bottom; drag the handle to reorder.");
     }
     let mut remove = None;
     let mut swap = None;
+    let mut drop: Option<(u64, u64)> = None;
     let count = effects.len();
     for (i, fx) in effects.iter_mut().enumerate() {
         let Some(desc) = shaders::effect(&fx.effect) else { continue };
         let fill = if fx.enabled { ui.visuals().faint_bg_color } else { ui.visuals().panel_fill };
-        egui::Frame::group(ui.style()).fill(fill).corner_radius(6).show(ui, |ui| {
+        let frame = egui::Frame::group(ui.style()).fill(fill).corner_radius(6).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
+            let id = ui.make_persistent_id(("fx", fx.id));
+            let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
+            let header = state.show_header(ui, |ui| {
+                let handle = ui.add(egui::Label::new(RichText::new(icon::DOTS_SIX_VERTICAL).color(Color32::GRAY)).sense(Sense::drag()));
+                handle.dnd_set_drag_payload(FxDrag(fx.id));
+                handle.on_hover_text("Drag to reorder");
                 ui.checkbox(&mut fx.enabled, RichText::new(desc.name).strong());
+                if fx.mix < 0.999 {
+                    ui.weak(format!("{:.0}%", fx.mix * 100.0));
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.small_button(icon::TRASH).on_hover_text("Remove effect").clicked() {
                         remove = Some(i);
@@ -455,11 +566,27 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>) -> Option<&
                     }
                 });
             });
-            for (pi, p) in desc.params.iter().enumerate() {
-                param_slider(ui, &mut fx.values, &mut fx.mods, pi, p);
-            }
-            ui.add(Slider::new(&mut fx.mix, 0.0..=1.0).text("Mix"));
+            header.body(|ui| {
+                for (pi, p) in desc.params.iter().enumerate() {
+                    param_slider(ui, &mut fx.values, &mut fx.mods, pi, p);
+                }
+                ui.add(Slider::new(&mut fx.mix, 0.0..=1.0).text("Mix"));
+            });
         });
+        if let Some(p) = frame.response.dnd_release_payload::<FxDrag>() {
+            drop = Some((p.0, fx.id));
+        }
+        if frame.response.dnd_hover_payload::<FxDrag>().is_some_and(|p| p.0 != fx.id) {
+            ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+        }
+    }
+    if let Some((from, onto)) = drop
+        && from != onto
+        && let Some(a) = effects.iter().position(|e| e.id == from)
+        && let Some(b) = effects.iter().position(|e| e.id == onto)
+    {
+        let moved = effects.remove(a);
+        effects.insert(b, moved);
     }
     if let Some((a, b)) = swap {
         effects.swap(a, b);
@@ -467,7 +594,31 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>) -> Option<&
     if let Some(i) = remove {
         effects.remove(i);
     }
-    add
+    action
+}
+
+fn apply_fx_action(st: &mut State, target: u64, action: FxAction) {
+    match action {
+        FxAction::Add(id) => add_effect_to(st, target, id),
+        FxAction::CopyChain => {
+            let chain = if target == MASTER_ID {
+                st.comp.master_effects.clone()
+            } else {
+                st.comp.layers.iter().find(|l| l.id == target).map(|l| l.effects.clone()).unwrap_or_default()
+            };
+            st.fx_clipboard = chain;
+        }
+        FxAction::PasteChain => {
+            for mut fx in st.fx_clipboard.clone() {
+                fx.id = st.comp.new_id();
+                if target == MASTER_ID {
+                    st.comp.master_effects.push(fx);
+                } else if let Some(l) = st.comp.layer_mut(target) {
+                    l.effects.push(fx);
+                }
+            }
+        }
+    }
 }
 
 fn inspector(ui: &mut egui::Ui, st: &mut State) {
@@ -476,7 +627,8 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
         ui.weak("Select a layer (or MASTER) to edit its source and effects.");
         return;
     };
-    let mut add_effect: Option<&'static str> = None;
+    let clipboard_len = st.fx_clipboard.len();
+    let mut fx_action: Option<FxAction> = None;
     if sel == MASTER_ID {
         let tex = st.texture;
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
@@ -486,7 +638,7 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
             ui.label(RichText::new("MASTER").strong().color(ACCENT));
             ui.weak("These effects run over the whole mix, after every layer has been blended.");
             ui.separator();
-            add_effect = effects_editor(ui, &mut st.comp.master_effects);
+            fx_action = effects_editor(ui, &mut st.comp.master_effects, clipboard_len);
         });
     } else {
         let thumb = st.layer_textures.get(&sel).map(|(t, _)| *t);
@@ -524,11 +676,11 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.add(Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
                 ui.separator();
             }
-            add_effect = effects_editor(ui, &mut layer.effects);
+            fx_action = effects_editor(ui, &mut layer.effects, clipboard_len);
         });
     }
-    if let Some(id) = add_effect {
-        add_effect_to(st, sel, id);
+    if let Some(action) = fx_action {
+        apply_fx_action(st, sel, action);
     }
 }
 

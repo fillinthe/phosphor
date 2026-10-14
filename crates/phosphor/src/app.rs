@@ -22,6 +22,7 @@ use crate::theme;
 const KEY_COMPOSITION: &str = "composition";
 const KEY_DOCK: &str = "dock";
 const KEY_STREAM: &str = "stream";
+const KEY_KNOWN_TABS: &str = "known_tabs";
 
 /// State the output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -59,6 +60,8 @@ pub struct State {
     pub control: ControlHub,
     pub learn_pick: Option<phosphor_engine::ControlTarget>,
     pub stream: Streamer,
+    /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
+    pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     /// This frame's audio/LFO signals, also shown in the Audio panel.
     pub mod_inputs: ModInputs,
 }
@@ -100,6 +103,7 @@ pub struct PhosphorApp {
     state: State,
     dock: DockState<Tab>,
     bench: Option<BenchRun>,
+    gather_windows: bool,
 }
 
 impl PhosphorApp {
@@ -115,7 +119,8 @@ impl PhosphorApp {
         };
         let stream_settings = stored(KEY_STREAM).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let mut dock = stored(KEY_DOCK).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_else(default_layout);
-        ensure_all_tabs(&mut dock);
+        let known: Vec<Tab> = stored(KEY_KNOWN_TABS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        ensure_new_tabs(&mut dock, &known);
 
         let render_state = cc.wgpu_render_state.clone();
         let engine = render_state.as_ref().map(|rs| Engine::new(rs.device.clone(), rs.queue.clone()));
@@ -142,10 +147,12 @@ impl PhosphorApp {
                 control: ControlHub::new(),
                 learn_pick: None,
                 stream: Streamer::new(stream_settings),
+                fx_clipboard: Vec::new(),
                 mod_inputs: ModInputs::default(),
             },
             dock,
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new() }),
+            gather_windows: false,
         };
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
@@ -238,6 +245,31 @@ impl PhosphorApp {
         }
     }
 
+    /// Keyboard shortcuts that act on the selected layer (ignored while typing in a field).
+    fn shortcuts(&mut self, ctx: &egui::Context) {
+        if ctx.memory(|m| m.focused().is_some()) {
+            return;
+        }
+        let Some(sel) = self.state.selected else { return };
+        if sel == phosphor_engine::MASTER_ID {
+            return;
+        }
+        let (delete, duplicate, toggle) = ctx.input(|i| {
+            (
+                i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
+                i.modifiers.command && i.key_pressed(egui::Key::D),
+                i.key_pressed(egui::Key::Space),
+            )
+        });
+        if delete {
+            panels::remove_layer(&mut self.state, sel);
+        } else if duplicate {
+            panels::duplicate_layer(&mut self.state, sel);
+        } else if toggle && let Some(l) = self.state.comp.layer_mut(sel) {
+            l.enabled = !l.enabled;
+        }
+    }
+
     /// Pulls corner drags made in the output window back into the composition.
     fn sync_mapping_from_output(&mut self) {
         let mut out = self.state.output.lock().unwrap();
@@ -288,14 +320,42 @@ impl PhosphorApp {
                 ui.separator();
                 ui.menu_button("View", |ui| {
                     ui.weak("Drag any tab to move it; drag it outside to float it.");
-                    if ui.button("Reset layout").clicked() {
-                        self.dock = default_layout();
+                    ui.menu_button("Panels", |ui| {
+                        for tab in Tab::ALL {
+                            let open = self.dock.find_tab(&tab).is_some();
+                            if ui.selectable_label(open, tab.title()).clicked() {
+                                match self.dock.find_tab(&tab) {
+                                    Some(path) => {
+                                        self.dock.remove_tab(path);
+                                    }
+                                    None => {
+                                        self.dock.add_window(vec![tab]);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    ui.menu_button("Layouts", |ui| {
+                        for (name, make) in LAYOUTS {
+                            if ui.button(*name).clicked() {
+                                self.dock = make();
+                                ui.close();
+                            }
+                        }
+                    });
+                    if ui.button("Gather floating windows").on_hover_text("Bring every floating panel back onto this screen").clicked() {
+                        self.gather_windows = true;
                         ui.close();
                     }
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let s = self.state.stats.latest;
-                    ui.monospace(format!("{:5.1} fps  engine {:4.2} ms  CPU {:4.1}%  {:4.0} MB", s.fps, s.render_ms, s.cpu_percent, s.memory_mb));
+                    let wide = ui.available_width() > 460.0;
+                    if wide {
+                        ui.monospace(format!("{:5.1} fps  engine {:4.2} ms  CPU {:4.1}%  {:4.0} MB", s.fps, s.render_ms, s.cpu_percent, s.memory_mb));
+                    } else if ui.available_width() > 120.0 {
+                        ui.monospace(format!("{:3.0} fps", s.fps));
+                    }
                 });
             });
             ui.add_space(2.0);
@@ -398,6 +458,7 @@ impl eframe::App for PhosphorApp {
         let now = ctx.input(|i| i.time);
 
         self.handle_dropped_files(&ctx);
+        self.shortcuts(&ctx);
         self.sync_mapping_from_output();
         {
             let State { control, comp, .. } = &mut self.state;
@@ -406,13 +467,14 @@ impl eframe::App for PhosphorApp {
         }
         self.render(now);
         self.top_bar(ui);
+        rescue_windows(&mut self.dock, ctx.content_rect(), std::mem::take(&mut self.gather_windows));
 
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let mut style = egui_dock::Style::from_egui(ui.style());
             style.tab_bar.fill_tab_bar = true;
             DockArea::new(&mut self.dock)
                 .style(style)
-                .show_close_buttons(false)
+                .show_close_buttons(true)
                 .show_leaf_close_all_buttons(false)
                 .show_leaf_collapse_buttons(false)
                 .show_inside(ui, &mut Viewer { st: &mut self.state });
@@ -455,6 +517,9 @@ impl eframe::App for PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.state.stream.settings) {
             storage.set_string(KEY_STREAM, json);
         }
+        if let Ok(json) = serde_json::to_string(&Tab::ALL) {
+            storage.set_string(KEY_KNOWN_TABS, json);
+        }
     }
 }
 
@@ -468,11 +533,62 @@ fn default_layout() -> DockState<Tab> {
     dock
 }
 
-/// Panels added in newer builds show up in layouts saved by older ones.
-fn ensure_all_tabs(dock: &mut DockState<Tab>) {
+/// Panels added in newer builds show up in layouts saved by older ones; panels the user closed
+/// on purpose stay closed.
+fn ensure_new_tabs(dock: &mut DockState<Tab>, known: &[Tab]) {
     for tab in Tab::ALL {
-        if dock.find_tab(&tab).is_none() {
+        if !known.contains(&tab) && dock.find_tab(&tab).is_none() {
             dock.push_to_focused_leaf(tab);
         }
     }
+}
+
+/// Keeps floating panels reachable: a window saved on a bigger display, or dragged off the
+/// edge, is moved back so its title bar is inside `screen`. `force` pulls every window fully inside.
+fn rescue_windows(dock: &mut DockState<Tab>, screen: egui::Rect, force: bool) {
+    let margin = 48.0;
+    for surface in dock.iter_surfaces_mut() {
+        let egui_dock::Surface::Window(_, ws) = surface else { continue };
+        let r = ws.rect();
+        if !r.is_finite() || r.width() <= 0.0 {
+            continue;
+        }
+        let max_size = (screen.size() - egui::vec2(16.0, 16.0)).max(egui::vec2(200.0, 120.0));
+        if r.width() > max_size.x || r.height() > max_size.y {
+            ws.set_size(r.size().min(max_size));
+        }
+        let visible = egui::Rect::from_min_max(
+            egui::pos2(screen.left() - r.width() + margin, screen.top()),
+            egui::pos2(screen.right() - margin, screen.bottom() - margin),
+        );
+        let lost = !visible.contains(r.min) || r.min.y < screen.top();
+        if lost || force {
+            let max_pos = (screen.max - r.size()).max(screen.min);
+            let target = egui::pos2(r.min.x.clamp(screen.left(), max_pos.x.max(screen.left())), r.min.y.clamp(screen.top(), max_pos.y.max(screen.top())));
+            ws.set_position(target);
+        }
+    }
+}
+
+const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] =
+    &[("Default", default_layout), ("Performance", layout_performance), ("Mapping", layout_mapping)];
+
+/// Big preview, layers on the right, audio + control underneath: for playing a show.
+fn layout_performance() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Preview]);
+    let surface = dock.main_surface_mut();
+    let [left, right] = surface.split_right(NodeIndex::root(), 0.7, vec![Tab::Layers]);
+    surface.split_below(right, 0.6, vec![Tab::Inspector, Tab::Presets]);
+    surface.split_below(left, 0.78, vec![Tab::Audio, Tab::Control, Tab::Stream]);
+    dock
+}
+
+/// Mapping editor front and centre, with the output controls beside it.
+fn layout_mapping() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Mapping]);
+    let surface = dock.main_surface_mut();
+    let [left, right] = surface.split_right(NodeIndex::root(), 0.7, vec![Tab::Output, Tab::Layers]);
+    surface.split_below(right, 0.5, vec![Tab::Inspector]);
+    surface.split_below(left, 0.72, vec![Tab::Preview, Tab::Library, Tab::Presets]);
+    dock
 }

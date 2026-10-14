@@ -222,6 +222,10 @@ pub struct LayerState {
     pub name: String,
     pub source: SourceSpec,
     pub enabled: bool,
+    /// When any layer is soloed, only soloed layers reach the mix.
+    pub solo: bool,
+    /// Skip this layer's effect chain (quick A/B without touching the chain).
+    pub fx_bypass: bool,
     pub opacity: f32,
     pub blend: BlendMode,
     pub fit: FitMode,
@@ -241,6 +245,8 @@ impl Default for LayerState {
             name: "Layer".into(),
             source: SourceSpec::None,
             enabled: true,
+            solo: false,
+            fx_bypass: false,
             opacity: 1.0,
             blend: BlendMode::Normal,
             fit: FitMode::Fill,
@@ -280,11 +286,12 @@ pub struct Composition {
     pub master_effects: Vec<EffectState>,
     /// MIDI/OSC bindings.
     pub control_maps: Vec<ControlMap>,
+    pub master_fx_bypass: bool,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false }
     }
 }
 

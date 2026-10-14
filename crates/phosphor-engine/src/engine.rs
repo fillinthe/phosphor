@@ -187,15 +187,17 @@ impl Engine {
         let mut layers_drawn = 0;
 
         let thumb_h = (THUMBNAIL_WIDTH * h / w).max(1);
+        let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
         for layer in &comp.layers {
             // Faded-out layers still render (into their thumbnail) so they can be cued before going live.
             if !layer.enabled {
                 continue;
             }
             let Some(frame) = self.resolve_source(layer, w, h, time, mods, &mut passes) else { continue };
-            let frame = self.apply_effects(layer.id, &layer.effects, frame, time, mods, &mut passes);
+            let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &mut passes) };
             self.push_thumbnail(layer, &frame, (w, h), thumb_h, &mut passes);
-            let opacity = modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods);
+            let muted = any_solo && !layer.solo;
+            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) };
             if opacity <= 0.001 {
                 continue;
             }
@@ -229,7 +231,7 @@ impl Engine {
 
         let output_view = self.output.as_ref().unwrap().view.clone();
         let mut master = current.map_or(self.gpu.blank.clone(), |c| self.accum[c].as_ref().unwrap().view.clone());
-        if current.is_some() && comp.master_effects.iter().any(|e| e.enabled) {
+        if current.is_some() && !comp.master_fx_bypass && comp.master_effects.iter().any(|e| e.enabled) {
             let frame = Frame::Rgb { view: master.clone(), w, h };
             if let Frame::Rgb { view, .. } = self.apply_effects(MASTER_ID, &comp.master_effects, frame, time, mods, &mut passes) {
                 master = view;
