@@ -1,0 +1,14 @@
+[package]
+name = "phosphor-engine"
+version = "0.1.0"
+edition = "2024"
+description = "Phosphor real-time video engine (wgpu: Metal natively, WebGPU in the browser)"
+
+[dependencies]
+wgpu = { version = "30", default-features = false, features = ["wgsl"] }
+bytemuck = { version = "1.25", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+naga = { version = "30", features = ["wgsl-in"] }
