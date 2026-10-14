@@ -14,6 +14,7 @@ pub enum Purpose {
     SaveProject,
     SaveSnapshot,
     StreamFile,
+    ExportShow,
 }
 
 pub struct Dialogs {

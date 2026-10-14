@@ -19,6 +19,9 @@ mkdir -p "$APP/Contents/Frameworks"
 cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
 cp vendor/Syphon-LICENSE.txt "$APP/Contents/Resources/"
 
+# FFmpeg and its libraries, so the app (and exported shows) run on Macs without Homebrew.
+python3 -I scripts/bundle-dylibs.py "$APP"
+
 # Icon: every size macOS asks for, from the 1024 px master.
 ICONSET=$(mktemp -d)/Phosphor.iconset
 mkdir -p "$ICONSET"

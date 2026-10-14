@@ -20,6 +20,12 @@ mod remote;
 mod screens;
 mod stats;
 mod stream;
+#[cfg(not(target_arch = "wasm32"))]
+mod show;
+#[cfg(not(target_arch = "wasm32"))]
+mod export;
+mod history;
+mod menu;
 #[cfg(target_os = "macos")]
 mod syphon;
 mod thumbs;
@@ -75,7 +81,7 @@ fn main() -> eframe::Result {
         persist_window: bench.is_none(),
         ..Default::default()
     };
-    eframe::run_native("Phosphor", options, Box::new(move |cc| Ok(Box::new(app::PhosphorApp::new(cc, bench)))))
+    eframe::run_native(show::storage_name(), options, Box::new(move |cc| Ok(Box::new(app::PhosphorApp::new(cc, bench)))))
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -54,16 +54,15 @@ app that's much smaller and lighter on the CPU.
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
 9. **ISF gaps**: multi-pass / feedback / >16 params (142 shaders), City Lights generator renders black,
    Broken LCD looks unchanged at defaults
-9b. **Export show**: one click packs a finished setup (project, every media file, shaders, ISF, MIDI/OSC/key
-    mappings, outputs and mapping) into a standalone player app that runs on another Mac without Phosphor
-    installed — opens straight into the show, outputs on their screens, controllers live
+9b. ~~Export show~~ done (File → Export Show). Next: a locked "player only" mode (hide editing, password to
+    unlock), Windows/Linux players, and notarized exports
 9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with
     disconnect / block / disable
 9d. ~~Syphon out~~ done — next NDI (network video to other machines/MadMapper on another Mac)
 9e. **Online media library on phosphorfx.com**: browse/search a hosted catalogue of clips, loops, shaders,
     ISF and presets from inside the Media panel, sorted by newest/popular; download on demand into the bin
     (cached, with thumbnails), new-drops badge; later user uploads/packs tied to the account
-10. **Distribution**: bundle FFmpeg inside the .app (LGPL build), notarize, auto-update, Intel test
+10. **Distribution**: LGPL FFmpeg build (current bundled one is Homebrew's GPL build) · bundle FFmpeg inside the .app (LGPL build), notarize, auto-update, Intel test
 
 ## TODO
 
@@ -123,6 +122,10 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] **Syphon output**: composition published as "Phosphor" (+ optional per-output sources after mapping);
       zero cost until an app (MadMapper, Resolume, OBS, VDMX) connects; verified with a Syphon client
 - [x] **Devices panel**: phones/browsers (disconnect, block), MIDI inputs on/off with activity, OSC senders (block)
+- [x] **Menu bar** (macOS system menu + in-window): File/Edit/View/Output/Help, Save to current file, Open Recent,
+      **Undo/Redo** (100 steps), zoom
+- [x] **Export Show**: standalone .app (+ zip) with project, media, used shaders, mappings; FFmpeg bundled in the app
+- [x] Right-click never moves sliders; app-wide controls mappable (tempo, launch, audio, bypass, Syphon, speed)
 - [x] **Watch folders**: every clip in a folder (+ subfolders) loads into the bin, new files appear automatically
       (rescan every 10 s, background thread); bin grouped by folder; "Fill clips of the selected layer" from a folder
 - [x] File dialogs never pause the show (sheets; results arrive next frame); images decode in the background

@@ -31,6 +31,10 @@ const KEY_FAVORITES: &str = "favorites";
 const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
 const KEY_REMOTE_PASSWORD: &str = "remote_password";
+const KEY_RECENT_PROJECTS: &str = "recent_projects";
+/// In-window menu clicks, queued for `menu_actions`.
+pub const MENU_REQUEST: &str = "phosphor_menu_request";
+const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_WATCHED: &str = "watched_folders";
 
 /// State one output window (a separate OS window) reads each frame.
@@ -129,6 +133,11 @@ pub struct State {
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
     pub media_view: panels::MediaView,
+    /// The project file being worked on (Save writes here).
+    pub project_path: Option<String>,
+    pub recent: Vec<String>,
+    pub history: crate::history::History,
+    pub export: ExportUi,
     #[cfg(target_os = "macos")]
     pub syphon: crate::syphon::Syphon,
     pub clock: Clock,
@@ -160,6 +169,51 @@ impl State {
     pub fn preview_tex(&self, key: &str) -> Option<egui::TextureId> {
         let i = self.preview_keys.iter().position(|k| k == key)?;
         self.preview_textures.get(i).map(|(t, _)| *t)
+    }
+
+    /// Remembers the project file (title, Save, Open Recent).
+    pub fn set_project_path(&mut self, path: &str) {
+        self.project_path = Some(path.to_string());
+        self.recent.retain(|p| p != path);
+        self.recent.insert(0, path.to_string());
+        self.recent.truncate(12);
+    }
+
+    /// Writes the project to its file, or asks where when it has none yet.
+    pub fn save_project(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        match &self.project_path {
+            Some(p) => match std::fs::write(p, self.comp.to_json()) {
+                Ok(()) => self.notice = Some(format!("Saved {}", std::path::Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned()))),
+                Err(e) => self.notice = Some(format!("Save failed: {e}")),
+            },
+            None => self.save_project_as(),
+        }
+    }
+
+    pub fn save_project_as(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let name = self
+                .project_path
+                .as_deref()
+                .and_then(|p| std::path::Path::new(p).file_name())
+                .map_or("Untitled.phosphor".to_string(), |n| n.to_string_lossy().into_owned());
+            self.dialogs.save_file(crate::dialogs::Purpose::SaveProject, ("Phosphor project", &["phosphor"]), &name);
+        }
+    }
+
+    pub fn open_project_file(&mut self, path: &str) {
+        match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
+            Ok(comp) => {
+                self.load_composition(comp);
+                self.set_project_path(path);
+            }
+            Err(e) => {
+                self.notice = Some(format!("Open failed: {e}"));
+                self.recent.retain(|p| p != path);
+            }
+        }
     }
 
     pub fn load_composition(&mut self, comp: Composition) {
@@ -278,8 +332,24 @@ struct BenchRun {
     rebuilt: bool,
 }
 
+/// The Export Show window.
+#[derive(Default)]
+pub struct ExportUi {
+    pub open: bool,
+    pub name: String,
+    pub zip: bool,
+    pub autostart: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub progress: Option<crate::export::Shared>,
+}
+
 pub struct PhosphorApp {
     state: State,
+    #[cfg(target_os = "macos")]
+    native_menu: Option<(muda::Menu, Vec<crate::menu::Action>)>,
+    title: String,
+    /// Exported show: open its outputs on the first frames.
+    show_start: Option<u32>,
     dock: DockState<Tab>,
     bench: Option<BenchRun>,
     gather_windows: bool,
@@ -312,7 +382,12 @@ impl PhosphorApp {
                 let recovered = snapshot.as_ref().and_then(|s| s.comp.clone());
                 #[cfg(target_arch = "wasm32")]
                 let recovered: Option<Composition> = None;
-                recovered.or_else(|| stored(KEY_COMPOSITION).and_then(|json| Composition::from_json(&json).ok())).unwrap_or_else(Composition::starter)
+                #[cfg(not(target_arch = "wasm32"))]
+                let show = crate::show::bundled().and_then(|b| crate::show::load(b).map_err(|e| eprintln!("show: {e}")).ok());
+                #[cfg(target_arch = "wasm32")]
+                let show: Option<Composition> = None;
+                // An exported show always starts from its own project (unless recovering from a crash).
+                recovered.or(show).or_else(|| stored(KEY_COMPOSITION).and_then(|json| Composition::from_json(&json).ok())).unwrap_or_else(Composition::starter)
             }
         };
         let stream_settings = stored(KEY_STREAM).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
@@ -390,6 +465,10 @@ impl PhosphorApp {
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 media_view: Default::default(),
+                project_path: stored(KEY_PROJECT_PATH).filter(|p| !p.is_empty()),
+                recent: stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+                history: Default::default(),
+                export: Default::default(),
                 #[cfg(target_os = "macos")]
                 syphon: Default::default(),
                 clock: Clock::new(comp_bpm),
@@ -398,6 +477,10 @@ impl PhosphorApp {
                 mod_inputs: ModInputs::default(),
             },
             dock,
+            #[cfg(target_os = "macos")]
+            native_menu: None,
+            title: String::new(),
+            show_start: None,
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false }),
             gather_windows: false,
             remote_published: 0.0,
@@ -412,6 +495,17 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(s) = snapshot {
             app.restore(s);
+        }
+        #[cfg(target_os = "macos")]
+        if app.bench.is_none() {
+            let panels: Vec<String> = Tab::ALL.iter().map(|t| t.title().to_string()).collect();
+            let layouts: Vec<&str> = LAYOUTS.iter().map(|(n, _)| *n).collect();
+            app.native_menu = crate::menu::native::install(&panels, &layouts);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if app.bench.is_none() && crate::show::bundled().is_some() {
+            app.show_start = Some(0);
+            app.state.project_path = None;
         }
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
@@ -774,16 +868,41 @@ impl PhosphorApp {
                 Purpose::OpenProject => {
                     if let Some(p) = paths.first() {
                         match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
-                            Ok(comp) => st.load_composition(comp),
+                            Ok(comp) => {
+                                st.load_composition(comp);
+                                st.set_project_path(&p.to_string_lossy());
+                            }
                             Err(e) => st.notice = Some(format!("Open failed: {e}")),
                         }
                     }
                 }
                 Purpose::SaveProject => {
-                    if let Some(p) = paths.first()
-                        && let Err(e) = std::fs::write(p, st.comp.to_json())
-                    {
-                        st.notice = Some(format!("Save failed: {e}"));
+                    if let Some(p) = paths.first() {
+                        st.set_project_path(&p.to_string_lossy());
+                        st.save_project();
+                    }
+                }
+                Purpose::ExportShow => {
+                    if let Some(dest) = paths.first() {
+                        let screens = {
+                            let map = st.output.lock().unwrap();
+                            let displays = crate::screens::displays();
+                            map.iter()
+                                .filter_map(|(id, o)| {
+                                    let d = displays.iter().find(|d| Some(d.id) == o.display)?;
+                                    Some((*id, d.name.clone()))
+                                })
+                                .collect()
+                        };
+                        let req = crate::export::Request {
+                            comp: st.comp.clone(),
+                            name: st.export.name.clone(),
+                            dest: dest.clone(),
+                            zip: st.export.zip,
+                            autostart: st.export.autostart,
+                            screens,
+                        };
+                        st.export.progress = Some(crate::export::start(req));
                     }
                 }
                 Purpose::SaveSnapshot => {
@@ -941,19 +1060,269 @@ impl PhosphorApp {
             let col = col + self.state.clip_page * panels::CLIP_PAGE_SIZE;
             self.state.trigger(Trigger::Column(col), now);
         }
-        let (delete, duplicate, toggle) = ctx.input(|i| {
-            (
-                i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
-                i.modifiers.command && i.key_pressed(egui::Key::D),
-                i.key_pressed(egui::Key::Space),
-            )
-        });
+        // ⌘D (duplicate) lives in the Edit menu.
+        let (delete, toggle) = ctx.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace), i.key_pressed(egui::Key::Space)));
         if delete {
             panels::remove_layer(&mut self.state, sel);
-        } else if duplicate {
-            panels::duplicate_layer(&mut self.state, sel);
         } else if toggle && let Some(l) = self.state.comp.layer_mut(sel) {
             l.enabled = !l.enabled;
+        }
+    }
+
+    /// Menu bar clicks (system and in-window) and their shortcuts.
+    fn menu_actions(&mut self, ctx: &egui::Context, now: f64) {
+        let mut actions = crate::menu::pressed(ctx);
+        #[cfg(target_os = "macos")]
+        if let Some((_, ids)) = &self.native_menu {
+            actions.extend(crate::menu::native::poll(ids));
+        }
+        actions.extend(ctx.data_mut(|d| d.remove_temp::<Vec<crate::menu::Action>>(egui::Id::new(MENU_REQUEST))).unwrap_or_default());
+        for a in actions {
+            self.run_action(ctx, a, now);
+        }
+    }
+
+    fn run_action(&mut self, ctx: &egui::Context, a: crate::menu::Action, now: f64) {
+        use crate::menu::Action as A;
+        let st = &mut self.state;
+        let selected_layer = st.selected.filter(|id| *id != phosphor_engine::MASTER_ID && st.comp.layers.iter().any(|l| l.id == *id));
+        match a {
+            A::NewProject => {
+                st.load_composition(Composition::starter());
+                st.project_path = None;
+                st.notice = Some("New project. Undo (⌘Z) brings the previous one back.".into());
+            }
+            A::Open => {
+                #[cfg(not(target_arch = "wasm32"))]
+                st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project", &["phosphor"])));
+            }
+            A::Save => st.save_project(),
+            A::SaveAs => st.save_project_as(),
+            A::Import => {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let exts = crate::media::dialog_extensions();
+                    st.dialogs.pick_files(crate::dialogs::Purpose::ImportFiles, Some(("Media", &exts)));
+                }
+            }
+            A::WatchFolder => {
+                #[cfg(not(target_arch = "wasm32"))]
+                st.dialogs.pick_folder(crate::dialogs::Purpose::WatchFolder);
+            }
+            A::Snapshot => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.save_snapshot();
+            }
+            A::ExportShow => {
+                let e = &mut st.export;
+                e.open = true;
+                if e.name.is_empty() {
+                    e.name = st
+                        .project_path
+                        .as_deref()
+                        .and_then(|p| std::path::Path::new(p).file_stem())
+                        .map_or("My Show".to_string(), |s| s.to_string_lossy().into_owned());
+                    e.autostart = true;
+                }
+            }
+            A::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            A::Undo => {
+                if let Some(c) = st.history.undo(&st.comp) {
+                    st.comp = c;
+                    st.comp.ensure_outputs();
+                }
+            }
+            A::Redo => {
+                if let Some(c) = st.history.redo(&st.comp) {
+                    st.comp = c;
+                    st.comp.ensure_outputs();
+                }
+            }
+            A::AddLayer => {
+                st.add_layer();
+            }
+            A::DuplicateLayer => {
+                if let Some(id) = selected_layer {
+                    panels::duplicate_layer(st, id);
+                }
+            }
+            A::DeleteLayer => {
+                if let Some(id) = selected_layer {
+                    panels::remove_layer(st, id);
+                }
+            }
+            A::Palette => st.palette.toggle(),
+            A::ResetLayout => self.dock = default_layout(),
+            A::AddMonitor => {
+                let _ = self.add_monitor();
+            }
+            A::Gather => self.gather_windows = true,
+            A::ZoomIn => ctx.set_zoom_factor((ctx.zoom_factor() * 1.1).min(3.0)),
+            A::ZoomOut => ctx.set_zoom_factor((ctx.zoom_factor() / 1.1).max(0.5)),
+            A::ZoomReset => ctx.set_zoom_factor(1.0),
+            A::ToggleOutput => st.toggle_output(),
+            A::Identify => st.identify_outputs(now),
+            A::Syphon => st.comp.syphon = !st.comp.syphon,
+            A::Notes => open_doc("NOTES.md"),
+            A::Roadmap => open_doc("../ROADMAP.md"),
+            A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
+            A::Panel(i) => {
+                if let Some(tab) = Tab::ALL.get(i).copied() {
+                    self.toggle_panel(tab);
+                }
+            }
+            A::Layout(i) => {
+                if let Some((_, make)) = LAYOUTS.get(i) {
+                    self.dock = make();
+                }
+            }
+        }
+    }
+
+    fn toggle_panel(&mut self, tab: Tab) {
+        if self.detached.contains(&tab) {
+            self.detached.retain(|t| *t != tab);
+            self.dock.push_to_focused_leaf(tab);
+            return;
+        }
+        match self.dock.find_tab(&tab) {
+            Some(path) => {
+                self.dock.remove_tab(path);
+            }
+            None => {
+                self.dock.add_window(vec![tab]);
+            }
+        }
+    }
+
+    /// Window title: project name (and the show name for exported shows).
+    fn update_title(&mut self, ctx: &egui::Context) {
+        let project = self.state.project_path.as_deref().and_then(|p| std::path::Path::new(p).file_stem()).map(|s| s.to_string_lossy().into_owned());
+        #[cfg(not(target_arch = "wasm32"))]
+        let show = crate::show::bundled().map(|b| b.manifest.name.clone());
+        #[cfg(target_arch = "wasm32")]
+        let show: Option<String> = None;
+        let title = match (show, project) {
+            (Some(s), _) => format!("{s} — Phosphor show"),
+            (None, Some(p)) => format!("{p} — Phosphor"),
+            (None, None) => "Phosphor".into(),
+        };
+        if title != self.title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.title = title;
+        }
+    }
+
+    /// Exported shows open their outputs by themselves, on the screens they were exported with.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn start_show(&mut self, _now: f64) {
+        let Some(frame) = self.show_start.as_mut() else { return };
+        *frame += 1;
+        // Give the main window a moment to settle first.
+        if *frame < 30 {
+            return;
+        }
+        self.show_start = None;
+        let Some(b) = crate::show::bundled() else { return };
+        if !b.manifest.autostart {
+            return;
+        }
+        let displays = crate::screens::displays();
+        self.state.displays = displays.clone();
+        let others: Vec<_> = displays.iter().filter(|d| !d.main).cloned().collect();
+        let outputs: Vec<u64> = self.state.comp.outputs.iter().filter(|o| o.enabled).map(|o| o.id).collect();
+        for (i, id) in outputs.iter().enumerate() {
+            let saved = b.manifest.screens.iter().find(|(o, _)| o == id).and_then(|(_, name)| displays.iter().find(|d| &d.name == name));
+            // Same screen as when exported; otherwise the extra screens in order; otherwise this one.
+            let target = saved.cloned().or_else(|| others.get(i).cloned()).or_else(|| (i == 0).then(|| displays.first().cloned()).flatten());
+            match target {
+                Some(d) => self.state.send_output_id_to(*id, d),
+                None => self.state.toggle_output_window(*id),
+            }
+        }
+    }
+
+    /// Export Show: name, options, then a folder; shows progress until done.
+    fn export_window(&mut self, ctx: &egui::Context) {
+        let st = &mut self.state;
+        if !st.export.open {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new(format!("{} Export Show", icon::PACKAGE)).open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+            #[cfg(target_arch = "wasm32")]
+            ui.label("Export Show is available in the Mac app.");
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let progress = st.export.progress.as_ref().map(|p| p.lock().unwrap().clone());
+                match progress {
+                    Some(p) if !p.done => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(&p.step);
+                        });
+                        ui.weak("The show keeps running while this works.");
+                    }
+                    Some(p) => {
+                        if let Some(app) = &p.output {
+                            ui.label(egui::RichText::new(format!("{} Exported {}", icon::CHECK_CIRCLE, app.file_name().unwrap_or_default().to_string_lossy())).strong().color(theme::ACCENT));
+                            ui.label(format!("{} media file(s), {:.1} MB of media", p.media_files, p.bytes as f64 / 1e6));
+                            if let Some(z) = &p.zip {
+                                ui.label(format!("Zip: {}", z.display()));
+                            }
+                            ui.weak("Copy it to the other Mac and double-click. First time: right-click → Open (it isn't notarized yet).");
+                            ui.horizontal(|ui| {
+                                if ui.button(label_text(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
+                                    let _ = std::process::Command::new("open").arg("-R").arg(app).spawn();
+                                }
+                                if ui.button("Export again").clicked() {
+                                    st.export.progress = None;
+                                }
+                            });
+                        }
+                        if let Some(e) = &p.error {
+                            ui.colored_label(egui::Color32::from_rgb(255, 120, 90), e);
+                            if p.output.is_none() && ui.button("Try again").clicked() {
+                                st.export.progress = None;
+                            }
+                        }
+                    }
+                    None => {
+                        ui.label("Packs this project, every media file, the shaders it uses, and all MIDI/OSC/key mappings and outputs into one app that runs on another Mac — no Phosphor install needed.");
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label("Show name");
+                            ui.text_edit_singleline(&mut st.export.name);
+                        });
+                        ui.checkbox(&mut st.export.autostart, "Open the outputs full screen when the show starts");
+                        ui.checkbox(&mut st.export.zip, "Also make a .zip (easier to send)");
+                        let mut files: Vec<String> = Vec::new();
+                        st.comp.clone().map_paths(|p| {
+                            files.push(p.to_string());
+                            p.to_string()
+                        });
+                        files.sort();
+                        files.dedup();
+                        let missing = files.iter().filter(|f| !std::path::Path::new(f).is_file()).count();
+                        let bytes: u64 = files.iter().filter_map(|f| std::fs::metadata(f).ok()).map(|m| m.len()).sum();
+                        ui.weak(format!("{} media file(s), {:.1} MB · {} output(s) · {} mapping(s)", files.len(), bytes as f64 / 1e6, st.comp.outputs.len(), st.comp.control_maps.len()));
+                        if missing > 0 {
+                            ui.colored_label(egui::Color32::from_rgb(255, 196, 70), format!("{missing} file(s) can't be found and will be left out"));
+                        }
+                        ui.add_space(4.0);
+                        if ui.add_enabled(!st.export.name.trim().is_empty(), egui::Button::new(label_text(icon::PACKAGE, "Choose folder and export…"))).clicked() {
+                            st.dialogs.pick_folder(crate::dialogs::Purpose::ExportShow);
+                        }
+                    }
+                }
+            }
+        });
+        if !open {
+            st.export.open = false;
+            #[cfg(not(target_arch = "wasm32"))]
+            if st.export.progress.as_ref().is_some_and(|p| p.lock().unwrap().done) {
+                st.export.progress = None;
+            }
         }
     }
 
@@ -1088,6 +1457,12 @@ impl PhosphorApp {
             ui.add_space(2.0);
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(theme::ACCENT));
+                let now = ui.ctx().input(|i| i.time);
+                let clicked = self.menu_bar(ui);
+                let ctx = ui.ctx().clone();
+                for a in clicked {
+                    self.run_action(&ctx, a, now);
+                }
                 ui.separator();
                 if ui.button(format!("{} Layer", icon::PLUS)).clicked() {
                     self.state.add_layer();
@@ -1119,55 +1494,9 @@ impl PhosphorApp {
                 .response
                 .on_hover_text("Choose the screen / projector");
                 ui.separator();
-                panels::project_buttons(ui, &mut self.state);
-                ui.separator();
                 if ui.button(format!("{} Search  ⌘K", icon::MAGNIFYING_GLASS)).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
                 }
-                if ui.button(format!("{} Reset Layout", icon::LAYOUT)).on_hover_text("Bring back every panel in the default arrangement").clicked() {
-                    self.dock = default_layout();
-                }
-                ui.menu_button("View", |ui| {
-                    ui.weak("Drag any tab to move it; drag it outside to float it.");
-                    if ui.button(format!("{} Add monitor", icon::MONITOR)).on_hover_text("A new preview panel showing the output, the mix, or any layer").clicked() {
-                        let _ = self.add_monitor();
-                        ui.close();
-                    }
-                    ui.menu_button("Panels", |ui| {
-                        for tab in Tab::ALL {
-                            let detached = self.detached.contains(&tab);
-                            let open = detached || self.dock.find_tab(&tab).is_some();
-                            let name = if detached { format!("{} (own window)", tab.title()) } else { tab.title().to_string() };
-                            if ui.selectable_label(open, name).clicked() {
-                                if detached {
-                                    self.detached.retain(|t| *t != tab);
-                                    self.dock.push_to_focused_leaf(tab);
-                                } else {
-                                    match self.dock.find_tab(&tab) {
-                                        Some(path) => {
-                                            self.dock.remove_tab(path);
-                                        }
-                                        None => {
-                                            self.dock.add_window(vec![tab]);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    ui.menu_button("Layouts", |ui| {
-                        for (name, make) in LAYOUTS {
-                            if ui.button(*name).clicked() {
-                                self.dock = make();
-                                ui.close();
-                            }
-                        }
-                    });
-                    if ui.button("Gather floating windows").on_hover_text("Bring every floating panel back onto this screen").clicked() {
-                        self.gather_windows = true;
-                        ui.close();
-                    }
-                });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let s = self.state.stats.latest;
                     let wide = ui.available_width() > 460.0;
@@ -1180,6 +1509,101 @@ impl PhosphorApp {
             });
             ui.add_space(2.0);
         });
+    }
+
+    /// File / Edit / View / Output / Help inside the window (same actions as the macOS menu bar).
+    fn menu_bar(&mut self, ui: &mut egui::Ui) -> Vec<crate::menu::Action> {
+        use crate::menu::{Action, Entry, MENUS, shortcut_text};
+        let mut clicked: Vec<Action> = Vec::new();
+        let can_undo = self.state.history.can_undo(&self.state.comp);
+        let can_redo = self.state.history.can_redo();
+        let has_layer = self.state.selected.is_some_and(|id| id != phosphor_engine::MASTER_ID && self.state.comp.layers.iter().any(|l| l.id == id));
+        for (title, entries) in MENUS {
+            ui.menu_button(*title, |ui| {
+                ui.set_min_width(230.0);
+                for e in entries.iter() {
+                    match e {
+                        Entry::Sep => {
+                            ui.separator();
+                        }
+                        Entry::Item(a, label, sc) => {
+                            let enabled = match a {
+                                Action::Undo => can_undo,
+                                Action::Redo => can_redo,
+                                Action::DuplicateLayer | Action::DeleteLayer => has_layer,
+                                Action::Syphon => cfg!(target_os = "macos"),
+                                _ => true,
+                            };
+                            let text = match a {
+                                Action::Syphon => format!("{label}  ({})", if self.state.comp.syphon { "on" } else { "off" }),
+                                _ => label.to_string(),
+                            };
+                            if ui.add_enabled(enabled, egui::Button::new(text).shortcut_text(shortcut_text(*sc))).clicked() {
+                                clicked.push(*a);
+                                ui.close();
+                            }
+                        }
+                        Entry::Dynamic("Open Recent") => {
+                            ui.add_enabled_ui(!self.state.recent.is_empty(), |ui| {
+                                ui.menu_button("Open Recent", |ui| {
+                                    for p in self.state.recent.clone() {
+                                        let name = std::path::Path::new(&p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
+                                        if ui.button(name).on_hover_text(&p).clicked() {
+                                            self.state.open_project_file(&p);
+                                            ui.close();
+                                        }
+                                    }
+                                    ui.separator();
+                                    if ui.button("Clear Menu").clicked() {
+                                        self.state.recent.clear();
+                                        ui.close();
+                                    }
+                                });
+                            });
+                        }
+                        Entry::Dynamic("Panels") => {
+                            ui.menu_button("Panels", |ui| {
+                                ui.weak("Drag any tab to move it; drag it outside to float it.");
+                                for (i, tab) in Tab::ALL.iter().enumerate() {
+                                    let open = self.detached.contains(tab) || self.dock.find_tab(tab).is_some();
+                                    if ui.selectable_label(open, tab.title()).clicked() {
+                                        clicked.push(Action::Panel(i));
+                                    }
+                                }
+                            });
+                        }
+                        Entry::Dynamic("Layouts") => {
+                            ui.menu_button("Layouts", |ui| {
+                                for (i, (name, _)) in LAYOUTS.iter().enumerate() {
+                                    if ui.button(*name).clicked() {
+                                        clicked.push(Action::Layout(i));
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        }
+                        Entry::Dynamic("Send Output To") => {
+                            ui.menu_button("Send Output To", |ui| {
+                                if self.state.displays.is_empty() {
+                                    self.state.displays = crate::screens::displays();
+                                }
+                                for d in self.state.displays.clone() {
+                                    if ui.button(d.label()).clicked() {
+                                        self.state.send_output_to(d);
+                                        ui.close();
+                                    }
+                                }
+                                if ui.button("Rescan displays").clicked() {
+                                    self.state.displays = crate::screens::displays();
+                                }
+                            });
+                        }
+                        Entry::Dynamic(_) => {}
+                    }
+                }
+            });
+        }
+        clicked
     }
 
     fn output_windows(&self, ctx: &egui::Context) {
@@ -1331,6 +1755,26 @@ impl PhosphorApp {
             audio_level: avg(|s| s.audio_level),
         };
         println!("SUMMARY {}", summary.to_json());
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(dir) = run.cfg.export.clone() {
+            let req = crate::export::Request {
+                comp: self.state.comp.clone(),
+                name: "Bench Show".into(),
+                dest: dir.into(),
+                zip: true,
+                autostart: false,
+                screens: Vec::new(),
+            };
+            let p = crate::export::start(req);
+            for _ in 0..1200 {
+                if p.lock().unwrap().done {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            let p = p.lock().unwrap().clone();
+            println!("EXPORT app={:?} zip={:?} media={} bytes={} error={:?}", p.output, p.zip, p.media_files, p.bytes, p.error);
+        }
         let an = self.state.audio.analysis();
         println!("BEAT bpm {:.1} confidence {:.2} clock {:.1}", an.bpm, an.confidence, self.state.clock.bpm);
         println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
@@ -1390,7 +1834,7 @@ impl eframe::App for PhosphorApp {
         if self.bench.is_none() {
             let snap = self.snapshot();
             self.saver = Default::default();
-            if let (Ok(json), Some(dir)) = (serde_json::to_string(&snap), eframe::storage_dir("Phosphor")) {
+            if let (Ok(json), Some(dir)) = (serde_json::to_string(&snap), crate::show::storage_dir()) {
                 let _ = std::fs::write(dir.join("recovery.json"), json);
             }
             crate::recovery::end_session();
@@ -1429,10 +1873,13 @@ impl PhosphorApp {
         }
         ctx.data_mut(|d| d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs));
         self.control_requests(&ctx);
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
-            self.state.palette.toggle();
-        }
+        self.menu_actions(&ctx, now);
         self.shortcuts(&ctx);
+        let busy = ctx.input(|i| i.pointer.any_down());
+        self.state.history.track(&self.state.comp, now, busy);
+        self.update_title(&ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.start_show(now);
         #[cfg(not(target_arch = "wasm32"))]
         self.handle_dialogs_and_folders(now);
         self.remote_sync(now);
@@ -1505,6 +1952,7 @@ impl PhosphorApp {
             self.save_snapshot();
         }
         self.learning_banner(&ctx);
+        self.export_window(&ctx);
         self.recovered_banner(&ctx);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
@@ -1564,6 +2012,10 @@ impl PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.state.folders.folders) {
             storage.set_string(KEY_WATCHED, json);
         }
+        if let Ok(json) = serde_json::to_string(&self.state.recent) {
+            storage.set_string(KEY_RECENT_PROJECTS, json);
+        }
+        storage.set_string(KEY_PROJECT_PATH, self.state.project_path.clone().unwrap_or_default());
         storage.set_string(KEY_REMOTE_PASSWORD, if self.state.require_password { self.state.remote_password.clone() } else { String::new() });
         if let Ok(json) = serde_json::to_string(&self.state.explorer.recent) {
             storage.set_string(KEY_RECENT, json);
@@ -1655,4 +2107,20 @@ fn layout_mapping() -> DockState<Tab> {
     surface.split_below(right, 0.5, vec![Tab::Inspector]);
     surface.split_below(left, 0.72, vec![Tab::Preview, Tab::Library, Tab::Presets]);
     dock
+}
+
+fn label_text(icon: &str, text: &str) -> String {
+    format!("{icon}  {text}")
+}
+
+/// Opens one of the docs (notes, roadmap) from the source folder, or the website if not there.
+fn open_doc(name: &str) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs").join(name);
+        let target = if path.is_file() { path.to_string_lossy().into_owned() } else { "https://phosphorfx.com".into() };
+        let _ = std::process::Command::new("open").arg(target).spawn();
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = name;
 }

@@ -2482,20 +2482,6 @@ fn output(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// Save/Open project (native: file dialogs; browser: later via account sync).
-pub fn project_buttons(ui: &mut egui::Ui, st: &mut State) {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        if ui.button(label(icon::FLOPPY_DISK, "Save")).clicked() {
-            st.dialogs.save_file(crate::dialogs::Purpose::SaveProject, ("Phosphor project", &["phosphor"]), "Untitled.phosphor");
-        }
-        if ui.button(label(icon::FOLDER_OPEN, "Open")).clicked() {
-            st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project", &["phosphor"])));
-        }
-    }
-    #[cfg(target_arch = "wasm32")]
-    let _ = (ui, st);
-}
-
 // -------------------------------------------------------------------------------------------
 // Monitors: extra preview panels showing the output, the mix, or one layer.
 
