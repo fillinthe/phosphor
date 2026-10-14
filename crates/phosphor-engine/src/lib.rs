@@ -6,6 +6,7 @@ pub mod control;
 pub mod custom;
 mod engine;
 mod gpu;
+pub mod expr;
 pub mod mapping;
 pub mod model;
 pub mod shaders;

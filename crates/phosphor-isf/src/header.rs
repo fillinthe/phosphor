@@ -5,6 +5,20 @@
 use crate::{IsfError, IsfInput, IsfInputKind};
 use serde_json::Value;
 
+/// One entry of an ISF `PASSES` list.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PassSpec {
+    /// Buffer this pass renders into (`None` = the effect's output).
+    pub target: Option<String>,
+    /// Keeps its contents between frames (feedback).
+    pub persistent: bool,
+    /// Asked for a float buffer (rendered 8-bit for now).
+    pub float: bool,
+    /// Size expressions, e.g. "$WIDTH/4.0" or "floor($HEIGHT*scale)".
+    pub width: Option<String>,
+    pub height: Option<String>,
+}
+
 /// Everything we read from the header.
 #[derive(Debug, Default)]
 pub(crate) struct Header {
@@ -16,6 +30,8 @@ pub(crate) struct Header {
     pub passes: usize,
     /// Any pass declares `PERSISTENT`.
     pub persistent: bool,
+    /// Each entry of `PASSES`, in order.
+    pub pass_specs: Vec<PassSpec>,
     pub imported: bool,
     /// MadMapper `GENERATORS` of type `time_base`: (name, speed expression).
     pub time_bases: Vec<(String, String)>,
@@ -238,6 +254,21 @@ pub(crate) fn parse_header(json: &str) -> Result<Header, IsfError> {
         h.persistent = passes.iter().any(|p| {
             p.get("PERSISTENT").is_some_and(|x| bool_of(Some(x)).unwrap_or(true))
         });
+        let text = |v: Option<&Value>| match v? {
+            Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_string()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        };
+        h.pass_specs = passes
+            .iter()
+            .map(|p| PassSpec {
+                target: text(p.get("TARGET")),
+                persistent: p.get("PERSISTENT").is_some_and(|x| bool_of(Some(x)).unwrap_or(true)),
+                float: p.get("FLOAT").is_some_and(|x| bool_of(Some(x)).unwrap_or(true)),
+                width: text(p.get("WIDTH")),
+                height: text(p.get("HEIGHT")),
+            })
+            .collect();
     }
     h.imported = obj.get("IMPORTED").is_some_and(|v| match v {
         Value::Object(m) => !m.is_empty(),

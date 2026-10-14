@@ -21,6 +21,23 @@ use std::fmt;
 pub const UNIFORM_VEC4S: usize = 12;
 /// Must equal `phosphor_engine::shaders::MAX_PARAMS`: all but the last (reserved) vec4.
 pub const MAX_PARAMS: usize = (UNIFORM_VEC4S - 1) * 4;
+/// Multi-pass buffers an ISF shader may use (texture bindings `BUFFER_BINDING..`).
+pub const MAX_BUFFERS: usize = 8;
+/// Binding of the first pass buffer (after the engine's tex0–tex2 at 3–5).
+pub const BUFFER_BINDING: usize = 6;
+
+pub use header::PassSpec;
+
+/// Distinct pass targets, in order of first use.
+fn buffer_names(passes: &[PassSpec]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for t in passes.iter().filter_map(|p| p.target.clone()) {
+        if !out.contains(&t) {
+            out.push(t);
+        }
+    }
+    out
+}
 /// Number of image bindings (`tex0..tex2`).
 pub const MAX_TEXTURES: usize = 3;
 
@@ -92,6 +109,11 @@ pub struct IsfShader {
     pub is_filter: bool,
     /// Render passes declared by the header (1 for plain single-pass shaders).
     pub passes: usize,
+    /// The passes, in order (empty for single-pass shaders).
+    pub pass_plan: Vec<PassSpec>,
+    /// Buffers the passes render into, in order of first use: buffer `i` is bound at
+    /// `BUFFER_BINDING + i` and sampled by name in the shader.
+    pub buffers: Vec<String>,
     /// WGSL fragment entry + helpers; empty when `unsupported` is set.
     pub wgsl: String,
     /// Name of the fragment entry function.
@@ -219,6 +241,8 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         inputs: Vec::new(),
         is_filter,
         passes: header.passes.max(1),
+        pass_plan: header.pass_specs.clone(),
+        buffers: buffer_names(&header.pass_specs),
         wgsl: String::new(),
         entry: entry.clone(),
         unsupported: None,
@@ -229,10 +253,8 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         unsupported.get_or_insert(reason);
     }
     shader.inputs = inputs;
-    if header.passes > 1 {
-        unsupported.get_or_insert(format!("multi-pass ({} passes)", header.passes));
-    } else if header.persistent {
-        unsupported.get_or_insert("persistent buffer (feedback)".into());
+    if shader.buffers.len() > MAX_BUFFERS {
+        unsupported.get_or_insert(format!("{} buffers (max {MAX_BUFFERS})", shader.buffers.len()));
     }
     if header.imported {
         unsupported.get_or_insert("imported images".into());
@@ -332,6 +354,14 @@ struct U {{
 @group(0) @binding(3) var tex0: texture_2d<f32>;
 @group(0) @binding(4) var tex1: texture_2d<f32>;
 @group(0) @binding(5) var tex2: texture_2d<f32>;
+@group(0) @binding(6) var buf0: texture_2d<f32>;
+@group(0) @binding(7) var buf1: texture_2d<f32>;
+@group(0) @binding(8) var buf2: texture_2d<f32>;
+@group(0) @binding(9) var buf3: texture_2d<f32>;
+@group(0) @binding(10) var buf4: texture_2d<f32>;
+@group(0) @binding(11) var buf5: texture_2d<f32>;
+@group(0) @binding(12) var buf6: texture_2d<f32>;
+@group(0) @binding(13) var buf7: texture_2d<f32>;
 struct VOut {{ @builtin(position) pos: vec4f, @location(0) uv: vec2f }};
 "#
     )

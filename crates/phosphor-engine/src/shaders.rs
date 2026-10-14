@@ -314,6 +314,44 @@ pub fn all_effect_entries() -> Vec<&'static str> {
 
 static CUSTOM: std::sync::RwLock<Vec<&'static ShaderDesc>> = std::sync::RwLock::new(Vec::new());
 
+/// How many buffer textures a multi-pass shader can use (bindings 6..).
+pub const MAX_BUFFERS: usize = 8;
+
+/// A shader that runs several times per frame (ISF `PASSES`): each pass renders into one of the
+/// shader's buffers or, without a target, into its output; every pass can read every buffer
+/// (`buf0`…). Persistent buffers keep their picture between frames (feedback).
+#[derive(Clone, Debug, Default)]
+pub struct PassPlan {
+    pub passes: Vec<PlanPass>,
+    /// Number of buffers (at most `MAX_BUFFERS`).
+    pub buffers: usize,
+    /// Parameter names usable in size expressions → their index in the parameter list.
+    pub vars: Vec<(String, usize)>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PlanPass {
+    /// Buffer index this pass writes, or `None` for the output.
+    pub target: Option<usize>,
+    /// Size expressions (`$WIDTH`, `$HEIGHT`, parameter names); `None` = full size.
+    pub width: Option<String>,
+    pub height: Option<String>,
+}
+
+static PLANS: std::sync::RwLock<Vec<(&'static str, std::sync::Arc<PassPlan>)>> = std::sync::RwLock::new(Vec::new());
+
+/// Registers the pass plan for a (custom/ISF) entry point.
+pub fn set_pass_plan(entry: &'static str, plan: PassPlan) {
+    if let Ok(mut p) = PLANS.write() {
+        p.retain(|(e, _)| *e != entry);
+        p.push((entry, std::sync::Arc::new(plan)));
+    }
+}
+
+pub fn pass_plan(entry: &str) -> Option<std::sync::Arc<PassPlan>> {
+    PLANS.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, p)| p.clone())
+}
+
 /// Prefix for user effects/generators made in the Shader Editor.
 pub const CUSTOM_EFFECT: &str = "custom:";
 pub const CUSTOM_GENERATOR: &str = "customgen:";

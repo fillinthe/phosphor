@@ -351,9 +351,9 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
 #define vv_FragNormCoord isf_FragNormCoord\n\
 #define TIME (phosphor_u.time)\n\
 #define RENDERSIZE (phosphor_u.resolution)\n\
-#define TIMEDELTA (1.0 / 60.0)\n\
-#define FRAMEINDEX (int(phosphor_u.time * 60.0))\n\
-#define PASSINDEX 0\n\
+#define TIMEDELTA (phosphor_u.p[11].z)\n\
+#define FRAMEINDEX (int(phosphor_u.p[11].y))\n\
+#define PASSINDEX (int(phosphor_u.p[11].x))\n\
 #define DATE vec4(2026.0, 1.0, 1.0, phosphor_u.time)\n\
 #define IMG_NORM_PIXEL(img, nuv) textureLod(sampler2D(img, phosphor_samp), phosphor_flip(nuv), 0.0)\n\
 #define IMG_PIXEL(img, px) textureLod(sampler2D(img, phosphor_samp), phosphor_flip((px) / vec2(textureSize(img, 0))), 0.0)\n\
@@ -369,6 +369,14 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
 #define mm_IsRenderingPreview false\n\
 #define mm_SurfaceIndex 0\n",
     );
+    // Multi-pass buffers: textures named like their TARGET, so IMG_PIXEL(name, …) samples them.
+    let mut seen: Vec<&str> = Vec::new();
+    for t in header.pass_specs.iter().filter_map(|p| p.target.as_deref()) {
+        if !seen.contains(&t) && seen.len() < crate::MAX_BUFFERS {
+            s.push_str(&format!("layout(binding={}) uniform texture2D {t};\n", crate::BUFFER_BINDING + seen.len()));
+            seen.push(t);
+        }
+    }
     // Value inputs are real globals (so shaders may shadow them, as with uniforms),
     // assigned from `u.p` in `phosphor_init`. Images stay macros for the texture bindings.
     let mut init = String::from("void phosphor_init_inputs() {\n");
