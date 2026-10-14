@@ -95,6 +95,9 @@ pub struct Engine {
     capture: Capture,
     frame_index: u64,
     previews: Vec<(PreviewItem, bool)>,
+    /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
+    monitor_req: Vec<(u64, u32, u32)>,
+    monitor_targets: Vec<Option<Target>>,
     preview_source: u64,
     preview_src: Option<Target>,
     preview_targets: Vec<Option<Target>>,
@@ -121,6 +124,8 @@ impl Engine {
             capture: Capture::default(),
             frame_index: 0,
             previews: Vec::new(),
+            monitor_req: Vec::new(),
+            monitor_targets: Vec::new(),
             preview_source: MASTER_ID,
             preview_src: None,
             preview_targets: Vec::new(),
@@ -189,6 +194,17 @@ impl Engine {
     pub fn request_previews(&mut self, source: u64, items: Vec<(PreviewItem, bool)>) {
         self.preview_source = source;
         self.previews = items;
+    }
+
+    /// Asks for monitor pictures on the next frame: each entry is a layer id (its picture after
+    /// effects, before blending) or `MASTER_ID` (the mix after master effects, before mapping),
+    /// rendered at the given size.
+    pub fn request_monitors(&mut self, req: Vec<(u64, u32, u32)>) {
+        self.monitor_req = req;
+    }
+
+    pub fn monitor(&self, index: usize) -> Option<&Target> {
+        self.monitor_targets.get(index)?.as_ref()
     }
 
     pub fn preview(&self, index: usize) -> Option<&Target> {
@@ -312,6 +328,10 @@ impl Engine {
         let mut layers_drawn = 0;
 
         let thumb_h = (THUMBNAIL_WIDTH * h / w).max(1);
+        let monitors = std::mem::take(&mut self.monitor_req);
+        if self.monitor_targets.len() < monitors.len() {
+            self.monitor_targets.resize_with(monitors.len(), || None);
+        }
         let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
         for layer in &comp.layers {
             // Faded-out layers still render (into their thumbnail) so they can be cued before going live.
@@ -338,6 +358,14 @@ impl Engine {
             }
             let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &comp.layers, &mut passes) };
             self.push_thumbnail(layer, &frame, (w, h), thumb_h, &mut passes);
+            for i in 0..monitors.len() {
+                let (src, mw, mh) = monitors[i];
+                if src == layer.id {
+                    Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);
+                    let view = self.monitor_targets[i].as_ref().unwrap().view.clone();
+                    push_fit_copy(view, &frame, (w, h), layer.fit, (mw, mh), &mut passes);
+                }
+            }
             let muted = any_solo && !layer.solo;
             let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) };
             if opacity <= 0.001 {
@@ -377,6 +405,16 @@ impl Engine {
             let frame = Frame::Rgb { view: master.clone(), w, h };
             if let Frame::Rgb { view, .. } = self.apply_effects(MASTER_ID, &comp.master_effects, frame, time, mods, &comp.layers, &mut passes) {
                 master = view;
+            }
+        }
+        for (i, (src, mw, mh)) in monitors.iter().copied().enumerate() {
+            if src == MASTER_ID {
+                Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);
+                let mut u = Uniforms::with_params(&[]);
+                u.resolution = [mw as f32, mh as f32];
+                u.opacity = 1.0;
+                let target = self.monitor_targets[i].as_ref().unwrap().view.clone();
+                passes.push(Pass { entry: "fs_finalize", target, tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
             }
         }
         self.render_previews(&master, (w, h), time, mods, &comp.layers, &mut passes);
@@ -856,6 +894,22 @@ impl Engine {
         }
         Some((w, h, pixels))
     }
+}
+
+/// Draws `frame` into `target` the way it would sit on the canvas (fit/fill/stretch).
+fn push_fit_copy(target: wgpu::TextureView, frame: &Frame, canvas: (u32, u32), fit: FitMode, size: (u32, u32), passes: &mut Vec<Pass>) {
+    let mut u = Uniforms::with_params(&[]);
+    u.resolution = [size.0 as f32, size.1 as f32];
+    u.opacity = 1.0;
+    u.uv_xform = fit_transform(frame.size(), canvas, fit);
+    let (tex0, tex2) = match frame.clone() {
+        Frame::Rgb { view, .. } => (view, None),
+        Frame::Yuv { luma, chroma, .. } => {
+            u.yuv = 1;
+            (luma, Some(chroma))
+        }
+    };
+    passes.push(Pass { entry: "fs_composite", target, tex0, tex1: None, tex2, uniforms: u });
 }
 
 /// Maps target uv → source uv so the source is fitted, filled, or stretched.

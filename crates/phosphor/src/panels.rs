@@ -25,6 +25,8 @@ pub enum Tab {
     Network,
     Output,
     ShaderEditor,
+    /// An extra preview panel; the number tells monitors apart.
+    Monitor(u8),
 }
 
 impl Tab {
@@ -45,7 +47,11 @@ impl Tab {
         Tab::ShaderEditor,
     ];
 
-    pub fn title(self) -> &'static str {
+    pub fn title(self) -> String {
+        match self {
+            Tab::Monitor(n) => return format!("Monitor {n}"),
+            _ => {}
+        }
         match self {
             Tab::Preview => "Preview",
             Tab::Layers => "Layers",
@@ -61,7 +67,9 @@ impl Tab {
             Tab::Network => "Session",
             Tab::Output => "Output & Stats",
             Tab::ShaderEditor => "Shader Editor",
+            Tab::Monitor(_) => unreachable!(),
         }
+        .to_string()
     }
 }
 
@@ -79,7 +87,10 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     fn title(&mut self, tab: &mut Tab) -> egui::WidgetText {
-        tab.title().into()
+        match tab {
+            Tab::Monitor(n) => format!("{} {}", icon::MONITOR, monitor_source_name(self.st, *n)).into(),
+            _ => tab.title().into(),
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Tab) {
@@ -98,6 +109,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Network => network(ui, self.st),
             Tab::Output => output(ui, self.st),
             Tab::ShaderEditor => crate::explorer::shader_editor(ui, self.st),
+            Tab::Monitor(n) => monitor(ui, self.st, *n),
         }
     }
 
@@ -197,6 +209,7 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
 }
 
 enum LayerAction {
+    BrowseSources,
     Up,
     Down,
     Duplicate,
@@ -280,6 +293,10 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
         Some((i, LayerAction::Remove)) => {
             let id = comp.layers[i].id;
             remove_layer(st, id);
+        }
+        Some((i, LayerAction::BrowseSources)) => {
+            let id = comp.layers[i].id;
+            st.fx_browser = Some(crate::explorer::FxBrowser::new(id, true, None));
         }
         Some((i, LayerAction::ClearSource)) => {
             comp.layers[i].source = SourceSpec::None;
@@ -424,7 +441,9 @@ fn layer_card(
                         }
                     });
                 });
-                source_picker(ui, layer);
+                if source_picker(ui, layer) {
+                    action = Some(LayerAction::BrowseSources);
+                }
                 ui.horizontal(|ui| {
                     ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
                     let r = ui.add(Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
@@ -498,8 +517,13 @@ fn layer_card(
     CardOut { select, action, dropped, dropped_media, dropped_palette }
 }
 
-fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) {
+/// Returns true when the user asks for the source browser.
+fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> bool {
+    let mut browse = false;
     ui.horizontal(|ui| {
+        if ui.button(icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
+            browse = true;
+        }
         ComboBox::from_id_salt(("source", layer.id)).width(150.0).selected_text(layer.source.label()).show_ui(ui, |ui| {
             if ui.selectable_label(layer.source == SourceSpec::None, "No source").clicked() {
                 layer.source = SourceSpec::None;
@@ -521,6 +545,7 @@ fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) {
             layer.name = layer.source.label();
         }
     });
+    browse
 }
 
 fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMod>, i: usize, p: &shaders::Param) {
@@ -650,7 +675,7 @@ fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
 }
 
 pub enum FxAction {
-    Add(&'static str),
+    Browse(Option<egui::Pos2>),
     CopyChain,
     PasteChain,
 }
@@ -664,14 +689,10 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
     let mut action: Option<FxAction> = None;
     ui.horizontal(|ui| {
         ui.label(RichText::new("Effects").strong());
-        ui.menu_button(label(icon::PLUS, "Add effect"), |ui| {
-            for e in shaders::EFFECTS {
-                if ui.button(e.name).clicked() {
-                    action = Some(FxAction::Add(e.id));
-                    ui.close();
-                }
-            }
-        });
+        let add = ui.button(label(icon::PLUS, "Add effect")).on_hover_text("Browse effects with previews");
+        if add.clicked() {
+            action = Some(FxAction::Browse(Some(add.rect.left_bottom())));
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.add_enabled(clipboard_len > 0, egui::Button::new(label(icon::CLIPBOARD_TEXT, "Paste"))).on_hover_text("Append the copied chain").clicked() {
                 action = Some(FxAction::PasteChain);
@@ -748,7 +769,7 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
 
 fn apply_fx_action(st: &mut State, target: u64, action: FxAction) {
     match action {
-        FxAction::Add(id) => add_effect_to(st, target, id),
+        FxAction::Browse(pos) => st.fx_browser = Some(crate::explorer::FxBrowser::new(target, false, pos)),
         FxAction::CopyChain => {
             let chain = if target == MASTER_ID {
                 st.comp.master_effects.clone()
@@ -845,6 +866,9 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
 
 pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
     let Some(fx) = st.comp.new_effect(effect) else { return };
+    st.explorer.recent.retain(|r| r != effect);
+    st.explorer.recent.insert(0, effect.to_string());
+    st.explorer.recent.truncate(12);
     if target == MASTER_ID {
         st.comp.master_effects.push(fx);
     } else if let Some(l) = st.comp.layer_mut(target) {
@@ -1665,6 +1689,30 @@ const RESOLUTIONS: &[(u32, u32, &str)] = &[
 ];
 
 fn output(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Screens").strong());
+        if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+            st.displays = crate::screens::displays();
+        }
+    });
+    if st.displays.is_empty() {
+        ui.weak("No displays found.");
+    }
+    for d in st.displays.clone() {
+        ui.horizontal(|ui| {
+            let icon_name = if d.main { icon::LAPTOP } else { icon::PROJECTOR_SCREEN };
+            ui.label(format!("{icon_name} {}", d.label()));
+            if d.main {
+                ui.weak("(this screen)");
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Send output here").on_hover_text("Opens the output fullscreen on this display, no menu bar").clicked() {
+                    st.send_output_to(d.clone());
+                }
+            });
+        });
+    }
+    ui.separator();
     egui::Grid::new("output_grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
         ui.label("Canvas");
         let current = format!("{}×{}", st.comp.width, st.comp.height);
@@ -1730,4 +1778,91 @@ pub fn project_buttons(ui: &mut egui::Ui, st: &mut State) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (ui, st);
+}
+
+// -------------------------------------------------------------------------------------------
+// Monitors: extra preview panels showing the output, the mix, or one layer.
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MonitorSource {
+    /// Exactly what the output window shows (after master fade and mapping).
+    Output,
+    /// The mix after master effects, before mapping.
+    Mix,
+    /// One layer after its effects, before blending.
+    Layer(u64),
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct MonitorCfg {
+    pub source: MonitorSource,
+    pub grid: bool,
+}
+
+impl Default for MonitorCfg {
+    fn default() -> Self {
+        Self { source: MonitorSource::Mix, grid: false }
+    }
+}
+
+pub fn monitor_source_name(st: &State, n: u8) -> String {
+    match st.monitors.get(&n).map(|c| c.source).unwrap_or(MonitorSource::Mix) {
+        MonitorSource::Output => "Output".into(),
+        MonitorSource::Mix => "Mix".into(),
+        MonitorSource::Layer(id) => st.comp.layers.iter().find(|l| l.id == id).map_or("(removed layer)".into(), |l| l.name.clone()),
+    }
+}
+
+fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
+    let aspect = st.aspect();
+    let mut cfg = st.monitors.get(&n).copied().unwrap_or_default();
+    ui.horizontal(|ui| {
+        let current = monitor_source_name(st, n);
+        ComboBox::from_id_salt(("monitor_src", n)).width(180.0).selected_text(current).show_ui(ui, |ui| {
+            ui.selectable_value(&mut cfg.source, MonitorSource::Output, "Output (what the projector sees)");
+            ui.selectable_value(&mut cfg.source, MonitorSource::Mix, "Mix (before mapping)");
+            ui.separator();
+            for l in st.comp.layers.iter().rev() {
+                ui.selectable_value(&mut cfg.source, MonitorSource::Layer(l.id), format!("Layer: {}", l.name));
+            }
+        });
+        ui.toggle_value(&mut cfg.grid, icon::GRID_FOUR).on_hover_text("Thirds and centre guides");
+        ui.weak("Drag the tab anywhere, or right-click it → Detach for its own window");
+    });
+    st.monitors.insert(n, cfg);
+    let rect = ui.available_rect_before_wrap();
+    ui.painter().rect_filled(rect, 4.0, Color32::from_gray(6));
+    let frame = fit_rect(rect.shrink(4.0), aspect);
+    let tex = match cfg.source {
+        MonitorSource::Output => st.texture,
+        MonitorSource::Mix | MonitorSource::Layer(_) => {
+            let ppp = ui.ctx().pixels_per_point();
+            let w = ((frame.width() * ppp) as u32).clamp(64, st.comp.width);
+            let h = ((w as f32 / aspect) as u32).max(16);
+            let src = match cfg.source {
+                MonitorSource::Layer(id) => id,
+                _ => MASTER_ID,
+            };
+            st.monitor_wants.push((n, src, w, h));
+            st.monitor_tex(n)
+        }
+    };
+    match tex {
+        Some(t) => paint_texture(ui.painter(), t, frame),
+        None => {
+            ui.painter().text(frame.center(), egui::Align2::CENTER_CENTER, "no picture (layer off?)", egui::FontId::proportional(13.0), Color32::GRAY);
+        }
+    }
+    if cfg.grid {
+        let p = ui.painter();
+        let stroke = Stroke::new(1.0, Color32::from_white_alpha(60));
+        for k in 1..3 {
+            let x = frame.left() + frame.width() * k as f32 / 3.0;
+            let y = frame.top() + frame.height() * k as f32 / 3.0;
+            p.line_segment([egui::pos2(x, frame.top()), egui::pos2(x, frame.bottom())], stroke);
+            p.line_segment([egui::pos2(frame.left(), y), egui::pos2(frame.right(), y)], stroke);
+        }
+        p.circle_stroke(frame.center(), 6.0, Stroke::new(1.0, ACCENT));
+    }
+    ui.allocate_rect(rect, Sense::hover());
 }
