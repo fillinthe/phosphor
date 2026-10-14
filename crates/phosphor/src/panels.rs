@@ -28,10 +28,11 @@ pub enum Tab {
     /// An extra preview panel; the number tells monitors apart.
     Monitor(u8),
     Mixer,
+    Devices,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 15] = [
+    pub const ALL: [Tab; 16] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -47,6 +48,7 @@ impl Tab {
         Tab::Output,
         Tab::ShaderEditor,
         Tab::Mixer,
+        Tab::Devices,
     ];
 
     pub fn title(self) -> String {
@@ -70,6 +72,7 @@ impl Tab {
             Tab::Output => "Output & Stats",
             Tab::ShaderEditor => "Shader Editor",
             Tab::Mixer => "Mixer",
+            Tab::Devices => "Devices",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -114,6 +117,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::ShaderEditor => crate::explorer::shader_editor(ui, self.st),
             Tab::Monitor(n) => monitor(ui, self.st, *n),
             Tab::Mixer => mixer(ui, self.st),
+            Tab::Devices => devices(ui, self.st),
         }
     }
 
@@ -2728,4 +2732,166 @@ fn qr_code(ui: &mut egui::Ui, text: &str, size: f32) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (ui, text, size);
+}
+
+// -------------------------------------------------------------------------------------------
+// Devices: everything connected to this Mac, with disconnect / block / disable.
+
+fn ago(t: std::time::Instant) -> String {
+    let s = t.elapsed().as_secs();
+    if s < 60 {
+        format!("{s}s")
+    } else if s < 3600 {
+        format!("{}m", s / 60)
+    } else {
+        format!("{}h{:02}m", s / 3600, (s % 3600) / 60)
+    }
+}
+
+fn activity_dot(ui: &mut egui::Ui, last: Option<std::time::Instant>) {
+    let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), Sense::hover());
+    let lit = last.map_or(0.0, |t| (1.0 - t.elapsed().as_secs_f32() / 1.5).clamp(0.0, 1.0));
+    let c = if lit > 0.0 { ACCENT.gamma_multiply(0.3 + 0.7 * lit) } else { Color32::from_gray(50) };
+    ui.painter().circle_filled(r.center(), 4.0, c);
+}
+
+fn devices(ui: &mut egui::Ui, st: &mut State) {
+    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        // Phones, tablets and browsers on the session.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(format!("{} Phones & browsers", icon::DEVICE_MOBILE)).strong());
+            if st.net.running() {
+                ui.weak(st.net.url());
+            } else {
+                ui.weak("session is off (Session panel)");
+            }
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let peers = st.net.peers();
+            if peers.is_empty() {
+                ui.weak("Nobody connected.");
+            }
+            egui::Grid::new("peers").num_columns(5).striped(true).spacing([10.0, 4.0]).show(ui, |ui| {
+                for p in &peers {
+                    let (glyph, what) = match p.kind {
+                        crate::net::PeerKind::Remote if p.controlling => (icon::HAND_POINTING, "controlling"),
+                        crate::net::PeerKind::Remote => (icon::LOCK, "remote, locked (watching)"),
+                        crate::net::PeerKind::Viewer => (icon::EYE, "watching"),
+                        crate::net::PeerKind::Audio => (icon::MICROPHONE, "sending audio"),
+                    };
+                    ui.label(format!("{glyph} {}", p.device));
+                    ui.monospace(&p.ip);
+                    ui.label(RichText::new(what).small());
+                    ui.weak(ago(p.since));
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Disconnect").on_hover_text("Drops it now; it can reconnect").clicked() {
+                            st.net.disconnect(p.id);
+                        }
+                        if ui.small_button(label(icon::PROHIBIT, "Block")).on_hover_text("Drops everything from this address and refuses it until unblocked").clicked() {
+                            st.net.block(&p.ip);
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
+            let blocked = st.net.blocked();
+            if !blocked.is_empty() {
+                ui.add_space(4.0);
+                ui.label(RichText::new("Blocked addresses").small().color(Color32::GRAY));
+                for ip in blocked {
+                    ui.horizontal(|ui| {
+                        ui.monospace(&ip);
+                        if ui.small_button("Unblock").clicked() {
+                            st.net.unblock(&ip);
+                        }
+                    });
+                }
+            }
+        }
+        ui.separator();
+
+        // MIDI inputs.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(format!("{} MIDI inputs", icon::PIANO_KEYS)).strong());
+            if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+                st.control.reconnect();
+            }
+        });
+        let all = st.control.midi_all.clone();
+        if all.is_empty() {
+            ui.weak("No MIDI devices found.");
+        }
+        let seen = st.control.activity.lock().unwrap().midi_seen.clone();
+        let mut changed = false;
+        for name in all {
+            ui.horizontal(|ui| {
+                activity_dot(ui, seen.get(&name).copied());
+                let mut on = !st.control.midi_disabled.contains(&name);
+                let text = RichText::new(if on { "ON" } else { "OFF" }).small();
+                if ui.toggle_value(&mut on, text).changed() {
+                    if on {
+                        st.control.midi_disabled.remove(&name);
+                    } else {
+                        st.control.midi_disabled.insert(name.clone());
+                    }
+                    changed = true;
+                }
+                ui.label(&name);
+            });
+        }
+        if changed {
+            st.control.reconnect();
+        }
+        ui.separator();
+
+        // OSC senders.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(format!("{} OSC senders", icon::BROADCAST)).strong());
+            ui.weak(&st.control.osc_status);
+        });
+        let (senders, blocked) = {
+            let a = st.control.activity.lock().unwrap();
+            (a.osc.values().cloned().collect::<Vec<_>>(), a.osc_blocked.clone())
+        };
+        if senders.is_empty() {
+            ui.weak("No OSC received yet.");
+        }
+        for s in senders {
+            ui.horizontal(|ui| {
+                activity_dot(ui, Some(s.last_seen));
+                ui.monospace(&s.ip);
+                ui.weak(format!("{} msgs · {}", s.count, s.last_address));
+                let is_blocked = blocked.contains(&s.ip);
+                let text = if is_blocked { "Unblock" } else { "Block" };
+                if ui.small_button(text).clicked() {
+                    let mut a = st.control.activity.lock().unwrap();
+                    if is_blocked {
+                        a.osc_blocked.remove(&s.ip);
+                    } else {
+                        a.osc_blocked.insert(s.ip.clone());
+                    }
+                }
+            });
+        }
+        ui.separator();
+
+        // Audio input and outputs, for the full picture.
+        ui.label(RichText::new(format!("{} Audio in", icon::MICROPHONE)).strong());
+        if st.audio.is_open() {
+            ui.label(st.audio.current().unwrap_or("Default input"));
+        } else {
+            ui.weak("off (Audio panel)");
+        }
+        ui.separator();
+        ui.label(RichText::new(format!("{} Outputs", icon::PROJECTOR_SCREEN)).strong());
+        let windows: Vec<(u64, bool)> = st.output.lock().unwrap().iter().map(|(id, o)| (*id, o.open)).collect();
+        for o in &st.comp.outputs {
+            let open = windows.iter().any(|(id, on)| *id == o.id && *on);
+            ui.horizontal(|ui| {
+                ui.label(&o.name);
+                ui.weak(if open { "window open" } else { "closed" });
+            });
+        }
+    });
 }

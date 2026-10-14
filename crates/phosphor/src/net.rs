@@ -12,6 +12,105 @@ const MAX_WIDTH: u32 = 1280;
 
 type Frame = Arc<Vec<u8>>;
 
+/// What a connected device is doing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PeerKind {
+    Remote,
+    Viewer,
+    Audio,
+}
+
+/// A phone/tablet/browser connected to the session.
+#[derive(Clone, Debug)]
+pub struct Peer {
+    pub id: u64,
+    pub kind: PeerKind,
+    pub ip: String,
+    pub device: String,
+    pub since: std::time::Instant,
+    /// Remote unlocked (or no password set).
+    pub controlling: bool,
+}
+
+/// Everyone connected, plus disconnect requests and blocked addresses.
+#[derive(Default)]
+pub struct Registry {
+    pub peers: Vec<Peer>,
+    pub kicked: std::collections::HashSet<u64>,
+    pub blocked: std::collections::BTreeSet<String>,
+    next: u64,
+}
+
+pub type Reg = Arc<Mutex<Registry>>;
+
+/// Registers a connection for as long as it lives; leaving happens on drop.
+struct Seat {
+    reg: Reg,
+    id: u64,
+}
+
+impl Seat {
+    fn join(reg: &Reg, kind: PeerKind, ip: &str, device: &str) -> Self {
+        let mut r = reg.lock().unwrap();
+        r.next += 1;
+        let id = r.next;
+        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false });
+        Self { reg: reg.clone(), id }
+    }
+
+    fn kicked(&self) -> bool {
+        self.reg.lock().unwrap().kicked.contains(&self.id)
+    }
+
+    fn set_controlling(&self, on: bool) {
+        if let Some(p) = self.reg.lock().unwrap().peers.iter_mut().find(|p| p.id == self.id) {
+            p.controlling = on;
+        }
+    }
+}
+
+impl Drop for Seat {
+    fn drop(&mut self) {
+        let mut r = self.reg.lock().unwrap();
+        r.peers.retain(|p| p.id != self.id);
+        r.kicked.remove(&self.id);
+    }
+}
+
+/// "iPhone · Safari" style label from a User-Agent header.
+fn device_label(request: &str) -> String {
+    let ua = request.lines().find_map(|l| l.strip_prefix("User-Agent:").or_else(|| l.strip_prefix("user-agent:"))).unwrap_or("").trim();
+    let os = if ua.contains("iPhone") {
+        "iPhone"
+    } else if ua.contains("iPad") || (ua.contains("Macintosh") && ua.contains("Mobile")) {
+        "iPad"
+    } else if ua.contains("Android") {
+        "Android"
+    } else if ua.contains("Macintosh") {
+        "Mac"
+    } else if ua.contains("Windows") {
+        "Windows"
+    } else if ua.contains("Linux") {
+        "Linux"
+    } else if ua.is_empty() {
+        "Unknown"
+    } else {
+        "Device"
+    };
+    let browser = if ua.contains("Edg/") {
+        "Edge"
+    } else if ua.contains("Chrome/") || ua.contains("CriOS") {
+        "Chrome"
+    } else if ua.contains("Firefox/") || ua.contains("FxiOS") {
+        "Firefox"
+    } else if ua.contains("Safari/") {
+        "Safari"
+    } else {
+        ""
+    };
+    if browser.is_empty() { os.to_string() } else { format!("{os} · {browser}") }
+}
+
 /// The remote-control page's view of the project: (version, JSON). Bumped when anything changes.
 pub type RemoteState = Arc<Mutex<(u64, Arc<String>)>>;
 /// Commands from phones/tablets, drained by the app each frame.
@@ -35,6 +134,7 @@ pub struct NetSession {
     /// Phones/tablets connected to the remote page.
     pub remotes: Arc<AtomicUsize>,
     password: RemotePassword,
+    registry: Reg,
     encoder: Option<SyncSender<(u32, u32, Vec<u8>)>>,
     next_frame: f64,
     pub status: String,
@@ -54,6 +154,7 @@ impl NetSession {
             remote_cmds: Arc::new(Mutex::new(Vec::new())),
             remotes: Arc::new(AtomicUsize::new(0)),
             password: Arc::new(Mutex::new(None)),
+            registry: Arc::new(Mutex::new(Registry::default())),
             encoder: None,
             next_frame: 0.0,
             status: String::new(),
@@ -82,6 +183,32 @@ impl NetSession {
         *self.password.lock().unwrap() = password.filter(|p| !p.is_empty());
     }
 
+    /// Everyone connected right now.
+    pub fn peers(&self) -> Vec<Peer> {
+        self.registry.lock().unwrap().peers.clone()
+    }
+
+    /// Drops a connection (it may reconnect unless its address is blocked).
+    pub fn disconnect(&self, id: u64) {
+        self.registry.lock().unwrap().kicked.insert(id);
+    }
+
+    /// Blocks an address: its current connections drop and new ones are refused.
+    pub fn block(&self, ip: &str) {
+        let mut r = self.registry.lock().unwrap();
+        r.blocked.insert(ip.to_string());
+        let ids: Vec<u64> = r.peers.iter().filter(|p| p.ip == ip).map(|p| p.id).collect();
+        r.kicked.extend(ids);
+    }
+
+    pub fn unblock(&self, ip: &str) {
+        self.registry.lock().unwrap().blocked.remove(ip);
+    }
+
+    pub fn blocked(&self) -> Vec<String> {
+        self.registry.lock().unwrap().blocked.iter().cloned().collect()
+    }
+
     pub fn remote_url(&self) -> String {
         format!("{}remote", self.url())
     }
@@ -103,15 +230,16 @@ impl NetSession {
         let peers = self.audio_peers.clone();
         let ring = self.audio_ring.clone();
         let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone(), self.password.clone());
+        let registry = self.registry.clone();
         std::thread::Builder::new()
             .name("phosphor-net".into())
             .spawn(move || {
                 while running.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let (running, latest, viewers, peers, ring, remote) =
-                                (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone());
-                            std::thread::spawn(move || native::serve(stream, running, latest, viewers, peers, ring, remote));
+                            let (running, latest, viewers, peers, ring, remote, registry) =
+                                (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone());
+                            std::thread::spawn(move || native::serve(stream, running, latest, viewers, peers, ring, remote, registry));
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(std::time::Duration::from_millis(30)),
                         Err(_) => break,
@@ -214,6 +342,7 @@ mod native {
         peers: Arc<AtomicUsize>,
         ring: Arc<Mutex<VecDeque<f32>>>,
         remote: super::RemoteHub,
+        registry: super::Reg,
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
@@ -222,13 +351,21 @@ mod native {
         let Ok(n) = stream.peek(&mut head) else { return };
         let request = String::from_utf8_lossy(&head[..n]).to_string();
         let path = request.split_whitespace().nth(1).unwrap_or("/").to_string();
+        let ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+        if registry.lock().unwrap().blocked.contains(&ip) {
+            let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            return;
+        }
+        let device = super::device_label(&request);
         if path.starts_with("/control") {
-            control_socket(stream, running, remote);
+            let seat = super::Seat::join(&registry, super::PeerKind::Remote, &ip, &device);
+            control_socket(stream, running, remote, seat);
             return;
         }
         if path.starts_with("/audio") {
             let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
-            audio_socket(stream, running, peers, ring);
+            let seat = super::Seat::join(&registry, super::PeerKind::Audio, &ip, &device);
+            audio_socket(stream, running, peers, ring, seat);
             return;
         }
         // Consume the request head, then answer.
@@ -237,12 +374,13 @@ mod native {
         let _ = stream.set_nodelay(true);
         match path.as_str() {
             "/stream.mjpeg" => {
+                let seat = super::Seat::join(&registry, super::PeerKind::Viewer, &ip, &device);
                 viewers.fetch_add(1, Ordering::Relaxed);
                 let _ = stream.write_all(
                     b"HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
                 );
                 let mut last: Option<Frame> = None;
-                while running.load(Ordering::Relaxed) {
+                while running.load(Ordering::Relaxed) && !seat.kicked() {
                     let frame = {
                         let (lock, cv) = &*latest;
                         let guard = lock.lock().unwrap();
@@ -288,7 +426,7 @@ mod native {
 
     /// Remote control: pushes the project state whenever it changes and queues the commands the
     /// page sends back (JSON objects like {"t":"opacity","layer":3,"v":0.5}).
-    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: super::RemoteHub) {
+    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: super::RemoteHub, seat: super::Seat) {
         let (state, cmds, count, password) = remote;
         let _ = stream.set_nodelay(true);
         let Ok(mut ws) = tungstenite::accept(stream) else { return };
@@ -298,10 +436,11 @@ mod native {
         // The password this socket proved it knows (None = not authorised, unless none is set).
         let mut granted: Option<Option<String>> = None;
         let mut told: Option<bool> = None;
-        while running.load(Ordering::Relaxed) {
+        while running.load(Ordering::Relaxed) && !seat.kicked() {
             let current = password.lock().unwrap().clone();
             let allowed = current.is_none() || granted.as_ref() == Some(&current);
             if told != Some(allowed) {
+                seat.set_controlling(allowed);
                 let msg = serde_json::json!({ "auth": if allowed { "ok" } else { "required" } }).to_string();
                 if ws.send(tungstenite::Message::Text(msg.as_str().into())).is_err() {
                     break;
@@ -345,11 +484,11 @@ mod native {
 
     /// Viewer microphone: first a text message `rate:<hz>`, then binary little-endian f32 mono
     /// chunks. Resampled to 48 kHz and queued for the audio analyser.
-    fn audio_socket(stream: TcpStream, running: Arc<AtomicBool>, peers: Arc<AtomicUsize>, ring: Arc<Mutex<VecDeque<f32>>>) {
+    fn audio_socket(stream: TcpStream, running: Arc<AtomicBool>, peers: Arc<AtomicUsize>, ring: Arc<Mutex<VecDeque<f32>>>, seat: super::Seat) {
         let Ok(mut ws) = tungstenite::accept(stream) else { return };
         peers.fetch_add(1, Ordering::Relaxed);
         let mut rate = 48_000.0f32;
-        while running.load(Ordering::Relaxed) {
+        while running.load(Ordering::Relaxed) && !seat.kicked() {
             let msg = match ws.read() {
                 Ok(m) => m,
                 Err(_) => break,
