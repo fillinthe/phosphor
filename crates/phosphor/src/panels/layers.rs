@@ -12,6 +12,8 @@ pub(crate) enum LayerAction {
     Duplicate,
     Remove,
     ClearSource,
+    /// Put this source on the layer (through the launch settings).
+    Launch(SourceSpec),
 }
 
 pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
@@ -109,6 +111,12 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
         Some((i, LayerAction::ClearSource)) => {
             comp.layers[i].source = SourceSpec::None;
+        }
+        Some((i, LayerAction::Launch(source))) => {
+            let id = comp.layers[i].id;
+            let name = source.label();
+            let now = ui.ctx().input(|i| i.time);
+            st.launch_source(id, source, Vec::new(), name, now);
         }
         _ => {}
     }
@@ -381,6 +389,73 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option
         if ui.button(label(icon::FOLDER_OPEN, "Open")).on_hover_text("Image or movie file (or drag one onto the window)").clicked() {
             action = Some(LayerAction::OpenFile);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(source) = live_menu(ui, layer.id) {
+            action = Some(LayerAction::Launch(source));
+        }
     });
     action
+}
+
+/// Live inputs for a layer: cameras / capture cards on this Mac, or a stream address.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
+    let mut picked = None;
+    let r = ui.menu_button(label(icon::VIDEO_CAMERA, "Live"), |ui| {
+        ui.set_min_width(260.0);
+        let cams_id = egui::Id::new("live_cameras");
+        let mut cams: Option<Vec<String>> = ui.ctx().data(|d| d.get_temp(cams_id));
+        if cams.is_none() {
+            cams = Some(crate::media::live::cameras().into_iter().map(|c| c.name).collect());
+        }
+        let list = cams.clone().unwrap_or_default();
+        ui.label(RichText::new("Cameras & capture cards").small().color(Color32::GRAY));
+        if list.is_empty() {
+            ui.weak("None found.");
+        }
+        for name in &list {
+            if ui.button(label(icon::VIDEO_CAMERA, name)).clicked() {
+                picked = Some(crate::media::live::camera_source(&crate::media::live::Camera { name: name.clone() }));
+                ui.close();
+            }
+        }
+        if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+            cams = None;
+        }
+        ui.ctx().data_mut(|d| match &cams {
+            Some(c) => {
+                d.insert_temp(cams_id, c.clone());
+            }
+            None => d.remove::<Vec<String>>(cams_id),
+        });
+        #[cfg(target_os = "macos")]
+        {
+            ui.separator();
+            ui.label(RichText::new("Syphon (other apps)").small().color(Color32::GRAY));
+            let servers = crate::syphon::servers();
+            if servers.is_empty() {
+                ui.weak("No app is publishing Syphon right now.");
+            }
+            for s in servers {
+                if ui.button(label(icon::SHARE_NETWORK, &s.label())).clicked() {
+                    picked = Some(crate::media::live::syphon_source(&s.label()));
+                    ui.close();
+                }
+            }
+        }
+        ui.separator();
+        ui.label(RichText::new("Stream address").small().color(Color32::GRAY));
+        let url_id = egui::Id::new(("live_url", layer));
+        let mut url: String = ui.ctx().data(|d| d.get_temp(url_id)).unwrap_or_default();
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut url).hint_text("rtsp://… srt://… https://….m3u8").desired_width(190.0));
+            if ui.add_enabled(url.contains("://"), egui::Button::new("Play")).clicked() {
+                picked = Some(crate::media::live::stream_source(&url));
+                ui.close();
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(url_id, url));
+    });
+    r.response.on_hover_text("Camera, capture card or network stream (RTSP, SRT, HLS, RTMP)");
+    picked
 }

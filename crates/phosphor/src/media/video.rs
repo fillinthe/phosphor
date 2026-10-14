@@ -79,6 +79,8 @@ pub struct VideoPlayer {
     error: Option<String>,
     duration: Option<f64>,
     size: (u32, u32),
+    /// Live input (camera, stream): always show the newest frame, no clock or looping.
+    live: bool,
 }
 
 enum Msg {
@@ -128,6 +130,25 @@ impl VideoPlayer {
         init();
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
         let dec = Decoder::open(path).map_err(|e| format!("{name}: {e}"))?;
+        Self::start(name, dec, false)
+    }
+
+    /// Opens a live input: an FFmpeg input device (`format`, e.g. "avfoundation" for cameras) or,
+    /// with an empty format, a network stream URL (rtsp, srt, http…). Each `options` set is tried
+    /// in turn until one opens (cameras only accept the frame rates they support).
+    pub fn open_live(name: &str, format: &str, url: &str, options: &[&[(&str, &str)]]) -> Result<Self, String> {
+        init();
+        let mut last = String::from("no options");
+        for opts in options.iter().copied().chain(std::iter::once(&[][..])) {
+            match Decoder::open_live(format, url, opts) {
+                Ok(dec) => return Self::start(name.to_string(), dec, true),
+                Err(e) => last = e,
+            }
+        }
+        Err(format!("{name}: {last}"))
+    }
+
+    fn start(name: String, dec: Decoder, live: bool) -> Result<Self, String> {
         let size = (dec.dec.width(), dec.dec.height());
         let duration = dec.duration;
         let shared = Arc::new(Shared {
@@ -169,6 +190,7 @@ impl VideoPlayer {
             error: None,
             duration,
             size,
+            live,
         })
     }
 
@@ -194,6 +216,9 @@ impl VideoPlayer {
     /// Called once per rendered frame with a monotonic clock in seconds. Returns the newest frame
     /// that is due for display since the last call (None if no new frame). Must be cheap and non-blocking.
     pub fn poll_frame(&mut self, now: f64) -> Option<VideoFrame> {
+        if self.live {
+            return self.poll_live();
+        }
         // Clamp large gaps (window hidden, debugger) so playback resumes instead of skipping ahead.
         let dt = self
             .last_now
@@ -244,6 +269,28 @@ impl VideoPlayer {
         self.shared
             .clock
             .store(self.clock.to_bits(), Ordering::Relaxed);
+        out
+    }
+
+    /// Live: the newest frame that arrived since the last call (older ones are dropped, so latency
+    /// never builds up).
+    fn poll_live(&mut self) -> Option<VideoFrame> {
+        let rx = self.rx.as_ref()?;
+        let mut out: Option<VideoFrame> = None;
+        for msg in rx.try_iter() {
+            match msg {
+                Msg::Frame(_, frame) => {
+                    if let Some(old) = out.replace(frame) {
+                        self.shared.recycle(old);
+                    }
+                }
+                Msg::End(_) => {}
+                Msg::Error(e) => {
+                    log::warn!("{e}");
+                    self.error = Some(e);
+                }
+            }
+        }
         out
     }
 
@@ -333,11 +380,43 @@ struct Decoder {
     frames_in_loop: u64,
     skips: u32,
     errors: u32,
+    live: bool,
+    /// Live pacing: (first pts, when it arrived). Inputs that run faster than real time (test
+    /// sources, recorded streams) are slowed to their timestamps; cameras already are.
+    live_start: Option<(f64, std::time::Instant)>,
 }
 
 impl Decoder {
     fn open(path: &str) -> Result<Self, String> {
         let input = ff::format::input(&path).map_err(|e| format!("can't open ({e})"))?;
+        Self::from_input(path, input, false)
+    }
+
+    fn open_live(format: &str, url: &str, options: &[(&str, &str)]) -> Result<Self, String> {
+        static DEVICES: Once = Once::new();
+        DEVICES.call_once(ff::device::register_all);
+        let mut dict = ff::Dictionary::new();
+        for (k, v) in options {
+            dict.set(k, v);
+        }
+        let ctx = if format.is_empty() {
+            ff::format::input_with_dictionary(&url, dict).map_err(|e| format!("can't open ({e})"))?
+        } else {
+            let fmt = ff::device::input::video()
+                .find(|f| match f {
+                    ff::Format::Input(i) => i.name() == format,
+                    _ => false,
+                })
+                .ok_or_else(|| format!("input type \"{format}\" isn't available"))?;
+            match ff::format::open_with(&url, &fmt, dict).map_err(|e| format!("can't open ({e})"))? {
+                ff::format::context::Context::Input(i) => i,
+                _ => return Err("not an input".into()),
+            }
+        };
+        Self::from_input(url, ctx, true)
+    }
+
+    fn from_input(path: &str, input: ff::format::context::Input, live: bool) -> Result<Self, String> {
         let st = input
             .streams()
             .best(ff::media::Type::Video)
@@ -386,6 +465,8 @@ impl Decoder {
             frames_in_loop: 0,
             skips: 0,
             errors: 0,
+            live,
+            live_start: None,
         })
     }
 
@@ -402,6 +483,9 @@ impl Decoder {
                 }
                 Err(e) => return Err(e),
             };
+            if !more && self.live {
+                return Err("the input stopped (unplugged or closed?)".into());
+            }
             if !more {
                 if self.frames_in_loop == 0 && self.hw && self.origin.is_none() {
                     self.fallback_to_software("no frames", sh)?;
@@ -438,12 +522,22 @@ impl Decoder {
             let (rel, dur) = self.timing();
             let pts = self.offset + rel;
             let clock = f64::from_bits(sh.clock.load(Ordering::Relaxed));
-            if pts + dur < clock - LATE && self.skips < MAX_SKIP {
+            if !self.live && pts + dur < clock - LATE && self.skips < MAX_SKIP {
                 self.skips += 1;
                 sh.skipped.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
             self.skips = 0;
+            if self.live {
+                let (pts0, t0) = *self.live_start.get_or_insert((pts, std::time::Instant::now()));
+                let ahead = (pts - pts0) - t0.elapsed().as_secs_f64();
+                if ahead > 0.002 {
+                    std::thread::sleep(std::time::Duration::from_secs_f64(ahead.min(0.25)));
+                } else if ahead < -1.0 {
+                    // Fell far behind (stall, clock jump): re-anchor instead of racing to catch up.
+                    self.live_start = Some((pts, std::time::Instant::now()));
+                }
+            }
             let src = self.download(sh)?;
             let out = self.scaler.convert(src, sh)?;
             if tx.send(Msg::Frame(pts, out)).is_err() {

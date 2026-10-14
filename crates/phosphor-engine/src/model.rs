@@ -85,6 +85,9 @@ pub enum SourceSpec {
     Generator(String),
     Image { name: String, path: Option<String> },
     Movie { name: String, path: Option<String> },
+    /// A live input: camera, capture card, or a network stream. `format` is the FFmpeg input
+    /// ("avfoundation" for cameras, empty to detect from `url`), `url` the device name or address.
+    Live { name: String, format: String, url: String },
 }
 
 impl SourceSpec {
@@ -92,7 +95,7 @@ impl SourceSpec {
         match self {
             SourceSpec::None => "No source".into(),
             SourceSpec::Generator(id) => shaders::generator(id).map_or(id.clone(), |g| g.name.to_string()),
-            SourceSpec::Image { name, .. } | SourceSpec::Movie { name, .. } => name.clone(),
+            SourceSpec::Image { name, .. } | SourceSpec::Movie { name, .. } | SourceSpec::Live { name, .. } => name.clone(),
         }
     }
 }

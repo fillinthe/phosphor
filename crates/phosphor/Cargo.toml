@@ -20,7 +20,7 @@ phosphor-isf = { path = "../phosphor-isf" }
 rfd = "0.17"
 libc = "0.2"
 env_logger = "0.11"
-ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling"] }
+ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "device"] }
 cpal = "0.18.2"
 rustfft = "6.4.1"
 midir = "0.11"
@@ -34,7 +34,7 @@ pollster = "0.4"
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
 objc2 = "0.6"
 muda = { version = "0.21", default-features = false }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSGeometry"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSGeometry", "NSArray", "NSEnumerator"] }
 objc2-metal = { version = "0.3", default-features = false, features = ["std", "MTLDevice", "MTLTexture", "MTLResource", "MTLCommandQueue", "MTLCommandBuffer", "MTLAllocation"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

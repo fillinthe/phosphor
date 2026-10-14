@@ -319,6 +319,15 @@ impl Engine {
         );
     }
 
+    /// Uses a GPU texture another app (or the system) produced as a layer's picture, with no copy:
+    /// Syphon input. It must be sampleable on this device.
+    pub fn set_layer_texture(&mut self, layer: u64, texture: wgpu::Texture) {
+        let size = texture.size();
+        let view = texture.create_view(&Default::default());
+        let target = Target { texture, view, width: size.width, height: size.height };
+        self.layers.entry(layer).or_default().media = Some(Media::Rgba(target));
+    }
+
     /// Uploads one NV12 (420 bi-planar, video range) video frame for a layer.
     #[allow(clippy::too_many_arguments)]
     pub fn upload_nv12(&mut self, layer: u64, width: u32, height: u32, luma: &[u8], luma_stride: u32, chroma: &[u8], chroma_stride: u32) {
@@ -677,7 +686,7 @@ impl Engine {
                     uniforms: u, mesh: None });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
-            SourceSpec::Image { .. } | SourceSpec::Movie { .. } => {
+            SourceSpec::Image { .. } | SourceSpec::Movie { .. } | SourceSpec::Live { .. } => {
                 let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &res.media_out } else { &res.media };
                 match slot.as_ref()? {

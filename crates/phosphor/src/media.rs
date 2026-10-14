@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use phosphor_engine::{Composition, Engine, SourceSpec};
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
+pub mod live;
 pub mod video;
 
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
@@ -58,6 +60,12 @@ pub struct MediaManager {
     /// Players for the outgoing side of a transition; they keep playing until it ends.
     #[cfg(not(target_arch = "wasm32"))]
     outgoing: HashMap<u64, video::VideoPlayer>,
+    /// Syphon In connections per layer.
+    #[cfg(target_os = "macos")]
+    syphon: HashMap<u64, crate::syphon::SyphonClient>,
+    /// Syphon layers whose source isn't there yet (the other app may start later): next retry time.
+    #[cfg(target_os = "macos")]
+    syphon_waiting: HashMap<u64, f64>,
 }
 
 impl MediaManager {
@@ -77,6 +85,10 @@ impl MediaManager {
                 }
             } else {
                 engine.clear_media(layer.id);
+                #[cfg(target_os = "macos")]
+                self.syphon.remove(&layer.id);
+                #[cfg(target_os = "macos")]
+                self.syphon_waiting.remove(&layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.players.remove(&layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
@@ -113,6 +125,20 @@ impl MediaManager {
                 SourceSpec::Movie { .. } => {
                     self.errors.insert(layer.id, "Video playback in the browser is coming soon".into());
                 }
+                #[cfg(target_os = "macos")]
+                SourceSpec::Live { format, .. } if format == "syphon" => {
+                    // Connected (with retries) in update_video.
+                    self.syphon_waiting.insert(layer.id, 0.0);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                SourceSpec::Live { name, format, url } => match live::open(name, format, url) {
+                    Ok(player) => {
+                        self.players.insert(layer.id, player);
+                    }
+                    Err(e) => {
+                        self.errors.insert(layer.id, e);
+                    }
+                },
                 _ => {}
             }
             self.loaded.insert(layer.id, layer.source.clone());
@@ -121,6 +147,10 @@ impl MediaManager {
         self.loaded.retain(|id, _| live.contains(id));
         #[cfg(not(target_arch = "wasm32"))]
         self.players.retain(|id, _| live.contains(id));
+        #[cfg(target_os = "macos")]
+        self.syphon.retain(|id, _| live.contains(id));
+        #[cfg(target_os = "macos")]
+        self.syphon_waiting.retain(|id, _| live.contains(id));
         #[cfg(not(target_arch = "wasm32"))]
         self.outgoing.retain(|id, _| comp.layers.iter().any(|l| l.id == *id && l.transition.is_some()));
     }
@@ -162,6 +192,33 @@ impl MediaManager {
             }
             if let Some(err) = player.error() {
                 self.errors.entry(layer.id).or_insert_with(|| err.to_string());
+            }
+        }
+        #[cfg(target_os = "macos")]
+        for (id, next) in self.syphon_waiting.iter_mut() {
+            if now < *next {
+                continue;
+            }
+            *next = now + 1.0;
+            let Some(SourceSpec::Live { url, .. }) = comp.layers.iter().find(|l| l.id == *id).map(|l| &l.source) else { continue };
+            match crate::syphon::SyphonClient::connect(url, engine.device()) {
+                Ok(client) => {
+                    self.errors.remove(id);
+                    self.syphon.insert(*id, client);
+                }
+                Err(e) => {
+                    self.errors.insert(*id, format!("{e} (waiting for it…)"));
+                }
+            }
+        }
+        #[cfg(target_os = "macos")]
+        self.syphon_waiting.retain(|id, _| !self.syphon.contains_key(id));
+        #[cfg(target_os = "macos")]
+        for (id, client) in &self.syphon {
+            if comp.layers.iter().any(|l| l.id == *id && l.enabled)
+                && let Some(tex) = client.new_frame(engine.device())
+            {
+                engine.set_layer_texture(*id, tex);
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
