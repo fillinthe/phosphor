@@ -35,7 +35,8 @@ app that's much smaller and lighter on the CPU.
          layer faders/on/solo, clip grid + column triggers, tap tempo, effect sliders for the selected layer
    - [x] Changes go back over a WebSocket and the page stays in sync both ways (moves when the Mac moves)
    - [x] QR code in the Session panel to open it instantly; works on iPhone, iPad, Android, any browser
-   - [ ] PIN / pairing so only your devices can control it; selected-layer thumbnails; quantize toggle
+   - [x] Optional password to control (Session panel); without it a phone only watches the output
+   - [ ] Selected-layer thumbnails on the remote; quantize toggle; HTTPS so passwords aren't sent in clear text
    - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. **Control Surface panel** (VDMX-style): place your own buttons/sliders/XY pads, each bound to anything;
@@ -137,7 +138,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] **TouchOSC integration**: OSC in/out with Zeroconf (`_osc._udp`), OSC Query, and a `.tosc`
       exporter (zlib XML, `<lexml version='4'>` node tree) that generates a TouchOSC layout from any
       Phosphor control surface; `.tosc` importer to map an existing layout
-- [ ] Right-click any control → Learn (MIDI/OSC/keyboard), for every button and slider
+- [x] Right-click any control → Learn, or type a mapping (OSC address, MIDI CC/note, key); every control also
+      answers a built-in OSC address with no setup (/phosphor/master, /phosphor/layer/<id>/opacity, /phosphor/fx/<id>/<n>…)
 - [ ] Keyboard mapping
 - [ ] Presets / snapshots per layer, effect, and whole project
 

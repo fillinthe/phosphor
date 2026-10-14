@@ -99,6 +99,23 @@ impl ControlHub {
             let Some(v) = self.fresh.get(&map.source).copied() else { continue };
             set_target(comp, &map.target, v, now);
         }
+        // Built-in addresses work without any mapping: /phosphor/master, /phosphor/layer/3/opacity…
+        let osc: Vec<(String, f32)> = self
+            .fresh
+            .iter()
+            .filter_map(|(s, v)| match s {
+                ControlSource::Osc { address } if address.starts_with("/phosphor/") => Some((address.clone(), *v)),
+                _ => None,
+            })
+            .collect();
+        if !osc.is_empty() {
+            let targets = all_targets(comp);
+            for (address, v) in osc {
+                if let Some((t, _)) = targets.iter().find(|(t, _)| default_osc_address(t) == address) {
+                    set_target(comp, &t.clone(), v, now);
+                }
+            }
+        }
         self.fresh.clear();
     }
 }
@@ -205,6 +222,21 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         effects(&l.name, &l.effects, &mut out);
     }
     out
+}
+
+/// The OSC address every control answers to without a mapping (values 0..1; 1 = press for triggers).
+pub fn default_osc_address(target: &ControlTarget) -> String {
+    match target {
+        ControlTarget::MasterFade => "/phosphor/master".into(),
+        ControlTarget::LayerOpacity(id) => format!("/phosphor/layer/{id}/opacity"),
+        ControlTarget::LayerEnabled(id) => format!("/phosphor/layer/{id}/on"),
+        ControlTarget::GeneratorParam { layer, index } => format!("/phosphor/layer/{layer}/source/{}", index + 1),
+        ControlTarget::EffectParam { effect, index } => format!("/phosphor/fx/{effect}/{}", index + 1),
+        ControlTarget::EffectMix(id) => format!("/phosphor/fx/{id}/mix"),
+        ControlTarget::EffectEnabled(id) => format!("/phosphor/fx/{id}/on"),
+        ControlTarget::TriggerClip { layer, slot } => format!("/phosphor/layer/{layer}/clip/{}", slot + 1),
+        ControlTarget::TriggerColumn(col) => format!("/phosphor/column/{}", col + 1),
+    }
 }
 
 pub fn target_label(comp: &Composition, target: &ControlTarget) -> String {
