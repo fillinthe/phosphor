@@ -133,6 +133,8 @@ pub struct State {
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
     pub media_view: panels::MediaView,
+    /// Map mode: click any control, then move a knob / send OSC / press a key to link them.
+    pub map_mode: bool,
     /// The project file being worked on (Save writes here).
     pub project_path: Option<String>,
     pub recent: Vec<String>,
@@ -465,6 +467,7 @@ impl PhosphorApp {
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 media_view: Default::default(),
+                map_mode: false,
                 project_path: stored(KEY_PROJECT_PATH).filter(|p| !p.is_empty()),
                 recent: stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 history: Default::default(),
@@ -814,11 +817,28 @@ impl PhosphorApp {
             }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            st.control.learning = None;
+            // Esc cancels the control being learned, then leaves Map mode.
+            if st.control.learning.take().is_none() {
+                st.map_mode = false;
+            }
         }
     }
 
     fn learning_banner(&mut self, ctx: &egui::Context) {
+        if self.state.map_mode && self.state.control.learning.is_none() {
+            egui::Area::new(egui::Id::new("map_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(14, 34, 40)).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(format!("{} MAP MODE", icon::PLUG)).strong().color(theme::ACCENT));
+                        ui.label("Click any highlighted control, then move a knob, send OSC, or press a key.");
+                        if ui.small_button("Done (Esc)").clicked() {
+                            self.state.map_mode = false;
+                        }
+                    });
+                });
+            });
+            return;
+        }
         let Some(t) = self.state.control.learning.clone() else { return };
         let name = crate::control::target_label(&self.state.comp, &t);
         egui::Area::new(egui::Id::new("learn_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
@@ -1152,6 +1172,10 @@ impl PhosphorApp {
                 }
             }
             A::Palette => st.palette.toggle(),
+            A::MapMode => {
+                st.map_mode = !st.map_mode;
+                st.control.learning = None;
+            }
             A::ResetLayout => self.dock = default_layout(),
             A::AddMonitor => {
                 let _ = self.add_monitor();
@@ -1496,6 +1520,16 @@ impl PhosphorApp {
                 ui.separator();
                 if ui.button(format!("{} Search  ⌘K", icon::MAGNIFYING_GLASS)).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
+                }
+                let map_text = egui::RichText::new(format!("{} MAP", icon::PLUG)).strong();
+                let map_text = if self.state.map_mode { map_text.color(egui::Color32::BLACK) } else { map_text };
+                if ui
+                    .add(egui::Button::new(map_text).selected(self.state.map_mode).fill(if self.state.map_mode { theme::ACCENT } else { egui::Color32::TRANSPARENT }))
+                    .on_hover_text("Map mode (⇧⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")
+                    .clicked()
+                {
+                    self.state.map_mode = !self.state.map_mode;
+                    self.state.control.learning = None;
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let s = self.state.stats.latest;
@@ -1871,7 +1905,11 @@ impl PhosphorApp {
             run.started = None;
             run.samples.clear();
         }
-        ctx.data_mut(|d| d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs));
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs);
+            d.insert_temp(egui::Id::new(panels::MAP_MODE), self.state.map_mode);
+            d.insert_temp(egui::Id::new(panels::LEARNING), self.state.control.learning.clone());
+        });
         self.control_requests(&ctx);
         self.menu_actions(&ctx, now);
         self.shortcuts(&ctx);

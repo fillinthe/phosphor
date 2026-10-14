@@ -545,6 +545,15 @@ mod tests {
         send(&mut hub, &mut comp, key.clone(), 1.0);
         assert_eq!(comp.layer_mut(id).unwrap().enabled, before);
 
+        // Learn: the next message binds to the chosen control.
+        hub.learning = Some(ControlTarget::LayerOpacity(id));
+        let cc = ControlSource::MidiCc { channel: 0, cc: 21 };
+        send(&mut hub, &mut comp, cc.clone(), 0.25);
+        assert!(hub.learning.is_none());
+        assert!(comp.control_maps.iter().any(|m| m.source == cc && m.target == ControlTarget::LayerOpacity(id)));
+        send(&mut hub, &mut comp, cc.clone(), 0.75);
+        assert!((comp.layer_mut(id).unwrap().opacity - 0.75).abs() < 1e-3);
+
         // An OSC toggle (TouchOSC style 1/0) follows the value.
         comp.control_maps.push(ControlMap { source: osc("/t/bypass"), target: ControlTarget::LayerFxBypass(id) });
         send(&mut hub, &mut comp, osc("/t/bypass"), 1.0);

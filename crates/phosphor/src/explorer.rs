@@ -1,6 +1,7 @@
 //! Effects Explorer (live previews of every effect/generator), the Shader Editor, and the
 //! ⌘K command palette.
 
+use crate::panels::RightMenu;
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use egui_phosphor::regular as icon;
 use phosphor_engine::{CompileError, EffectState, MASTER_ID, PreviewItem, custom, shaders};
@@ -177,7 +178,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 }
                 let params: Vec<&str> = desc.params.iter().map(|p| p.name).collect();
                 let resp = resp.on_hover_text(format!("{about}\n\nControls: {}", if params.is_empty() { "none".into() } else { params.join(", ") }));
-                resp.context_menu(|ui| {
+                resp.right_menu(|ui| {
                     let text = if fav { label(icon::STAR, "Remove from favourites") } else { label(icon::STAR, "Add to favourites") };
                     if ui.button(text).clicked() {
                         action = Some(TileAction::Favorite(desc.id.to_string()));
