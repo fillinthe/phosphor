@@ -169,6 +169,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     });
                 });
             });
+            color_grade_editor(ui, id, &mut o.color);
         });
         if toggle {
             st.toggle_output_window(id);
@@ -230,5 +231,23 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
             _ => OutputStatus::Off,
         };
         output_status(ui, status);
+    });
+}
+
+/// Colour correction for one output: match projectors and screens to each other.
+pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_engine::ColorGrade) {
+    let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
+    egui::CollapsingHeader::new(title).id_salt(("output_color", id)).show(ui, |ui| {
+        ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
+        guarded!(ui, g.brightness, Slider::new(&mut g.brightness, -1.0..=1.0).text("Brightness").fixed_decimals(2));
+        guarded!(ui, g.contrast, Slider::new(&mut g.contrast, 0.0..=3.0).text("Contrast").fixed_decimals(2));
+        guarded!(ui, g.gamma, Slider::new(&mut g.gamma, 0.2..=3.0).text("Gamma").fixed_decimals(2).logarithmic(true));
+        guarded!(ui, g.saturation, Slider::new(&mut g.saturation, 0.0..=2.0).text("Saturation").fixed_decimals(2));
+        for (k, name) in ["Red", "Green", "Blue"].iter().enumerate() {
+            guarded!(ui, g.gains[k], Slider::new(&mut g.gains[k], 0.0..=2.0).text(*name).fixed_decimals(2));
+        }
+        if ui.add_enabled(!g.is_neutral(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset colour"))).clicked() {
+            *g = Default::default();
+        }
     });
 }

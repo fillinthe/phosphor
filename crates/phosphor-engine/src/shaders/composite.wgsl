@@ -96,5 +96,5 @@ fn fs_mix(in: VOut) -> @location(0) vec4f {
 @fragment
 fn fs_finalize(in: VOut) -> @location(0) vec4f {
     let c = textureSampleLevel(tex0, samp, in.uv, 0.0);
-    return vec4f(c.rgb * u.opacity, 1.0);
+    return vec4f(grade(c.rgb) * u.opacity, 1.0);
 }

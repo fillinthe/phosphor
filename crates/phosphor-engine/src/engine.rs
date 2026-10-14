@@ -525,6 +525,9 @@ impl Engine {
             let view = slot.as_ref().unwrap().view.clone();
             let mut u = Uniforms::with_params(&[]);
             u.resolution = [ow as f32, oh as f32];
+            let [g0, g1] = o.color.uniforms();
+            u.p[5] = g0;
+            u.p[6] = g1;
             if !o.mapping.active() {
                 u.opacity = fade;
                 passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
@@ -544,7 +547,9 @@ impl Engine {
                     u.opacity = s.opacity * fade;
                     u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
                     u.mode = o.mapping.test_pattern as u32;
-                    u.p[4] = [0.0, s.feather, 0.0, 0.0];
+                    u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
+                    u.p[5] = g0;
+                    u.p[6] = g1;
                     passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
@@ -559,7 +564,9 @@ impl Engine {
                 u.p[1] = [c[2][0], c[2][1], c[3][0], c[3][1]];
                 u.p[2] = [inv[0], inv[1], inv[2], inv[3]];
                 u.p[3] = [inv[4], inv[5], inv[6], inv[7]];
-                u.p[4] = [inv[8], s.feather, 0.0, 0.0];
+                u.p[4] = [inv[8], s.feather, s.blend_gamma - 1.0, 0.0];
+                u.p[5] = g0;
+                u.p[6] = g1;
                 passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
             self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
