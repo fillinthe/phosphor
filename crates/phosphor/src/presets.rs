@@ -81,5 +81,5 @@ impl PresetStore {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn user_dir() -> Option<std::path::PathBuf> {
-    eframe::storage_dir("Phosphor").map(|d| d.join("presets"))
+    crate::show::storage_dir().map(|d| d.join("presets"))
 }

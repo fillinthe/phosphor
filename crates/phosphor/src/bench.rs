@@ -15,6 +15,8 @@ pub struct BenchConfig {
     pub effects: Vec<String>,
     pub size: Option<(u32, u32)>,
     pub snapshot: Option<String>,
+    /// Export the bench project as a standalone show into this folder (tests Export Show).
+    pub export: Option<String>,
     /// Open the default audio input and report its level.
     pub audio: bool,
     /// A .phosphor project to load instead of building one from the flags.
@@ -52,6 +54,7 @@ impl BenchConfig {
                 ("--movie", Some(v)) => cfg.movies.push(v),
                 ("--fx", Some(v)) => cfg.effects.push(v),
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
+                ("--export", Some(v)) => cfg.export = Some(v),
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
                 ("--remote-password", Some(v)) => cfg.remote_password = Some(v),

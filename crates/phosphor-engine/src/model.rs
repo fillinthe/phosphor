@@ -642,6 +642,41 @@ impl Composition {
     }
 
     /// Adds a layer on top of the stack.
+    /// Rewrites every media file path (layer sources, clip slots, the media bin), e.g. to make a
+    /// project portable or to resolve it against a new folder.
+    pub fn map_paths(&mut self, mut f: impl FnMut(&str) -> String) {
+        let spec = |s: &mut SourceSpec, f: &mut dyn FnMut(&str) -> String| {
+            if let SourceSpec::Image { path: Some(p), .. } | SourceSpec::Movie { path: Some(p), .. } = s {
+                *p = f(p);
+            }
+        };
+        for l in &mut self.layers {
+            spec(&mut l.source, &mut f);
+            for c in &mut l.clips {
+                spec(&mut c.source, &mut f);
+            }
+        }
+        for m in &mut self.media_bin {
+            m.path = f(&m.path);
+        }
+    }
+
+    /// Effect and generator ids in use (for packing shaders with a show).
+    pub fn used_shader_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.master_effects.iter().map(|e| e.effect.clone()).collect();
+        for l in &self.layers {
+            ids.extend(l.effects.iter().map(|e| e.effect.clone()));
+            for s in std::iter::once(&l.source).chain(l.clips.iter().map(|c| &c.source)) {
+                if let SourceSpec::Generator(g) = s {
+                    ids.push(g.clone());
+                }
+            }
+        }
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
     pub fn add_layer(&mut self) -> &mut LayerState {
         let id = self.new_id();
         let name = format!("Layer {}", self.layers.len() + 1);

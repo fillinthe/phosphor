@@ -33,9 +33,10 @@ pub fn folders() -> Vec<std::path::PathBuf> {
         dirs.push(home.join("Library/Graphics/ISF"));
         dirs.push(home.join("Documents/VDMX Media/ISF"));
     }
-    if let Some(d) = eframe::storage_dir("Phosphor") {
+    if let Some(d) = crate::show::storage_dir() {
         dirs.push(d.join("isf"));
     }
+    dirs.extend(crate::show::shader_dir("isf"));
     dirs
 }
 

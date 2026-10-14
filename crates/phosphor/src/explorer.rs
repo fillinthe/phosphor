@@ -269,7 +269,7 @@ pub struct EditorState {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn effects_dir() -> Option<std::path::PathBuf> {
-    eframe::storage_dir("Phosphor").map(|d| d.join("effects"))
+    crate::show::storage_dir().map(|d| d.join("effects"))
 }
 
 fn id_for(slug: &str, source: &str) -> String {
@@ -284,9 +284,8 @@ pub fn load_user_shaders(st: &mut State) {
     }
     st.editor.loaded = true;
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(dir) = effects_dir()
-        && let Ok(entries) = std::fs::read_dir(dir)
-    {
+    for dir in effects_dir().into_iter().chain(crate::show::shader_dir("effects")) {
+        let Ok(entries) = std::fs::read_dir(dir) else { continue };
         let mut files: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "wgsl")).collect();
         files.sort();
         for path in files {

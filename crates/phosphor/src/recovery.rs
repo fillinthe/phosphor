@@ -32,7 +32,7 @@ pub struct Snapshot {
 }
 
 fn dir() -> Option<PathBuf> {
-    eframe::storage_dir("Phosphor")
+    crate::show::storage_dir()
 }
 
 fn snapshot_path() -> Option<PathBuf> {
