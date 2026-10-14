@@ -31,6 +31,7 @@ pub enum Action {
     ToggleOutput,
     Identify,
     Syphon,
+    Ndi,
     Notes,
     Roadmap,
     Website,
@@ -109,6 +110,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Identify, "Identify Outputs", None),
             S,
             I(A::Syphon, "Syphon On / Off", None),
+            I(A::Ndi, "NDI On / Off", None),
         ],
     ),
     (

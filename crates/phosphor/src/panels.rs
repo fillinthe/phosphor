@@ -1238,7 +1238,12 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
 }
 
 pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
-    let Some(fx) = st.comp.new_effect(effect) else { return };
+    let Some(mut fx) = st.comp.new_effect(effect) else { return };
+    // With Launch → Fade, a new effect blends in instead of popping on.
+    if st.comp.launch.fade {
+        st.fx_fades.push((fx.id, st.mod_inputs.time, st.comp.launch.fade_secs.max(0.05), fx.mix));
+        fx.mix = 0.0;
+    }
     st.explorer.recent.retain(|r| r != effect);
     st.explorer.recent.insert(0, effect.to_string());
     st.explorer.recent.truncate(12);
@@ -2738,6 +2743,8 @@ fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     });
     #[cfg(target_os = "macos")]
     syphon_row(ui, st);
+    #[cfg(target_os = "macos")]
+    ndi_row(ui, st);
     let canvas = (st.comp.width, st.comp.height);
     let mut remove = None;
     let count = st.comp.outputs.len();
@@ -2992,6 +2999,8 @@ fn devices(ui: &mut egui::Ui, st: &mut State) {
         ui.label(RichText::new(format!("{} Outputs", icon::PROJECTOR_SCREEN)).strong());
         #[cfg(target_os = "macos")]
         syphon_row(ui, st);
+        #[cfg(target_os = "macos")]
+        ndi_row(ui, st);
         let windows: Vec<(u64, bool)> = st.output.lock().unwrap().iter().map(|(id, o)| (*id, o.open)).collect();
         for o in &st.comp.outputs {
             let open = windows.iter().any(|(id, on)| *id == o.id && *on);
@@ -3021,6 +3030,44 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
             ui.label(RichText::new(format!("{} {clients} app(s) receiving", icon::CHECK_CIRCLE)).small().color(ACCENT));
         } else {
             ui.weak(format!("{} source(s) published, no app receiving yet", st.syphon.server_count()));
+        }
+    });
+}
+
+/// Composition → NDI toggle, name, frame rate and status.
+#[cfg(target_os = "macos")]
+pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        let Some(lib) = crate::ndi::Ndi::library() else {
+            ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
+            ui.weak("needs the free NDI Tools");
+            if ui.small_button("Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
+                ui.ctx().open_url(egui::OpenUrl::new_tab("https://ndi.video/tools/"));
+            }
+            return;
+        };
+        let r = ui
+            .toggle_value(&mut st.comp.ndi.enabled, label(icon::BROADCAST, "NDI"))
+            .on_hover_text(format!("Send the composition over the network as NDI (MadMapper, Resolume, OBS, vMix, other computers)\nNDI library: {}", lib.display()));
+        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::Ndi));
+        ui.add(egui::TextEdit::singleline(&mut st.comp.ndi.name).desired_width(90.0)).on_hover_text("Name receivers see");
+        ComboBox::from_id_salt("ndi_fps").width(60.0).selected_text(format!("{} fps", st.comp.ndi.fps)).show_ui(ui, |ui| {
+            for f in [25, 30, 50, 60] {
+                ui.selectable_value(&mut st.comp.ndi.fps, f, format!("{f} fps"));
+            }
+        });
+        if let Some(e) = &st.ndi.error
+            && st.comp.ndi.enabled
+            && !st.ndi.running()
+        {
+            ui.colored_label(Color32::from_rgb(255, 120, 90), e);
+        } else if st.ndi.running() {
+            let n = st.ndi.connections();
+            if n > 0 {
+                ui.label(RichText::new(format!("{} {n} receiving", icon::CHECK_CIRCLE)).small().color(ACCENT));
+            } else {
+                ui.weak("on the network, nobody receiving yet");
+            }
         }
     });
 }

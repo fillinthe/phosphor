@@ -346,6 +346,22 @@ pub enum ControlTarget {
     App(AppControl),
 }
 
+/// NDI network video output.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NdiSettings {
+    pub enabled: bool,
+    /// Shown to receivers as "COMPUTER (name)".
+    pub name: String,
+    pub fps: u32,
+}
+
+impl Default for NdiSettings {
+    fn default() -> Self {
+        Self { enabled: false, name: "Phosphor".into(), fps: 60 }
+    }
+}
+
 /// App-wide mappable controls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AppControl {
@@ -360,10 +376,11 @@ pub enum AppControl {
     AudioGain,
     KickThreshold,
     Syphon,
+    Ndi,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 11] = [
+    pub const ALL: [AppControl; 12] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -375,6 +392,7 @@ impl AppControl {
         AppControl::AudioGain,
         AppControl::KickThreshold,
         AppControl::Syphon,
+        AppControl::Ndi,
     ];
 
     pub fn name(self) -> &'static str {
@@ -390,6 +408,7 @@ impl AppControl {
             AppControl::AudioGain => "Audio gain",
             AppControl::KickThreshold => "Kick threshold",
             AppControl::Syphon => "Syphon on/off",
+            AppControl::Ndi => "NDI on/off",
         }
     }
 
@@ -407,12 +426,13 @@ impl AppControl {
             AppControl::AudioGain => "audio/gain",
             AppControl::KickThreshold => "audio/kick",
             AppControl::Syphon => "syphon",
+            AppControl::Ndi => "ndi",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi)
     }
 }
 
@@ -611,6 +631,8 @@ pub struct Composition {
     pub launch: LaunchSettings,
     /// Publish the composition as a Syphon source named "Phosphor" (macOS).
     pub syphon: bool,
+    /// Send the composition over the network as NDI.
+    pub ndi: NdiSettings,
     /// Names of your media collections.
     pub media_collections: Vec<String>,
     pub bpm: f32,
@@ -618,7 +640,7 @@ pub struct Composition {
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, media_collections: Vec::new() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), media_collections: Vec::new() }
     }
 }
 

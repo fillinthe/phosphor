@@ -28,6 +28,8 @@ mod history;
 mod menu;
 #[cfg(target_os = "macos")]
 mod syphon;
+#[cfg(target_os = "macos")]
+mod ndi;
 mod thumbs;
 mod theme;
 

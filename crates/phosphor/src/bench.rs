@@ -28,6 +28,8 @@ pub struct BenchConfig {
     pub trigger_at: f64,
     /// Host a network session and analyse viewer audio.
     pub net: bool,
+    /// Turn NDI output on.
+    pub ndi: bool,
     /// Require this password for remote control.
     pub remote_password: Option<String>,
     /// Watch this folder (prints how many media files landed in the bin).
@@ -69,6 +71,11 @@ impl BenchConfig {
                 }
                 ("--net", _) => {
                     cfg.net = true;
+                    i += 1;
+                    continue;
+                }
+                ("--ndi", _) => {
+                    cfg.ndi = true;
                     i += 1;
                     continue;
                 }

@@ -44,6 +44,8 @@ pub struct ExplorerState {
     /// Show generators (sources) instead of effects.
     pub sources: bool,
     pub favorites: Vec<String>,
+    /// The tile clicked last: chosen, not yet added to anything.
+    pub picked: Option<&'static str>,
 }
 
 fn matches(desc: &shaders::ShaderDesc, query: &str) -> bool {
@@ -100,9 +102,34 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             }
         }
     });
-    let verb = if st.explorer.sources { "sets the source of" } else { "adds to" };
+    // The picked tile and what to do with it; nothing changes on screen until you choose.
+    let picked = st.explorer.picked.and_then(|id| list.iter().find(|d| d.id == id).copied());
+    let mut add_to: Option<Option<u64>> = None;
     ui.horizontal(|ui| {
-        ui.weak(format!("Click {verb} {target_name} · drag onto any layer or MASTER · right-click for more"));
+        match picked {
+            Some(d) => {
+                ui.label(RichText::new(d.name).strong().color(ACCENT));
+                if st.explorer.sources {
+                    if ui.button(label(icon::SPARKLE, &format!("Use on {target_name}"))).clicked() {
+                        add_to = Some(None);
+                    }
+                } else {
+                    if ui.button(label(icon::PLUS, &format!("Add to {target_name}"))).clicked() {
+                        add_to = Some(None);
+                    }
+                    if st.selected != Some(MASTER_ID) && ui.button(label(icon::PLUS, "Add to MASTER")).clicked() {
+                        add_to = Some(Some(MASTER_ID));
+                    }
+                }
+                if ui.small_button(icon::X).on_hover_text("Unselect").clicked() {
+                    st.explorer.picked = None;
+                }
+            }
+            None => {
+                let verb = if st.explorer.sources { "use it" } else { "add it" };
+                ui.weak(format!("Click to pick · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
+            }
+        }
         #[cfg(not(target_arch = "wasm32"))]
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
@@ -165,7 +192,13 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 if fav {
                     p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, egui::FontId::proportional(14.0), Color32::from_rgb(255, 210, 90));
                 }
-                let stroke = if resp.hovered() { Stroke::new(1.5, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(48)) };
+                let stroke = if st.explorer.picked == Some(desc.id) {
+                    Stroke::new(2.5, ACCENT)
+                } else if resp.hovered() {
+                    Stroke::new(1.5, ACCENT)
+                } else {
+                    Stroke::new(1.0, Color32::from_gray(48))
+                };
                 p.rect_stroke(rect, 6.0, stroke, StrokeKind::Inside);
                 let payload = if st.explorer.sources {
                     PaletteDrag { effect: None, generator: Some(desc.id) }
@@ -173,8 +206,10 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                     PaletteDrag { effect: Some(desc.id), generator: None }
                 };
                 resp.dnd_set_drag_payload(payload);
-                if resp.clicked() {
+                if resp.double_clicked() {
                     action = Some(TileAction::Apply(desc.id));
+                } else if resp.clicked() {
+                    st.explorer.picked = Some(desc.id);
                 }
                 let params: Vec<&str> = desc.params.iter().map(|p| p.name).collect();
                 let resp = resp.on_hover_text(format!("{about}\n\nControls: {}", if params.is_empty() { "none".into() } else { params.join(", ") }));
@@ -202,6 +237,9 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         });
     });
 
+    if let (Some(d), Some(target)) = (picked, add_to) {
+        apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(d.id), generator: st.explorer.sources.then_some(d.id) }, target);
+    }
     match action {
         Some(TileAction::Apply(id)) => apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(id), generator: st.explorer.sources.then_some(id) }, None),
         Some(TileAction::Favorite(id)) => {
