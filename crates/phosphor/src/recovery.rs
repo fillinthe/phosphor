@@ -43,6 +43,34 @@ fn lock_path() -> Option<PathBuf> {
     dir().map(|d| d.join("running.lock"))
 }
 
+fn heartbeat_path() -> Option<PathBuf> {
+    dir().map(|d| d.join("heartbeat"))
+}
+
+/// Seconds without a heartbeat (while the watchdog itself was awake) before Phosphor counts as frozen.
+const FROZEN_AFTER: f64 = 20.0;
+
+/// Written once a second by the render loop (which keeps running even when the window is
+/// hidden); the watchdog restarts Phosphor if it stops.
+#[derive(Default)]
+pub struct Heartbeat {
+    last: f64,
+    count: u64,
+}
+
+impl Heartbeat {
+    pub fn beat(&mut self, now: f64) {
+        if now - self.last < 1.0 {
+            return;
+        }
+        self.last = now;
+        self.count += 1;
+        if let Some(p) = heartbeat_path() {
+            let _ = std::fs::write(p, self.count.to_string());
+        }
+    }
+}
+
 fn crashes_path() -> Option<PathBuf> {
     dir().map(|d| d.join("crashes.txt"))
 }
@@ -115,15 +143,42 @@ pub fn spawn_watchdog() {
         .spawn();
 }
 
-/// The watchdog: waits for `pid` to exit. If it exited without a clean quit, reopens Phosphor
+/// The watchdog: waits for `pid` to exit, or to freeze (no heartbeat for `FROZEN_AFTER`
+/// seconds, in which case it's killed). If it went without a clean quit, reopens Phosphor
 /// (unless it has crashed 3 times in the last 2 minutes, to avoid a crash loop).
 pub fn run_watchdog(pid: u32) {
+    let mut last_beat: Option<String> = None;
+    let mut stale = 0.0f64;
+    let mut tick = std::time::Instant::now();
     loop {
         std::thread::sleep(std::time::Duration::from_millis(700));
+        // Only count time we were awake ourselves: after the Mac sleeps, a stale heartbeat isn't a freeze.
+        let dt = tick.elapsed().as_secs_f64();
+        tick = std::time::Instant::now();
         // SAFETY: signal 0 only checks whether the process exists.
         let alive = unsafe { libc::kill(pid as i32, 0) } == 0;
         if alive {
-            continue;
+            let beat = heartbeat_path().and_then(|p| std::fs::read_to_string(p).ok());
+            if beat.is_some() && beat != last_beat {
+                last_beat = beat;
+                stale = 0.0;
+            } else if last_beat.is_some() && dt < 2.0 {
+                stale += dt;
+            }
+            if stale < FROZEN_AFTER {
+                continue;
+            }
+            // Frozen: end it so it can be reopened with the last settings.
+            if let Some(log) = crash_log_path() {
+                let _ = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(log)
+                    .and_then(|mut f| std::io::Write::write_all(&mut f, format!("[{}] froze (no heartbeat for {FROZEN_AFTER} s); restarted by the watchdog\n", unix_now()).as_bytes()));
+            }
+            // SAFETY: killing the frozen Phosphor process we're watching.
+            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
         let Some(lock) = lock_path() else { return };
         if !lock.exists() {

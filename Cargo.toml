@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/phosphor-engine", "crates/phosphor", "crates/phosphor-isf"]
+exclude = ["vendor"]
 
 [profile.release]
 lto = "thin"
@@ -9,3 +10,8 @@ codegen-units = 1
 
 [profile.dev.package."*"]
 opt-level = 2
+
+# eframe with one patch (vendor/eframe/src/native/run.rs, "PHOSPHOR PATCH"): a hidden control
+# window keeps rendering the outputs at full rate on macOS. Re-apply when upgrading eframe.
+[patch.crates-io]
+eframe = { path = "vendor/eframe" }

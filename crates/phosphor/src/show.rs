@@ -47,9 +47,11 @@ pub fn bundled() -> Option<&'static Bundled> {
 /// Name for settings/recovery storage: separate per exported show.
 pub fn storage_name() -> &'static str {
     static N: OnceLock<String> = OnceLock::new();
-    N.get_or_init(|| match bundled() {
-        Some(b) => format!("Phosphor Show {}", slug(&b.manifest.name)),
-        None => "Phosphor".into(),
+    N.get_or_init(|| match (bundled(), std::env::var("PHOSPHOR_PROFILE").ok().filter(|p| !p.is_empty())) {
+        (Some(b), _) => format!("Phosphor Show {}", slug(&b.manifest.name)),
+        // A separate settings folder (tests, or a second copy alongside your main one).
+        (None, Some(p)) => format!("Phosphor Profile {}", slug(&p)),
+        (None, None) => "Phosphor".into(),
     })
 }
 

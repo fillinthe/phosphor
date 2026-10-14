@@ -427,10 +427,33 @@ pub struct PhosphorApp {
     layouts: Layouts,
     /// Save Layout window: (name, open at startup).
     layout_draft: Option<(String, bool)>,
+    /// When the last UI frame ran (wall clock) and its egui time: `logic` keeps the show going
+    /// on our own clock while the window is hidden.
+    last_ui: (web_time::Instant, f64),
+    /// Paces rendering while the window is hidden (60 fps).
+    hidden_pacer: crate::pacing::FramePacer,
+    #[cfg(not(target_arch = "wasm32"))]
+    heartbeat: crate::recovery::Heartbeat,
 }
 
 impl eframe::App for PhosphorApp {
+    /// Runs every frame, and on its own while the control window is minimized or covered
+    /// (eframe then skips `ui`). The outputs, Syphon, NDI and streams must keep going then, so
+    /// render here when the UI hasn't drawn recently.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let (at, time) = self.last_ui;
+        let idle = at.elapsed().as_secs_f64();
+        if idle > 0.05 {
+            let now = time + idle;
+            if self.hidden_pacer.due(now, 60) {
+                self.render(now);
+            }
+            ctx.request_repaint();
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.last_ui = (web_time::Instant::now(), ui.ctx().input(|i| i.time));
         // A bug in one frame should not take the show down: skip that frame and carry on.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.ui_frame(ui, frame)));
         if result.is_err() {
