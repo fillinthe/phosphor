@@ -274,6 +274,7 @@ pub enum ControlSource {
     MidiCc { channel: u8, cc: u8 },
     MidiNote { channel: u8, note: u8 },
     Osc { address: String },
+    Key { key: String },
 }
 
 impl ControlSource {
@@ -282,6 +283,7 @@ impl ControlSource {
             ControlSource::MidiCc { channel, cc } => format!("MIDI ch{} CC{cc}", channel + 1),
             ControlSource::MidiNote { channel, note } => format!("MIDI ch{} note {note}", channel + 1),
             ControlSource::Osc { address } => format!("OSC {address}"),
+            ControlSource::Key { key } => format!("Key {key}"),
         }
     }
 }
