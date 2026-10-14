@@ -11,6 +11,11 @@ pub const DEFAULT_PORT: u16 = 8777;
 const MAX_WIDTH: u32 = 1280;
 
 type Frame = Arc<Vec<u8>>;
+
+/// The remote-control page's view of the project: (version, JSON). Bumped when anything changes.
+pub type RemoteState = Arc<Mutex<(u64, Arc<String>)>>;
+/// Commands from phones/tablets, drained by the app each frame.
+pub type RemoteCmds = Arc<Mutex<Vec<serde_json::Value>>>;
 type Shared = Arc<(Mutex<Option<Frame>>, Condvar)>;
 
 pub struct NetSession {
@@ -21,6 +26,10 @@ pub struct NetSession {
     pub viewers: Arc<AtomicUsize>,
     pub audio_peers: Arc<AtomicUsize>,
     audio_ring: Arc<Mutex<VecDeque<f32>>>,
+    remote_state: RemoteState,
+    remote_cmds: RemoteCmds,
+    /// Phones/tablets connected to the remote page.
+    pub remotes: Arc<AtomicUsize>,
     encoder: Option<SyncSender<(u32, u32, Vec<u8>)>>,
     next_frame: f64,
     pub status: String,
@@ -36,6 +45,9 @@ impl NetSession {
             viewers: Arc::new(AtomicUsize::new(0)),
             audio_peers: Arc::new(AtomicUsize::new(0)),
             audio_ring: Arc::new(Mutex::new(VecDeque::new())),
+            remote_state: Arc::new(Mutex::new((0, Arc::new(String::new())))),
+            remote_cmds: Arc::new(Mutex::new(Vec::new())),
+            remotes: Arc::new(AtomicUsize::new(0)),
             encoder: None,
             next_frame: 0.0,
             status: String::new(),
@@ -44,6 +56,23 @@ impl NetSession {
 
     pub fn running(&self) -> bool {
         self.running.load(Ordering::Relaxed)
+    }
+
+    /// Publishes the project state for remotes (only when it changed).
+    pub fn set_remote_state(&self, json: String) {
+        let mut s = self.remote_state.lock().unwrap();
+        if *s.1 != json {
+            s.0 += 1;
+            s.1 = Arc::new(json);
+        }
+    }
+
+    pub fn take_remote_commands(&self) -> Vec<serde_json::Value> {
+        std::mem::take(&mut *self.remote_cmds.lock().unwrap())
+    }
+
+    pub fn remote_url(&self) -> String {
+        format!("{}remote", self.url())
     }
 
     pub fn url(&self) -> String {
@@ -62,15 +91,16 @@ impl NetSession {
         let viewers = self.viewers.clone();
         let peers = self.audio_peers.clone();
         let ring = self.audio_ring.clone();
+        let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone());
         std::thread::Builder::new()
             .name("phosphor-net".into())
             .spawn(move || {
                 while running.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let (running, latest, viewers, peers, ring) =
-                                (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone());
-                            std::thread::spawn(move || native::serve(stream, running, latest, viewers, peers, ring));
+                            let (running, latest, viewers, peers, ring, remote) =
+                                (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone());
+                            std::thread::spawn(move || native::serve(stream, running, latest, viewers, peers, ring, remote));
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(std::time::Duration::from_millis(30)),
                         Err(_) => break,
@@ -149,6 +179,7 @@ mod native {
     use super::{Frame, MAX_WIDTH, Shared};
 
     pub const PLAYER_HTML: &str = include_str!("../player.html");
+    pub const REMOTE_HTML: &str = include_str!("../remote.html");
 
     pub fn encode(w: u32, h: u32, rgba: Vec<u8>) -> Option<Vec<u8>> {
         let img = image::RgbaImage::from_raw(w, h, rgba)?;
@@ -171,6 +202,7 @@ mod native {
         viewers: Arc<AtomicUsize>,
         peers: Arc<AtomicUsize>,
         ring: Arc<Mutex<VecDeque<f32>>>,
+        remote: (super::RemoteState, super::RemoteCmds, Arc<AtomicUsize>),
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
@@ -179,6 +211,10 @@ mod native {
         let Ok(n) = stream.peek(&mut head) else { return };
         let request = String::from_utf8_lossy(&head[..n]).to_string();
         let path = request.split_whitespace().nth(1).unwrap_or("/").to_string();
+        if path.starts_with("/control") {
+            control_socket(stream, running, remote);
+            return;
+        }
         if path.starts_with("/audio") {
             let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
             audio_socket(stream, running, peers, ring);
@@ -226,12 +262,49 @@ mod native {
                     }
                 }
             }
+            p if p.starts_with("/remote") => {
+                let body = REMOTE_HTML.as_bytes();
+                let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
+                let _ = stream.write_all(body);
+            }
             _ => {
                 let body = PLAYER_HTML.as_bytes();
                 let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
                 let _ = stream.write_all(body);
             }
         }
+    }
+
+    /// Remote control: pushes the project state whenever it changes and queues the commands the
+    /// page sends back (JSON objects like {"t":"opacity","layer":3,"v":0.5}).
+    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: (super::RemoteState, super::RemoteCmds, Arc<AtomicUsize>)) {
+        let (state, cmds, count) = remote;
+        let _ = stream.set_nodelay(true);
+        let Ok(mut ws) = tungstenite::accept(stream) else { return };
+        let _ = ws.get_mut().set_read_timeout(Some(Duration::from_millis(30)));
+        count.fetch_add(1, Ordering::Relaxed);
+        let mut sent = u64::MAX;
+        while running.load(Ordering::Relaxed) {
+            let (version, json) = state.lock().unwrap().clone();
+            if version != sent && !json.is_empty() {
+                if ws.send(tungstenite::Message::Text(json.as_str().into())).is_err() {
+                    break;
+                }
+                sent = version;
+            }
+            match ws.read() {
+                Ok(tungstenite::Message::Text(t)) => {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.as_str()) {
+                        cmds.lock().unwrap().push(v);
+                    }
+                }
+                Ok(tungstenite::Message::Close(_)) => break,
+                Ok(_) => {}
+                Err(tungstenite::Error::Io(e)) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+                Err(_) => break,
+            }
+        }
+        count.fetch_sub(1, Ordering::Relaxed);
     }
 
     /// Viewer microphone: first a text message `rate:<hz>`, then binary little-endian f32 mono

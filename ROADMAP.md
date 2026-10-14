@@ -28,12 +28,14 @@ app that's much smaller and lighter on the CPU.
 
 ## Next up (priority order)
 
-1. **Multiple outputs**: one window per projector/screen, each with its own mapping surfaces
+1. ~~**Multiple outputs**~~ ✔ any number of outputs, each with its own size (incl. portrait), mapping
+   surfaces, window, screen and Identify; the main output is now a clean program feed
 2. **Phone / iPad remote** (piggyback on the Mac over the network, no OSC layouts to build):
-   - [ ] Session server serves a touch **control page** generated from the live project: master fader,
+   - [x] Session server serves a touch **control page** generated from the live project: master fader,
          layer faders/on/solo, clip grid + column triggers, tap tempo, effect sliders for the selected layer
-   - [ ] Changes go back over a WebSocket and the page stays in sync both ways (moves when the Mac moves)
-   - [ ] QR code in the Session panel to open it instantly; works on iPhone, iPad, Android, any browser
+   - [x] Changes go back over a WebSocket and the page stays in sync both ways (moves when the Mac moves)
+   - [x] QR code in the Session panel to open it instantly; works on iPhone, iPad, Android, any browser
+   - [ ] PIN / pairing so only your devices can control it; selected-layer thumbnails; quantize toggle
    - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. **Control Surface panel** (VDMX-style): place your own buttons/sliders/XY pads, each bound to anything;

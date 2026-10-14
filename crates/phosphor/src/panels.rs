@@ -1926,6 +1926,22 @@ fn network(ui: &mut egui::Ui, st: &mut State) {
                 ui.ctx().copy_text(url.clone());
             }
         });
+        ui.separator();
+        ui.label(RichText::new(format!("{} Phone / tablet remote", icon::DEVICE_MOBILE)).strong());
+        ui.weak("Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
+        let remote = net.remote_url();
+        ui.horizontal(|ui| {
+            qr_code(ui, &remote, 150.0);
+            ui.vertical(|ui| {
+                ui.monospace(&remote);
+                if ui.button(icon::COPY).on_hover_text("Copy link").clicked() {
+                    ui.ctx().copy_text(remote.clone());
+                }
+                ui.monospace(format!("remotes connected: {}", net.remotes.load(std::sync::atomic::Ordering::Relaxed)));
+                ui.weak("Tip: Share ▸ Add to Home Screen makes it full-screen like an app.");
+            });
+        });
+        ui.separator();
         ui.monospace(format!(
             "viewers {} · sending audio {}",
             net.viewers.load(std::sync::atomic::Ordering::Relaxed),
@@ -2303,4 +2319,28 @@ fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         let id = st.comp.outputs.remove(i).id;
         st.output.lock().unwrap().remove(&id);
     }
+}
+
+/// Draws a QR code for `text` (no image needed: one filled square per dark module).
+fn qr_code(ui: &mut egui::Ui, text: &str, size: f32) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let Ok(code) = qrcode::QrCode::new(text.as_bytes()) else { return };
+        let n = code.width();
+        let colors = code.to_colors();
+        let quiet = 2.0;
+        let cell = size / (n as f32 + quiet * 2.0);
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), Sense::hover());
+        let p = ui.painter();
+        p.rect_filled(rect, 4.0, Color32::WHITE);
+        for (i, c) in colors.iter().enumerate() {
+            if *c == qrcode::Color::Dark {
+                let (x, y) = ((i % n) as f32, (i / n) as f32);
+                let min = rect.min + egui::vec2((x + quiet) * cell, (y + quiet) * cell);
+                p.rect_filled(egui::Rect::from_min_size(min, egui::vec2(cell + 0.5, cell + 0.5)), 0.0, Color32::BLACK);
+            }
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = (ui, text, size);
 }

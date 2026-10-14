@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141618">
+<title>Phosphor Remote</title>
+<style>
+  :root { --bg:#141618; --card:#1d2023; --line:#2c3034; --ink:#e6e6e6; --dim:#8a9096; --acc:#78ffaa; --warn:#ff8c5a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; background:var(--bg); color:var(--ink); font:14px -apple-system, system-ui, sans-serif; }
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) calc(env(safe-area-inset-bottom) + 64px) env(safe-area-inset-left); }
+  header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg); border-bottom:1px solid var(--line); }
+  header b { color:var(--acc); letter-spacing:.08em; }
+  #dot { width:9px; height:9px; border-radius:50%; background:var(--warn); }
+  #dot.on { background:var(--acc); }
+  header .sp { flex:1; }
+  button { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font:inherit; touch-action:manipulation; }
+  button.on { background:#1d3a2a; border-color:var(--acc); color:var(--acc); }
+  button.big { font-weight:600; }
+  #tap { color:var(--acc); }
+  #prev { width:100%; display:block; background:#000; aspect-ratio:16/9; object-fit:contain; }
+  #prevwrap.off #prev { display:none; }
+  .section { padding:10px 12px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .fader { position:relative; background:#30353a; border-radius:12px; overflow:hidden; touch-action:none; cursor:pointer; }
+  .fader .fill { position:absolute; background:linear-gradient(90deg,#2a7a52,var(--acc)); }
+  .fader.h { height:40px; flex:1; }
+  .fader.h .fill { left:0; top:0; bottom:0; }
+  .fader.v { width:48px; height:220px; }
+  .fader.v .fill { left:0; right:0; bottom:0; background:linear-gradient(0deg,#2a7a52,var(--acc)); }
+  .fader.drag { outline:2px solid #fff; }
+  .label { color:var(--dim); font-size:12px; min-width:64px; }
+  .val { font-variant-numeric: tabular-nums; color:var(--dim); font-size:12px; min-width:38px; text-align:right; }
+  /* mixer */
+  #strips { display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; scroll-snap-type:x mandatory; }
+  .strip { flex:0 0 92px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; display:flex; flex-direction:column; align-items:center; gap:8px; scroll-snap-align:start; }
+  .strip.sel { border-color:var(--acc); }
+  .strip .name { font-size:12px; font-weight:600; max-width:84px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .strip .btns { display:flex; gap:4px; }
+  .strip .btns button { padding:6px 8px; font-size:12px; }
+  /* clips */
+  #clips { overflow-x:auto; }
+  table { border-collapse:separate; border-spacing:6px; }
+  td, th { padding:0; }
+  .cell { width:86px; height:56px; border-radius:10px; background:var(--card); border:1px solid var(--line); color:var(--ink); font-size:11px; padding:4px; overflow:hidden; }
+  .cell.empty { color:#444; }
+  .cell.active { border-color:var(--acc); background:#1d3a2a; color:var(--acc); }
+  .lname { font-size:12px; color:var(--dim); max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; padding-right:4px; }
+  th button { width:86px; padding:8px 0; }
+  /* params */
+  .fxhead { margin:14px 0 2px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+  nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:#101214; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); z-index:6; }
+  nav button { flex:1; border:none; border-radius:0; background:transparent; padding:14px 0; color:var(--dim); }
+  nav button.on { color:var(--acc); background:transparent; }
+  .page { display:none; } .page.on { display:block; }
+  .hint { color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <div id="dot"></div><b>PHOSPHOR</b><span class="hint" id="status">connecting…</span>
+  <span class="sp"></span>
+  <span class="val" id="bpm">120</span>
+  <button id="tap" class="big">TAP</button>
+</header>
+<div id="prevwrap"><img id="prev" alt=""></div>
+<div class="section">
+  <div class="row"><span class="label">MASTER</span><div id="master"></div><span class="val" id="masterv"></span></div>
+</div>
+<div class="page on" id="p-mixer"><div class="section"><div id="strips"></div></div></div>
+<div class="page" id="p-clips"><div class="section"><div id="clips"></div><p class="hint">Tap a cell to trigger · tap a number to trigger the whole column</p></div></div>
+<div class="page" id="p-ctrl"><div class="section" id="params"></div></div>
+<nav>
+  <button data-p="mixer" class="on">Mixer</button>
+  <button data-p="clips">Clips</button>
+  <button data-p="ctrl">Controls</button>
+  <button id="pv">Preview</button>
+</nav>
+<script>
+let ws = null, state = null, touching = new Set(), pending = new Map(), raf = 0;
+const $ = s => document.querySelector(s);
+const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+// Coalesce slider moves to one message per animation frame per control.
+function queue(key, msg) { pending.set(key, msg); if (!raf) raf = requestAnimationFrame(() => { raf = 0; pending.forEach(m => send(m)); pending.clear(); }); }
+// Touch faders drawn with divs: they track the finger exactly on iOS/Android and never scroll the page.
+function fader(key, min, max, value, onInput, vertical) {
+  const t = document.createElement('div'); t.className = 'fader ' + (vertical ? 'v' : 'h'); t.dataset.key = key;
+  const f = document.createElement('div'); f.className = 'fill'; t.appendChild(f);
+  t.setValue = v => { t.value = v; const p = ((v - min) / (max - min) * 100) + '%'; if (vertical) f.style.height = p; else f.style.width = p; };
+  t.setValue(value);
+  const at = e => {
+    const r = t.getBoundingClientRect();
+    const k = vertical ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+    const v = min + Math.min(1, Math.max(0, k)) * (max - min);
+    t.setValue(v); onInput(v);
+  };
+  t.addEventListener('pointerdown', e => { touching.add(key); t.classList.add('drag'); try { t.setPointerCapture(e.pointerId); } catch (_) {} at(e); e.preventDefault(); });
+  t.addEventListener('pointermove', e => { if (t.hasPointerCapture(e.pointerId)) at(e); });
+  const end = () => { t.classList.remove('drag'); setTimeout(() => touching.delete(key), 300); };
+  t.addEventListener('pointerup', end); t.addEventListener('pointercancel', end);
+  return t;
+}
+const slider = (key, min, max, value, onInput) => fader(key, min, max, value, onInput, false);
+function setIfIdle(el, v) { if (el && !touching.has(el.dataset.key)) el.setValue(v); }
+
+function render() {
+  if (!state) return;
+  $('#bpm').textContent = state.bpm.toFixed(1) + ' bpm';
+  setIfIdle($('#master'), state.master); $('#masterv').textContent = Math.round(state.master * 100) + '%';
+  // Mixer strips (rebuilt only when the layer set changes).
+  const sig = state.layers.map(l => l.id + l.name).join('|') + '|' + state.selected;
+  const strips = $('#strips');
+  if (strips.dataset.sig !== sig) {
+    strips.dataset.sig = sig; strips.innerHTML = '';
+    state.layers.forEach(l => {
+      const d = document.createElement('div'); d.className = 'strip' + (l.id === state.selected ? ' sel' : ''); d.dataset.id = l.id;
+      const n = document.createElement('div'); n.className = 'name'; n.textContent = l.name; n.onclick = () => send({ t: 'select', layer: l.id });
+      const vw = fader('op' + l.id, 0, 1, l.opacity, v => queue('op' + l.id, { t: 'opacity', layer: l.id, v }), true);
+      const val = document.createElement('div'); val.className = 'val'; val.dataset.role = 'v';
+      const b = document.createElement('div'); b.className = 'btns';
+      const on = document.createElement('button'); on.textContent = 'ON'; on.dataset.role = 'on'; on.onclick = () => send({ t: 'enabled', layer: l.id, v: !on.classList.contains('on') });
+      const so = document.createElement('button'); so.textContent = 'S'; so.dataset.role = 'solo'; so.onclick = () => send({ t: 'solo', layer: l.id, v: !so.classList.contains('on') });
+      b.append(on, so); d.append(n, vw, val, b); strips.appendChild(d);
+    });
+  }
+  state.layers.forEach(l => {
+    const d = strips.querySelector(`[data-id="${l.id}"]`); if (!d) return;
+    setIfIdle(d.querySelector('.fader'), l.opacity);
+    d.querySelector('[data-role=v]').textContent = Math.round(l.opacity * 100) + '%';
+    d.querySelector('[data-role=on]').classList.toggle('on', l.enabled);
+    d.querySelector('[data-role=solo]').classList.toggle('on', l.solo);
+  });
+  // Clip grid.
+  let h = '<table><tr><th></th>';
+  for (let c = 0; c < state.columns; c++) h += `<th><button data-col="${c}">${c + 1}</button></th>`;
+  h += '</tr>';
+  state.layers.forEach(l => {
+    h += `<tr><td class="lname">${esc(l.name)}</td>`;
+    for (let c = 0; c < state.columns; c++) {
+      const k = l.clips.find(x => x.slot === c);
+      const cls = !k ? 'cell empty' : 'cell' + (k.active ? ' active' : '');
+      h += `<td><button class="${cls}" data-layer="${l.id}" data-slot="${c}">${k ? esc(k.name) : '—'}</button></td>`;
+    }
+    h += '</tr>';
+  });
+  $('#clips').innerHTML = h + '</table>';
+  // Controls for the selected layer.
+  const sigp = state.params.map(p => p.key).join('|');
+  const box = $('#params');
+  if (box.dataset.sig !== sigp) {
+    box.dataset.sig = sigp; box.innerHTML = '';
+    if (!state.params.length) box.innerHTML = '<p class="hint">Pick a layer (tap its name in the Mixer) to control its source and effects here.</p>';
+    let group = null;
+    state.params.forEach(p => {
+      if (p.group !== group) {
+        group = p.group;
+        const head = document.createElement('div'); head.className = 'fxhead'; head.textContent = group;
+        if (p.fx) { const t = document.createElement('button'); t.textContent = 'ON'; t.dataset.fxon = p.fx; t.onclick = () => send({ t: 'fxon', effect: p.fx, v: !t.classList.contains('on') }); head.appendChild(t); }
+        box.appendChild(head);
+      }
+      const row = document.createElement('div'); row.className = 'row';
+      const lab = document.createElement('span'); lab.className = 'label'; lab.textContent = p.name;
+      row.append(lab, slider(p.key, p.min, p.max, p.value, v => queue(p.key, Object.assign({}, p.msg, { v }))));
+      box.appendChild(row);
+    });
+  }
+  state.params.forEach(p => { const r = box.querySelector(`[data-key="${CSS.escape(p.key)}"]`); if (r) setIfIdle(r, p.value); if (p.fx) { const b = box.querySelector(`[data-fxon="${p.fx}"]`); if (b) b.classList.toggle('on', p.fxon); } });
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.col !== undefined) send({ t: 'column', col: +t.dataset.col });
+  if (t.dataset.slot !== undefined && !t.classList.contains('empty')) send({ t: 'clip', layer: +t.dataset.layer, slot: +t.dataset.slot });
+  if (t.dataset.p) { document.querySelectorAll('nav button[data-p]').forEach(b => b.classList.toggle('on', b === t)); document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'p-' + t.dataset.p)); }
+});
+$('#tap').onclick = () => send({ t: 'tap' });
+const master = slider('master', 0, 1, 1, v => queue('master', { t: 'master', v }));
+master.id = 'master'; $('#master').replaceWith(master);
+$('#pv').onclick = () => { const w = $('#prevwrap'); w.classList.toggle('off'); $('#prev').src = w.classList.contains('off') ? '' : '/stream.mjpeg'; $('#pv').classList.toggle('on', !w.classList.contains('off')); };
+$('#prevwrap').classList.add('off');
+
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/control');
+  ws.onopen = () => { $('#dot').classList.add('on'); $('#status').textContent = 'connected'; };
+  ws.onmessage = e => { state = JSON.parse(e.data); render(); };
+  ws.onclose = () => { $('#dot').classList.remove('on'); $('#status').textContent = 'reconnecting…'; setTimeout(connect, 1000); };
+}
+connect();
+</script>
+</body>
+</html>

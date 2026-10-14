@@ -243,6 +243,7 @@ pub struct PhosphorApp {
     dock: DockState<Tab>,
     bench: Option<BenchRun>,
     gather_windows: bool,
+    remote_published: f64,
     /// Panels living in their own OS windows.
     detached: Vec<Tab>,
 }
@@ -328,6 +329,7 @@ impl PhosphorApp {
             dock,
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false }),
             gather_windows: false,
+            remote_published: 0.0,
             detached,
         };
         if open_audio && let Err(e) = app.state.audio.open(None) {
@@ -778,6 +780,21 @@ impl PhosphorApp {
         }
     }
 
+    /// Phone/tablet remote: apply what remotes sent, then publish the state (≈20 times a second).
+    fn remote_sync(&mut self, now: f64) {
+        if !self.state.net.running() {
+            return;
+        }
+        for cmd in self.state.net.take_remote_commands() {
+            crate::remote::apply(&mut self.state, &cmd, now);
+        }
+        if now - self.remote_published > 0.05 {
+            self.remote_published = now;
+            let json = crate::remote::state_json(&self.state);
+            self.state.net.set_remote_state(json);
+        }
+    }
+
     /// Pulls corner drags made in the output window back into the composition.
     fn sync_mapping_from_output(&mut self) {
         let mut map = self.state.output.lock().unwrap();
@@ -1116,6 +1133,7 @@ impl eframe::App for PhosphorApp {
             self.state.palette.toggle();
         }
         self.shortcuts(&ctx);
+        self.remote_sync(now);
         self.sync_mapping_from_output();
         {
             let State { control, comp, .. } = &mut self.state;
