@@ -7,6 +7,7 @@ mod panels;
 mod presets;
 mod stats;
 mod stream;
+mod thumbs;
 mod theme;
 
 #[cfg(not(target_arch = "wasm32"))]

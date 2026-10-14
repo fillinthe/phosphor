@@ -60,7 +60,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Ship FFmpeg inside the .app (LGPL build, decoders only) instead of relying on Homebrew
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
 - [ ] Live camera / capture card input
-- [ ] Media bin with thumbnails
+- [x] Media bin with thumbnails (background FFmpeg frame grabs), import files/folders, click or drag onto layers
 - [x] Seamless looping, speed 0.1–4×
 - [ ] Scrubbing, reverse, in/out points, beat-length quantised loops
 

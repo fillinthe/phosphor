@@ -271,6 +271,13 @@ impl LayerState {
     }
 }
 
+/// A file in the media bin. Paths are stored as given; thumbnails are rebuilt on load.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaItem {
+    pub name: String,
+    pub path: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Composition {
@@ -287,11 +294,12 @@ pub struct Composition {
     /// MIDI/OSC bindings.
     pub control_maps: Vec<ControlMap>,
     pub master_fx_bypass: bool,
+    pub media_bin: Vec<MediaItem>,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new() }
     }
 }
 
@@ -329,6 +337,30 @@ impl Composition {
     pub fn new_effect(&mut self, effect_id: &str) -> Option<EffectState> {
         let desc = shaders::effect(effect_id)?;
         Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new() })
+    }
+
+    /// Adds a file to the media bin (no duplicates). Returns true if it was new.
+    pub fn add_media(&mut self, name: &str, path: &str) -> bool {
+        if self.media_bin.iter().any(|m| m.path == path) {
+            return false;
+        }
+        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string() });
+        true
+    }
+
+    /// Makes sure every file used by a layer is in the bin (covers Open…, drops and loaded projects).
+    pub fn sync_media_bin(&mut self) {
+        let used: Vec<(String, String)> = self
+            .layers
+            .iter()
+            .filter_map(|l| match &l.source {
+                SourceSpec::Image { name, path: Some(p) } | SourceSpec::Movie { name, path: Some(p) } => Some((name.clone(), p.clone())),
+                _ => None,
+            })
+            .collect();
+        for (name, path) in used {
+            self.add_media(&name, &path);
+        }
     }
 
     pub fn to_json(&self) -> String {

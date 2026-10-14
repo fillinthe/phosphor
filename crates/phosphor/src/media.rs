@@ -24,6 +24,10 @@ fn file_name(path: &str) -> String {
     path.rsplit(['/', '\\']).next().unwrap_or(path).to_string()
 }
 
+pub fn is_movie(name: &str) -> bool {
+    MOVIE_EXTS.contains(&extension(name).as_str())
+}
+
 pub fn is_supported(name: &str) -> bool {
     let ext = extension(name);
     IMAGE_EXTS.contains(&ext.as_str()) || MOVIE_EXTS.contains(&ext.as_str())
