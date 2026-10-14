@@ -16,6 +16,10 @@ type Frame = Arc<Vec<u8>>;
 pub type RemoteState = Arc<Mutex<(u64, Arc<String>)>>;
 /// Commands from phones/tablets, drained by the app each frame.
 pub type RemoteCmds = Arc<Mutex<Vec<serde_json::Value>>>;
+/// Password required to control (None = anyone on the network may control).
+pub type RemotePassword = Arc<Mutex<Option<String>>>;
+/// What the control socket needs: state, command queue, connected count, password.
+pub type RemoteHub = (RemoteState, RemoteCmds, Arc<AtomicUsize>, RemotePassword);
 type Shared = Arc<(Mutex<Option<Frame>>, Condvar)>;
 
 pub struct NetSession {
@@ -30,6 +34,7 @@ pub struct NetSession {
     remote_cmds: RemoteCmds,
     /// Phones/tablets connected to the remote page.
     pub remotes: Arc<AtomicUsize>,
+    password: RemotePassword,
     encoder: Option<SyncSender<(u32, u32, Vec<u8>)>>,
     next_frame: f64,
     pub status: String,
@@ -48,6 +53,7 @@ impl NetSession {
             remote_state: Arc::new(Mutex::new((0, Arc::new(String::new())))),
             remote_cmds: Arc::new(Mutex::new(Vec::new())),
             remotes: Arc::new(AtomicUsize::new(0)),
+            password: Arc::new(Mutex::new(None)),
             encoder: None,
             next_frame: 0.0,
             status: String::new(),
@@ -71,6 +77,11 @@ impl NetSession {
         std::mem::take(&mut *self.remote_cmds.lock().unwrap())
     }
 
+    /// Sets (or clears) the password needed to control from a phone; viewing never needs it.
+    pub fn set_password(&self, password: Option<String>) {
+        *self.password.lock().unwrap() = password.filter(|p| !p.is_empty());
+    }
+
     pub fn remote_url(&self) -> String {
         format!("{}remote", self.url())
     }
@@ -91,7 +102,7 @@ impl NetSession {
         let viewers = self.viewers.clone();
         let peers = self.audio_peers.clone();
         let ring = self.audio_ring.clone();
-        let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone());
+        let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone(), self.password.clone());
         std::thread::Builder::new()
             .name("phosphor-net".into())
             .spawn(move || {
@@ -202,7 +213,7 @@ mod native {
         viewers: Arc<AtomicUsize>,
         peers: Arc<AtomicUsize>,
         ring: Arc<Mutex<VecDeque<f32>>>,
-        remote: (super::RemoteState, super::RemoteCmds, Arc<AtomicUsize>),
+        remote: super::RemoteHub,
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
@@ -277,14 +288,26 @@ mod native {
 
     /// Remote control: pushes the project state whenever it changes and queues the commands the
     /// page sends back (JSON objects like {"t":"opacity","layer":3,"v":0.5}).
-    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: (super::RemoteState, super::RemoteCmds, Arc<AtomicUsize>)) {
-        let (state, cmds, count) = remote;
+    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: super::RemoteHub) {
+        let (state, cmds, count, password) = remote;
         let _ = stream.set_nodelay(true);
         let Ok(mut ws) = tungstenite::accept(stream) else { return };
         let _ = ws.get_mut().set_read_timeout(Some(Duration::from_millis(30)));
         count.fetch_add(1, Ordering::Relaxed);
         let mut sent = u64::MAX;
+        // The password this socket proved it knows (None = not authorised, unless none is set).
+        let mut granted: Option<Option<String>> = None;
+        let mut told: Option<bool> = None;
         while running.load(Ordering::Relaxed) {
+            let current = password.lock().unwrap().clone();
+            let allowed = current.is_none() || granted.as_ref() == Some(&current);
+            if told != Some(allowed) {
+                let msg = serde_json::json!({ "auth": if allowed { "ok" } else { "required" } }).to_string();
+                if ws.send(tungstenite::Message::Text(msg.as_str().into())).is_err() {
+                    break;
+                }
+                told = Some(allowed);
+            }
             let (version, json) = state.lock().unwrap().clone();
             if version != sent && !json.is_empty() {
                 if ws.send(tungstenite::Message::Text(json.as_str().into())).is_err() {
@@ -294,7 +317,20 @@ mod native {
             }
             match ws.read() {
                 Ok(tungstenite::Message::Text(t)) => {
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.as_str()) {
+                    let Ok(v) = serde_json::from_str::<serde_json::Value>(t.as_str()) else { continue };
+                    if v.get("t").and_then(|t| t.as_str()) == Some("auth") {
+                        let tried = v.get("password").and_then(|p| p.as_str()).unwrap_or("");
+                        if current.as_deref().is_some_and(|p| p == tried) {
+                            granted = Some(current.clone());
+                        } else {
+                            // Slow down guessing a little.
+                            std::thread::sleep(Duration::from_millis(400));
+                            let _ = ws.send(tungstenite::Message::Text(r#"{"auth":"bad"}"#.into()));
+                            told = Some(false);
+                        }
+                        continue;
+                    }
+                    if allowed {
                         cmds.lock().unwrap().push(v);
                     }
                 }

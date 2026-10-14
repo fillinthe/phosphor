@@ -679,27 +679,97 @@ fn mod_button(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
 
 pub const LEARN_REQUEST: &str = "phosphor_learn_request";
 pub const UNLEARN_REQUEST: &str = "phosphor_unlearn_request";
+pub const MAP_REQUEST: &str = "phosphor_map_request";
 pub const MAPPED_TARGETS: &str = "phosphor_mapped_targets";
 
 fn request(ui: &egui::Ui, key: &str, target: ControlTarget) {
     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(key), target));
 }
 
-fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
+/// Mappings for the UI: (target, source description).
+pub type MappedList = std::sync::Arc<Vec<(ControlTarget, String)>>;
+
+fn mapped_sources(ui: &egui::Ui, target: &ControlTarget) -> Vec<String> {
     ui.ctx()
-        .data(|d| d.get_temp::<std::sync::Arc<Vec<ControlTarget>>>(egui::Id::new(MAPPED_TARGETS)))
-        .is_some_and(|v| v.contains(target))
+        .data(|d| d.get_temp::<MappedList>(egui::Id::new(MAPPED_TARGETS)))
+        .map(|v| v.iter().filter(|(t, _)| t == target).map(|(_, s)| s.clone()).collect())
+        .unwrap_or_default()
 }
 
-/// Learn / Forget entries for any control's right-click menu.
+fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
+    !mapped_sources(ui, target).is_empty()
+}
+
+/// Typed-in mapping drafts, remembered per control while the menu is open.
+#[derive(Clone, Default)]
+struct MapDraft {
+    osc: String,
+    channel: u8,
+    cc: u8,
+    key: String,
+}
+
+/// The "Map" section of any control's right-click menu: Learn, the built-in OSC address, typed
+/// OSC / MIDI CC / key mappings, and Forget.
 fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
-    if ui.button(label(icon::BROADCAST, "Learn MIDI / OSC / key")).on_hover_text("Then move a knob, send OSC, or press a key").clicked() {
+    ui.set_min_width(300.0);
+    if ui.button(label(icon::BROADCAST, "Learn: move a knob, send OSC, or press a key")).clicked() {
         request(ui, LEARN_REQUEST, target.clone());
         ui.close();
     }
-    if is_mapped(ui, target) && ui.button(label(icon::X, "Forget mapping")).clicked() {
-        request(ui, UNLEARN_REQUEST, target.clone());
-        ui.close();
+    let address = crate::control::default_osc_address(target);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("OSC").small().color(Color32::GRAY));
+        ui.monospace(&address).on_hover_text("Always works, no mapping needed. Send 0–1 (1 = press for buttons and clips).");
+        if ui.small_button(icon::COPY).on_hover_text("Copy address").clicked() {
+            ui.ctx().copy_text(address.clone());
+        }
+    });
+    ui.menu_button(label(icon::PLUG, "Map to…"), |ui| {
+        ui.set_min_width(280.0);
+        let id = egui::Id::new(("map_draft", format!("{target:?}")));
+        let mut draft: MapDraft = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(MapDraft { channel: 1, ..Default::default() });
+        let mut chosen: Option<phosphor_engine::ControlSource> = None;
+        ui.label(RichText::new("OSC address").small().color(Color32::GRAY));
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut draft.osc).hint_text("/touchosc/fader1").desired_width(190.0));
+            if ui.add_enabled(draft.osc.starts_with('/'), egui::Button::new("Set")).clicked() {
+                chosen = Some(phosphor_engine::ControlSource::Osc { address: draft.osc.trim().to_string() });
+            }
+        });
+        ui.label(RichText::new("MIDI control change").small().color(Color32::GRAY));
+        ui.horizontal(|ui| {
+            ui.add(egui::DragValue::new(&mut draft.channel).range(1..=16).prefix("ch "));
+            ui.add(egui::DragValue::new(&mut draft.cc).range(0..=127).prefix("CC "));
+            if ui.button("Set").clicked() {
+                chosen = Some(phosphor_engine::ControlSource::MidiCc { channel: draft.channel - 1, cc: draft.cc });
+            }
+            if ui.button("Note").on_hover_text("Use this number as a MIDI note (pads, keys) instead of a CC").clicked() {
+                chosen = Some(phosphor_engine::ControlSource::MidiNote { channel: draft.channel - 1, note: draft.cc });
+            }
+        });
+        ui.label(RichText::new("Keyboard key").small().color(Color32::GRAY));
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut draft.key).hint_text("Q").char_limit(12).desired_width(60.0));
+            if ui.add_enabled(!draft.key.trim().is_empty(), egui::Button::new("Set")).clicked() {
+                chosen = Some(phosphor_engine::ControlSource::Key { key: draft.key.trim().to_uppercase() });
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(id, draft));
+        if let Some(source) = chosen {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(MAP_REQUEST), (target.clone(), source)));
+            ui.close();
+        }
+    });
+    let sources = mapped_sources(ui, target);
+    if !sources.is_empty() {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(format!("Mapped: {}", sources.join(", "))).small().color(Color32::from_rgb(255, 196, 70)));
+            if ui.small_button(label(icon::X, "Forget")).clicked() {
+                request(ui, UNLEARN_REQUEST, target.clone());
+                ui.close();
+            }
+        });
     }
 }
 
@@ -1916,7 +1986,7 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
 }
 
 fn network(ui: &mut egui::Ui, st: &mut State) {
-    let State { net, notice, audio, .. } = st;
+    let State { net, notice, audio, remote_password, require_password, .. } = st;
     ui.label(RichText::new("Session").strong());
     ui.weak("Anyone on your network opens the link and sees the output live; they can send their music back.");
     ui.horizontal(|ui| {
@@ -1950,6 +2020,17 @@ fn network(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
         ui.label(RichText::new(format!("{} Phone / tablet remote", icon::DEVICE_MOBILE)).strong());
         ui.weak("Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
+        ui.horizontal(|ui| {
+            ui.checkbox(require_password, label(icon::LOCK, "Password to control"))
+                .on_hover_text("Without it, people who open the link can only watch the output");
+            ui.add_enabled(
+                *require_password,
+                egui::TextEdit::singleline(remote_password).password(true).hint_text("password").desired_width(140.0),
+            );
+        });
+        if *require_password && remote_password.is_empty() {
+            ui.colored_label(WARN, "Type a password, or anyone can control.");
+        }
         let remote = net.remote_url();
         ui.horizontal(|ui| {
             qr_code(ui, &remote, 150.0);

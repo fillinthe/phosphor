@@ -57,6 +57,13 @@
   nav button { flex:1; border:none; border-radius:0; background:transparent; padding:14px 0; color:var(--dim); }
   nav button.on { color:var(--acc); background:transparent; }
   .page { display:none; } .page.on { display:block; }
+  /* View-only: big picture, no controls, a password box. */
+  body.viewonly nav, body.viewonly .page, body.viewonly #mastersec, body.viewonly #tap { display:none !important; }
+  body.viewonly #prevwrap #prev { display:block !important; height:calc(100vh - 180px); aspect-ratio:auto; }
+  #lock { display:none; padding:12px; gap:8px; align-items:center; }
+  body.viewonly #lock { display:flex; flex-wrap:wrap; }
+  #lock input { flex:1; min-width:140px; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; }
+  #lockmsg { width:100%; color:var(--dim); font-size:12px; }
   .hint { color:var(--dim); font-size:12px; }
 </style>
 </head>
@@ -67,8 +74,13 @@
   <span class="val" id="bpm">120</span>
   <button id="tap" class="big">TAP</button>
 </header>
+<div id="lock">
+  <div id="lockmsg">Watching only. Enter the password to control.</div>
+  <input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+  <button id="pwgo" class="big">Unlock</button>
+</div>
 <div id="prevwrap"><img id="prev" alt=""></div>
-<div class="section">
+<div class="section" id="mastersec">
   <div class="row"><span class="label">MASTER</span><div id="master"></div><span class="val" id="masterv"></span></div>
 </div>
 <div class="page on" id="p-mixer"><div class="section"><div id="strips"></div></div></div>
@@ -184,10 +196,32 @@ master.id = 'master'; $('#master').replaceWith(master);
 $('#pv').onclick = () => { const w = $('#prevwrap'); w.classList.toggle('off'); $('#prev').src = w.classList.contains('off') ? '' : '/stream.mjpeg'; $('#pv').classList.toggle('on', !w.classList.contains('off')); };
 $('#prevwrap').classList.add('off');
 
+// Password: viewers without it get the picture only.
+let viewOnly = false;
+function auth(status) {
+  if (status === 'ok') { setViewOnly(false); return; }
+  setViewOnly(true);
+  if (status === 'bad') { $('#lockmsg').textContent = 'Wrong password. Watching only.'; localStorage.removeItem('phosphor-pw'); return; }
+  const saved = localStorage.getItem('phosphor-pw');
+  if (saved) send({ t: 'auth', password: saved });
+}
+function setViewOnly(on) {
+  viewOnly = on;
+  document.body.classList.toggle('viewonly', on);
+  $('#status').textContent = on ? 'watching' : 'connected';
+  if (on) { $('#prevwrap').classList.remove('off'); $('#prev').src = '/stream.mjpeg'; }
+}
+$('#pwgo').onclick = () => { const p = $('#pw').value; localStorage.setItem('phosphor-pw', p); send({ t: 'auth', password: p }); };
+$('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwgo').click(); });
+
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/control');
-  ws.onopen = () => { $('#dot').classList.add('on'); $('#status').textContent = 'connected'; };
-  ws.onmessage = e => { state = JSON.parse(e.data); render(); };
+  ws.onopen = () => { $('#dot').classList.add('on'); $('#status').textContent = viewOnly ? 'watching' : 'connected'; };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.auth !== undefined) return auth(m.auth);
+    state = m; render();
+  };
   ws.onclose = () => { $('#dot').classList.remove('on'); $('#status').textContent = 'reconnecting…'; setTimeout(connect, 1000); };
 }
 connect();

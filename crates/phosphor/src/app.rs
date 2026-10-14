@@ -30,6 +30,7 @@ const KEY_DETACHED: &str = "detached";
 const KEY_FAVORITES: &str = "favorites";
 const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
+const KEY_REMOTE_PASSWORD: &str = "remote_password";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -91,6 +92,9 @@ pub struct State {
     pub stream_audio_devices: Vec<(i32, String)>,
     pub net: NetSession,
     net_audio: Vec<f32>,
+    /// Password phones need to control (viewing never needs it). Empty = no password.
+    pub remote_password: String,
+    pub require_password: bool,
     pub explorer: crate::explorer::ExplorerState,
     pub editor: crate::explorer::EditorState,
     pub palette: crate::explorer::PaletteState,
@@ -321,6 +325,8 @@ impl PhosphorApp {
                 stream_audio_devices: Vec::new(),
                 net: NetSession::new(),
                 net_audio: Vec::new(),
+                remote_password: stored(KEY_REMOTE_PASSWORD).unwrap_or_default(),
+                require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
                 explorer: crate::explorer::ExplorerState {
                     favorites: stored(KEY_FAVORITES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                     recent: stored(KEY_RECENT).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
@@ -367,6 +373,10 @@ impl PhosphorApp {
         }
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
+        }
+        if let Some(pw) = app.bench.as_ref().and_then(|b| b.cfg.remote_password.clone()) {
+            app.state.remote_password = pw;
+            app.state.require_password = true;
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.net) {
             if let Err(e) = app.state.net.start() {
@@ -594,8 +604,17 @@ impl PhosphorApp {
     /// keyboard keys as controller input.
     fn control_requests(&mut self, ctx: &egui::Context) {
         let st = &mut self.state;
-        let mapped: std::sync::Arc<Vec<phosphor_engine::ControlTarget>> = std::sync::Arc::new(st.comp.control_maps.iter().map(|m| m.target.clone()).collect());
+        let mapped: panels::MappedList = std::sync::Arc::new(st.comp.control_maps.iter().map(|m| (m.target.clone(), m.source.label())).collect());
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::MAPPED_TARGETS), mapped));
+        if let Some((target, source)) = ctx.data_mut(|d| {
+            let id = egui::Id::new(panels::MAP_REQUEST);
+            let t = d.get_temp::<(phosphor_engine::ControlTarget, phosphor_engine::ControlSource)>(id);
+            d.remove::<(phosphor_engine::ControlTarget, phosphor_engine::ControlSource)>(id);
+            t
+        }) {
+            st.comp.control_maps.retain(|m| m.target != target);
+            st.comp.control_maps.push(phosphor_engine::ControlMap { source, target });
+        }
         if let Some(t) = ctx.data_mut(|d| {
             let id = egui::Id::new(panels::LEARN_REQUEST);
             let t = d.get_temp::<phosphor_engine::ControlTarget>(id);
@@ -892,6 +911,8 @@ impl PhosphorApp {
         if !self.state.net.running() {
             return;
         }
+        let pw = self.state.require_password.then(|| self.state.remote_password.clone());
+        self.state.net.set_password(pw);
         for cmd in self.state.net.take_remote_commands() {
             crate::remote::apply(&mut self.state, &cmd, now);
         }
@@ -1397,6 +1418,7 @@ impl PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.state.explorer.favorites) {
             storage.set_string(KEY_FAVORITES, json);
         }
+        storage.set_string(KEY_REMOTE_PASSWORD, if self.state.require_password { self.state.remote_password.clone() } else { String::new() });
         if let Ok(json) = serde_json::to_string(&self.state.explorer.recent) {
             storage.set_string(KEY_RECENT, json);
         }
