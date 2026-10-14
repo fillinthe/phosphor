@@ -61,6 +61,8 @@ impl Tab {
 
 pub struct Viewer<'a> {
     pub st: &'a mut State,
+    /// Set when the user picks "Detach" from a tab's menu; the app moves it to its own window.
+    pub detach: Option<Tab>,
 }
 
 impl egui_dock::TabViewer for Viewer<'_> {
@@ -99,6 +101,13 @@ impl egui_dock::TabViewer for Viewer<'_> {
     /// Panels manage their own scrolling; the dock must never pan content sideways.
     fn scroll_bars(&self, _tab: &Tab) -> [bool; 2] {
         [false, false]
+    }
+
+    fn context_menu(&mut self, ui: &mut egui::Ui, tab: &mut Tab, _path: egui_dock::NodePath) {
+        if ui.button(label(icon::ARROW_SQUARE_OUT, "Detach to its own window")).on_hover_text("Move this panel to a separate window (drag it to another screen)").clicked() {
+            self.detach = Some(*tab);
+            ui.close();
+        }
     }
 }
 
@@ -841,6 +850,29 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
+/// Columns per bank page.
+pub const CLIP_PAGE_SIZE: usize = 9;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Quantize {
+    #[default]
+    Off,
+    Beat,
+    Bar,
+}
+
+impl Quantize {
+    pub const ALL: [Quantize; 3] = [Quantize::Off, Quantize::Beat, Quantize::Bar];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Quantize::Off => "Instant",
+            Quantize::Beat => "On beat",
+            Quantize::Bar => "On bar",
+        }
+    }
+}
+
 fn clips(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let aspect = st.aspect();
@@ -861,19 +893,31 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
             let color = if lit { ACCENT.gamma_multiply(1.0 - 0.6 * phase) } else { Color32::from_gray(60) };
             ui.painter().circle_filled(r.center(), if lit { 5.0 } else { 4.0 }, color);
         }
-        ui.toggle_value(&mut st.quantize, "Quantize").on_hover_text("Triggers wait for the next beat");
+        ComboBox::from_id_salt("quantize").width(90.0).selected_text(st.quantize.name()).show_ui(ui, |ui| {
+            for q in Quantize::ALL {
+                ui.selectable_value(&mut st.quantize, q, q.name());
+            }
+        });
         if !st.pending_triggers.is_empty() {
             ui.colored_label(ACCENT, format!("{} queued", st.pending_triggers.len()));
+        }
+        ui.separator();
+        ui.label(RichText::new("Bank").small());
+        for (i, name) in ["A", "B", "C", "D"].iter().enumerate() {
+            if ui.selectable_label(st.clip_page == i, *name).clicked() {
+                st.clip_page = i;
+            }
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button(label(icon::PLUS, "Column")).clicked() {
                 st.comp.clip_columns += 1;
             }
-            ui.weak("Keys 1–9 trigger columns · drop media onto a cell · right-click a cell");
+            ui.weak("Keys 1–9 trigger this bank's columns · drop media onto a cell · right-click a cell");
         });
     });
     ui.add_space(4.0);
     let cols = st.comp.clip_columns.max(1);
+    let page_offset = st.clip_page * CLIP_PAGE_SIZE;
     let cell = egui::vec2(96.0, 96.0 / aspect + 16.0);
     let mut triggers: Vec<Trigger> = Vec::new();
     let mut set_cell: Option<(usize, usize, usize)> = None; // (layer idx, slot, media idx)
@@ -885,7 +929,7 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
             // Column headers trigger whole columns.
             ui.horizontal(|ui| {
                 ui.allocate_exact_size(egui::vec2(110.0, 22.0), Sense::hover());
-                for c in 0..cols {
+                for c in page_offset..page_offset + cols {
                     if ui.add_sized([cell.x, 22.0], egui::Button::new(format!("{} {}", icon::PLAY, c + 1))).on_hover_text("Trigger this column on every layer").clicked() {
                         triggers.push(Trigger::Column(c));
                     }
@@ -897,7 +941,7 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     let (r, _) = ui.allocate_exact_size(egui::vec2(110.0, cell.y), Sense::hover());
                     ui.painter().text(r.left_center() + egui::vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, &layer.name, egui::FontId::proportional(13.0), Color32::LIGHT_GRAY);
-                    for c in 0..cols {
+                    for c in page_offset..page_offset + cols {
                         let clip = layer.clips.get(c);
                         let (rect, resp) = ui.allocate_exact_size(cell, Sense::click());
                         let active = clip.is_some_and(|k| !k.is_empty() && layer.active_clip == Some(k.id));

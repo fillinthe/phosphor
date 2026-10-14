@@ -25,6 +25,7 @@ const KEY_COMPOSITION: &str = "composition";
 const KEY_DOCK: &str = "dock";
 const KEY_STREAM: &str = "stream";
 const KEY_KNOWN_TABS: &str = "known_tabs";
+const KEY_DETACHED: &str = "detached";
 
 /// State the output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -73,9 +74,10 @@ pub struct State {
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
     pub clock: Clock,
-    /// Hold triggers until the next beat.
-    pub quantize: bool,
+    pub quantize: panels::Quantize,
     pub pending_triggers: Vec<Trigger>,
+    /// Which bank of clip columns the grid and the number keys address.
+    pub clip_page: usize,
     /// This frame's audio/LFO signals, also shown in the Audio panel.
     pub mod_inputs: ModInputs,
 }
@@ -99,7 +101,7 @@ impl State {
 
     /// Fires a trigger now, or queues it for the next beat when quantise is on.
     pub fn trigger(&mut self, t: Trigger, now: f64) {
-        if self.quantize {
+        if self.quantize != panels::Quantize::Off {
             if !self.pending_triggers.contains(&t) {
                 self.pending_triggers.push(t);
             }
@@ -140,6 +142,8 @@ pub struct PhosphorApp {
     dock: DockState<Tab>,
     bench: Option<BenchRun>,
     gather_windows: bool,
+    /// Panels living in their own OS windows.
+    detached: Vec<Tab>,
 }
 
 impl PhosphorApp {
@@ -154,6 +158,7 @@ impl PhosphorApp {
                 .unwrap_or_else(Composition::starter),
         };
         let stream_settings = stored(KEY_STREAM).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let detached: Vec<Tab> = stored(KEY_DETACHED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let mut dock = stored(KEY_DOCK).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_else(default_layout);
         let known: Vec<Tab> = stored(KEY_KNOWN_TABS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         ensure_new_tabs(&mut dock, &known);
@@ -187,13 +192,15 @@ impl PhosphorApp {
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 clock: Clock::new(comp_bpm),
-                quantize: false,
+                quantize: panels::Quantize::Off,
                 pending_triggers: Vec::new(),
+                clip_page: 0,
                 mod_inputs: ModInputs::default(),
             },
             dock,
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new() }),
             gather_windows: false,
+            detached,
         };
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
@@ -288,6 +295,49 @@ impl PhosphorApp {
         }
     }
 
+    /// Moves a panel out of the dock into its own OS window.
+    fn detach(&mut self, tab: Tab) {
+        if let Some(path) = self.dock.find_tab(&tab) {
+            self.dock.remove_tab(path);
+        }
+        if !self.detached.contains(&tab) {
+            self.detached.push(tab);
+        }
+    }
+
+    /// Shows every detached panel in its own window; closing the window docks it again.
+    fn detached_windows(&mut self, ctx: &egui::Context) {
+        let mut redock = Vec::new();
+        for tab in self.detached.clone() {
+            let id = egui::ViewportId::from_hash_of(("phosphor_panel", tab));
+            let builder = egui::ViewportBuilder::default().with_title(format!("Phosphor · {}", tab.title())).with_inner_size([460.0, 640.0]);
+            ctx.show_viewport_immediate(id, builder, |ctx, _class| {
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    redock.push(tab);
+                }
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(tab.title()).strong());
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Dock back").clicked() {
+                                redock.push(tab);
+                            }
+                        });
+                    });
+                    ui.separator();
+                    let mut tab = tab;
+                    egui_dock::TabViewer::ui(&mut Viewer { st: &mut self.state, detach: None }, ui, &mut tab);
+                });
+            });
+        }
+        for tab in redock {
+            self.detached.retain(|t| *t != tab);
+            if self.dock.find_tab(&tab).is_none() {
+                self.dock.push_to_focused_leaf(tab);
+            }
+        }
+    }
+
     /// Keyboard shortcuts that act on the selected layer (ignored while typing in a field).
     fn shortcuts(&mut self, ctx: &egui::Context) {
         if ctx.memory(|m| m.focused().is_some()) {
@@ -304,6 +354,7 @@ impl PhosphorApp {
         });
         if let Some(col) = digit {
             let now = ctx.input(|i| i.time);
+            let col = col + self.state.clip_page * panels::CLIP_PAGE_SIZE;
             self.state.trigger(Trigger::Column(col), now);
         }
         let (delete, duplicate, toggle) = ctx.input(|i| {
@@ -377,14 +428,21 @@ impl PhosphorApp {
                     ui.weak("Drag any tab to move it; drag it outside to float it.");
                     ui.menu_button("Panels", |ui| {
                         for tab in Tab::ALL {
-                            let open = self.dock.find_tab(&tab).is_some();
-                            if ui.selectable_label(open, tab.title()).clicked() {
-                                match self.dock.find_tab(&tab) {
-                                    Some(path) => {
-                                        self.dock.remove_tab(path);
-                                    }
-                                    None => {
-                                        self.dock.add_window(vec![tab]);
+                            let detached = self.detached.contains(&tab);
+                            let open = detached || self.dock.find_tab(&tab).is_some();
+                            let name = if detached { format!("{} (own window)", tab.title()) } else { tab.title().to_string() };
+                            if ui.selectable_label(open, name).clicked() {
+                                if detached {
+                                    self.detached.retain(|t| *t != tab);
+                                    self.dock.push_to_focused_leaf(tab);
+                                } else {
+                                    match self.dock.find_tab(&tab) {
+                                        Some(path) => {
+                                            self.dock.remove_tab(path);
+                                        }
+                                        None => {
+                                            self.dock.add_window(vec![tab]);
+                                        }
                                     }
                                 }
                             }
@@ -530,7 +588,12 @@ impl eframe::App for PhosphorApp {
             let st = &mut self.state;
             st.comp.bpm = st.clock.bpm;
             let beat = st.clock.tick(now);
-            if beat || !st.quantize {
+            let fire_now = match st.quantize {
+                panels::Quantize::Off => true,
+                panels::Quantize::Beat => beat,
+                panels::Quantize::Bar => beat && st.clock.beat_in_bar(now) == 0,
+            };
+            if fire_now {
                 for t in std::mem::take(&mut st.pending_triggers) {
                     st.fire(t, now as f32);
                 }
@@ -544,13 +607,18 @@ impl eframe::App for PhosphorApp {
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let mut style = egui_dock::Style::from_egui(ui.style());
             style.tab_bar.fill_tab_bar = true;
+            let mut viewer = Viewer { st: &mut self.state, detach: None };
             DockArea::new(&mut self.dock)
                 .style(style)
                 .show_close_buttons(true)
                 .show_leaf_close_all_buttons(false)
                 .show_leaf_collapse_buttons(false)
-                .show_inside(ui, &mut Viewer { st: &mut self.state });
+                .show_inside(ui, &mut viewer);
+            if let Some(tab) = viewer.detach {
+                self.detach(tab);
+            }
         });
+        self.detached_windows(&ctx);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let rect = ctx.content_rect();
@@ -591,6 +659,9 @@ impl eframe::App for PhosphorApp {
         }
         if let Ok(json) = serde_json::to_string(&Tab::ALL) {
             storage.set_string(KEY_KNOWN_TABS, json);
+        }
+        if let Ok(json) = serde_json::to_string(&self.detached) {
+            storage.set_string(KEY_DETACHED, json);
         }
     }
 }

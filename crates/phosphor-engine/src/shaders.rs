@@ -96,8 +96,89 @@ pub const EFFECTS: &[ShaderDesc] = &[
             p("Brightness", 0.0, 3.0, 1.2),
             p("Source colour", 0.0, 1.0, 0.6),
             p("Perspective", 0.0, 2.0, 0.6),
+            p("Draw (0 lines,1 mesh,2 tri,3 vert)", 0.0, 3.0, 0.0),
+            p("Displace (0 luma, 1 RGB)", 0.0, 1.0, 0.0),
         ],
     },
+    ShaderDesc {
+        id: "rutt_etra_points",
+        name: "Rutt-Etra Points",
+        entry: "fs_rutt_points",
+        params: &[
+            p("Rows", 4.0, 400.0, 120.0),
+            p("Points per row", 8.0, 512.0, 240.0),
+            p("Extrude", 0.0, 2.0, 0.5),
+            p("Rotate X", -1.0, 1.0, 0.0),
+            p("Rotate Y", -1.0, 1.0, 0.0),
+            p("Zoom", 0.25, 4.0, 1.0),
+            p("Point size", 1.0, 8.0, 2.0),
+            p("Brightness", 0.0, 3.0, 1.5),
+            p("Source colour", 0.0, 1.0, 0.8),
+            p("Perspective", 0.0, 2.0, 0.6),
+            p("(unused)", 0.0, 0.0, 0.0),
+            p("Displace (0 luma, 1 RGB)", 0.0, 1.0, 0.0),
+        ],
+    },
+    ShaderDesc { id: "blur", name: "Gaussian Blur", entry: "fx_blur", params: &[p("Radius (px)", 0.0, 64.0, 8.0)] },
+    ShaderDesc {
+        id: "zoom_blur",
+        name: "Zoom Blur",
+        entry: "fx_zoom_blur",
+        params: &[p("Amount", 0.0, 1.0, 0.2), p("Center X", 0.0, 1.0, 0.5), p("Center Y", 0.0, 1.0, 0.5)],
+    },
+    ShaderDesc {
+        id: "motion_blur",
+        name: "Directional Blur",
+        entry: "fx_motion_blur",
+        params: &[p("Length", 0.0, 0.3, 0.05), p("Angle", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc {
+        id: "glow",
+        name: "Glow",
+        entry: "fx_glow",
+        params: &[p("Radius (px)", 1.0, 64.0, 16.0), p("Threshold", 0.0, 1.0, 0.6), p("Intensity", 0.0, 3.0, 1.0)],
+    },
+    ShaderDesc {
+        id: "trails",
+        name: "Trails / Feedback",
+        entry: "fx_trails",
+        params: &[
+            p("Decay", 0.0, 0.995, 0.9),
+            p("Zoom", 0.8, 1.2, 1.0),
+            p("Rotate", -0.05, 0.05, 0.0),
+            p("Mode (0 max,1 add,2 mix)", 0.0, 2.0, 0.0),
+        ],
+    },
+    ShaderDesc { id: "technicolor", name: "Technicolor", entry: "fx_technicolor", params: &[p("Amount", 0.0, 1.0, 1.0)] },
+    ShaderDesc { id: "bleach", name: "Bleach Bypass", entry: "fx_bleach", params: &[p("Amount", 0.0, 1.0, 1.0)] },
+    ShaderDesc {
+        id: "vignette",
+        name: "Vignette",
+        entry: "fx_vignette",
+        params: &[p("Radius", 0.2, 1.2, 0.8), p("Softness", 0.01, 1.0, 0.45), p("Amount", 0.0, 1.0, 1.0)],
+    },
+    ShaderDesc { id: "grain", name: "Film Grain", entry: "fx_grain", params: &[p("Amount", 0.0, 1.0, 0.25), p("Flicker", 0.0, 0.5, 0.05)] },
+    ShaderDesc {
+        id: "crt",
+        name: "CRT",
+        entry: "fx_crt",
+        params: &[p("Scanlines", 0.0, 1.0, 0.5), p("Aperture mask", 0.0, 1.0, 0.4), p("Curvature", 0.0, 1.0, 0.3), p("Line density", 0.25, 2.0, 0.5)],
+    },
+    ShaderDesc {
+        id: "glitch",
+        name: "Analog Glitch",
+        entry: "fx_glitch",
+        params: &[p("Amount", 0.0, 0.3, 0.05), p("Bands", 2.0, 60.0, 12.0), p("Rate (Hz)", 1.0, 30.0, 8.0), p("Density", 0.0, 1.0, 0.4)],
+    },
+    ShaderDesc { id: "halftone", name: "Halftone", entry: "fx_halftone", params: &[p("Dot size (px)", 2.0, 48.0, 10.0), p("Colour", 0.0, 1.0, 0.0)] },
+    ShaderDesc { id: "sharpen", name: "Sharpen", entry: "fx_sharpen", params: &[p("Amount", 0.0, 4.0, 1.0)] },
+    ShaderDesc {
+        id: "emboss",
+        name: "Emboss",
+        entry: "fx_emboss",
+        params: &[p("Depth", 0.0, 10.0, 3.0), p("Angle", 0.0, 1.0, 0.125), p("Distance (px)", 0.5, 6.0, 1.5), p("Colour", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc { id: "tile", name: "Tile", entry: "fx_tile", params: &[p("Tiles", 1.0, 12.0, 2.0), p("Mirror", 0.0, 1.0, 1.0)] },
     ShaderDesc {
         id: "strobe",
         name: "Strobe",
@@ -146,6 +227,30 @@ pub const GENERATORS: &[ShaderDesc] = &[
     },
 ];
 
+/// Effects whose entry point is really a sequence of passes. The last pass may read the chain's
+/// dry input through `tex1`.
+pub fn multipass(entry: &str) -> &'static [&'static str] {
+    match entry {
+        "fx_blur" => &["fx_blur_h", "fx_blur_v"],
+        "fx_glow" => &["fx_bright", "fx_blur_h", "fx_blur_v", "fx_glow_add"],
+        _ => &[],
+    }
+}
+
+/// Every fragment entry point an effect can use (including sub-passes), for pipeline warm-up.
+pub fn all_effect_entries() -> Vec<&'static str> {
+    let mut out = Vec::new();
+    for d in EFFECTS {
+        let sub = multipass(d.entry);
+        if sub.is_empty() {
+            out.push(d.entry);
+        } else {
+            out.extend_from_slice(sub);
+        }
+    }
+    out
+}
+
 pub fn effect(id: &str) -> Option<&'static ShaderDesc> {
     EFFECTS.iter().find(|d| d.id == id)
 }
@@ -181,8 +286,13 @@ mod tests {
             .validate(&module)
             .unwrap_or_else(|e| panic!("{}", e.emit_to_string(&wgsl_source())));
         let entries: Vec<_> = module.entry_points.iter().map(|e| e.name.as_str()).collect();
-        for d in EFFECTS.iter().chain(GENERATORS) {
+        for d in GENERATORS {
             assert!(entries.contains(&d.entry), "missing entry point {}", d.entry);
+        }
+        for e in all_effect_entries() {
+            assert!(entries.contains(&e), "missing entry point {e}");
+        }
+        for d in EFFECTS {
             assert!(d.params.len() <= MAX_PARAMS);
         }
     }

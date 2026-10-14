@@ -137,10 +137,10 @@ impl Gpu {
 
     /// Compiles every pipeline up front so the first use of an effect never hitches a show.
     pub fn prewarm(&mut self) {
-        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_rutt"];
+        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface"];
         let all = fixed
             .into_iter()
-            .chain(shaders::EFFECTS.iter().map(|d| d.entry))
+            .chain(shaders::all_effect_entries())
             .chain(shaders::GENERATORS.iter().map(|d| d.entry));
         for entry in all {
             self.pipeline(entry);
@@ -153,7 +153,8 @@ impl Gpu {
         // fullscreen triangle that overwrites its target.
         let surface = entry == "fs_surface";
         // Rutt-Etra draws additive line lists generated in the vertex shader.
-        let rutt = entry == "fs_rutt";
+        let rutt = entry == "fs_rutt" || entry == "fs_rutt_points";
+        let points = entry == "fs_rutt_points";
         let additive = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add };
         pipelines.entry(entry).or_insert_with(|| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -161,12 +162,18 @@ impl Gpu {
                 layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
                     module,
-                    entry_point: Some(if surface { "vs_surface" } else if rutt { "vs_rutt" } else { "vs_fullscreen" }),
+                    entry_point: Some(if surface { "vs_surface" } else if points { "vs_rutt_points" } else if rutt { "vs_rutt" } else { "vs_fullscreen" }),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
                 primitive: wgpu::PrimitiveState {
-                    topology: if rutt { wgpu::PrimitiveTopology::LineList } else { wgpu::PrimitiveTopology::TriangleList },
+                    topology: if points {
+                        wgpu::PrimitiveTopology::PointList
+                    } else if rutt {
+                        wgpu::PrimitiveTopology::LineList
+                    } else {
+                        wgpu::PrimitiveTopology::TriangleList
+                    },
                     ..Default::default()
                 },
                 depth_stencil: None,
