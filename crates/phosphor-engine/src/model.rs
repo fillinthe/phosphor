@@ -428,6 +428,31 @@ impl LayerState {
     }
 }
 
+/// One physical output (projector, screen, LED wall): its own size and mapping surfaces.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OutputConfig {
+    pub id: u64,
+    pub name: String,
+    pub enabled: bool,
+    /// 0 × 0 follows the canvas size.
+    pub width: u32,
+    pub height: u32,
+    pub mapping: Mapping,
+}
+
+impl Default for OutputConfig {
+    fn default() -> Self {
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default() }
+    }
+}
+
+impl OutputConfig {
+    pub fn size(&self, canvas: (u32, u32)) -> (u32, u32) {
+        if self.width == 0 || self.height == 0 { canvas } else { (self.width, self.height) }
+    }
+}
+
 /// A file in the media bin. Paths are stored as given; thumbnails are rebuilt on load.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaItem {
@@ -445,7 +470,9 @@ pub struct Composition {
     /// Index 0 is the bottom of the stack.
     pub layers: Vec<LayerState>,
     pub next_id: u64,
+    /// Legacy single-output mapping; moved into `outputs[0]` on load.
     pub mapping: Mapping,
+    pub outputs: Vec<OutputConfig>,
     /// Effects applied to the whole mix, after every layer has been blended.
     pub master_effects: Vec<EffectState>,
     /// MIDI/OSC bindings.
@@ -460,7 +487,7 @@ pub struct Composition {
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None }
     }
 }
 
@@ -498,6 +525,26 @@ impl Composition {
     pub fn new_effect(&mut self, effect_id: &str) -> Option<EffectState> {
         let desc = shaders::effect(effect_id)?;
         Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new() })
+    }
+
+    /// Makes sure there is at least one output (older projects kept a single mapping instead).
+    pub fn ensure_outputs(&mut self) {
+        if self.outputs.is_empty() {
+            let id = self.new_id();
+            let mapping = std::mem::take(&mut self.mapping);
+            self.outputs.push(OutputConfig { id, name: "Output 1".into(), mapping, ..Default::default() });
+        }
+    }
+
+    pub fn add_output(&mut self) -> u64 {
+        let id = self.new_id();
+        let name = format!("Output {}", self.outputs.len() + 1);
+        self.outputs.push(OutputConfig { id, name, ..Default::default() });
+        id
+    }
+
+    pub fn output_mut(&mut self, id: u64) -> Option<&mut OutputConfig> {
+        self.outputs.iter_mut().find(|o| o.id == id)
     }
 
     /// Triggers column `col` on every layer that has a clip there.

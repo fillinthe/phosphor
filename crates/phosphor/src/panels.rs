@@ -235,7 +235,7 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
     });
     let s = st.stats.latest;
     let mut info = format!("{}×{}  {:.0} fps", st.comp.width, st.comp.height, s.fps);
-    if st.comp.mapping.active() {
+    if st.comp.outputs.iter().any(|o| o.mapping.active()) {
         info = format!("mapped · {info}");
     }
     let font = egui::FontId::monospace(11.0);
@@ -1570,26 +1570,55 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
 }
 
 fn mapping(ui: &mut egui::Ui, st: &mut State) {
-    let aspect = st.aspect();
-    let tex = st.texture;
-    let mut edit_on_output = st.output.lock().unwrap().edit_mapping;
-    let State { comp, selected_surface, output, .. } = st;
-    ui.horizontal(|ui| {
-        ui.toggle_value(&mut comp.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
-            .on_hover_text("When on, the output shows only the surfaces below");
-        ui.toggle_value(&mut comp.mapping.test_pattern, label(icon::GRID_FOUR, "Alignment grid"));
-        if ui.button(label(icon::PLUS, "Surface")).clicked() {
-            let id = comp.new_id();
-            comp.mapping.add_surface(id);
-            *selected_surface = Some(id);
-            comp.mapping.enabled = true;
+    st.comp.ensure_outputs();
+    if !st.comp.outputs.iter().any(|o| o.id == st.mapping_output) {
+        st.mapping_output = st.primary_output();
+    }
+    // Which output's surfaces are being edited.
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("Output").strong());
+        let outs: Vec<(u64, String)> = st.comp.outputs.iter().map(|o| (o.id, o.name.clone())).collect();
+        for (id, name) in outs {
+            ui.selectable_value(&mut st.mapping_output, id, name);
         }
-        if ui.checkbox(&mut edit_on_output, "Edit on output (E)").on_hover_text("Show draggable handles in the output window").changed() {
-            output.lock().unwrap().edit_mapping = edit_on_output;
+        if ui.small_button(label(icon::PLUS, "Output")).on_hover_text("Add another output (projector / screen)").clicked() {
+            st.mapping_output = st.comp.add_output();
         }
     });
-    ui.weak("Drag corners to pin a surface onto the real object. Drag the centre to move it. Overlap feathered edges to blend projectors.");
+    let oid = st.mapping_output;
+    let tex = st.output_tex(oid);
+    let mut edit_on_output = st.output.lock().unwrap().get(&oid).is_some_and(|o| o.edit_mapping);
+    let canvas = (st.comp.width, st.comp.height);
+    let mut add_surface = false;
+    {
+        let State { comp, output, .. } = st;
+        let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
+        ui.horizontal(|ui| {
+            ui.toggle_value(&mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
+                .on_hover_text("When on, this output shows only its surfaces");
+            ui.toggle_value(&mut o.mapping.test_pattern, label(icon::GRID_FOUR, "Alignment grid"));
+            if ui.button(label(icon::PLUS, "Surface")).clicked() {
+                add_surface = true;
+            }
+            if ui.checkbox(&mut edit_on_output, "Edit on output (E)").on_hover_text("Show draggable handles in this output's window").changed() {
+                output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
+            }
+        });
+    }
+    if add_surface {
+        let id = st.comp.new_id();
+        if let Some(o) = st.comp.output_mut(oid) {
+            o.mapping.add_surface(id);
+            o.mapping.enabled = true;
+        }
+        st.selected_surface = Some(id);
+    }
+    ui.weak("Drag corners to pin a surface onto the real object. Drag the centre to move it. Overlap soft edges to blend projectors.");
 
+    let State { comp, selected_surface, .. } = st;
+    let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
+    let (ow, oh) = o.size(canvas);
+    let aspect = ow as f32 / oh.max(1) as f32;
     let avail = ui.available_size();
     let h = (avail.y * 0.5).min(avail.x / aspect).max(120.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(avail.x, h), Sense::hover());
@@ -1599,16 +1628,17 @@ fn mapping(ui: &mut egui::Ui, st: &mut State) {
         paint_texture(ui.painter(), t, frame);
     }
     ui.painter().rect_stroke(frame, 0.0, Stroke::new(1.0, Color32::from_gray(70)), StrokeKind::Outside);
-    mapping_handles(ui, frame, &mut comp.mapping, selected_surface, true);
+    mapping_handles(ui, frame, &mut o.mapping, selected_surface, true);
 
     ui.add_space(4.0);
     let mut remove = None;
+    let mut duplicate = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 180.0).max(80.0);
-        if comp.mapping.surfaces.is_empty() {
+        if o.mapping.surfaces.is_empty() {
             ui.weak("No surfaces yet. Add one, then drag its corners.");
         }
-        for (i, s) in comp.mapping.surfaces.iter_mut().enumerate() {
+        for (i, s) in o.mapping.surfaces.iter_mut().enumerate() {
             let is_selected = *selected_surface == Some(s.id);
             let frame = card_frame(ui, is_selected).show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -1626,23 +1656,51 @@ fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 });
                 ui.add(Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
                 ui.add(Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
-                ui.collapsing("Input region (part of the master shown)", |ui| {
+                ui.collapsing("Input region (part of the mix shown)", |ui| {
                     ui.add(Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
                     ui.add(Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
                     ui.add(Slider::new(&mut s.input[2], 0.05..=1.0).text("Width"));
                     ui.add(Slider::new(&mut s.input[3], 0.05..=1.0).text("Height"));
                 });
             });
-            if frame.response.interact(Sense::click()).clicked() {
+            let resp = frame.response.interact(Sense::click());
+            if resp.clicked() {
                 *selected_surface = Some(s.id);
             }
+            resp.context_menu(|ui| {
+                if ui.button(label(icon::CORNERS_OUT, "Reset corners")).clicked() {
+                    s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+                    ui.close();
+                }
+                if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+                    duplicate = Some(i);
+                    ui.close();
+                }
+                if ui.button(label(icon::TRASH, "Delete")).clicked() {
+                    remove = Some(i);
+                    ui.close();
+                }
+            });
             ui.add_space(4.0);
         }
     });
     if let Some(i) = remove {
-        let removed = comp.mapping.surfaces.remove(i);
+        let removed = o.mapping.surfaces.remove(i);
         if *selected_surface == Some(removed.id) {
             *selected_surface = None;
+        }
+    }
+    if let Some(i) = duplicate {
+        let mut copy = o.mapping.surfaces[i].clone();
+        copy.id = comp.next_id;
+        comp.next_id += 1;
+        copy.name = format!("{} copy", copy.name);
+        for c in &mut copy.corners {
+            c[0] += 0.03;
+            c[1] += 0.03;
+        }
+        if let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) {
+            o.mapping.surfaces.insert(i + 1, copy);
         }
     }
 }
@@ -1913,12 +1971,14 @@ fn output(ui: &mut egui::Ui, st: &mut State) {
                 ui.weak("(this screen)");
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Send output here").on_hover_text("Opens the output fullscreen on this display, no menu bar").clicked() {
+                if ui.button("Send Output 1 here").on_hover_text("Opens the first output fullscreen on this display, no menu bar").clicked() {
                     st.send_output_to(d.clone());
                 }
             });
         });
     }
+    ui.separator();
+    outputs_list(ui, st);
     ui.separator();
     egui::Grid::new("output_grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
         ui.label("Canvas");
@@ -1937,7 +1997,7 @@ fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.add(Slider::new(&mut st.comp.master_fade, 0.0..=1.0).text("fade"));
         ui.end_row();
 
-        ui.label("Output window");
+        ui.label("All output windows");
         let text = if st.output_open() { "Close" } else { "Open" };
         if ui.button(text).clicked() {
             st.toggle_output();
@@ -2147,4 +2207,100 @@ fn mixer(ui: &mut egui::Ui, st: &mut State) {
             });
         });
     });
+}
+
+const OUTPUT_SIZES: &[(u32, u32, &str)] = &[
+    (0, 0, "Same as canvas"),
+    (1280, 720, "1280×720"),
+    (1920, 1080, "1920×1080"),
+    (1920, 1200, "1920×1200"),
+    (2560, 1440, "2560×1440"),
+    (3840, 2160, "3840×2160"),
+    (1080, 1920, "1080×1920 (portrait)"),
+];
+
+/// Every output with its size, screen, window and Identify controls.
+fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
+    let now = ui.ctx().input(|i| i.time);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Outputs").strong());
+        if ui.small_button(label(icon::PLUS, "Add output")).clicked() {
+            st.mapping_output = st.comp.add_output();
+        }
+        if ui.small_button(label(icon::HASH, "Identify")).on_hover_text("Show each output's number on its window").clicked() {
+            st.identify_outputs(now);
+        }
+    });
+    let canvas = (st.comp.width, st.comp.height);
+    let mut remove = None;
+    let count = st.comp.outputs.len();
+    for i in 0..count {
+        let id = st.comp.outputs[i].id;
+        let open = st.output_window_open(id);
+        let tex = st.output_tex(id);
+        let mut toggle = false;
+        let mut send: Option<crate::screens::Display> = None;
+        let displays = st.displays.clone();
+        let o = &mut st.comp.outputs[i];
+        card_frame(ui, false).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(egui::vec2(64.0, 36.0), Sense::hover());
+                ui.painter().rect_filled(r, 3.0, Color32::BLACK);
+                if let Some(t) = tex {
+                    let (ow, oh) = o.size(canvas);
+                    paint_texture(ui.painter(), t, fit_rect(r, ow as f32 / oh.max(1) as f32));
+                }
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("{}", i + 1)).strong().color(ACCENT));
+                        ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
+                        ui.toggle_value(&mut o.enabled, RichText::new("ON").small()).on_hover_text("Render this output");
+                        if o.mapping.active() {
+                            ui.label(RichText::new(format!("{} mapped", icon::PROJECTOR_SCREEN)).small().color(ACCENT));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        let current = OUTPUT_SIZES.iter().find(|(w, h, _)| *w == o.width && *h == o.height).map_or(format!("{}×{}", o.width, o.height), |(_, _, n)| n.to_string());
+                        ComboBox::from_id_salt(("out_size", id)).width(130.0).selected_text(current).show_ui(ui, |ui| {
+                            for (w, h, name) in OUTPUT_SIZES {
+                                if ui.selectable_label(o.width == *w && o.height == *h, *name).clicked() {
+                                    o.width = *w;
+                                    o.height = *h;
+                                }
+                            }
+                        });
+                        let text = if open { label(icon::STOP, "Window") } else { label(icon::PLAY, "Window") };
+                        if ui.button(text).clicked() {
+                            toggle = true;
+                        }
+                        ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send to"), |ui| {
+                            for d in &displays {
+                                if ui.button(d.label()).clicked() {
+                                    send = Some(d.clone());
+                                    ui.close();
+                                }
+                            }
+                            if displays.is_empty() {
+                                ui.weak("No displays found");
+                            }
+                        });
+                        if count > 1 && ui.small_button(icon::TRASH).on_hover_text("Remove output").clicked() {
+                            remove = Some(i);
+                        }
+                    });
+                });
+            });
+        });
+        if toggle {
+            st.toggle_output_window(id);
+        }
+        if let Some(d) = send {
+            st.send_output_id_to(id, d);
+        }
+    }
+    if let Some(i) = remove {
+        let id = st.comp.outputs.remove(i).id;
+        st.output.lock().unwrap().remove(&id);
+    }
 }
