@@ -219,15 +219,19 @@ pub(crate) fn finalize(naga_wgsl: &str, entry: &str) -> Result<String, IsfError>
         match (it.kind, it.binding) {
             (Kind::Var, Some(bind)) => {
                 let contract = match bind {
-                    0 => "u",
-                    1 => "samp",
-                    2 => "samp_mirror",
-                    3 => "tex0",
-                    4 => "tex1",
-                    5 => "tex2",
+                    0 => "u".to_string(),
+                    1 => "samp".to_string(),
+                    2 => "samp_mirror".to_string(),
+                    3 => "tex0".to_string(),
+                    4 => "tex1".to_string(),
+                    5 => "tex2".to_string(),
+                    // Multi-pass buffers: `buf0`… in the shared prelude.
+                    b if (crate::BUFFER_BINDING as u32..(crate::BUFFER_BINDING + crate::MAX_BUFFERS) as u32).contains(&b) => {
+                        format!("buf{}", b - crate::BUFFER_BINDING as u32)
+                    }
                     _ => return Err(IsfError::Wgsl(format!("unexpected binding {bind}"))),
                 };
-                map.insert(it.name.clone(), contract.to_string());
+                map.insert(it.name.clone(), contract);
                 if bind == 0 {
                     // `var<uniform> NAME: TYPE;`
                     if let Some(ty) = it.text.rsplit(':').next() {

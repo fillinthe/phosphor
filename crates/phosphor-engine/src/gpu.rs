@@ -93,6 +93,15 @@ impl Gpu {
                 tex_entry(3),
                 tex_entry(4),
                 tex_entry(5),
+                // Multi-pass buffers (see `shaders::PassPlan`).
+                tex_entry(6),
+                tex_entry(7),
+                tex_entry(8),
+                tex_entry(9),
+                tex_entry(10),
+                tex_entry(11),
+                tex_entry(12),
+                tex_entry(13),
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

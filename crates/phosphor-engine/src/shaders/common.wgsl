@@ -21,6 +21,15 @@ struct U {
 @group(0) @binding(3) var tex0: texture_2d<f32>;  // source
 @group(0) @binding(4) var tex1: texture_2d<f32>;  // destination / accumulator
 @group(0) @binding(5) var tex2: texture_2d<f32>;  // chroma plane
+// Multi-pass buffers (ISF PASSES targets), bindings 6..13; blank unless a pass binds them.
+@group(0) @binding(6) var buf0: texture_2d<f32>;
+@group(0) @binding(7) var buf1: texture_2d<f32>;
+@group(0) @binding(8) var buf2: texture_2d<f32>;
+@group(0) @binding(9) var buf3: texture_2d<f32>;
+@group(0) @binding(10) var buf4: texture_2d<f32>;
+@group(0) @binding(11) var buf5: texture_2d<f32>;
+@group(0) @binding(12) var buf6: texture_2d<f32>;
+@group(0) @binding(13) var buf7: texture_2d<f32>;
 
 struct VOut {
     @builtin(position) pos: vec4f,

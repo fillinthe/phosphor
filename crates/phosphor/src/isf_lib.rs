@@ -14,6 +14,8 @@ pub struct Loaded {
     params: Vec<Param>,
     entry: String,
     wgsl: String,
+    /// Multi-pass shaders: how their passes run (empty plan = single pass).
+    plan: Option<shaders::PassPlan>,
 }
 
 pub struct IsfLibrary {
@@ -76,6 +78,24 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
     slots.into_iter().enumerate().map(|(i, p)| p.unwrap_or(Param { name: leak(format!("p{i}")), min: 0.0, max: 1.0, default: 0.0 })).collect()
 }
 
+/// The engine's pass plan for a multi-pass ISF shader: which buffer each pass writes (by index)
+/// and which input names its size expressions may use. `None` for single-pass shaders.
+fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
+    if sh.pass_plan.len() <= 1 && sh.buffers.is_empty() {
+        return None;
+    }
+    let index = |t: &Option<String>| t.as_ref().and_then(|t| sh.buffers.iter().position(|b| b == t));
+    Some(shaders::PassPlan {
+        passes: sh
+            .pass_plan
+            .iter()
+            .map(|p| shaders::PlanPass { target: index(&p.target), width: p.width.clone(), height: p.height.clone() })
+            .collect(),
+        buffers: sh.buffers.len(),
+        vars: sh.inputs.iter().filter_map(|i| Some((i.name.clone(), i.offset?))).collect(),
+    })
+}
+
 impl IsfLibrary {
     /// Starts scanning in the background.
     pub fn scan() -> Self {
@@ -113,7 +133,7 @@ impl IsfLibrary {
                                 if !sh.credit.is_empty() {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
-                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), wgsl: sh.wgsl })
+                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), wgsl: sh.wgsl })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
                             Err(e) => Err(format!("{e:?}")),
@@ -141,6 +161,9 @@ impl IsfLibrary {
                         params: Box::leak(l.params.into_boxed_slice()),
                     }));
                     shaders::set_custom_info(desc.id, "ISF", leak(l.about));
+                    if let Some(plan) = l.plan {
+                        shaders::set_pass_plan(desc.entry, plan);
+                    }
                     engine.register_lazy(desc, l.wgsl);
                     self.loaded += 1;
                 }

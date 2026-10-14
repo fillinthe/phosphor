@@ -30,9 +30,23 @@ struct LayerResources {
     rutt: Option<Target>,
     /// Previous outputs of history effects (trails), per effect id, ping-ponged by frame parity.
     history: HashMap<u64, [Option<Target>; 2]>,
+    /// Multi-pass shader buffers, per effect id (or `GENERATOR_KEY` for the layer's source).
+    multipass: HashMap<u64, PassBuffers>,
     media: Option<Media>,
     thumbnail: Option<Target>,
 }
+
+/// A multi-pass shader's buffers: two textures each (read one, write the other), and which is
+/// the newest. Kept between frames so persistent buffers give feedback.
+#[derive(Default)]
+struct PassBuffers {
+    slots: Vec<[Option<Target>; 2]>,
+    front: Vec<usize>,
+}
+
+/// `multipass` keys for a layer's generator source (and its outgoing copy in transitions).
+const GENERATOR_KEY: u64 = u64::MAX;
+const GENERATOR_OUT_KEY: u64 = u64::MAX - 1;
 
 /// Width of the per-layer thumbnails; height follows the canvas aspect.
 pub const THUMBNAIL_WIDTH: u32 = 240;
@@ -77,6 +91,8 @@ struct Pass {
     uniforms: Uniforms,
     /// Triangles from a vertex buffer (mesh-warped surfaces, masks) instead of generated ones.
     mesh: Option<MeshDraw>,
+    /// Multi-pass buffers bound as `buf0…` (bindings 6..); unbound ones are blank.
+    bufs: Vec<wgpu::TextureView>,
 }
 
 #[derive(Clone)]
@@ -469,7 +485,7 @@ impl Engine {
                 tex0,
                 tex1: current.map(|c| self.accum[c].as_ref().unwrap().view.clone()),
                 tex2,
-                uniforms: u, mesh: None });
+                uniforms: u, mesh: None, bufs: Vec::new() });
             current = Some(next);
             layers_drawn += 1;
         }
@@ -489,7 +505,7 @@ impl Engine {
                 u.resolution = [mw as f32, mh as f32];
                 u.opacity = 1.0;
                 let target = self.monitor_targets[i].as_ref().unwrap().view.clone();
-                passes.push(Pass { entry: "fs_finalize", target, tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
+                passes.push(Pass { entry: "fs_finalize", target, tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
         }
         self.render_previews(&master, (w, h), time, mods, &comp.layers, &mut passes);
@@ -498,7 +514,7 @@ impl Engine {
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [w as f32, h as f32];
         u.opacity = fade;
-        passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
+        passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
 
         // Each output: its own size and mapping surfaces.
         for o in comp.outputs.iter().filter(|o| o.enabled) {
@@ -511,13 +527,13 @@ impl Engine {
             u.resolution = [ow as f32, oh as f32];
             if !o.mapping.active() {
                 u.opacity = fade;
-                passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
+                passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
                 self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
                 continue;
             }
             // Black, then each enabled surface blended on top.
             u.opacity = 0.0;
-            passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
+            passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             for s in o.mapping.surfaces.iter().filter(|s| s.enabled) {
                 // Mesh warp: one pass drawing the cached, finely subdivided mesh.
                 if let Some(m) = &s.mesh {
@@ -529,7 +545,7 @@ impl Engine {
                     u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, 0.0, 0.0];
-                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw) });
+                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
                 let Some(inv) = mapping::quad_to_square(&s.corners) else { continue };
@@ -544,7 +560,7 @@ impl Engine {
                 u.p[2] = [inv[0], inv[1], inv[2], inv[3]];
                 u.p[3] = [inv[4], inv[5], inv[6], inv[7]];
                 u.p[4] = [inv[8], s.feather, 0.0, 0.0];
-                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None });
+                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
             self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
         }
@@ -565,7 +581,7 @@ impl Engine {
         let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || mapping.mask_triangles()) else { return };
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [size.0 as f32, size.1 as f32];
-        passes.push(Pass { entry: "fs_mask", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw) });
+        passes.push(Pass { entry: "fs_mask", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -580,7 +596,7 @@ impl Engine {
             let mut u = Uniforms::with_params(&[]);
             u.resolution = [size.0 as f32, size.1 as f32];
             u.opacity = 1.0;
-            passes.push(Pass { entry: "fs_finalize", target, tex0: src, tex1: None, tex2: None, uniforms: u, mesh: None });
+            passes.push(Pass { entry: "fs_finalize", target, tex0: src, tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
         };
         // Source picture: the chosen layer's thumbnail, or a downscaled copy of the mix.
         let layer_thumb = (self.preview_source != MASTER_ID)
@@ -638,7 +654,7 @@ impl Engine {
             tex0,
             tex1: None,
             tex2,
-            uniforms: u, mesh: None });
+            uniforms: u, mesh: None, bufs: Vec::new() });
     }
 
     /// The layer's own picture (source + effects, before blending), for UI thumbnails.
@@ -674,6 +690,14 @@ impl Engine {
                 let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
                 Target::ensure(slot, device, "generator", w, h);
                 let target = slot.as_ref().unwrap();
+                if let Some(plan) = shaders::pass_plan(desc.entry) {
+                    let out = target.view.clone();
+                    let params = resolve_params(desc, values, value_mods, mods);
+                    let key = if outgoing { GENERATOR_OUT_KEY } else { GENERATOR_KEY };
+                    let blank = self.gpu.blank.clone();
+                    let view = self.run_plan(layer_id, key, desc.entry, &plan, &params, blank, out, (w, h), time, passes);
+                    return Some(Frame::Rgb { view, w, h });
+                }
                 let mut u = Uniforms::with_params(&resolve_params(desc, values, value_mods, mods));
                 u.resolution = [w as f32, h as f32];
                 u.time = time;
@@ -683,7 +707,7 @@ impl Engine {
                     tex0: self.gpu.blank.clone(),
                     tex1: None,
                     tex2: None,
-                    uniforms: u, mesh: None });
+                    uniforms: u, mesh: None, bufs: Vec::new() });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
             SourceSpec::Image { .. } | SourceSpec::Movie { .. } | SourceSpec::Live { .. } => {
@@ -730,7 +754,7 @@ impl Engine {
                     let mut u = base;
                     u.resolution = [w as f32, h as f32];
                     u.yuv = 1;
-                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0: luma, tex1: None, tex2: Some(chroma), uniforms: u, mesh: None });
+                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0: luma, tex1: None, tex2: Some(chroma), uniforms: u, mesh: None, bufs: Vec::new() });
                     (view, (w, h))
                 }
             }
@@ -746,8 +770,69 @@ impl Engine {
         u.mode = t.kind.shader_index();
         u.uv_xform = fit_transform(in_size, canvas, fit);
         u.p[0] = fit_transform(out_size, canvas, fit);
-        passes.push(Pass { entry: "fs_crossfade", target: result.clone(), tex0: in_view, tex1: Some(out_view), tex2: None, uniforms: u, mesh: None });
+        passes.push(Pass { entry: "fs_crossfade", target: result.clone(), tex0: in_view, tex1: Some(out_view), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
         Frame::Rgb { view: result, w, h }
+    }
+
+    /// Runs a multi-pass shader (ISF PASSES) for one effect or generator: each pass renders into
+    /// the back copy of its buffer (or `out`) while every pass reads the front copies of all
+    /// buffers, so nothing is read and written at once and persistent buffers feed back.
+    /// Returns the view with the result (`out`, or the last buffer if no pass targets the output).
+    #[allow(clippy::too_many_arguments)]
+    fn run_plan(
+        &mut self,
+        res_id: u64,
+        key: u64,
+        entry: &'static str,
+        plan: &shaders::PassPlan,
+        params: &[f32],
+        input: wgpu::TextureView,
+        out: wgpu::TextureView,
+        (w, h): (u32, u32),
+        time: f32,
+        passes: &mut Vec<Pass>,
+    ) -> wgpu::TextureView {
+        let device = self.gpu.device.clone();
+        let blank = self.gpu.blank.clone();
+        let frame = self.frame_index as f32;
+        let n = plan.buffers.min(shaders::MAX_BUFFERS);
+        let bufs = self.layers.entry(res_id).or_default().multipass.entry(key).or_default();
+        bufs.slots.resize_with(n, Default::default);
+        bufs.front.resize(n, 0);
+        let var = |name: &str| -> Option<f64> {
+            match name {
+                "$WIDTH" => Some(w as f64),
+                "$HEIGHT" => Some(h as f64),
+                _ => plan.vars.iter().find(|(v, _)| v == name).and_then(|(_, i)| params.get(*i)).map(|v| *v as f64),
+            }
+        };
+        let size = |e: &Option<String>, full: u32| e.as_deref().and_then(|e| crate::expr::eval(e, &var)).map_or(full, |v| (v.max(1.0) as u32).min(8192));
+        let mut result = out.clone();
+        for (k, pp) in plan.passes.iter().enumerate() {
+            let views: Vec<wgpu::TextureView> =
+                (0..n).map(|b| bufs.slots[b][bufs.front[b]].as_ref().map_or_else(|| blank.clone(), |t| t.view.clone())).collect();
+            let (target, tw, th) = match pp.target {
+                Some(b) if b < n => {
+                    let (bw, bh) = (size(&pp.width, w), size(&pp.height, h));
+                    for slot in bufs.slots[b].iter_mut() {
+                        Target::ensure(slot, &device, "pass buffer", bw, bh);
+                    }
+                    let write = 1 - bufs.front[b];
+                    bufs.front[b] = write;
+                    let view = bufs.slots[b][write].as_ref().unwrap().view.clone();
+                    (view, bw, bh)
+                }
+                _ => (out.clone(), w, h),
+            };
+            let mut u = Uniforms::with_params(params);
+            u.resolution = [tw as f32, th as f32];
+            u.time = time;
+            // PASSINDEX, FRAMEINDEX, TIMEDELTA (the reserved last vec4).
+            u.p[11] = [k as f32, frame, 1.0 / 60.0, 0.0];
+            result = target.clone();
+            passes.push(Pass { entry, target, tex0: input.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: views });
+        }
+        result
     }
 
     /// Runs the layer's enabled effects at the source's native resolution (ping-pong).
@@ -792,7 +877,7 @@ impl Engine {
                     tex0: luma,
                     tex1: None,
                     tex2: Some(chroma),
-                    uniforms: Uniforms { yuv: 1, ..base }, mesh: None });
+                    uniforms: Uniforms { yuv: 1, ..base }, mesh: None, bufs: Vec::new() });
                 input_idx = Some(0);
                 views[0].clone()
             }
@@ -805,53 +890,61 @@ impl Engine {
             let dry = input.clone();
             let dry_idx = input_idx;
             let params = resolve_params(desc, values, param_mods, mods);
-            let sub = shaders::multipass(desc.entry);
-            let entries: Vec<&'static str> = if sub.is_empty() { vec![desc.entry] } else { sub.to_vec() };
-            let last_index = entries.len() - 1;
-            for (k, entry) in entries.into_iter().enumerate() {
-                let mut u = Uniforms::with_params(&params);
-                u.resolution = base.resolution;
-                u.time = time;
-                let mut tex1 = None;
-                let mut tex2 = None;
-                let mut next_idx: Option<usize> = None;
-                let target = if entry == "fs_rutt" || entry == "fs_rutt_points" {
-                    let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
-                    let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
-                    // Optional displacement from another layer's picture (its live thumbnail).
-                    let other = params.get(12).copied().unwrap_or(0.0) as usize;
-                    if other > 0 && let Some(l) = all_layers.get(other - 1) {
-                        tex2 = self.layers.get(&l.id).and_then(|r| r.thumbnail.as_ref()).map(|t| t.view.clone());
+            if let Some(plan) = shaders::pass_plan(desc.entry) {
+                // Multi-pass shader (ISF PASSES): its own buffers, output into a free chain view.
+                let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
+                let result = self.run_plan(res_id, fx_id, desc.entry, &plan, &params, input.clone(), views[i].clone(), (w, h), time, passes);
+                input_idx = (result == views[i]).then_some(i);
+                input = result;
+            } else {
+                let sub = shaders::multipass(desc.entry);
+                let entries: Vec<&'static str> = if sub.is_empty() { vec![desc.entry] } else { sub.to_vec() };
+                let last_index = entries.len() - 1;
+                for (k, entry) in entries.into_iter().enumerate() {
+                    let mut u = Uniforms::with_params(&params);
+                    u.resolution = base.resolution;
+                    u.time = time;
+                    let mut tex1 = None;
+                    let mut tex2 = None;
+                    let mut next_idx: Option<usize> = None;
+                    let target = if entry == "fs_rutt" || entry == "fs_rutt_points" {
+                        let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
+                        let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
+                        // Optional displacement from another layer's picture (its live thumbnail).
+                        let other = params.get(12).copied().unwrap_or(0.0) as usize;
+                        if other > 0 && let Some(l) = all_layers.get(other - 1) {
+                            tex2 = self.layers.get(&l.id).and_then(|r| r.thumbnail.as_ref()).map(|t| t.view.clone());
+                        }
+                        let res = self.layers.entry(res_id).or_default();
+                        Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
+                        u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
+                        res.rutt.as_ref().unwrap().view.clone()
+                    } else if entry == "fx_trails" || entry == "fx_slitscan" {
+                        // History effects write one slot while reading the other.
+                        let res = self.layers.entry(res_id).or_default();
+                        let slots = res.history.entry(fx_id).or_default();
+                        for slot in slots.iter_mut() {
+                            Target::ensure(slot, &self.gpu.device, "history", w, h);
+                        }
+                        tex1 = Some(slots[1 - parity].as_ref().unwrap().view.clone());
+                        slots[parity].as_ref().unwrap().view.clone()
+                    } else {
+                        let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
+                        next_idx = Some(i);
+                        views[i].clone()
+                    };
+                    if k == last_index && entry == "fx_glow_add" {
+                        tex1 = Some(dry.clone());
                     }
-                    let res = self.layers.entry(res_id).or_default();
-                    Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
-                    u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
-                    res.rutt.as_ref().unwrap().view.clone()
-                } else if entry == "fx_trails" || entry == "fx_slitscan" {
-                    // History effects write one slot while reading the other.
-                    let res = self.layers.entry(res_id).or_default();
-                    let slots = res.history.entry(fx_id).or_default();
-                    for slot in slots.iter_mut() {
-                        Target::ensure(slot, &self.gpu.device, "history", w, h);
-                    }
-                    tex1 = Some(slots[1 - parity].as_ref().unwrap().view.clone());
-                    slots[parity].as_ref().unwrap().view.clone()
-                } else {
-                    let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
-                    next_idx = Some(i);
-                    views[i].clone()
-                };
-                if k == last_index && entry == "fx_glow_add" {
-                    tex1 = Some(dry.clone());
+                    passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
+                    input = target;
+                    input_idx = next_idx;
                 }
-                passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u, mesh: None });
-                input = target;
-                input_idx = next_idx;
             }
             if mix < 0.999 {
                 let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
                 let u = Uniforms { opacity: mix, ..base };
-                passes.push(Pass { entry: "fs_mix", target: views[i].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u, mesh: None });
+                passes.push(Pass { entry: "fs_mix", target: views[i].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
                 input = views[i].clone();
                 input_idx = Some(i);
             }
@@ -908,6 +1001,14 @@ impl Engine {
                         binding: 5,
                         resource: wgpu::BindingResource::TextureView(pass.tex2.as_ref().unwrap_or(blank)),
                     },
+                    wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::TextureView(pass.bufs.first().unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::TextureView(pass.bufs.get(1).unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::TextureView(pass.bufs.get(2).unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 9, resource: wgpu::BindingResource::TextureView(pass.bufs.get(3).unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 10, resource: wgpu::BindingResource::TextureView(pass.bufs.get(4).unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 11, resource: wgpu::BindingResource::TextureView(pass.bufs.get(5).unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 12, resource: wgpu::BindingResource::TextureView(pass.bufs.get(6).unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 13, resource: wgpu::BindingResource::TextureView(pass.bufs.get(7).unwrap_or(blank)) },
                 ],
             });
             // Surfaces, meshes and masks draw on top of what the output already has.
@@ -1023,7 +1124,7 @@ fn push_fit_copy(target: wgpu::TextureView, frame: &Frame, canvas: (u32, u32), f
             (luma, Some(chroma))
         }
     };
-    passes.push(Pass { entry: "fs_composite", target, tex0, tex1: None, tex2, uniforms: u, mesh: None });
+    passes.push(Pass { entry: "fs_composite", target, tex0, tex1: None, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
 }
 
 /// Maps target uv → source uv so the source is fitted, filled, or stretched.

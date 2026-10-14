@@ -54,8 +54,8 @@ app that's much smaller and lighter on the CPU.
 7. **Performance**: cache GPU bind groups (explorer previews cost ~2 ms CPU/frame at 40 tiles), render
    thread decoupled from UI, Hap decoded on the GPU
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
-9. **ISF gaps**: multi-pass / feedback / >16 params (142 shaders), City Lights generator renders black,
-   Broken LCD looks unchanged at defaults
+9. **ISF gaps**: ~~multi-pass / feedback / >16 params~~ ✔ (341/406 now). Next: MadMapper includes (MadNoise, MadSDF:
+   18 shaders), imported images (15), FLOAT buffers, `curve`/`floatRange` inputs, City Lights renders black
 9b. ~~Export show~~ done (File → Export Show). Next: a locked "player only" mode (hide editing, password to
     unlock), Windows/Linux players, and notarized exports
 9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with
