@@ -98,6 +98,7 @@ pub const EFFECTS: &[ShaderDesc] = &[
             p("Perspective", 0.0, 2.0, 0.6),
             p("Draw (0 lines,1 mesh,2 tri,3 vert)", 0.0, 3.0, 0.0),
             p("Displace (0 luma, 1 RGB)", 0.0, 1.0, 0.0),
+            p("Displace from layer # (0 = this)", 0.0, 16.0, 0.0),
         ],
     },
     ShaderDesc {
@@ -117,6 +118,7 @@ pub const EFFECTS: &[ShaderDesc] = &[
             p("Perspective", 0.0, 2.0, 0.6),
             p("(unused)", 0.0, 0.0, 0.0),
             p("Displace (0 luma, 1 RGB)", 0.0, 1.0, 0.0),
+            p("Displace from layer # (0 = this)", 0.0, 16.0, 0.0),
         ],
     },
     ShaderDesc { id: "blur", name: "Gaussian Blur", entry: "fx_blur", params: &[p("Radius (px)", 0.0, 64.0, 8.0)] },
@@ -180,6 +182,31 @@ pub const EFFECTS: &[ShaderDesc] = &[
     },
     ShaderDesc { id: "tile", name: "Tile", entry: "fx_tile", params: &[p("Tiles", 1.0, 12.0, 2.0), p("Mirror", 0.0, 1.0, 1.0)] },
     ShaderDesc {
+        id: "chroma_key",
+        name: "Chroma Key",
+        entry: "fx_chroma_key",
+        params: &[p("Key hue", 0.0, 1.0, 0.33), p("Tolerance", 0.0, 0.3, 0.08), p("Softness", 0.0, 0.3, 0.05)],
+    },
+    ShaderDesc {
+        id: "gamma",
+        name: "Gamma / Lift / Gain",
+        entry: "fx_gamma",
+        params: &[p("Gamma", 0.2, 3.0, 1.0), p("Lift", -0.5, 0.5, 0.0), p("Gain", 0.0, 2.0, 1.0)],
+    },
+    ShaderDesc { id: "solarize", name: "Solarize", entry: "fx_solarize", params: &[p("Threshold", 0.0, 1.0, 0.5), p("Amount", 0.0, 1.0, 1.0)] },
+    ShaderDesc {
+        id: "slitscan",
+        name: "Slit-scan",
+        entry: "fx_slitscan",
+        params: &[p("Slit position", 0.0, 1.0, 0.5), p("Shift (px)", 0.0, 8.0, 1.0), p("Vertical", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc {
+        id: "edge_glow",
+        name: "Edge Glow",
+        entry: "fx_edge_glow",
+        params: &[p("Radius (px)", 1.0, 64.0, 8.0), p("Edge strength", 0.0, 8.0, 3.0), p("Intensity", 0.0, 3.0, 1.2)],
+    },
+    ShaderDesc {
         id: "strobe",
         name: "Strobe",
         entry: "fx_strobe",
@@ -220,6 +247,36 @@ pub const GENERATORS: &[ShaderDesc] = &[
     },
     ShaderDesc { id: "color_bars", name: "Color Bars", entry: "gen_color_bars", params: &[] },
     ShaderDesc {
+        id: "tunnel",
+        name: "Tunnel",
+        entry: "gen_tunnel",
+        params: &[p("Depth scale", 0.05, 1.0, 0.3), p("Speed", -4.0, 4.0, 1.0), p("Segments", 2.0, 32.0, 8.0), p("Hue", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc {
+        id: "starfield",
+        name: "Starfield",
+        entry: "gen_starfield",
+        params: &[p("Density", 2.0, 30.0, 10.0), p("Speed", 0.0, 10.0, 2.0), p("Brightness", 0.0, 2.0, 1.0)],
+    },
+    ShaderDesc {
+        id: "spiral",
+        name: "Spiral",
+        entry: "gen_spiral",
+        params: &[p("Arms", 1.0, 12.0, 3.0), p("Twist", 0.0, 20.0, 6.0), p("Speed", -6.0, 6.0, 2.0)],
+    },
+    ShaderDesc {
+        id: "voronoi",
+        name: "Voronoi Cells",
+        entry: "gen_voronoi",
+        params: &[p("Scale", 1.0, 20.0, 5.0), p("Speed", 0.0, 3.0, 0.5), p("Hue", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc {
+        id: "lines",
+        name: "Oscilloscope Lines",
+        entry: "gen_lines",
+        params: &[p("Lines", 1.0, 12.0, 6.0), p("Amplitude", 0.0, 0.5, 0.2), p("Frequency", 0.5, 8.0, 2.0), p("Speed", -6.0, 6.0, 2.0)],
+    },
+    ShaderDesc {
         id: "solid",
         name: "Solid Color",
         entry: "gen_solid",
@@ -233,6 +290,7 @@ pub fn multipass(entry: &str) -> &'static [&'static str] {
     match entry {
         "fx_blur" => &["fx_blur_h", "fx_blur_v"],
         "fx_glow" => &["fx_bright", "fx_blur_h", "fx_blur_v", "fx_glow_add"],
+        "fx_edge_glow" => &["fx_edges_only", "fx_blur_h", "fx_blur_v", "fx_glow_add"],
         _ => &[],
     }
 }

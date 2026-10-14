@@ -80,3 +80,87 @@ fn gen_color_bars(in: VOut) -> @location(0) vec4f {
 fn gen_solid(in: VOut) -> @location(0) vec4f {
     return vec4f(P(0u), P(1u), P(2u), 1.0);
 }
+
+@fragment
+fn gen_tunnel(in: VOut) -> @location(0) vec4f {
+    let p = centered(in.uv);
+    let r = max(length(p), 0.002);
+    let a = atan2(p.y, p.x);
+    let depth = P(0u) / r + u.time * P(1u);
+    let around = a / TAU * P(2u);
+    let cell = step(0.5, fract(depth)) + step(0.5, fract(around));
+    let checker = abs(cell - 1.0);
+    let fog = smoothstep(0.0, 0.5, r);
+    return vec4f(palette(depth * 0.05 + P(3u)) * (0.35 + 0.65 * checker) * fog, 1.0);
+}
+
+@fragment
+fn gen_starfield(in: VOut) -> @location(0) vec4f {
+    var col = vec3f(0.0);
+    let p = centered(in.uv);
+    for (var layer = 0; layer < 3; layer = layer + 1) {
+        let z = fract(u.time * P(1u) * 0.1 + f32(layer) / 3.0);
+        let scale = mix(P(0u) * 2.0, P(0u) * 0.25, z);
+        let q = p * scale;
+        let cell = floor(q);
+        let h = hash21(cell + f32(layer) * 17.0);
+        let pos = fract(q) - (vec2f(hash21(cell + 3.1), hash21(cell + 7.7)));
+        let d = length(pos);
+        let twinkle = 0.7 + 0.3 * sin(u.time * 6.0 + h * TAU);
+        let star = smoothstep(0.08 * (1.0 - z) + 0.01, 0.0, d) * step(1.0 - P(2u) * 0.5, h) * twinkle;
+        col = col + mix(vec3f(1.0), palette(h), 0.35) * star * smoothstep(0.0, 0.2, z) * smoothstep(1.0, 0.8, z);
+    }
+    return vec4f(clamp(col, vec3f(0.0), vec3f(1.0)), 1.0);
+}
+
+@fragment
+fn gen_spiral(in: VOut) -> @location(0) vec4f {
+    let p = centered(in.uv);
+    let r = max(length(p), 0.001);
+    let a = atan2(p.y, p.x);
+    let v = sin(a * P(0u) + log(r) * P(1u) - u.time * P(2u));
+    let band = smoothstep(-0.1, 0.1, v);
+    return vec4f(palette(a / TAU + r * 0.5 + u.time * 0.05) * (0.15 + 0.85 * band), 1.0);
+}
+
+@fragment
+fn gen_voronoi(in: VOut) -> @location(0) vec4f {
+    let p = centered(in.uv) * P(0u);
+    let cell = floor(p);
+    var best = 10.0;
+    var second = 10.0;
+    var best_id = 0.0;
+    for (var y = -1; y <= 1; y = y + 1) {
+        for (var x = -1; x <= 1; x = x + 1) {
+            let n = cell + vec2f(f32(x), f32(y));
+            let h = hash21(n);
+            let site = n + 0.5 + 0.4 * vec2f(sin(u.time * P(1u) + h * TAU), cos(u.time * P(1u) * 1.3 + h * 9.0));
+            let d = length(p - site);
+            if (d < best) {
+                second = best;
+                best = d;
+                best_id = h;
+            } else if (d < second) {
+                second = d;
+            }
+        }
+    }
+    let edge = smoothstep(0.0, 0.08, second - best);
+    let col = palette(best_id + P(2u)) * (0.3 + 0.7 * edge);
+    return vec4f(col, 1.0);
+}
+
+@fragment
+fn gen_lines(in: VOut) -> @location(0) vec4f {
+    var col = vec3f(0.0);
+    let n = u32(max(P(0u), 1.0));
+    for (var i = 0u; i < 12u; i = i + 1u) {
+        if (i >= n) { break; }
+        let f = f32(i) / f32(max(n, 2u) - 1u);
+        let y = 0.5 + P(1u) * sin(in.uv.x * P(2u) * TAU + u.time * P(3u) + f * TAU) * (0.3 + 0.7 * f);
+        let d = abs(in.uv.y - y);
+        let line = smoothstep(0.012, 0.0, d);
+        col = col + palette(f + u.time * 0.05) * line;
+    }
+    return vec4f(clamp(col, vec3f(0.0), vec3f(1.0)), 1.0);
+}
