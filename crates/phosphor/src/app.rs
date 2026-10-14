@@ -11,6 +11,7 @@ use phosphor_engine::{Composition, Engine, Mapping, ModInputs, wgpu};
 
 use crate::audio::AudioInput;
 use crate::bench::BenchConfig;
+use crate::clock::Clock;
 use crate::control::ControlHub;
 use crate::media::{self, MediaManager};
 use crate::panels::{self, Tab, Viewer};
@@ -36,6 +37,13 @@ pub struct OutputShared {
     pub edit_mapping: bool,
     pub mapping_changed: bool,
     pub selected_surface: Option<u64>,
+}
+
+/// A clip trigger, fired now or on the next beat when quantised.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Trigger {
+    Clip { layer: u64, slot: usize },
+    Column(usize),
 }
 
 /// Everything panels can read and edit. Kept separate from the dock layout so both can be
@@ -64,6 +72,10 @@ pub struct State {
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
+    pub clock: Clock,
+    /// Hold triggers until the next beat.
+    pub quantize: bool,
+    pub pending_triggers: Vec<Trigger>,
     /// This frame's audio/LFO signals, also shown in the Audio panel.
     pub mod_inputs: ModInputs,
 }
@@ -83,6 +95,28 @@ impl State {
         self.selected = comp.layers.last().map(|l| l.id);
         self.comp = comp;
         self.notice = None;
+    }
+
+    /// Fires a trigger now, or queues it for the next beat when quantise is on.
+    pub fn trigger(&mut self, t: Trigger, now: f64) {
+        if self.quantize {
+            if !self.pending_triggers.contains(&t) {
+                self.pending_triggers.push(t);
+            }
+        } else {
+            self.fire(t, now as f32);
+        }
+    }
+
+    fn fire(&mut self, t: Trigger, now: f32) {
+        match t {
+            Trigger::Clip { layer, slot } => {
+                if let Some(l) = self.comp.layer_mut(layer) {
+                    l.trigger_clip(slot, now);
+                }
+            }
+            Trigger::Column(col) => self.comp.trigger_column(col, now),
+        }
     }
 
     pub fn toggle_output(&mut self) {
@@ -124,6 +158,7 @@ impl PhosphorApp {
         let known: Vec<Tab> = stored(KEY_KNOWN_TABS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         ensure_new_tabs(&mut dock, &known);
 
+        let comp_bpm = comp.bpm;
         let render_state = cc.wgpu_render_state.clone();
         let engine = render_state.as_ref().map(|rs| Engine::new(rs.device.clone(), rs.queue.clone()));
         let now = cc.egui_ctx.input(|i| i.time);
@@ -151,6 +186,9 @@ impl PhosphorApp {
                 stream: Streamer::new(stream_settings),
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
+                clock: Clock::new(comp_bpm),
+                quantize: false,
+                pending_triggers: Vec::new(),
                 mod_inputs: ModInputs::default(),
             },
             dock,
@@ -174,14 +212,16 @@ impl PhosphorApp {
 
     /// Advances media, renders the frame, and keeps the preview + thumbnail textures registered.
     fn render(&mut self, now: f64) {
-        let State { comp, engine, render_state, texture, texture_generation, layer_textures, media, stats, output, audio, mod_inputs, stream, .. } =
+        let State { comp, engine, render_state, texture, texture_generation, layer_textures, media, stats, output, audio, mod_inputs, stream, clock, .. } =
             &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
         media.sync(comp, engine);
         media.update_video(comp, engine, now);
 
         let an = audio.update();
+        let beat_phase = clock.phase(now);
         *mod_inputs = ModInputs {
+            beat_phase,
             time: now as f32,
             audio_level: an.level,
             audio_low: an.low,
@@ -256,6 +296,15 @@ impl PhosphorApp {
         let Some(sel) = self.state.selected else { return };
         if sel == phosphor_engine::MASTER_ID {
             return;
+        }
+        let digit = ctx.input(|i| {
+            [egui::Key::Num1, egui::Key::Num2, egui::Key::Num3, egui::Key::Num4, egui::Key::Num5, egui::Key::Num6, egui::Key::Num7, egui::Key::Num8, egui::Key::Num9]
+                .iter()
+                .position(|k| i.key_pressed(*k))
+        });
+        if let Some(col) = digit {
+            let now = ctx.input(|i| i.time);
+            self.state.trigger(Trigger::Column(col), now);
         }
         let (delete, duplicate, toggle) = ctx.input(|i| {
             (
@@ -424,6 +473,10 @@ impl PhosphorApp {
     fn finish_bench(&mut self, ctx: &egui::Context, now: f64) {
         let Some(run) = &mut self.bench else { return };
         let started = *run.started.get_or_insert(now);
+        if let Some(col) = run.cfg.trigger_column.take_if(|_| now - started >= run.cfg.trigger_at) {
+            self.state.comp.trigger_column(col, now as f32);
+            return;
+        }
         if now - started < run.cfg.seconds {
             return;
         }
@@ -471,7 +524,18 @@ impl eframe::App for PhosphorApp {
         {
             let State { control, comp, .. } = &mut self.state;
             control.poll(comp);
-            control.apply(comp);
+            control.apply(comp, now as f32);
+        }
+        {
+            let st = &mut self.state;
+            st.comp.bpm = st.clock.bpm;
+            let beat = st.clock.tick(now);
+            if beat || !st.quantize {
+                for t in std::mem::take(&mut st.pending_triggers) {
+                    st.fire(t, now as f32);
+                }
+            }
+            st.comp.expire_transitions(now as f32);
         }
         self.render(now);
         self.top_bar(ui);
@@ -537,7 +601,7 @@ fn default_layout() -> DockState<Tab> {
     let surface = dock.main_surface_mut();
     let [left, right] = surface.split_right(NodeIndex::root(), 0.64, vec![Tab::Layers]);
     surface.split_below(right, 0.5, vec![Tab::Inspector]);
-    surface.split_below(left, 0.68, vec![Tab::Media, Tab::Library, Tab::Presets, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
+    surface.split_below(left, 0.68, vec![Tab::Clips, Tab::Media, Tab::Library, Tab::Presets, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
     dock
 }
 

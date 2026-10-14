@@ -82,13 +82,13 @@ impl ControlHub {
 
     /// Writes this frame's values into their targets, then forgets them so the UI stays in charge
     /// until the controller moves again.
-    pub fn apply(&mut self, comp: &mut Composition) {
+    pub fn apply(&mut self, comp: &mut Composition, now: f32) {
         if self.fresh.is_empty() {
             return;
         }
         for map in comp.control_maps.clone() {
             let Some(v) = self.fresh.get(&map.source).copied() else { continue };
-            set_target(comp, &map.target, v);
+            set_target(comp, &map.target, v, now);
         }
         self.fresh.clear();
     }
@@ -102,8 +102,18 @@ pub fn find_effect_mut(comp: &mut Composition, id: u64) -> Option<&mut EffectSta
     comp.master_effects.iter_mut().chain(comp.layers.iter_mut().flat_map(|l| l.effects.iter_mut())).find(|e| e.id == id)
 }
 
-fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32) {
+fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, now: f32) {
     match target {
+        ControlTarget::TriggerClip { layer, slot } => {
+            if v > 0.5 && let Some(l) = comp.layer_mut(*layer) {
+                l.trigger_clip(*slot, now);
+            }
+        }
+        ControlTarget::TriggerColumn(col) => {
+            if v > 0.5 {
+                comp.trigger_column(*col, now);
+            }
+        }
         ControlTarget::MasterFade => comp.master_fade = v.clamp(0.0, 1.0),
         ControlTarget::LayerOpacity(id) => {
             if let Some(l) = comp.layer_mut(*id) {
@@ -154,6 +164,9 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32) {
 /// Every bindable target in the composition, with a readable name.
 pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     let mut out = vec![(ControlTarget::MasterFade, "Master fade".to_string())];
+    for col in 0..comp.clip_columns {
+        out.push((ControlTarget::TriggerColumn(col), format!("Column {} (trigger)", col + 1)));
+    }
     let effects = |prefix: &str, effects: &[EffectState], out: &mut Vec<(ControlTarget, String)>| {
         for fx in effects {
             let Some(desc) = shaders::effect(&fx.effect) else { continue };
@@ -168,6 +181,11 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     for l in &comp.layers {
         out.push((ControlTarget::LayerOpacity(l.id), format!("{} · opacity", l.name)));
         out.push((ControlTarget::LayerEnabled(l.id), format!("{} · on/off", l.name)));
+        for (slot, clip) in l.clips.iter().enumerate() {
+            if !clip.is_empty() {
+                out.push((ControlTarget::TriggerClip { layer: l.id, slot }, format!("{} · clip {} ({})", l.name, slot + 1, clip.name)));
+            }
+        }
         if let phosphor_engine::SourceSpec::Generator(g) = &l.source
             && let Some(desc) = shaders::generator(g)
         {

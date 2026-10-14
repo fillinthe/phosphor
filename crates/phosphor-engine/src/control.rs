@@ -11,6 +11,8 @@ pub struct ModInputs {
     pub audio_low: f32,
     pub audio_mid: f32,
     pub audio_high: f32,
+    /// 0..1 within the current beat.
+    pub beat_phase: f32,
 }
 
 pub fn source_value(m: &Modulation, inputs: &ModInputs) -> f32 {
@@ -24,6 +26,7 @@ pub fn source_value(m: &Modulation, inputs: &ModInputs) -> f32 {
         ModSource::LfoTriangle => 1.0 - (phase * 2.0 - 1.0).abs(),
         ModSource::LfoSaw => phase,
         ModSource::LfoSquare => if phase < 0.5 { 1.0 } else { 0.0 },
+        ModSource::Beat => inputs.beat_phase,
     }
 }
 

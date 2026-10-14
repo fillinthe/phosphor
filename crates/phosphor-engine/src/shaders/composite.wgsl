@@ -50,6 +50,40 @@ fn fs_to_rgb(in: VOut) -> @location(0) vec4f {
     return sample_source(in.uv);
 }
 
+fn fitted(uv: vec2f, xf: vec4f, which: u32) -> vec4f {
+    let st = uv * xf.xy + xf.zw;
+    var c: vec4f;
+    if (which == 0u) {
+        c = textureSampleLevel(tex0, samp, st, 0.0);
+    } else {
+        c = textureSampleLevel(tex1, samp, st, 0.0);
+    }
+    if (any(st < vec2f(0.0)) || any(st > vec2f(1.0))) {
+        c = vec4f(0.0);
+    }
+    return c;
+}
+
+// Clip transition: tex0 = incoming (fit in uv_xform), tex1 = outgoing (fit in p[0]),
+// opacity = progress, mode = kind (0 crossfade, 1 dip to black, 2 wipe).
+@fragment
+fn fs_crossfade(in: VOut) -> @location(0) vec4f {
+    let a = fitted(in.uv, u.uv_xform, 0u);
+    let b = fitted(in.uv, u.p[0], 1u);
+    let t = u.opacity;
+    if (u.mode == 1u) {
+        if (t < 0.5) {
+            return b * (1.0 - t * 2.0);
+        }
+        return a * (t * 2.0 - 1.0);
+    }
+    if (u.mode == 2u) {
+        let edge = smoothstep(t - 0.015, t + 0.015, in.uv.x);
+        return mix(a, b, edge);
+    }
+    return mix(b, a, t);
+}
+
 // Dry/wet: tex0 = effect output, tex1 = effect input, opacity = mix.
 @fragment
 fn fs_mix(in: VOut) -> @location(0) vec4f {

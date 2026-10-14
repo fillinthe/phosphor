@@ -1,0 +1,83 @@
+{
+ "width": 1920,
+ "height": 1080,
+ "next_id": 50,
+ "clip_columns": 4,
+ "layers": [
+  {
+   "id": 1,
+   "name": "Deck",
+   "source": {
+    "Generator": "plasma"
+   },
+   "generator_values": [
+    1.0,
+    6.0,
+    0.0
+   ],
+   "transition_secs": 1.0,
+   "transition_kind": "Crossfade",
+   "clips": [
+    {
+     "id": 11,
+     "name": "Plasma",
+     "source": {
+      "Generator": "plasma"
+     },
+     "generator_values": [
+      1.0,
+      6.0,
+      0.0
+     ]
+    },
+    {
+     "id": 12,
+     "name": "Clip A",
+     "source": {
+      "Movie": {
+       "name": "a.mp4",
+       "path": "/Volumes/_FOOTAGE/_ORIG/3244070447511548074.mp4"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Top",
+   "source": {
+    "Generator": "rings"
+   },
+   "generator_values": [
+    10.0,
+    1.0,
+    0.5
+   ],
+   "blend": "Screen",
+   "opacity": 0.5,
+   "transition_secs": 1.0,
+   "transition_kind": "Wipe",
+   "clips": [
+    {
+     "id": 21,
+     "name": "Rings",
+     "source": {
+      "Generator": "rings"
+     },
+     "generator_values": [
+      10.0,
+      1.0,
+      0.5
+     ]
+    },
+    {
+     "id": 22,
+     "name": "Bars",
+     "source": {
+      "Generator": "color_bars"
+     }
+    }
+   ]
+  }
+ ]
+}

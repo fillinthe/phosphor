@@ -20,6 +20,11 @@ enum Media {
 #[derive(Default)]
 struct LayerResources {
     generator: Option<Target>,
+    /// Outgoing source during a transition.
+    generator_out: Option<Target>,
+    media_out: Option<Media>,
+    /// RGB copies of incoming/outgoing (when YUV) and the blended result.
+    trans: [Option<Target>; 3],
     fx: [Option<Target>; 3],
     /// Reduced-size target for Rutt-Etra; its scale sets the apparent line width.
     rutt: Option<Target>,
@@ -108,12 +113,22 @@ impl Engine {
     /// Uploads an RGBA8 frame (tightly packed) for a layer: a still image or one video frame.
     /// The texture is reused while the size stays the same.
     pub fn upload_rgba(&mut self, layer: u64, width: u32, height: u32, rgba: &[u8]) {
+        self.upload_rgba_slot(layer, false, width, height, rgba);
+    }
+
+    /// Same as `upload_rgba`, for the outgoing source of a transition.
+    pub fn upload_rgba_outgoing(&mut self, layer: u64, width: u32, height: u32, rgba: &[u8]) {
+        self.upload_rgba_slot(layer, true, width, height, rgba);
+    }
+
+    fn upload_rgba_slot(&mut self, layer: u64, outgoing: bool, width: u32, height: u32, rgba: &[u8]) {
         let res = self.layers.entry(layer).or_default();
-        let reuse = matches!(&res.media, Some(Media::Rgba(t)) if t.width == width && t.height == height);
+        let slot = if outgoing { &mut res.media_out } else { &mut res.media };
+        let reuse = matches!(slot, Some(Media::Rgba(t)) if t.width == width && t.height == height);
         if !reuse {
-            res.media = Some(Media::Rgba(Target::new(&self.gpu.device, "media", width, height)));
+            *slot = Some(Media::Rgba(Target::new(&self.gpu.device, "media", width, height)));
         }
-        let Some(Media::Rgba(target)) = &res.media else { return };
+        let Some(Media::Rgba(target)) = slot else { return };
         self.gpu.queue.write_texture(
             target.texture.as_image_copy(),
             rgba,
@@ -124,27 +139,30 @@ impl Engine {
 
     /// Uploads one NV12 (420 bi-planar, video range) video frame for a layer.
     #[allow(clippy::too_many_arguments)]
-    pub fn upload_nv12(
-        &mut self,
-        layer: u64,
-        width: u32,
-        height: u32,
-        luma: &[u8],
-        luma_stride: u32,
-        chroma: &[u8],
-        chroma_stride: u32,
-    ) {
+    pub fn upload_nv12(&mut self, layer: u64, width: u32, height: u32, luma: &[u8], luma_stride: u32, chroma: &[u8], chroma_stride: u32) {
+        self.upload_nv12_slot(layer, false, width, height, luma, luma_stride, chroma, chroma_stride);
+    }
+
+    /// Same as `upload_nv12`, for the outgoing source of a transition.
+    #[allow(clippy::too_many_arguments)]
+    pub fn upload_nv12_outgoing(&mut self, layer: u64, width: u32, height: u32, luma: &[u8], luma_stride: u32, chroma: &[u8], chroma_stride: u32) {
+        self.upload_nv12_slot(layer, true, width, height, luma, luma_stride, chroma, chroma_stride);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn upload_nv12_slot(&mut self, layer: u64, outgoing: bool, width: u32, height: u32, luma: &[u8], luma_stride: u32, chroma: &[u8], chroma_stride: u32) {
         let device = &self.gpu.device;
         let res = self.layers.entry(layer).or_default();
+        let slot = if outgoing { &mut res.media_out } else { &mut res.media };
         let (cw, ch) = (width.div_ceil(2), height.div_ceil(2));
-        let reuse = matches!(&res.media, Some(Media::Nv12 { luma, .. }) if luma.width == width && luma.height == height);
+        let reuse = matches!(slot, Some(Media::Nv12 { luma, .. }) if luma.width == width && luma.height == height);
         if !reuse {
-            res.media = Some(Media::Nv12 {
+            *slot = Some(Media::Nv12 {
                 luma: Target::with_format(device, "luma", width, height, wgpu::TextureFormat::R8Unorm),
                 chroma: Target::with_format(device, "chroma", cw, ch, wgpu::TextureFormat::Rg8Unorm),
             });
         }
-        let Some(Media::Nv12 { luma: lt, chroma: ct }) = &res.media else { return };
+        let Some(Media::Nv12 { luma: lt, chroma: ct }) = slot else { return };
         let write = |t: &Target, data: &[u8], stride: u32| {
             self.gpu.queue.write_texture(
                 t.texture.as_image_copy(),
@@ -157,9 +175,16 @@ impl Engine {
         write(ct, chroma, chroma_stride);
     }
 
+    /// Keeps the current media as the outgoing picture of a transition.
+    pub fn begin_transition(&mut self, layer: u64) {
+        let res = self.layers.entry(layer).or_default();
+        res.media_out = res.media.take();
+    }
+
     pub fn clear_media(&mut self, layer: u64) {
         if let Some(res) = self.layers.get_mut(&layer) {
             res.media = None;
+            res.media_out = None;
         }
     }
 
@@ -193,7 +218,24 @@ impl Engine {
             if !layer.enabled {
                 continue;
             }
-            let Some(frame) = self.resolve_source(layer, w, h, time, mods, &mut passes) else { continue };
+            let Some(mut frame) =
+                self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, w, h, time, mods, &mut passes)
+            else {
+                continue;
+            };
+            match &layer.transition {
+                Some(t) if t.progress(time) < 1.0 => {
+                    if let Some(out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, &mut passes) {
+                        frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), &mut passes);
+                    }
+                }
+                _ => {
+                    if let Some(res) = self.layers.get_mut(&layer.id) {
+                        res.generator_out = None;
+                        res.media_out = None;
+                    }
+                }
+            }
             let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &mut passes) };
             self.push_thumbnail(layer, &frame, (w, h), thumb_h, &mut passes);
             let muted = any_solo && !layer.solo;
@@ -309,9 +351,16 @@ impl Engine {
         self.layers.get(&layer)?.thumbnail.as_ref()
     }
 
-    fn resolve_source(
+    /// Resolves a source spec into a frame, rendering generators into the layer's slot
+    /// (`outgoing` selects the transition slot).
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_spec(
         &mut self,
-        layer: &LayerState,
+        layer_id: u64,
+        spec: &SourceSpec,
+        values: &[f32],
+        value_mods: &[crate::model::ParamMod],
+        outgoing: bool,
         w: u32,
         h: u32,
         time: f32,
@@ -319,14 +368,15 @@ impl Engine {
         passes: &mut Vec<Pass>,
     ) -> Option<Frame> {
         let device = &self.gpu.device;
-        let res = self.layers.entry(layer.id).or_default();
-        match &layer.source {
+        let res = self.layers.entry(layer_id).or_default();
+        match spec {
             SourceSpec::None => None,
             SourceSpec::Generator(id) => {
                 let desc = shaders::generator(id)?;
-                Target::ensure(&mut res.generator, device, "generator", w, h);
-                let target = res.generator.as_ref().unwrap();
-                let mut u = Uniforms::with_params(&resolve_params(desc, &layer.generator_values, &layer.generator_mods, mods));
+                let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
+                Target::ensure(slot, device, "generator", w, h);
+                let target = slot.as_ref().unwrap();
+                let mut u = Uniforms::with_params(&resolve_params(desc, values, value_mods, mods));
                 u.resolution = [w as f32, h as f32];
                 u.time = time;
                 passes.push(Pass {
@@ -339,16 +389,67 @@ impl Engine {
                 });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
-            SourceSpec::Image { .. } | SourceSpec::Movie { .. } => match res.media.as_ref()? {
-                Media::Rgba(t) => Some(Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height }),
-                Media::Nv12 { luma, chroma } => Some(Frame::Yuv {
-                    luma: luma.view.clone(),
-                    chroma: chroma.view.clone(),
-                    w: luma.width,
-                    h: luma.height,
-                }),
-            },
+            SourceSpec::Image { .. } | SourceSpec::Movie { .. } => {
+                let slot = if outgoing { &res.media_out } else { &res.media };
+                match slot.as_ref()? {
+                    Media::Rgba(t) => Some(Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height }),
+                    Media::Nv12 { luma, chroma } => Some(Frame::Yuv {
+                        luma: luma.view.clone(),
+                        chroma: chroma.view.clone(),
+                        w: luma.width,
+                        h: luma.height,
+                    }),
+                }
+            }
         }
+    }
+
+    /// Blends the outgoing source into the incoming one at the canvas size.
+    #[allow(clippy::too_many_arguments)]
+    fn crossfade(
+        &mut self,
+        layer_id: u64,
+        incoming: Frame,
+        outgoing: Frame,
+        t: &crate::model::Transition,
+        time: f32,
+        fit: FitMode,
+        canvas: (u32, u32),
+        passes: &mut Vec<Pass>,
+    ) -> Frame {
+        let (w, h) = canvas;
+        let device = &self.gpu.device;
+        let res = self.layers.entry(layer_id).or_default();
+        let mut base = Uniforms::with_params(&[]);
+        base.time = time;
+        // YUV sources first become RGB at their own size.
+        let to_rgb = |frame: Frame, slot: &mut Option<Target>, passes: &mut Vec<Pass>| -> (wgpu::TextureView, (u32, u32)) {
+            match frame {
+                Frame::Rgb { view, w, h } => (view, (w, h)),
+                Frame::Yuv { luma, chroma, w, h } => {
+                    Target::ensure(slot, device, "transition", w, h);
+                    let view = slot.as_ref().unwrap().view.clone();
+                    let mut u = base;
+                    u.resolution = [w as f32, h as f32];
+                    u.yuv = 1;
+                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0: luma, tex1: None, tex2: Some(chroma), uniforms: u });
+                    (view, (w, h))
+                }
+            }
+        };
+        let [slot_in, slot_out, slot_result] = &mut res.trans;
+        let (in_view, in_size) = to_rgb(incoming, slot_in, passes);
+        let (out_view, out_size) = to_rgb(outgoing, slot_out, passes);
+        Target::ensure(slot_result, device, "transition", w, h);
+        let result = slot_result.as_ref().unwrap().view.clone();
+        let mut u = base;
+        u.resolution = [w as f32, h as f32];
+        u.opacity = t.progress(time);
+        u.mode = t.kind.shader_index();
+        u.uv_xform = fit_transform(in_size, canvas, fit);
+        u.p[0] = fit_transform(out_size, canvas, fit);
+        passes.push(Pass { entry: "fs_crossfade", target: result.clone(), tex0: in_view, tex1: Some(out_view), tex2: None, uniforms: u });
+        Frame::Rgb { view: result, w, h }
     }
 
     /// Runs the layer's enabled effects at the source's native resolution (ping-pong).
