@@ -134,15 +134,26 @@ fn long_menu_and_color_convert_and_validate() {
 
 #[test]
 fn unsupported_features_are_reported_not_errors() {
-    let multipass = GENERATOR.replace("\"INPUTS\"", "\"PASSES\": [{\"TARGET\": \"a\"}, {}], \"INPUTS\"");
+    // Multi-pass and persistent buffers are supported: passes and buffers come through.
+    let multipass = GENERATOR.replace("\"INPUTS\"", "\"PASSES\": [{\"TARGET\": \"a\", \"WIDTH\": \"$WIDTH/2\"}, {}], \"INPUTS\"");
     let s = import("mp", &multipass, None).unwrap();
     assert_eq!(s.passes, 2);
-    assert!(s.unsupported.as_deref().unwrap_or("").starts_with("multi-pass"));
+    assert!(s.unsupported.is_none(), "{:?}", s.unsupported);
+    assert_eq!(s.buffers, vec!["a".to_string()]);
+    assert_eq!(s.pass_plan[0].width.as_deref(), Some("$WIDTH/2"));
+    assert!(s.pass_plan[1].target.is_none());
     assert_eq!(s.inputs.len(), 2);
 
     let persistent = GENERATOR.replace("\"INPUTS\"", "\"PASSES\": [{\"TARGET\": \"a\", \"PERSISTENT\": true}], \"INPUTS\"");
     let s = import("fb", &persistent, None).unwrap();
-    assert!(s.unsupported.as_deref().unwrap_or("").contains("persistent"));
+    assert!(s.unsupported.is_none(), "{:?}", s.unsupported);
+    assert!(s.pass_plan[0].persistent);
+
+    // More buffers than bindings is still reported.
+    let many_bufs: String = (0..=crate::MAX_BUFFERS).map(|i| format!("{{\"TARGET\": \"b{i}\"}},")).collect();
+    let too_many_bufs = GENERATOR.replace("\"INPUTS\"", &format!("\"PASSES\": [{many_bufs} {{}}], \"INPUTS\""));
+    let s = import("bufs", &too_many_bufs, None).unwrap();
+    assert!(s.unsupported.as_deref().unwrap_or("").contains("buffers"), "{:?}", s.unsupported);
 
     // One more colour (4 floats each) than fits.
     let many: String = (0..crate::MAX_PARAMS / 4 + 1).map(|i| format!("{{ \"NAME\": \"c{i}\", \"TYPE\": \"color\" }},")).collect();
