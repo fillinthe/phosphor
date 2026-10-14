@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/phosphor-engine", "crates/phosphor"]
+members = ["crates/phosphor-engine", "crates/phosphor", "crates/phosphor-isf"]
 
 [profile.release]
 lto = "thin"

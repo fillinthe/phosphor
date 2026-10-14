@@ -56,7 +56,7 @@ impl ControlHub {
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.midi_ports = self.backend.open_midi(self.tx.clone());
-            self.local_ip = native::local_ip();
+            self.local_ip = local_ip();
             self.osc_status = match self.backend.open_osc(self.osc_port, self.tx.clone(), self.local_ip.as_deref()) {
                 Ok(()) => format!(
                     "OSC listening on udp/{} at {}",
@@ -202,6 +202,17 @@ pub fn target_label(comp: &Composition, target: &ControlTarget) -> String {
     all_targets(comp).into_iter().find(|(t, _)| t == target).map(|(_, n)| n).unwrap_or_else(|| "(removed)".into())
 }
 
+pub fn local_ip() -> Option<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::local_ip()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        None
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::net::UdpSocket;
@@ -314,7 +325,7 @@ mod native {
         }
     }
 
-    /// The LAN address other devices should send OSC to.
+    /// The LAN address other devices should talk to.
     pub fn local_ip() -> Option<String> {
         let s = UdpSocket::bind("0.0.0.0:0").ok()?;
         s.connect("8.8.8.8:80").ok()?;

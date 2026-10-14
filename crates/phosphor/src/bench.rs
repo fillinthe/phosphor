@@ -24,6 +24,8 @@ pub struct BenchConfig {
     /// Trigger clip column N (1-based) at `trigger_at` seconds, to exercise transitions.
     pub trigger_column: Option<usize>,
     pub trigger_at: f64,
+    /// Host a network session and analyse viewer audio.
+    pub net: bool,
 }
 
 impl BenchConfig {
@@ -50,6 +52,11 @@ impl BenchConfig {
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
                 ("--audio", _) => {
                     cfg.audio = true;
+                    i += 1;
+                    continue;
+                }
+                ("--net", _) => {
+                    cfg.net = true;
                     i += 1;
                     continue;
                 }

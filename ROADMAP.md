@@ -50,7 +50,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Engine: multi-pass effects and per-effect history (feedback) targets
 - [x] Shader validation test (no GPU required)
 - [x] egui app: preview, layer stack, effect chains, dockable panels (egui_dock)
-- [x] Output window (drag to projector, F = fullscreen)
+- [x] Output window: borderless (no title/menu bar), drag by its surface to the projector, F or double-click = fullscreen, cursor hidden
 - [x] Stats (fps, engine ms, process CPU, memory) + `--bench` mode with PNG snapshot
 - [x] Images (drag and drop / Open… dialog), project Save/Open (.phosphor JSON), autosave
 - [ ] **CPU: ~45–55% of one core at 120 Hz, nearly all UI redraw (engine is ~0.7 ms/frame).**
@@ -126,15 +126,18 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Non-blocking GPU readback ring → FFmpeg pipe → VideoToolbox H.264 (never stalls rendering)
 - [x] Stream out directly: YouTube Live, Twitch, custom RTMP, SRT — pick size/fps/bitrate, Start
 - [x] Record to disk: .mp4 (H.264) or .mov (ProRes 422 HQ, VideoToolbox)
-- [ ] Audio in the stream (program audio / mic via AAC); HEVC option; RTMPS; WHIP (WebRTC)
+- [x] Audio in the stream: pick any AVFoundation input (mic, interface, BlackHole loopback) → AAC 160k
+- [ ] HEVC option; RTMPS; WHIP (WebRTC)
 - [ ] Multiple simultaneous destinations; connection health graph; auto-reconnect
 - [ ] OBS-friendly: Syphon (macOS) and NDI outputs, plus a virtual camera (CoreMediaIO extension)
 
 ### Phase 5c: Network players & remote audio (play *through* other machines)
-- [ ] **Browser player**: anyone opens a link and sees the output live (WebRTC via WHEP;
-      sub-second latency; works on laptops, phones, a Raspberry Pi running Chromium)
-- [ ] **Audio back-channel**: the same WebRTC session carries the viewer's mic/line-in back to
-      Phosphor, so you can react to *their* music (FFT bands become data sources, see Phase 3)
+- [x] **Session** (v1, LAN): built-in server; any browser (laptop, phone, Pi) opens the link and sees the
+      output live as MJPEG (≤1280 px, 10–30 fps); Start/Stop + copy link in the Session panel
+- [x] **Audio back-channel**: the player page's "Send my audio" streams the viewer's mic over a WebSocket
+      into Phosphor's audio analysis ("Session viewers" source), so visuals react to *their* music
+- [ ] Upgrade transport to WebRTC (WHEP) for sub-second latency and HTTPS/TLS so mic access works
+      without the Chrome insecure-origin flag
 - [ ] **Phosphor Player** for Raspberry Pi / small PCs: a headless build that either plays the
       stream or renders the project itself from a synced clock (tiny bandwidth, perfect sync)
 - [ ] Session page: QR code / short link, viewer list, per-viewer audio level meters

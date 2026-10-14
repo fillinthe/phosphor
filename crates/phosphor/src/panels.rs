@@ -22,11 +22,12 @@ pub enum Tab {
     Control,
     Mapping,
     Stream,
+    Network,
     Output,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 12] = [
+    pub const ALL: [Tab; 13] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -38,6 +39,7 @@ impl Tab {
         Tab::Control,
         Tab::Mapping,
         Tab::Stream,
+        Tab::Network,
         Tab::Output,
     ];
 
@@ -54,6 +56,7 @@ impl Tab {
             Tab::Control => "MIDI / OSC",
             Tab::Mapping => "Mapping",
             Tab::Stream => "Stream & Record",
+            Tab::Network => "Session",
             Tab::Output => "Output & Stats",
         }
     }
@@ -89,6 +92,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Control => control(ui, self.st),
             Tab::Mapping => mapping(ui, self.st),
             Tab::Stream => stream(ui, self.st),
+            Tab::Network => network(ui, self.st),
             Tab::Output => output(ui, self.st),
         }
     }
@@ -1156,6 +1160,9 @@ fn audio(ui: &mut egui::Ui, st: &mut State) {
             {
                 *notice = Some(e);
             }
+            if ui.selectable_label(audio.is_network(), "Session viewers (network)").on_hover_text("Audio sent back by people watching your session link").clicked() {
+                audio.use_network();
+            }
             for d in devices {
                 if ui.selectable_label(audio.current() == Some(d.as_str()), &d).clicked()
                     && let Err(e) = audio.open(Some(&d))
@@ -1529,6 +1536,58 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
     }
     ui.add_space(6.0);
     ui.weak("Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio.");
+}
+
+fn network(ui: &mut egui::Ui, st: &mut State) {
+    let State { net, notice, audio, .. } = st;
+    ui.label(RichText::new("Session").strong());
+    ui.weak("Anyone on your network opens the link and sees the output live; they can send their music back.");
+    ui.horizontal(|ui| {
+        ui.add_enabled_ui(!net.running(), |ui| {
+            ui.add(egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
+            ComboBox::from_id_salt("net_fps").width(60.0).selected_text(format!("{} fps", net.fps)).show_ui(ui, |ui| {
+                for f in [10, 15, 20, 30] {
+                    ui.selectable_value(&mut net.fps, f, format!("{f} fps"));
+                }
+            });
+        });
+        if net.running() {
+            if ui.button(label(icon::STOP, "Stop session")).clicked() {
+                net.stop();
+            }
+        } else if ui.button(label(icon::BROADCAST, "Start session")).clicked() {
+            match net.start() {
+                Ok(()) => *notice = None,
+                Err(e) => *notice = Some(e),
+            }
+        }
+    });
+    if net.running() {
+        let url = net.url();
+        ui.horizontal(|ui| {
+            ui.monospace(&url);
+            if ui.button(icon::COPY).on_hover_text("Copy link").clicked() {
+                ui.ctx().copy_text(url.clone());
+            }
+        });
+        ui.monospace(format!(
+            "viewers {} · sending audio {}",
+            net.viewers.load(std::sync::atomic::Ordering::Relaxed),
+            net.audio_peers.load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        if !audio.is_network() {
+            if ui.button(label(icon::MICROPHONE, "React to viewers' audio")).clicked() {
+                audio.use_network();
+            }
+        } else {
+            ui.colored_label(ACCENT, "Audio analysis is listening to session viewers");
+        }
+        ui.add_space(4.0);
+        ui.weak("Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
+    }
+    if let Some(msg) = notice {
+        ui.colored_label(WARN, msg.as_str());
+    }
 }
 
 const RESOLUTIONS: &[(u32, u32, &str)] = &[
