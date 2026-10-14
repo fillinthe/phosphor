@@ -40,7 +40,7 @@ app that's much smaller and lighter on the CPU.
    - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
-   mappable themselves; Mappings editor with Listen + ranges. Next: show it on the phone/iPad remote, TouchOSC `.tosc` export
+   mappable themselves; Mappings editor with Listen + ranges. on the phone/iPad remote ✔. Next: TouchOSC `.tosc` export, multiple surface pages
 4. **Mapping upgrades**: mesh warp (grid of bezier points), masks, per-output colour/brightness
 5. **OBS / pro I/O**: Syphon and NDI out, virtual camera, NDI in
 6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
