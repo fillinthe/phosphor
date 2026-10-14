@@ -8,3 +8,4 @@
 /media/test/*.mkv
 /media/test/*.avi
 /media/test/*.gif
+/vendor/*.framework

@@ -2636,6 +2636,8 @@ fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
             st.identify_outputs(now);
         }
     });
+    #[cfg(target_os = "macos")]
+    syphon_row(ui, st);
     let canvas = (st.comp.width, st.comp.height);
     let mut remove = None;
     let count = st.comp.outputs.len();
@@ -2661,6 +2663,9 @@ fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         ui.label(RichText::new(format!("{}", i + 1)).strong().color(ACCENT));
                         ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
                         ui.toggle_value(&mut o.enabled, RichText::new("ON").small()).on_hover_text("Render this output");
+                        #[cfg(target_os = "macos")]
+                        ui.toggle_value(&mut o.syphon, RichText::new("SYPHON").small())
+                            .on_hover_text("Also publish this output (after mapping) as a Syphon source for MadMapper, Resolume, OBS…");
                         if o.mapping.active() {
                             ui.label(RichText::new(format!("{} mapped", icon::PROJECTOR_SCREEN)).small().color(ACCENT));
                         }
@@ -2885,6 +2890,8 @@ fn devices(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.separator();
         ui.label(RichText::new(format!("{} Outputs", icon::PROJECTOR_SCREEN)).strong());
+        #[cfg(target_os = "macos")]
+        syphon_row(ui, st);
         let windows: Vec<(u64, bool)> = st.output.lock().unwrap().iter().map(|(id, o)| (*id, o.open)).collect();
         for o in &st.comp.outputs {
             let open = windows.iter().any(|(id, on)| *id == o.id && *on);
@@ -2892,6 +2899,27 @@ fn devices(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(&o.name);
                 ui.weak(if open { "window open" } else { "closed" });
             });
+        }
+    });
+}
+
+/// Composition → Syphon toggle with status.
+#[cfg(target_os = "macos")]
+pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        if !st.syphon.available {
+            ui.weak("Syphon unavailable (framework missing)");
+            return;
+        }
+        ui.toggle_value(&mut st.comp.syphon, label(icon::SHARE_NETWORK, "Syphon"))
+            .on_hover_text("Publish the composition as \"Phosphor\" — pick it in MadMapper, Resolume, OBS (Syphon Client), VDMX…");
+        let clients = st.syphon.clients();
+        if st.syphon.server_count() == 0 {
+            ui.weak("off");
+        } else if clients > 0 {
+            ui.label(RichText::new(format!("{} {clients} app(s) receiving", icon::CHECK_CIRCLE)).small().color(ACCENT));
+        } else {
+            ui.weak(format!("{} source(s) published, no app receiving yet", st.syphon.server_count()));
         }
     });
 }

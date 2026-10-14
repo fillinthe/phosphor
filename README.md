@@ -1,5 +1,7 @@
 # Phosphor
 
+Website: https://phosphorfx.com
+
 A real-time VJ / live-visuals app: VDMX-style modular interface, MadMapper-style mapping (planned),
 one engine for macOS, iPadOS/iOS and the browser. Rust + wgpu (Metal natively, WebGPU on the web) + egui.
 
