@@ -481,11 +481,13 @@ pub struct OutputConfig {
     pub width: u32,
     pub height: u32,
     pub mapping: Mapping,
+    /// Also publish this output (after mapping) as its own Syphon source.
+    pub syphon: bool,
 }
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default() }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false }
     }
 }
 
@@ -533,6 +535,8 @@ pub struct Composition {
     pub clip_columns: usize,
     pub master_fade_mod: Option<Modulation>,
     pub launch: LaunchSettings,
+    /// Publish the composition as a Syphon source named "Phosphor" (macOS).
+    pub syphon: bool,
     /// Names of your media collections.
     pub media_collections: Vec<String>,
     pub bpm: f32,
@@ -540,7 +544,7 @@ pub struct Composition {
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), media_collections: Vec::new() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, media_collections: Vec::new() }
     }
 }
 

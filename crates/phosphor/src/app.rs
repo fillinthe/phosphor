@@ -129,6 +129,8 @@ pub struct State {
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
     pub media_view: panels::MediaView,
+    #[cfg(target_os = "macos")]
+    pub syphon: crate::syphon::Syphon,
     pub clock: Clock,
     pub pending_triggers: Vec<Trigger>,
     /// Which bank of clip columns the grid and the number keys address.
@@ -372,6 +374,8 @@ impl PhosphorApp {
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 media_view: Default::default(),
+                #[cfg(target_os = "macos")]
+                syphon: Default::default(),
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
                 clip_page: 0,
@@ -449,6 +453,8 @@ impl PhosphorApp {
             monitor_keys,
             monitor_textures,
             output_textures,
+            #[cfg(target_os = "macos")]
+            syphon,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -498,6 +504,21 @@ impl PhosphorApp {
         let t0 = web_time::Instant::now();
         let info = engine.render(comp, now as f32, mod_inputs);
         let render_secs = t0.elapsed().as_secs_f64();
+        #[cfg(target_os = "macos")]
+        {
+            let mut frames: Vec<(u64, String, &wgpu::Texture)> = Vec::new();
+            if comp.syphon
+                && let Some(out) = engine.output()
+            {
+                frames.push((crate::syphon::PROGRAM, String::new(), &out.texture));
+            }
+            for o in comp.outputs.iter().filter(|o| o.syphon && o.enabled) {
+                if let Some(t) = engine.output_texture(o.id) {
+                    frames.push((o.id, o.name.clone(), &t.texture));
+                }
+            }
+            syphon.publish(engine.device(), &frames);
+        }
 
         let stream_due = stream.frame_due(now);
         let net_due = net.frame_due(now);

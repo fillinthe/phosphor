@@ -2425,6 +2425,9 @@ dependencies = [
  "log",
  "mdns-sd",
  "midir",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "objc2-metal 0.3.2",
  "phosphor-engine",
  "phosphor-isf",
  "pollster 0.4.0",
@@ -2439,6 +2442,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
+ "wgpu",
 ]
 
 [[package]]

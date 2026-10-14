@@ -13,6 +13,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp target/release/phosphor "$APP/Contents/MacOS/Phosphor"
 
+# Syphon output (BSD). Built once by scripts/build-syphon.sh; the app runs without it.
+[[ -d vendor/Syphon.framework ]] || scripts/build-syphon.sh
+mkdir -p "$APP/Contents/Frameworks"
+cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
+cp vendor/Syphon-LICENSE.txt "$APP/Contents/Resources/"
+
 # Icon: every size macOS asks for, from the 1024 px master.
 ICONSET=$(mktemp -d)/Phosphor.iconset
 mkdir -p "$ICONSET"

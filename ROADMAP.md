@@ -59,7 +59,10 @@ app that's much smaller and lighter on the CPU.
     installed — opens straight into the show, outputs on their screens, controllers live
 9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with
     disconnect / block / disable
-9d. **Syphon out** (MadMapper, Resolume, OBS pick it up) — then NDI
+9d. ~~Syphon out~~ done — next NDI (network video to other machines/MadMapper on another Mac)
+9e. **Online media library on phosphorfx.com**: browse/search a hosted catalogue of clips, loops, shaders,
+    ISF and presets from inside the Media panel, sorted by newest/popular; download on demand into the bin
+    (cached, with thumbnails), new-drops badge; later user uploads/packs tied to the account
 10. **Distribution**: bundle FFmpeg inside the .app (LGPL build), notarize, auto-update, Intel test
 
 ## TODO
@@ -117,6 +120,9 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] **Launch settings** for everything (clicks, drags, clips, MIDI/OSC triggers): Cut or Fade (time), Now / On beat / On bar
 - [x] **Audio beat detector**: kick detection + BPM estimate with confidence (verified 128.6 BPM on a 128 BPM track);
       Follow audio locks tempo/beat to the music; "Audio beat (kick)" modulation source
+- [x] **Syphon output**: composition published as "Phosphor" (+ optional per-output sources after mapping);
+      zero cost until an app (MadMapper, Resolume, OBS, VDMX) connects; verified with a Syphon client
+- [x] **Devices panel**: phones/browsers (disconnect, block), MIDI inputs on/off with activity, OSC senders (block)
 - [x] **Watch folders**: every clip in a folder (+ subfolders) loads into the bin, new files appear automatically
       (rescan every 10 s, background thread); bin grouped by folder; "Fill clips of the selected layer" from a folder
 - [x] File dialogs never pause the show (sheets; results arrive next frame); images decode in the background

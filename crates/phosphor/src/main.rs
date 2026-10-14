@@ -20,6 +20,8 @@ mod remote;
 mod screens;
 mod stats;
 mod stream;
+#[cfg(target_os = "macos")]
+mod syphon;
 mod thumbs;
 mod theme;
 
