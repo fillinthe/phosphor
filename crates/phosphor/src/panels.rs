@@ -9,6 +9,27 @@ use serde::{Deserialize, Serialize};
 use crate::app::{State, Trigger};
 use crate::theme::{ACCENT, WARN};
 
+/// Right-click menus that also open on sliders and other draggable controls. egui treats a
+/// right-press on those as a drag, so its own context menu never opens; this opens on release.
+pub trait RightMenu {
+    fn right_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>>;
+}
+
+impl RightMenu for egui::Response {
+    fn right_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>> {
+        use egui::SetOpenCommand;
+        let released = self.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && self.contains_pointer();
+        let cmd = if self.secondary_clicked() || released {
+            Some(SetOpenCommand::Bool(true))
+        } else if self.clicked() {
+            Some(SetOpenCommand::Bool(false))
+        } else {
+            None
+        };
+        egui::Popup::menu(self).open_memory(cmd).at_pointer_fixed().show(add)
+    }
+}
+
 /// Adds a slider or drag value, but undoes any change made with the right or middle mouse button,
 /// so right-clicking opens the control's menu without moving it.
 macro_rules! guarded {
@@ -228,7 +249,7 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     let resp = ui.interact(rect, egui::Id::new("preview_area"), Sense::click());
-    resp.context_menu(|ui| {
+    resp.right_menu(|ui| {
         let open = st.output_open();
         if ui.button(label(if open { icon::STOP } else { icon::PLAY }, if open { "Close output" } else { "Open output" })).clicked() {
             st.toggle_output();
@@ -525,7 +546,7 @@ fn layer_card(
                 ui.horizontal(|ui| {
                     let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong()).on_hover_text("Layer on/off (Space) · right-click to Learn");
                     mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
-                    on.context_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
+                    on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
                     let solo_color = if layer.solo { WARN } else { Color32::GRAY };
                     ui.toggle_value(&mut layer.solo, RichText::new("S").small().strong().color(solo_color))
                         .on_hover_text("Solo: only soloed layers reach the mix");
@@ -596,7 +617,7 @@ fn layer_card(
     if resp.clicked() {
         select = true;
     }
-    resp.context_menu(|ui| {
+    resp.right_menu(|ui| {
         if ui.button(label(icon::SPARKLE, "Browse sources…")).clicked() {
             action = Some(LayerAction::BrowseSources);
             ui.close();
@@ -810,16 +831,61 @@ fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
 
 /// Small badge on a control that has a MIDI/OSC/key mapping.
 fn mapped_badge(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget) {
-    if is_mapped(ui, target) {
+    let mapped = is_mapped(ui, target);
+    if mapped {
         let p = resp.rect.left_top() + egui::vec2(1.0, 1.0);
         ui.painter().circle_filled(p, 3.0, Color32::from_rgb(255, 196, 70));
     }
+    if ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new(MAP_MODE))).unwrap_or(false) {
+        map_overlay(ui, resp, target, mapped);
+    }
+}
+
+pub const MAP_MODE: &str = "phosphor_map_mode";
+pub const LEARNING: &str = "phosphor_learning";
+
+/// Map mode: a clickable layer over each mappable control. Click it, then move a knob, send OSC
+/// or press a key, and the two are linked. The control itself doesn't change while mapping.
+fn map_overlay(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget, mapped: bool) {
+    let learning = ui.ctx().data(|d| d.get_temp::<Option<ControlTarget>>(egui::Id::new(LEARNING))).flatten();
+    let active = learning.as_ref() == Some(target);
+    let rect = resp.rect.expand(1.5);
+    // Click *and* drag, so sliders underneath get neither while mapping.
+    let r = ui.interact(rect, resp.id.with("map_overlay"), Sense::click_and_drag());
+    let gold = Color32::from_rgb(255, 196, 70);
+    let (fill, stroke) = if active {
+        let t = ui.ctx().input(|i| i.time) as f32;
+        let a = 0.5 + 0.5 * (t * 6.0).sin();
+        ui.ctx().request_repaint();
+        (gold.gamma_multiply(0.25 + 0.2 * a), Stroke::new(2.0, gold))
+    } else if mapped {
+        (gold.gamma_multiply(0.12), Stroke::new(1.5, gold))
+    } else if r.hovered() {
+        (ACCENT.gamma_multiply(0.25), Stroke::new(1.5, ACCENT))
+    } else {
+        (ACCENT.gamma_multiply(0.08), Stroke::new(1.0, ACCENT.gamma_multiply(0.7)))
+    };
+    let p = ui.painter();
+    p.rect_filled(rect, 3.0, fill);
+    p.rect_stroke(rect, 3.0, stroke, StrokeKind::Outside);
+    if r.clicked() || r.drag_started() {
+        request(ui, LEARN_REQUEST, target.clone());
+    }
+    let sources = mapped_sources(ui, target);
+    let hint = if active {
+        "Now move a knob, send OSC, or press a key".to_string()
+    } else if sources.is_empty() {
+        "Click, then move a knob / send OSC / press a key to map".to_string()
+    } else {
+        format!("Mapped to {} — click to map again, right-click to forget", sources.join(", "))
+    };
+    r.on_hover_text(hint).right_menu(|ui| learn_items(ui, target));
 }
 
 /// The standard right-click menu for a slider: Learn, Modulate, Reset. Returns true on Reset.
 fn control_menu(resp: &egui::Response, target: Option<&ControlTarget>, m: Option<&mut Option<Modulation>>) -> bool {
     let mut reset = false;
-    resp.context_menu(|ui| {
+    resp.right_menu(|ui| {
         if let Some(t) = target {
             learn_items(ui, t);
         }
@@ -837,7 +903,7 @@ fn control_menu(resp: &egui::Response, target: Option<&ControlTarget>, m: Option
 /// Right-click → Map (Learn / OSC / MIDI / key) for a button or value, with the mapped badge.
 fn map_menu(ui: &egui::Ui, resp: &egui::Response, target: ControlTarget) {
     mapped_badge(ui, resp, &target);
-    resp.context_menu(|ui| learn_items(ui, &target));
+    resp.right_menu(|ui| learn_items(ui, &target));
 }
 
 fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
@@ -985,7 +1051,7 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
                 handle.on_hover_text("Drag to reorder");
                 let on = ui.checkbox(&mut fx.enabled, RichText::new(desc.name).strong());
                 mapped_badge(ui, &on, &ControlTarget::EffectEnabled(fx.id));
-                on.context_menu(|ui| {
+                on.right_menu(|ui| {
                     learn_items(ui, &ControlTarget::EffectEnabled(fx.id));
                     ui.separator();
                     if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset all controls")).clicked() {
@@ -1277,7 +1343,7 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
             for c in comp.media_collections.clone() {
                 let n = count(&|m| m.collections.contains(&c));
                 let r = ui.selectable_value(&mut view.filter, MediaFilter::Collection(c.clone()), format!("{} {c} {n}", icon::BOOKMARKS_SIMPLE));
-                r.context_menu(|ui| {
+                r.right_menu(|ui| {
                     if ui.button(label(icon::TRASH, "Delete collection")).on_hover_text("The media stays in the bin").clicked() {
                         acts.push(MediaAct::DeleteCollection(c.clone()));
                         ui.close();
@@ -1362,7 +1428,7 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
                 .id_salt(("media_group", &group))
                 .default_open(true)
                 .show(ui, |ui| grid(ui));
-            header.header_response.context_menu(|ui| {
+            header.header_response.right_menu(|ui| {
                 if ui.button(label(icon::SQUARES_FOUR, "Fill clips of the selected layer")).on_hover_text("Puts this folder's media into the selected layer's clip slots, in order").clicked() {
                     acts.push(MediaAct::FillFolder(group.clone()));
                     ui.close();
@@ -1519,7 +1585,7 @@ fn media_tile(
     if resp.clicked() {
         acts.push(MediaAct::Assign(i));
     }
-    resp.on_hover_text(&item.path).context_menu(|ui| {
+    resp.on_hover_text(&item.path).right_menu(|ui| {
         let fav = if item.favorite { "Remove from favourites" } else { "Add to favourites" };
         if ui.button(label(icon::STAR, fav)).clicked() {
             acts.push(MediaAct::Favorite(i));
@@ -1664,7 +1730,7 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
                         triggers.push(Trigger::Column(c));
                     }
                     mapped_badge(ui, &head, &ControlTarget::TriggerColumn(c));
-                    head.context_menu(|ui| learn_items(ui, &ControlTarget::TriggerColumn(c)));
+                    head.right_menu(|ui| learn_items(ui, &ControlTarget::TriggerColumn(c)));
                 }
             });
             let n = comp.layers.len();
@@ -1721,7 +1787,7 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
                             }
                         }
                         mapped_badge(ui, &resp, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
-                        resp.context_menu(|ui| {
+                        resp.right_menu(|ui| {
                             if clip.is_some_and(|k| !k.is_empty()) {
                                 if ui.button(label(icon::PLAY, "Trigger")).clicked() {
                                     triggers.push(Trigger::Clip { layer: layer.id, slot: c });
@@ -2094,7 +2160,7 @@ fn mapping(ui: &mut egui::Ui, st: &mut State) {
             if resp.clicked() {
                 *selected_surface = Some(s.id);
             }
-            resp.context_menu(|ui| {
+            resp.right_menu(|ui| {
                 if ui.button(label(icon::CORNERS_OUT, "Reset corners")).clicked() {
                     s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
                     ui.close();
@@ -2616,7 +2682,8 @@ fn mixer(ui: &mut egui::Ui, st: &mut State) {
                         ui.monospace(format!("{:3.0}%", layer.opacity * 100.0));
                         ui.horizontal(|ui| {
                             let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small());
-                            on.context_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
+                            mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
+                            on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
                             ui.toggle_value(&mut layer.solo, RichText::new("S").small());
                         });
                         ComboBox::from_id_salt(("mix_blend", layer.id)).width(70.0).selected_text(RichText::new(layer.blend.name()).small()).show_ui(ui, |ui| {

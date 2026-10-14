@@ -21,6 +21,7 @@ pub enum Action {
     DuplicateLayer,
     DeleteLayer,
     Palette,
+    MapMode,
     ResetLayout,
     AddMonitor,
     Gather,
@@ -83,6 +84,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::DeleteLayer, "Delete Layer", None),
             S,
             I(A::Palette, "Command Palette…", Some((false, Key::K))),
+            I(A::MapMode, "Map Mode (MIDI / OSC / Keys)", Some((true, Key::M))),
         ],
     ),
     (
@@ -179,6 +181,7 @@ pub mod native {
             K::Z => Code::KeyZ,
             K::D => Code::KeyD,
             K::K => Code::KeyK,
+            K::M => Code::KeyM,
             K::Equals => Code::Equal,
             K::Minus => Code::Minus,
             K::Num0 => Code::Digit0,
