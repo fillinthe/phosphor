@@ -23,6 +23,8 @@ pub struct BenchConfig {
     pub ui_shot: Option<String>,
     /// A live input layer: "format|url" (e.g. "lavfi|testsrc=size=640x360:rate=30", "avfoundation|FaceTime HD Camera").
     pub live: Option<String>,
+    /// Send the output to the display whose name contains this (tests screen placement).
+    pub send_output: Option<String>,
     /// Open the default audio input and report its level.
     pub audio: bool,
     /// A .phosphor project to load instead of building one from the flags.
@@ -66,6 +68,7 @@ impl BenchConfig {
                 ("--tab", Some(v)) => cfg.tab = Some(v),
                 ("--ui-shot", Some(v)) => cfg.ui_shot = Some(v),
                 ("--live", Some(v)) => cfg.live = Some(v),
+                ("--send-output", Some(v)) => cfg.send_output = Some(v),
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
                 ("--remote-password", Some(v)) => cfg.remote_password = Some(v),

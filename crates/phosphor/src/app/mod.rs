@@ -321,6 +321,7 @@ impl State {
 
     /// Opens the first output on `display`, fullscreen.
     pub fn send_output_to(&mut self, display: crate::screens::Display) {
+        self.comp.ensure_outputs();
         let id = self.primary_output();
         self.send_output_id_to(id, display);
     }
@@ -453,6 +454,15 @@ impl eframe::App for PhosphorApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        // When the window is covered, macOS stops pacing redraws to the display, and the loop
+        // would spin at thousands of fps. Faster than any display (< 4 ms apart): hold ~120 fps.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let since = self.last_ui.0.elapsed().as_secs_f64();
+            if since < 0.004 {
+                std::thread::sleep(std::time::Duration::from_secs_f64(1.0 / 120.0 - since));
+            }
+        }
         self.last_ui = (web_time::Instant::now(), ui.ctx().input(|i| i.time));
         // A bug in one frame should not take the show down: skip that frame and carry on.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.ui_frame(ui, frame)));

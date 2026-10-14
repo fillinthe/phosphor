@@ -32,7 +32,8 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             if control_menu(&r, Some(&ControlTarget::MasterFade), Some(&mut st.comp.master_fade_mod)) {
                 st.comp.master_fade = 1.0;
             }
-            ui.monospace(format!("{:3.0}%", st.comp.master_fade * 100.0));
+            value_bubble(ui, &r, format!("{:.0}%", st.comp.master_fade * 100.0));
+            percent_field(ui, &mut st.comp.master_fade);
             mod_button(ui, &mut st.comp.master_fade_mod);
             let text = if st.output_open() { label(icon::STOP, "Output") } else { label(icon::PLAY, "Output") };
             if ui.button(text).on_hover_text("Open the output window (F = fullscreen, E = edit mapping)").clicked() {

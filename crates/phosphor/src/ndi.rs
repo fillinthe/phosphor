@@ -66,6 +66,12 @@ fn candidates() -> Vec<PathBuf> {
     out.push("/usr/local/lib/libndi.dylib".into());
     out.push("/Library/NDI SDK for Apple/lib/macOS/libndi.dylib".into());
     out.push("/Library/Application Support/NDI/lib/libndi.dylib".into());
+    // NDI Tools for Mac doesn't install a shared runtime; its apps carry NDI's own official
+    // library. Use that (only NDI's own apps, never other vendors' copies).
+    for app in ["NDI Scan Converter", "NDI Test Patterns", "NDI Video Monitor", "NDI Discovery", "NDI Router"] {
+        out.push(format!("/Applications/{app}.app/Contents/Frameworks/libndi.dylib").into());
+        out.push(format!("/Applications/{app}.app/Contents/Frameworks/libndi_advanced.dylib").into());
+    }
     out
 }
 

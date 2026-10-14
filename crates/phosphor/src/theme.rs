@@ -27,7 +27,9 @@ pub fn apply(ctx: &egui::Context) {
     v.selection.bg_fill = ACCENT.gamma_multiply(0.32);
     v.selection.stroke = Stroke::new(1.0, ACCENT);
     v.hyperlink_color = ACCENT;
+    // Sliders: a thick filled bar with a thin line where the value sits (no round knob).
     v.slider_trailing_fill = true;
+    v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.18 };
     v.window_corner_radius = CornerRadius::same(8);
     v.menu_corner_radius = CornerRadius::same(6);
     for w in [
@@ -54,6 +56,7 @@ pub fn apply(ctx: &egui::Context) {
         s.spacing.item_spacing = egui::vec2(6.0, 4.0);
         s.spacing.button_padding = egui::vec2(7.0, 3.0);
         s.spacing.slider_width = 150.0;
+        s.spacing.slider_rail_height = 10.0;
         s.spacing.interact_size.y = 19.0;
         s.spacing.menu_margin = egui::Margin::same(6);
     });
