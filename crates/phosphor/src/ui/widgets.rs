@@ -178,3 +178,26 @@ pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
         }
     }
 }
+
+/// A video scrub bar: shows where the clip is, click or drag to jump. Returns the time asked for.
+pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64) -> Option<f64> {
+    let width = ui.available_width().max(120.0);
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 18.0), Sense::click_and_drag());
+    let frac = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) as f32 } else { 0.0 };
+    let p = ui.painter();
+    p.rect_filled(rect, 4.0, Color32::from_gray(32));
+    let mut done = rect;
+    done.set_width(rect.width() * frac);
+    p.rect_filled(done, 4.0, ACCENT.gamma_multiply(0.5));
+    let x = rect.left() + rect.width() * frac;
+    p.line_segment([egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())], Stroke::new(2.0, Color32::WHITE));
+    let fmt = |t: f64| format!("{}:{:04.1}", (t / 60.0) as u32, t % 60.0);
+    p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, fmt(pos), egui::FontId::monospace(10.0), Color32::WHITE);
+    p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, fmt(dur), egui::FontId::monospace(10.0), Color32::GRAY);
+    if (resp.clicked() || resp.dragged_by(egui::PointerButton::Primary))
+        && let Some(at) = resp.interact_pointer_pos()
+    {
+        return Some((((at.x - rect.left()) / rect.width()).clamp(0.0, 1.0) as f64) * dur);
+    }
+    None
+}

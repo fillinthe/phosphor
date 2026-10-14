@@ -50,7 +50,7 @@ app that's much smaller and lighter on the CPU.
     3 crashes in 2 min); restores project, layout, output windows on their screens, session, audio; offers
     Resume stream; a bug inside one frame is skipped instead of closing the app; crash.log for diagnosis
     - [x] Freeze detection: heartbeat from the render loop, watchdog restarts after 20 s (sleep-aware)
-    - [ ] Restore video playback positions and active clips exactly
+    - [x] Restore video playback positions (active clips were already saved with the project)
 7. **Performance**: render thread decoupled from the UI (today a hidden window renders via a patched eframe —
    see the project instructions), Hap decoded on the GPU. (Bind-group caching was measured slower and dropped.)
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
