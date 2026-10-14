@@ -31,10 +31,15 @@ const KEY_FAVORITES: &str = "favorites";
 const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
 
-/// State the output window (a separate OS window) reads each frame.
+/// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]
 pub struct OutputShared {
     pub open: bool,
+    pub name: String,
+    /// 1-based position in the outputs list, shown by Identify.
+    pub number: usize,
+    /// Show the big Identify overlay until this time.
+    pub identify_until: f64,
     pub texture: Option<egui::TextureId>,
     pub aspect: f32,
     /// Copy of the composition's mapping; the output window edits it when `edit_mapping` is on.
@@ -67,7 +72,11 @@ pub struct State {
     pub stats: Stats,
     pub selected: Option<u64>,
     pub selected_surface: Option<u64>,
-    pub output: Arc<Mutex<OutputShared>>,
+    /// Output windows by output id.
+    pub output: Arc<Mutex<std::collections::HashMap<u64, OutputShared>>>,
+    output_textures: HashMap<u64, (egui::TextureId, (u32, u32))>,
+    /// Output being edited in the Mapping panel.
+    pub mapping_output: u64,
     pub presets: PresetStore,
     pub preset_name: String,
     /// A message worth showing the user (save failed, bad preset, …).
@@ -140,6 +149,7 @@ impl State {
     pub fn load_composition(&mut self, comp: Composition) {
         self.selected = comp.layers.last().map(|l| l.id);
         self.comp = comp;
+        self.comp.ensure_outputs();
         self.notice = None;
     }
 
@@ -165,20 +175,58 @@ impl State {
         }
     }
 
-    /// Opens the output on `display`, fullscreen.
+    pub fn primary_output(&self) -> u64 {
+        self.comp.outputs.first().map_or(0, |o| o.id)
+    }
+
+    /// Opens the first output on `display`, fullscreen.
     pub fn send_output_to(&mut self, display: crate::screens::Display) {
-        let mut out = self.output.lock().unwrap();
+        let id = self.primary_output();
+        self.send_output_id_to(id, display);
+    }
+
+    pub fn send_output_id_to(&mut self, id: u64, display: crate::screens::Display) {
+        let mut map = self.output.lock().unwrap();
+        let out = map.entry(id).or_default();
         out.open = true;
         out.place = Some((display, 0, 0));
     }
 
+    /// Opens every enabled output's window, or closes them all if any is open.
     pub fn toggle_output(&mut self) {
-        let mut out = self.output.lock().unwrap();
-        out.open = !out.open;
+        let mut map = self.output.lock().unwrap();
+        let any = map.values().any(|o| o.open);
+        for o in self.comp.outputs.iter().filter(|o| o.enabled) {
+            map.entry(o.id).or_default().open = !any;
+        }
+        if any {
+            map.values_mut().for_each(|o| o.open = false);
+        }
     }
 
     pub fn output_open(&self) -> bool {
-        self.output.lock().unwrap().open
+        self.output.lock().unwrap().values().any(|o| o.open)
+    }
+
+    pub fn output_window_open(&self, id: u64) -> bool {
+        self.output.lock().unwrap().get(&id).is_some_and(|o| o.open)
+    }
+
+    pub fn toggle_output_window(&mut self, id: u64) {
+        let mut map = self.output.lock().unwrap();
+        let o = map.entry(id).or_default();
+        o.open = !o.open;
+    }
+
+    /// Flashes each output's number on its window for a few seconds.
+    pub fn identify_outputs(&mut self, now: f64) {
+        for o in self.output.lock().unwrap().values_mut() {
+            o.identify_until = now + 3.0;
+        }
+    }
+
+    pub fn output_tex(&self, id: u64) -> Option<egui::TextureId> {
+        self.output_textures.get(&id).map(|(t, _)| *t)
     }
 }
 
@@ -234,7 +282,9 @@ impl PhosphorApp {
                 layer_textures: HashMap::new(),
                 media: MediaManager::default(),
                 stats: Stats::new(now),
-                output: Arc::new(Mutex::new(OutputShared::default())),
+                output: Arc::new(Mutex::new(std::collections::HashMap::new())),
+                output_textures: HashMap::new(),
+                mapping_output: 0,
                 presets: PresetStore::default(),
                 preset_name: String::new(),
                 notice: None,
@@ -327,6 +377,7 @@ impl PhosphorApp {
             monitor_wants,
             monitor_keys,
             monitor_textures,
+            output_textures,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -416,6 +467,28 @@ impl PhosphorApp {
                     }
                 }
             }
+            for o in &comp.outputs {
+                let Some(t) = engine.output_texture(o.id) else { continue };
+                let key = (t.width, t.height);
+                match output_textures.get_mut(&o.id) {
+                    Some((_, k)) if *k == key => {}
+                    Some((id, k)) => {
+                        renderer.update_egui_texture_from_wgpu_texture(&rs.device, &t.view, linear, *id);
+                        *k = key;
+                    }
+                    None => {
+                        let id = renderer.register_native_texture(&rs.device, &t.view, linear);
+                        output_textures.insert(o.id, (id, key));
+                    }
+                }
+            }
+            output_textures.retain(|id, (tex, _)| {
+                let live = comp.outputs.iter().any(|o| o.id == *id && o.enabled);
+                if !live {
+                    renderer.free_texture(tex);
+                }
+                live
+            });
             for i in 0..mkeys.len() {
                 let Some(t) = engine.monitor(i) else { continue };
                 let key = (t.width, t.height);
@@ -458,9 +531,20 @@ impl PhosphorApp {
         *preview_keys = keys;
         *monitor_keys = mkeys;
         {
-            let mut out = output.lock().unwrap();
-            out.texture = *texture;
-            out.aspect = comp.width as f32 / comp.height.max(1) as f32;
+            let _ = texture;
+            let mut map = output.lock().unwrap();
+            for (i, o) in comp.outputs.iter().enumerate() {
+                let e = map.entry(o.id).or_default();
+                e.texture = output_textures.get(&o.id).map(|(t, _)| *t);
+                let (ow, oh) = o.size((comp.width, comp.height));
+                e.aspect = ow as f32 / oh.max(1) as f32;
+                e.name = o.name.clone();
+                e.number = i + 1;
+                if !o.enabled {
+                    e.open = false;
+                }
+            }
+            map.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id));
         }
 
         if let Some(snapshot) = stats.record(now, render_secs, info.passes, mod_inputs.audio_level as f64)
@@ -600,7 +684,12 @@ impl PhosphorApp {
             Command::AddMonitor => {
                 let _ = self.add_monitor();
             }
-            Command::ToggleMapping => st.comp.mapping.enabled = !st.comp.mapping.enabled,
+            Command::ToggleMapping => {
+                let id = st.primary_output();
+                if let Some(o) = st.comp.output_mut(id) {
+                    o.mapping.enabled = !o.mapping.enabled;
+                }
+            }
             Command::ToggleSession => {
                 if st.net.running() {
                     st.net.stop();
@@ -691,11 +780,16 @@ impl PhosphorApp {
 
     /// Pulls corner drags made in the output window back into the composition.
     fn sync_mapping_from_output(&mut self) {
-        let mut out = self.state.output.lock().unwrap();
-        if out.mapping_changed {
-            self.state.comp.mapping = out.mapping.clone();
-            self.state.selected_surface = out.selected_surface;
-            out.mapping_changed = false;
+        let mut map = self.state.output.lock().unwrap();
+        for (id, out) in map.iter_mut() {
+            if out.mapping_changed {
+                if let Some(o) = self.state.comp.outputs.iter_mut().find(|o| o.id == *id) {
+                    o.mapping = out.mapping.clone();
+                }
+                self.state.selected_surface = out.selected_surface;
+                self.state.mapping_output = *id;
+                out.mapping_changed = false;
+            }
         }
     }
 
@@ -815,22 +909,28 @@ impl PhosphorApp {
         });
     }
 
-    fn output_window(&self, ctx: &egui::Context) {
-        if !self.state.output_open() {
-            return;
+    fn output_windows(&self, ctx: &egui::Context) {
+        let open: Vec<(u64, String)> =
+            self.state.output.lock().unwrap().iter().filter(|(_, o)| o.open).map(|(id, o)| (*id, o.name.clone())).collect();
+        for (oid, name) in open {
+            self.output_window(ctx, oid, &name);
         }
-        let id = egui::ViewportId::from_hash_of("phosphor_output");
+    }
+
+    fn output_window(&self, ctx: &egui::Context, oid: u64, name: &str) {
+        let id = egui::ViewportId::from_hash_of(("phosphor_output", oid));
         let shared = self.state.output.clone();
         ctx.show_viewport_deferred(
             id,
             // Borderless: nothing but picture, so a projector sees no title bar or menu bar.
             egui::ViewportBuilder::default()
-                .with_title("Phosphor Output")
+                .with_title(format!("Phosphor · {name}"))
                 .with_decorations(false)
                 .with_inner_size([960.0, 540.0]),
             move |ui, _class| {
                 let ctx = ui.ctx().clone();
-                let mut out = shared.lock().unwrap();
+                let mut map = shared.lock().unwrap();
+                let Some(out) = map.get_mut(&oid) else { return };
                 let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                 if ctx.input(|i| i.key_pressed(egui::Key::E)) {
                     out.edit_mapping = !out.edit_mapping;
@@ -909,6 +1009,12 @@ impl PhosphorApp {
                         );
                     }
                 }
+                if ctx.input(|i| i.time) < out.identify_until {
+                    let c = rect.center();
+                    ui.painter().rect_filled(rect, 0.0, Color32::from_black_alpha(140));
+                    ui.painter().text(c, egui::Align2::CENTER_CENTER, out.number.to_string(), egui::FontId::proportional(rect.height() * 0.45), theme::ACCENT);
+                    ui.painter().text(c + egui::vec2(0.0, rect.height() * 0.28), egui::Align2::CENTER_CENTER, &out.name, egui::FontId::proportional(28.0), Color32::WHITE);
+                }
                 if out.edit_mapping {
                     let OutputShared { mapping, selected_surface, mapping_changed, .. } = &mut *out;
                     if panels::mapping_handles(ui, frame, mapping, selected_surface, true) {
@@ -962,6 +1068,15 @@ impl PhosphorApp {
                 Ok(()) => println!("SNAPSHOT {path}"),
                 Err(e) => eprintln!("snapshot failed: {e}"),
             }
+            // Mapped outputs too, as <name>-out<N>.png.
+            for (i, o) in self.state.comp.outputs.iter().enumerate().filter(|(_, o)| o.mapping.active()) {
+                if let Some((w, h, px)) = engine.read_output_of(o.id) {
+                    let p = path.trim_end_matches(".png").to_string() + &format!("-out{}.png", i + 1);
+                    if image::save_buffer(&p, &px, w, h, image::ColorType::Rgba8).is_ok() {
+                        println!("SNAPSHOT {p}");
+                    }
+                }
+            }
         }
         self.bench = None;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -974,6 +1089,7 @@ impl eframe::App for PhosphorApp {
         let now = ctx.input(|i| i.time);
 
         self.handle_dropped_files(&ctx);
+        self.state.comp.ensure_outputs();
         self.state.comp.sync_media_bin();
         self.state.thumbs.poll(&ctx);
         #[cfg(not(target_arch = "wasm32"))]
@@ -1077,13 +1193,17 @@ impl eframe::App for PhosphorApp {
         }
 
         {
-            let mut out = self.state.output.lock().unwrap();
-            if !out.mapping_changed {
-                out.mapping = self.state.comp.mapping.clone();
-                out.selected_surface = self.state.selected_surface;
+            let mut map = self.state.output.lock().unwrap();
+            for o in &self.state.comp.outputs {
+                if let Some(out) = map.get_mut(&o.id)
+                    && !out.mapping_changed
+                {
+                    out.mapping = o.mapping.clone();
+                    out.selected_surface = self.state.selected_surface;
+                }
             }
         }
-        self.output_window(&ctx);
+        self.output_windows(&ctx);
         self.finish_bench(&ctx, now);
         // A VJ app renders continuously; the GPU frame rate follows the display's vsync.
         ctx.request_repaint();

@@ -94,6 +94,8 @@ pub struct Engine {
     uniform_capacity: usize,
     capture: Capture,
     frame_index: u64,
+    /// One target per configured output, at that output's size.
+    output_targets: HashMap<u64, Option<Target>>,
     previews: Vec<(PreviewItem, bool)>,
     /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
     monitor_req: Vec<(u64, u32, u32)>,
@@ -123,6 +125,7 @@ impl Engine {
             uniform_capacity: 0,
             capture: Capture::default(),
             frame_index: 0,
+            output_targets: HashMap::new(),
             previews: Vec::new(),
             monitor_req: Vec::new(),
             monitor_targets: Vec::new(),
@@ -219,6 +222,11 @@ impl Engine {
     /// compare `output_generation()` to know when to re-register it with a UI.
     pub fn output(&self) -> Option<&Target> {
         self.output.as_ref()
+    }
+
+    /// The picture for one configured output (after its mapping).
+    pub fn output_texture(&self, id: u64) -> Option<&Target> {
+        self.output_targets.get(&id)?.as_ref()
     }
 
     pub fn output_generation(&self) -> u64 {
@@ -419,45 +427,46 @@ impl Engine {
         }
         self.render_previews(&master, (w, h), time, mods, &comp.layers, &mut passes);
         let fade = modulate(comp.master_fade, 0.0, 1.0, comp.master_fade_mod.as_ref(), mods);
+        // Program feed: the mix with the master fader (preview, streaming, snapshots).
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [w as f32, h as f32];
-        if comp.mapping.active() {
-            // Black output, then each enabled surface blended on top.
+        u.opacity = fade;
+        passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
+
+        // Each output: its own size and mapping surfaces.
+        for o in comp.outputs.iter().filter(|o| o.enabled) {
+            let (ow, oh) = o.size((w, h));
+            let (ow, oh) = (ow.max(16), oh.max(16));
+            let slot = self.output_targets.entry(o.id).or_insert(None);
+            Target::ensure(slot, &device, "output", ow, oh);
+            let view = slot.as_ref().unwrap().view.clone();
+            let mut u = Uniforms::with_params(&[]);
+            u.resolution = [ow as f32, oh as f32];
+            if !o.mapping.active() {
+                u.opacity = fade;
+                passes.push(Pass { entry: "fs_finalize", target: view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
+                continue;
+            }
+            // Black, then each enabled surface blended on top.
             u.opacity = 0.0;
-            passes.push(Pass {
-                entry: "fs_finalize",
-                target: output_view.clone(),
-                tex0: self.gpu.blank.clone(),
-                tex1: None,
-                tex2: None,
-                uniforms: u,
-            });
-            for s in comp.mapping.surfaces.iter().filter(|s| s.enabled) {
+            passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u });
+            for s in o.mapping.surfaces.iter().filter(|s| s.enabled) {
                 let Some(inv) = mapping::quad_to_square(&s.corners) else { continue };
                 let c = &s.corners;
                 let mut u = Uniforms::with_params(&[]);
-                u.resolution = [w as f32, h as f32];
+                u.resolution = [ow as f32, oh as f32];
                 u.opacity = s.opacity * fade;
                 u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
-                u.mode = comp.mapping.test_pattern as u32;
+                u.mode = o.mapping.test_pattern as u32;
                 u.p[0] = [c[0][0], c[0][1], c[1][0], c[1][1]];
                 u.p[1] = [c[2][0], c[2][1], c[3][0], c[3][1]];
                 u.p[2] = [inv[0], inv[1], inv[2], inv[3]];
                 u.p[3] = [inv[4], inv[5], inv[6], inv[7]];
                 u.p[4] = [inv[8], s.feather, 0.0, 0.0];
-                passes.push(Pass {
-                    entry: "fs_surface",
-                    target: output_view.clone(),
-                    tex0: master.clone(),
-                    tex1: None,
-                    tex2: None,
-                    uniforms: u,
-                });
+                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u });
             }
-        } else {
-            u.opacity = fade;
-            passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master, tex1: None, tex2: None, uniforms: u });
         }
+        self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
 
         self.encode(&passes);
         self.frame_index += 1;
@@ -865,7 +874,15 @@ impl Engine {
     /// Copies the output texture back to the CPU as tightly packed RGBA8 (for snapshots/tests).
     /// Blocks until the GPU is done, so never call this during a live show.
     pub fn read_output(&self) -> Option<(u32, u32, Vec<u8>)> {
-        let out = self.output.as_ref()?;
+        self.read_target(self.output.as_ref()?)
+    }
+
+    /// Same as `read_output`, for one configured output (after its mapping).
+    pub fn read_output_of(&self, id: u64) -> Option<(u32, u32, Vec<u8>)> {
+        self.read_target(self.output_texture(id)?)
+    }
+
+    fn read_target(&self, out: &Target) -> Option<(u32, u32, Vec<u8>)> {
         let (w, h) = (out.width, out.height);
         let padded = (w * 4).div_ceil(256) * 256;
         let buffer = self.gpu.device.create_buffer(&wgpu::BufferDescriptor {
