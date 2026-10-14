@@ -28,6 +28,8 @@ const KEY_STREAM: &str = "stream";
 const KEY_KNOWN_TABS: &str = "known_tabs";
 const KEY_DETACHED: &str = "detached";
 const KEY_FAVORITES: &str = "favorites";
+const KEY_MONITORS: &str = "monitors";
+const KEY_RECENT: &str = "recent_effects";
 
 /// State the output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -40,6 +42,8 @@ pub struct OutputShared {
     pub edit_mapping: bool,
     pub mapping_changed: bool,
     pub selected_surface: Option<u64>,
+    /// Move the output window to this display and go fullscreen: (display, step, frames waited).
+    pub place: Option<(crate::screens::Display, u8, u32)>,
 }
 
 /// A clip trigger, fired now or on the next beat when quantised.
@@ -86,6 +90,13 @@ pub struct State {
     preview_textures: Vec<(egui::TextureId, (u32, u32))>,
     /// A panel to bring to the front (set by explorer actions and the palette).
     pub open_tab: Option<Tab>,
+    pub fx_browser: Option<crate::explorer::FxBrowser>,
+    pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
+    /// Monitor pictures requested this frame: (monitor number, source, width, height).
+    pub monitor_wants: Vec<(u8, u64, u32, u32)>,
+    monitor_keys: Vec<u8>,
+    monitor_textures: Vec<(egui::TextureId, (u32, u32))>,
+    pub displays: Vec<crate::screens::Display>,
     #[cfg(not(target_arch = "wasm32"))]
     pub isf: crate::isf_lib::IsfLibrary,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
@@ -109,6 +120,12 @@ impl State {
         let id = self.comp.add_layer().id;
         self.selected = Some(id);
         id
+    }
+
+    /// A monitor's picture (from the previous frame).
+    pub fn monitor_tex(&self, n: u8) -> Option<egui::TextureId> {
+        let i = self.monitor_keys.iter().position(|k| *k == n)?;
+        self.monitor_textures.get(i).map(|(t, _)| *t)
     }
 
     /// A rendered explorer/editor preview by key (from the previous frame).
@@ -143,6 +160,13 @@ impl State {
             }
             Trigger::Column(col) => self.comp.trigger_column(col, now),
         }
+    }
+
+    /// Opens the output on `display`, fullscreen.
+    pub fn send_output_to(&mut self, display: crate::screens::Display) {
+        let mut out = self.output.lock().unwrap();
+        out.open = true;
+        out.place = Some((display, 0, 0));
     }
 
     pub fn toggle_output(&mut self) {
@@ -220,6 +244,7 @@ impl PhosphorApp {
                 net_audio: Vec::new(),
                 explorer: crate::explorer::ExplorerState {
                     favorites: stored(KEY_FAVORITES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+                    recent: stored(KEY_RECENT).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                     ..Default::default()
                 },
                 editor: Default::default(),
@@ -229,6 +254,12 @@ impl PhosphorApp {
                 preview_refreshed: 0.0,
                 preview_textures: Vec::new(),
                 open_tab: None,
+                fx_browser: None,
+                monitors: stored(KEY_MONITORS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+                monitor_wants: Vec::new(),
+                monitor_keys: Vec::new(),
+                monitor_textures: Vec::new(),
+                displays: crate::screens::displays(),
                 #[cfg(not(target_arch = "wasm32"))]
                 isf: crate::isf_lib::IsfLibrary::scan(),
                 fx_clipboard: Vec::new(),
@@ -288,6 +319,9 @@ impl PhosphorApp {
             preview_textures,
             preview_refreshed,
             selected,
+            monitor_wants,
+            monitor_keys,
+            monitor_textures,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -329,6 +363,9 @@ impl PhosphorApp {
                 .collect();
             engine.request_previews(source, items);
         }
+        let mwants = std::mem::take(monitor_wants);
+        let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
+        engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
         let t0 = web_time::Instant::now();
         let info = engine.render(comp, now as f32, mod_inputs);
         let render_secs = t0.elapsed().as_secs_f64();
@@ -374,6 +411,21 @@ impl PhosphorApp {
                     }
                 }
             }
+            for i in 0..mkeys.len() {
+                let Some(t) = engine.monitor(i) else { continue };
+                let key = (t.width, t.height);
+                match monitor_textures.get_mut(i) {
+                    Some((_, k)) if *k == key => {}
+                    Some((id, k)) => {
+                        renderer.update_egui_texture_from_wgpu_texture(&rs.device, &t.view, linear, *id);
+                        *k = key;
+                    }
+                    None => {
+                        let id = renderer.register_native_texture(&rs.device, &t.view, linear);
+                        monitor_textures.push((id, key));
+                    }
+                }
+            }
             // Explorer / editor previews, one texture slot per index.
             for i in 0..keys.len() {
                 let Some(t) = engine.preview(i) else { continue };
@@ -399,6 +451,7 @@ impl PhosphorApp {
             });
         }
         *preview_keys = keys;
+        *monitor_keys = mkeys;
         {
             let mut out = output.lock().unwrap();
             out.texture = *texture;
@@ -411,6 +464,14 @@ impl PhosphorApp {
             println!("{}", snapshot.to_json());
             run.samples.push(snapshot);
         }
+    }
+
+    /// Opens a new Monitor panel as a floating window.
+    fn add_monitor(&mut self) {
+        let used: Vec<u8> = self.dock.iter_all_tabs().filter_map(|(_, t)| if let Tab::Monitor(n) = t { Some(*n) } else { None }).collect();
+        let n = (1..=99).find(|n| !used.contains(n) && !self.detached.contains(&Tab::Monitor(*n))).unwrap_or(99);
+        self.state.monitors.entry(n).or_default();
+        self.dock.add_window(vec![Tab::Monitor(n)]);
     }
 
     /// Brings a panel to the front, reopening it if it was closed.
@@ -446,6 +507,7 @@ impl PhosphorApp {
                 crate::explorer::new_shader(st, phosphor_engine::custom::template(generator));
                 self.show_tab(Tab::ShaderEditor);
             }
+            Command::AddMonitor => self.add_monitor(),
             Command::ToggleMapping => st.comp.mapping.enabled = !st.comp.mapping.enabled,
             Command::ToggleSession => {
                 if st.net.running() {
@@ -580,6 +642,23 @@ impl PhosphorApp {
                 if ui.button(output_label).on_hover_text("Output window. F = fullscreen, Esc = exit").clicked() {
                     self.state.toggle_output();
                 }
+                ui.menu_button(icon::CARET_DOWN, |ui| {
+                    ui.label(egui::RichText::new("Send output to").strong());
+                    if self.state.displays.is_empty() {
+                        self.state.displays = crate::screens::displays();
+                    }
+                    for d in self.state.displays.clone() {
+                        if ui.button(d.label()).clicked() {
+                            self.state.send_output_to(d);
+                            ui.close();
+                        }
+                    }
+                    if ui.button("Rescan displays").clicked() {
+                        self.state.displays = crate::screens::displays();
+                    }
+                })
+                .response
+                .on_hover_text("Choose the screen / projector");
                 ui.separator();
                 panels::project_buttons(ui, &mut self.state);
                 ui.separator();
@@ -591,6 +670,10 @@ impl PhosphorApp {
                 }
                 ui.menu_button("View", |ui| {
                     ui.weak("Drag any tab to move it; drag it outside to float it.");
+                    if ui.button(format!("{} Add monitor", icon::MONITOR)).on_hover_text("A new preview panel showing the output, the mix, or any layer").clicked() {
+                        self.add_monitor();
+                        ui.close();
+                    }
                     ui.menu_button("Panels", |ui| {
                         for tab in Tab::ALL {
                             let detached = self.detached.contains(&tab);
@@ -659,6 +742,39 @@ impl PhosphorApp {
                 let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                 if ctx.input(|i| i.key_pressed(egui::Key::E)) {
                     out.edit_mapping = !out.edit_mapping;
+                }
+                // Screen placement: leave fullscreen, move to the display, then fullscreen there.
+                if let Some((d, step, wait)) = out.place.as_mut() {
+                    *wait += 1;
+                    match *step {
+                        0 => {
+                            if fullscreen {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+                                *step = 1;
+                            } else {
+                                *step = 2;
+                            }
+                            *wait = 0;
+                        }
+                        1 if *wait > 45 => {
+                            *step = 2;
+                            *wait = 0;
+                        }
+                        2 => {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(d.x + 40.0, d.y + 40.0)));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(d.w * 0.6, d.h * 0.6)));
+                            *step = 3;
+                            *wait = 0;
+                        }
+                        3 if *wait > 10 => {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+                            *step = 4;
+                        }
+                        _ => {}
+                    }
+                    if *step == 4 {
+                        out.place = None;
+                    }
                 }
                 if ctx.input(|i| i.viewport().close_requested()) {
                     out.open = false;
@@ -838,6 +954,7 @@ impl eframe::App for PhosphorApp {
             }
         });
         self.detached_windows(&ctx);
+        crate::explorer::fx_browser_window(&ctx, &mut self.state);
         if let Some(cmd) = crate::explorer::palette(&ctx, &mut self.state) {
             self.run_command(cmd, now);
         }
@@ -890,6 +1007,12 @@ impl eframe::App for PhosphorApp {
         }
         if let Ok(json) = serde_json::to_string(&self.state.explorer.favorites) {
             storage.set_string(KEY_FAVORITES, json);
+        }
+        if let Ok(json) = serde_json::to_string(&self.state.explorer.recent) {
+            storage.set_string(KEY_RECENT, json);
+        }
+        if let Ok(json) = serde_json::to_string(&self.state.monitors) {
+            storage.set_string(KEY_MONITORS, json);
         }
     }
 }

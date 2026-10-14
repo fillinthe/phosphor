@@ -33,6 +33,8 @@ pub enum PreviewMode {
 #[derive(Default)]
 pub struct ExplorerState {
     pub preview_mode: PreviewMode,
+    /// Recently added effects (most recent first).
+    pub recent: Vec<String>,
     /// Live tiles refresh at 30 fps, not every display frame.
     pub live_tick: i64,
     pub search: String,
@@ -548,6 +550,7 @@ pub enum Command {
     NewShader(bool),
     ToggleMapping,
     ToggleSession,
+    AddMonitor,
 }
 
 fn commands(st: &State) -> Vec<(String, Command)> {
@@ -558,6 +561,7 @@ fn commands(st: &State) -> Vec<(String, Command)> {
         (format!("{} Mapping on/off", icon::PROJECTOR_SCREEN), Command::ToggleMapping),
         (format!("{} Session on/off (browser viewers)", icon::BROADCAST), Command::ToggleSession),
         (format!("{} Reset layout", icon::LAYOUT), Command::ResetLayout),
+        (format!("{} Add monitor (preview panel)", icon::MONITOR), Command::AddMonitor),
         (format!("{} New effect shader", icon::CODE), Command::NewShader(false)),
         (format!("{} New generator shader", icon::CODE), Command::NewShader(true)),
     ];
@@ -659,4 +663,146 @@ pub fn palette(ctx: &egui::Context, st: &mut State) -> Option<Command> {
         st.palette.open = false;
     }
     chosen
+}
+
+// -------------------------------------------------------------------------------------------
+// "+ Add effect" / "Browse sources" picker
+
+pub struct FxBrowser {
+    /// Layer id or MASTER_ID.
+    pub target: u64,
+    /// Pick a generator (layer source) instead of an effect.
+    pub sources: bool,
+    pub pos: Option<egui::Pos2>,
+    search: String,
+    category: String,
+    focus: bool,
+}
+
+impl FxBrowser {
+    pub fn new(target: u64, sources: bool, pos: Option<egui::Pos2>) -> Self {
+        Self { target, sources, pos, search: String::new(), category: String::new(), focus: true }
+    }
+}
+
+/// The pop-up effect/source browser. Click adds and closes, Shift-click adds and stays open,
+/// Enter adds the first match, Esc closes.
+pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
+    let Some(mut b) = st.fx_browser.take() else { return };
+    let aspect = st.aspect();
+    let target_name = if b.target == MASTER_ID {
+        "MASTER".to_string()
+    } else {
+        st.comp.layers.iter().find(|l| l.id == b.target).map_or("layer".into(), |l| l.name.clone())
+    };
+    let title = if b.sources { format!("Source for {target_name}") } else { format!("Add effect to {target_name}") };
+    let list: Vec<&'static shaders::ShaderDesc> = if b.sources { shaders::all_generators() } else { shaders::all_effects() };
+    let mut open = true;
+    let mut picked: Option<(&'static str, bool)> = None;
+    let mut window = egui::Window::new(title)
+        .id(egui::Id::new("fx_browser"))
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(true)
+        .default_size([600.0, 480.0]);
+    if let Some(p) = b.pos.take() {
+        window = window.default_pos(p - egui::vec2(300.0, 0.0)).current_pos(p - egui::vec2(300.0, 0.0));
+    }
+    window.show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+            let edit = ui.add(egui::TextEdit::singleline(&mut b.search).hint_text("Type to search…  Enter adds the first match").desired_width(f32::INFINITY));
+            if b.focus {
+                edit.request_focus();
+                b.focus = false;
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.selectable_value(&mut b.category, String::new(), "All");
+            if !b.sources {
+                ui.selectable_value(&mut b.category, "recent".to_string(), format!("{} Recent", icon::CLOCK_COUNTER_CLOCKWISE));
+            }
+            ui.selectable_value(&mut b.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+            for cat in CATEGORY_ORDER {
+                if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
+                    ui.selectable_value(&mut b.category, cat.to_string(), *cat);
+                }
+            }
+        });
+        ui.separator();
+        let mut shown: Vec<&'static shaders::ShaderDesc> = list
+            .iter()
+            .copied()
+            .filter(|d| matches(d, &b.search))
+            .filter(|d| match b.category.as_str() {
+                "" => true,
+                "★" => st.explorer.favorites.iter().any(|f| f == d.id),
+                "recent" => st.explorer.recent.iter().any(|r| r == d.id),
+                cat => shaders::info(d.id).0 == cat,
+            })
+            .collect();
+        if b.category == "recent" {
+            shown.sort_by_key(|d| st.explorer.recent.iter().position(|r| r == d.id).unwrap_or(usize::MAX));
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::Enter)) && let Some(d) = shown.first() {
+            picked = Some((d.id, false));
+        }
+        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+            if shown.is_empty() {
+                ui.weak("Nothing matches.");
+            }
+            let tile_w = 128.0;
+            let tile = egui::vec2(tile_w, tile_w / aspect + 20.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+                for (i, d) in shown.iter().enumerate() {
+                    let (rect, resp) = ui.allocate_exact_size(tile, Sense::click());
+                    if !ui.is_rect_visible(rect) {
+                        continue;
+                    }
+                    let key = format!("pick:{}", d.id);
+                    if st.explorer.preview_mode != PreviewMode::Off {
+                        let item = if b.sources { PreviewItem::Generator(d.id.to_string()) } else { PreviewItem::Effect(preview_fx(d, 20_000 + i)) };
+                        let live = st.explorer.preview_mode == PreviewMode::Live || resp.hovered();
+                        st.preview_wants.push((key.clone(), item, live));
+                    }
+                    let pic = egui::Rect::from_min_size(rect.min, egui::vec2(tile_w, tile_w / aspect));
+                    let p = ui.painter();
+                    p.rect_filled(rect, 5.0, ui.visuals().faint_bg_color);
+                    match st.preview_tex(&key) {
+                        Some(t) => panels::paint_texture(p, t, pic),
+                        None => {
+                            p.rect_filled(pic, 4.0, Color32::from_gray(14));
+                        }
+                    }
+                    p.text(egui::pos2(rect.left() + 5.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, d.name, egui::FontId::proportional(11.5), Color32::WHITE);
+                    let first = i == 0 && !b.search.is_empty();
+                    let stroke = if resp.hovered() || first { Stroke::new(1.5, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(48)) };
+                    p.rect_stroke(rect, 5.0, stroke, StrokeKind::Inside);
+                    if resp.clicked() {
+                        picked = Some((d.id, ui.input(|i| i.modifiers.shift)));
+                    }
+                    let (cat, about) = shaders::info(d.id);
+                    resp.on_hover_text(format!("{}  ·  {cat}\n{about}", d.name));
+                }
+            });
+        });
+        ui.weak("Click adds and closes · Shift-click adds more · Esc closes");
+    });
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        open = false;
+    }
+    if let Some((id, keep)) = picked {
+        if b.sources {
+            apply_palette(st, PaletteDrag { effect: None, generator: Some(id) }, Some(b.target));
+        } else {
+            apply_palette(st, PaletteDrag { effect: Some(id), generator: None }, Some(b.target));
+        }
+        if !keep {
+            open = false;
+        }
+    }
+    if open {
+        st.fx_browser = Some(b);
+    }
 }

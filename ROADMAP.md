@@ -42,6 +42,10 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] **Shader Editor**: write WGSL effects/generators in-app, compile-as-you-type with line-accurate errors,
       live preview, "Edit a copy" of built-ins, saved to ~/Library/Application Support/Phosphor/effects
 - [x] **⌘K command palette**: every effect, source, panel and action, fuzzy search
+- [x] **+ Add effect browser**: pop-up with search (Enter adds first match), categories, Recent, Favourites,
+      previews on that layer; Shift-click adds several. Same browser for layer sources (✦ button)
+- [x] **Monitors**: any number of preview panels (View ▸ Add monitor), each showing Output, Mix, or one
+      layer; dock/float/detach anywhere; optional thirds grid
 - [x] Effects workflow: collapsible cards, drag handle to reorder, copy/paste whole chains, double-click resets a slider
 - [x] Panels can be closed and reopened (View ▸ Panels), layout presets, floating windows rescued on smaller screens
 - [x] **Master effects**: a pinned MASTER card whose chain runs over the whole mix
@@ -113,6 +117,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Direct manipulation: drag corners/centre in the Mapping panel **or on the projector output** (E)
 - [x] Input region per surface (slice of the master), per-surface opacity, soft edge for projector blending
 - [x] Alignment grid test pattern with orientation marker
+- [x] Choose the output screen: Output ▾ menu / Screens list → window moves there and goes fullscreen (no menu bar)
 - [ ] Multiple outputs (one window per projector), each with its own surfaces
 - [ ] Mesh warp (bezier grid), triangle, circle, bezier masks
 - [ ] Per-output identify / colour correction
