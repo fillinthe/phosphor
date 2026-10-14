@@ -105,7 +105,10 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Ship FFmpeg inside the .app (LGPL build, decoders only) instead of relying on Homebrew
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
 - [ ] Live camera / capture card input
-- [x] Media bin with thumbnails (background FFmpeg frame grabs), import files/folders, click or drag onto layers
+- [x] Media bin with thumbnails (background FFmpeg frame grabs), import files, click or drag onto layers
+- [x] **Watch folders**: every clip in a folder (+ subfolders) loads into the bin, new files appear automatically
+      (rescan every 10 s, background thread); bin grouped by folder; "Fill clips of the selected layer" from a folder
+- [x] File dialogs never pause the show (sheets; results arrive next frame); images decode in the background
 - [x] Seamless looping, speed 0.1–4×
 - [ ] Scrubbing, reverse, in/out points, beat-length quantised loops
 

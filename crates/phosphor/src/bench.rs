@@ -28,6 +28,8 @@ pub struct BenchConfig {
     pub net: bool,
     /// Require this password for remote control.
     pub remote_password: Option<String>,
+    /// Watch this folder (prints how many media files landed in the bin).
+    pub watch: Option<String>,
     /// Render this many live effect previews every frame (to measure the explorer's cost).
     pub previews: usize,
 }
@@ -53,6 +55,7 @@ impl BenchConfig {
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
                 ("--remote-password", Some(v)) => cfg.remote_password = Some(v),
+                ("--watch", Some(v)) => cfg.watch = Some(v),
                 ("--previews", Some(v)) => cfg.previews = v.parse().unwrap_or(0),
                 ("--column", Some(v)) => cfg.trigger_column = v.parse::<usize>().ok().map(|c| c.saturating_sub(1)),
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
