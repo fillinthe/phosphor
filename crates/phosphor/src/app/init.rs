@@ -145,6 +145,10 @@ impl PhosphorApp {
             show_start: None,
             layouts,
             layout_draft: None,
+            last_ui: (web_time::Instant::now(), 0.0),
+            hidden_pacer: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            heartbeat: Default::default(),
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false }),
             gather_windows: false,
             remote_published: 0.0,

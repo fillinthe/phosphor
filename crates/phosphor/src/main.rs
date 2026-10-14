@@ -72,6 +72,10 @@ fn main() -> eframe::Result {
         default_hook(info);
     }));
     let bench = bench::BenchConfig::from_args(std::env::args().skip(1));
+    // A live show must never be slowed down by App Nap or timer coalescing (e.g. while the
+    // control window is minimized or covered and the outputs are on a projector).
+    #[cfg(target_os = "macos")]
+    let _show_activity = keep_awake_for_show();
     if bench.is_none() {
         recovery::spawn_watchdog();
     }
@@ -103,4 +107,24 @@ fn main() {
             .await
             .expect("failed to start Phosphor");
     });
+}
+
+/// Tells macOS this is user-initiated, latency-critical work (a live show), which turns off App
+/// Nap and timer throttling for the app's lifetime. Keep the returned token alive.
+#[cfg(target_os = "macos")]
+fn keep_awake_for_show() -> Option<objc2::rc::Retained<objc2::runtime::AnyObject>> {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject};
+    // NSActivityUserInitiated | NSActivityLatencyCritical (no idle-system-sleep prevention: the
+    // Mac can still sleep when the user wants).
+    const OPTIONS: u64 = 0x00FF_FFFF | 0xFF_0000_0000;
+    let class = AnyClass::get(c"NSProcessInfo")?;
+    let reason = objc2_foundation::NSString::from_str("Phosphor is running a live show");
+    // SAFETY: +processInfo and -beginActivityWithOptions:reason: per NSProcessInfo.h.
+    unsafe {
+        let info: Option<Retained<AnyObject>> = msg_send![class, processInfo];
+        let info = info?;
+        msg_send![&*info, beginActivityWithOptions: OPTIONS, reason: &*reason]
+    }
 }
