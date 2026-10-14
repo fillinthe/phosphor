@@ -81,10 +81,13 @@ pub struct VideoPlayer {
     size: (u32, u32),
     /// Live input (camera, stream): always show the newest frame, no clock or looping.
     live: bool,
+    /// Seek generation: frames decoded before the latest seek carry an older number and are dropped.
+    generation: u64,
 }
 
 enum Msg {
-    Frame(f64, VideoFrame),
+    /// (seek generation, presentation time, frame)
+    Frame(u64, f64, VideoFrame),
     End(f64),
     Error(String),
 }
@@ -104,6 +107,8 @@ struct Shared {
 struct Ctl {
     looping: bool,
     quit: bool,
+    /// Jump to this media time (seconds) and tag following frames with `generation`.
+    seek: Option<(f64, u64)>,
 }
 
 impl Shared {
@@ -155,6 +160,7 @@ impl VideoPlayer {
             ctl: Mutex::new(Ctl {
                 looping: true,
                 quit: false,
+                seek: None,
             }),
             cv: Condvar::new(),
             clock: AtomicU64::new(0f64.to_bits()),
@@ -191,6 +197,7 @@ impl VideoPlayer {
             duration,
             size,
             live,
+            generation: 0,
         })
     }
 
@@ -235,7 +242,11 @@ impl VideoPlayer {
         loop {
             if self.pending.is_none() {
                 match rx.try_recv() {
-                    Ok(Msg::Frame(pts, frame)) => {
+                    Ok(Msg::Frame(generation, _, frame)) if generation != self.generation => {
+                        // From before the last seek.
+                        self.shared.recycle(frame);
+                    }
+                    Ok(Msg::Frame(_, pts, frame)) => {
                         self.end = None;
                         self.pending = Some((pts, frame));
                     }
@@ -279,7 +290,7 @@ impl VideoPlayer {
         let mut out: Option<VideoFrame> = None;
         for msg in rx.try_iter() {
             match msg {
-                Msg::Frame(_, frame) => {
+                Msg::Frame(_, _, frame) => {
                     if let Some(old) = out.replace(frame) {
                         self.shared.recycle(old);
                     }
@@ -292,6 +303,45 @@ impl VideoPlayer {
             }
         }
         out
+    }
+
+    /// Jumps to `t` seconds into the clip. The next frames shown are from there; anything decoded
+    /// before the jump is dropped.
+    pub fn seek(&mut self, t: f64) {
+        if self.live {
+            return;
+        }
+        let t = match self.duration {
+            Some(d) if d > 0.0 => t.clamp(0.0, (d - 1e-3).max(0.0)),
+            _ => t.max(0.0),
+        };
+        self.generation += 1;
+        if let Ok(mut ctl) = self.shared.ctl.lock() {
+            ctl.seek = Some((t, self.generation));
+        }
+        self.shared.cv.notify_all();
+        self.clock = t;
+        self.end = None;
+        if let Some((_, f)) = self.pending.take() {
+            self.shared.recycle(f);
+        }
+        // Unblock the decoder if it's waiting on a full queue.
+        if let Some(rx) = &self.rx {
+            for msg in rx.try_iter() {
+                if let Msg::Frame(_, _, f) = msg {
+                    self.shared.recycle(f);
+                }
+            }
+        }
+        self.shared.clock.store(self.clock.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Where the clip is (seconds from its start), for the scrub bar and crash recovery.
+    pub fn position(&self) -> f64 {
+        match self.duration {
+            Some(d) if d > 0.0 => self.clock.rem_euclid(d),
+            _ => self.clock,
+        }
     }
 
     /// Returns a frame's buffers for reuse by the decoder (optional; avoids reallocations).
@@ -381,6 +431,10 @@ struct Decoder {
     skips: u32,
     errors: u32,
     live: bool,
+    /// Tag for frames sent (the seek they belong to).
+    generation: u64,
+    /// After a seek: decode and drop frames until this media time.
+    seek_target: Option<f64>,
     /// Live pacing: (first pts, when it arrived). Inputs that run faster than real time (test
     /// sources, recorded streams) are slowed to their timestamps; cameras already are.
     live_start: Option<(f64, std::time::Instant)>,
@@ -467,13 +521,20 @@ impl Decoder {
             errors: 0,
             live,
             live_start: None,
+            generation: 0,
+            seek_target: None,
         })
     }
 
     fn run(&mut self, sh: &Shared, tx: &SyncSender<Msg>) -> Result<(), String> {
         loop {
-            if sh.ctl.lock().map_or(true, |c| c.quit) {
-                return Ok(());
+            let seek = match sh.ctl.lock() {
+                Ok(mut c) if !c.quit => c.seek.take(),
+                _ => return Ok(()),
+            };
+            if let Some((t, generation)) = seek {
+                self.seek_to(t)?;
+                self.generation = generation;
             }
             let more = match self.next_frame() {
                 Ok(more) => more,
@@ -504,7 +565,7 @@ impl Decoder {
                     let Ok(mut ctl) = sh.ctl.lock() else {
                         return Ok(());
                     };
-                    while !ctl.quit && (still || !ctl.looping) {
+                    while !ctl.quit && ctl.seek.is_none() && (still || !ctl.looping) {
                         ctl = match sh.cv.wait(ctl) {
                             Ok(c) => c,
                             Err(_) => return Ok(()),
@@ -512,6 +573,10 @@ impl Decoder {
                     }
                     if ctl.quit {
                         return Ok(());
+                    }
+                    if ctl.seek.is_some() {
+                        // Handled at the top of the loop.
+                        continue;
                     }
                 }
                 self.rewind()?;
@@ -522,6 +587,15 @@ impl Decoder {
             let (rel, dur) = self.timing();
             let pts = self.offset + rel;
             let clock = f64::from_bits(sh.clock.load(Ordering::Relaxed));
+            // After a seek, frames before the target only lead up to it.
+            if let Some(target) = self.seek_target {
+                // Drop frames whose display time ends at or before the target (the one shown at
+                // `target` is the one whose interval contains it).
+                if rel + dur <= target + 1e-6 {
+                    continue;
+                }
+                self.seek_target = None;
+            }
             if !self.live && pts + dur < clock - LATE && self.skips < MAX_SKIP {
                 self.skips += 1;
                 sh.skipped.fetch_add(1, Ordering::Relaxed);
@@ -540,7 +614,7 @@ impl Decoder {
             }
             let src = self.download(sh)?;
             let out = self.scaler.convert(src, sh)?;
-            if tx.send(Msg::Frame(pts, out)).is_err() {
+            if tx.send(Msg::Frame(self.generation, pts, out)).is_err() {
                 return Ok(());
             }
         }
@@ -633,6 +707,23 @@ impl Decoder {
             c.clone_from(&self.codec);
         }
         self.rewind()
+    }
+
+    /// Jumps to `t` seconds (the keyframe before it; `seek_target` drops frames up to `t`).
+    fn seek_to(&mut self, t: f64) -> Result<(), String> {
+        let ts = self.start_ts + (t / self.tb) as i64;
+        // SAFETY: seeking the demuxer we own, on this thread.
+        let ok = unsafe { ffi::av_seek_frame(self.input.as_mut_ptr(), self.stream as i32, ts, ffi::AVSEEK_FLAG_BACKWARD) >= 0 };
+        if !ok {
+            self.input = ff::format::input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
+        }
+        self.dec.flush();
+        self.eof_sent = false;
+        self.last_rel = -1.0;
+        self.frames_in_loop = 0;
+        self.offset = 0.0;
+        self.seek_target = Some(t);
+        Ok(())
     }
 
     fn rewind(&mut self) -> Result<(), String> {
@@ -977,4 +1068,54 @@ fn copy_plane(dst: &mut [u8], width: usize, src: *const u8, linesize: i32, rows:
         dst[y * width..(y + 1) * width].copy_from_slice(line);
     }
     true
+}
+
+#[cfg(test)]
+mod seek_tests {
+    use super::{VideoFrame, VideoPlayer};
+
+    fn luma(f: &VideoFrame) -> Vec<u8> {
+        match f {
+            VideoFrame::Nv12 { luma, .. } => luma.clone(),
+            VideoFrame::Rgba { data, .. } => data.clone(),
+        }
+    }
+
+    /// Plays `p` on a fake clock from `from` to `to` seconds and returns the last frame shown.
+    fn play(p: &mut VideoPlayer, from: f64, to: f64) -> Option<Vec<u8>> {
+        let mut last = None;
+        let mut t = from;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while t <= to + 1e-9 && std::time::Instant::now() < deadline {
+            // Give the decoder a moment, then advance the clock a frame.
+            for _ in 0..200 {
+                if let Some(f) = p.poll_frame(t) {
+                    last = Some(luma(&f));
+                    p.recycle(f);
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            t += 1.0 / 30.0;
+        }
+        last
+    }
+
+    /// Jumping to 1.5 s shows the same picture as playing up to 1.5 s (the clip is 2.5 s).
+    #[test]
+    fn seek_lands_on_the_right_frame() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../media/test/h264.mp4");
+        if !std::path::Path::new(path).exists() {
+            return;
+        }
+        let mut played = VideoPlayer::open(path).unwrap();
+        let reference = play(&mut played, 0.0, 1.5).expect("frames");
+        let mut jumped = VideoPlayer::open(path).unwrap();
+        jumped.poll_frame(0.0);
+        jumped.seek(1.5);
+        assert!((jumped.position() - 1.5).abs() < 1e-6);
+        let landed = play(&mut jumped, 0.0, 0.0).expect("a frame after seeking");
+        let diff: u64 = reference.iter().zip(&landed).map(|(a, b)| a.abs_diff(*b) as u64).sum::<u64>() / reference.len().max(1) as u64;
+        assert!(diff <= 1, "picture after seek differs from playing to 1.5 s (mean diff {diff})");
+    }
 }

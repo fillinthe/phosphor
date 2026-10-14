@@ -29,6 +29,9 @@ pub struct Snapshot {
     pub audio_device: Option<String>,
     pub streaming: bool,
     pub selected: Option<u64>,
+    /// (layer, seconds) for each playing video, so it resumes where it was.
+    #[serde(default)]
+    pub video_positions: Vec<(u64, f64)>,
 }
 
 fn dir() -> Option<PathBuf> {

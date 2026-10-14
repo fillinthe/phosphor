@@ -63,6 +63,9 @@ pub struct MediaManager {
     /// Syphon In connections per layer.
     #[cfg(target_os = "macos")]
     syphon: HashMap<u64, crate::syphon::SyphonClient>,
+    /// Seeks waiting for a layer's video to open (crash recovery restores positions this way).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub pending_seek: HashMap<u64, f64>,
     /// Syphon layers whose source isn't there yet (the other app may start later): next retry time.
     #[cfg(target_os = "macos")]
     syphon_waiting: HashMap<u64, f64>,
@@ -115,7 +118,10 @@ impl MediaManager {
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Movie { path: Some(path), .. } => match video::VideoPlayer::open(path) {
-                    Ok(player) => {
+                    Ok(mut player) => {
+                        if let Some(t) = self.pending_seek.remove(&layer.id) {
+                            player.seek(t);
+                        }
                         self.players.insert(layer.id, player);
                     }
                     Err(e) => {
@@ -240,6 +246,43 @@ impl MediaManager {
 }
 
 impl MediaManager {
+    /// (position, duration) in seconds of a layer's video, for the scrub bar.
+    pub fn position(&self, layer: u64) -> Option<(f64, f64)> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let p = self.players.get(&layer)?;
+            return Some((p.position(), p.duration()?));
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = layer;
+            None
+        }
+    }
+
+    /// Jumps a layer's video to `t` seconds (or remembers it until the video has opened).
+    pub fn seek(&mut self, layer: u64, t: f64) {
+        #[cfg(not(target_arch = "wasm32"))]
+        match self.players.get_mut(&layer) {
+            Some(p) => p.seek(t),
+            None => {
+                self.pending_seek.insert(layer, t);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (layer, t);
+    }
+
+    /// Every playing video's position, for crash recovery.
+    pub fn positions(&self) -> Vec<(u64, f64)> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            return self.players.iter().filter(|(_, p)| p.duration().is_some()).map(|(id, p)| (*id, (p.position() * 10.0).round() / 10.0)).collect();
+        }
+        #[cfg(target_arch = "wasm32")]
+        Vec::new()
+    }
+
     /// Codec and decoder details for a movie layer, for the Inspector.
     pub fn video_info(&self, layer: u64) -> Option<String> {
         #[cfg(not(target_arch = "wasm32"))]
