@@ -26,6 +26,8 @@ pub struct BenchConfig {
     pub trigger_at: f64,
     /// Host a network session and analyse viewer audio.
     pub net: bool,
+    /// Render this many live effect previews every frame (to measure the explorer's cost).
+    pub previews: usize,
 }
 
 impl BenchConfig {
@@ -48,6 +50,7 @@ impl BenchConfig {
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
+                ("--previews", Some(v)) => cfg.previews = v.parse().unwrap_or(0),
                 ("--column", Some(v)) => cfg.trigger_column = v.parse::<usize>().ok().map(|c| c.saturating_sub(1)),
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
                 ("--audio", _) => {
