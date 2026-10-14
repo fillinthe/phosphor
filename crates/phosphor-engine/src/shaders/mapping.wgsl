@@ -37,13 +37,14 @@ fn alignment_grid(st: vec2f) -> vec3f {
 /// its input region of the frame (or the alignment grid), feathered edges, premultiplied.
 fn surface_color(st: vec2f) -> vec4f {
     let uv = u.uv_xform.zw + st * u.uv_xform.xy;
-    var rgb = textureSampleLevel(tex0, samp, uv, 0.0).rgb;
+    var rgb = grade(textureSampleLevel(tex0, samp, uv, 0.0).rgb);
     if (u.mode == 1u) {
         rgb = alignment_grid(st);
     }
     let f = max(u.p[4].y, 1e-4);
-    let soft = smoothstep(0.0, f, st.x) * smoothstep(0.0, f, 1.0 - st.x)
-        * smoothstep(0.0, f, st.y) * smoothstep(0.0, f, 1.0 - st.y);
+    // Soft edge, shaped by the blend curve (u.p[4].z + 1) so overlapping projectors even out.
+    let soft = pow(smoothstep(0.0, f, st.x) * smoothstep(0.0, f, 1.0 - st.x)
+        * smoothstep(0.0, f, st.y) * smoothstep(0.0, f, 1.0 - st.y), 1.0 + u.p[4].z);
     let inside = select(0.0, 1.0, all(st >= vec2f(-1e-4)) && all(st <= vec2f(1.0 + 1e-4)));
     let a = u.opacity * soft * inside;
     return vec4f(rgb * a, a);

@@ -18,6 +18,9 @@ pub struct Surface {
     /// Soft-edge width as a fraction of the surface (0 = hard edge). Overlap two surfaces'
     /// feathered edges to blend projectors.
     pub feather: f32,
+    /// Curve of the soft edge (1 = straight ramp). Around 2.2 makes two overlapping projectors
+    /// add up to even brightness (projectors are gamma-curved).
+    pub blend_gamma: f32,
     /// Mesh warp: a grid of points to bend the surface onto curved or uneven objects. `None` = the
     /// plain four-corner pin (exact perspective).
     pub mesh: Option<Mesh>,
@@ -160,6 +163,7 @@ impl Default for Surface {
             input: [0.0, 0.0, 1.0, 1.0],
             opacity: 1.0,
             feather: 0.0,
+            blend_gamma: 1.0,
             mesh: None,
         }
     }
