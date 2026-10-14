@@ -3,7 +3,7 @@
 
 use eframe::egui::{self, Color32, ComboBox, RichText, Sense, Slider, Stroke, StrokeKind};
 use egui_phosphor::regular as icon;
-use phosphor_engine::{BlendMode, EffectState, FitMode, LayerState, MASTER_ID, Mapping, ModSource, Modulation, ParamMod, SourceSpec, TransitionKind, shaders};
+use phosphor_engine::{BlendMode, ControlTarget, EffectState, FitMode, LayerState, MASTER_ID, Mapping, ModSource, Modulation, ParamMod, SourceSpec, TransitionKind, shaders};
 use serde::{Deserialize, Serialize};
 
 use crate::app::{State, Trigger};
@@ -27,10 +27,11 @@ pub enum Tab {
     ShaderEditor,
     /// An extra preview panel; the number tells monitors apart.
     Monitor(u8),
+    Mixer,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 14] = [
+    pub const ALL: [Tab; 15] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -45,6 +46,7 @@ impl Tab {
         Tab::Network,
         Tab::Output,
         Tab::ShaderEditor,
+        Tab::Mixer,
     ];
 
     pub fn title(self) -> String {
@@ -67,6 +69,7 @@ impl Tab {
             Tab::Network => "Session",
             Tab::Output => "Output & Stats",
             Tab::ShaderEditor => "Shader Editor",
+            Tab::Mixer => "Mixer",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -110,6 +113,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Output => output(ui, self.st),
             Tab::ShaderEditor => crate::explorer::shader_editor(ui, self.st),
             Tab::Monitor(n) => monitor(ui, self.st, *n),
+            Tab::Mixer => mixer(ui, self.st),
         }
     }
 
@@ -176,6 +180,10 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
             ui.spacing_mut().slider_width = (ui.available_width() - 200.0).max(80.0);
             let r = ui.add(Slider::new(&mut st.comp.master_fade, 0.0..=1.0).show_value(false));
             mod_marker(ui, &r, st.comp.master_fade, 0.0, 1.0, st.comp.master_fade_mod.as_ref());
+            mapped_badge(ui, &r, &ControlTarget::MasterFade);
+            if control_menu(&r, Some(&ControlTarget::MasterFade), Some(&mut st.comp.master_fade_mod)) {
+                st.comp.master_fade = 1.0;
+            }
             ui.monospace(format!("{:3.0}%", st.comp.master_fade * 100.0));
             mod_button(ui, &mut st.comp.master_fade_mod);
             let text = if st.output_open() { label(icon::STOP, "Output") } else { label(icon::PLAY, "Output") };
@@ -192,6 +200,39 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "GPU unavailable", egui::FontId::proportional(16.0), Color32::GRAY);
         }
     }
+    let resp = ui.interact(rect, egui::Id::new("preview_area"), Sense::click());
+    resp.context_menu(|ui| {
+        let open = st.output_open();
+        if ui.button(label(if open { icon::STOP } else { icon::PLAY }, if open { "Close output" } else { "Open output" })).clicked() {
+            st.toggle_output();
+            ui.close();
+        }
+        ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send output to"), |ui| {
+            if st.displays.is_empty() {
+                st.displays = crate::screens::displays();
+            }
+            for d in st.displays.clone() {
+                if ui.button(d.label()).clicked() {
+                    st.send_output_to(d);
+                    ui.close();
+                }
+            }
+        });
+        if ui.button(label(icon::MONITOR, "New monitor")).clicked() {
+            st.new_monitor = Some(MonitorSource::Mix);
+            ui.close();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::CAMERA, "Save snapshot…")).clicked() {
+            st.snapshot_requested = true;
+            ui.close();
+        }
+        ui.separator();
+        if ui.button(label(icon::BROADCAST, "Learn master fade")).clicked() {
+            request(ui, LEARN_REQUEST, ControlTarget::MasterFade);
+            ui.close();
+        }
+    });
     let s = st.stats.latest;
     let mut info = format!("{}×{}  {:.0} fps", st.comp.width, st.comp.height, s.fps);
     if st.comp.mapping.active() {
@@ -210,6 +251,8 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
 
 enum LayerAction {
     BrowseSources,
+    BrowseEffects,
+    Monitor,
     Up,
     Down,
     Duplicate,
@@ -298,6 +341,14 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
             let id = comp.layers[i].id;
             st.fx_browser = Some(crate::explorer::FxBrowser::new(id, true, None));
         }
+        Some((i, LayerAction::BrowseEffects)) => {
+            let id = comp.layers[i].id;
+            st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None));
+        }
+        Some((i, LayerAction::Monitor)) => {
+            let id = comp.layers[i].id;
+            st.new_monitor = Some(MonitorSource::Layer(id));
+        }
         Some((i, LayerAction::ClearSource)) => {
             comp.layers[i].source = SourceSpec::None;
         }
@@ -366,7 +417,7 @@ fn master_card(
                 select = true;
             }
             ui.vertical(|ui| {
-                if ui.selectable_label(is_selected, RichText::new("MASTER").strong().size(14.0).color(ACCENT)).clicked() {
+                if ui.selectable_label(is_selected, RichText::new("MASTER").strong().size(12.5).color(ACCENT)).clicked() {
                     select = true;
                 }
                 ui.weak("Effects here run over all layers");
@@ -417,11 +468,13 @@ fn layer_card(
             }
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong()).on_hover_text("Layer on/off (Space)");
+                    let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong()).on_hover_text("Layer on/off (Space) · right-click to Learn");
+                    mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
+                    on.context_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
                     let solo_color = if layer.solo { WARN } else { Color32::GRAY };
                     ui.toggle_value(&mut layer.solo, RichText::new("S").small().strong().color(solo_color))
                         .on_hover_text("Solo: only soloed layers reach the mix");
-                    let name = RichText::new(&layer.name).strong().size(14.0);
+                    let name = RichText::new(&layer.name).strong().size(12.5);
                     let name = if muted { name.color(Color32::GRAY) } else { name };
                     if ui.selectable_label(is_selected, name).clicked() {
                         select = true;
@@ -448,6 +501,10 @@ fn layer_card(
                     ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
                     let r = ui.add(Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
                     mod_marker(ui, &r, layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref());
+                    mapped_badge(ui, &r, &ControlTarget::LayerOpacity(layer.id));
+                    if control_menu(&r, Some(&ControlTarget::LayerOpacity(layer.id)), Some(&mut layer.opacity_mod)) {
+                        layer.opacity = 1.0;
+                    }
                     ui.monospace(format!("{:3.0}%", layer.opacity * 100.0));
                     mod_button(ui, &mut layer.opacity_mod);
                 });
@@ -482,6 +539,25 @@ fn layer_card(
         select = true;
     }
     resp.context_menu(|ui| {
+        if ui.button(label(icon::SPARKLE, "Browse sources…")).clicked() {
+            action = Some(LayerAction::BrowseSources);
+            ui.close();
+        }
+        if ui.button(label(icon::MAGIC_WAND, "Add effect…")).clicked() {
+            action = Some(LayerAction::BrowseEffects);
+            ui.close();
+        }
+        if ui.button(label(icon::MONITOR, "Show in a new monitor")).clicked() {
+            action = Some(LayerAction::Monitor);
+            ui.close();
+        }
+        ui.separator();
+        learn_items(ui, &ControlTarget::LayerEnabled(layer.id));
+        if ui.button(label(icon::BROADCAST, "Learn opacity")).clicked() {
+            request(ui, LEARN_REQUEST, ControlTarget::LayerOpacity(layer.id));
+            ui.close();
+        }
+        ui.separator();
         if ui.button(label(icon::COPY, "Duplicate (⌘D)")).clicked() {
             action = Some(LayerAction::Duplicate);
             ui.close();
@@ -548,18 +624,21 @@ fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> bool {
     browse
 }
 
-fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMod>, i: usize, p: &shaders::Param) {
+fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMod>, i: usize, p: &shaders::Param, target: Option<ControlTarget>) {
     if values.len() <= i {
         values.resize(i + 1, p.default);
     }
     ui.horizontal(|ui| {
-        let r = ui.add(Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset");
-        if r.double_clicked() {
-            values[i] = p.default;
-        }
+        let r = ui.add(Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset · right-click for Learn / Modulate");
         let slot = mods.iter().position(|m| m.index == i);
         mod_marker(ui, &r, values[i], p.min, p.max, slot.map(|k| &mods[k].m));
+        if let Some(t) = &target {
+            mapped_badge(ui, &r, t);
+        }
         let mut m = slot.map(|k| mods[k].m);
+        if r.double_clicked() | control_menu(&r, target.as_ref(), Some(&mut m)) {
+            values[i] = p.default;
+        }
         mod_button(ui, &mut m);
         match (slot, m) {
             (Some(k), Some(nm)) => mods[k].m = nm,
@@ -578,6 +657,58 @@ fn mod_button(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
     ui.menu_button(RichText::new(icon::WAVE_SINE).color(color), |ui| modulation_editor(ui, m))
         .response
         .on_hover_text("Drive this with audio or an LFO");
+}
+
+pub const LEARN_REQUEST: &str = "phosphor_learn_request";
+pub const UNLEARN_REQUEST: &str = "phosphor_unlearn_request";
+pub const MAPPED_TARGETS: &str = "phosphor_mapped_targets";
+
+fn request(ui: &egui::Ui, key: &str, target: ControlTarget) {
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(key), target));
+}
+
+fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
+    ui.ctx()
+        .data(|d| d.get_temp::<std::sync::Arc<Vec<ControlTarget>>>(egui::Id::new(MAPPED_TARGETS)))
+        .is_some_and(|v| v.contains(target))
+}
+
+/// Learn / Forget entries for any control's right-click menu.
+fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
+    if ui.button(label(icon::BROADCAST, "Learn MIDI / OSC / key")).on_hover_text("Then move a knob, send OSC, or press a key").clicked() {
+        request(ui, LEARN_REQUEST, target.clone());
+        ui.close();
+    }
+    if is_mapped(ui, target) && ui.button(label(icon::X, "Forget mapping")).clicked() {
+        request(ui, UNLEARN_REQUEST, target.clone());
+        ui.close();
+    }
+}
+
+/// Small badge on a control that has a MIDI/OSC/key mapping.
+fn mapped_badge(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget) {
+    if is_mapped(ui, target) {
+        let p = resp.rect.left_top() + egui::vec2(1.0, 1.0);
+        ui.painter().circle_filled(p, 3.0, Color32::from_rgb(255, 196, 70));
+    }
+}
+
+/// The standard right-click menu for a slider: Learn, Modulate, Reset. Returns true on Reset.
+fn control_menu(resp: &egui::Response, target: Option<&ControlTarget>, m: Option<&mut Option<Modulation>>) -> bool {
+    let mut reset = false;
+    resp.context_menu(|ui| {
+        if let Some(t) = target {
+            learn_items(ui, t);
+        }
+        if let Some(m) = m {
+            ui.menu_button(label(icon::WAVE_SINE, "Modulate…"), |ui| modulation_editor(ui, m));
+        }
+        if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).clicked() {
+            reset = true;
+            ui.close();
+        }
+    });
+    reset
 }
 
 fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
@@ -675,6 +806,8 @@ fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
 }
 
 pub enum FxAction {
+    /// Copy the effect at this index right after itself (needs a fresh id from the composition).
+    Duplicate(usize),
     Browse(Option<egui::Pos2>),
     CopyChain,
     PasteChain,
@@ -707,6 +840,7 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
     }
     let mut remove = None;
     let mut swap = None;
+    let mut duplicate: Option<usize> = None;
     let mut drop: Option<(u64, u64)> = None;
     let count = effects.len();
     for (i, fx) in effects.iter_mut().enumerate() {
@@ -720,7 +854,34 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
                 let handle = ui.add(egui::Label::new(RichText::new(icon::DOTS_SIX_VERTICAL).color(Color32::GRAY)).sense(Sense::drag()));
                 handle.dnd_set_drag_payload(FxDrag(fx.id));
                 handle.on_hover_text("Drag to reorder");
-                ui.checkbox(&mut fx.enabled, RichText::new(desc.name).strong());
+                let on = ui.checkbox(&mut fx.enabled, RichText::new(desc.name).strong());
+                mapped_badge(ui, &on, &ControlTarget::EffectEnabled(fx.id));
+                on.context_menu(|ui| {
+                    learn_items(ui, &ControlTarget::EffectEnabled(fx.id));
+                    ui.separator();
+                    if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset all controls")).clicked() {
+                        fx.values = desc.defaults();
+                        fx.mods.clear();
+                        fx.mix = 1.0;
+                        ui.close();
+                    }
+                    if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+                        duplicate = Some(i);
+                        ui.close();
+                    }
+                    if ui.button(label(icon::ARROW_UP, "Earlier in the chain")).clicked() && i > 0 {
+                        swap = Some((i, i - 1));
+                        ui.close();
+                    }
+                    if ui.button(label(icon::ARROW_DOWN, "Later in the chain")).clicked() && i + 1 < count {
+                        swap = Some((i, i + 1));
+                        ui.close();
+                    }
+                    if ui.button(label(icon::TRASH, "Remove")).clicked() {
+                        remove = Some(i);
+                        ui.close();
+                    }
+                });
                 if fx.mix < 0.999 {
                     ui.weak(format!("{:.0}%", fx.mix * 100.0));
                 }
@@ -738,9 +899,13 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
             });
             header.body(|ui| {
                 for (pi, p) in desc.params.iter().enumerate() {
-                    param_slider(ui, &mut fx.values, &mut fx.mods, pi, p);
+                    param_slider(ui, &mut fx.values, &mut fx.mods, pi, p, Some(ControlTarget::EffectParam { effect: fx.id, index: pi }));
                 }
-                ui.add(Slider::new(&mut fx.mix, 0.0..=1.0).text("Mix"));
+                let mix = ui.add(Slider::new(&mut fx.mix, 0.0..=1.0).text("Mix"));
+                mapped_badge(ui, &mix, &ControlTarget::EffectMix(fx.id));
+                if control_menu(&mix, Some(&ControlTarget::EffectMix(fx.id)), None) {
+                    fx.mix = 1.0;
+                }
             });
         });
         if let Some(p) = frame.response.dnd_release_payload::<FxDrag>() {
@@ -764,12 +929,24 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
     if let Some(i) = remove {
         effects.remove(i);
     }
+    if let Some(i) = duplicate {
+        action = Some(FxAction::Duplicate(i));
+    }
     action
 }
 
 fn apply_fx_action(st: &mut State, target: u64, action: FxAction) {
     match action {
         FxAction::Browse(pos) => st.fx_browser = Some(crate::explorer::FxBrowser::new(target, false, pos)),
+        FxAction::Duplicate(i) => {
+            let id = st.comp.new_id();
+            let chain = if target == MASTER_ID { Some(&mut st.comp.master_effects) } else { st.comp.layer_mut(target).map(|l| &mut l.effects) };
+            if let Some(chain) = chain
+                && let Some(fx) = chain.get(i).cloned()
+            {
+                chain.insert(i + 1, phosphor_engine::EffectState { id, ..fx });
+            }
+        }
         FxAction::CopyChain => {
             let chain = if target == MASTER_ID {
                 st.comp.master_effects.clone()
@@ -829,7 +1006,7 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
             {
                 ui.label(RichText::new(format!("Generator · {}", desc.name)).strong());
                 for (i, p) in desc.params.iter().enumerate() {
-                    param_slider(ui, &mut layer.generator_values, &mut layer.generator_mods, i, p);
+                    param_slider(ui, &mut layer.generator_values, &mut layer.generator_mods, i, p, Some(ControlTarget::GeneratorParam { layer: layer.id, index: i }));
                 }
                 ui.separator();
             }
@@ -923,6 +1100,7 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(4.0);
     let State { comp, thumbs, selected, .. } = st;
     let mut assign: Option<usize> = None;
+    let mut new_layer_from: Option<usize> = None;
     let mut remove: Option<usize> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
@@ -956,6 +1134,15 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
                     assign = Some(i);
                 }
                 resp.on_hover_text(&item.path).context_menu(|ui| {
+                    if ui.button(label(icon::PLUS, "Put on a new layer")).clicked() {
+                        new_layer_from = Some(i);
+                        ui.close();
+                    }
+                    #[cfg(target_os = "macos")]
+                    if ui.button(label(icon::FOLDER_OPEN, "Reveal in Finder")).clicked() {
+                        let _ = std::process::Command::new("open").arg("-R").arg(&item.path).spawn();
+                        ui.close();
+                    }
                     if ui.button(label(icon::TRASH, "Remove from bin")).clicked() {
                         remove = Some(i);
                         ui.close();
@@ -979,6 +1166,14 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
             l.source = crate::media::spec_for_path(&item.path);
             l.name = item.name;
         }
+    }
+    if let Some(i) = new_layer_from
+        && let Some(item) = comp.media_bin.get(i).cloned()
+    {
+        let l = comp.add_layer();
+        l.source = crate::media::spec_for_path(&item.path);
+        l.name = item.name;
+        *selected = Some(l.id);
     }
     if let Some(i) = remove {
         let item = comp.media_bin.remove(i);
@@ -1066,9 +1261,12 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 ui.allocate_exact_size(egui::vec2(110.0, 22.0), Sense::hover());
                 for c in page_offset..page_offset + cols {
-                    if ui.add_sized([cell.x, 22.0], egui::Button::new(format!("{} {}", icon::PLAY, c + 1))).on_hover_text("Trigger this column on every layer").clicked() {
+                    let head = ui.add_sized([cell.x, 22.0], egui::Button::new(format!("{} {}", icon::PLAY, c + 1))).on_hover_text("Trigger this column on every layer · right-click to Learn");
+                    if head.clicked() {
                         triggers.push(Trigger::Column(c));
                     }
+                    mapped_badge(ui, &head, &ControlTarget::TriggerColumn(c));
+                    head.context_menu(|ui| learn_items(ui, &ControlTarget::TriggerColumn(c)));
                 }
             });
             let n = comp.layers.len();
@@ -1124,7 +1322,16 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
                                 _ => use_current = Some((idx, c)),
                             }
                         }
+                        mapped_badge(ui, &resp, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
                         resp.context_menu(|ui| {
+                            if clip.is_some_and(|k| !k.is_empty()) {
+                                if ui.button(label(icon::PLAY, "Trigger")).clicked() {
+                                    triggers.push(Trigger::Clip { layer: layer.id, slot: c });
+                                    ui.close();
+                                }
+                                learn_items(ui, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
+                                ui.separator();
+                            }
                             if ui.button("Store the layer's current source here").clicked() {
                                 use_current = Some((idx, c));
                                 ui.close();
@@ -1865,4 +2072,79 @@ fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
         p.circle_stroke(frame.center(), 6.0, Stroke::new(1.0, ACCENT));
     }
     ui.allocate_rect(rect, Sense::hover());
+}
+
+// -------------------------------------------------------------------------------------------
+// Mixer: one vertical fader strip per layer, plus master.
+
+fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulation>, target: ControlTarget, height: f32) {
+    ui.spacing_mut().slider_width = height;
+    let r = ui.add(Slider::new(value, 0.0..=1.0).vertical().show_value(false));
+    if let Some(mm) = m.as_ref() {
+        let live = phosphor_engine::control::modulate(*value, 0.0, 1.0, Some(mm), &mod_inputs(ui));
+        let rr = r.rect;
+        let pad = rr.width() * 0.5;
+        let y = rr.bottom() - pad - live * (height - 2.0 * pad).max(1.0);
+        ui.painter().line_segment([egui::pos2(rr.left() - 2.0, y), egui::pos2(rr.right() + 2.0, y)], Stroke::new(2.0, ACCENT));
+    }
+    mapped_badge(ui, &r, &target);
+    if control_menu(&r, Some(&target), Some(m)) {
+        *value = 1.0;
+    }
+}
+
+fn mixer(ui: &mut egui::Ui, st: &mut State) {
+    let aspect = st.aspect();
+    let height = (ui.available_height() - 150.0).clamp(80.0, 600.0);
+    let State { comp, selected, layer_textures, texture, .. } = st;
+    let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
+    egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
+        ui.horizontal_top(|ui| {
+            for layer in comp.layers.iter_mut() {
+                let is_sel = *selected == Some(layer.id);
+                let frame = card_frame(ui, is_sel).inner_margin(egui::Margin::same(5)).show(ui, |ui| {
+                    ui.set_width(78.0);
+                    ui.vertical_centered(|ui| {
+                        let tex = layer_textures.get(&layer.id).map(|(t, _)| *t);
+                        let muted = any_solo && !layer.solo;
+                        if thumbnail(ui, tex, egui::vec2(72.0, 72.0 / aspect), layer.enabled && !muted).clicked() {
+                            *selected = Some(layer.id);
+                        }
+                        let mut name = layer.name.clone();
+                        if name.chars().count() > 11 {
+                            name = format!("{}…", name.chars().take(10).collect::<String>());
+                        }
+                        ui.label(RichText::new(name).small().strong());
+                        fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
+                        ui.monospace(format!("{:3.0}%", layer.opacity * 100.0));
+                        ui.horizontal(|ui| {
+                            let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small());
+                            on.context_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
+                            ui.toggle_value(&mut layer.solo, RichText::new("S").small());
+                        });
+                        ComboBox::from_id_salt(("mix_blend", layer.id)).width(70.0).selected_text(RichText::new(layer.blend.name()).small()).show_ui(ui, |ui| {
+                            for mode in BlendMode::ALL {
+                                ui.selectable_value(&mut layer.blend, mode, mode.name());
+                            }
+                        });
+                    });
+                });
+                if frame.response.interact(Sense::click()).clicked() {
+                    *selected = Some(layer.id);
+                }
+            }
+            // Master strip.
+            card_frame(ui, *selected == Some(MASTER_ID)).inner_margin(egui::Margin::same(5)).show(ui, |ui| {
+                ui.set_width(78.0);
+                ui.vertical_centered(|ui| {
+                    if thumbnail(ui, *texture, egui::vec2(72.0, 72.0 / aspect), true).clicked() {
+                        *selected = Some(MASTER_ID);
+                    }
+                    ui.label(RichText::new("MASTER").small().strong().color(ACCENT));
+                    fader(ui, &mut comp.master_fade, &mut comp.master_fade_mod, ControlTarget::MasterFade, height);
+                    ui.monospace(format!("{:3.0}%", comp.master_fade * 100.0));
+                });
+            });
+        });
+    });
 }

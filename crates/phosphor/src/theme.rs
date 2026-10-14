@@ -41,9 +41,20 @@ pub fn apply(ctx: &egui::Context) {
     }
     ctx.set_visuals(v);
     ctx.style_mut_of(egui::Theme::Dark, |s| {
-        s.spacing.item_spacing = egui::vec2(8.0, 6.0);
-        s.spacing.button_padding = egui::vec2(10.0, 5.0);
-        s.spacing.slider_width = 160.0;
-        s.spacing.interact_size.y = 22.0;
+        use egui::{FontId, TextStyle};
+        // Compact: smaller labels so more controls fit on screen.
+        s.text_styles = [
+            (TextStyle::Small, FontId::proportional(9.0)),
+            (TextStyle::Body, FontId::proportional(11.5)),
+            (TextStyle::Button, FontId::proportional(11.5)),
+            (TextStyle::Heading, FontId::proportional(14.0)),
+            (TextStyle::Monospace, FontId::monospace(10.5)),
+        ]
+        .into();
+        s.spacing.item_spacing = egui::vec2(6.0, 4.0);
+        s.spacing.button_padding = egui::vec2(7.0, 3.0);
+        s.spacing.slider_width = 150.0;
+        s.spacing.interact_size.y = 19.0;
+        s.spacing.menu_margin = egui::Margin::same(6);
     });
 }

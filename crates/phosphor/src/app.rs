@@ -97,6 +97,9 @@ pub struct State {
     monitor_keys: Vec<u8>,
     monitor_textures: Vec<(egui::TextureId, (u32, u32))>,
     pub displays: Vec<crate::screens::Display>,
+    /// Set by panels: open a new monitor with this source.
+    pub new_monitor: Option<panels::MonitorSource>,
+    pub snapshot_requested: bool,
     #[cfg(not(target_arch = "wasm32"))]
     pub isf: crate::isf_lib::IsfLibrary,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
@@ -260,6 +263,8 @@ impl PhosphorApp {
                 monitor_keys: Vec::new(),
                 monitor_textures: Vec::new(),
                 displays: crate::screens::displays(),
+                new_monitor: None,
+                snapshot_requested: false,
                 #[cfg(not(target_arch = "wasm32"))]
                 isf: crate::isf_lib::IsfLibrary::scan(),
                 fx_clipboard: Vec::new(),
@@ -466,12 +471,97 @@ impl PhosphorApp {
         }
     }
 
-    /// Opens a new Monitor panel as a floating window.
-    fn add_monitor(&mut self) {
+    /// Mapped targets for the UI badges, Learn/Forget requests from right-click menus, and
+    /// keyboard keys as controller input.
+    fn control_requests(&mut self, ctx: &egui::Context) {
+        let st = &mut self.state;
+        let mapped: std::sync::Arc<Vec<phosphor_engine::ControlTarget>> = std::sync::Arc::new(st.comp.control_maps.iter().map(|m| m.target.clone()).collect());
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::MAPPED_TARGETS), mapped));
+        if let Some(t) = ctx.data_mut(|d| {
+            let id = egui::Id::new(panels::LEARN_REQUEST);
+            let t = d.get_temp::<phosphor_engine::ControlTarget>(id);
+            d.remove::<phosphor_engine::ControlTarget>(id);
+            t
+        }) {
+            st.control.learning = Some(t);
+        }
+        if let Some(t) = ctx.data_mut(|d| {
+            let id = egui::Id::new(panels::UNLEARN_REQUEST);
+            let t = d.get_temp::<phosphor_engine::ControlTarget>(id);
+            d.remove::<phosphor_engine::ControlTarget>(id);
+            t
+        }) {
+            st.comp.control_maps.retain(|m| m.target != t);
+        }
+        // Keys act as controller buttons (ignored while typing in a text field).
+        if ctx.memory(|m| m.focused().is_some()) {
+            return;
+        }
+        let keys: Vec<(String, bool)> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Key { key, pressed, repeat: false, modifiers, .. } if !modifiers.command && *key != egui::Key::Escape => {
+                        Some((key.name().to_string(), *pressed))
+                    }
+                    _ => None,
+                })
+                .collect()
+        });
+        for (key, pressed) in keys {
+            let source = phosphor_engine::ControlSource::Key { key };
+            let mapped = st.comp.control_maps.iter().any(|m| m.source == source);
+            // Unmapped key releases don't need to reach the hub; presses do (for Learn).
+            if pressed || mapped {
+                st.control.inject(&mut st.comp, crate::control::Incoming { source, value: if pressed { 1.0 } else { 0.0 } });
+            }
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            st.control.learning = None;
+        }
+    }
+
+    fn learning_banner(&mut self, ctx: &egui::Context) {
+        let Some(t) = self.state.control.learning.clone() else { return };
+        let name = crate::control::target_label(&self.state.comp, &t);
+        egui::Area::new(egui::Id::new("learn_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(40, 34, 14)).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("{} Learning: {name}", icon::BROADCAST)).color(egui::Color32::from_rgb(255, 205, 90)));
+                    ui.weak("move a knob, send OSC, or press a key");
+                    if ui.small_button("Cancel (Esc)").clicked() {
+                        self.state.control.learning = None;
+                    }
+                });
+            });
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn save_snapshot(&mut self) {
+        let Some(engine) = &self.state.engine else { return };
+        let Some((w, h, pixels)) = engine.read_output() else { return };
+        if let Some(path) = rfd::FileDialog::new().add_filter("PNG", &["png"]).set_file_name("Phosphor snapshot.png").save_file()
+            && let Err(e) = image::save_buffer(&path, &pixels, w, h, image::ColorType::Rgba8)
+        {
+            self.state.notice = Some(format!("Snapshot failed: {e}"));
+        }
+    }
+
+    fn add_monitor_with(&mut self, source: panels::MonitorSource) {
+        let n = self.add_monitor();
+        if let Some(cfg) = self.state.monitors.get_mut(&n) {
+            cfg.source = source;
+        }
+    }
+
+    /// Opens a new Monitor panel as a floating window and returns its number.
+    fn add_monitor(&mut self) -> u8 {
         let used: Vec<u8> = self.dock.iter_all_tabs().filter_map(|(_, t)| if let Tab::Monitor(n) = t { Some(*n) } else { None }).collect();
         let n = (1..=99).find(|n| !used.contains(n) && !self.detached.contains(&Tab::Monitor(*n))).unwrap_or(99);
         self.state.monitors.entry(n).or_default();
         self.dock.add_window(vec![Tab::Monitor(n)]);
+        n
     }
 
     /// Brings a panel to the front, reopening it if it was closed.
@@ -507,7 +597,9 @@ impl PhosphorApp {
                 crate::explorer::new_shader(st, phosphor_engine::custom::template(generator));
                 self.show_tab(Tab::ShaderEditor);
             }
-            Command::AddMonitor => self.add_monitor(),
+            Command::AddMonitor => {
+                let _ = self.add_monitor();
+            }
             Command::ToggleMapping => st.comp.mapping.enabled = !st.comp.mapping.enabled,
             Command::ToggleSession => {
                 if st.net.running() {
@@ -633,7 +725,7 @@ impl PhosphorApp {
         egui::Panel::top("top_bar").show(ui, |ui| {
             ui.add_space(2.0);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("PHOSPHOR").strong().size(15.0).color(theme::ACCENT));
+                ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(theme::ACCENT));
                 ui.separator();
                 if ui.button(format!("{} Layer", icon::PLUS)).clicked() {
                     self.state.add_layer();
@@ -671,7 +763,7 @@ impl PhosphorApp {
                 ui.menu_button("View", |ui| {
                     ui.weak("Drag any tab to move it; drag it outside to float it.");
                     if ui.button(format!("{} Add monitor", icon::MONITOR)).on_hover_text("A new preview panel showing the output, the mix, or any layer").clicked() {
-                        self.add_monitor();
+                        let _ = self.add_monitor();
                         ui.close();
                     }
                     ui.menu_button("Panels", |ui| {
@@ -903,6 +995,7 @@ impl eframe::App for PhosphorApp {
             run.samples.clear();
         }
         ctx.data_mut(|d| d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs));
+        self.control_requests(&ctx);
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
             self.state.palette.toggle();
         }
@@ -961,6 +1054,14 @@ impl eframe::App for PhosphorApp {
         if let Some(tab) = self.state.open_tab.take() {
             self.show_tab(tab);
         }
+        if let Some(src) = self.state.new_monitor.take() {
+            self.add_monitor_with(src);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if std::mem::take(&mut self.state.snapshot_requested) {
+            self.save_snapshot();
+        }
+        self.learning_banner(&ctx);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let rect = ctx.content_rect();
@@ -1017,13 +1118,20 @@ impl eframe::App for PhosphorApp {
     }
 }
 
-/// Preview + library on the left, layer stack + inspector on the right.
+/// Everything at once: preview + monitor, clips, mixer/effects along the bottom, layers and
+/// inspector down the right.
 fn default_layout() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Preview]);
     let surface = dock.main_surface_mut();
-    let [left, right] = surface.split_right(NodeIndex::root(), 0.64, vec![Tab::Layers]);
-    surface.split_below(right, 0.5, vec![Tab::Inspector]);
-    surface.split_below(left, 0.68, vec![Tab::Library, Tab::Clips, Tab::Media, Tab::Presets, Tab::ShaderEditor, Tab::Network, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
+    let [left, right] = surface.split_right(NodeIndex::root(), 0.72, vec![Tab::Layers]);
+    surface.split_below(right, 0.46, vec![Tab::Inspector, Tab::Presets]);
+    let [top, bottom] = surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Media]);
+    surface.split_right(top, 0.62, vec![Tab::Monitor(1), Tab::Mapping]);
+    surface.split_below(
+        bottom,
+        0.42,
+        vec![Tab::Mixer, Tab::Library, Tab::Audio, Tab::Control, Tab::Stream, Tab::Network, Tab::ShaderEditor, Tab::Output],
+    );
     dock
 }
 

@@ -71,13 +71,22 @@ impl ControlHub {
     /// Drains incoming messages; binds the learning target if one is waiting.
     pub fn poll(&mut self, comp: &mut Composition) {
         while let Ok(msg) = self.rx.try_recv() {
-            if let Some(target) = self.learning.take() {
-                comp.control_maps.retain(|m| m.target != target);
-                comp.control_maps.push(ControlMap { source: msg.source.clone(), target });
-            }
-            self.fresh.insert(msg.source.clone(), msg.value);
-            self.last = Some(msg);
+            self.handle(comp, msg);
         }
+    }
+
+    /// Feeds a message from inside the app (keyboard) through the same path as MIDI/OSC.
+    pub fn inject(&mut self, comp: &mut Composition, msg: Incoming) {
+        self.handle(comp, msg);
+    }
+
+    fn handle(&mut self, comp: &mut Composition, msg: Incoming) {
+        if let Some(target) = self.learning.take() {
+            comp.control_maps.retain(|m| m.target != target);
+            comp.control_maps.push(ControlMap { source: msg.source.clone(), target });
+        }
+        self.fresh.insert(msg.source.clone(), msg.value);
+        self.last = Some(msg);
     }
 
     /// Writes this frame's values into their targets, then forgets them so the UI stays in charge
