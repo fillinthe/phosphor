@@ -138,6 +138,42 @@ impl Transition {
     }
 }
 
+/// When a clip/source change lands.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LaunchTiming {
+    #[default]
+    Now,
+    Beat,
+    Bar,
+}
+
+impl LaunchTiming {
+    pub const ALL: [LaunchTiming; 3] = [LaunchTiming::Now, LaunchTiming::Beat, LaunchTiming::Bar];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            LaunchTiming::Now => "Now",
+            LaunchTiming::Beat => "On beat",
+            LaunchTiming::Bar => "On bar",
+        }
+    }
+}
+
+/// How clicking/triggering media puts it on a layer: cut or fade, now or on the beat/bar.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LaunchSettings {
+    pub fade: bool,
+    pub fade_secs: f32,
+    pub timing: LaunchTiming,
+}
+
+impl Default for LaunchSettings {
+    fn default() -> Self {
+        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now }
+    }
+}
+
 /// A clip slot: a source ready to be triggered onto its layer.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -188,14 +224,17 @@ pub enum ModSource {
     Random,
     /// An 8-step sequencer.
     Steps,
+    /// A pulse on every beat the audio beat detector hears.
+    AudioBeat,
 }
 
 impl ModSource {
-    pub const ALL: [ModSource; 11] = [
+    pub const ALL: [ModSource; 12] = [
         ModSource::AudioLevel,
         ModSource::AudioLow,
         ModSource::AudioMid,
         ModSource::AudioHigh,
+        ModSource::AudioBeat,
         ModSource::LfoSine,
         ModSource::LfoTriangle,
         ModSource::LfoSaw,
@@ -218,6 +257,7 @@ impl ModSource {
             ModSource::Beat => "Beat (BPM)",
             ModSource::Random => "Random",
             ModSource::Steps => "Step sequencer",
+            ModSource::AudioBeat => "Audio beat (kick)",
         }
     }
 
@@ -229,7 +269,7 @@ impl ModSource {
     }
 
     pub fn is_audio(self) -> bool {
-        matches!(self, ModSource::AudioLevel | ModSource::AudioLow | ModSource::AudioMid | ModSource::AudioHigh)
+        matches!(self, ModSource::AudioLevel | ModSource::AudioLow | ModSource::AudioMid | ModSource::AudioHigh | ModSource::AudioBeat)
     }
 }
 
@@ -375,26 +415,28 @@ impl Default for LayerState {
 }
 
 impl LayerState {
-    /// Starts a transition from the current source, if transitions are enabled on this layer.
-    pub fn start_transition(&mut self, now: f32) {
-        if self.transition_secs > 0.01 && self.source != SourceSpec::None {
+    /// Starts a `secs`-long transition from the current source (0 = cut).
+    pub fn start_transition(&mut self, now: f32, secs: f32) {
+        if secs > 0.01 && self.source != SourceSpec::None {
             self.transition = Some(Transition {
                 from: self.source.clone(),
                 from_values: self.generator_values.clone(),
                 start: now,
-                duration: self.transition_secs,
+                duration: secs,
                 kind: self.transition_kind,
             });
+        } else {
+            self.transition = None;
         }
     }
 
-    /// Puts clip `slot` on this layer (with a transition). Returns false for an empty slot.
-    pub fn trigger_clip(&mut self, slot: usize, now: f32) -> bool {
+    /// Puts clip `slot` on this layer with a `secs` transition. Returns false for an empty slot.
+    pub fn trigger_clip(&mut self, slot: usize, now: f32, secs: f32) -> bool {
         let Some(clip) = self.clips.get(slot).filter(|c| !c.is_empty()).cloned() else { return false };
         if self.active_clip == Some(clip.id) && self.source == clip.source {
             return true;
         }
-        self.start_transition(now);
+        self.start_transition(now, secs);
         self.source = clip.source;
         self.generator_values = clip.generator_values;
         self.generator_mods.clear();
@@ -454,13 +496,18 @@ impl OutputConfig {
 }
 
 /// A file in the media bin. Paths are stored as given; thumbnails are rebuilt on load.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaItem {
     pub name: String,
     pub path: String,
     /// Watched folder this came from (empty for files added one by one).
     #[serde(default)]
     pub folder: String,
+    #[serde(default)]
+    pub favorite: bool,
+    /// Your collections this item belongs to.
+    #[serde(default)]
+    pub collections: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -485,12 +532,15 @@ pub struct Composition {
     /// Columns shown in the Clips grid.
     pub clip_columns: usize,
     pub master_fade_mod: Option<Modulation>,
+    pub launch: LaunchSettings,
+    /// Names of your media collections.
+    pub media_collections: Vec<String>,
     pub bpm: f32,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), media_collections: Vec::new() }
     }
 }
 
@@ -552,8 +602,37 @@ impl Composition {
 
     /// Triggers column `col` on every layer that has a clip there.
     pub fn trigger_column(&mut self, col: usize, now: f32) {
+        let secs = self.launch_secs();
         for l in &mut self.layers {
-            l.trigger_clip(col, now);
+            l.trigger_clip(col, now, secs);
+        }
+    }
+
+    /// Fade time for launches (0 = cut).
+    pub fn launch_secs(&self) -> f32 {
+        if self.launch.fade { self.launch.fade_secs } else { 0.0 }
+    }
+
+    pub fn trigger_clip(&mut self, layer: u64, slot: usize, now: f32) {
+        let secs = self.launch_secs();
+        if let Some(l) = self.layer_mut(layer) {
+            l.trigger_clip(slot, now, secs);
+        }
+    }
+
+    /// Puts a new source on a layer using the launch fade.
+    pub fn set_layer_source(&mut self, layer: u64, source: SourceSpec, values: Vec<f32>, name: String, now: f32) {
+        let secs = self.launch_secs();
+        if let Some(l) = self.layer_mut(layer) {
+            l.start_transition(now, secs);
+            l.source = source;
+            l.generator_values = values;
+            l.generator_mods.clear();
+            l.active_clip = None;
+            if !name.is_empty() {
+                l.name = name;
+            }
+            l.playing = true;
         }
     }
 
@@ -568,7 +647,7 @@ impl Composition {
         if self.media_bin.iter().any(|m| m.path == path) {
             return false;
         }
-        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string(), folder: String::new() });
+        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string(), ..Default::default() });
         true
     }
 
@@ -578,7 +657,7 @@ impl Composition {
             m.folder = folder.to_string();
             return false;
         }
-        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string(), folder: folder.to_string() });
+        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string(), folder: folder.to_string(), ..Default::default() });
         true
     }
 

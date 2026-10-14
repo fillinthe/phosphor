@@ -239,10 +239,9 @@ pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
             Some(t) if t != MASTER_ID => t,
             _ => st.add_layer(),
         };
-        if let Some(l) = st.comp.layer_mut(t) {
-            l.start_transition(st.mod_inputs.time);
-            l.set_generator(g);
-            l.name = shaders::generator(g).map_or(g.to_string(), |d| d.name.to_string());
+        if let Some(desc) = shaders::generator(g) {
+            let now = st.mod_inputs.time as f64;
+            st.launch_source(t, phosphor_engine::SourceSpec::Generator(g.to_string()), desc.defaults(), desc.name.to_string(), now);
         }
     }
 }

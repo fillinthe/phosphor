@@ -54,6 +54,12 @@ app that's much smaller and lighter on the CPU.
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
 9. **ISF gaps**: multi-pass / feedback / >16 params (142 shaders), City Lights generator renders black,
    Broken LCD looks unchanged at defaults
+9b. **Export show**: one click packs a finished setup (project, every media file, shaders, ISF, MIDI/OSC/key
+    mappings, outputs and mapping) into a standalone player app that runs on another Mac without Phosphor
+    installed — opens straight into the show, outputs on their screens, controllers live
+9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with
+    disconnect / block / disable
+9d. **Syphon out** (MadMapper, Resolume, OBS pick it up) — then NDI
 10. **Distribution**: bundle FFmpeg inside the .app (LGPL build), notarize, auto-update, Intel test
 
 ## TODO
@@ -106,6 +112,11 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
 - [ ] Live camera / capture card input
 - [x] Media bin with thumbnails (background FFmpeg frame grabs), import files, click or drag onto layers
+- [x] Media organising: favourites, your own collections, search, filter (videos/images/favourites/collection),
+      sort (name/newest/type), tile size, rename
+- [x] **Launch settings** for everything (clicks, drags, clips, MIDI/OSC triggers): Cut or Fade (time), Now / On beat / On bar
+- [x] **Audio beat detector**: kick detection + BPM estimate with confidence (verified 128.6 BPM on a 128 BPM track);
+      Follow audio locks tempo/beat to the music; "Audio beat (kick)" modulation source
 - [x] **Watch folders**: every clip in a folder (+ subfolders) loads into the bin, new files appear automatically
       (rescan every 10 s, background thread); bin grouped by folder; "Fill clips of the selected layer" from a folder
 - [x] File dialogs never pause the show (sheets; results arrive next frame); images decode in the background

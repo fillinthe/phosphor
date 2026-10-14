@@ -26,6 +26,8 @@ pub struct ControlHub {
     pub last: Option<Incoming>,
     /// Target waiting for the next message to bind to.
     pub learning: Option<ControlTarget>,
+    /// Clip (Some(layer), slot) / column (None, column) triggers from controllers, for the app to launch.
+    pub triggers: Vec<(Option<u64>, usize)>,
     fresh: HashMap<ControlSource, f32>,
     #[cfg(not(target_arch = "wasm32"))]
     backend: native::Backend,
@@ -43,6 +45,7 @@ impl ControlHub {
             local_ip: None,
             last: None,
             learning: None,
+            triggers: Vec::new(),
             fresh: HashMap::new(),
             #[cfg(not(target_arch = "wasm32"))]
             backend: native::Backend::default(),
@@ -97,7 +100,9 @@ impl ControlHub {
         }
         for map in comp.control_maps.clone() {
             let Some(v) = self.fresh.get(&map.source).copied() else { continue };
-            set_target(comp, &map.target, v, now);
+            if let Some(t) = set_target(comp, &map.target, v, now) {
+                self.triggers.push(t);
+            }
         }
         // Built-in addresses work without any mapping: /phosphor/master, /phosphor/layer/3/opacity…
         let osc: Vec<(String, f32)> = self
@@ -111,8 +116,10 @@ impl ControlHub {
         if !osc.is_empty() {
             let targets = all_targets(comp);
             for (address, v) in osc {
-                if let Some((t, _)) = targets.iter().find(|(t, _)| default_osc_address(t) == address) {
-                    set_target(comp, &t.clone(), v, now);
+                if let Some((t, _)) = targets.iter().find(|(t, _)| default_osc_address(t) == address)
+                    && let Some(trig) = set_target(comp, &t.clone(), v, now)
+                {
+                    self.triggers.push(trig);
                 }
             }
         }
@@ -128,17 +135,14 @@ pub fn find_effect_mut(comp: &mut Composition, id: u64) -> Option<&mut EffectSta
     comp.master_effects.iter_mut().chain(comp.layers.iter_mut().flat_map(|l| l.effects.iter_mut())).find(|e| e.id == id)
 }
 
-fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, now: f32) {
+/// Sets a value target directly; returns clip/column triggers for the app to launch.
+fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32) -> Option<(Option<u64>, usize)> {
     match target {
         ControlTarget::TriggerClip { layer, slot } => {
-            if v > 0.5 && let Some(l) = comp.layer_mut(*layer) {
-                l.trigger_clip(*slot, now);
-            }
+            return (v > 0.5).then_some((Some(*layer), *slot));
         }
         ControlTarget::TriggerColumn(col) => {
-            if v > 0.5 {
-                comp.trigger_column(*col, now);
-            }
+            return (v > 0.5).then_some((None, *col));
         }
         ControlTarget::MasterFade => comp.master_fade = v.clamp(0.0, 1.0),
         ControlTarget::LayerOpacity(id) => {
@@ -185,6 +189,7 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, now: f32) 
             }
         }
     }
+    None
 }
 
 /// Every bindable target in the composition, with a readable name.
