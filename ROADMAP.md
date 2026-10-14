@@ -41,7 +41,8 @@ app that's much smaller and lighter on the CPU.
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
    mappable themselves; Mappings editor with Listen + ranges. on the phone/iPad remote ✔. Next: TouchOSC `.tosc` export, multiple surface pages
-4. **Mapping upgrades**: mesh warp (grid of bezier points), masks, per-output colour/brightness
+4. ~~**Mapping upgrades**~~ mesh warp ✔ (Catmull-Rom grid up to 8×8), masks ✔ (polygons, invert). Next: per-output
+   colour/brightness, edge-blend curves (gamma), mask feather, bezier edges
 5. **OBS / pro I/O**: Syphon and NDI out, virtual camera, NDI in
 6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
 6b. ~~**Crash recovery**~~ ✔ rolling snapshot every 2 s; watchdog reopens Phosphor after a crash (stops after

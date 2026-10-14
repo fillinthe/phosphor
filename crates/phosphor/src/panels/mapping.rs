@@ -2,8 +2,29 @@
 
 use super::*;
 
-/// Draws every surface's outline, corner handles and a centre handle over `frame` (the rect the
-/// output occupies on screen) and applies drags. Returns true if anything was touched.
+/// One draggable point on the mapping canvas. Returns its response; `delta` gets the drag in
+/// output units (0..1).
+fn point_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::Rect, color: Color32, square: bool, delta: &mut [f32; 2]) -> egui::Response {
+    let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(18.0, 18.0)), id, Sense::click_and_drag());
+    if r.dragged() {
+        let d = r.drag_delta();
+        *delta = [d.x / frame.width(), d.y / frame.height()];
+    }
+    let active = r.hovered() || r.dragged();
+    let fill = if active { Color32::WHITE } else { color };
+    if square {
+        ui.painter().rect_filled(egui::Rect::from_center_size(at, egui::vec2(10.0, 10.0)), 2.0, fill);
+    } else {
+        ui.painter().circle(at, if active { 7.0 } else { 5.0 }, fill, Stroke::new(1.5, Color32::BLACK));
+    }
+    r
+}
+
+const MASK_COLOR: Color32 = Color32::from_rgb(255, 130, 80);
+
+/// Draws every surface (corners or mesh grid) and mask over `frame` (the rect the output occupies
+/// on screen) with draggable handles, and applies drags. Shared by the Mapping panel and the
+/// output window's edit mode. Returns true if anything was touched.
 pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mapping, selected: &mut Option<u64>, labels: bool) -> bool {
     let to_screen = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
     let mut touched = false;
@@ -11,43 +32,127 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         let is_selected = *selected == Some(s.id);
         let base = if s.enabled { ACCENT } else { Color32::GRAY };
         let line = if is_selected { Stroke::new(2.0, base) } else { Stroke::new(1.0, base.gamma_multiply(0.55)) };
-        let pts: Vec<egui::Pos2> = s.corners.iter().map(|c| to_screen(*c)).collect();
-        ui.painter().add(egui::Shape::closed_line(pts.clone(), line));
         let id = ui.id().with(("surface", s.id));
-
-        let c = to_screen(s.center());
-        let r = ui.interact(egui::Rect::from_center_size(c, egui::vec2(16.0, 16.0)), id.with("move"), Sense::click_and_drag());
+        // Outline: the corner quad, or the mesh's curved grid lines.
+        match &s.mesh {
+            Some(m) => {
+                let steps = 24;
+                for j in 0..=m.rows {
+                    let t = j as f32 / m.rows as f32;
+                    let pts: Vec<egui::Pos2> = (0..=steps).map(|k| to_screen(m.eval(k as f32 / steps as f32, t))).collect();
+                    ui.painter().add(egui::Shape::line(pts, if j == 0 || j == m.rows { line } else { Stroke::new(1.0, base.gamma_multiply(0.35)) }));
+                }
+                for i in 0..=m.cols {
+                    let u = i as f32 / m.cols as f32;
+                    let pts: Vec<egui::Pos2> = (0..=steps).map(|k| to_screen(m.eval(u, k as f32 / steps as f32))).collect();
+                    ui.painter().add(egui::Shape::line(pts, if i == 0 || i == m.cols { line } else { Stroke::new(1.0, base.gamma_multiply(0.35)) }));
+                }
+            }
+            None => {
+                let pts: Vec<egui::Pos2> = s.corners.iter().map(|c| to_screen(*c)).collect();
+                ui.painter().add(egui::Shape::closed_line(pts, line));
+            }
+        }
+        let mut d = [0.0, 0.0];
+        let r = point_handle(ui, id.with("move"), to_screen(s.center()), frame, base, true, &mut d);
         if r.clicked() || r.drag_started() {
             *selected = Some(s.id);
             touched = true;
         }
-        if r.dragged() {
-            let d = r.drag_delta();
-            s.translate(d.x / frame.width(), d.y / frame.height());
+        if d != [0.0, 0.0] {
+            s.translate(d[0], d[1]);
             touched = true;
         }
-        let fill = if r.hovered() || r.dragged() { Color32::WHITE } else { base };
-        ui.painter().rect_filled(egui::Rect::from_center_size(c, egui::vec2(10.0, 10.0)), 2.0, fill);
         r.on_hover_text("Drag to move the whole surface");
-
-        for (i, corner) in s.corners.iter_mut().enumerate() {
-            let p = to_screen(*corner);
-            let r = ui.interact(egui::Rect::from_center_size(p, egui::vec2(20.0, 20.0)), id.with(i), Sense::click_and_drag());
+        // Mesh points, or the four corners.
+        let points: Vec<&mut [f32; 2]> = match &mut s.mesh {
+            Some(m) => m.points.iter_mut().collect(),
+            None => s.corners.iter_mut().collect(),
+        };
+        for (i, p) in points.into_iter().enumerate() {
+            let mut d = [0.0, 0.0];
+            let r = point_handle(ui, id.with(i), to_screen(*p), frame, base, false, &mut d);
             if r.clicked() || r.drag_started() {
                 *selected = Some(s.id);
                 touched = true;
             }
-            if r.dragged() {
-                let d = r.drag_delta();
-                corner[0] += d.x / frame.width();
-                corner[1] += d.y / frame.height();
-                touched = true;
-            }
-            let active = r.hovered() || r.dragged();
-            ui.painter().circle(p, if active { 7.0 } else { 5.0 }, if active { Color32::WHITE } else { base }, Stroke::new(1.5, Color32::BLACK));
+            p[0] += d[0];
+            p[1] += d[1];
+            touched |= d != [0.0, 0.0];
         }
+        s.sync_corners();
         if labels {
-            ui.painter().text(pts[0] + egui::vec2(10.0, 8.0), egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(12.0), Color32::WHITE);
+            ui.painter().text(to_screen(s.corners[0]) + egui::vec2(10.0, 8.0), egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(12.0), Color32::WHITE);
+        }
+    }
+    // Masks: drag points, + between points adds one, right-click a point to delete it.
+    for m in &mut mapping.masks {
+        let id = ui.id().with(("mask", m.id));
+        let color = if m.enabled { MASK_COLOR } else { Color32::GRAY };
+        let is_selected = *selected == Some(m.id);
+        let pts: Vec<egui::Pos2> = m.points.iter().map(|p| to_screen(*p)).collect();
+        if pts.len() >= 2 {
+            ui.painter().add(egui::Shape::closed_line(pts.clone(), Stroke::new(if is_selected { 2.0 } else { 1.0 }, color)));
+        }
+        let n = m.points.len().max(1) as f32;
+        let centre = m.points.iter().fold([0.0, 0.0], |a, p| [a[0] + p[0] / n, a[1] + p[1] / n]);
+        let mut d = [0.0, 0.0];
+        let r = point_handle(ui, id.with("move"), to_screen(centre), frame, color, true, &mut d);
+        if r.clicked() || r.drag_started() {
+            *selected = Some(m.id);
+            touched = true;
+        }
+        if d != [0.0, 0.0] {
+            m.points.iter_mut().for_each(|p| {
+                p[0] += d[0];
+                p[1] += d[1];
+            });
+            touched = true;
+        }
+        r.on_hover_text(format!("{}: drag to move the mask", m.name));
+        let mut delete = None;
+        let mut insert = None;
+        let count = m.points.len();
+        for i in 0..count {
+            let mut d = [0.0, 0.0];
+            let r = point_handle(ui, id.with(i), pts[i], frame, color, false, &mut d);
+            if r.clicked() || r.drag_started() {
+                *selected = Some(m.id);
+            }
+            m.points[i][0] += d[0];
+            m.points[i][1] += d[1];
+            touched |= d != [0.0, 0.0];
+            if count > 3 {
+                r.right_menu(|ui| {
+                    if ui.button(label(icon::TRASH, "Delete point")).clicked() {
+                        delete = Some(i);
+                        ui.close();
+                    }
+                });
+            }
+            // A small + halfway to the next point adds a point there.
+            let next = pts[(i + 1) % count];
+            let mid = pts[i] + (next - pts[i]) * 0.5;
+            let a = ui.interact(egui::Rect::from_center_size(mid, egui::vec2(14.0, 14.0)), id.with(("add", i)), Sense::click());
+            let c = if a.hovered() { Color32::WHITE } else { color.gamma_multiply(0.6) };
+            ui.painter().circle_stroke(mid, 4.0, Stroke::new(1.0, c));
+            ui.painter().text(mid, egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(9.0), c);
+            if a.on_hover_text("Add a point here").clicked() {
+                insert = Some(i + 1);
+            }
+        }
+        if let Some(i) = delete {
+            m.points.remove(i);
+            touched = true;
+        }
+        if let Some(i) = insert {
+            let (a, b) = (m.points[i - 1], m.points[i % m.points.len()]);
+            m.points.insert(i, [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5]);
+            *selected = Some(m.id);
+            touched = true;
+        }
+        if labels && let Some(p) = pts.first() {
+            ui.painter().text(*p + egui::vec2(8.0, -14.0), egui::Align2::LEFT_TOP, &m.name, egui::FontId::proportional(11.0), color);
         }
     }
     touched
@@ -74,6 +179,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     let mut edit_on_output = st.output.lock().unwrap().get(&oid).is_some_and(|o| o.edit_mapping);
     let canvas = (st.comp.width, st.comp.height);
     let mut add_surface = false;
+    let mut add_mask = false;
     {
         let State { comp, output, .. } = st;
         let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
@@ -83,6 +189,9 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             ui.toggle_value(&mut o.mapping.test_pattern, label(icon::GRID_FOUR, "Alignment grid"));
             if ui.button(label(icon::PLUS, "Surface")).clicked() {
                 add_surface = true;
+            }
+            if ui.button(label(icon::PLUS, "Mask")).on_hover_text("A shape that blacks out part of this output (doors, faces, the booth…)").clicked() {
+                add_mask = true;
             }
             if ui.checkbox(&mut edit_on_output, "Edit on output (E)").on_hover_text("Show draggable handles in this output's window").changed() {
                 output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
@@ -97,7 +206,15 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
         st.selected_surface = Some(id);
     }
-    ui.weak("Drag corners to pin a surface onto the real object. Drag the centre to move it. Overlap soft edges to blend projectors.");
+    if add_mask {
+        let id = st.comp.new_id();
+        if let Some(o) = st.comp.output_mut(oid) {
+            o.mapping.add_mask(id);
+            o.mapping.enabled = true;
+        }
+        st.selected_surface = Some(id);
+    }
+    ui.weak("Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
 
     let State { comp, selected_surface, .. } = st;
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
@@ -142,6 +259,21 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 });
                 guarded!(ui, s.opacity, Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
                 guarded!(ui, s.feather, Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
+                ui.horizontal(|ui| {
+                    let mut on = s.mesh.is_some();
+                    let (mut cols, mut rows) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));
+                    let mut changed = ui.toggle_value(&mut on, label(icon::GRID_NINE, "Mesh warp")).on_hover_text("Bend the surface onto curved or uneven objects with a grid of points").changed();
+                    if on {
+                        changed |= guarded!(ui, cols, egui::DragValue::new(&mut cols).range(1..=8).prefix("cols ")).changed();
+                        changed |= guarded!(ui, rows, egui::DragValue::new(&mut rows).range(1..=8).prefix("rows ")).changed();
+                        if ui.small_button("Flatten").on_hover_text("Straighten the grid between the four corners").clicked() {
+                            s.mesh = Some(phosphor_engine::mapping::Mesh::from_corners(&s.corners, cols, rows));
+                        }
+                    }
+                    if changed {
+                        s.set_mesh(on, cols, rows);
+                    }
+                });
                 ui.collapsing("Input region (part of the mix shown)", |ui| {
                     guarded!(ui, s.input[0], Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
                     guarded!(ui, s.input[1], Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
@@ -169,6 +301,29 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
             ui.add_space(4.0);
+        }
+        // Masks.
+        let mut remove_mask = None;
+        for (i, m) in o.mapping.masks.iter_mut().enumerate() {
+            card_frame(ui, *selected_surface == Some(m.id)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
+                    ui.toggle_value(&mut m.enabled, RichText::new("ON").small().strong());
+                    ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
+                    ui.toggle_value(&mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
+                    ui.weak(format!("{} points", m.points.len()));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button(icon::TRASH).on_hover_text("Delete mask").clicked() {
+                            remove_mask = Some(i);
+                        }
+                    });
+                });
+            });
+            ui.add_space(4.0);
+        }
+        if let Some(i) = remove_mask {
+            o.mapping.masks.remove(i);
         }
     });
     if let Some(i) = remove {
