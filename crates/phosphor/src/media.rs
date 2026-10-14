@@ -52,6 +52,9 @@ pub struct MediaManager {
     pub errors: HashMap<u64, String>,
     #[cfg(not(target_arch = "wasm32"))]
     players: HashMap<u64, video::VideoPlayer>,
+    /// Images decoding on background threads: (layer, source, result).
+    #[cfg(not(target_arch = "wasm32"))]
+    decoded: Option<(std::sync::mpsc::Sender<Decoded>, std::sync::mpsc::Receiver<Decoded>)>,
     /// Players for the outgoing side of a transition; they keep playing until it ends.
     #[cfg(not(target_arch = "wasm32"))]
     outgoing: HashMap<u64, video::VideoPlayer>,
@@ -82,6 +85,18 @@ impl MediaManager {
             self.errors.remove(&layer.id);
             match &layer.source {
                 SourceSpec::Image { path: Some(path), .. } => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        // Decode off the UI thread so big images never hitch playback.
+                        let (tx, _) = self.decoded.get_or_insert_with(std::sync::mpsc::channel);
+                        let tx = tx.clone();
+                        let (id, spec, path) = (layer.id, layer.source.clone(), path.clone());
+                        std::thread::spawn(move || {
+                            let result = image::open(&path).map(|i| i.to_rgba8()).map_err(|e| format!("Couldn't open {}: {e}", file_name(&path)));
+                            let _ = tx.send((id, spec, result));
+                        });
+                    }
+                    #[cfg(target_arch = "wasm32")]
                     if let Err(e) = load_image_path(engine, layer.id, path) {
                         self.errors.insert(layer.id, e);
                     }
@@ -112,6 +127,21 @@ impl MediaManager {
 
     /// Pulls the newest due frame from every movie into the engine. `now` is the frame clock in seconds.
     pub fn update_video(&mut self, comp: &Composition, engine: &mut Engine, now: f64) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((_, rx)) = &self.decoded {
+            for (id, spec, result) in rx.try_iter() {
+                // Only if the layer still shows that image.
+                if !comp.layers.iter().any(|l| l.id == id && l.source == spec) {
+                    continue;
+                }
+                match result {
+                    Ok(img) => engine.upload_rgba(id, img.width(), img.height(), img.as_raw()),
+                    Err(e) => {
+                        self.errors.insert(id, e);
+                    }
+                }
+            }
+        }
         #[cfg(not(target_arch = "wasm32"))]
         for layer in &comp.layers {
             let Some(player) = self.players.get_mut(&layer.id) else { continue };
@@ -173,6 +203,10 @@ impl MediaManager {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+type Decoded = (u64, SourceSpec, Result<image::RgbaImage, String>);
+
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn load_image_path(engine: &mut Engine, layer: u64, path: &str) -> Result<(), String> {
     #[cfg(not(target_arch = "wasm32"))]
     {

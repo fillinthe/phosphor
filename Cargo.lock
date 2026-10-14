@@ -2427,6 +2427,7 @@ dependencies = [
  "midir",
  "phosphor-engine",
  "phosphor-isf",
+ "pollster 0.4.0",
  "qrcode",
  "rfd",
  "rosc",

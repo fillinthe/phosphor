@@ -458,6 +458,9 @@ impl OutputConfig {
 pub struct MediaItem {
     pub name: String,
     pub path: String,
+    /// Watched folder this came from (empty for files added one by one).
+    #[serde(default)]
+    pub folder: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -565,7 +568,17 @@ impl Composition {
         if self.media_bin.iter().any(|m| m.path == path) {
             return false;
         }
-        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string() });
+        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string(), folder: String::new() });
+        true
+    }
+
+    /// Adds a file from a watched folder (no duplicates). Returns true if it was new.
+    pub fn add_folder_media(&mut self, name: &str, path: &str, folder: &str) -> bool {
+        if let Some(m) = self.media_bin.iter_mut().find(|m| m.path == path) {
+            m.folder = folder.to_string();
+            return false;
+        }
+        self.media_bin.push(MediaItem { name: name.to_string(), path: path.to_string(), folder: folder.to_string() });
         true
     }
 

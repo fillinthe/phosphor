@@ -3,7 +3,11 @@ mod audio;
 mod bench;
 mod clock;
 mod control;
+#[cfg(not(target_arch = "wasm32"))]
+mod dialogs;
 mod explorer;
+#[cfg(not(target_arch = "wasm32"))]
+mod folders;
 #[cfg(not(target_arch = "wasm32"))]
 mod isf_lib;
 mod media;

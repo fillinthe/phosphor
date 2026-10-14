@@ -31,6 +31,7 @@ const KEY_FAVORITES: &str = "favorites";
 const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
 const KEY_REMOTE_PASSWORD: &str = "remote_password";
+const KEY_WATCHED: &str = "watched_folders";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -95,6 +96,10 @@ pub struct State {
     /// Password phones need to control (viewing never needs it). Empty = no password.
     pub remote_password: String,
     pub require_password: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub dialogs: crate::dialogs::Dialogs,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub folders: crate::folders::FolderWatcher,
     pub explorer: crate::explorer::ExplorerState,
     pub editor: crate::explorer::EditorState,
     pub palette: crate::explorer::PaletteState,
@@ -253,6 +258,8 @@ pub struct PhosphorApp {
     gather_windows: bool,
     remote_published: f64,
     #[cfg(not(target_arch = "wasm32"))]
+    pending_snapshot: Option<(u32, u32, Vec<u8>)>,
+    #[cfg(not(target_arch = "wasm32"))]
     saver: crate::recovery::Saver,
     /// Shown after restoring from an unexpected quit; `true` if a stream was live.
     recovered: Option<bool>,
@@ -327,6 +334,10 @@ impl PhosphorApp {
                 net_audio: Vec::new(),
                 remote_password: stored(KEY_REMOTE_PASSWORD).unwrap_or_default(),
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
+                #[cfg(not(target_arch = "wasm32"))]
+                dialogs: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
+                folders: crate::folders::FolderWatcher::new(stored(KEY_WATCHED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()),
                 explorer: crate::explorer::ExplorerState {
                     favorites: stored(KEY_FAVORITES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                     recent: stored(KEY_RECENT).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
@@ -362,6 +373,8 @@ impl PhosphorApp {
             gather_windows: false,
             remote_published: 0.0,
             #[cfg(not(target_arch = "wasm32"))]
+            pending_snapshot: None,
+            #[cfg(not(target_arch = "wasm32"))]
             saver: Default::default(),
             recovered: None,
             panics: Vec::new(),
@@ -373,6 +386,10 @@ impl PhosphorApp {
         }
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(dir) = app.bench.as_ref().and_then(|b| b.cfg.watch.clone()) {
+            app.state.folders.add(dir);
         }
         if let Some(pw) = app.bench.as_ref().and_then(|b| b.cfg.remote_password.clone()) {
             app.state.remote_password = pw;
@@ -449,11 +466,9 @@ impl PhosphorApp {
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
         let keys: Vec<String> = wants.iter().map(|(k, _, _)| k.clone()).collect();
         if !wants.is_empty() {
-            // Stills refresh when the set of tiles changes and every 2 s; live tiles every frame.
-            let stale = now - *preview_refreshed > 2.0;
-            if stale {
-                *preview_refreshed = now;
-            }
+            // Each tile renders once (a still); only hovered/live tiles keep updating.
+            let _ = preview_refreshed;
+            let stale = false;
             let items = wants
                 .into_iter()
                 .enumerate()
@@ -675,14 +690,76 @@ impl PhosphorApp {
         });
     }
 
+    /// Grabs the output now; the save dialog opens as a sheet (the show keeps running).
     #[cfg(not(target_arch = "wasm32"))]
     fn save_snapshot(&mut self) {
         let Some(engine) = &self.state.engine else { return };
-        let Some((w, h, pixels)) = engine.read_output() else { return };
-        if let Some(path) = rfd::FileDialog::new().add_filter("PNG", &["png"]).set_file_name("Phosphor snapshot.png").save_file()
-            && let Err(e) = image::save_buffer(&path, &pixels, w, h, image::ColorType::Rgba8)
-        {
-            self.state.notice = Some(format!("Snapshot failed: {e}"));
+        self.pending_snapshot = engine.read_output();
+        self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), "Phosphor snapshot.png");
+    }
+
+    /// Answers from file dialogs, and files found in watched folders.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn handle_dialogs_and_folders(&mut self, now: f64) {
+        use crate::dialogs::Purpose;
+        let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
+        for (purpose, paths) in self.state.dialogs.poll() {
+            let st = &mut self.state;
+            match purpose {
+                Purpose::LayerSource(id) => {
+                    if let (Some(p), Some(l)) = (paths.first(), st.comp.layer_mut(id)) {
+                        l.start_transition(now as f32);
+                        l.source = crate::media::spec_for_path(&p.to_string_lossy());
+                        l.name = name_of(p);
+                    }
+                }
+                Purpose::ImportFiles => {
+                    for p in &paths {
+                        st.comp.add_media(&name_of(p), &p.to_string_lossy());
+                    }
+                }
+                Purpose::WatchFolder => {
+                    if let Some(p) = paths.first() {
+                        st.folders.add(p.to_string_lossy().to_string());
+                    }
+                }
+                Purpose::OpenProject => {
+                    if let Some(p) = paths.first() {
+                        match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
+                            Ok(comp) => st.load_composition(comp),
+                            Err(e) => st.notice = Some(format!("Open failed: {e}")),
+                        }
+                    }
+                }
+                Purpose::SaveProject => {
+                    if let Some(p) = paths.first()
+                        && let Err(e) = std::fs::write(p, st.comp.to_json())
+                    {
+                        st.notice = Some(format!("Save failed: {e}"));
+                    }
+                }
+                Purpose::SaveSnapshot => {
+                    if let (Some(p), Some((w, h, px))) = (paths.first().cloned(), self.pending_snapshot.take()) {
+                        std::thread::spawn(move || {
+                            let _ = image::save_buffer(&p, &px, w, h, image::ColorType::Rgba8);
+                        });
+                    }
+                }
+                Purpose::StreamFile => {
+                    if let Some(p) = paths.first() {
+                        st.stream.settings.file_path = p.to_string_lossy().to_string();
+                    }
+                }
+            }
+        }
+        if let Some(found) = self.state.folders.poll(now) {
+            // Files that vanished from a watched folder leave the bin; new ones join it.
+            let folders = self.state.folders.folders.clone();
+            let paths: std::collections::HashSet<&str> = found.iter().map(|(_, p, _)| p.as_str()).collect();
+            self.state.comp.media_bin.retain(|m| m.folder.is_empty() || !folders.contains(&m.folder) || paths.contains(m.path.as_str()));
+            for (name, path, folder) in &found {
+                self.state.comp.add_folder_media(name, path, folder);
+            }
         }
     }
 
@@ -1203,6 +1280,7 @@ impl PhosphorApp {
             audio_level: avg(|s| s.audio_level),
         };
         println!("SUMMARY {}", summary.to_json());
+        println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
         if self.state.stream.running() {
             self.state.stream.stop_and_wait();
             println!("RECORDED {}", self.state.stream.settings.file_path);
@@ -1289,7 +1367,9 @@ impl PhosphorApp {
             // Effects named on the command line may be ISF shaders that only exist now.
             run.rebuilt = true;
             if run.cfg.project.is_none() {
+                let bin = std::mem::take(&mut self.state.comp.media_bin);
                 self.state.comp = run.cfg.composition();
+                self.state.comp.media_bin = bin;
             }
             run.started = None;
             run.samples.clear();
@@ -1300,6 +1380,8 @@ impl PhosphorApp {
             self.state.palette.toggle();
         }
         self.shortcuts(&ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.handle_dialogs_and_folders(now);
         self.remote_sync(now);
         self.sync_mapping_from_output();
         {
@@ -1417,6 +1499,10 @@ impl PhosphorApp {
         }
         if let Ok(json) = serde_json::to_string(&self.state.explorer.favorites) {
             storage.set_string(KEY_FAVORITES, json);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Ok(json) = serde_json::to_string(&self.state.folders.folders) {
+            storage.set_string(KEY_WATCHED, json);
         }
         storage.set_string(KEY_REMOTE_PASSWORD, if self.state.require_password { self.state.remote_password.clone() } else { String::new() });
         if let Ok(json) = serde_json::to_string(&self.state.explorer.recent) {

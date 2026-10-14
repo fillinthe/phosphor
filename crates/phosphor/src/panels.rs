@@ -251,6 +251,7 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
 
 enum LayerAction {
     BrowseSources,
+    OpenFile,
     BrowseEffects,
     Monitor,
     Up,
@@ -340,6 +341,16 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
         Some((i, LayerAction::BrowseSources)) => {
             let id = comp.layers[i].id;
             st.fx_browser = Some(crate::explorer::FxBrowser::new(id, true, None));
+        }
+        Some((i, LayerAction::OpenFile)) => {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let id = comp.layers[i].id;
+                let exts = crate::media::dialog_extensions();
+                st.dialogs.pick_file(crate::dialogs::Purpose::LayerSource(id), Some(("Media", &exts)));
+            }
+            #[cfg(target_arch = "wasm32")]
+            let _ = i;
         }
         Some((i, LayerAction::BrowseEffects)) => {
             let id = comp.layers[i].id;
@@ -511,8 +522,8 @@ fn layer_card(
                         }
                     });
                 });
-                if source_picker(ui, layer) {
-                    action = Some(LayerAction::BrowseSources);
+                if let Some(a) = source_picker(ui, layer) {
+                    action = Some(a);
                 }
                 ui.horizontal(|ui| {
                     ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
@@ -611,12 +622,12 @@ fn layer_card(
     CardOut { select, action, dropped, dropped_media, dropped_palette }
 }
 
-/// Returns true when the user asks for the source browser.
-fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> bool {
-    let mut browse = false;
+/// Source menu for a layer card; returns a request for the browser or the Open dialog.
+fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option<LayerAction> {
+    let mut action = None;
     ui.horizontal(|ui| {
         if ui.button(icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
-            browse = true;
+            action = Some(LayerAction::BrowseSources);
         }
         ComboBox::from_id_salt(("source", layer.id)).width(150.0).selected_text(layer.source.label()).show_ui(ui, |ui| {
             if ui.selectable_label(layer.source == SourceSpec::None, "No source").clicked() {
@@ -630,16 +641,11 @@ fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> bool {
                 }
             }
         });
-        #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::FOLDER_OPEN, "Open")).on_hover_text("Image or movie file (or drag one onto the window)").clicked()
-            && let Some(path) = rfd::FileDialog::new().add_filter("Media", &crate::media::dialog_extensions()).pick_file()
-        {
-            let path = path.to_string_lossy().to_string();
-            layer.source = crate::media::spec_for_path(&path);
-            layer.name = layer.source.label();
+        if ui.button(label(icon::FOLDER_OPEN, "Open")).on_hover_text("Image or movie file (or drag one onto the window)").clicked() {
+            action = Some(LayerAction::OpenFile);
         }
     });
-    browse
+    action
 }
 
 fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMod>, i: usize, p: &shaders::Param, target: Option<ControlTarget>) {
@@ -1141,46 +1147,19 @@ pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
     }
 }
 
-/// Adds every supported file under `dir` (two levels deep, capped) to the bin.
-#[cfg(not(target_arch = "wasm32"))]
-fn import_folder(comp: &mut phosphor_engine::Composition, dir: &std::path::Path, depth: u32, budget: &mut usize) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
-    let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|e| e.file_name());
-    for e in entries {
-        if *budget == 0 {
-            return;
-        }
-        let p = e.path();
-        let name = e.file_name().to_string_lossy().to_string();
-        if p.is_dir() {
-            if depth > 0 && !name.starts_with('.') {
-                import_folder(comp, &p, depth - 1, budget);
-            }
-        } else if crate::media::is_supported(&name) && comp.add_media(&name, &p.to_string_lossy()) {
-            *budget -= 1;
-        }
-    }
-}
-
 fn media(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if ui.button(label(icon::FOLDER_OPEN, "Import files…")).clicked()
-                && let Some(paths) = rfd::FileDialog::new().add_filter("Media", &crate::media::dialog_extensions()).pick_files()
-            {
-                for p in paths {
-                    let path = p.to_string_lossy().to_string();
-                    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
-                    st.comp.add_media(&name, &path);
-                }
+            if ui.button(label(icon::FOLDER_OPEN, "Import files…")).clicked() {
+                let exts = crate::media::dialog_extensions();
+                st.dialogs.pick_files(crate::dialogs::Purpose::ImportFiles, Some(("Media", &exts)));
             }
-            if ui.button(label(icon::FOLDER_OPEN, "Import folder…")).on_hover_text("Adds every image/movie in the folder (and one level of subfolders)").clicked()
-                && let Some(dir) = rfd::FileDialog::new().pick_folder()
-            {
-                let mut budget = 500;
-                import_folder(&mut st.comp, &dir, 1, &mut budget);
+            if ui.button(label(icon::EYE, "Watch folder…")).on_hover_text("Loads every clip in a folder (and its subfolders) and picks up new files automatically").clicked() {
+                st.dialogs.pick_folder(crate::dialogs::Purpose::WatchFolder);
+            }
+            if st.folders.scanning() {
+                ui.spinner();
             }
         }
         ui.weak("Click = put on selected layer · drag onto a layer · right-click to remove");
@@ -1188,15 +1167,33 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(4.0);
     let State { comp, thumbs, selected, .. } = st;
     let mut assign: Option<usize> = None;
+    let mut fill_from: Option<String> = None;
+    let mut unwatch: Option<String> = None;
+    let mut unwatch_folder: Option<String> = None;
     let mut new_layer_from: Option<usize> = None;
     let mut remove: Option<usize> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
             ui.weak("Empty. Import files or a folder, or drop files onto the window.");
         }
-        ui.horizontal_wrapped(|ui| {
+        // Group by watched folder; loose files first.
+        let mut groups: Vec<String> = Vec::new();
+        for item in &comp.media_bin {
+            if !groups.contains(&item.folder) {
+                groups.push(item.folder.clone());
+            }
+        }
+        groups.sort();
+        for group in groups {
+          let title = if group.is_empty() { "Files".to_string() } else { group.rsplit('/').next().unwrap_or(&group).to_string() };
+          let count = comp.media_bin.iter().filter(|m| m.folder == group).count();
+          let header = egui::CollapsingHeader::new(RichText::new(format!("{} {title}  ({count})", if group.is_empty() { icon::FILES } else { icon::FOLDER })).strong())
+            .id_salt(("media_group", &group))
+            .default_open(true)
+            .show(ui, |ui| {
+          ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-            for (i, item) in comp.media_bin.iter().enumerate() {
+            for (i, item) in comp.media_bin.iter().enumerate().filter(|(_, m)| m.folder == group) {
                 let size = egui::vec2(128.0, 72.0 + 18.0);
                 let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
                 resp.dnd_set_drag_payload(MediaDrag(i));
@@ -1237,8 +1234,46 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
                     }
                 });
             }
-        });
+          });
+            });
+          header.header_response.context_menu(|ui| {
+              if ui.button(label(icon::SQUARES_FOUR, "Fill clips of the selected layer")).on_hover_text("Puts this folder's media into the selected layer's clip slots, in order").clicked() {
+                  fill_from = Some(group.clone());
+                  ui.close();
+              }
+              if !group.is_empty() {
+                  if ui.button(label(icon::EYE_SLASH, "Stop watching")).clicked() {
+                      unwatch = Some(group.clone());
+                      ui.close();
+                  }
+                  #[cfg(target_os = "macos")]
+                  if ui.button(label(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
+                      let _ = std::process::Command::new("open").arg(&group).spawn();
+                      ui.close();
+                  }
+              }
+          });
+        }
     });
+    if let Some(group) = fill_from
+        && let Some(sel) = selected.filter(|id| *id != MASTER_ID)
+    {
+        let items: Vec<_> = comp.media_bin.iter().filter(|m| m.folder == group).cloned().collect();
+        if let Some(l) = comp.layer_mut(sel) {
+            for (slot, item) in items.iter().enumerate() {
+                let id = l.id;
+                let c = l.clip_slot_mut(slot);
+                c.source = crate::media::spec_for_path(&item.path);
+                c.name = item.name.clone();
+                c.generator_values.clear();
+                c.id = id * 1000 + slot as u64 + 1;
+            }
+        }
+        comp.clip_columns = comp.clip_columns.max(items.len().min(64));
+    }
+    if let Some(group) = unwatch {
+        unwatch_folder = Some(group);
+    }
     if let Some(i) = assign
         && let Some(item) = comp.media_bin.get(i).cloned()
     {
@@ -1266,6 +1301,11 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
     if let Some(i) = remove {
         let item = comp.media_bin.remove(i);
         thumbs.forget(&item.path);
+    }
+    if let Some(folder) = unwatch_folder {
+        comp.media_bin.retain(|m| m.folder != folder);
+        #[cfg(not(target_arch = "wasm32"))]
+        st.folders.remove(&folder);
     }
 }
 
@@ -1870,6 +1910,7 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
     use crate::stream::Destination;
     let now = ui.ctx().input(|i| i.time);
     let (cw, ch) = (st.comp.width, st.comp.height);
+    let mut choose_file = false;
     let State { stream, notice, stream_audio_devices, .. } = st;
     let running = stream.running();
     ui.add_enabled_ui(!running, |ui| {
@@ -1910,10 +1951,8 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
                     ui.label("File");
                     ui.add(egui::TextEdit::singleline(&mut s.file_path).hint_text("…/recording.mp4 or .mov (ProRes)").desired_width(260.0));
                     #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button("Choose…").clicked()
-                        && let Some(p) = rfd::FileDialog::new().add_filter("Video", &["mp4", "mov"]).set_file_name("Phosphor recording.mp4").save_file()
-                    {
-                        s.file_path = p.to_string_lossy().to_string();
+                    if ui.button("Choose…").clicked() {
+                        choose_file = true;
                     }
                 });
             }
@@ -1983,6 +2022,12 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
     }
     ui.add_space(6.0);
     ui.weak("Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio.");
+    #[cfg(not(target_arch = "wasm32"))]
+    if choose_file {
+        st.dialogs.save_file(crate::dialogs::Purpose::StreamFile, ("Video", &["mp4", "mov"]), "Phosphor recording.mp4");
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = choose_file;
 }
 
 fn network(ui: &mut egui::Ui, st: &mut State) {
@@ -2144,21 +2189,11 @@ fn output(ui: &mut egui::Ui, st: &mut State) {
 pub fn project_buttons(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        if ui.button(label(icon::FLOPPY_DISK, "Save")).clicked()
-            && let Some(path) =
-                rfd::FileDialog::new().add_filter("Phosphor project", &["phosphor"]).set_file_name("Untitled.phosphor").save_file()
-            && let Err(e) = std::fs::write(&path, st.comp.to_json())
-        {
-            st.notice = Some(format!("Save failed: {e}"));
+        if ui.button(label(icon::FLOPPY_DISK, "Save")).clicked() {
+            st.dialogs.save_file(crate::dialogs::Purpose::SaveProject, ("Phosphor project", &["phosphor"]), "Untitled.phosphor");
         }
-        if ui.button(label(icon::FOLDER_OPEN, "Open")).clicked()
-            && let Some(path) = rfd::FileDialog::new().add_filter("Phosphor project", &["phosphor"]).pick_file()
-            && let Ok(json) = std::fs::read_to_string(&path)
-        {
-            match phosphor_engine::Composition::from_json(&json) {
-                Ok(comp) => st.load_composition(comp),
-                Err(e) => st.notice = Some(format!("Open failed: {e}")),
-            }
+        if ui.button(label(icon::FOLDER_OPEN, "Open")).clicked() {
+            st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project", &["phosphor"])));
         }
     }
     #[cfg(target_arch = "wasm32")]
