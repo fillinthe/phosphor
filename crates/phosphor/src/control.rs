@@ -16,10 +16,33 @@ pub struct Incoming {
     pub value: f32,
 }
 
+/// An OSC sender seen on the network.
+#[derive(Clone, Debug)]
+pub struct OscSender {
+    pub ip: String,
+    pub count: u64,
+    pub last_address: String,
+    pub last_seen: std::time::Instant,
+}
+
+/// Who's talking to us, shared with the listener threads.
+#[derive(Default)]
+pub struct Activity {
+    pub osc: std::collections::BTreeMap<String, OscSender>,
+    pub osc_blocked: std::collections::BTreeSet<String>,
+    pub midi_seen: std::collections::HashMap<String, std::time::Instant>,
+}
+
 pub struct ControlHub {
     rx: mpsc::Receiver<Incoming>,
     tx: mpsc::Sender<Incoming>,
+    /// Connected (enabled) MIDI inputs.
     pub midi_ports: Vec<String>,
+    /// Every MIDI input on the system, enabled or not.
+    pub midi_all: Vec<String>,
+    /// MIDI inputs switched off in the Devices panel.
+    pub midi_disabled: std::collections::BTreeSet<String>,
+    pub activity: std::sync::Arc<std::sync::Mutex<Activity>>,
     pub osc_port: u16,
     pub osc_status: String,
     pub local_ip: Option<String>,
@@ -40,6 +63,9 @@ impl ControlHub {
             rx,
             tx,
             midi_ports: Vec::new(),
+            midi_all: Vec::new(),
+            midi_disabled: Default::default(),
+            activity: Default::default(),
             osc_port: DEFAULT_OSC_PORT,
             osc_status: "OSC off".into(),
             local_ip: None,
@@ -58,9 +84,11 @@ impl ControlHub {
     pub fn reconnect(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.midi_ports = self.backend.open_midi(self.tx.clone());
+            let (all, open) = self.backend.open_midi(self.tx.clone(), &self.midi_disabled, self.activity.clone());
+            self.midi_all = all;
+            self.midi_ports = open;
             self.local_ip = local_ip();
-            self.osc_status = match self.backend.open_osc(self.osc_port, self.tx.clone(), self.local_ip.as_deref()) {
+            self.osc_status = match self.backend.open_osc(self.osc_port, self.tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
                 Ok(()) => format!(
                     "OSC listening on udp/{} at {}",
                     self.osc_port,
@@ -278,18 +306,32 @@ mod native {
     }
 
     impl Backend {
-        pub fn open_midi(&mut self, tx: mpsc::Sender<Incoming>) -> Vec<String> {
+        /// Opens every MIDI input except the disabled ones. Returns (all inputs, opened inputs).
+        pub fn open_midi(
+            &mut self,
+            tx: mpsc::Sender<Incoming>,
+            disabled: &std::collections::BTreeSet<String>,
+            activity: Arc<std::sync::Mutex<super::Activity>>,
+        ) -> (Vec<String>, Vec<String>) {
             self.midi.clear();
-            let mut names = Vec::new();
-            let Ok(probe) = midir::MidiInput::new("Phosphor") else { return names };
+            let mut all = Vec::new();
+            let mut open = Vec::new();
+            let Ok(probe) = midir::MidiInput::new("Phosphor") else { return (all, open) };
             for port in probe.ports() {
                 let name = probe.port_name(&port).unwrap_or_else(|_| "MIDI".into());
+                all.push(name.clone());
+                if disabled.contains(&name) {
+                    continue;
+                }
                 let Ok(input) = midir::MidiInput::new("Phosphor") else { continue };
                 let tx = tx.clone();
+                let activity = activity.clone();
+                let seen_name = name.clone();
                 let conn = input.connect(
                     &port,
                     "phosphor-in",
                     move |_, msg, _| {
+                        activity.lock().unwrap().midi_seen.insert(seen_name.clone(), std::time::Instant::now());
                         if let Some(incoming) = parse_midi(msg) {
                             let _ = tx.send(incoming);
                         }
@@ -298,13 +340,13 @@ mod native {
                 );
                 if let Ok(conn) = conn {
                     self.midi.push(conn);
-                    names.push(name);
+                    open.push(name);
                 }
             }
-            names
+            (all, open)
         }
 
-        pub fn open_osc(&mut self, port: u16, tx: mpsc::Sender<Incoming>, ip: Option<&str>) -> Result<(), String> {
+        pub fn open_osc(&mut self, port: u16, tx: mpsc::Sender<Incoming>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
             if let Some(stop) = self.osc_stop.take() {
                 stop.store(true, Ordering::Relaxed);
             }
@@ -318,10 +360,29 @@ mod native {
                 .spawn(move || {
                     let mut buf = [0u8; 65_536];
                     while !stop.load(Ordering::Relaxed) {
-                        let Ok((n, _)) = socket.recv_from(&mut buf) else { continue };
-                        if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
-                            deliver(packet, &tx);
+                        let Ok((n, from)) = socket.recv_from(&mut buf) else { continue };
+                        let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) else { continue };
+                        let ip = from.ip().to_string();
+                        {
+                            let mut a = activity.lock().unwrap();
+                            if a.osc_blocked.contains(&ip) {
+                                continue;
+                            }
+                            let address = match &packet {
+                                rosc::OscPacket::Message(m) => m.addr.clone(),
+                                rosc::OscPacket::Bundle(_) => "(bundle)".into(),
+                            };
+                            let e = a.osc.entry(ip.clone()).or_insert(super::OscSender {
+                                ip: ip.clone(),
+                                count: 0,
+                                last_address: String::new(),
+                                last_seen: std::time::Instant::now(),
+                            });
+                            e.count += 1;
+                            e.last_address = address;
+                            e.last_seen = std::time::Instant::now();
                         }
+                        deliver(packet, &tx);
                     }
                 })
                 .map_err(|e| e.to_string())?;
