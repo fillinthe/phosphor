@@ -52,6 +52,9 @@ pub struct MediaManager {
     pub errors: HashMap<u64, String>,
     #[cfg(not(target_arch = "wasm32"))]
     players: HashMap<u64, video::VideoPlayer>,
+    /// Players for the outgoing side of a transition; they keep playing until it ends.
+    #[cfg(not(target_arch = "wasm32"))]
+    outgoing: HashMap<u64, video::VideoPlayer>,
 }
 
 impl MediaManager {
@@ -61,10 +64,22 @@ impl MediaManager {
             if self.loaded.get(&layer.id) == Some(&layer.source) {
                 continue;
             }
-            engine.clear_media(layer.id);
+            // A transition keeps the old source alive as the outgoing picture.
+            let transitioning = layer.transition.as_ref().is_some_and(|t| self.loaded.get(&layer.id) == Some(&t.from));
+            if transitioning {
+                engine.begin_transition(layer.id);
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(p) = self.players.remove(&layer.id) {
+                    self.outgoing.insert(layer.id, p);
+                }
+            } else {
+                engine.clear_media(layer.id);
+                #[cfg(not(target_arch = "wasm32"))]
+                self.players.remove(&layer.id);
+                #[cfg(not(target_arch = "wasm32"))]
+                self.outgoing.remove(&layer.id);
+            }
             self.errors.remove(&layer.id);
-            #[cfg(not(target_arch = "wasm32"))]
-            self.players.remove(&layer.id);
             match &layer.source {
                 SourceSpec::Image { path: Some(path), .. } => {
                     if let Err(e) = load_image_path(engine, layer.id, path) {
@@ -91,6 +106,8 @@ impl MediaManager {
         self.loaded.retain(|id, _| live.contains(id));
         #[cfg(not(target_arch = "wasm32"))]
         self.players.retain(|id, _| live.contains(id));
+        #[cfg(not(target_arch = "wasm32"))]
+        self.outgoing.retain(|id, _| comp.layers.iter().any(|l| l.id == *id && l.transition.is_some()));
     }
 
     /// Pulls the newest due frame from every movie into the engine. `now` is the frame clock in seconds.
@@ -115,6 +132,19 @@ impl MediaManager {
             }
             if let Some(err) = player.error() {
                 self.errors.entry(layer.id).or_insert_with(|| err.to_string());
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        for (id, player) in &mut self.outgoing {
+            player.set_playing(true);
+            if let Some(frame) = player.poll_frame(now) {
+                match &frame {
+                    video::VideoFrame::Nv12 { width, height, luma, luma_stride, chroma, chroma_stride } => {
+                        engine.upload_nv12_outgoing(*id, *width, *height, luma, *luma_stride, chroma, *chroma_stride);
+                    }
+                    video::VideoFrame::Rgba { width, height, data } => engine.upload_rgba_outgoing(*id, *width, *height, data),
+                }
+                player.recycle(frame);
             }
         }
         #[cfg(target_arch = "wasm32")]

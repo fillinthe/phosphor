@@ -137,7 +137,7 @@ impl Gpu {
 
     /// Compiles every pipeline up front so the first use of an effect never hitches a show.
     pub fn prewarm(&mut self) {
-        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_finalize", "fs_surface", "fs_rutt"];
+        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_rutt"];
         let all = fixed
             .into_iter()
             .chain(shaders::EFFECTS.iter().map(|d| d.entry))

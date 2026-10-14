@@ -20,7 +20,8 @@ formats). The **~** button next to any slider drives it from audio (Audio panel)
 card at the top of Layers holds effects that run over the whole mix. **Mapping** adds corner-pinned
 surfaces you drag into place (press **E** in the output window to edit them on the projector). **MIDI / OSC** panel: pick a
 target, press Learn, move a knob (or send from TouchOSC: UDP to this Mac, port 8000). **Stream & Record**: YouTube/Twitch/RTMP/SRT
-or a file, hardware-encoded, no OBS needed.
+or a file, hardware-encoded, no OBS needed. **Clips**: drop media into the grid, click cells or press 1–9
+to trigger columns with per-layer transitions; Tap sets the tempo, Quantize snaps triggers to the beat.
 
 Drag images onto the window or use **Open…** on a layer. Panels can be dragged by their tabs to
 rearrange; **Reset Layout** restores the default. **Open Output** opens the output window; drag it

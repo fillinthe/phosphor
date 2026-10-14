@@ -21,6 +21,9 @@ pub struct BenchConfig {
     pub project: Option<String>,
     /// Record the run to this file (.mp4 = H.264, .mov = ProRes) to exercise the streaming path.
     pub record: Option<String>,
+    /// Trigger clip column N (1-based) at `trigger_at` seconds, to exercise transitions.
+    pub trigger_column: Option<usize>,
+    pub trigger_at: f64,
 }
 
 impl BenchConfig {
@@ -43,6 +46,8 @@ impl BenchConfig {
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
+                ("--column", Some(v)) => cfg.trigger_column = v.parse::<usize>().ok().map(|c| c.saturating_sub(1)),
+                ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
                 ("--audio", _) => {
                     cfg.audio = true;
                     i += 1;

@@ -1,6 +1,7 @@
 mod app;
 mod audio;
 mod bench;
+mod clock;
 mod control;
 mod media;
 mod panels;

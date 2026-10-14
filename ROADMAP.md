@@ -65,10 +65,12 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Scrubbing, reverse, in/out points, beat-length quantised loops
 
 ### Phase 2: Performance (Resolume-style play)
-- [ ] Clip grid: layers × columns, trigger with click/key/MIDI
-- [ ] Columns (trigger a whole scene), decks (banks of clips)
-- [ ] Transitions between clips (crossfade, cut, effect-based)
-- [ ] BPM clock: tap tempo, Ableton Link, MIDI clock; beat-synced LFOs and effects
+- [x] Clips grid: layers × columns; click a cell, a column header, keys 1–9, or a MIDI/OSC-learned trigger
+- [x] Drop media-bin items onto cells; store a layer's current source into a slot
+- [x] Transitions per layer: crossfade / dip to black / wipe with duration; the outgoing clip keeps playing
+- [x] BPM clock: tap tempo, resync, beat indicator, **Quantize** (triggers wait for the next beat),
+      "Beat" modulation source for beat-synced parameters
+- [ ] Decks (banks of clips), Ableton Link, MIDI clock in, bar-quantise, effect-based transitions
 - [ ] Master crossfader (A/B groups)
 - [ ] Layer groups
 

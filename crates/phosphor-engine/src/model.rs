@@ -97,6 +97,63 @@ impl SourceSpec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TransitionKind {
+    #[default]
+    Crossfade,
+    DipToBlack,
+    Wipe,
+}
+
+impl TransitionKind {
+    pub const ALL: [TransitionKind; 3] = [TransitionKind::Crossfade, TransitionKind::DipToBlack, TransitionKind::Wipe];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            TransitionKind::Crossfade => "Crossfade",
+            TransitionKind::DipToBlack => "Dip to black",
+            TransitionKind::Wipe => "Wipe",
+        }
+    }
+
+    pub(crate) fn shader_index(self) -> u32 {
+        Self::ALL.iter().position(|k| *k == self).unwrap_or(0) as u32
+    }
+}
+
+/// A source change in progress: the engine keeps rendering `from` and blends it with the new
+/// source until `start + duration`. Never saved.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Transition {
+    pub from: SourceSpec,
+    pub from_values: Vec<f32>,
+    pub start: f32,
+    pub duration: f32,
+    pub kind: TransitionKind,
+}
+
+impl Transition {
+    pub fn progress(&self, now: f32) -> f32 {
+        ((now - self.start) / self.duration.max(0.001)).clamp(0.0, 1.0)
+    }
+}
+
+/// A clip slot: a source ready to be triggered onto its layer.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Clip {
+    pub id: u64,
+    pub name: String,
+    pub source: SourceSpec,
+    pub generator_values: Vec<f32>,
+}
+
+impl Clip {
+    pub fn is_empty(&self) -> bool {
+        self.source == SourceSpec::None
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EffectState {
     pub id: u64,
@@ -125,10 +182,12 @@ pub enum ModSource {
     LfoTriangle,
     LfoSaw,
     LfoSquare,
+    /// Sawtooth that restarts on every beat of the BPM clock.
+    Beat,
 }
 
 impl ModSource {
-    pub const ALL: [ModSource; 8] = [
+    pub const ALL: [ModSource; 9] = [
         ModSource::AudioLevel,
         ModSource::AudioLow,
         ModSource::AudioMid,
@@ -137,6 +196,7 @@ impl ModSource {
         ModSource::LfoTriangle,
         ModSource::LfoSaw,
         ModSource::LfoSquare,
+        ModSource::Beat,
     ];
 
     pub fn name(self) -> &'static str {
@@ -149,6 +209,7 @@ impl ModSource {
             ModSource::LfoTriangle => "LFO triangle",
             ModSource::LfoSaw => "LFO saw",
             ModSource::LfoSquare => "LFO square",
+            ModSource::Beat => "Beat (BPM)",
         }
     }
 
@@ -200,6 +261,8 @@ pub enum ControlTarget {
     EffectParam { effect: u64, index: usize },
     EffectMix(u64),
     EffectEnabled(u64),
+    TriggerClip { layer: u64, slot: usize },
+    TriggerColumn(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -236,6 +299,14 @@ pub struct LayerState {
     pub playing: bool,
     pub rate: f32,
     pub looping: bool,
+    /// Clip slots, by column.
+    pub clips: Vec<Clip>,
+    pub transition_secs: f32,
+    pub transition_kind: TransitionKind,
+    #[serde(skip)]
+    pub transition: Option<Transition>,
+    #[serde(skip)]
+    pub active_clip: Option<u64>,
 }
 
 impl Default for LayerState {
@@ -257,11 +328,60 @@ impl Default for LayerState {
             playing: true,
             rate: 1.0,
             looping: true,
+            clips: Vec::new(),
+            transition_secs: 0.5,
+            transition_kind: TransitionKind::Crossfade,
+            transition: None,
+            active_clip: None,
         }
     }
 }
 
 impl LayerState {
+    /// Starts a transition from the current source, if transitions are enabled on this layer.
+    pub fn start_transition(&mut self, now: f32) {
+        if self.transition_secs > 0.01 && self.source != SourceSpec::None {
+            self.transition = Some(Transition {
+                from: self.source.clone(),
+                from_values: self.generator_values.clone(),
+                start: now,
+                duration: self.transition_secs,
+                kind: self.transition_kind,
+            });
+        }
+    }
+
+    /// Puts clip `slot` on this layer (with a transition). Returns false for an empty slot.
+    pub fn trigger_clip(&mut self, slot: usize, now: f32) -> bool {
+        let Some(clip) = self.clips.get(slot).filter(|c| !c.is_empty()).cloned() else { return false };
+        if self.active_clip == Some(clip.id) && self.source == clip.source {
+            return true;
+        }
+        self.start_transition(now);
+        self.source = clip.source;
+        self.generator_values = clip.generator_values;
+        self.generator_mods.clear();
+        if !clip.name.is_empty() {
+            self.name = clip.name;
+        }
+        self.active_clip = Some(clip.id);
+        self.playing = true;
+        true
+    }
+
+    pub fn clip_slot_mut(&mut self, slot: usize) -> &mut Clip {
+        if self.clips.len() <= slot {
+            self.clips.resize_with(slot + 1, Clip::default);
+        }
+        &mut self.clips[slot]
+    }
+
+    pub fn expire_transition(&mut self, now: f32) {
+        if self.transition.as_ref().is_some_and(|t| t.progress(now) >= 1.0) {
+            self.transition = None;
+        }
+    }
+
     pub fn set_generator(&mut self, id: &str) {
         if let Some(desc) = shaders::generator(id) {
             self.source = SourceSpec::Generator(id.to_string());
@@ -295,11 +415,14 @@ pub struct Composition {
     pub control_maps: Vec<ControlMap>,
     pub master_fx_bypass: bool,
     pub media_bin: Vec<MediaItem>,
+    /// Columns shown in the Clips grid.
+    pub clip_columns: usize,
+    pub bpm: f32,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0 }
     }
 }
 
@@ -337,6 +460,19 @@ impl Composition {
     pub fn new_effect(&mut self, effect_id: &str) -> Option<EffectState> {
         let desc = shaders::effect(effect_id)?;
         Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new() })
+    }
+
+    /// Triggers column `col` on every layer that has a clip there.
+    pub fn trigger_column(&mut self, col: usize, now: f32) {
+        for l in &mut self.layers {
+            l.trigger_clip(col, now);
+        }
+    }
+
+    pub fn expire_transitions(&mut self, now: f32) {
+        for l in &mut self.layers {
+            l.expire_transition(now);
+        }
     }
 
     /// Adds a file to the media bin (no duplicates). Returns true if it was new.
