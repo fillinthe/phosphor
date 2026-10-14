@@ -40,8 +40,12 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Effects workflow: collapsible cards, drag handle to reorder, copy/paste whole chains, double-click resets a slider
 - [x] Panels can be closed and reopened (View ▸ Panels), layout presets, floating windows rescued on smaller screens
 - [x] **Master effects**: a pinned MASTER card whose chain runs over the whole mix
-- [x] **Rutt-Etra** rebuilt natively (v002-style scan processor: scanlines displaced by luminance,
-      3D rotate/perspective, additive beam, line width) — GPU-generated, ~0 CPU
+- [x] **Rutt-Etra** rebuilt natively (v002-style scan processor): scanlines / square mesh / triangle mesh /
+      vertical lines / **points** draw modes, luminance or **RGB→XYZ** displacement, 3D rotate/perspective,
+      additive beam, line/point size — GPU-generated, ~0 CPU
+- [x] 28 effects total: + Gaussian/Zoom/Directional blur, Glow, Trails/Feedback (zoom-rotate tunnel),
+      Technicolor, Bleach Bypass, Vignette, Film Grain, CRT, Analog Glitch, Halftone, Sharpen, Emboss, Tile
+- [x] Engine: multi-pass effects and per-effect history (feedback) targets
 - [x] Shader validation test (no GPU required)
 - [x] egui app: preview, layer stack, effect chains, dockable panels (egui_dock)
 - [x] Output window (drag to projector, F = fullscreen)
@@ -70,7 +74,9 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Transitions per layer: crossfade / dip to black / wipe with duration; the outgoing clip keeps playing
 - [x] BPM clock: tap tempo, resync, beat indicator, **Quantize** (triggers wait for the next beat),
       "Beat" modulation source for beat-synced parameters
-- [ ] Decks (banks of clips), Ableton Link, MIDI clock in, bar-quantise, effect-based transitions
+- [x] Clip banks A–D (pages of 9 columns), bar-quantise
+- [x] Detach any panel into its own OS window (tab menu → Detach; closing it docks it back)
+- [ ] Ableton Link, MIDI clock in, effect-based transitions
 - [ ] Master crossfader (A/B groups)
 - [ ] Layer groups
 
@@ -106,9 +112,9 @@ Legend: [x] done · [~] in progress · [ ] not started
 ### Phase 5: Effects & interop
 - [ ] ISF import: GLSL → WGSL via naga's GLSL front end; cache the result. Same loader reads
       MadMapper materials/generators (ISF `.fs` + JSON header, optional `.vs`)
-- [ ] More v002 ports (Blurs, Glitch, Film Effects, Optical Flow) as native WGSL — the installed
-      plugins are Intel-only OpenGL/Quartz Composer, so VDMX runs them under Rosetta
-- [ ] Multi-pass effects (blur, bloom, feedback/trails, temporal)
+- [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
+      Optical Flow, Rutt-Etra displacement-image mode and lit (normals) rendering
+- [x] Multi-pass effects (blur, glow, feedback/trails)
 - [ ] Text / title source
 - [ ] Syphon in/out (macOS), NDI in/out (optional plugin)
 - [ ] Recording to ProRes / Hap

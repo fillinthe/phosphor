@@ -28,6 +28,8 @@ struct LayerResources {
     fx: [Option<Target>; 3],
     /// Reduced-size target for Rutt-Etra; its scale sets the apparent line width.
     rutt: Option<Target>,
+    /// Previous outputs of history effects (trails), per effect id, ping-ponged by frame parity.
+    history: HashMap<u64, [Option<Target>; 2]>,
     media: Option<Media>,
     thumbnail: Option<Target>,
 }
@@ -78,6 +80,7 @@ pub struct Engine {
     uniform_buffer: Option<wgpu::Buffer>,
     uniform_capacity: usize,
     capture: Capture,
+    frame_index: u64,
 }
 
 impl Engine {
@@ -93,6 +96,7 @@ impl Engine {
             uniform_buffer: None,
             uniform_capacity: 0,
             capture: Capture::default(),
+            frame_index: 0,
         }
     }
 
@@ -320,6 +324,7 @@ impl Engine {
         }
 
         self.encode(&passes);
+        self.frame_index += 1;
         FrameInfo { passes: passes.len(), layers_drawn }
     }
 
@@ -465,7 +470,7 @@ impl Engine {
         let chain: Vec<_> = effects
             .iter()
             .filter(|e| e.enabled)
-            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, &e.values, &e.mods, e.mix)))
+            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix)))
             .collect();
         if chain.is_empty() {
             return frame;
@@ -497,26 +502,45 @@ impl Engine {
                 views[0].clone()
             }
         };
-        for (desc, values, param_mods, mix) in chain {
+        let parity = (self.frame_index % 2) as usize;
+        for (desc, fx_id, values, param_mods, mix) in chain {
             let dry = input.clone();
             let params = resolve_params(desc, values, param_mods, mods);
-            let mut u = Uniforms::with_params(&params);
-            u.resolution = base.resolution;
-            u.time = time;
-            let target = if desc.entry == "fs_rutt" {
-                let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
-                let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
-                let res = self.layers.entry(res_id).or_default();
-                Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
-                u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
-                res.rutt.as_ref().unwrap().view.clone()
-            } else {
-                let t = views[idx].clone();
-                idx = (idx + 1) % 3;
-                t
-            };
-            passes.push(Pass { entry: desc.entry, target: target.clone(), tex0: input, tex1: None, tex2: None, uniforms: u });
-            input = target;
+            let sub = shaders::multipass(desc.entry);
+            let entries: Vec<&'static str> = if sub.is_empty() { vec![desc.entry] } else { sub.to_vec() };
+            let last_index = entries.len() - 1;
+            for (k, entry) in entries.into_iter().enumerate() {
+                let mut u = Uniforms::with_params(&params);
+                u.resolution = base.resolution;
+                u.time = time;
+                let mut tex1 = None;
+                let target = if entry == "fs_rutt" || entry == "fs_rutt_points" {
+                    let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
+                    let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
+                    let res = self.layers.entry(res_id).or_default();
+                    Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
+                    u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
+                    res.rutt.as_ref().unwrap().view.clone()
+                } else if entry == "fx_trails" {
+                    // Write this frame's output into one history slot while reading the other.
+                    let res = self.layers.entry(res_id).or_default();
+                    let slots = res.history.entry(fx_id).or_default();
+                    for slot in slots.iter_mut() {
+                        Target::ensure(slot, &self.gpu.device, "history", w, h);
+                    }
+                    tex1 = Some(slots[1 - parity].as_ref().unwrap().view.clone());
+                    slots[parity].as_ref().unwrap().view.clone()
+                } else {
+                    let t = views[idx].clone();
+                    idx = (idx + 1) % 3;
+                    t
+                };
+                if k == last_index && entry == "fx_glow_add" {
+                    tex1 = Some(dry.clone());
+                }
+                passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2: None, uniforms: u });
+                input = target;
+            }
             if mix < 0.999 {
                 let u = Uniforms { opacity: mix, ..base };
                 passes.push(Pass { entry: "fs_mix", target: views[idx].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u });
@@ -584,8 +608,13 @@ impl Engine {
                 "fs_rutt" => {
                     let rows = (pass.uniforms.p[0][0] as u32).max(2);
                     let cols = (pass.uniforms.p[0][1] as u32).max(2);
-                    rows * (cols - 1) * 2
+                    let mode = pass.uniforms.p[2][2] as u32;
+                    let horizontal = if mode == 3 { 0 } else { rows * (cols - 1) };
+                    let vertical = if mode >= 1 { cols * (rows - 1) } else { 0 };
+                    let diagonal = if mode == 2 { (rows - 1) * (cols - 1) } else { 0 };
+                    (horizontal + vertical + diagonal) * 2
                 }
+                "fs_rutt_points" => (pass.uniforms.p[0][0] as u32).max(2) * (pass.uniforms.p[0][1] as u32).max(2),
                 _ => 3,
             };
             let pipeline = self.gpu.pipeline(pass.entry).clone();
