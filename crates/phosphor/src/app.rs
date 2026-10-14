@@ -79,8 +79,10 @@ pub struct State {
     pub editor: crate::explorer::EditorState,
     pub palette: crate::explorer::PaletteState,
     /// Previews requested by panels this frame (key, item); rendered on the next frame.
-    pub preview_wants: Vec<(String, phosphor_engine::PreviewItem)>,
+    pub preview_wants: Vec<(String, phosphor_engine::PreviewItem, bool)>,
     preview_keys: Vec<String>,
+    /// When stills were last refreshed.
+    preview_refreshed: f64,
     preview_textures: Vec<(egui::TextureId, (u32, u32))>,
     /// A panel to bring to the front (set by explorer actions and the palette).
     pub open_tab: Option<Tab>,
@@ -224,6 +226,7 @@ impl PhosphorApp {
                 palette: Default::default(),
                 preview_wants: Vec::new(),
                 preview_keys: Vec::new(),
+                preview_refreshed: 0.0,
                 preview_textures: Vec::new(),
                 open_tab: None,
                 #[cfg(not(target_arch = "wasm32"))]
@@ -283,6 +286,7 @@ impl PhosphorApp {
             preview_wants,
             preview_keys,
             preview_textures,
+            preview_refreshed,
             selected,
             ..
         } = &mut self.state;
@@ -308,9 +312,22 @@ impl PhosphorApp {
         };
         let wants = std::mem::take(preview_wants);
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
-        let keys: Vec<String> = wants.iter().map(|(k, _)| k.clone()).collect();
+        let keys: Vec<String> = wants.iter().map(|(k, _, _)| k.clone()).collect();
         if !wants.is_empty() {
-            engine.request_previews(source, wants.into_iter().map(|(_, i)| i).collect());
+            // Stills refresh when the set of tiles changes and every 2 s; live tiles every frame.
+            let stale = now - *preview_refreshed > 2.0;
+            if stale {
+                *preview_refreshed = now;
+            }
+            let items = wants
+                .into_iter()
+                .enumerate()
+                .map(|(i, (key, item, live))| {
+                    let moved = preview_keys.get(i) != Some(&key);
+                    (item, live || stale || moved)
+                })
+                .collect();
+            engine.request_previews(source, items);
         }
         let t0 = web_time::Instant::now();
         let info = engine.render(comp, now as f32, mod_inputs);
@@ -795,6 +812,12 @@ impl eframe::App for PhosphorApp {
                 }
             }
             st.comp.expire_transitions(now as f32);
+        }
+        if let Some(n) = self.bench.as_ref().map(|b| b.cfg.previews).filter(|n| *n > 0) {
+            for (i, d) in phosphor_engine::shaders::all_effects().iter().cycle().take(n).enumerate() {
+                let fx = phosphor_engine::EffectState { id: 8_000_000 + i as u64, effect: d.id.to_string(), enabled: true, values: d.defaults(), mix: 1.0, mods: Vec::new() };
+                self.state.preview_wants.push((format!("bench:{i}"), phosphor_engine::PreviewItem::Effect(fx), true));
+            }
         }
         self.render(now);
         self.top_bar(ui);

@@ -19,8 +19,22 @@ pub struct PaletteDrag {
 const CATEGORY_ORDER: &[&str] =
     &["Color", "Film", "Blur", "Light", "Distort", "Stylize", "Retro", "Time", "3D", "Key", "Patterns", "Motion", "Utility", "Yours", "ISF", "Other"];
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PreviewMode {
+    /// Every visible tile animates.
+    Live,
+    /// The tile under the mouse animates; the rest are stills refreshed every few seconds.
+    #[default]
+    Hover,
+    /// No previews.
+    Off,
+}
+
 #[derive(Default)]
 pub struct ExplorerState {
+    pub preview_mode: PreviewMode,
+    /// Live tiles refresh at 30 fps, not every display frame.
+    pub live_tick: i64,
     pub search: String,
     /// "" = all, "★" = favourites, otherwise a category name.
     pub category: String,
@@ -66,6 +80,11 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
         ui.selectable_value(&mut st.explorer.sources, false, label(icon::MAGIC_WAND, "Effects"));
         ui.selectable_value(&mut st.explorer.sources, true, label(icon::SPARKLE, "Sources"));
+        ui.separator();
+        ui.label(RichText::new("Previews").small().color(Color32::GRAY));
+        ui.selectable_value(&mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse; others refresh every 2 s (lightest)");
+        ui.selectable_value(&mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
+        ui.selectable_value(&mut st.explorer.preview_mode, PreviewMode::Off, "Off");
     });
     let list: Vec<&'static shaders::ShaderDesc> = if st.explorer.sources { shaders::all_generators() } else { shaders::all_effects() };
     // Category chips, only for categories that exist in the current list.
@@ -89,6 +108,9 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     });
     ui.add_space(2.0);
 
+    let tick = ui.ctx().input(|i| (i.time * 30.0) as i64);
+    let live_frame = tick != st.explorer.live_tick;
+    st.explorer.live_tick = tick;
     let filtered: Vec<(usize, &'static shaders::ShaderDesc)> = list
         .iter()
         .enumerate()
@@ -116,17 +138,21 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 if !ui.is_rect_visible(rect) {
                     continue;
                 }
-                // Only tiles on screen get a live preview.
-                let item = if st.explorer.sources { PreviewItem::Generator(desc.id.to_string()) } else { PreviewItem::Effect(preview_fx(desc, *i)) };
-                st.preview_wants.push((key.clone(), item));
+                // Only tiles on screen get a preview; how often it refreshes depends on the mode.
+                if st.explorer.preview_mode != PreviewMode::Off {
+                    let item = if st.explorer.sources { PreviewItem::Generator(desc.id.to_string()) } else { PreviewItem::Effect(preview_fx(desc, *i)) };
+                    let live = (st.explorer.preview_mode == PreviewMode::Live && live_frame) || resp.hovered();
+                    st.preview_wants.push((key.clone(), item, live));
+                }
                 let pic = egui::Rect::from_min_size(rect.min, egui::vec2(tile_w, tile_w / aspect));
                 let p = ui.painter();
                 p.rect_filled(rect, 6.0, ui.visuals().faint_bg_color);
-                match st.preview_tex(&key) {
+                match st.preview_tex(&key).filter(|_| st.explorer.preview_mode != PreviewMode::Off) {
                     Some(t) => panels::paint_texture(p, t, pic),
                     None => {
                         p.rect_filled(pic, 4.0, Color32::from_gray(14));
-                        p.text(pic.center(), egui::Align2::CENTER_CENTER, "…", egui::FontId::proportional(18.0), Color32::GRAY);
+                        let glyph = if st.explorer.preview_mode == PreviewMode::Off { icon::MAGIC_WAND } else { "…" };
+                        p.text(pic.center(), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(18.0), Color32::GRAY);
                     }
                 }
                 let (cat, about) = shaders::info(desc.id);
@@ -390,7 +416,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         } else {
             PreviewItem::Generator(String::new())
         };
-        st.preview_wants.push((format!("edit:{id}"), item));
+        st.preview_wants.push((format!("edit:{id}"), item, true));
     }
     let aspect = st.aspect();
     egui::Panel::right("shader_preview").resizable(true).default_size(260.0).show(ui, |ui| {

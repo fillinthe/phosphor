@@ -94,7 +94,7 @@ pub struct Engine {
     uniform_capacity: usize,
     capture: Capture,
     frame_index: u64,
-    previews: Vec<PreviewItem>,
+    previews: Vec<(PreviewItem, bool)>,
     preview_source: u64,
     preview_src: Option<Target>,
     preview_targets: Vec<Option<Target>>,
@@ -183,9 +183,10 @@ impl Engine {
         Ok(desc)
     }
 
-    /// Asks for live previews of effects (applied to `source`: a layer id or `MASTER_ID`) and
-    /// generators on the next frame. Call every frame the explorer is visible.
-    pub fn request_previews(&mut self, source: u64, items: Vec<PreviewItem>) {
+    /// Asks for previews of effects (applied to `source`: a layer id or `MASTER_ID`) and
+    /// generators on the next frame. Items flagged `false` keep last frame's picture and cost
+    /// nothing, so a big library can show stills and only animate what you're looking at.
+    pub fn request_previews(&mut self, source: u64, items: Vec<(PreviewItem, bool)>) {
         self.preview_source = source;
         self.previews = items;
     }
@@ -428,7 +429,7 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     fn render_previews(&mut self, master: &wgpu::TextureView, canvas: (u32, u32), time: f32, mods: &ModInputs, layers: &[LayerState], passes: &mut Vec<Pass>) {
         let items = std::mem::take(&mut self.previews);
-        if items.is_empty() {
+        if !items.iter().any(|(_, refresh)| *refresh) {
             return;
         }
         let (w, h) = canvas;
@@ -450,7 +451,11 @@ impl Engine {
         if self.preview_targets.len() < items.len() {
             self.preview_targets.resize_with(items.len(), || None);
         }
-        for (i, item) in items.iter().enumerate() {
+        for (i, (item, refresh)) in items.iter().enumerate() {
+            let has_picture = self.preview_targets[i].is_some();
+            if !*refresh && has_picture {
+                continue;
+            }
             let rid = RESERVED_IDS + 1 + i as u64;
             let frame = match item {
                 PreviewItem::Effect(fx) => Some(self.apply_effects(
