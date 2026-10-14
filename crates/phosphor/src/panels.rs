@@ -9,6 +9,29 @@ use serde::{Deserialize, Serialize};
 use crate::app::{State, Trigger};
 use crate::theme::{ACCENT, WARN};
 
+/// Adds a slider or drag value, but undoes any change made with the right or middle mouse button,
+/// so right-clicking opens the control's menu without moving it.
+macro_rules! guarded {
+    ($ui:expr, $v:expr, $w:expr) => {{
+        let before = $v;
+        let r = $ui.add($w);
+        if not_primary(&r) {
+            $v = before;
+        }
+        r
+    }};
+}
+
+/// True while the right/middle button is pressing or releasing on this widget.
+fn not_primary(r: &egui::Response) -> bool {
+    use egui::PointerButton::{Middle, Secondary};
+    let other = r.ctx.input(|i| {
+        let p = &i.pointer;
+        !p.primary_down() && [Secondary, Middle].iter().any(|b| p.button_down(*b) || p.button_pressed(*b) || p.button_released(*b))
+    });
+    other && (r.hovered() || r.contains_pointer() || r.is_pointer_button_down_on())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Tab {
     Preview,
@@ -182,7 +205,7 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("MASTER").small().strong());
             ui.spacing_mut().slider_width = (ui.available_width() - 200.0).max(80.0);
-            let r = ui.add(Slider::new(&mut st.comp.master_fade, 0.0..=1.0).show_value(false));
+            let r = guarded!(ui, st.comp.master_fade, Slider::new(&mut st.comp.master_fade, 0.0..=1.0).show_value(false));
             mod_marker(ui, &r, st.comp.master_fade, 0.0, 1.0, st.comp.master_fade_mod.as_ref());
             mapped_badge(ui, &r, &ControlTarget::MasterFade);
             if control_menu(&r, Some(&ControlTarget::MasterFade), Some(&mut st.comp.master_fade_mod)) {
@@ -452,7 +475,9 @@ fn master_card(
                 if fx > 0 {
                     let mut active = !*bypass;
                     let color = if active { ACCENT } else { Color32::GRAY };
-                    if ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass the master effects").changed() {
+                    let r = ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass the master effects · right-click to map");
+                    map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MasterFxBypass));
+                    if r.changed() {
                         *bypass = !active;
                     }
                 }
@@ -529,7 +554,7 @@ fn layer_card(
                 }
                 ui.horizontal(|ui| {
                     ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
-                    let r = ui.add(Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
+                    let r = guarded!(ui, layer.opacity, Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
                     mod_marker(ui, &r, layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref());
                     mapped_badge(ui, &r, &ControlTarget::LayerOpacity(layer.id));
                     if control_menu(&r, Some(&ControlTarget::LayerOpacity(layer.id)), Some(&mut layer.opacity_mod)) {
@@ -553,7 +578,9 @@ fn layer_card(
                     if fx > 0 {
                         let mut active = !layer.fx_bypass;
                         let color = if active { ACCENT } else { Color32::GRAY };
-                        if ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass this layer's effects").changed() {
+                        let r = ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass this layer's effects · right-click to map");
+                        map_menu(ui, &r, ControlTarget::LayerFxBypass(layer.id));
+                        if r.changed() {
                             layer.fx_bypass = !active;
                         }
                     }
@@ -655,7 +682,7 @@ fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMo
         values.resize(i + 1, p.default);
     }
     ui.horizontal(|ui| {
-        let r = ui.add(Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset · right-click for Learn / Modulate");
+        let r = guarded!(ui, values[i], Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset · right-click for Learn / Modulate");
         let slot = mods.iter().position(|m| m.index == i);
         mod_marker(ui, &r, values[i], p.min, p.max, slot.map(|k| &mods[k].m));
         if let Some(t) = &target {
@@ -747,8 +774,8 @@ fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
         });
         ui.label(RichText::new("MIDI control change").small().color(Color32::GRAY));
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut draft.channel).range(1..=16).prefix("ch "));
-            ui.add(egui::DragValue::new(&mut draft.cc).range(0..=127).prefix("CC "));
+            guarded!(ui, draft.channel, egui::DragValue::new(&mut draft.channel).range(1..=16).prefix("ch "));
+            guarded!(ui, draft.cc, egui::DragValue::new(&mut draft.cc).range(0..=127).prefix("CC "));
             if ui.button("Set").clicked() {
                 chosen = Some(phosphor_engine::ControlSource::MidiCc { channel: draft.channel - 1, cc: draft.cc });
             }
@@ -805,6 +832,12 @@ fn control_menu(resp: &egui::Response, target: Option<&ControlTarget>, m: Option
         }
     });
     reset
+}
+
+/// Right-click → Map (Learn / OSC / MIDI / key) for a button or value, with the mapped badge.
+fn map_menu(ui: &egui::Ui, resp: &egui::Response, target: ControlTarget) {
+    mapped_badge(ui, resp, &target);
+    resp.context_menu(|ui| learn_items(ui, &target));
 }
 
 fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
@@ -865,7 +898,7 @@ fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
                     }
                 });
             } else {
-                ui.add(Slider::new(&mut mm.rate, 0.01..=10.0).text("Hz").logarithmic(true));
+                guarded!(ui, mm.rate, Slider::new(&mut mm.rate, 0.01..=10.0).text("Hz").logarithmic(true));
             }
         });
     }
@@ -892,10 +925,10 @@ fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
         ui.checkbox(&mut mm.invert, "Invert");
     });
     if mm.range {
-        ui.add(Slider::new(&mut mm.min, 0.0..=1.0).text("From"));
-        ui.add(Slider::new(&mut mm.max, 0.0..=1.0).text("To"));
+        guarded!(ui, mm.min, Slider::new(&mut mm.min, 0.0..=1.0).text("From"));
+        guarded!(ui, mm.max, Slider::new(&mut mm.max, 0.0..=1.0).text("To"));
     } else {
-        ui.add(Slider::new(&mut mm.amount, -1.0..=1.0).text("Amount"));
+        guarded!(ui, mm.amount, Slider::new(&mut mm.amount, -1.0..=1.0).text("Amount"));
     }
     let v = phosphor_engine::control::source_value(mm, &inputs);
     ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(ACCENT.gamma_multiply(0.6)));
@@ -997,7 +1030,7 @@ fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_l
                 for (pi, p) in desc.params.iter().enumerate() {
                     param_slider(ui, &mut fx.values, &mut fx.mods, pi, p, Some(ControlTarget::EffectParam { effect: fx.id, index: pi }));
                 }
-                let mix = ui.add(Slider::new(&mut fx.mix, 0.0..=1.0).text("Mix"));
+                let mix = guarded!(ui, fx.mix, Slider::new(&mut fx.mix, 0.0..=1.0).text("Mix"));
                 mapped_badge(ui, &mix, &ControlTarget::EffectMix(fx.id));
                 if control_menu(&mix, Some(&ControlTarget::EffectMix(fx.id)), None) {
                     fx.mix = 1.0;
@@ -1126,7 +1159,8 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
                     ui.toggle_value(&mut layer.playing, text);
                     ui.checkbox(&mut layer.looping, "Loop");
                 });
-                ui.add(Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
+                let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
+                map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
                 ui.separator();
             }
             fx_action = effects_editor(ui, &mut layer.effects, clipboard_len);
@@ -1216,7 +1250,7 @@ fn media(ui: &mut egui::Ui, st: &mut State) {
         ui.add(egui::TextEdit::singleline(&mut st.media_view.search).hint_text("Search media").desired_width(150.0));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().slider_width = 70.0;
-            ui.add(Slider::new(&mut st.media_view.tile, 72.0..=240.0).show_value(false)).on_hover_text("Thumbnail size");
+            guarded!(ui, st.media_view.tile, Slider::new(&mut st.media_view.tile, 72.0..=240.0).show_value(false)).on_hover_text("Thumbnail size");
             let sort_name = match st.media_view.sort {
                 MediaSort::Name => "Name",
                 MediaSort::Newest => "Newest",
@@ -1546,14 +1580,18 @@ pub const CLIP_PAGE_SIZE: usize = 9;
 /// Cut / Fade and Now / Beat / Bar: how clips and media land on layers.
 pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     ui.label(RichText::new("Launch").small().color(Color32::GRAY));
-    ui.selectable_value(&mut comp.launch.fade, false, "Cut").on_hover_text("Switch instantly");
-    ui.selectable_value(&mut comp.launch.fade, true, "Fade").on_hover_text("Crossfade (or the layer's transition style)");
+    let cut = ui.selectable_value(&mut comp.launch.fade, false, "Cut").on_hover_text("Switch instantly");
+    map_menu(ui, &cut, ControlTarget::App(phosphor_engine::AppControl::LaunchFade));
+    let fade = ui.selectable_value(&mut comp.launch.fade, true, "Fade").on_hover_text("Crossfade (or the layer's transition style)");
+    map_menu(ui, &fade, ControlTarget::App(phosphor_engine::AppControl::LaunchFade));
     if comp.launch.fade {
-        ui.add(egui::DragValue::new(&mut comp.launch.fade_secs).range(0.05..=10.0).speed(0.02).fixed_decimals(2).suffix(" s"));
+        let secs = guarded!(ui, comp.launch.fade_secs, egui::DragValue::new(&mut comp.launch.fade_secs).range(0.05..=10.0).speed(0.02).fixed_decimals(2).suffix(" s"));
+        map_menu(ui, &secs, ControlTarget::App(phosphor_engine::AppControl::FadeTime));
     }
     ui.separator();
     for t in phosphor_engine::LaunchTiming::ALL {
-        ui.selectable_value(&mut comp.launch.timing, t, t.name());
+        let r = ui.selectable_value(&mut comp.launch.timing, t, t.name());
+        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming));
     }
 }
 
@@ -1561,11 +1599,16 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let aspect = st.aspect();
     ui.horizontal(|ui| {
-        if ui.button(label(icon::METRONOME, "Tap")).on_hover_text("Tap 3+ times to set the tempo").clicked() {
+        let tap = ui.button(label(icon::METRONOME, "Tap")).on_hover_text("Tap 3+ times to set the tempo");
+        map_menu(ui, &tap, ControlTarget::App(phosphor_engine::AppControl::TapTempo));
+        if tap.clicked() {
             st.clock.tap(now);
         }
-        ui.add(egui::DragValue::new(&mut st.clock.bpm).range(40.0..=300.0).speed(0.5).suffix(" bpm"));
-        if ui.button("Resync").on_hover_text("Beat 1 = now").clicked() {
+        let bpm = guarded!(ui, st.clock.bpm, egui::DragValue::new(&mut st.clock.bpm).range(40.0..=300.0).speed(0.5).suffix(" bpm"));
+        map_menu(ui, &bpm, ControlTarget::App(phosphor_engine::AppControl::Tempo));
+        let resync = ui.button("Resync").on_hover_text("Beat 1 = now");
+        map_menu(ui, &resync, ControlTarget::App(phosphor_engine::AppControl::Resync));
+        if resync.clicked() {
             st.clock.resync(now);
         }
         // Beat indicator: four dots, the current one lit.
@@ -1578,6 +1621,7 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
             ui.painter().circle_filled(r.center(), if lit { 5.0 } else { 4.0 }, color);
         }
         let auto = ui.toggle_value(&mut st.clock.follow_audio, RichText::new("AUTO").small().strong()).on_hover_text("Follow the audio beat detector (tempo and beat)");
+        map_menu(ui, &auto, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
         if st.mod_inputs.audio_beat > 0.05 {
             ui.painter().circle_filled(auto.rect.right_top() + egui::vec2(-2.0, 2.0), 2.0 + 3.0 * st.mod_inputs.audio_beat, Color32::from_rgb(255, 196, 70));
         }
@@ -1842,8 +1886,9 @@ fn audio(ui: &mut egui::Ui, st: &mut State) {
     if let Some(msg) = notice {
         ui.colored_label(WARN, msg.as_str());
     }
-    ui.add(Slider::new(&mut audio.gain, 0.1..=10.0).text("Gain").logarithmic(true));
-    ui.add(Slider::new(&mut audio.release, 0.02..=0.6).text("Release (s)"));
+    let gain = guarded!(ui, audio.gain, Slider::new(&mut audio.gain, 0.1..=10.0).text("Gain").logarithmic(true));
+    map_menu(ui, &gain, ControlTarget::App(phosphor_engine::AppControl::AudioGain));
+    guarded!(ui, audio.release, Slider::new(&mut audio.release, 0.02..=0.6).text("Release (s)"));
     ui.separator();
     for (name, v) in [
         ("Level", mod_inputs.audio_level),
@@ -1884,11 +1929,13 @@ fn audio(ui: &mut egui::Ui, st: &mut State) {
             ui.weak("listening for a beat…");
         }
     });
-    ui.add(Slider::new(&mut audio.beats.sensitivity, 1.1..=3.0).text("Kick threshold").fixed_decimals(2))
+    let kick = guarded!(ui, audio.beats.sensitivity, Slider::new(&mut audio.beats.sensitivity, 1.1..=3.0).text("Kick threshold").fixed_decimals(2))
         .on_hover_text("Lower catches softer kicks; higher ignores everything but strong hits");
+    map_menu(ui, &kick, ControlTarget::App(phosphor_engine::AppControl::KickThreshold));
     ui.horizontal(|ui| {
-        ui.toggle_value(follow_audio, label(icon::METRONOME, "Follow audio"))
+        let r = ui.toggle_value(follow_audio, label(icon::METRONOME, "Follow audio"))
             .on_hover_text("Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick");
+        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
         ui.weak("Also: Audio beat (kick) under any slider's wave button.");
     });
     ui.add_space(4.0);
@@ -2033,13 +2080,13 @@ fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 });
-                ui.add(Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
-                ui.add(Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
+                guarded!(ui, s.opacity, Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
+                guarded!(ui, s.feather, Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
                 ui.collapsing("Input region (part of the mix shown)", |ui| {
-                    ui.add(Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
-                    ui.add(Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
-                    ui.add(Slider::new(&mut s.input[2], 0.05..=1.0).text("Width"));
-                    ui.add(Slider::new(&mut s.input[3], 0.05..=1.0).text("Height"));
+                    guarded!(ui, s.input[0], Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
+                    guarded!(ui, s.input[1], Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
+                    guarded!(ui, s.input[2], Slider::new(&mut s.input[2], 0.05..=1.0).text("Width"));
+                    guarded!(ui, s.input[3], Slider::new(&mut s.input[3], 0.05..=1.0).text("Height"));
                 });
             });
             remember_card(ui, card_id, frame.response.rect);
@@ -2096,7 +2143,7 @@ fn control(ui: &mut egui::Ui, st: &mut State) {
     }
     ui.horizontal(|ui| {
         ui.label(RichText::new("OSC").strong());
-        ui.add(egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
+        guarded!(ui, control.osc_port, egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
         if ui.button(label(icon::ARROWS_CLOCKWISE, "Reconnect")).clicked() {
             control.reconnect();
         }
@@ -2222,7 +2269,7 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
         });
-        ui.add(Slider::new(&mut s.kbps, 1000..=30000).text("Bitrate (kbps)").logarithmic(true));
+        guarded!(ui, s.kbps, Slider::new(&mut s.kbps, 1000..=30000).text("Bitrate (kbps)").logarithmic(true));
         #[cfg(not(target_arch = "wasm32"))]
         ui.horizontal(|ui| {
             ui.label("Audio");
@@ -2285,7 +2332,7 @@ fn network(ui: &mut egui::Ui, st: &mut State) {
     ui.weak("Anyone on your network opens the link and sees the output live; they can send their music back.");
     ui.horizontal(|ui| {
         ui.add_enabled_ui(!net.running(), |ui| {
-            ui.add(egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
+            guarded!(ui, net.port, egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
             ComboBox::from_id_salt("net_fps").width(60.0).selected_text(format!("{} fps", net.fps)).show_ui(ui, |ui| {
                 for f in [10, 15, 20, 30] {
                     ui.selectable_value(&mut net.fps, f, format!("{f} fps"));
@@ -2406,7 +2453,7 @@ fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.end_row();
 
         ui.label("Master");
-        ui.add(Slider::new(&mut st.comp.master_fade, 0.0..=1.0).text("fade"));
+        guarded!(ui, st.comp.master_fade, Slider::new(&mut st.comp.master_fade, 0.0..=1.0).text("fade"));
         ui.end_row();
 
         ui.label("All output windows");
@@ -2541,7 +2588,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
 
 fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulation>, target: ControlTarget, height: f32) {
     ui.spacing_mut().slider_width = height;
-    let r = ui.add(Slider::new(value, 0.0..=1.0).vertical().show_value(false));
+    let r = guarded!(ui, *value, Slider::new(value, 0.0..=1.0).vertical().show_value(false));
     if let Some(mm) = m.as_ref() {
         let live = phosphor_engine::control::modulate(*value, 0.0, 1.0, Some(mm), &mod_inputs(ui));
         let rr = r.rect;
@@ -2911,8 +2958,9 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
             ui.weak("Syphon unavailable (framework missing)");
             return;
         }
-        ui.toggle_value(&mut st.comp.syphon, label(icon::SHARE_NETWORK, "Syphon"))
+        let r = ui.toggle_value(&mut st.comp.syphon, label(icon::SHARE_NETWORK, "Syphon"))
             .on_hover_text("Publish the composition as \"Phosphor\" — pick it in MadMapper, Resolume, OBS (Syphon Client), VDMX…");
+        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::Syphon));
         let clients = st.syphon.clients();
         if st.syphon.server_count() == 0 {
             ui.weak("off");

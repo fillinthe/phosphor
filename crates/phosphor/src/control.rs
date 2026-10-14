@@ -5,7 +5,36 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-use phosphor_engine::{Composition, ControlMap, ControlSource, ControlTarget, EffectState, shaders};
+use phosphor_engine::{AppControl, Composition, ControlMap, ControlSource, ControlTarget, EffectState, shaders};
+
+/// Controller actions the composition can't carry out by itself; the app handles them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Deferred {
+    Clip(u64, usize),
+    Column(usize),
+    /// Value 0..1, or `FLIP` to toggle an on/off control.
+    App(AppControl, f32),
+}
+
+/// Sent instead of a value when a pad or key press should flip an on/off control.
+pub const FLIP: f32 = -1.0;
+
+/// Pads and keys send press (1) / release (0); on/off targets toggle on press instead of following.
+fn momentary(source: &ControlSource) -> bool {
+    matches!(source, ControlSource::MidiNote { .. } | ControlSource::Key { .. })
+}
+
+fn is_toggle(target: &ControlTarget) -> bool {
+    match target {
+        ControlTarget::LayerEnabled(_) | ControlTarget::EffectEnabled(_) | ControlTarget::LayerFxBypass(_) => true,
+        ControlTarget::App(a) => a.is_toggle(),
+        _ => false,
+    }
+}
+
+fn toggled(current: bool, v: f32) -> bool {
+    if v == FLIP { !current } else { v > 0.5 }
+}
 
 pub const DEFAULT_OSC_PORT: u16 = 8000;
 
@@ -49,8 +78,8 @@ pub struct ControlHub {
     pub last: Option<Incoming>,
     /// Target waiting for the next message to bind to.
     pub learning: Option<ControlTarget>,
-    /// Clip (Some(layer), slot) / column (None, column) triggers from controllers, for the app to launch.
-    pub triggers: Vec<(Option<u64>, usize)>,
+    /// Clip/column launches and app-wide controls from controllers, for the app to carry out.
+    pub triggers: Vec<Deferred>,
     fresh: HashMap<ControlSource, f32>,
     #[cfg(not(target_arch = "wasm32"))]
     backend: native::Backend,
@@ -127,7 +156,13 @@ impl ControlHub {
             return;
         }
         for map in comp.control_maps.clone() {
-            let Some(v) = self.fresh.get(&map.source).copied() else { continue };
+            let Some(mut v) = self.fresh.get(&map.source).copied() else { continue };
+            if momentary(&map.source) && is_toggle(&map.target) {
+                if v <= 0.5 {
+                    continue;
+                }
+                v = FLIP;
+            }
             if let Some(t) = set_target(comp, &map.target, v, now) {
                 self.triggers.push(t);
             }
@@ -163,15 +198,42 @@ pub fn find_effect_mut(comp: &mut Composition, id: u64) -> Option<&mut EffectSta
     comp.master_effects.iter_mut().chain(comp.layers.iter_mut().flat_map(|l| l.effects.iter_mut())).find(|e| e.id == id)
 }
 
-/// Sets a value target directly; returns clip/column triggers for the app to launch.
-fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32) -> Option<(Option<u64>, usize)> {
+/// Maps 0..1 onto a range, logarithmically when `log`.
+pub fn unit_to(v: f32, min: f32, max: f32, log: bool) -> f32 {
+    let v = v.clamp(0.0, 1.0);
+    if log { min * (max / min).powf(v) } else { min + v * (max - min) }
+}
+
+/// Sets a value target directly; returns launches and app-wide controls for the app.
+fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32) -> Option<Deferred> {
     match target {
         ControlTarget::TriggerClip { layer, slot } => {
-            return (v > 0.5).then_some((Some(*layer), *slot));
+            return (v > 0.5).then_some(Deferred::Clip(*layer, *slot));
         }
         ControlTarget::TriggerColumn(col) => {
-            return (v > 0.5).then_some((None, *col));
+            return (v > 0.5).then_some(Deferred::Column(*col));
         }
+        ControlTarget::LayerFxBypass(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                l.fx_bypass = toggled(l.fx_bypass, v);
+            }
+        }
+        ControlTarget::LayerSpeed(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                l.rate = unit_to(v, 0.1, 4.0, true);
+            }
+        }
+        ControlTarget::App(a) => match a {
+            AppControl::LaunchFade => comp.launch.fade = toggled(comp.launch.fade, v),
+            AppControl::FadeTime => comp.launch.fade_secs = unit_to(v, 0.05, 10.0, true),
+            AppControl::LaunchTiming => {
+                let all = phosphor_engine::LaunchTiming::ALL;
+                comp.launch.timing = all[((v.clamp(0.0, 1.0) * all.len() as f32) as usize).min(all.len() - 1)];
+            }
+            AppControl::MasterFxBypass => comp.master_fx_bypass = toggled(comp.master_fx_bypass, v),
+            AppControl::Syphon => comp.syphon = toggled(comp.syphon, v),
+            _ => return Some(Deferred::App(*a, v)),
+        },
         ControlTarget::MasterFade => comp.master_fade = v.clamp(0.0, 1.0),
         ControlTarget::LayerOpacity(id) => {
             if let Some(l) = comp.layer_mut(*id) {
@@ -180,7 +242,7 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32)
         }
         ControlTarget::LayerEnabled(id) => {
             if let Some(l) = comp.layer_mut(*id) {
-                l.enabled = v > 0.5;
+                l.enabled = toggled(l.enabled, v);
             }
         }
         ControlTarget::GeneratorParam { layer, index } => {
@@ -213,7 +275,7 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32)
         }
         ControlTarget::EffectEnabled(id) => {
             if let Some(fx) = find_effect_mut(comp, *id) {
-                fx.enabled = v > 0.5;
+                fx.enabled = toggled(fx.enabled, v);
             }
         }
     }
@@ -223,6 +285,7 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32)
 /// Every bindable target in the composition, with a readable name.
 pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     let mut out = vec![(ControlTarget::MasterFade, "Master fade".to_string())];
+    out.extend(AppControl::ALL.iter().map(|a| (ControlTarget::App(*a), a.name().to_string())));
     for col in 0..comp.clip_columns {
         out.push((ControlTarget::TriggerColumn(col), format!("Column {} (trigger)", col + 1)));
     }
@@ -240,6 +303,8 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     for l in &comp.layers {
         out.push((ControlTarget::LayerOpacity(l.id), format!("{} · opacity", l.name)));
         out.push((ControlTarget::LayerEnabled(l.id), format!("{} · on/off", l.name)));
+        out.push((ControlTarget::LayerSpeed(l.id), format!("{} · speed", l.name)));
+        out.push((ControlTarget::LayerFxBypass(l.id), format!("{} · effects bypass", l.name)));
         for (slot, clip) in l.clips.iter().enumerate() {
             if !clip.is_empty() {
                 out.push((ControlTarget::TriggerClip { layer: l.id, slot }, format!("{} · clip {} ({})", l.name, slot + 1, clip.name)));
@@ -269,6 +334,9 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::EffectEnabled(id) => format!("/phosphor/fx/{id}/on"),
         ControlTarget::TriggerClip { layer, slot } => format!("/phosphor/layer/{layer}/clip/{}", slot + 1),
         ControlTarget::TriggerColumn(col) => format!("/phosphor/column/{}", col + 1),
+        ControlTarget::LayerSpeed(id) => format!("/phosphor/layer/{id}/speed"),
+        ControlTarget::LayerFxBypass(id) => format!("/phosphor/layer/{id}/fxbypass"),
+        ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),
     }
 }
 
@@ -437,5 +505,51 @@ mod native {
         let s = UdpSocket::bind("0.0.0.0:0").ok()?;
         s.connect("8.8.8.8:80").ok()?;
         Some(s.local_addr().ok()?.ip().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use phosphor_engine::{ControlMap, LaunchTiming};
+
+    fn send(hub: &mut ControlHub, comp: &mut Composition, source: ControlSource, value: f32) {
+        hub.inject(comp, Incoming { source, value });
+        hub.apply(comp, 0.0);
+    }
+
+    #[test]
+    fn app_controls_and_toggles() {
+        let mut hub = ControlHub::new();
+        let mut comp = Composition::default();
+        let id = comp.add_layer().id;
+        let osc = |a: &str| ControlSource::Osc { address: a.to_string() };
+
+        // Built-in OSC addresses for app-wide controls.
+        send(&mut hub, &mut comp, osc("/phosphor/launch/timing"), 0.5);
+        assert_eq!(comp.launch.timing, LaunchTiming::Beat);
+        send(&mut hub, &mut comp, osc("/phosphor/launch/fade"), 0.0);
+        assert!(!comp.launch.fade);
+        send(&mut hub, &mut comp, osc("/phosphor/tempo"), 0.5);
+        assert_eq!(hub.triggers.pop(), Some(Deferred::App(AppControl::Tempo, 0.5)));
+        send(&mut hub, &mut comp, osc(&format!("/phosphor/layer/{id}/speed")), 1.0);
+        assert!((comp.layer_mut(id).unwrap().rate - 4.0).abs() < 1e-3);
+
+        // A key mapped to an on/off control flips it on each press and ignores the release.
+        let key = ControlSource::Key { key: "Q".into() };
+        comp.control_maps.push(ControlMap { source: key.clone(), target: ControlTarget::LayerEnabled(id) });
+        let before = comp.layer_mut(id).unwrap().enabled;
+        send(&mut hub, &mut comp, key.clone(), 1.0);
+        send(&mut hub, &mut comp, key.clone(), 0.0);
+        assert_eq!(comp.layer_mut(id).unwrap().enabled, !before);
+        send(&mut hub, &mut comp, key.clone(), 1.0);
+        assert_eq!(comp.layer_mut(id).unwrap().enabled, before);
+
+        // An OSC toggle (TouchOSC style 1/0) follows the value.
+        comp.control_maps.push(ControlMap { source: osc("/t/bypass"), target: ControlTarget::LayerFxBypass(id) });
+        send(&mut hub, &mut comp, osc("/t/bypass"), 1.0);
+        assert!(comp.layer_mut(id).unwrap().fx_bypass);
+        send(&mut hub, &mut comp, osc("/t/bypass"), 0.0);
+        assert!(!comp.layer_mut(id).unwrap().fx_bypass);
     }
 }
