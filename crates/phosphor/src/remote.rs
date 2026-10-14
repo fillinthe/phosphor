@@ -51,7 +51,18 @@ pub fn state_json(st: &State) -> String {
         params.push(json!({"key": format!("m{}", fx.id), "group": desc.name, "fx": fx.id, "fxon": fx.enabled, "name": "Mix",
             "min": 0.0, "max": 1.0, "value": round(fx.mix), "msg": {"t": "mix", "effect": fx.id}}));
     }
+    let surface: Vec<Value> = comp
+        .surface
+        .widgets
+        .iter()
+        .map(|w| {
+            let [r, g, b] = w.color;
+            json!({"id": w.id, "kind": format!("{:?}", w.kind), "x": w.x, "y": w.y, "w": w.w, "h": w.h, "label": w.label,
+                "color": format!("#{r:02x}{g:02x}{b:02x}"), "value": round(w.value), "value_y": round(w.value_y)})
+        })
+        .collect();
     json!({
+        "surface": {"columns": comp.surface.columns, "widgets": surface},
         "bpm": comp.bpm,
         "master": round(comp.master_fade),
         "columns": comp.clip_columns,
@@ -93,6 +104,12 @@ pub fn apply(st: &mut State, cmd: &Value, now: f64) {
         "clip" => st.trigger(Trigger::Clip { layer: id("layer"), slot: f("slot") as usize }, now),
         "column" => st.trigger(Trigger::Column(f("col") as usize), now),
         "tap" => st.clock.tap(now),
+        // Any control by target (the Control Surface uses this): same path as the Mac's own UI.
+        "set" => {
+            if let Some(t) = cmd.get("target").and_then(|t| serde_json::from_value::<phosphor_engine::ControlTarget>(t.clone()).ok()) {
+                st.set_control(&t, v, now);
+            }
+        }
         "gen" => {
             let i = f("i") as usize;
             if let Some(l) = st.comp.layer_mut(id("layer")) {
