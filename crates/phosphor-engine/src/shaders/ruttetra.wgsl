@@ -4,7 +4,7 @@
 //   P(0) scanlines  P(1) points per line  P(2) extrude  P(3) rotate X  P(4) rotate Y
 //   P(5) zoom  P(6) line width (handled by target size)  P(7) brightness  P(8) source colour
 //   P(9) perspective  P(10) draw: 0 scanlines, 1 mesh, 2 triangle mesh, 3 vertical lines
-//   P(11) displace: 0 luminance, 1 RGB -> XYZ
+//   P(11) displace: 0 luminance, 1 RGB -> XYZ   P(12) displace from another layer (tex2) when > 0.5
 
 struct RuttOut {
     @builtin(position) pos: vec4f,
@@ -14,12 +14,16 @@ struct RuttOut {
 fn rutt_vertex(row: u32, col: u32, rows: u32, cols: u32) -> RuttOut {
     let uv = vec2f(f32(col) / f32(max(cols, 2u) - 1u), f32(row) / f32(max(rows, 2u) - 1u));
     let c = textureSampleLevel(tex0, samp, uv, 0.0);
-    let l = luma(c.rgb);
+    var d = c;
+    if (P(12u) > 0.5) {
+        d = textureSampleLevel(tex2, samp, uv, 0.0);
+    }
+    let l = luma(d.rgb);
     let asp = aspect();
 
     var p = vec3f((uv.x - 0.5) * asp, 0.5 - uv.y, 0.0);
     if (P(11u) > 0.5) {
-        p = p + (c.rgb - 0.5) * P(2u) * vec3f(0.5, 0.5, 1.0);
+        p = p + (d.rgb - 0.5) * P(2u) * vec3f(0.5, 0.5, 1.0);
     } else {
         p.y = p.y + l * P(2u) * 0.5;
         p.z = l * P(2u) * 0.5;

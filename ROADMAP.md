@@ -43,8 +43,10 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] **Rutt-Etra** rebuilt natively (v002-style scan processor): scanlines / square mesh / triangle mesh /
       vertical lines / **points** draw modes, luminance or **RGB→XYZ** displacement, 3D rotate/perspective,
       additive beam, line/point size — GPU-generated, ~0 CPU
-- [x] 28 effects total: + Gaussian/Zoom/Directional blur, Glow, Trails/Feedback (zoom-rotate tunnel),
-      Technicolor, Bleach Bypass, Vignette, Film Grain, CRT, Analog Glitch, Halftone, Sharpen, Emboss, Tile
+- [x] 33 effects: + Gaussian/Zoom/Directional blur, Glow, Edge Glow, Trails/Feedback (zoom-rotate tunnel),
+      Slit-scan, Chroma Key (transparency), Gamma/Lift/Gain, Solarize, Technicolor, Bleach Bypass, Vignette,
+      Film Grain, CRT, Analog Glitch, Halftone, Sharpen, Emboss, Tile
+- [x] 12 generators: + Tunnel, Starfield, Spiral, Voronoi Cells, Oscilloscope Lines
 - [x] Engine: multi-pass effects and per-effect history (feedback) targets
 - [x] Shader validation test (no GPU required)
 - [x] egui app: preview, layer stack, effect chains, dockable panels (egui_dock)
@@ -113,7 +115,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] ISF import: GLSL → WGSL via naga's GLSL front end; cache the result. Same loader reads
       MadMapper materials/generators (ISF `.fs` + JSON header, optional `.vs`)
 - [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
-      Optical Flow, Rutt-Etra displacement-image mode and lit (normals) rendering
+      Optical Flow and lit (normals) Rutt-Etra rendering. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)
 - [ ] Text / title source
 - [ ] Syphon in/out (macOS), NDI in/out (optional plugin)

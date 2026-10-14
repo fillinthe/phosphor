@@ -336,3 +336,66 @@ fn fx_tile(in: VOut) -> @location(0) vec4f {
     }
     return src(f);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Keying, tone and time effects
+
+// Chroma key: pixels near the key hue become transparent. P(0) hue, P(1) tolerance, P(2) softness.
+@fragment
+fn fx_chroma_key(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    let hsv = rgb2hsv(c.rgb);
+    let dh = min(abs(hsv.x - P(0u)), 1.0 - abs(hsv.x - P(0u)));
+    let by_hue = smoothstep(P(1u), P(1u) + max(P(2u), 0.001), dh);
+    let saturated = smoothstep(0.15, 0.4, hsv.y) * smoothstep(0.1, 0.3, hsv.z);
+    let keep = max(by_hue, 1.0 - saturated);
+    return vec4f(c.rgb, c.a * keep);
+}
+
+@fragment
+fn fx_gamma(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    var v = pow(max(c.rgb, vec3f(0.0)), vec3f(1.0 / max(P(0u), 0.05)));
+    v = (v + P(1u)) * P(2u);
+    return vec4f(clamp(v, vec3f(0.0), vec3f(1.0)), c.a);
+}
+
+@fragment
+fn fx_solarize(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    let flipped = select(c.rgb, 1.0 - c.rgb, c.rgb > vec3f(P(0u)));
+    return vec4f(mix(c.rgb, flipped, P(1u)), c.a);
+}
+
+// Slit-scan: columns left of the slit are yesterday's picture shifted by `shift` pixels, so time
+// smears across the frame. tex1 = previous output. P(0) slit, P(1) shift px, P(2) vertical.
+@fragment
+fn fx_slitscan(in: VOut) -> @location(0) vec4f {
+    let vertical = P(2u) > 0.5;
+    let coord = select(in.uv.x, in.uv.y, vertical);
+    let step = P(1u) / select(u.resolution.x, u.resolution.y, vertical);
+    let off = select(vec2f(step, 0.0), vec2f(0.0, step), vertical);
+    let prev = textureSampleLevel(tex1, samp, in.uv + off, 0.0);
+    let cur = src(in.uv);
+    return select(cur, prev, coord < P(0u));
+}
+
+// Edge glow = coloured edges -> blur -> add. P(0) radius, P(1) edge strength, P(2) intensity.
+@fragment
+fn fx_edges_only(in: VOut) -> @location(0) vec4f {
+    let t = 1.0 / u.resolution;
+    let tl = luma(src(in.uv + vec2f(-t.x, -t.y)).rgb);
+    let tc = luma(src(in.uv + vec2f(0.0, -t.y)).rgb);
+    let tr = luma(src(in.uv + vec2f(t.x, -t.y)).rgb);
+    let ml = luma(src(in.uv + vec2f(-t.x, 0.0)).rgb);
+    let mr = luma(src(in.uv + vec2f(t.x, 0.0)).rgb);
+    let bl = luma(src(in.uv + vec2f(-t.x, t.y)).rgb);
+    let bc = luma(src(in.uv + vec2f(0.0, t.y)).rgb);
+    let br = luma(src(in.uv + vec2f(t.x, t.y)).rgb);
+    let gx = -tl - 2.0 * ml - bl + tr + 2.0 * mr + br;
+    let gy = -tl - 2.0 * tc - tr + bl + 2.0 * bc + br;
+    let e = clamp(length(vec2f(gx, gy)) * P(1u), 0.0, 1.0);
+    let c = src(in.uv);
+    let tint = mix(vec3f(1.0), normalize(c.rgb + 0.05), 0.7);
+    return vec4f(tint * e, 1.0);
+}
