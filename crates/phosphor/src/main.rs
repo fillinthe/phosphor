@@ -17,6 +17,15 @@ mod thumbs;
 mod theme;
 
 #[cfg(not(target_arch = "wasm32"))]
+fn app_icon() -> std::sync::Arc<eframe::egui::IconData> {
+    let rgba = image::load_from_memory(include_bytes!("../../../assets/icon-1024.png")).map(|i| i.to_rgba8()).ok();
+    std::sync::Arc::new(match rgba {
+        Some(img) => eframe::egui::IconData { width: img.width(), height: img.height(), rgba: img.into_raw() },
+        None => eframe::egui::IconData::default(),
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     env_logger::init();
     // Converter crashes on odd third-party shaders are caught and skipped; keep them out of the log.
@@ -32,7 +41,8 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Phosphor")
             .with_inner_size([1440.0, 900.0])
-            .with_min_inner_size([960.0, 600.0]),
+            .with_min_inner_size([960.0, 600.0])
+            .with_icon(app_icon()),
         // A benchmark must start from a clean slate, not yesterday's project.
         persist_window: bench.is_none(),
         ..Default::default()

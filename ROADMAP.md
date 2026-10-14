@@ -26,6 +26,28 @@ app that's much smaller and lighter on the CPU.
 
 ---
 
+## Next up (priority order)
+
+1. **Multiple outputs**: one window per projector/screen, each with its own mapping surfaces
+2. **Phone / iPad remote** (piggyback on the Mac over the network, no OSC layouts to build):
+   - [ ] Session server serves a touch **control page** generated from the live project: master fader,
+         layer faders/on/solo, clip grid + column triggers, tap tempo, effect sliders for the selected layer
+   - [ ] Changes go back over a WebSocket and the page stays in sync both ways (moves when the Mac moves)
+   - [ ] QR code in the Session panel to open it instantly; works on iPhone, iPad, Android, any browser
+   - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
+   - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
+3. **Control Surface panel** (VDMX-style): place your own buttons/sliders/XY pads, each bound to anything;
+   also exported as the phone/iPad remote layout and as a TouchOSC `.tosc`
+4. **Mapping upgrades**: mesh warp (grid of bezier points), masks, per-output colour/brightness
+5. **OBS / pro I/O**: Syphon and NDI out, virtual camera, NDI in
+6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
+7. **Performance**: cache GPU bind groups (explorer previews cost ~2 ms CPU/frame at 40 tiles), render
+   thread decoupled from UI, Hap decoded on the GPU
+8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
+9. **ISF gaps**: multi-pass / feedback / >16 params (142 shaders), City Lights generator renders black,
+   Broken LCD looks unchanged at defaults
+10. **Distribution**: bundle FFmpeg inside the .app (LGPL build), notarize, auto-update, Intel test
+
 ## TODO
 
 Legend: [x] done · [~] in progress · [ ] not started
@@ -165,6 +187,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Media handling: references plus an optional cloud media library
 
 ### Phase 7: Platforms
+- [x] macOS app bundle with icon (`scripts/bundle-mac.sh` → /Applications/Phosphor.app), opens .phosphor files
 - [~] macOS (Apple Silicon + Intel), macOS 14+
 - [x] **Browser build runs** (WebGPU, Chrome): `cd crates/phosphor && trunk build --release --dist ../../dist`,
       then serve `dist/`. Same engine + UI; 9 MB wasm. No video/audio/MIDI in the browser yet

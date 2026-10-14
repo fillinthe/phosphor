@@ -5,9 +5,15 @@ one engine for macOS, iPadOS/iOS and the browser. Rust + wgpu (Metal natively, W
 
 - `crates/phosphor-engine`: platform-independent render graph, WGSL shaders, project model
 - `crates/phosphor`: the app (dockable UI, output window, benchmark mode)
-- `VDMX-REVIEW.md`: teardown of VDMX6 Plus · `ROADMAP.md`: evaluation + TODO list
+- `docs/VDMX-REVIEW.md`: teardown of VDMX6 Plus · `ROADMAP.md`: evaluation + TODO list
 
-## Run (macOS)
+## Install (macOS)
+
+```bash
+scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
+```
+
+## Run from source (macOS)
 
 Needs Homebrew FFmpeg 9 for video playback: `brew install ffmpeg pkg-config`.
 
