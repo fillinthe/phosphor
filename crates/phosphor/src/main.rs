@@ -4,6 +4,7 @@ mod bench;
 mod clock;
 mod control;
 mod media;
+mod net;
 mod panels;
 mod presets;
 mod stats;

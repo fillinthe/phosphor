@@ -14,6 +14,7 @@ use crate::bench::BenchConfig;
 use crate::clock::Clock;
 use crate::control::ControlHub;
 use crate::media::{self, MediaManager};
+use crate::net::NetSession;
 use crate::panels::{self, Tab, Viewer};
 use crate::presets::PresetStore;
 use crate::stats::{Snapshot, Stats};
@@ -71,6 +72,8 @@ pub struct State {
     pub learn_pick: Option<phosphor_engine::ControlTarget>,
     pub stream: Streamer,
     pub stream_audio_devices: Vec<(i32, String)>,
+    pub net: NetSession,
+    net_audio: Vec<f32>,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
@@ -191,6 +194,8 @@ impl PhosphorApp {
                 learn_pick: None,
                 stream: Streamer::new(stream_settings),
                 stream_audio_devices: Vec::new(),
+                net: NetSession::new(),
+                net_audio: Vec::new(),
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 clock: Clock::new(comp_bpm),
@@ -207,6 +212,12 @@ impl PhosphorApp {
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
         }
+        if app.bench.as_ref().is_some_and(|b| b.cfg.net) {
+            if let Err(e) = app.state.net.start() {
+                eprintln!("net: {e}");
+            }
+            app.state.audio.use_network();
+        }
         if let Some(path) = app.bench.as_ref().and_then(|b| b.cfg.record.clone()) {
             app.state.stream.settings.destination = crate::stream::Destination::File;
             app.state.stream.settings.file_path = path;
@@ -221,12 +232,17 @@ impl PhosphorApp {
 
     /// Advances media, renders the frame, and keeps the preview + thumbnail textures registered.
     fn render(&mut self, now: f64) {
-        let State { comp, engine, render_state, texture, texture_generation, layer_textures, media, stats, output, audio, mod_inputs, stream, clock, .. } =
+        let State { comp, engine, render_state, texture, texture_generation, layer_textures, media, stats, output, audio, mod_inputs, stream, clock, net, net_audio, .. } =
             &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
         media.sync(comp, engine);
         media.update_video(comp, engine, now);
 
+        net_audio.clear();
+        net.take_audio(net_audio);
+        if !net_audio.is_empty() {
+            audio.push_external(net_audio);
+        }
         let an = audio.update();
         let beat_phase = clock.phase(now);
         *mod_inputs = ModInputs {
@@ -241,11 +257,18 @@ impl PhosphorApp {
         let info = engine.render(comp, now as f32, mod_inputs);
         let render_secs = t0.elapsed().as_secs_f64();
 
-        if stream.frame_due(now) && !engine.capture_frame() {
+        let stream_due = stream.frame_due(now);
+        let net_due = net.frame_due(now);
+        if (stream_due || net_due) && !engine.capture_frame() && stream_due {
             stream.repeat_last();
         }
         for f in engine.poll_captures() {
-            stream.push(f.width, f.height, f.rgba);
+            if net.running() {
+                net.push_frame(f.width, f.height, f.rgba.clone());
+            }
+            if stream.running() {
+                stream.push(f.width, f.height, f.rgba);
+            }
         }
 
         if let Some(rs) = render_state {
@@ -700,7 +723,7 @@ fn default_layout() -> DockState<Tab> {
     let surface = dock.main_surface_mut();
     let [left, right] = surface.split_right(NodeIndex::root(), 0.64, vec![Tab::Layers]);
     surface.split_below(right, 0.5, vec![Tab::Inspector]);
-    surface.split_below(left, 0.68, vec![Tab::Clips, Tab::Media, Tab::Library, Tab::Presets, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
+    surface.split_below(left, 0.68, vec![Tab::Clips, Tab::Media, Tab::Library, Tab::Presets, Tab::Network, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
     dock
 }
 

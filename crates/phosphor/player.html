@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phosphor session</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font: 14px system-ui, sans-serif; color: #ddd; }
+  #v { width: 100vw; height: 100vh; object-fit: contain; display: block; }
+  #bar { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; opacity: .9; transition: opacity .4s; }
+  body.idle #bar { opacity: 0; }
+  button { background: #1d2023; color: #78ffaa; border: 1px solid #2c3034; border-radius: 6px; padding: 8px 12px; font: inherit; cursor: pointer; }
+  button.on { background: #1d3a2a; }
+  #st { color: #999; }
+  #meter { width: 80px; height: 8px; background: #222; border-radius: 4px; overflow: hidden; }
+  #meter i { display: block; height: 100%; width: 0; background: #78ffaa; }
+</style>
+</head>
+<body>
+<img id="v" src="/stream.mjpeg" alt="Phosphor output">
+<div id="bar">
+  <button id="mic">Send my audio</button>
+  <div id="meter"><i id="lvl"></i></div>
+  <button id="fs">Fullscreen</button>
+  <span id="st">connected</span>
+</div>
+<script>
+const st = document.getElementById('st'), lvl = document.getElementById('lvl'), micBtn = document.getElementById('mic');
+let ws = null, ctx = null, proc = null, src = null;
+function stopMic() {
+  if (proc) { proc.disconnect(); proc = null; }
+  if (src) { src.mediaStream.getTracks().forEach(t => t.stop()); src.disconnect(); src = null; }
+  if (ctx) { ctx.close(); ctx = null; }
+  if (ws) { ws.close(); ws = null; }
+  micBtn.classList.remove('on'); micBtn.textContent = 'Send my audio'; lvl.style.width = '0';
+}
+async function startMic() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    st.textContent = 'Mic needs HTTPS or localhost. In Chrome: chrome://flags/#unsafely-treat-insecure-origin-as-secure → add ' + location.origin;
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    src = ctx.createMediaStreamSource(stream);
+    proc = ctx.createScriptProcessor(2048, 1, 1);
+    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/audio');
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = () => { ws.send('rate:' + ctx.sampleRate); st.textContent = 'sending audio'; };
+    ws.onclose = () => { st.textContent = 'audio link closed'; stopMic(); };
+    proc.onaudioprocess = e => {
+      const d = e.inputBuffer.getChannelData(0);
+      let peak = 0; for (let i = 0; i < d.length; i += 8) peak = Math.max(peak, Math.abs(d[i]));
+      lvl.style.width = Math.min(100, peak * 140) + '%';
+      if (ws && ws.readyState === 1) ws.send(d.buffer.slice(0));
+    };
+    src.connect(proc); proc.connect(ctx.destination);
+    micBtn.classList.add('on'); micBtn.textContent = 'Stop sending';
+  } catch (err) { st.textContent = 'mic: ' + err.message; }
+}
+micBtn.onclick = () => (ws ? stopMic() : startMic());
+document.getElementById('fs').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
+let idle; const wake = () => { document.body.classList.remove('idle'); clearTimeout(idle); idle = setTimeout(() => document.body.classList.add('idle'), 3000); };
+['mousemove', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, wake)); wake();
+document.getElementById('v').onerror = () => { st.textContent = 'reconnecting…'; setTimeout(() => { document.getElementById('v').src = '/stream.mjpeg?' + Date.now(); }, 1000); };
+</script>
+</body>
+</html>

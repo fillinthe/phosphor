@@ -50,6 +50,8 @@ mod native {
         analysis: AudioAnalysis,
         spectrum: Vec<f32>,
         last_update: Option<web_time::Instant>,
+        /// Analyse samples pushed from the network session instead of a device.
+        network: bool,
     }
 
     impl AudioInput {
@@ -70,6 +72,7 @@ mod native {
                 analysis: AudioAnalysis::default(),
                 spectrum: vec![0.0; SPECTRUM_BARS],
                 last_update: None,
+                network: false,
             };
             input.refresh_devices();
             input
@@ -84,7 +87,30 @@ mod native {
         }
 
         pub fn is_open(&self) -> bool {
-            self.stream.is_some()
+            self.stream.is_some() || self.network
+        }
+
+        pub fn is_network(&self) -> bool {
+            self.network
+        }
+
+        /// Switches analysis to audio arriving from session viewers.
+        pub fn use_network(&mut self) {
+            self.close();
+            self.network = true;
+            self.current = Some("Session viewers".into());
+        }
+
+        /// Feeds viewer audio (mono, 48 kHz) into the analyser.
+        pub fn push_external(&mut self, samples: &[f32]) {
+            if !self.network {
+                return;
+            }
+            let mut q = self.ring.lock().unwrap();
+            q.extend(samples.iter().copied());
+            while q.len() > FFT_SIZE * 2 {
+                q.pop_front();
+            }
         }
 
         pub fn spectrum(&self) -> &[f32] {
@@ -99,6 +125,10 @@ mod native {
         /// Starts listening on a device (`None` = system default input).
         pub fn open(&mut self, name: Option<&str>) -> Result<(), String> {
             self.close();
+            if name == Some("Session viewers") {
+                self.use_network();
+                return Ok(());
+            }
             let host = cpal::default_host();
             let device = match name {
                 Some(n) => host
@@ -149,6 +179,7 @@ mod native {
 
         pub fn close(&mut self) {
             self.stream = None;
+            self.network = false;
             self.ring.lock().unwrap().clear();
             self.analysis = AudioAnalysis::default();
             self.spectrum.iter_mut().for_each(|v| *v = 0.0);
@@ -156,7 +187,7 @@ mod native {
 
         /// Analyses the newest samples; call once per frame.
         pub fn update(&mut self) -> AudioAnalysis {
-            if self.stream.is_none() {
+            if self.stream.is_none() && !self.network {
                 return AudioAnalysis::default();
             }
             let now = web_time::Instant::now();
@@ -241,6 +272,11 @@ mod stub {
             Err("Audio input in the browser is coming with network sessions".into())
         }
         pub fn close(&mut self) {}
+        pub fn is_network(&self) -> bool {
+            false
+        }
+        pub fn use_network(&mut self) {}
+        pub fn push_external(&mut self, _samples: &[f32]) {}
         pub fn update(&mut self) -> AudioAnalysis {
             AudioAnalysis::default()
         }
