@@ -114,7 +114,10 @@ pub struct State {
     pub notice: Option<String>,
     pub audio: AudioInput,
     pub control: ControlHub,
-    pub learn_pick: Option<phosphor_engine::ControlTarget>,
+    /// Mappings editor: what the next heard input is for, the new mapping being made, and search.
+    pub listen_for: Option<ListenFor>,
+    pub map_draft: Option<(phosphor_engine::ControlSource, Option<phosphor_engine::ControlTarget>)>,
+    pub map_search: String,
     pub stream: Streamer,
     pub stream_audio_devices: Vec<(i32, String)>,
     pub net: NetSession,
@@ -265,6 +268,24 @@ impl State {
         }
     }
 
+    /// Sets any control (0..1) from the UI, a surface widget or the remote, and carries out what it
+    /// triggers (clip launches, tempo…). The same path controllers take.
+    pub fn set_control(&mut self, target: &phosphor_engine::ControlTarget, v: f32, now: f64) {
+        let mut out = Vec::new();
+        crate::control::set_target(&mut self.comp, target, v, &mut out);
+        for d in out {
+            self.run_deferred(d, now);
+        }
+    }
+
+    pub fn run_deferred(&mut self, d: crate::control::Deferred, now: f64) {
+        match d {
+            crate::control::Deferred::Clip(layer, slot) => self.trigger(Trigger::Clip { layer, slot }, now),
+            crate::control::Deferred::Column(col) => self.trigger(Trigger::Column(col), now),
+            crate::control::Deferred::App(a, v) => self.app_control(a, v, now),
+        }
+    }
+
     /// Carries out an app-wide control from a controller (value 0..1, or `control::FLIP`).
     pub fn app_control(&mut self, a: phosphor_engine::AppControl, v: f32, now: f64) {
         use crate::control::{FLIP, unit_to};
@@ -356,6 +377,16 @@ struct BenchRun {
     samples: Vec<Snapshot>,
     /// Rebuilt the composition once imported (ISF) shaders were registered.
     rebuilt: bool,
+    /// `--ui-shot`: the window picture was requested.
+    shot_requested: bool,
+}
+
+/// What a Listen in the Mappings editor is for.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ListenFor {
+    NewMapping,
+    /// Re-capture the input of mapping `i`.
+    Replace(usize),
 }
 
 /// The Export Show window.

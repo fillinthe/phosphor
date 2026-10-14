@@ -13,6 +13,23 @@ impl PhosphorApp {
         if now - started < run.cfg.seconds {
             return;
         }
+        // --ui-shot: ask egui for a picture of the window, and finish once it arrives.
+        if let Some(path) = run.cfg.ui_shot.clone() {
+            if !run.shot_requested {
+                run.shot_requested = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+                return;
+            }
+            let shot = ctx.input(|i| i.events.iter().find_map(|e| if let egui::Event::Screenshot { image, .. } = e { Some(image.clone()) } else { None }));
+            let Some(image) = shot else { return };
+            let [w, h] = image.size;
+            let rgba: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
+            match image::save_buffer(&path, &rgba, w as u32, h as u32, image::ColorType::Rgba8) {
+                Ok(()) => println!("UI_SHOT {path}"),
+                Err(e) => println!("UI_SHOT failed: {e}"),
+            }
+            run.cfg.ui_shot = None;
+        }
         // Drop the first sample: it includes startup and pipeline warm-up.
         let steady: Vec<_> = run.samples.iter().skip(1).copied().collect();
         let n = steady.len().max(1) as f64;

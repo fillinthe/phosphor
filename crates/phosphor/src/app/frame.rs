@@ -57,11 +57,7 @@ impl PhosphorApp {
             control.apply(comp, now as f32);
         }
         for d in std::mem::take(&mut self.state.control.triggers) {
-            match d {
-                crate::control::Deferred::Clip(layer, slot) => self.state.trigger(Trigger::Clip { layer, slot }, now),
-                crate::control::Deferred::Column(col) => self.state.trigger(Trigger::Column(col), now),
-                crate::control::Deferred::App(a, v) => self.state.app_control(a, v, now),
-            }
+            self.state.run_deferred(d, now);
         }
         {
             let st = &mut self.state;

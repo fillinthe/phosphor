@@ -193,7 +193,7 @@ pub(crate) fn default_layout() -> DockState<Tab> {
     surface.split_below(
         bottom,
         0.42,
-        vec![Tab::Mixer, Tab::Library, Tab::Audio, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output],
+        vec![Tab::Mixer, Tab::Surface, Tab::Library, Tab::Audio, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output],
     );
     dock
 }

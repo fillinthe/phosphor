@@ -3,8 +3,7 @@
 use super::*;
 
 pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
-    use crate::control::{all_targets, target_label};
-    let State { control, comp, learn_pick, .. } = st;
+    let control = &mut st.control;
     ui.label(RichText::new("MIDI").strong());
     if control.midi_ports.is_empty() {
         ui.weak("No MIDI inputs found. Plug in a controller and press Reconnect.");
@@ -20,54 +19,123 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     });
     ui.weak(&control.osc_status);
     ui.weak("TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
-    ui.separator();
-
-    ui.label(RichText::new("Learn").strong());
-    ui.horizontal(|ui| {
-        let targets = all_targets(comp);
-        let current = learn_pick.as_ref().map(|t| target_label(comp, t)).unwrap_or_else(|| "Pick what to control…".into());
-        ComboBox::from_id_salt("learn_target").width(260.0).selected_text(current).show_ui(ui, |ui| {
-            for (t, name) in targets {
-                if ui.selectable_label(learn_pick.as_ref() == Some(&t), name).clicked() {
-                    *learn_pick = Some(t);
-                }
-            }
-        });
-        let can_learn = learn_pick.is_some() && control.learning.is_none();
-        if ui.add_enabled(can_learn, egui::Button::new(label(icon::BROADCAST, "Learn"))).clicked() {
-            control.learning = learn_pick.clone();
-        }
-        if control.learning.is_some() && ui.button("Cancel").clicked() {
-            control.learning = None;
-        }
-    });
-    if let Some(t) = &control.learning {
-        ui.colored_label(ACCENT, format!("Move a knob or send an OSC message to bind → {}", target_label(comp, t)));
-    }
     match &control.last {
-        Some(m) => ui.monospace(format!("last: {}  {:.3}", m.source.label(), m.value)),
+        Some(m) => ui.monospace(format!("last input: {}  {:.3}", m.source.label(), m.value)),
         None => ui.weak("No controller messages received yet."),
     };
     ui.separator();
 
-    ui.label(RichText::new("Mappings").strong());
+    mappings_editor(ui, st);
+}
+
+/// Every controller mapping, editable: Listen for a new input, retype or re-listen an input, pick
+/// the target, set the range, switch on/off, delete. A live meter shows each input as it moves.
+fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
+    use crate::app::ListenFor;
+    let State { control, comp, listen_for, map_draft, map_search, .. } = st;
+    // A heard input lands where the Listen was for.
+    if let Some(src) = control.heard.take() {
+        match listen_for.take() {
+            Some(ListenFor::Replace(i)) => {
+                if let Some(m) = comp.control_maps.get_mut(i) {
+                    m.source = src;
+                }
+            }
+            _ => *map_draft = Some((src, None)),
+        }
+    }
+    let listening = control.listen_source;
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Mappings").strong());
+        ui.weak(format!("{}", comp.control_maps.len()));
+        if listening {
+            ui.label(RichText::new(format!("{} Listening… touch a knob, pad or key, or send OSC", icon::EAR)).color(Color32::from_rgb(255, 205, 90)));
+            ui.ctx().request_repaint();
+            if ui.button("Cancel").clicked() {
+                control.listen_source = false;
+                *listen_for = None;
+            }
+        } else if ui.button(label(icon::EAR, "Listen")).on_hover_text("Waits for the next input (MIDI knob/pad, OSC message or key), then lets you pick what it controls").clicked() {
+            control.listen_source = true;
+            *listen_for = Some(ListenFor::NewMapping);
+        }
+        if ui.button(label(icon::PLUS, "Add by hand")).clicked() {
+            *map_draft = Some((phosphor_engine::ControlSource::MidiCc { channel: 0, cc: 1 }, None));
+        }
+        ui.add(egui::TextEdit::singleline(map_search).hint_text("Search mappings").desired_width(140.0));
+    });
+    let targets = crate::control::all_targets(comp);
+    // The mapping being made: input heard (or typed) → pick a target → Add.
+    let mut finish: Option<bool> = None;
+    if let Some((src, target)) = map_draft.as_mut() {
+        card_frame(ui, true).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("New").strong().color(ACCENT));
+                source_editor(ui, "new_map_source", src);
+                ui.label("→");
+                if let Some(t) = target_picker(ui, "new_map_target", &targets, target.as_ref(), 220.0) {
+                    *target = Some(t);
+                }
+                if ui.add_enabled(target.is_some(), egui::Button::new("Add")).clicked() {
+                    finish = Some(true);
+                }
+                if ui.small_button(icon::X).clicked() {
+                    finish = Some(false);
+                }
+            });
+        });
+    }
+    if let Some(add) = finish {
+        if add && let Some((src, Some(t))) = map_draft.take() {
+            comp.control_maps.push(phosphor_engine::ControlMap::new(src, t));
+        }
+        *map_draft = None;
+    }
+
+    let last = control.last.as_ref().map(|m| (m.source.clone(), m.value));
+    let q = map_search.to_lowercase();
     let mut remove = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-        if comp.control_maps.is_empty() {
-            ui.weak("None yet. Pick a target above, press Learn, then move a control.");
+        if comp.control_maps.is_empty() && map_draft.is_none() {
+            ui.weak("None yet. Press Listen and move a control, or right-click any slider or button → Listen, or use MAP in the top bar.");
         }
-        for (i, m) in comp.control_maps.iter().enumerate() {
-            ui.horizontal(|ui| {
-                if ui.small_button(icon::TRASH).clicked() {
+        egui::Grid::new("mappings").num_columns(6).striped(true).spacing([6.0, 3.0]).show(ui, |ui| {
+            for (i, m) in comp.control_maps.iter_mut().enumerate() {
+                let name = targets.iter().find(|(t, _)| *t == m.target).map_or("(removed)", |(_, n)| n.as_str());
+                if !q.is_empty() && !name.to_lowercase().contains(&q) && !m.source.label().to_lowercase().contains(&q) {
+                    continue;
+                }
+                ui.checkbox(&mut m.enabled, "").on_hover_text("On / off");
+                ui.horizontal(|ui| {
+                    source_editor(ui, ("map_source", i), &mut m.source);
+                    let relisten = *listen_for == Some(ListenFor::Replace(i)) && control.listen_source;
+                    if ui.selectable_label(relisten, icon::EAR).on_hover_text("Listen again for this mapping's input").clicked() {
+                        control.listen_source = true;
+                        *listen_for = Some(ListenFor::Replace(i));
+                    }
+                });
+                // Live meter: lights up and shows the value while this input moves.
+                let live = last.as_ref().filter(|(s, _)| *s == m.source).map(|(_, v)| *v);
+                let (r, _) = ui.allocate_exact_size(egui::vec2(36.0, 8.0), Sense::hover());
+                ui.painter().rect_filled(r, 2.0, Color32::from_gray(35));
+                if let Some(v) = live {
+                    let mut fill = r;
+                    fill.set_width(r.width() * v.clamp(0.0, 1.0));
+                    ui.painter().rect_filled(fill, 2.0, ACCENT);
+                }
+                if let Some(t) = target_picker(ui, ("map_target", i), &targets, Some(&m.target), 220.0) {
+                    m.target = t;
+                }
+                ui.horizontal(|ui| range_editor(ui, &mut m.range));
+                if ui.small_button(icon::TRASH).on_hover_text("Delete").clicked() {
                     remove = Some(i);
                 }
-                ui.monospace(m.source.label());
-                ui.label("→");
-                ui.label(target_label(comp, &m.target));
-            });
-        }
+                ui.end_row();
+            }
+        });
     });
     if let Some(i) = remove {
         comp.control_maps.remove(i);
+        *listen_for = None;
     }
 }

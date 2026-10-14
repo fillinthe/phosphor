@@ -24,10 +24,11 @@ fn momentary(source: &ControlSource) -> bool {
     matches!(source, ControlSource::MidiNote { .. } | ControlSource::Key { .. })
 }
 
-fn is_toggle(target: &ControlTarget) -> bool {
+fn is_toggle(comp: &Composition, target: &ControlTarget) -> bool {
     match target {
         ControlTarget::LayerEnabled(_) | ControlTarget::EffectEnabled(_) | ControlTarget::LayerFxBypass(_) => true,
         ControlTarget::App(a) => a.is_toggle(),
+        ControlTarget::Surface(id) => comp.surface.widget(*id).is_some_and(|w| w.kind == phosphor_engine::WidgetKind::Toggle),
         _ => false,
     }
 }
@@ -78,6 +79,9 @@ pub struct ControlHub {
     pub last: Option<Incoming>,
     /// Target waiting for the next message to bind to.
     pub learning: Option<ControlTarget>,
+    /// Listen: catch the next input (any knob, pad, key or OSC message) into `heard`.
+    pub listen_source: bool,
+    pub heard: Option<ControlSource>,
     /// Clip/column launches and app-wide controls from controllers, for the app to carry out.
     pub triggers: Vec<Deferred>,
     fresh: HashMap<ControlSource, f32>,
@@ -100,6 +104,8 @@ impl ControlHub {
             local_ip: None,
             last: None,
             learning: None,
+            listen_source: false,
+            heard: None,
             triggers: Vec::new(),
             fresh: HashMap::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -141,9 +147,12 @@ impl ControlHub {
     }
 
     fn handle(&mut self, comp: &mut Composition, msg: Incoming) {
-        if let Some(target) = self.learning.take() {
+        if self.listen_source {
+            self.listen_source = false;
+            self.heard = Some(msg.source.clone());
+        } else if let Some(target) = self.learning.take() {
             comp.control_maps.retain(|m| m.target != target);
-            comp.control_maps.push(ControlMap { source: msg.source.clone(), target });
+            comp.control_maps.push(ControlMap::new(msg.source.clone(), target));
         }
         self.fresh.insert(msg.source.clone(), msg.value);
         self.last = Some(msg);
@@ -156,17 +165,21 @@ impl ControlHub {
             return;
         }
         for map in comp.control_maps.clone() {
-            let Some(mut v) = self.fresh.get(&map.source).copied() else { continue };
-            if momentary(&map.source) && is_toggle(&map.target) {
+            if !map.enabled {
+                continue;
+            }
+            let Some(v) = self.fresh.get(&map.source).copied() else { continue };
+            let v = if momentary(&map.source) && is_toggle(comp, &map.target) {
                 if v <= 0.5 {
                     continue;
                 }
-                v = FLIP;
-            }
-            if let Some(t) = set_target(comp, &map.target, v, now) {
-                self.triggers.push(t);
-            }
+                FLIP
+            } else {
+                map.range.apply(v)
+            };
+            set_target(comp, &map.target, v, &mut self.triggers);
         }
+        let _ = now;
         // Built-in addresses work without any mapping: /phosphor/master, /phosphor/layer/3/opacity…
         let osc: Vec<(String, f32)> = self
             .fresh
@@ -179,10 +192,8 @@ impl ControlHub {
         if !osc.is_empty() {
             let targets = all_targets(comp);
             for (address, v) in osc {
-                if let Some((t, _)) = targets.iter().find(|(t, _)| default_osc_address(t) == address)
-                    && let Some(trig) = set_target(comp, &t.clone(), v, now)
-                {
-                    self.triggers.push(trig);
+                if let Some((t, _)) = targets.iter().find(|(t, _)| default_osc_address(t) == address) {
+                    set_target(comp, &t.clone(), v, &mut self.triggers);
                 }
             }
         }
@@ -204,14 +215,42 @@ pub fn unit_to(v: f32, min: f32, max: f32, log: bool) -> f32 {
     if log { min * (max / min).powf(v) } else { min + v * (max - min) }
 }
 
-/// Sets a value target directly; returns launches and app-wide controls for the app.
-fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32) -> Option<Deferred> {
+/// Sets any target to a 0..1 value (or `FLIP` for on/off ones). Clip launches and app-wide
+/// controls the composition can't do itself are pushed onto `out` for the app.
+pub fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, out: &mut Vec<Deferred>) {
+    set_target_depth(comp, target, v, out, 0);
+}
+
+/// Surface widgets can drive other widgets; `depth` stops loops (A drives B drives A).
+fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out: &mut Vec<Deferred>, depth: u8) {
+    if depth > 6 {
+        return;
+    }
     match target {
         ControlTarget::TriggerClip { layer, slot } => {
-            return (v > 0.5).then_some(Deferred::Clip(*layer, *slot));
+            if v > 0.5 {
+                out.push(Deferred::Clip(*layer, *slot));
+            }
         }
         ControlTarget::TriggerColumn(col) => {
-            return (v > 0.5).then_some(Deferred::Column(*col));
+            if v > 0.5 {
+                out.push(Deferred::Column(*col));
+            }
+        }
+        ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => {
+            let y = matches!(target, ControlTarget::SurfaceY(_));
+            let Some(w) = comp.surface.widget_mut(*id) else { return };
+            let value = if !y && w.kind == phosphor_engine::WidgetKind::Toggle { toggled(w.value > 0.5, v) as u8 as f32 } else { v.clamp(0.0, 1.0) };
+            let bindings = if y {
+                w.value_y = value;
+                w.bindings_y.clone()
+            } else {
+                w.value = value;
+                w.bindings.clone()
+            };
+            for b in bindings {
+                set_target_depth(comp, &b.target, b.range.apply(value), out, depth + 1);
+            }
         }
         ControlTarget::LayerFxBypass(id) => {
             if let Some(l) = comp.layer_mut(*id) {
@@ -233,7 +272,7 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32)
             AppControl::MasterFxBypass => comp.master_fx_bypass = toggled(comp.master_fx_bypass, v),
             AppControl::Syphon => comp.syphon = toggled(comp.syphon, v),
             AppControl::Ndi => comp.ndi.enabled = toggled(comp.ndi.enabled, v),
-            _ => return Some(Deferred::App(*a, v)),
+            _ => out.push(Deferred::App(*a, v)),
         },
         ControlTarget::MasterFade => comp.master_fade = v.clamp(0.0, 1.0),
         ControlTarget::LayerOpacity(id) => {
@@ -280,13 +319,21 @@ fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, _now: f32)
             }
         }
     }
-    None
 }
 
 /// Every bindable target in the composition, with a readable name.
 pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     let mut out = vec![(ControlTarget::MasterFade, "Master fade".to_string())];
     out.extend(AppControl::ALL.iter().map(|a| (ControlTarget::App(*a), a.name().to_string())));
+    for w in &comp.surface.widgets {
+        if w.kind == phosphor_engine::WidgetKind::Label {
+            continue;
+        }
+        out.push((ControlTarget::Surface(w.id), format!("Surface · {}", w.label)));
+        if w.kind == phosphor_engine::WidgetKind::XyPad {
+            out.push((ControlTarget::SurfaceY(w.id), format!("Surface · {} (Y)", w.label)));
+        }
+    }
     for col in 0..comp.clip_columns {
         out.push((ControlTarget::TriggerColumn(col), format!("Column {} (trigger)", col + 1)));
     }
@@ -337,6 +384,8 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::TriggerColumn(col) => format!("/phosphor/column/{}", col + 1),
         ControlTarget::LayerSpeed(id) => format!("/phosphor/layer/{id}/speed"),
         ControlTarget::LayerFxBypass(id) => format!("/phosphor/layer/{id}/fxbypass"),
+        ControlTarget::Surface(id) => format!("/phosphor/surface/{id}"),
+        ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
         ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),
     }
 }
@@ -538,7 +587,7 @@ mod tests {
 
         // A key mapped to an on/off control flips it on each press and ignores the release.
         let key = ControlSource::Key { key: "Q".into() };
-        comp.control_maps.push(ControlMap { source: key.clone(), target: ControlTarget::LayerEnabled(id) });
+        comp.control_maps.push(ControlMap::new(key.clone(), ControlTarget::LayerEnabled(id)));
         let before = comp.layer_mut(id).unwrap().enabled;
         send(&mut hub, &mut comp, key.clone(), 1.0);
         send(&mut hub, &mut comp, key.clone(), 0.0);
@@ -556,10 +605,64 @@ mod tests {
         assert!((comp.layer_mut(id).unwrap().opacity - 0.75).abs() < 1e-3);
 
         // An OSC toggle (TouchOSC style 1/0) follows the value.
-        comp.control_maps.push(ControlMap { source: osc("/t/bypass"), target: ControlTarget::LayerFxBypass(id) });
+        comp.control_maps.push(ControlMap::new(osc("/t/bypass"), ControlTarget::LayerFxBypass(id)));
         send(&mut hub, &mut comp, osc("/t/bypass"), 1.0);
         assert!(comp.layer_mut(id).unwrap().fx_bypass);
         send(&mut hub, &mut comp, osc("/t/bypass"), 0.0);
         assert!(!comp.layer_mut(id).unwrap().fx_bypass);
+    }
+
+    #[test]
+    fn surface_widgets_drive_bindings() {
+        use phosphor_engine::{Binding, ValueRange, WidgetKind};
+        let mut hub = ControlHub::new();
+        let mut comp = Composition::default();
+        let a = comp.add_layer().id;
+        let b = comp.add_layer().id;
+        // A fader driving two layers: one straight 0.2–0.8, one inverted.
+        let fader = comp.surface.add(WidgetKind::Fader, 0.0, 0.0);
+        let w = comp.surface.widget_mut(fader).unwrap();
+        w.bindings.push(Binding { target: ControlTarget::LayerOpacity(a), range: ValueRange { min: 0.2, max: 0.8, invert: false } });
+        w.bindings.push(Binding { target: ControlTarget::LayerOpacity(b), range: ValueRange { min: 0.0, max: 1.0, invert: true } });
+        // A MIDI knob mapped to the fader.
+        let cc = ControlSource::MidiCc { channel: 0, cc: 7 };
+        comp.control_maps.push(ControlMap::new(cc.clone(), ControlTarget::Surface(fader)));
+        send(&mut hub, &mut comp, cc.clone(), 0.5);
+        assert!((comp.surface.widget(fader).unwrap().value - 0.5).abs() < 1e-3);
+        assert!((comp.layer_mut(a).unwrap().opacity - 0.5).abs() < 1e-3);
+        assert!((comp.layer_mut(b).unwrap().opacity - 0.5).abs() < 1e-3);
+        send(&mut hub, &mut comp, cc.clone(), 1.0);
+        assert!((comp.layer_mut(a).unwrap().opacity - 0.8).abs() < 1e-3);
+        assert!(comp.layer_mut(b).unwrap().opacity < 1e-3);
+
+        // A key flips a surface toggle, which switches a layer.
+        let tog = comp.surface.add(WidgetKind::Toggle, 2.0, 0.0);
+        comp.surface.widget_mut(tog).unwrap().bindings.push(Binding { target: ControlTarget::LayerEnabled(a), range: ValueRange::default() });
+        let key = ControlSource::Key { key: "T".into() };
+        comp.control_maps.push(ControlMap::new(key.clone(), ControlTarget::Surface(tog)));
+        send(&mut hub, &mut comp, key.clone(), 1.0);
+        send(&mut hub, &mut comp, key.clone(), 0.0);
+        assert_eq!(comp.surface.widget(tog).unwrap().value, 1.0);
+        assert!(comp.layer_mut(a).unwrap().enabled);
+        send(&mut hub, &mut comp, key.clone(), 1.0);
+        assert!(!comp.layer_mut(a).unwrap().enabled);
+
+        // Two widgets driving each other don't loop forever.
+        let x = comp.surface.add(WidgetKind::Slider, 0.0, 2.0);
+        let y = comp.surface.add(WidgetKind::Slider, 0.0, 3.0);
+        comp.surface.widget_mut(x).unwrap().bindings.push(Binding { target: ControlTarget::Surface(y), range: ValueRange::default() });
+        comp.surface.widget_mut(y).unwrap().bindings.push(Binding { target: ControlTarget::Surface(x), range: ValueRange::default() });
+        let mut out = Vec::new();
+        set_target(&mut comp, &ControlTarget::Surface(x), 0.3, &mut out);
+        assert!((comp.surface.widget(y).unwrap().value - 0.3).abs() < 1e-3);
+
+        // A switched-off mapping does nothing; Listen catches the next input.
+        comp.control_maps.iter_mut().for_each(|m| m.enabled = false);
+        send(&mut hub, &mut comp, cc.clone(), 0.0);
+        assert!((comp.layer_mut(a).unwrap().opacity - 0.8).abs() < 1e-3);
+        hub.listen_source = true;
+        send(&mut hub, &mut comp, ControlSource::Osc { address: "/x".into() }, 0.4);
+        assert_eq!(hub.heard, Some(ControlSource::Osc { address: "/x".into() }));
+        assert!(!hub.listen_source);
     }
 }
