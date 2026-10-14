@@ -10,6 +10,8 @@ mod media;
 mod net;
 mod panels;
 mod presets;
+#[cfg(not(target_arch = "wasm32"))]
+mod recovery;
 mod remote;
 mod screens;
 mod stats;
@@ -28,16 +30,35 @@ fn app_icon() -> std::sync::Arc<eframe::egui::IconData> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("--watchdog") {
+        if let Some(pid) = args.get(2).and_then(|p| p.parse().ok()) {
+            recovery::run_watchdog(pid);
+        }
+        return Ok(());
+    }
     env_logger::init();
     // Converter crashes on odd third-party shaders are caught and skipped; keep them out of the log.
+    // Everything else is also written to crash.log so problems can be diagnosed after the fact.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let isf = std::thread::current().name() == Some("phosphor-isf");
-        if !isf {
-            default_hook(info);
+        if isf {
+            return;
         }
+        if let Some(path) = recovery::crash_log_path() {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                let when = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                let _ = writeln!(f, "[{when}] {info}");
+            }
+        }
+        default_hook(info);
     }));
     let bench = bench::BenchConfig::from_args(std::env::args().skip(1));
+    if bench.is_none() {
+        recovery::spawn_watchdog();
+    }
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Phosphor")

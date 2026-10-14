@@ -47,6 +47,9 @@ pub struct OutputShared {
     pub edit_mapping: bool,
     pub mapping_changed: bool,
     pub selected_surface: Option<u64>,
+    /// Display the window was sent to, and whether it's fullscreen (for crash recovery).
+    pub display: Option<u32>,
+    pub fullscreen: bool,
     /// Move the output window to this display and go fullscreen: (display, step, frames waited).
     pub place: Option<(crate::screens::Display, u8, u32)>,
 }
@@ -189,6 +192,7 @@ impl State {
         let mut map = self.output.lock().unwrap();
         let out = map.entry(id).or_default();
         out.open = true;
+        out.display = Some(display.id);
         out.place = Some((display, 0, 0));
     }
 
@@ -244,6 +248,12 @@ pub struct PhosphorApp {
     bench: Option<BenchRun>,
     gather_windows: bool,
     remote_published: f64,
+    #[cfg(not(target_arch = "wasm32"))]
+    saver: crate::recovery::Saver,
+    /// Shown after restoring from an unexpected quit; `true` if a stream was live.
+    recovered: Option<bool>,
+    /// Panics caught in the last few seconds (UI keeps running instead of closing).
+    panics: Vec<f64>,
     /// Panels living in their own OS windows.
     detached: Vec<Tab>,
 }
@@ -253,15 +263,30 @@ impl PhosphorApp {
         theme::apply(&cc.egui_ctx);
 
         let stored = |key: &str| if bench.is_none() { cc.storage.and_then(|s| s.get_string(key)) } else { None };
+        #[cfg(not(target_arch = "wasm32"))]
+        let snapshot = if bench.is_none() { crate::recovery::begin_session() } else { None };
+        #[cfg(target_arch = "wasm32")]
+        let snapshot: Option<()> = None;
         let comp = match &bench {
             Some(cfg) => cfg.composition(),
-            None => stored(KEY_COMPOSITION)
-                .and_then(|json| Composition::from_json(&json).ok())
-                .unwrap_or_else(Composition::starter),
+            None => {
+                #[cfg(not(target_arch = "wasm32"))]
+                let recovered = snapshot.as_ref().and_then(|s| s.comp.clone());
+                #[cfg(target_arch = "wasm32")]
+                let recovered: Option<Composition> = None;
+                recovered.or_else(|| stored(KEY_COMPOSITION).and_then(|json| Composition::from_json(&json).ok())).unwrap_or_else(Composition::starter)
+            }
         };
         let stream_settings = stored(KEY_STREAM).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        let detached: Vec<Tab> = stored(KEY_DETACHED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let mut detached: Vec<Tab> = stored(KEY_DETACHED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let mut dock = stored(KEY_DOCK).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_else(default_layout);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(s) = &snapshot {
+            if let Some(d) = s.dock.clone().and_then(|v| serde_json::from_value(v).ok()) {
+                dock = d;
+            }
+            detached = s.detached.clone();
+        }
         let known: Vec<Tab> = stored(KEY_KNOWN_TABS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         ensure_new_tabs(&mut dock, &known);
 
@@ -330,8 +355,16 @@ impl PhosphorApp {
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false }),
             gather_windows: false,
             remote_published: 0.0,
+            #[cfg(not(target_arch = "wasm32"))]
+            saver: Default::default(),
+            recovered: None,
+            panics: Vec::new(),
             detached,
         };
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(s) = snapshot {
+            app.restore(s);
+        }
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
         }
@@ -780,6 +813,80 @@ impl PhosphorApp {
         }
     }
 
+    /// Puts the show back the way it was before an unexpected quit.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn restore(&mut self, s: crate::recovery::Snapshot) {
+        let st = &mut self.state;
+        st.comp.ensure_outputs();
+        st.selected = s.selected.or(st.selected);
+        {
+            let mut map = st.output.lock().unwrap();
+            for w in s.outputs.iter().filter(|w| w.open) {
+                let e = map.entry(w.id).or_default();
+                e.open = true;
+                if let Some(d) = w.display.and_then(|id| st.displays.iter().find(|d| d.id == id)) {
+                    e.display = Some(d.id);
+                    if w.fullscreen {
+                        e.place = Some((d.clone(), 0, 0));
+                    }
+                }
+            }
+        }
+        if s.session && let Err(e) = st.net.start() {
+            st.notice = Some(e);
+        }
+        if s.audio_open {
+            let _ = st.audio.open(s.audio_device.as_deref());
+        }
+        self.recovered = Some(s.streaming);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn snapshot(&self) -> crate::recovery::Snapshot {
+        let st = &self.state;
+        let outputs = st
+            .output
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(id, o)| crate::recovery::OutputWindowState { id: *id, open: o.open, display: o.display, fullscreen: o.fullscreen })
+            .collect();
+        crate::recovery::Snapshot {
+            comp: Some(st.comp.clone()),
+            dock: serde_json::to_value(&self.dock).ok(),
+            detached: self.detached.clone(),
+            outputs,
+            session: st.net.running(),
+            audio_open: st.audio.is_open() && !st.audio.is_network(),
+            audio_device: st.audio.current().map(str::to_string),
+            streaming: st.stream.running(),
+            selected: st.selected,
+        }
+    }
+
+    fn recovered_banner(&mut self, ctx: &egui::Context) {
+        let Some(was_streaming) = self.recovered else { return };
+        egui::Area::new(egui::Id::new("recovered_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(20, 44, 32)).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("{} Recovered after an unexpected quit", icon::LIFEBUOY)).color(theme::ACCENT).strong());
+                    ui.weak("project, layout, outputs, session and audio were restored");
+                    if was_streaming && ui.button(format!("{} Resume stream", icon::BROADCAST)).clicked() {
+                        let (w, h) = (self.state.comp.width, self.state.comp.height);
+                        let now = ui.ctx().input(|i| i.time);
+                        if let Err(e) = self.state.stream.start(w, h, now) {
+                            self.state.notice = Some(e);
+                        }
+                        self.recovered = None;
+                    }
+                    if ui.small_button("OK").clicked() {
+                        self.recovered = None;
+                    }
+                });
+            });
+        });
+    }
+
     /// Phone/tablet remote: apply what remotes sent, then publish the state (≈20 times a second).
     fn remote_sync(&mut self, now: f64) {
         if !self.state.net.running() {
@@ -949,6 +1056,7 @@ impl PhosphorApp {
                 let mut map = shared.lock().unwrap();
                 let Some(out) = map.get_mut(&oid) else { return };
                 let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+                out.fullscreen = fullscreen;
                 if ctx.input(|i| i.key_pressed(egui::Key::E)) {
                     out.edit_mapping = !out.edit_mapping;
                 }
@@ -1101,7 +1209,45 @@ impl PhosphorApp {
 }
 
 impl eframe::App for PhosphorApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        // A bug in one frame should not take the show down: skip that frame and carry on.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.ui_frame(ui, frame)));
+        if result.is_err() {
+            let now = ui.ctx().input(|i| i.time);
+            self.panics.retain(|t| now - t < 5.0);
+            self.panics.push(now);
+            self.state.notice = Some("Phosphor hit an internal error and skipped a frame (details in crash.log).".into());
+            ui.ctx().request_repaint();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let now = ui.ctx().input(|i| i.time);
+            if self.bench.is_none() && self.saver.due(now) {
+                let snap = self.snapshot();
+                self.saver.save(now, &snap);
+            }
+        }
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.save_settings(storage);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_exit(&mut self) {
+        if self.bench.is_none() {
+            let snap = self.snapshot();
+            self.saver = Default::default();
+            if let (Ok(json), Some(dir)) = (serde_json::to_string(&snap), eframe::storage_dir("Phosphor")) {
+                let _ = std::fs::write(dir.join("recovery.json"), json);
+            }
+            crate::recovery::end_session();
+        }
+    }
+}
+
+impl PhosphorApp {
+    fn ui_frame(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
 
@@ -1196,6 +1342,7 @@ impl eframe::App for PhosphorApp {
             self.save_snapshot();
         }
         self.learning_banner(&ctx);
+        self.recovered_banner(&ctx);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let rect = ctx.content_rect();
@@ -1227,7 +1374,10 @@ impl eframe::App for PhosphorApp {
         ctx.request_repaint();
     }
 
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+}
+
+impl PhosphorApp {
+    fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
         if self.bench.is_some() {
             return;
         }

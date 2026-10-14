@@ -43,6 +43,11 @@ app that's much smaller and lighter on the CPU.
 4. **Mapping upgrades**: mesh warp (grid of bezier points), masks, per-output colour/brightness
 5. **OBS / pro I/O**: Syphon and NDI out, virtual camera, NDI in
 6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
+6b. ~~**Crash recovery**~~ ✔ rolling snapshot every 2 s; watchdog reopens Phosphor after a crash (stops after
+    3 crashes in 2 min); restores project, layout, output windows on their screens, session, audio; offers
+    Resume stream; a bug inside one frame is skipped instead of closing the app; crash.log for diagnosis
+    - [ ] Freeze detection (app alive but hung) — needs care so modal file dialogs don't count as hangs
+    - [ ] Restore video playback positions and active clips exactly
 7. **Performance**: cache GPU bind groups (explorer previews cost ~2 ms CPU/frame at 40 tiles), render
    thread decoupled from UI, Hap decoded on the GPU
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
