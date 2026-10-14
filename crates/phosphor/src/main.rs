@@ -10,6 +10,7 @@ mod media;
 mod net;
 mod panels;
 mod presets;
+mod remote;
 mod screens;
 mod stats;
 mod stream;
