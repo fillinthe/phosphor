@@ -1416,7 +1416,7 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
     use crate::stream::Destination;
     let now = ui.ctx().input(|i| i.time);
     let (cw, ch) = (st.comp.width, st.comp.height);
-    let State { stream, notice, .. } = st;
+    let State { stream, notice, stream_audio_devices, .. } = st;
     let running = stream.running();
     ui.add_enabled_ui(!running, |ui| {
         let s = &mut stream.settings;
@@ -1481,6 +1481,24 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
             });
         });
         ui.add(Slider::new(&mut s.kbps, 1000..=30000).text("Bitrate (kbps)").logarithmic(true));
+        #[cfg(not(target_arch = "wasm32"))]
+        ui.horizontal(|ui| {
+            ui.label("Audio");
+            let current = if s.audio_device < 0 {
+                "None".to_string()
+            } else {
+                stream_audio_devices.iter().find(|(i, _)| *i == s.audio_device).map(|(_, n)| n.clone()).unwrap_or_else(|| format!("Device {}", s.audio_device))
+            };
+            ComboBox::from_id_salt("stream_audio").width(220.0).selected_text(current).show_ui(ui, |ui| {
+                ui.selectable_value(&mut s.audio_device, -1, "None");
+                for (i, name) in stream_audio_devices.iter() {
+                    ui.selectable_value(&mut s.audio_device, *i, name);
+                }
+            });
+            if ui.button(icon::ARROWS_CLOCKWISE).on_hover_text("Scan audio devices (mic, interface, BlackHole loopback)").clicked() {
+                *stream_audio_devices = crate::stream::list_audio_devices();
+            }
+        });
     });
     ui.add_space(4.0);
     ui.horizontal(|ui| {
@@ -1510,7 +1528,7 @@ fn stream(ui: &mut egui::Ui, st: &mut State) {
         ui.colored_label(WARN, msg.as_str());
     }
     ui.add_space(6.0);
-    ui.weak("Hardware H.264 via VideoToolbox. No audio yet. OBS users: keep using OBS with a window/display capture for now; Syphon/NDI output is next.");
+    ui.weak("Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio.");
 }
 
 const RESOLUTIONS: &[(u32, u32, &str)] = &[

@@ -70,6 +70,7 @@ pub struct State {
     pub control: ControlHub,
     pub learn_pick: Option<phosphor_engine::ControlTarget>,
     pub stream: Streamer,
+    pub stream_audio_devices: Vec<(i32, String)>,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
@@ -189,6 +190,7 @@ impl PhosphorApp {
                 control: ControlHub::new(),
                 learn_pick: None,
                 stream: Streamer::new(stream_settings),
+                stream_audio_devices: Vec::new(),
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 clock: Clock::new(comp_bpm),
@@ -483,7 +485,11 @@ impl PhosphorApp {
         let shared = self.state.output.clone();
         ctx.show_viewport_deferred(
             id,
-            egui::ViewportBuilder::default().with_title("Phosphor Output").with_inner_size([960.0, 540.0]),
+            // Borderless: nothing but picture, so a projector sees no title bar or menu bar.
+            egui::ViewportBuilder::default()
+                .with_title("Phosphor Output")
+                .with_decorations(false)
+                .with_inner_size([960.0, 540.0]),
             move |ui, _class| {
                 let ctx = ui.ctx().clone();
                 let mut out = shared.lock().unwrap();
@@ -509,6 +515,28 @@ impl PhosphorApp {
                 let frame = panels::fit_rect(rect, out.aspect);
                 if let Some(tex) = out.texture {
                     panels::paint_texture(ui.painter(), tex, frame);
+                }
+                if fullscreen {
+                    ctx.set_cursor_icon(egui::CursorIcon::None);
+                }
+                if !out.edit_mapping {
+                    // No title bar, so dragging the picture moves the window (to the projector).
+                    let drag = ui.interact(rect, egui::Id::new("output_drag"), egui::Sense::drag());
+                    if drag.drag_started() && !fullscreen {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    }
+                    if drag.double_clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+                    }
+                    if !fullscreen {
+                        ui.painter().text(
+                            rect.left_bottom() + egui::vec2(12.0, -12.0),
+                            egui::Align2::LEFT_BOTTOM,
+                            "Drag to move · double-click or F = fullscreen · E = mapping handles · Esc = close",
+                            egui::FontId::proportional(12.0),
+                            Color32::from_white_alpha(110),
+                        );
+                    }
                 }
                 if out.edit_mapping {
                     let OutputShared { mapping, selected_surface, mapping_changed, .. } = &mut *out;

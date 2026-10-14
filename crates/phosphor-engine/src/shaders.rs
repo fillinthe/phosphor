@@ -99,6 +99,7 @@ pub const EFFECTS: &[ShaderDesc] = &[
             p("Draw (0 lines,1 mesh,2 tri,3 vert)", 0.0, 3.0, 0.0),
             p("Displace (0 luma, 1 RGB)", 0.0, 1.0, 0.0),
             p("Displace from layer # (0 = this)", 0.0, 16.0, 0.0),
+            p("Lighting", 0.0, 1.0, 0.0),
         ],
     },
     ShaderDesc {
@@ -119,6 +120,7 @@ pub const EFFECTS: &[ShaderDesc] = &[
             p("(unused)", 0.0, 0.0, 0.0),
             p("Displace (0 luma, 1 RGB)", 0.0, 1.0, 0.0),
             p("Displace from layer # (0 = this)", 0.0, 16.0, 0.0),
+            p("Lighting", 0.0, 1.0, 0.0),
         ],
     },
     ShaderDesc { id: "blur", name: "Gaussian Blur", entry: "fx_blur", params: &[p("Radius (px)", 0.0, 64.0, 8.0)] },

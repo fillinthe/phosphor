@@ -46,6 +46,8 @@ pub struct StreamSettings {
     pub height: u32,
     pub fps: u32,
     pub kbps: u32,
+    /// AVFoundation audio device index to include (-1 = no audio).
+    pub audio_device: i32,
 }
 
 impl Default for StreamSettings {
@@ -59,6 +61,7 @@ impl Default for StreamSettings {
             height: 1080,
             fps: 30,
             kbps: 6000,
+            audio_device: -1,
         }
     }
 }
@@ -101,6 +104,32 @@ pub struct Streamer {
     next_frame: f64,
     pub frame_size: (u32, u32),
     started: Option<f64>,
+}
+
+/// AVFoundation audio capture devices as (index, name), from FFmpeg's device listing.
+pub fn list_audio_devices() -> Vec<(i32, String)> {
+    let Some(ffmpeg) = ffmpeg_path() else { return Vec::new() };
+    let Ok(out) = Command::new(ffmpeg).args(["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""]).stdin(Stdio::null()).output() else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&out.stderr);
+    let mut devices = Vec::new();
+    let mut in_audio = false;
+    for line in text.lines() {
+        if line.contains("audio devices") {
+            in_audio = true;
+            continue;
+        }
+        if line.contains("video devices") {
+            in_audio = false;
+        }
+        if in_audio && let Some(rest) = line.split("] [").nth(1) && let Some((idx, name)) = rest.split_once("] ") {
+            if let Ok(i) = idx.trim().parse::<i32>() {
+                devices.push((i, name.trim().to_string()));
+            }
+        }
+    }
+    devices
 }
 
 pub fn ffmpeg_path() -> Option<String> {
@@ -162,12 +191,21 @@ impl Streamer {
         let fps = s.fps.clamp(1, 120);
         let mut args: Vec<String> = vec![
             "-hide_banner", "-loglevel", "error", "-nostats", "-y",
+            "-thread_queue_size", "1024",
             "-f", "rawvideo", "-pix_fmt", "rgba", "-s", &format!("{width}x{height}"), "-framerate", &fps.to_string(), "-i", "pipe:0",
-            "-an",
         ]
         .into_iter()
         .map(String::from)
         .collect();
+        if s.audio_device >= 0 {
+            // Program audio from a capture device (a mic, or a loopback like BlackHole for the DJ feed).
+            args.extend(
+                ["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{}", s.audio_device), "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"]
+                    .map(String::from),
+            );
+        } else {
+            args.push("-an".into());
+        }
         if s.height > 0 && s.height != height {
             args.extend(["-vf".into(), format!("scale=-2:{}", s.height)]);
         }
