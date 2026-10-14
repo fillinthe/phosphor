@@ -1,0 +1,636 @@
+//! Effects Explorer (live previews of every effect/generator), the Shader Editor, and the
+//! ⌘K command palette.
+
+use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
+use egui_phosphor::regular as icon;
+use phosphor_engine::{CompileError, EffectState, MASTER_ID, PreviewItem, custom, shaders};
+
+use crate::app::State;
+use crate::panels::{self, Tab, label};
+use crate::theme::{ACCENT, WARN};
+
+/// Drag payload from the explorer: drop on a layer card (or MASTER) to apply.
+#[derive(Clone, Copy, Debug)]
+pub struct PaletteDrag {
+    pub effect: Option<&'static str>,
+    pub generator: Option<&'static str>,
+}
+
+const CATEGORY_ORDER: &[&str] =
+    &["Color", "Film", "Blur", "Light", "Distort", "Stylize", "Retro", "Time", "3D", "Key", "Patterns", "Motion", "Utility", "Yours", "ISF", "Other"];
+
+#[derive(Default)]
+pub struct ExplorerState {
+    pub search: String,
+    /// "" = all, "★" = favourites, otherwise a category name.
+    pub category: String,
+    /// Show generators (sources) instead of effects.
+    pub sources: bool,
+    pub favorites: Vec<String>,
+}
+
+fn matches(desc: &shaders::ShaderDesc, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    let (cat, about) = shaders::info(desc.id);
+    let hay = format!("{} {} {} {}", desc.name, desc.id, cat, about).to_lowercase();
+    query.to_lowercase().split_whitespace().all(|w| hay.contains(w))
+}
+
+/// Stable fake effect ids for previews, so feedback effects keep their history between frames.
+fn preview_fx(desc: &shaders::ShaderDesc, index: usize) -> EffectState {
+    EffectState { id: 9_000_000 + index as u64, effect: desc.id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new() }
+}
+
+enum TileAction {
+    Apply(&'static str),
+    Favorite(String),
+    EditCopy(&'static str),
+    EditCustom(String),
+}
+
+pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
+    let aspect = st.aspect();
+    let target_name = match st.selected {
+        Some(MASTER_ID) => "MASTER (all layers)".to_string(),
+        Some(id) => st.comp.layers.iter().find(|l| l.id == id).map_or("a new layer".into(), |l| l.name.clone()),
+        None => "a new layer".into(),
+    };
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+        ui.add(egui::TextEdit::singleline(&mut st.explorer.search).hint_text("Search effects, looks, categories…").desired_width(220.0));
+        if !st.explorer.search.is_empty() && ui.small_button(icon::X).clicked() {
+            st.explorer.search.clear();
+        }
+        ui.separator();
+        ui.selectable_value(&mut st.explorer.sources, false, label(icon::MAGIC_WAND, "Effects"));
+        ui.selectable_value(&mut st.explorer.sources, true, label(icon::SPARKLE, "Sources"));
+    });
+    let list: Vec<&'static shaders::ShaderDesc> = if st.explorer.sources { shaders::all_generators() } else { shaders::all_effects() };
+    // Category chips, only for categories that exist in the current list.
+    ui.horizontal_wrapped(|ui| {
+        ui.selectable_value(&mut st.explorer.category, String::new(), "All");
+        ui.selectable_value(&mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+        for cat in CATEGORY_ORDER {
+            if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
+                ui.selectable_value(&mut st.explorer.category, cat.to_string(), *cat);
+            }
+        }
+    });
+    let verb = if st.explorer.sources { "sets the source of" } else { "adds to" };
+    ui.horizontal(|ui| {
+        ui.weak(format!("Click {verb} {target_name} · drag onto any layer or MASTER · right-click for more"));
+        #[cfg(not(target_arch = "wasm32"))]
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
+            ui.weak(status).on_hover_text("ISF shaders from /Library/Graphics/ISF and ~/Library/Graphics/ISF. Skipped ones need multi-pass or feedback support.");
+        });
+    });
+    ui.add_space(2.0);
+
+    let filtered: Vec<(usize, &'static shaders::ShaderDesc)> = list
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| matches(d, &st.explorer.search))
+        .filter(|(_, d)| match st.explorer.category.as_str() {
+            "" => true,
+            "★" => st.explorer.favorites.iter().any(|f| f == d.id),
+            cat => shaders::info(d.id).0 == cat,
+        })
+        .map(|(i, d)| (i, *d))
+        .collect();
+
+    let mut action: Option<TileAction> = None;
+    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        if filtered.is_empty() {
+            ui.weak("Nothing matches. Clear the search or pick another category.");
+        }
+        let tile_w = 152.0;
+        let tile = egui::vec2(tile_w, tile_w / aspect + 30.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+            for (i, desc) in filtered.iter().take(96) {
+                let key = format!("{}:{}", if st.explorer.sources { "gen" } else { "fx" }, desc.id);
+                let (rect, resp) = ui.allocate_exact_size(tile, Sense::click_and_drag());
+                if !ui.is_rect_visible(rect) {
+                    continue;
+                }
+                // Only tiles on screen get a live preview.
+                let item = if st.explorer.sources { PreviewItem::Generator(desc.id.to_string()) } else { PreviewItem::Effect(preview_fx(desc, *i)) };
+                st.preview_wants.push((key.clone(), item));
+                let pic = egui::Rect::from_min_size(rect.min, egui::vec2(tile_w, tile_w / aspect));
+                let p = ui.painter();
+                p.rect_filled(rect, 6.0, ui.visuals().faint_bg_color);
+                match st.preview_tex(&key) {
+                    Some(t) => panels::paint_texture(p, t, pic),
+                    None => {
+                        p.rect_filled(pic, 4.0, Color32::from_gray(14));
+                        p.text(pic.center(), egui::Align2::CENTER_CENTER, "…", egui::FontId::proportional(18.0), Color32::GRAY);
+                    }
+                }
+                let (cat, about) = shaders::info(desc.id);
+                p.text(egui::pos2(rect.left() + 6.0, pic.bottom() + 4.0), egui::Align2::LEFT_TOP, desc.name, egui::FontId::proportional(12.5), Color32::WHITE);
+                p.text(egui::pos2(rect.left() + 6.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, cat, egui::FontId::proportional(10.0), Color32::GRAY);
+                let fav = st.explorer.favorites.iter().any(|f| f == desc.id);
+                if fav {
+                    p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, egui::FontId::proportional(14.0), Color32::from_rgb(255, 210, 90));
+                }
+                let stroke = if resp.hovered() { Stroke::new(1.5, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(48)) };
+                p.rect_stroke(rect, 6.0, stroke, StrokeKind::Inside);
+                let payload = if st.explorer.sources {
+                    PaletteDrag { effect: None, generator: Some(desc.id) }
+                } else {
+                    PaletteDrag { effect: Some(desc.id), generator: None }
+                };
+                resp.dnd_set_drag_payload(payload);
+                if resp.clicked() {
+                    action = Some(TileAction::Apply(desc.id));
+                }
+                let params: Vec<&str> = desc.params.iter().map(|p| p.name).collect();
+                let resp = resp.on_hover_text(format!("{about}\n\nControls: {}", if params.is_empty() { "none".into() } else { params.join(", ") }));
+                resp.context_menu(|ui| {
+                    let text = if fav { label(icon::STAR, "Remove from favourites") } else { label(icon::STAR, "Add to favourites") };
+                    if ui.button(text).clicked() {
+                        action = Some(TileAction::Favorite(desc.id.to_string()));
+                        ui.close();
+                    }
+                    if desc.id.starts_with(shaders::CUSTOM_EFFECT) || desc.id.starts_with(shaders::CUSTOM_GENERATOR) {
+                        if ui.button(label(icon::CODE, "Edit in Shader Editor")).clicked() {
+                            action = Some(TileAction::EditCustom(desc.id.to_string()));
+                            ui.close();
+                        }
+                    } else if custom::builtin_as_custom(desc.id).is_some() {
+                        if ui.button(label(icon::CODE, "Edit a copy in Shader Editor")).clicked() {
+                            action = Some(TileAction::EditCopy(desc.id));
+                            ui.close();
+                        }
+                    } else {
+                        ui.weak("Multi-pass / 3D effect: not editable yet");
+                    }
+                });
+            }
+        });
+    });
+
+    match action {
+        Some(TileAction::Apply(id)) => apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(id), generator: st.explorer.sources.then_some(id) }, None),
+        Some(TileAction::Favorite(id)) => {
+            if let Some(i) = st.explorer.favorites.iter().position(|f| *f == id) {
+                st.explorer.favorites.remove(i);
+            } else {
+                st.explorer.favorites.push(id);
+            }
+        }
+        Some(TileAction::EditCopy(id)) => {
+            if let Some(src) = custom::builtin_as_custom(id) {
+                new_shader(st, src);
+                st.open_tab = Some(Tab::ShaderEditor);
+            }
+        }
+        Some(TileAction::EditCustom(id)) => {
+            st.editor.current = st.editor.shaders.iter().position(|s| s.id == id);
+            st.open_tab = Some(Tab::ShaderEditor);
+        }
+        None => {}
+    }
+}
+
+/// Applies an explorer item to `target` (a layer id or MASTER), or to the selection.
+pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
+    let target = target.or(st.selected).filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id));
+    if let Some(fx) = drag.effect {
+        let t = match target {
+            Some(t) => t,
+            None => st.add_layer(),
+        };
+        panels::add_effect_to(st, t, fx);
+    }
+    if let Some(g) = drag.generator {
+        let t = match target {
+            Some(t) if t != MASTER_ID => t,
+            _ => st.add_layer(),
+        };
+        if let Some(l) = st.comp.layer_mut(t) {
+            l.start_transition(st.mod_inputs.time);
+            l.set_generator(g);
+            l.name = shaders::generator(g).map_or(g.to_string(), |d| d.name.to_string());
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------------
+// Shader Editor
+
+pub struct UserShader {
+    /// `custom:<slug>` or `customgen:<slug>`.
+    pub id: String,
+    /// File stem in the user effects folder.
+    pub slug: String,
+    pub source: String,
+    pub error: Option<CompileError>,
+    pub compiled: bool,
+}
+
+#[derive(Default)]
+pub struct EditorState {
+    pub shaders: Vec<UserShader>,
+    pub current: Option<usize>,
+    dirty_at: Option<f64>,
+    loaded: bool,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn effects_dir() -> Option<std::path::PathBuf> {
+    eframe::storage_dir("Phosphor").map(|d| d.join("effects"))
+}
+
+fn id_for(slug: &str, source: &str) -> String {
+    let generator = custom::parse_header(source).map(|h| h.generator).unwrap_or(false);
+    format!("{}{slug}", if generator { shaders::CUSTOM_GENERATOR } else { shaders::CUSTOM_EFFECT })
+}
+
+/// Compiles every saved user shader once the engine exists.
+pub fn load_user_shaders(st: &mut State) {
+    if st.editor.loaded || st.engine.is_none() {
+        return;
+    }
+    st.editor.loaded = true;
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(dir) = effects_dir()
+        && let Ok(entries) = std::fs::read_dir(dir)
+    {
+        let mut files: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "wgsl")).collect();
+        files.sort();
+        for path in files {
+            let (Some(stem), Ok(source)) = (path.file_stem(), std::fs::read_to_string(&path)) else { continue };
+            let slug = stem.to_string_lossy().to_string();
+            st.editor.shaders.push(UserShader { id: id_for(&slug, &source), slug, source, error: None, compiled: false });
+            let i = st.editor.shaders.len() - 1;
+            compile(st, i, false);
+        }
+    }
+}
+
+fn compile(st: &mut State, index: usize, save: bool) {
+    let Some(engine) = st.engine.as_mut() else { return };
+    let sh = &mut st.editor.shaders[index];
+    let new_id = id_for(&sh.slug, &sh.source);
+    if new_id != sh.id {
+        shaders::unregister_custom(&sh.id);
+        sh.id = new_id;
+    }
+    match engine.compile_custom(&sh.id, &sh.source) {
+        Ok(_) => {
+            sh.error = None;
+            sh.compiled = true;
+            #[cfg(not(target_arch = "wasm32"))]
+            if save && let Some(dir) = effects_dir() {
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = std::fs::write(dir.join(format!("{}.wgsl", sh.slug)), &sh.source);
+            }
+        }
+        Err(e) => {
+            sh.error = Some(e);
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = save;
+}
+
+pub fn new_shader(st: &mut State, source: String) {
+    let name = custom::parse_header(&source).map(|h| h.name).unwrap_or_else(|_| "shader".into());
+    let base: String = name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+    let base = base.trim_matches('_').to_string();
+    let mut slug = if base.is_empty() { "shader".to_string() } else { base };
+    let mut n = 2;
+    while st.editor.shaders.iter().any(|s| s.slug == slug) {
+        slug = format!("{}_{n}", slug.trim_end_matches(|c: char| c.is_ascii_digit() || c == '_'));
+        n += 1;
+    }
+    st.editor.shaders.push(UserShader { id: id_for(&slug, &source), slug, source, error: None, compiled: false });
+    let i = st.editor.shaders.len() - 1;
+    st.editor.current = Some(i);
+    compile(st, i, true);
+}
+
+pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
+    let now = ui.ctx().input(|i| i.time);
+    let mut delete: Option<usize> = None;
+    let mut create: Option<String> = None;
+    egui::Panel::left("shader_list").resizable(true).default_size(190.0).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(label(icon::PLUS, "Effect")).on_hover_text("New effect (processes a layer)").clicked() {
+                create = Some(custom::template(false));
+            }
+            if ui.button(label(icon::PLUS, "Generator")).on_hover_text("New generator (makes its own picture)").clicked() {
+                create = Some(custom::template(true));
+            }
+        });
+        ui.menu_button(label(icon::COPY, "Copy a built-in…"), |ui| {
+            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                for d in shaders::EFFECTS.iter().chain(shaders::GENERATORS) {
+                    if let Some(src) = custom::builtin_as_custom(d.id)
+                        && ui.button(d.name).clicked()
+                    {
+                        create = Some(src);
+                        ui.close();
+                    }
+                }
+            });
+        });
+        ui.separator();
+        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+            if st.editor.shaders.is_empty() {
+                ui.weak("No shaders yet.");
+            }
+            for (i, sh) in st.editor.shaders.iter().enumerate() {
+                let name = custom::parse_header(&sh.source).map(|h| h.name).unwrap_or_else(|_| sh.slug.clone());
+                let dot = if sh.error.is_some() { RichText::new("●").color(WARN) } else { RichText::new("●").color(ACCENT) };
+                ui.horizontal(|ui| {
+                    ui.label(dot.small());
+                    if ui.selectable_label(st.editor.current == Some(i), name).clicked() {
+                        st.editor.current = Some(i);
+                    }
+                });
+            }
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(dir) = effects_dir() {
+            ui.separator();
+            if ui.small_button(label(icon::FOLDER_OPEN, "Show folder")).clicked() {
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = std::process::Command::new("open").arg(&dir).spawn();
+            }
+        }
+    });
+    if let Some(src) = create {
+        new_shader(st, src);
+    }
+
+    let Some(idx) = st.editor.current.filter(|i| *i < st.editor.shaders.len()) else {
+        ui.add_space(20.0);
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new("Shader Editor").strong().size(16.0));
+            ui.weak("Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
+            ui.weak("Start with + Effect, or right-click any effect in the explorer → Edit a copy.");
+        });
+        return;
+    };
+
+    let is_generator = custom::parse_header(&st.editor.shaders[idx].source).map(|h| h.generator).unwrap_or(false);
+    let id = st.editor.shaders[idx].id.clone();
+    let compiled = st.editor.shaders[idx].compiled;
+    // Live preview of this shader on the selected layer (or as a generator).
+    if compiled {
+        let item = if is_generator {
+            PreviewItem::Generator(id.clone())
+        } else if let Some(d) = shaders::effect(&id) {
+            PreviewItem::Effect(preview_fx(d, 50_000 + idx))
+        } else {
+            PreviewItem::Generator(String::new())
+        };
+        st.preview_wants.push((format!("edit:{id}"), item));
+    }
+    let aspect = st.aspect();
+    egui::Panel::right("shader_preview").resizable(true).default_size(260.0).show(ui, |ui| {
+        let w = ui.available_width();
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(w, w / aspect), Sense::hover());
+        ui.painter().rect_filled(rect, 4.0, Color32::from_gray(10));
+        if let Some(t) = st.preview_tex(&format!("edit:{id}")) {
+            panels::paint_texture(ui.painter(), t, rect);
+        }
+        ui.weak(if is_generator { "Live preview" } else { "Live preview on the selected layer" });
+        ui.add_space(4.0);
+        let ok = compiled && st.editor.shaders[idx].error.is_none();
+        ui.add_enabled_ui(ok, |ui| {
+            if is_generator {
+                if ui.button(label(icon::SPARKLE, "Use as source of selected layer")).clicked() {
+                    let g: &'static str = shaders::generator(&id).map_or("", |d| d.id);
+                    apply_palette(st, PaletteDrag { effect: None, generator: Some(g) }, None);
+                }
+            } else {
+                if ui.button(label(icon::PLUS, "Add to selected layer")).clicked() {
+                    let e: &'static str = shaders::effect(&id).map_or("", |d| d.id);
+                    apply_palette(st, PaletteDrag { effect: Some(e), generator: None }, None);
+                }
+                if ui.button(label(icon::PLUS, "Add to MASTER")).clicked() {
+                    let e: &'static str = shaders::effect(&id).map_or("", |d| d.id);
+                    apply_palette(st, PaletteDrag { effect: Some(e), generator: None }, Some(MASTER_ID));
+                }
+            }
+        });
+        ui.add_space(8.0);
+        ui.collapsing("Cheat sheet", |ui| {
+            ui.monospace("src(uv) → vec4f      input picture");
+            ui.monospace("P(0u)…P(15u)          your @params");
+            ui.monospace("u.time  u.resolution");
+            ui.monospace("in.uv (0..1, y down)");
+            ui.monospace("luma rgb2hsv hsv2rgb");
+            ui.monospace("palette hash21 centered");
+            ui.monospace("aspect()  TAU");
+        });
+        ui.add_space(8.0);
+        if ui.button(label(icon::TRASH, "Delete shader")).clicked() {
+            delete = Some(idx);
+        }
+    });
+
+    let sh = &mut st.editor.shaders[idx];
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(if is_generator { "Generator" } else { "Effect" }).strong());
+        ui.monospace(&sh.slug);
+        match &sh.error {
+            Some(_) => ui.colored_label(WARN, "● error"),
+            None if sh.compiled => ui.colored_label(ACCENT, "● compiled · saved"),
+            None => ui.weak("not compiled"),
+        };
+    });
+    if let Some(e) = &sh.error {
+        egui::Frame::new().fill(Color32::from_rgb(48, 22, 18)).corner_radius(4).inner_margin(6).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.colored_label(WARN, e.to_string());
+        });
+    }
+    let err_line = sh.error.as_ref().and_then(|e| e.line);
+    egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+        ui.horizontal_top(|ui| {
+            // Line-number gutter, with the error line highlighted.
+            let lines = sh.source.lines().count().max(1);
+            let mut gutter = egui::text::LayoutJob::default();
+            for n in 1..=lines {
+                let color = if Some(n as u32) == err_line { WARN } else { Color32::from_gray(90) };
+                gutter.append(&format!("{n:>3}\n"), 0.0, egui::TextFormat { font_id: egui::FontId::monospace(13.0), color, ..Default::default() });
+            }
+            ui.add(egui::Label::new(gutter).selectable(false));
+            let edit = egui::TextEdit::multiline(&mut sh.source)
+                .code_editor()
+                .font(egui::FontId::monospace(13.0))
+                .desired_width(f32::INFINITY)
+                .desired_rows(28)
+                .lock_focus(true);
+            if ui.add(edit).changed() {
+                st.editor.dirty_at = Some(now);
+            }
+        });
+    });
+    if st.editor.dirty_at.is_some_and(|t| now - t > 0.35) {
+        st.editor.dirty_at = None;
+        compile(st, idx, true);
+    }
+    if let Some(i) = delete {
+        let sh = st.editor.shaders.remove(i);
+        shaders::unregister_custom(&sh.id);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(dir) = effects_dir() {
+            let _ = std::fs::remove_file(dir.join(format!("{}.wgsl", sh.slug)));
+        }
+        st.editor.current = None;
+    }
+}
+
+// -------------------------------------------------------------------------------------------
+// Command palette
+
+#[derive(Default)]
+pub struct PaletteState {
+    pub open: bool,
+    pub query: String,
+    pub selected: usize,
+    focus: bool,
+}
+
+impl PaletteState {
+    pub fn toggle(&mut self) {
+        self.open = !self.open;
+        self.query.clear();
+        self.selected = 0;
+        self.focus = true;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Command {
+    AddEffect(&'static str),
+    SetGenerator(&'static str),
+    OpenTab(Tab),
+    TriggerColumn(usize),
+    ToggleOutput,
+    ResetLayout,
+    NewLayer,
+    TapTempo,
+    NewShader(bool),
+    ToggleMapping,
+    ToggleSession,
+}
+
+fn commands(st: &State) -> Vec<(String, Command)> {
+    let mut out = vec![
+        (format!("{} New layer", icon::PLUS), Command::NewLayer),
+        (format!("{} Output window", icon::MONITOR), Command::ToggleOutput),
+        (format!("{} Tap tempo", icon::METRONOME), Command::TapTempo),
+        (format!("{} Mapping on/off", icon::PROJECTOR_SCREEN), Command::ToggleMapping),
+        (format!("{} Session on/off (browser viewers)", icon::BROADCAST), Command::ToggleSession),
+        (format!("{} Reset layout", icon::LAYOUT), Command::ResetLayout),
+        (format!("{} New effect shader", icon::CODE), Command::NewShader(false)),
+        (format!("{} New generator shader", icon::CODE), Command::NewShader(true)),
+    ];
+    for tab in Tab::ALL {
+        out.push((format!("{} Show panel: {}", icon::APP_WINDOW, tab.title()), Command::OpenTab(tab)));
+    }
+    for c in 0..st.comp.clip_columns {
+        out.push((format!("{} Trigger column {}", icon::PLAY, c + 1), Command::TriggerColumn(c)));
+    }
+    for d in shaders::all_effects() {
+        out.push((format!("{} Add effect: {}  · {}", icon::MAGIC_WAND, d.name, shaders::info(d.id).0), Command::AddEffect(d.id)));
+    }
+    for d in shaders::all_generators() {
+        out.push((format!("{} Source: {}", icon::SPARKLE, d.name), Command::SetGenerator(d.id)));
+    }
+    out
+}
+
+/// Subsequence match with a bonus for contiguous runs; `None` if not all characters appear.
+fn score(text: &str, query: &str) -> Option<i32> {
+    if query.is_empty() {
+        return Some(0);
+    }
+    let text = text.to_lowercase();
+    let mut score = 0;
+    let mut last: Option<usize> = None;
+    let mut from = 0;
+    for qc in query.to_lowercase().chars().filter(|c| !c.is_whitespace()) {
+        let pos = text[from..].find(qc)? + from;
+        score += match last {
+            Some(l) if pos == l + qc.len_utf8() => 5,
+            _ => 1,
+        };
+        last = Some(pos);
+        from = pos + qc.len_utf8();
+    }
+    if text.contains(&query.to_lowercase()) {
+        score += 20;
+    }
+    Some(score)
+}
+
+pub fn palette(ctx: &egui::Context, st: &mut State) -> Option<Command> {
+    if !st.palette.open {
+        return None;
+    }
+    let mut ranked: Vec<(i32, String, Command)> =
+        commands(st).into_iter().filter_map(|(t, c)| score(&t, &st.palette.query).map(|s| (s, t, c))).collect();
+    ranked.sort_by(|a, b| b.0.cmp(&a.0));
+    ranked.truncate(12);
+    let (down, up, enter, esc) = ctx.input(|i| {
+        (i.key_pressed(egui::Key::ArrowDown), i.key_pressed(egui::Key::ArrowUp), i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape))
+    });
+    if down {
+        st.palette.selected = (st.palette.selected + 1).min(ranked.len().saturating_sub(1));
+    }
+    if up {
+        st.palette.selected = st.palette.selected.saturating_sub(1);
+    }
+    let mut chosen: Option<Command> = None;
+    if esc {
+        st.palette.open = false;
+        return None;
+    }
+    let screen = ctx.content_rect();
+    ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("palette_dim"))).rect_filled(screen, 0.0, Color32::from_black_alpha(120));
+    egui::Area::new(egui::Id::new("command_palette"))
+        .order(egui::Order::Tooltip)
+        .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 90.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).inner_margin(10).show(ui, |ui| {
+                ui.set_width(520.0);
+                let edit = ui.add(egui::TextEdit::singleline(&mut st.palette.query).hint_text("Type a command, effect, panel…").desired_width(f32::INFINITY));
+                if st.palette.focus {
+                    edit.request_focus();
+                    st.palette.focus = false;
+                }
+                if edit.changed() {
+                    st.palette.selected = 0;
+                }
+                ui.separator();
+                for (i, (_, text, cmd)) in ranked.iter().enumerate() {
+                    let sel = i == st.palette.selected;
+                    if ui.selectable_label(sel, text).clicked() {
+                        chosen = Some(cmd.clone());
+                    }
+                }
+                if ranked.is_empty() {
+                    ui.weak("No matches");
+                }
+                ui.add_space(2.0);
+                ui.weak("↑↓ to move · Enter to run · Esc to close");
+            });
+        });
+    if enter && let Some((_, _, cmd)) = ranked.get(st.palette.selected) {
+        chosen = Some(cmd.clone());
+    }
+    if chosen.is_some() {
+        st.palette.open = false;
+    }
+    chosen
+}

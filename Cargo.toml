@@ -5,7 +5,7 @@ members = ["crates/phosphor-engine", "crates/phosphor", "crates/phosphor-isf"]
 [profile.release]
 lto = "thin"
 codegen-units = 1
-panic = "abort"
+# Unwind (not abort) so a third-party shader that crashes the converter only skips that shader.
 
 [profile.dev.package."*"]
 opt-level = 2

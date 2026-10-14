@@ -184,10 +184,14 @@ pub enum ModSource {
     LfoSquare,
     /// Sawtooth that restarts on every beat of the BPM clock.
     Beat,
+    /// A new random value every cycle (sample and hold).
+    Random,
+    /// An 8-step sequencer.
+    Steps,
 }
 
 impl ModSource {
-    pub const ALL: [ModSource; 9] = [
+    pub const ALL: [ModSource; 11] = [
         ModSource::AudioLevel,
         ModSource::AudioLow,
         ModSource::AudioMid,
@@ -197,6 +201,8 @@ impl ModSource {
         ModSource::LfoSaw,
         ModSource::LfoSquare,
         ModSource::Beat,
+        ModSource::Random,
+        ModSource::Steps,
     ];
 
     pub fn name(self) -> &'static str {
@@ -207,29 +213,58 @@ impl ModSource {
             ModSource::AudioHigh => "Audio high",
             ModSource::LfoSine => "LFO sine",
             ModSource::LfoTriangle => "LFO triangle",
-            ModSource::LfoSaw => "LFO saw",
+            ModSource::LfoSaw => "Ramp (saw)",
             ModSource::LfoSquare => "LFO square",
             ModSource::Beat => "Beat (BPM)",
+            ModSource::Random => "Random",
+            ModSource::Steps => "Step sequencer",
         }
     }
 
     pub fn is_lfo(self) -> bool {
-        matches!(self, ModSource::LfoSine | ModSource::LfoTriangle | ModSource::LfoSaw | ModSource::LfoSquare)
+        matches!(
+            self,
+            ModSource::LfoSine | ModSource::LfoTriangle | ModSource::LfoSaw | ModSource::LfoSquare | ModSource::Random | ModSource::Steps
+        )
+    }
+
+    pub fn is_audio(self) -> bool {
+        matches!(self, ModSource::AudioLevel | ModSource::AudioLow | ModSource::AudioMid | ModSource::AudioHigh)
     }
 }
 
 /// How a signal moves a parameter: `amount` is a fraction of the parameter's range (−1..1).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Modulation {
     pub source: ModSource,
     pub amount: f32,
-    /// LFO speed in Hz (ignored for audio sources).
+    /// Cycles per second, or beats per cycle when `sync` is on (ignored for audio sources).
     pub rate: f32,
+    /// Lock the cycle to the BPM clock.
+    pub sync: bool,
+    /// Range mode: the signal sweeps the parameter between `min` and `max` (fractions of its
+    /// range) and the slider is ignored. Otherwise the signal is added on top of the slider.
+    pub range: bool,
+    pub min: f32,
+    pub max: f32,
+    pub invert: bool,
+    pub steps: [f32; 8],
 }
 
 impl Default for Modulation {
     fn default() -> Self {
-        Self { source: ModSource::AudioLevel, amount: 0.5, rate: 1.0 }
+        Self {
+            source: ModSource::AudioLevel,
+            amount: 0.5,
+            rate: 1.0,
+            sync: false,
+            range: false,
+            min: 0.0,
+            max: 1.0,
+            invert: false,
+            steps: [1.0, 0.0, 0.5, 0.0, 1.0, 0.25, 0.75, 0.0],
+        }
     }
 }
 
@@ -417,12 +452,13 @@ pub struct Composition {
     pub media_bin: Vec<MediaItem>,
     /// Columns shown in the Clips grid.
     pub clip_columns: usize,
+    pub master_fade_mod: Option<Modulation>,
     pub bpm: f32,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0 }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None }
     }
 }
 

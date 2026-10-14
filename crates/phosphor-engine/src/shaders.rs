@@ -311,12 +311,124 @@ pub fn all_effect_entries() -> Vec<&'static str> {
     out
 }
 
+static CUSTOM: std::sync::RwLock<Vec<&'static ShaderDesc>> = std::sync::RwLock::new(Vec::new());
+
+/// Prefix for user effects/generators made in the Shader Editor.
+pub const CUSTOM_EFFECT: &str = "custom:";
+pub const CUSTOM_GENERATOR: &str = "customgen:";
+/// Prefix for imported ISF shaders.
+pub const ISF_EFFECT: &str = "isf:";
+pub const ISF_GENERATOR: &str = "isfgen:";
+
+static CUSTOM_INFO: std::sync::RwLock<Vec<(&'static str, &'static str, &'static str)>> = std::sync::RwLock::new(Vec::new());
+
+/// Category and description for a registered (user or imported) shader.
+pub fn set_custom_info(id: &'static str, category: &'static str, about: &'static str) {
+    let mut list = CUSTOM_INFO.write().unwrap();
+    list.retain(|(i, _, _)| *i != id);
+    list.push((id, category, about));
+}
+
+fn is_custom_effect(id: &str) -> bool {
+    id.starts_with(CUSTOM_EFFECT) || id.starts_with(ISF_EFFECT)
+}
+
+fn is_custom_generator(id: &str) -> bool {
+    id.starts_with(CUSTOM_GENERATOR) || id.starts_with(ISF_GENERATOR)
+}
+
+/// Adds or replaces a user shader (by id).
+pub fn register_custom(desc: &'static ShaderDesc) {
+    let mut list = CUSTOM.write().unwrap();
+    list.retain(|d| d.id != desc.id);
+    list.push(desc);
+}
+
+pub fn unregister_custom(id: &str) {
+    CUSTOM.write().unwrap().retain(|d| d.id != id);
+}
+
+fn custom(id: &str) -> Option<&'static ShaderDesc> {
+    CUSTOM.read().unwrap().iter().find(|d| d.id == id).copied()
+}
+
+/// Built-in effects followed by the user's.
+pub fn all_effects() -> Vec<&'static ShaderDesc> {
+    let user = CUSTOM.read().unwrap();
+    EFFECTS.iter().chain(user.iter().copied().filter(|d| is_custom_effect(d.id))).collect()
+}
+
+pub fn all_generators() -> Vec<&'static ShaderDesc> {
+    let user = CUSTOM.read().unwrap();
+    GENERATORS.iter().chain(user.iter().copied().filter(|d| is_custom_generator(d.id))).collect()
+}
+
+/// Explorer category and a one-line description.
+pub fn info(id: &str) -> (&'static str, &'static str) {
+    if let Some((_, cat, about)) = CUSTOM_INFO.read().unwrap().iter().find(|(i, _, _)| *i == id) {
+        return (cat, about);
+    }
+    if id.starts_with(CUSTOM_EFFECT) || id.starts_with(CUSTOM_GENERATOR) {
+        return ("Yours", "Made in the Shader Editor");
+    }
+    if id.starts_with(ISF_EFFECT) || id.starts_with(ISF_GENERATOR) {
+        return ("ISF", "Imported ISF shader");
+    }
+    match id {
+        "invert" => ("Color", "Negative image"),
+        "color_adjust" => ("Color", "Hue, saturation, brightness, contrast"),
+        "gamma" => ("Color", "Gamma, lift and gain"),
+        "posterize" => ("Color", "Fewer colour levels"),
+        "threshold" => ("Color", "Hard black and white"),
+        "solarize" => ("Color", "Flip tones above a threshold"),
+        "technicolor" => ("Film", "Two-strip film colour"),
+        "bleach" => ("Film", "Desaturated, punchy contrast"),
+        "vignette" => ("Film", "Darkened corners"),
+        "grain" => ("Film", "Film grain and flicker"),
+        "blur" => ("Blur", "Soft Gaussian blur"),
+        "zoom_blur" => ("Blur", "Radial streaks from a point"),
+        "motion_blur" => ("Blur", "Streaks in one direction"),
+        "glow" => ("Light", "Bloom on bright areas"),
+        "edge_glow" => ("Light", "Glowing outlines"),
+        "rgb_shift" => ("Distort", "Split colour channels"),
+        "kaleidoscope" => ("Distort", "Mirrored segments"),
+        "mirror" => ("Distort", "Mirror halves or quarters"),
+        "zoom_rotate" => ("Distort", "Zoom and spin"),
+        "wave" => ("Distort", "Wavy warp"),
+        "tile" => ("Distort", "Repeat the image"),
+        "pixelate" => ("Stylize", "Big pixels"),
+        "edges" => ("Stylize", "Edge detection"),
+        "halftone" => ("Stylize", "Printed dots"),
+        "emboss" => ("Stylize", "Raised relief"),
+        "sharpen" => ("Stylize", "Crisper detail"),
+        "crt" => ("Retro", "Scanlines and tube curve"),
+        "glitch" => ("Retro", "Analog tracking glitches"),
+        "strobe" => ("Time", "Flash on and off"),
+        "trails" => ("Time", "Feedback trails and tunnels"),
+        "slitscan" => ("Time", "Time smeared across the frame"),
+        "rutt_etra" => ("3D", "Scan-processor lines (v002)"),
+        "rutt_etra_points" => ("3D", "Scan-processor points (v002)"),
+        "chroma_key" => ("Key", "Make a colour transparent"),
+        "plasma" | "gradient" | "noise" | "voronoi" => ("Patterns", "Animated pattern"),
+        "rings" | "spiral" | "tunnel" => ("Patterns", "Hypnotic motion"),
+        "checker" | "color_bars" | "solid" => ("Utility", "Test and fill"),
+        "starfield" | "lines" => ("Motion", "Moving lines and points"),
+        _ => ("Other", ""),
+    }
+}
+
 pub fn effect(id: &str) -> Option<&'static ShaderDesc> {
-    EFFECTS.iter().find(|d| d.id == id)
+    EFFECTS.iter().find(|d| d.id == id).or_else(|| if is_custom_effect(id) { custom(id) } else { None })
 }
 
 pub fn generator(id: &str) -> Option<&'static ShaderDesc> {
-    GENERATORS.iter().find(|d| d.id == id)
+    GENERATORS.iter().find(|d| d.id == id).or_else(|| if is_custom_generator(id) { custom(id) } else { None })
+}
+
+/// Shared declarations and helpers (bindings, `VOut`, `src`, `palette`, `hash21`, …): the prelude
+/// for user and imported shaders, which are compiled as separate small modules.
+pub fn common_source() -> &'static str {
+    include_str!("shaders/common.wgsl")
 }
 
 /// All WGSL concatenated into one module: compiled once, one pipeline per entry point.

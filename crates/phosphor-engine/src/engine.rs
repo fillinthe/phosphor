@@ -40,6 +40,19 @@ pub const THUMBNAIL_WIDTH: u32 = 240;
 /// Resource slot for the master effect chain (never a real layer id).
 pub const MASTER_ID: u64 = u64::MAX;
 
+/// Resource slots at or above this id belong to the engine (master chain, explorer previews).
+const RESERVED_IDS: u64 = u64::MAX - 100_000;
+
+/// Width of explorer preview tiles; height follows the canvas aspect.
+pub const PREVIEW_WIDTH: u32 = 192;
+
+/// Something to render as a small live preview in the effects explorer.
+#[derive(Clone, Debug)]
+pub enum PreviewItem {
+    Effect(crate::model::EffectState),
+    Generator(String),
+}
+
 /// A frame source after it has been resolved for this frame.
 #[derive(Clone)]
 enum Frame {
@@ -81,6 +94,16 @@ pub struct Engine {
     uniform_capacity: usize,
     capture: Capture,
     frame_index: u64,
+    previews: Vec<PreviewItem>,
+    preview_source: u64,
+    preview_src: Option<Target>,
+    preview_targets: Vec<Option<Target>>,
+    custom_generation: u64,
+    /// Imported shaders waiting to be compiled on first use: entry → WGSL (without prelude).
+    pending_modules: HashMap<&'static str, String>,
+    /// Shaders that failed to build, by entry, with the error.
+    pub failed_modules: HashMap<&'static str, String>,
+    compile_budget: u32,
 }
 
 impl Engine {
@@ -97,7 +120,78 @@ impl Engine {
             uniform_capacity: 0,
             capture: Capture::default(),
             frame_index: 0,
+            previews: Vec::new(),
+            preview_source: MASTER_ID,
+            preview_src: None,
+            preview_targets: Vec::new(),
+            custom_generation: 0,
+            pending_modules: HashMap::new(),
+            failed_modules: HashMap::new(),
+            compile_budget: 0,
         }
+    }
+
+    /// Registers an already-converted shader (e.g. ISF) that is compiled the first time it is
+    /// drawn. `wgsl` must define `@fragment fn <entry>(in: VOut)` on top of the common prelude.
+    pub fn register_lazy(&mut self, desc: &'static crate::shaders::ShaderDesc, wgsl: String) {
+        self.pending_modules.insert(desc.entry, wgsl);
+        crate::shaders::register_custom(desc);
+    }
+
+    /// True if `entry` is ready to draw. Compiles pending shaders within a small per-frame budget
+    /// so browsing a big library never stalls the show.
+    fn ensure_module(&mut self, entry: &'static str) -> bool {
+        if self.failed_modules.contains_key(entry) {
+            return false;
+        }
+        let Some(src) = self.pending_modules.get(entry) else { return true };
+        if self.compile_budget == 0 {
+            return false;
+        }
+        self.compile_budget -= 1;
+        let src = src.clone();
+        self.pending_modules.remove(entry);
+        let full = format!("{}\n{src}", crate::shaders::common_source());
+        let prelude_lines = crate::shaders::common_source().lines().count() as u32 + 1;
+        if let Err(e) = crate::custom::validate(&full, prelude_lines) {
+            self.failed_modules.insert(entry, e.to_string());
+            return false;
+        }
+        let module = self.gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(entry), source: wgpu::ShaderSource::Wgsl(full.into()) });
+        self.gpu.custom_modules.insert(entry, module);
+        self.gpu.pipeline(entry);
+        true
+    }
+
+    /// Compiles a user shader (see `custom`). On success it is registered under `id` and can be
+    /// used like any built-in effect or generator.
+    pub fn compile_custom(&mut self, id: &str, source: &str) -> Result<&'static crate::shaders::ShaderDesc, crate::custom::CompileError> {
+        let header = crate::custom::parse_header(source)?;
+        self.custom_generation += 1;
+        let slug: String = id.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+        let entry: &'static str = Box::leak(format!("custom_{slug}_{}", self.custom_generation).into_boxed_str());
+        let (full, prelude_lines) = crate::custom::module_source(source, entry)?;
+        crate::custom::validate(&full, prelude_lines)?;
+        let module = self.gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(entry),
+            source: wgpu::ShaderSource::Wgsl(full.into()),
+        });
+        self.gpu.custom_modules.insert(entry, module);
+        self.gpu.pipeline(entry);
+        let desc: &'static crate::shaders::ShaderDesc = Box::leak(Box::new(crate::custom::make_desc(id, &header, entry)));
+        crate::shaders::register_custom(desc);
+        Ok(desc)
+    }
+
+    /// Asks for live previews of effects (applied to `source`: a layer id or `MASTER_ID`) and
+    /// generators on the next frame. Call every frame the explorer is visible.
+    pub fn request_previews(&mut self, source: u64, items: Vec<PreviewItem>) {
+        self.preview_source = source;
+        self.previews = items;
+    }
+
+    pub fn preview(&self, index: usize) -> Option<&Target> {
+        self.preview_targets.get(index)?.as_ref()
     }
 
     pub fn device(&self) -> &wgpu::Device {
@@ -197,10 +291,11 @@ impl Engine {
     pub fn render(&mut self, comp: &Composition, time: f32, mods: &ModInputs) -> FrameInfo {
         let (w, h) = (comp.width.max(16), comp.height.max(16));
         let device = self.gpu.device.clone();
+        self.compile_budget = 2;
 
         // Drop GPU resources for layers that no longer exist.
         let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).collect();
-        self.layers.retain(|id, _| *id == MASTER_ID || live.contains(id));
+        self.layers.retain(|id, _| *id >= RESERVED_IDS || live.contains(id));
 
         for slot in &mut self.accum {
             Target::ensure(slot, &device, "accum", w, h);
@@ -283,6 +378,8 @@ impl Engine {
                 master = view;
             }
         }
+        self.render_previews(&master, (w, h), time, mods, &comp.layers, &mut passes);
+        let fade = modulate(comp.master_fade, 0.0, 1.0, comp.master_fade_mod.as_ref(), mods);
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [w as f32, h as f32];
         if comp.mapping.active() {
@@ -301,7 +398,7 @@ impl Engine {
                 let c = &s.corners;
                 let mut u = Uniforms::with_params(&[]);
                 u.resolution = [w as f32, h as f32];
-                u.opacity = s.opacity * comp.master_fade;
+                u.opacity = s.opacity * fade;
                 u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
                 u.mode = comp.mapping.test_pattern as u32;
                 u.p[0] = [c[0][0], c[0][1], c[1][0], c[1][1]];
@@ -319,13 +416,60 @@ impl Engine {
                 });
             }
         } else {
-            u.opacity = comp.master_fade;
+            u.opacity = fade;
             passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master, tex1: None, tex2: None, uniforms: u });
         }
 
         self.encode(&passes);
         self.frame_index += 1;
         FrameInfo { passes: passes.len(), layers_drawn }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_previews(&mut self, master: &wgpu::TextureView, canvas: (u32, u32), time: f32, mods: &ModInputs, layers: &[LayerState], passes: &mut Vec<Pass>) {
+        let items = std::mem::take(&mut self.previews);
+        if items.is_empty() {
+            return;
+        }
+        let (w, h) = canvas;
+        let ph = (PREVIEW_WIDTH * h / w).max(1);
+        let copy = |target: wgpu::TextureView, src: wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>| {
+            let mut u = Uniforms::with_params(&[]);
+            u.resolution = [size.0 as f32, size.1 as f32];
+            u.opacity = 1.0;
+            passes.push(Pass { entry: "fs_finalize", target, tex0: src, tex1: None, tex2: None, uniforms: u });
+        };
+        // Source picture: the chosen layer's thumbnail, or a downscaled copy of the mix.
+        let layer_thumb = (self.preview_source != MASTER_ID)
+            .then(|| self.layers.get(&self.preview_source).and_then(|r| r.thumbnail.as_ref()).map(|t| t.view.clone()))
+            .flatten();
+        Target::ensure(&mut self.preview_src, &self.gpu.device, "preview source", PREVIEW_WIDTH, ph);
+        let src_view = self.preview_src.as_ref().unwrap().view.clone();
+        copy(src_view.clone(), layer_thumb.unwrap_or_else(|| master.clone()), (PREVIEW_WIDTH, ph), passes);
+
+        if self.preview_targets.len() < items.len() {
+            self.preview_targets.resize_with(items.len(), || None);
+        }
+        for (i, item) in items.iter().enumerate() {
+            let rid = RESERVED_IDS + 1 + i as u64;
+            let frame = match item {
+                PreviewItem::Effect(fx) => Some(self.apply_effects(
+                    rid,
+                    std::slice::from_ref(fx),
+                    Frame::Rgb { view: src_view.clone(), w: PREVIEW_WIDTH, h: ph },
+                    time,
+                    mods,
+                    layers,
+                    passes,
+                )),
+                PreviewItem::Generator(id) => shaders::generator(id).and_then(|desc| {
+                    self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), &desc.defaults(), &[], false, PREVIEW_WIDTH, ph, time, mods, passes)
+                }),
+            };
+            let Some(Frame::Rgb { view, .. }) = frame else { continue };
+            Target::ensure(&mut self.preview_targets[i], &self.gpu.device, "preview", PREVIEW_WIDTH, ph);
+            copy(self.preview_targets[i].as_ref().unwrap().view.clone(), view, (PREVIEW_WIDTH, ph), passes);
+        }
     }
 
     fn push_thumbnail(&mut self, layer: &LayerState, frame: &Frame, canvas: (u32, u32), thumb_h: u32, passes: &mut Vec<Pass>) {
@@ -372,12 +516,15 @@ impl Engine {
         mods: &ModInputs,
         passes: &mut Vec<Pass>,
     ) -> Option<Frame> {
-        let device = &self.gpu.device;
-        let res = self.layers.entry(layer_id).or_default();
         match spec {
             SourceSpec::None => None,
             SourceSpec::Generator(id) => {
                 let desc = shaders::generator(id)?;
+                if !self.ensure_module(desc.entry) {
+                    return None;
+                }
+                let device = &self.gpu.device;
+                let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
                 Target::ensure(slot, device, "generator", w, h);
                 let target = slot.as_ref().unwrap();
@@ -395,6 +542,7 @@ impl Engine {
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
             SourceSpec::Image { .. } | SourceSpec::Movie { .. } => {
+                let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &res.media_out } else { &res.media };
                 match slot.as_ref()? {
                     Media::Rgba(t) => Some(Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height }),
@@ -507,6 +655,9 @@ impl Engine {
         };
         let parity = (self.frame_index % 2) as usize;
         for (desc, fx_id, values, param_mods, mix) in chain {
+            if !self.ensure_module(desc.entry) {
+                continue;
+            }
             let dry = input.clone();
             let dry_idx = input_idx;
             let params = resolve_params(desc, values, param_mods, mods);

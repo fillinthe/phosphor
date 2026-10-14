@@ -27,6 +27,7 @@ const KEY_DOCK: &str = "dock";
 const KEY_STREAM: &str = "stream";
 const KEY_KNOWN_TABS: &str = "known_tabs";
 const KEY_DETACHED: &str = "detached";
+const KEY_FAVORITES: &str = "favorites";
 
 /// State the output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -74,6 +75,17 @@ pub struct State {
     pub stream_audio_devices: Vec<(i32, String)>,
     pub net: NetSession,
     net_audio: Vec<f32>,
+    pub explorer: crate::explorer::ExplorerState,
+    pub editor: crate::explorer::EditorState,
+    pub palette: crate::explorer::PaletteState,
+    /// Previews requested by panels this frame (key, item); rendered on the next frame.
+    pub preview_wants: Vec<(String, phosphor_engine::PreviewItem)>,
+    preview_keys: Vec<String>,
+    preview_textures: Vec<(egui::TextureId, (u32, u32))>,
+    /// A panel to bring to the front (set by explorer actions and the palette).
+    pub open_tab: Option<Tab>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub isf: crate::isf_lib::IsfLibrary,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
     pub fx_clipboard: Vec<phosphor_engine::EffectState>,
     pub thumbs: Thumbs,
@@ -95,6 +107,12 @@ impl State {
         let id = self.comp.add_layer().id;
         self.selected = Some(id);
         id
+    }
+
+    /// A rendered explorer/editor preview by key (from the previous frame).
+    pub fn preview_tex(&self, key: &str) -> Option<egui::TextureId> {
+        let i = self.preview_keys.iter().position(|k| k == key)?;
+        self.preview_textures.get(i).map(|(t, _)| *t)
     }
 
     pub fn load_composition(&mut self, comp: Composition) {
@@ -139,6 +157,8 @@ struct BenchRun {
     cfg: BenchConfig,
     started: Option<f64>,
     samples: Vec<Snapshot>,
+    /// Rebuilt the composition once imported (ISF) shaders were registered.
+    rebuilt: bool,
 }
 
 pub struct PhosphorApp {
@@ -196,6 +216,18 @@ impl PhosphorApp {
                 stream_audio_devices: Vec::new(),
                 net: NetSession::new(),
                 net_audio: Vec::new(),
+                explorer: crate::explorer::ExplorerState {
+                    favorites: stored(KEY_FAVORITES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+                    ..Default::default()
+                },
+                editor: Default::default(),
+                palette: Default::default(),
+                preview_wants: Vec::new(),
+                preview_keys: Vec::new(),
+                preview_textures: Vec::new(),
+                open_tab: None,
+                #[cfg(not(target_arch = "wasm32"))]
+                isf: crate::isf_lib::IsfLibrary::scan(),
                 fx_clipboard: Vec::new(),
                 thumbs: Thumbs::new(),
                 clock: Clock::new(comp_bpm),
@@ -205,7 +237,7 @@ impl PhosphorApp {
                 mod_inputs: ModInputs::default(),
             },
             dock,
-            bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new() }),
+            bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false }),
             gather_windows: false,
             detached,
         };
@@ -232,8 +264,28 @@ impl PhosphorApp {
 
     /// Advances media, renders the frame, and keeps the preview + thumbnail textures registered.
     fn render(&mut self, now: f64) {
-        let State { comp, engine, render_state, texture, texture_generation, layer_textures, media, stats, output, audio, mod_inputs, stream, clock, net, net_audio, .. } =
-            &mut self.state;
+        let State {
+            comp,
+            engine,
+            render_state,
+            texture,
+            texture_generation,
+            layer_textures,
+            media,
+            stats,
+            output,
+            audio,
+            mod_inputs,
+            stream,
+            clock,
+            net,
+            net_audio,
+            preview_wants,
+            preview_keys,
+            preview_textures,
+            selected,
+            ..
+        } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
         media.sync(comp, engine);
         media.update_video(comp, engine, now);
@@ -246,6 +298,7 @@ impl PhosphorApp {
         let an = audio.update();
         let beat_phase = clock.phase(now);
         *mod_inputs = ModInputs {
+            beats: clock.beats(now) as f32,
             beat_phase,
             time: now as f32,
             audio_level: an.level,
@@ -253,6 +306,12 @@ impl PhosphorApp {
             audio_mid: an.mid,
             audio_high: an.high,
         };
+        let wants = std::mem::take(preview_wants);
+        let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
+        let keys: Vec<String> = wants.iter().map(|(k, _)| k.clone()).collect();
+        if !wants.is_empty() {
+            engine.request_previews(source, wants.into_iter().map(|(_, i)| i).collect());
+        }
         let t0 = web_time::Instant::now();
         let info = engine.render(comp, now as f32, mod_inputs);
         let render_secs = t0.elapsed().as_secs_f64();
@@ -298,6 +357,22 @@ impl PhosphorApp {
                     }
                 }
             }
+            // Explorer / editor previews, one texture slot per index.
+            for i in 0..keys.len() {
+                let Some(t) = engine.preview(i) else { continue };
+                let key = (t.width, t.height);
+                match preview_textures.get_mut(i) {
+                    Some((_, k)) if *k == key => {}
+                    Some((id, k)) => {
+                        renderer.update_egui_texture_from_wgpu_texture(&rs.device, &t.view, linear, *id);
+                        *k = key;
+                    }
+                    None => {
+                        let id = renderer.register_native_texture(&rs.device, &t.view, linear);
+                        preview_textures.push((id, key));
+                    }
+                }
+            }
             layer_textures.retain(|id, (tex, _)| {
                 let live = comp.layers.iter().any(|l| l.id == *id);
                 if !live {
@@ -306,6 +381,7 @@ impl PhosphorApp {
                 live
             });
         }
+        *preview_keys = keys;
         {
             let mut out = output.lock().unwrap();
             out.texture = *texture;
@@ -317,6 +393,50 @@ impl PhosphorApp {
         {
             println!("{}", snapshot.to_json());
             run.samples.push(snapshot);
+        }
+    }
+
+    /// Brings a panel to the front, reopening it if it was closed.
+    fn show_tab(&mut self, tab: Tab) {
+        if self.detached.contains(&tab) {
+            return;
+        }
+        match self.dock.find_tab(&tab) {
+            Some(path) => {
+                let _ = self.dock.set_active_tab(path);
+            }
+            None => {
+                self.dock.push_to_focused_leaf(tab);
+            }
+        }
+    }
+
+    fn run_command(&mut self, cmd: crate::explorer::Command, now: f64) {
+        use crate::explorer::{Command, PaletteDrag, apply_palette};
+        let st = &mut self.state;
+        match cmd {
+            Command::AddEffect(id) => apply_palette(st, PaletteDrag { effect: Some(id), generator: None }, None),
+            Command::SetGenerator(id) => apply_palette(st, PaletteDrag { effect: None, generator: Some(id) }, None),
+            Command::OpenTab(tab) => self.show_tab(tab),
+            Command::TriggerColumn(c) => st.trigger(Trigger::Column(c), now),
+            Command::ToggleOutput => st.toggle_output(),
+            Command::ResetLayout => self.dock = default_layout(),
+            Command::NewLayer => {
+                st.add_layer();
+            }
+            Command::TapTempo => st.clock.tap(now),
+            Command::NewShader(generator) => {
+                crate::explorer::new_shader(st, phosphor_engine::custom::template(generator));
+                self.show_tab(Tab::ShaderEditor);
+            }
+            Command::ToggleMapping => st.comp.mapping.enabled = !st.comp.mapping.enabled,
+            Command::ToggleSession => {
+                if st.net.running() {
+                    st.net.stop();
+                } else if let Err(e) = st.net.start() {
+                    st.notice = Some(e);
+                }
+            }
         }
     }
 
@@ -446,6 +566,9 @@ impl PhosphorApp {
                 ui.separator();
                 panels::project_buttons(ui, &mut self.state);
                 ui.separator();
+                if ui.button(format!("{} Search  ⌘K", icon::MAGNIFYING_GLASS)).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
+                    self.state.palette.toggle();
+                }
                 if ui.button(format!("{} Reset Layout", icon::LAYOUT)).on_hover_text("Bring back every panel in the default arrangement").clicked() {
                     self.dock = default_layout();
                 }
@@ -628,6 +751,28 @@ impl eframe::App for PhosphorApp {
         self.handle_dropped_files(&ctx);
         self.state.comp.sync_media_bin();
         self.state.thumbs.poll(&ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(engine) = self.state.engine.as_mut() {
+            self.state.isf.poll(engine);
+        }
+        crate::explorer::load_user_shaders(&mut self.state);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(run) = &mut self.bench
+            && !run.rebuilt
+            && !self.state.isf.scanning()
+        {
+            // Effects named on the command line may be ISF shaders that only exist now.
+            run.rebuilt = true;
+            if run.cfg.project.is_none() {
+                self.state.comp = run.cfg.composition();
+            }
+            run.started = None;
+            run.samples.clear();
+        }
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs));
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
+            self.state.palette.toggle();
+        }
         self.shortcuts(&ctx);
         self.sync_mapping_from_output();
         {
@@ -670,6 +815,12 @@ impl eframe::App for PhosphorApp {
             }
         });
         self.detached_windows(&ctx);
+        if let Some(cmd) = crate::explorer::palette(&ctx, &mut self.state) {
+            self.run_command(cmd, now);
+        }
+        if let Some(tab) = self.state.open_tab.take() {
+            self.show_tab(tab);
+        }
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let rect = ctx.content_rect();
@@ -714,6 +865,9 @@ impl eframe::App for PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.detached) {
             storage.set_string(KEY_DETACHED, json);
         }
+        if let Ok(json) = serde_json::to_string(&self.state.explorer.favorites) {
+            storage.set_string(KEY_FAVORITES, json);
+        }
     }
 }
 
@@ -723,7 +877,7 @@ fn default_layout() -> DockState<Tab> {
     let surface = dock.main_surface_mut();
     let [left, right] = surface.split_right(NodeIndex::root(), 0.64, vec![Tab::Layers]);
     surface.split_below(right, 0.5, vec![Tab::Inspector]);
-    surface.split_below(left, 0.68, vec![Tab::Clips, Tab::Media, Tab::Library, Tab::Presets, Tab::Network, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
+    surface.split_below(left, 0.68, vec![Tab::Library, Tab::Clips, Tab::Media, Tab::Presets, Tab::ShaderEditor, Tab::Network, Tab::Audio, Tab::Control, Tab::Mapping, Tab::Stream, Tab::Output]);
     dock
 }
 

@@ -3,6 +3,9 @@ mod audio;
 mod bench;
 mod clock;
 mod control;
+mod explorer;
+#[cfg(not(target_arch = "wasm32"))]
+mod isf_lib;
 mod media;
 mod net;
 mod panels;
@@ -15,6 +18,14 @@ mod theme;
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     env_logger::init();
+    // Converter crashes on odd third-party shaders are caught and skipped; keep them out of the log.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let isf = std::thread::current().name() == Some("phosphor-isf");
+        if !isf {
+            default_hook(info);
+        }
+    }));
     let bench = bench::BenchConfig::from_args(std::env::args().skip(1));
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()

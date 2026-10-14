@@ -37,6 +37,11 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] 12 built-in effects (WGSL) with per-effect Mix (dry/wet), 7 generators, 10 blend modes, fit/fill/stretch
 - [x] Live thumbnails per layer, Presets panel (built-in + yours), duplicate layer, dark theme, Phosphor icon font
 - [x] Layer workflow: drag thumbnails to reorder, Solo, FX bypass, right-click menu, Space/⌫/⌘D shortcuts
+- [x] **Effects explorer**: live previews of every effect on the selected layer, categories, search, favourites,
+      click or drag onto any layer/MASTER, Sources view for generators
+- [x] **Shader Editor**: write WGSL effects/generators in-app, compile-as-you-type with line-accurate errors,
+      live preview, "Edit a copy" of built-ins, saved to ~/Library/Application Support/Phosphor/effects
+- [x] **⌘K command palette**: every effect, source, panel and action, fuzzy search
 - [x] Effects workflow: collapsible cards, drag handle to reorder, copy/paste whole chains, double-click resets a slider
 - [x] Panels can be closed and reopened (View ▸ Panels), layout presets, floating windows rescued on smaller screens
 - [x] **Master effects**: a pinned MASTER card whose chain runs over the whole mix
@@ -86,7 +91,9 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Dockable, rearrangeable panels; layout saved with the project
 - [ ] **Control surfaces**: freeform canvases where you place buttons, sliders, XY pads and
       color pickers anywhere, and resize them
-- [x] Data sources: audio input analysis (level, low/mid/high, 32-band spectrum) + LFOs (sine/tri/saw/square)
+- [x] Data sources: audio input analysis (level, low/mid/high, 32-band spectrum) + LFOs (sine/tri/ramp/square),
+      random (S&H), 8-step sequencer, beat; **tempo sync** (1/4 beat … 8 bars), Add or **Sweep a range** (from/to),
+      invert, live meter; a green tick on every modulated slider shows where it really is
 - [x] `~` button on every slider and layer opacity: modulate by any data source with amount/rate
 - [ ] Step sequencers, beat detection / BPM-synced LFOs, envelope followers with attack
 - [ ] Map any data source to any parameter (right-click → "Control with…")
@@ -97,6 +104,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] **TouchOSC integration**: OSC in/out with Zeroconf (`_osc._udp`), OSC Query, and a `.tosc`
       exporter (zlib XML, `<lexml version='4'>` node tree) that generates a TouchOSC layout from any
       Phosphor control surface; `.tosc` importer to map an existing layout
+- [ ] Right-click any control → Learn (MIDI/OSC/keyboard), for every button and slider
 - [ ] Keyboard mapping
 - [ ] Presets / snapshots per layer, effect, and whole project
 
@@ -112,8 +120,9 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Save mapping with the project; quick-recall mapping presets per venue
 
 ### Phase 5: Effects & interop
-- [ ] ISF import: GLSL → WGSL via naga's GLSL front end; cache the result. Same loader reads
-      MadMapper materials/generators (ISF `.fs` + JSON header, optional `.vs`)
+- [x] ISF import (`crates/phosphor-isf`): GLSL → WGSL via naga; 264 of 406 shaders on this Mac convert
+      (233/327 of /Library/Graphics/ISF); converted in the background, compiled lazily (2 per frame)
+- [ ] ISF multi-pass / persistent buffers, >16 params, imported images (the 131 skipped shaders)
 - [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
       Optical Flow and lit (normals) Rutt-Etra rendering. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)

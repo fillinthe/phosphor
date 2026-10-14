@@ -24,10 +24,11 @@ pub enum Tab {
     Stream,
     Network,
     Output,
+    ShaderEditor,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 13] = [
+    pub const ALL: [Tab; 14] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -41,6 +42,7 @@ impl Tab {
         Tab::Stream,
         Tab::Network,
         Tab::Output,
+        Tab::ShaderEditor,
     ];
 
     pub fn title(self) -> &'static str {
@@ -50,7 +52,7 @@ impl Tab {
             Tab::Clips => "Clips",
             Tab::Inspector => "Inspector",
             Tab::Media => "Media",
-            Tab::Library => "Library",
+            Tab::Library => "Effects",
             Tab::Presets => "Presets",
             Tab::Audio => "Audio",
             Tab::Control => "MIDI / OSC",
@@ -58,6 +60,7 @@ impl Tab {
             Tab::Stream => "Stream & Record",
             Tab::Network => "Session",
             Tab::Output => "Output & Stats",
+            Tab::ShaderEditor => "Shader Editor",
         }
     }
 }
@@ -86,7 +89,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Clips => clips(ui, self.st),
             Tab::Inspector => inspector(ui, self.st),
             Tab::Media => media(ui, self.st),
-            Tab::Library => library(ui, self.st),
+            Tab::Library => crate::explorer::explorer(ui, self.st),
             Tab::Presets => presets(ui, self.st),
             Tab::Audio => audio(ui, self.st),
             Tab::Control => control(ui, self.st),
@@ -94,6 +97,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Stream => stream(ui, self.st),
             Tab::Network => network(ui, self.st),
             Tab::Output => output(ui, self.st),
+            Tab::ShaderEditor => crate::explorer::shader_editor(ui, self.st),
         }
     }
 
@@ -130,7 +134,7 @@ pub fn paint_texture(painter: &egui::Painter, tex: egui::TextureId, rect: egui::
     painter.image(tex, rect, FULL_UV, Color32::WHITE);
 }
 
-fn label(icon: &str, text: &str) -> String {
+pub fn label(icon: &str, text: &str) -> String {
     format!("{icon} {text}")
 }
 
@@ -157,9 +161,11 @@ fn preview(ui: &mut egui::Ui, st: &mut State) {
     egui::Panel::bottom("preview_bar").show_separator_line(false).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(RichText::new("MASTER").small().strong());
-            ui.spacing_mut().slider_width = (ui.available_width() - 170.0).max(80.0);
-            ui.add(Slider::new(&mut st.comp.master_fade, 0.0..=1.0).show_value(false));
+            ui.spacing_mut().slider_width = (ui.available_width() - 200.0).max(80.0);
+            let r = ui.add(Slider::new(&mut st.comp.master_fade, 0.0..=1.0).show_value(false));
+            mod_marker(ui, &r, st.comp.master_fade, 0.0, 1.0, st.comp.master_fade_mod.as_ref());
             ui.monospace(format!("{:3.0}%", st.comp.master_fade * 100.0));
+            mod_button(ui, &mut st.comp.master_fade_mod);
             let text = if st.output_open() { label(icon::STOP, "Output") } else { label(icon::PLAY, "Output") };
             if ui.button(text).on_hover_text("Open the output window (F = fullscreen, E = edit mapping)").clicked() {
                 st.toggle_output();
@@ -214,9 +220,14 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
     let mut action = None;
     let mut drop: Option<(u64, u64)> = None;
     let mut media_drop: Option<(usize, usize)> = None;
+    let mut palette_drop: Option<(u64, crate::explorer::PaletteDrag)> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-        if master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass) {
+        let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass);
+        if pick {
             *selected = Some(MASTER_ID);
+        }
+        if let Some(d) = dropped {
+            palette_drop = Some((MASTER_ID, d));
         }
         ui.add_space(4.0);
         for idx in (0..count).rev() {
@@ -237,6 +248,9 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
             }
             if let Some(m) = out.dropped_media {
                 media_drop = Some((idx, m));
+            }
+            if let Some(d) = out.dropped_palette {
+                palette_drop = Some((layer.id, d));
             }
             ui.add_space(4.0);
         }
@@ -272,6 +286,9 @@ fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
         _ => {}
     }
+    if let Some((target, d)) = palette_drop {
+        crate::explorer::apply_palette(st, d, Some(target));
+    }
 }
 
 pub fn duplicate_layer(st: &mut State, id: u64) {
@@ -301,6 +318,8 @@ struct CardOut {
     dropped: Option<u64>,
     /// Media bin index dropped onto this card.
     dropped_media: Option<usize>,
+    /// Effect or generator dragged from the Effects explorer.
+    dropped_palette: Option<crate::explorer::PaletteDrag>,
 }
 
 /// Drag payload from the media bin.
@@ -314,7 +333,14 @@ fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
 }
 
 /// The pinned card for the whole mix: shows the output and the master effect count.
-fn master_card(ui: &mut egui::Ui, tex: Option<egui::TextureId>, aspect: f32, is_selected: bool, effects: &[EffectState], bypass: &mut bool) -> bool {
+fn master_card(
+    ui: &mut egui::Ui,
+    tex: Option<egui::TextureId>,
+    aspect: f32,
+    is_selected: bool,
+    effects: &[EffectState],
+    bypass: &mut bool,
+) -> (bool, Option<crate::explorer::PaletteDrag>) {
     let mut select = false;
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -341,7 +367,12 @@ fn master_card(ui: &mut egui::Ui, tex: Option<egui::TextureId>, aspect: f32, is_
     if frame.response.interact(Sense::click()).clicked() {
         select = true;
     }
-    select
+    // Only effects make sense on MASTER.
+    let dropped = frame.response.dnd_release_payload::<crate::explorer::PaletteDrag>().map(|p| *p).filter(|d| d.effect.is_some());
+    if frame.response.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some_and(|d| d.effect.is_some()) {
+        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+    }
+    (select, dropped)
 }
 
 fn layer_card(
@@ -396,7 +427,8 @@ fn layer_card(
                 source_picker(ui, layer);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
-                    ui.add(Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
+                    let r = ui.add(Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
+                    mod_marker(ui, &r, layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref());
                     ui.monospace(format!("{:3.0}%", layer.opacity * 100.0));
                     mod_button(ui, &mut layer.opacity_mod);
                 });
@@ -456,12 +488,14 @@ fn layer_card(
     // Drop target for a dragged layer or a media bin item.
     let dropped = frame.response.dnd_release_payload::<u64>().map(|p| *p);
     let dropped_media = frame.response.dnd_release_payload::<MediaDrag>().map(|p| p.0);
+    let dropped_palette = frame.response.dnd_release_payload::<crate::explorer::PaletteDrag>().map(|p| *p);
     let hovering = frame.response.dnd_hover_payload::<u64>().is_some_and(|p| *p != layer.id)
-        || frame.response.dnd_hover_payload::<MediaDrag>().is_some();
+        || frame.response.dnd_hover_payload::<MediaDrag>().is_some()
+        || frame.response.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some();
     if hovering {
         ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
     }
-    CardOut { select, action, dropped, dropped_media }
+    CardOut { select, action, dropped, dropped_media, dropped_palette }
 }
 
 fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) {
@@ -494,10 +528,12 @@ fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMo
         values.resize(i + 1, p.default);
     }
     ui.horizontal(|ui| {
-        if ui.add(Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset").double_clicked() {
+        let r = ui.add(Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset");
+        if r.double_clicked() {
             values[i] = p.default;
         }
         let slot = mods.iter().position(|m| m.index == i);
+        mod_marker(ui, &r, values[i], p.min, p.max, slot.map(|k| &mods[k].m));
         let mut m = slot.map(|k| mods[k].m);
         mod_button(ui, &mut m);
         match (slot, m) {
@@ -519,26 +555,98 @@ fn mod_button(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
         .on_hover_text("Drive this with audio or an LFO");
 }
 
+fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
+    ui.ctx().data(|d| d.get_temp(egui::Id::new("phosphor_mod_inputs"))).unwrap_or_default()
+}
+
+/// Draws where a modulated slider actually is right now (a green tick on the rail).
+fn mod_marker(ui: &egui::Ui, slider: &egui::Response, base: f32, min: f32, max: f32, m: Option<&Modulation>) {
+    let Some(m) = m else { return };
+    let live = phosphor_engine::control::modulate(base, min, max, Some(m), &mod_inputs(ui));
+    let t = if (max - min).abs() > f32::EPSILON { ((live - min) / (max - min)).clamp(0.0, 1.0) } else { 0.0 };
+    let rail = ui.spacing().slider_width;
+    let r = slider.rect;
+    let pad = r.height() * 0.5;
+    let x = r.left() + pad + t * (rail - 2.0 * pad).max(1.0);
+    let y = r.center().y;
+    ui.painter().line_segment([egui::pos2(x, y - 6.0), egui::pos2(x, y + 6.0)], Stroke::new(2.0, ACCENT));
+    ui.painter().circle_filled(egui::pos2(x, y), 3.0, ACCENT);
+}
+
+const SYNC_CHOICES: &[(f32, &str)] =
+    &[(0.25, "1/4 beat"), (0.5, "1/2 beat"), (1.0, "1 beat"), (2.0, "2 beats"), (4.0, "1 bar"), (8.0, "2 bars"), (16.0, "4 bars"), (32.0, "8 bars")];
+
 fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
-    ui.set_min_width(240.0);
-    ui.label(RichText::new("Modulate with").strong());
+    ui.set_min_width(320.0);
+    let inputs = mod_inputs(ui);
     let current = m.map(|m| m.source);
-    ui.horizontal_wrapped(|ui| {
-        if ui.selectable_label(current.is_none(), "Off").clicked() {
-            *m = None;
-        }
-        for src in ModSource::ALL {
-            if ui.selectable_label(current == Some(src), src.name()).clicked() {
-                *m = Some(Modulation { source: src, ..m.unwrap_or_default() });
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Drive this control with").strong());
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.selectable_label(current.is_none(), "Off").clicked() {
+                *m = None;
             }
-        }
+        });
     });
-    if let Some(mm) = m {
-        ui.add(Slider::new(&mut mm.amount, -1.0..=1.0).text("Amount"));
-        if mm.source.is_lfo() {
-            ui.add(Slider::new(&mut mm.rate, 0.05..=10.0).text("Rate (Hz)").logarithmic(true));
+    let mut chips = |ui: &mut egui::Ui, title: &str, filter: fn(ModSource) -> bool| {
+        ui.label(RichText::new(title).small().color(Color32::GRAY));
+        ui.horizontal_wrapped(|ui| {
+            for src in ModSource::ALL.into_iter().filter(|s| filter(*s)) {
+                if ui.selectable_label(current == Some(src), src.name()).clicked() {
+                    *m = Some(Modulation { source: src, ..m.unwrap_or_default() });
+                }
+            }
+        });
+    };
+    chips(ui, "AUDIO", |s| s.is_audio());
+    chips(ui, "TIME & TEMPO", |s| !s.is_audio());
+    let Some(mm) = m else { return };
+    ui.separator();
+    if mm.source.is_lfo() {
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut mm.sync, "Sync to tempo");
+            if mm.sync {
+                let current = SYNC_CHOICES.iter().find(|(v, _)| (*v - mm.rate).abs() < 1e-3).map_or("custom", |(_, n)| *n);
+                ComboBox::from_id_salt("sync_rate").width(100.0).selected_text(format!("every {current}")).show_ui(ui, |ui| {
+                    for (v, name) in SYNC_CHOICES {
+                        ui.selectable_value(&mut mm.rate, *v, *name);
+                    }
+                });
+            } else {
+                ui.add(Slider::new(&mut mm.rate, 0.01..=10.0).text("Hz").logarithmic(true));
+            }
+        });
+    }
+    if mm.source == ModSource::Steps {
+        ui.label(RichText::new("Steps (drag to set)").small().color(Color32::GRAY));
+        let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 56.0), Sense::click_and_drag());
+        let w = rect.width() / 8.0;
+        let cycles = if mm.sync { inputs.beats / mm.rate.max(1.0 / 16.0) } else { inputs.time * mm.rate };
+        let playing = ((cycles.rem_euclid(1.0)) * 8.0) as usize;
+        if let Some(pos) = resp.interact_pointer_pos() {
+            let i = (((pos.x - rect.left()) / w) as usize).min(7);
+            mm.steps[i] = (1.0 - (pos.y - rect.top()) / rect.height()).clamp(0.0, 1.0);
+        }
+        for (i, v) in mm.steps.iter().enumerate() {
+            let x0 = rect.left() + i as f32 * w + 2.0;
+            let bar = egui::Rect::from_min_max(egui::pos2(x0, rect.bottom() - v * rect.height()), egui::pos2(x0 + w - 4.0, rect.bottom()));
+            ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(x0, rect.top()), egui::pos2(x0 + w - 4.0, rect.bottom())), 2.0, Color32::from_gray(26));
+            ui.painter().rect_filled(bar, 2.0, if i == playing { ACCENT } else { ACCENT.gamma_multiply(0.45) });
         }
     }
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut mm.range, false, "Add to slider").on_hover_text("The signal pushes the slider up (or down) by Amount");
+        ui.selectable_value(&mut mm.range, true, "Sweep a range").on_hover_text("The signal moves the control between From and To; the slider is ignored");
+        ui.checkbox(&mut mm.invert, "Invert");
+    });
+    if mm.range {
+        ui.add(Slider::new(&mut mm.min, 0.0..=1.0).text("From"));
+        ui.add(Slider::new(&mut mm.max, 0.0..=1.0).text("To"));
+    } else {
+        ui.add(Slider::new(&mut mm.amount, -1.0..=1.0).text("Amount"));
+    }
+    let v = phosphor_engine::control::source_value(mm, &inputs);
+    ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(ACCENT.gamma_multiply(0.6)));
 }
 
 pub enum FxAction {
@@ -735,7 +843,7 @@ fn inspector(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
-fn add_effect_to(st: &mut State, target: u64, effect: &str) {
+pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
     let Some(fx) = st.comp.new_effect(effect) else { return };
     if target == MASTER_ID {
         st.comp.master_effects.push(fx);
@@ -1045,47 +1153,6 @@ fn clips(ui: &mut egui::Ui, st: &mut State) {
     for t in triggers {
         st.trigger(t, now);
     }
-}
-
-fn library(ui: &mut egui::Ui, st: &mut State) {
-    let has_selection = st.selected.is_some_and(|id| id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == id));
-    let on_master = st.selected == Some(MASTER_ID);
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-        ui.label(RichText::new("Generators").strong());
-        ui.weak("Sets the selected layer's source (or adds a layer).");
-        ui.horizontal_wrapped(|ui| {
-            for g in shaders::GENERATORS {
-                if ui.button(g.name).clicked() {
-                    let id = match st.selected {
-                        Some(id) if has_selection && !on_master => id,
-                        _ => st.add_layer(),
-                    };
-                    if let Some(l) = st.comp.layer_mut(id) {
-                        l.set_generator(g.id);
-                        l.name = g.name.to_string();
-                    }
-                }
-            }
-        });
-        ui.add_space(8.0);
-        ui.label(RichText::new("Effects").strong());
-        ui.weak(match (has_selection, on_master) {
-            (true, true) => "Adds to the MASTER chain (over all layers).",
-            (true, false) => "Adds to the selected layer's chain.",
-            _ => "Select a layer or MASTER first.",
-        });
-        ui.horizontal_wrapped(|ui| {
-            for e in shaders::EFFECTS {
-                if ui.add_enabled(has_selection, egui::Button::new(e.name)).clicked()
-                    && let Some(id) = st.selected
-                {
-                    add_effect_to(st, id, e.id);
-                }
-            }
-        });
-        ui.add_space(8.0);
-        ui.weak("Drag images or movies onto the window to add them as layers.");
-    });
 }
 
 fn presets(ui: &mut egui::Ui, st: &mut State) {
