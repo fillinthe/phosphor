@@ -1,0 +1,347 @@
+//! Dock layout: panels, monitors, detached windows and the preset layouts.
+
+use super::*;
+
+impl PhosphorApp {
+    pub(crate) fn apply_layout(&mut self, i: usize) {
+        if let Some((dock, detached)) = self.layouts.get(i) {
+            self.dock = dock;
+            self.detached = detached;
+        }
+    }
+
+    /// Rebuilds the macOS menu bar (the Layouts list changes when you save or delete one).
+    pub(crate) fn install_native_menu(&mut self) {
+        #[cfg(target_os = "macos")]
+        if self.bench.is_none() {
+            let panels: Vec<String> = Tab::ALL.iter().map(|t| t.title().to_string()).collect();
+            let names = self.layouts.names();
+            let layouts: Vec<&str> = names.iter().map(String::as_str).collect();
+            self.native_menu = crate::menu::native::install(&panels, &layouts);
+        }
+    }
+
+    /// The Save Layout window.
+    pub(crate) fn save_layout_window(&mut self, ctx: &egui::Context) {
+        let Some(draft) = self.layout_draft.as_mut() else { return };
+        let mut open = true;
+        let mut save = false;
+        egui::Window::new(format!("{} Save Layout", icon::LAYOUT)).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+            ui.label("Saves where every panel is, including floating windows.");
+            ui.horizontal(|ui| {
+                ui.label("Name");
+                let r = ui.text_edit_singleline(&mut draft.0);
+                r.request_focus();
+                save = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            });
+            ui.checkbox(&mut draft.1, "Open with this layout when Phosphor starts");
+            if self.layouts.saved.iter().any(|l| l.name == draft.0.trim()) {
+                ui.weak("Replaces the saved layout with this name.");
+            }
+            save |= ui.add_enabled(!draft.0.trim().is_empty(), egui::Button::new("Save")).clicked();
+        });
+        if save && let Some((name, startup)) = self.layout_draft.take() {
+            let name = name.trim().to_string();
+            self.layouts.save(&name, &self.dock, &self.detached);
+            if startup {
+                self.layouts.startup = Some(name.clone());
+            }
+            self.state.notice = Some(format!("Saved layout \"{name}\""));
+            self.install_native_menu();
+        } else if !open {
+            self.layout_draft = None;
+        }
+    }
+
+    pub(crate) fn add_monitor_with(&mut self, source: panels::MonitorSource) {
+        let n = self.add_monitor();
+        if let Some(cfg) = self.state.monitors.get_mut(&n) {
+            cfg.source = source;
+        }
+    }
+
+    /// Opens a new Monitor panel as a floating window and returns its number.
+    pub(crate) fn add_monitor(&mut self) -> u8 {
+        let used: Vec<u8> = self.dock.iter_all_tabs().filter_map(|(_, t)| if let Tab::Monitor(n) = t { Some(*n) } else { None }).collect();
+        let n = (1..=99).find(|n| !used.contains(n) && !self.detached.contains(&Tab::Monitor(*n))).unwrap_or(99);
+        self.state.monitors.entry(n).or_default();
+        self.dock.add_window(vec![Tab::Monitor(n)]);
+        n
+    }
+
+    /// Brings a panel to the front, reopening it if it was closed.
+    pub(crate) fn show_tab(&mut self, tab: Tab) {
+        if self.detached.contains(&tab) {
+            return;
+        }
+        match self.dock.find_tab(&tab) {
+            Some(path) => {
+                let _ = self.dock.set_active_tab(path);
+            }
+            None => {
+                self.dock.push_to_focused_leaf(tab);
+            }
+        }
+    }
+
+    pub(crate) fn run_command(&mut self, cmd: crate::explorer::Command, now: f64) {
+        use crate::explorer::{Command, PaletteDrag, apply_palette};
+        let st = &mut self.state;
+        match cmd {
+            Command::AddEffect(id) => apply_palette(st, PaletteDrag { effect: Some(id), generator: None }, None),
+            Command::SetGenerator(id) => apply_palette(st, PaletteDrag { effect: None, generator: Some(id) }, None),
+            Command::OpenTab(tab) => self.show_tab(tab),
+            Command::TriggerColumn(c) => st.trigger(Trigger::Column(c), now),
+            Command::ToggleOutput => st.toggle_output(),
+            Command::ResetLayout => self.dock = default_layout(),
+            Command::NewLayer => {
+                st.add_layer();
+            }
+            Command::TapTempo => st.clock.tap(now),
+            Command::NewShader(generator) => {
+                crate::explorer::new_shader(st, phosphor_engine::custom::template(generator));
+                self.show_tab(Tab::ShaderEditor);
+            }
+            Command::AddMonitor => {
+                let _ = self.add_monitor();
+            }
+            Command::ToggleMapping => {
+                let id = st.primary_output();
+                if let Some(o) = st.comp.output_mut(id) {
+                    o.mapping.enabled = !o.mapping.enabled;
+                }
+            }
+            Command::ToggleSession => {
+                if st.net.running() {
+                    st.net.stop();
+                } else if let Err(e) = st.net.start() {
+                    st.notice = Some(e);
+                }
+            }
+        }
+    }
+
+    /// Moves a panel out of the dock into its own OS window.
+    pub(crate) fn detach(&mut self, tab: Tab) {
+        if let Some(path) = self.dock.find_tab(&tab) {
+            self.dock.remove_tab(path);
+        }
+        if !self.detached.contains(&tab) {
+            self.detached.push(tab);
+        }
+    }
+
+    /// Shows every detached panel in its own window; closing the window docks it again.
+    pub(crate) fn detached_windows(&mut self, ctx: &egui::Context) {
+        let mut redock = Vec::new();
+        for tab in self.detached.clone() {
+            let id = egui::ViewportId::from_hash_of(("phosphor_panel", tab));
+            let builder = egui::ViewportBuilder::default().with_title(format!("Phosphor · {}", tab.title())).with_inner_size([460.0, 640.0]);
+            ctx.show_viewport_immediate(id, builder, |ctx, _class| {
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    redock.push(tab);
+                }
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(tab.title()).strong());
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Dock back").clicked() {
+                                redock.push(tab);
+                            }
+                        });
+                    });
+                    ui.separator();
+                    let mut tab = tab;
+                    egui_dock::TabViewer::ui(&mut Viewer { st: &mut self.state, detach: None }, ui, &mut tab);
+                });
+            });
+        }
+        for tab in redock {
+            self.detached.retain(|t| *t != tab);
+            if self.dock.find_tab(&tab).is_none() {
+                self.dock.push_to_focused_leaf(tab);
+            }
+        }
+    }
+
+    pub(crate) fn toggle_panel(&mut self, tab: Tab) {
+        if self.detached.contains(&tab) {
+            self.detached.retain(|t| *t != tab);
+            self.dock.push_to_focused_leaf(tab);
+            return;
+        }
+        match self.dock.find_tab(&tab) {
+            Some(path) => {
+                self.dock.remove_tab(path);
+            }
+            None => {
+                self.dock.add_window(vec![tab]);
+            }
+        }
+    }
+}
+
+/// Everything at once: preview + monitor, clips, mixer/effects along the bottom, layers and
+/// inspector down the right.
+pub(crate) fn default_layout() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Preview]);
+    let surface = dock.main_surface_mut();
+    let [left, right] = surface.split_right(NodeIndex::root(), 0.72, vec![Tab::Layers]);
+    surface.split_below(right, 0.46, vec![Tab::Inspector, Tab::Presets]);
+    let [top, bottom] = surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Media]);
+    surface.split_right(top, 0.62, vec![Tab::Monitor(1), Tab::Mapping]);
+    surface.split_below(
+        bottom,
+        0.42,
+        vec![Tab::Mixer, Tab::Library, Tab::Audio, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output],
+    );
+    dock
+}
+
+/// Panels added in newer builds show up in layouts saved by older ones; panels the user closed
+/// on purpose stay closed.
+pub(crate) fn ensure_new_tabs(dock: &mut DockState<Tab>, known: &[Tab]) {
+    for tab in Tab::ALL {
+        if !known.contains(&tab) && dock.find_tab(&tab).is_none() {
+            dock.push_to_focused_leaf(tab);
+        }
+    }
+}
+
+/// Keeps floating panels reachable: a window saved on a bigger display, or dragged off the
+/// edge, is moved back so its title bar is inside `screen`. `force` pulls every window fully inside.
+pub(crate) fn rescue_windows(dock: &mut DockState<Tab>, screen: egui::Rect, force: bool) {
+    let margin = 48.0;
+    for surface in dock.iter_surfaces_mut() {
+        let egui_dock::Surface::Window(_, ws) = surface else { continue };
+        let r = ws.rect();
+        if !r.is_finite() || r.width() <= 0.0 {
+            continue;
+        }
+        let max_size = (screen.size() - egui::vec2(16.0, 16.0)).max(egui::vec2(200.0, 120.0));
+        if r.width() > max_size.x || r.height() > max_size.y {
+            ws.set_size(r.size().min(max_size));
+        }
+        let visible = egui::Rect::from_min_max(
+            egui::pos2(screen.left() - r.width() + margin, screen.top()),
+            egui::pos2(screen.right() - margin, screen.bottom() - margin),
+        );
+        let lost = !visible.contains(r.min) || r.min.y < screen.top();
+        if lost || force {
+            let max_pos = (screen.max - r.size()).max(screen.min);
+            let target = egui::pos2(r.min.x.clamp(screen.left(), max_pos.x.max(screen.left())), r.min.y.clamp(screen.top(), max_pos.y.max(screen.top())));
+            ws.set_position(target);
+        }
+    }
+}
+
+/// Layouts are stored as RON text: unlike JSON it keeps infinite sizes (unopened windows), which
+/// JSON turns into `null` and then can't read back. Old JSON-stored layouts still load.
+pub(crate) fn to_text<T: serde::Serialize>(value: &T) -> Option<String> {
+    ron::to_string(value).ok()
+}
+
+pub(crate) fn from_text<T: serde::de::DeserializeOwned>(text: &str) -> Option<T> {
+    ron::from_str(text).ok().or_else(|| serde_json::from_str(text).ok())
+}
+
+/// A layout you saved: the panel arrangement plus panels floating in their own windows.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct SavedLayout {
+    pub name: String,
+    pub dock: DockState<Tab>,
+    #[serde(default)]
+    pub detached: Vec<Tab>,
+}
+
+/// Built-in layouts plus yours, and which one opens at startup. Index `i` in menus counts the
+/// built-ins first, then saved ones.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub(crate) struct Layouts {
+    pub saved: Vec<SavedLayout>,
+    /// `None`: reopen however it was left.
+    pub startup: Option<String>,
+}
+
+impl Layouts {
+    pub fn names(&self) -> Vec<String> {
+        LAYOUTS.iter().map(|(n, _)| n.to_string()).chain(self.saved.iter().map(|l| l.name.clone())).collect()
+    }
+
+    pub fn get(&self, i: usize) -> Option<(DockState<Tab>, Vec<Tab>)> {
+        match LAYOUTS.get(i) {
+            Some((_, make)) => Some((make(), Vec::new())),
+            None => self.saved.get(i - LAYOUTS.len()).map(|l| (l.dock.clone(), l.detached.clone())),
+        }
+    }
+
+    pub fn find(&self, name: &str) -> Option<usize> {
+        self.names().iter().position(|n| n == name)
+    }
+
+    /// Saves (or replaces, same name) a layout.
+    pub fn save(&mut self, name: &str, dock: &DockState<Tab>, detached: &[Tab]) {
+        let l = SavedLayout { name: name.to_string(), dock: dock.clone(), detached: detached.to_vec() };
+        match self.saved.iter_mut().find(|s| s.name == name) {
+            Some(s) => *s = l,
+            None => self.saved.push(l),
+        }
+    }
+
+    pub fn remove(&mut self, name: &str) {
+        self.saved.retain(|l| l.name != name);
+        if self.startup.as_deref() == Some(name) {
+            self.startup = None;
+        }
+    }
+}
+
+pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] =
+    &[("Default", default_layout), ("Performance", layout_performance), ("Mapping", layout_mapping)];
+
+/// Big preview, layers on the right, audio + control underneath: for playing a show.
+pub(crate) fn layout_performance() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Preview]);
+    let surface = dock.main_surface_mut();
+    let [left, right] = surface.split_right(NodeIndex::root(), 0.7, vec![Tab::Layers]);
+    surface.split_below(right, 0.6, vec![Tab::Inspector, Tab::Presets]);
+    surface.split_below(left, 0.78, vec![Tab::Audio, Tab::Control, Tab::Stream]);
+    dock
+}
+
+/// Mapping editor front and centre, with the output controls beside it.
+pub(crate) fn layout_mapping() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Mapping]);
+    let surface = dock.main_surface_mut();
+    let [left, right] = surface.split_right(NodeIndex::root(), 0.7, vec![Tab::Output, Tab::Layers]);
+    surface.split_below(right, 0.5, vec![Tab::Inspector]);
+    surface.split_below(left, 0.72, vec![Tab::Preview, Tab::Library, Tab::Presets]);
+    dock
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_layouts_round_trip() {
+        let mut l = Layouts::default();
+        let builtins = LAYOUTS.len();
+        l.save("Gig", &layout_performance(), &[Tab::Mixer]);
+        l.save("Gig", &default_layout(), &[]); // same name replaces
+        l.save("Mapping night", &layout_mapping(), &[]);
+        l.startup = Some("Gig".into());
+        assert_eq!(l.names().len(), builtins + 2);
+        assert_eq!(l.find("Gig"), Some(builtins));
+        let back: Layouts = from_text(&to_text(&l).unwrap()).unwrap();
+        let (dock, detached) = back.get(builtins).unwrap();
+        assert!(detached.is_empty());
+        assert_eq!(dock.iter_all_tabs().count(), default_layout().iter_all_tabs().count());
+        assert_eq!(back.startup.as_deref(), Some("Gig"));
+        let mut back = back;
+        back.remove("Gig");
+        assert!(back.startup.is_none());
+        assert_eq!(back.names().len(), builtins + 1);
+    }
+}

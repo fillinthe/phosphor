@@ -136,7 +136,7 @@ pub struct NetSession {
     password: RemotePassword,
     registry: Reg,
     encoder: Option<SyncSender<(u32, u32, Vec<u8>)>>,
-    next_frame: f64,
+    pacer: crate::pacing::FramePacer,
     pub status: String,
 }
 
@@ -156,7 +156,7 @@ impl NetSession {
             password: Arc::new(Mutex::new(None)),
             registry: Arc::new(Mutex::new(Registry::default())),
             encoder: None,
-            next_frame: 0.0,
+            pacer: Default::default(),
             status: String::new(),
         }
     }
@@ -282,12 +282,7 @@ impl NetSession {
     }
 
     pub fn frame_due(&mut self, now: f64) -> bool {
-        if !self.running() || now < self.next_frame {
-            return false;
-        }
-        let step = 1.0 / self.fps.max(1) as f64;
-        self.next_frame = (self.next_frame + step).max(now - step);
-        true
+        self.running() && self.pacer.due(now, self.fps)
     }
 
     /// Hands a captured frame to the encoder; drops it if the encoder is still busy.

@@ -1,0 +1,20 @@
+//! Reusable UI components shared by every panel. Look here (and extend these) before writing a
+//! new widget: see "components first" in the project instructions.
+
+#![allow(unused_imports)]
+
+use eframe::egui::{self, Color32, ComboBox, RichText, Sense, Slider, Stroke, StrokeKind};
+use egui_phosphor::regular as icon;
+use phosphor_engine::{BlendMode, ControlTarget, EffectState, FitMode, LayerState, MASTER_ID, Mapping, ModSource, Modulation, ParamMod, SourceSpec, TransitionKind, shaders};
+use serde::{Deserialize, Serialize};
+
+use crate::app::{State, Trigger};
+use crate::theme::{ACCENT, WARN};
+
+mod learn;
+mod modulation;
+mod widgets;
+
+pub(crate) use learn::*;
+pub(crate) use modulation::*;
+pub(crate) use widgets::*;

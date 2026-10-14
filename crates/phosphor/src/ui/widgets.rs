@@ -1,0 +1,180 @@
+//! Small shared widgets: right-click menus that work on sliders, the right-click-proof slider
+//! guard, cards, texture painting, labels, QR codes, activity lights.
+
+use super::*;
+
+/// Right-click menus that also open on sliders and other draggable controls. egui treats a
+/// right-press on those as a drag, so its own context menu never opens; this opens on release.
+pub trait RightMenu {
+    fn right_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>>;
+}
+
+impl RightMenu for egui::Response {
+    fn right_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>> {
+        use egui::SetOpenCommand;
+        let released = self.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && self.contains_pointer();
+        let cmd = if self.secondary_clicked() || released {
+            Some(SetOpenCommand::Bool(true))
+        } else if self.clicked() {
+            Some(SetOpenCommand::Bool(false))
+        } else {
+            None
+        };
+        egui::Popup::menu(self).open_memory(cmd).at_pointer_fixed().show(add)
+    }
+}
+
+/// Adds a slider or drag value, but undoes any change made with the right or middle mouse button,
+/// so right-clicking opens the control's menu without moving it.
+#[allow(unused_macros)]
+macro_rules! guarded {
+    ($ui:expr, $v:expr, $w:expr) => {{
+        let before = $v;
+        let r = $ui.add($w);
+        if $crate::ui::not_primary(&r) {
+            $v = before;
+        }
+        r
+    }};
+}
+pub(crate) use guarded;
+
+/// True while the right/middle button is pressing or releasing on this widget.
+pub(crate) fn not_primary(r: &egui::Response) -> bool {
+    use egui::PointerButton::{Middle, Secondary};
+    let other = r.ctx.input(|i| {
+        let p = &i.pointer;
+        !p.primary_down() && [Secondary, Middle].iter().any(|b| p.button_down(*b) || p.button_pressed(*b) || p.button_released(*b))
+    });
+    other && (r.hovered() || r.contains_pointer() || r.is_pointer_button_down_on())
+}
+
+pub fn fit_rect(area: egui::Rect, aspect: f32) -> egui::Rect {
+    let size = if area.width() / area.height().max(1.0) > aspect {
+        egui::vec2(area.height() * aspect, area.height())
+    } else {
+        egui::vec2(area.width(), area.width() / aspect)
+    };
+    egui::Rect::from_center_size(area.center(), size)
+}
+
+pub(crate) const FULL_UV: egui::Rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+
+pub fn paint_texture(painter: &egui::Painter, tex: egui::TextureId, rect: egui::Rect) {
+    painter.image(tex, rect, FULL_UV, Color32::WHITE);
+}
+
+pub fn label(icon: &str, text: &str) -> String {
+    format!("{icon} {text}")
+}
+
+/// A click / right-click area *behind* a card, registered before the card's contents so its own
+/// buttons, menus and sliders stay clickable (egui gives clicks to the widget registered last).
+/// Uses the card's rect from the previous frame; `None` on the very first frame.
+pub(crate) fn card_background(ui: &mut egui::Ui, id: egui::Id) -> Option<egui::Response> {
+    let rect = ui.ctx().data(|d| d.get_temp::<egui::Rect>(id))?;
+    Some(ui.interact(rect, id.with("bg"), Sense::click()))
+}
+
+pub(crate) fn remember_card(ui: &egui::Ui, id: egui::Id, rect: egui::Rect) {
+    ui.ctx().data_mut(|d| d.insert_temp(id, rect));
+}
+
+pub(crate) fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
+    let stroke = if is_selected { Stroke::new(1.5, ACCENT) } else { ui.visuals().widgets.noninteractive.bg_stroke };
+    let fill = if is_selected { Color32::from_rgb(24, 34, 30) } else { ui.visuals().faint_bg_color };
+    egui::Frame::new().fill(fill).stroke(stroke).corner_radius(6).inner_margin(egui::Margin::same(8))
+}
+
+/// Draws a QR code for `text` (no image needed: one filled square per dark module).
+pub(crate) fn qr_code(ui: &mut egui::Ui, text: &str, size: f32) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let Ok(code) = qrcode::QrCode::new(text.as_bytes()) else { return };
+        let n = code.width();
+        let colors = code.to_colors();
+        let quiet = 2.0;
+        let cell = size / (n as f32 + quiet * 2.0);
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), Sense::hover());
+        let p = ui.painter();
+        p.rect_filled(rect, 4.0, Color32::WHITE);
+        for (i, c) in colors.iter().enumerate() {
+            if *c == qrcode::Color::Dark {
+                let (x, y) = ((i % n) as f32, (i / n) as f32);
+                let min = rect.min + egui::vec2((x + quiet) * cell, (y + quiet) * cell);
+                p.rect_filled(egui::Rect::from_min_size(min, egui::vec2(cell + 0.5, cell + 0.5)), 0.0, Color32::BLACK);
+            }
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = (ui, text, size);
+}
+
+// Devices: everything connected to this Mac, with disconnect / block / disable.
+
+pub(crate) fn ago(t: std::time::Instant) -> String {
+    let s = t.elapsed().as_secs();
+    if s < 60 {
+        format!("{s}s")
+    } else if s < 3600 {
+        format!("{}m", s / 60)
+    } else {
+        format!("{}h{:02}m", s / 3600, (s % 3600) / 60)
+    }
+}
+
+pub(crate) fn activity_dot(ui: &mut egui::Ui, last: Option<std::time::Instant>) {
+    let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), Sense::hover());
+    let lit = last.map_or(0.0, |t| (1.0 - t.elapsed().as_secs_f32() / 1.5).clamp(0.0, 1.0));
+    let c = if lit > 0.0 { ACCENT.gamma_multiply(0.3 + 0.7 * lit) } else { Color32::from_gray(50) };
+    ui.painter().circle_filled(r.center(), 4.0, c);
+}
+
+/// The screens/projectors to send the main output to, plus Rescan.
+pub(crate) fn screen_menu(ui: &mut egui::Ui, st: &mut State) {
+    if st.displays.is_empty() {
+        st.displays = crate::screens::displays();
+    }
+    for d in st.displays.clone() {
+        if ui.button(d.label()).clicked() {
+            st.send_output_to(d);
+            ui.close();
+        }
+    }
+    if ui.button("Rescan displays").clicked() {
+        st.displays = crate::screens::displays();
+    }
+}
+
+/// How an output (Syphon, NDI, …) is doing, shown next to its toggle.
+pub(crate) enum OutputStatus<'a> {
+    Off,
+    /// Running, nobody receiving yet.
+    Waiting(&'a str),
+    Receiving(usize),
+    Error(&'a str),
+}
+
+/// An output's on/off toggle, mappable to a controller (right-click / Map mode).
+pub(crate) fn output_toggle(ui: &mut egui::Ui, on: &mut bool, glyph: &str, name: &str, hover: &str, control: phosphor_engine::AppControl) -> egui::Response {
+    let r = ui.toggle_value(on, label(glyph, name)).on_hover_text(hover);
+    map_menu(ui, &r, ControlTarget::App(control));
+    r
+}
+
+pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
+    match status {
+        OutputStatus::Off => {
+            ui.weak("off");
+        }
+        OutputStatus::Waiting(text) => {
+            ui.weak(text);
+        }
+        OutputStatus::Receiving(n) => {
+            ui.label(RichText::new(format!("{} {n} receiving", icon::CHECK_CIRCLE)).small().color(ACCENT));
+        }
+        OutputStatus::Error(e) => {
+            ui.colored_label(Color32::from_rgb(255, 120, 90), e);
+        }
+    }
+}

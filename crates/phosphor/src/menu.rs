@@ -39,6 +39,7 @@ pub enum Action {
     Panel(usize),
     /// View ▸ Layouts (index into the layout list).
     Layout(usize),
+    SaveLayout,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -93,6 +94,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
         &[
             D("Panels"),
             D("Layouts"),
+            I(A::SaveLayout, "Save Current Layout…", None),
             I(A::ResetLayout, "Reset Layout", None),
             I(A::AddMonitor, "Add Monitor", None),
             I(A::Gather, "Gather Floating Windows", None),

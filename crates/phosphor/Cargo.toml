@@ -7,6 +7,7 @@ edition = "2024"
 phosphor-engine = { path = "../phosphor-engine" }
 eframe = { version = "0.36.2", default-features = false, features = ["wgpu", "default_fonts", "persistence"] }
 serde_json = "1"
+ron = "0.12"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 log = "0.4"
 egui_dock = { version = "0.21", features = ["serde"] }

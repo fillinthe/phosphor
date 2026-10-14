@@ -101,7 +101,7 @@ pub struct Streamer {
     tx: Option<SyncSender<Msg>>,
     child: Arc<Mutex<Option<Child>>>,
     shared: Arc<Mutex<Shared>>,
-    next_frame: f64,
+    pacer: crate::pacing::FramePacer,
     pub frame_size: (u32, u32),
     started: Option<f64>,
 }
@@ -149,7 +149,7 @@ impl Streamer {
             tx: None,
             child: Arc::new(Mutex::new(None)),
             shared: Arc::new(Mutex::new(Shared::default())),
-            next_frame: 0.0,
+            pacer: Default::default(),
             frame_size: (0, 0),
             started: None,
         }
@@ -276,7 +276,7 @@ impl Streamer {
             .map_err(|e| e.to_string())?;
         self.tx = Some(tx);
         self.frame_size = (width, height);
-        self.next_frame = now;
+        self.pacer.reset(now);
         self.started = Some(now);
         let mut sh = self.shared.lock().unwrap();
         *sh = Shared { status: format!("{} · {}", s.destination.name(), target), ..Default::default() };
@@ -309,15 +309,7 @@ impl Streamer {
 
     /// True when the next frame at the stream's frame rate is due.
     pub fn frame_due(&mut self, now: f64) -> bool {
-        if !self.running() || now < self.next_frame {
-            return false;
-        }
-        let step = 1.0 / self.settings.fps.max(1) as f64;
-        self.next_frame += step;
-        if self.next_frame < now - step {
-            self.next_frame = now;
-        }
-        true
+        self.running() && self.pacer.due(now, self.settings.fps)
     }
 
     pub fn push(&mut self, width: u32, height: u32, rgba: Vec<u8>) {

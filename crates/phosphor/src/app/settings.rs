@@ -1,0 +1,45 @@
+//! Saving settings to disk.
+
+use super::*;
+
+impl PhosphorApp {
+    pub(crate) fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
+        if self.bench.is_some() {
+            return;
+        }
+        storage.set_string(KEY_COMPOSITION, self.state.comp.to_json());
+        if let Some(text) = to_text(&self.dock) {
+            storage.set_string(KEY_DOCK, text);
+        }
+        if let Some(text) = to_text(&self.layouts) {
+            storage.set_string(KEY_LAYOUTS, text);
+        }
+        if let Ok(json) = serde_json::to_string(&self.state.stream.settings) {
+            storage.set_string(KEY_STREAM, json);
+        }
+        if let Ok(json) = serde_json::to_string(&Tab::ALL) {
+            storage.set_string(KEY_KNOWN_TABS, json);
+        }
+        if let Ok(json) = serde_json::to_string(&self.detached) {
+            storage.set_string(KEY_DETACHED, json);
+        }
+        if let Ok(json) = serde_json::to_string(&self.state.explorer.favorites) {
+            storage.set_string(KEY_FAVORITES, json);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Ok(json) = serde_json::to_string(&self.state.folders.folders) {
+            storage.set_string(KEY_WATCHED, json);
+        }
+        if let Ok(json) = serde_json::to_string(&self.state.recent) {
+            storage.set_string(KEY_RECENT_PROJECTS, json);
+        }
+        storage.set_string(KEY_PROJECT_PATH, self.state.project_path.clone().unwrap_or_default());
+        storage.set_string(KEY_REMOTE_PASSWORD, if self.state.require_password { self.state.remote_password.clone() } else { String::new() });
+        if let Ok(json) = serde_json::to_string(&self.state.explorer.recent) {
+            storage.set_string(KEY_RECENT, json);
+        }
+        if let Ok(json) = serde_json::to_string(&self.state.monitors) {
+            storage.set_string(KEY_MONITORS, json);
+        }
+    }
+}

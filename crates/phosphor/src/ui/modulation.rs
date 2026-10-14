@@ -1,0 +1,132 @@
+//! Modulation (LFOs, audio, time) for any value, and the standard parameter slider.
+
+use super::*;
+
+pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMod>, i: usize, p: &shaders::Param, target: Option<ControlTarget>) {
+    if values.len() <= i {
+        values.resize(i + 1, p.default);
+    }
+    ui.horizontal(|ui| {
+        let r = guarded!(ui, values[i], Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset · right-click for Learn / Modulate");
+        let slot = mods.iter().position(|m| m.index == i);
+        mod_marker(ui, &r, values[i], p.min, p.max, slot.map(|k| &mods[k].m));
+        if let Some(t) = &target {
+            mapped_badge(ui, &r, t);
+        }
+        let mut m = slot.map(|k| mods[k].m);
+        if r.double_clicked() | control_menu(&r, target.as_ref(), Some(&mut m)) {
+            values[i] = p.default;
+        }
+        mod_button(ui, &mut m);
+        match (slot, m) {
+            (Some(k), Some(nm)) => mods[k].m = nm,
+            (Some(k), None) => {
+                mods.remove(k);
+            }
+            (None, Some(nm)) => mods.push(ParamMod { index: i, m: nm }),
+            (None, None) => {}
+        }
+    });
+}
+
+/// The `~` button next to a control: opens the modulation editor; lit when a signal is attached.
+pub(crate) fn mod_button(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
+    let color = if m.is_some() { ACCENT } else { Color32::GRAY };
+    ui.menu_button(RichText::new(icon::WAVE_SINE).color(color), |ui| modulation_editor(ui, m))
+        .response
+        .on_hover_text("Drive this with audio or an LFO");
+}
+
+pub(crate) fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
+    ui.ctx().data(|d| d.get_temp(egui::Id::new("phosphor_mod_inputs"))).unwrap_or_default()
+}
+
+/// Draws where a modulated slider actually is right now (a green tick on the rail).
+pub(crate) fn mod_marker(ui: &egui::Ui, slider: &egui::Response, base: f32, min: f32, max: f32, m: Option<&Modulation>) {
+    let Some(m) = m else { return };
+    let live = phosphor_engine::control::modulate(base, min, max, Some(m), &mod_inputs(ui));
+    let t = if (max - min).abs() > f32::EPSILON { ((live - min) / (max - min)).clamp(0.0, 1.0) } else { 0.0 };
+    let rail = ui.spacing().slider_width;
+    let r = slider.rect;
+    let pad = r.height() * 0.5;
+    let x = r.left() + pad + t * (rail - 2.0 * pad).max(1.0);
+    let y = r.center().y;
+    ui.painter().line_segment([egui::pos2(x, y - 6.0), egui::pos2(x, y + 6.0)], Stroke::new(2.0, ACCENT));
+    ui.painter().circle_filled(egui::pos2(x, y), 3.0, ACCENT);
+}
+
+pub(crate) const SYNC_CHOICES: &[(f32, &str)] =
+    &[(0.25, "1/4 beat"), (0.5, "1/2 beat"), (1.0, "1 beat"), (2.0, "2 beats"), (4.0, "1 bar"), (8.0, "2 bars"), (16.0, "4 bars"), (32.0, "8 bars")];
+
+pub(crate) fn modulation_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
+    ui.set_min_width(320.0);
+    let inputs = mod_inputs(ui);
+    let current = m.map(|m| m.source);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Drive this control with").strong());
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.selectable_label(current.is_none(), "Off").clicked() {
+                *m = None;
+            }
+        });
+    });
+    let mut chips = |ui: &mut egui::Ui, title: &str, filter: fn(ModSource) -> bool| {
+        ui.label(RichText::new(title).small().color(Color32::GRAY));
+        ui.horizontal_wrapped(|ui| {
+            for src in ModSource::ALL.into_iter().filter(|s| filter(*s)) {
+                if ui.selectable_label(current == Some(src), src.name()).clicked() {
+                    *m = Some(Modulation { source: src, ..m.unwrap_or_default() });
+                }
+            }
+        });
+    };
+    chips(ui, "AUDIO", |s| s.is_audio());
+    chips(ui, "TIME & TEMPO", |s| !s.is_audio());
+    let Some(mm) = m else { return };
+    ui.separator();
+    if mm.source.is_lfo() {
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut mm.sync, "Sync to tempo");
+            if mm.sync {
+                let current = SYNC_CHOICES.iter().find(|(v, _)| (*v - mm.rate).abs() < 1e-3).map_or("custom", |(_, n)| *n);
+                ComboBox::from_id_salt("sync_rate").width(100.0).selected_text(format!("every {current}")).show_ui(ui, |ui| {
+                    for (v, name) in SYNC_CHOICES {
+                        ui.selectable_value(&mut mm.rate, *v, *name);
+                    }
+                });
+            } else {
+                guarded!(ui, mm.rate, Slider::new(&mut mm.rate, 0.01..=10.0).text("Hz").logarithmic(true));
+            }
+        });
+    }
+    if mm.source == ModSource::Steps {
+        ui.label(RichText::new("Steps (drag to set)").small().color(Color32::GRAY));
+        let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 56.0), Sense::click_and_drag());
+        let w = rect.width() / 8.0;
+        let cycles = if mm.sync { inputs.beats / mm.rate.max(1.0 / 16.0) } else { inputs.time * mm.rate };
+        let playing = ((cycles.rem_euclid(1.0)) * 8.0) as usize;
+        if let Some(pos) = resp.interact_pointer_pos() {
+            let i = (((pos.x - rect.left()) / w) as usize).min(7);
+            mm.steps[i] = (1.0 - (pos.y - rect.top()) / rect.height()).clamp(0.0, 1.0);
+        }
+        for (i, v) in mm.steps.iter().enumerate() {
+            let x0 = rect.left() + i as f32 * w + 2.0;
+            let bar = egui::Rect::from_min_max(egui::pos2(x0, rect.bottom() - v * rect.height()), egui::pos2(x0 + w - 4.0, rect.bottom()));
+            ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(x0, rect.top()), egui::pos2(x0 + w - 4.0, rect.bottom())), 2.0, Color32::from_gray(26));
+            ui.painter().rect_filled(bar, 2.0, if i == playing { ACCENT } else { ACCENT.gamma_multiply(0.45) });
+        }
+    }
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut mm.range, false, "Add to slider").on_hover_text("The signal pushes the slider up (or down) by Amount");
+        ui.selectable_value(&mut mm.range, true, "Sweep a range").on_hover_text("The signal moves the control between From and To; the slider is ignored");
+        ui.checkbox(&mut mm.invert, "Invert");
+    });
+    if mm.range {
+        guarded!(ui, mm.min, Slider::new(&mut mm.min, 0.0..=1.0).text("From"));
+        guarded!(ui, mm.max, Slider::new(&mut mm.max, 0.0..=1.0).text("To"));
+    } else {
+        guarded!(ui, mm.amount, Slider::new(&mut mm.amount, -1.0..=1.0).text("Amount"));
+    }
+    let v = phosphor_engine::control::source_value(mm, &inputs);
+    ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(ACCENT.gamma_multiply(0.6)));
+}
