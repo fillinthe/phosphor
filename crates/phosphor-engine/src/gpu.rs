@@ -40,6 +40,8 @@ pub(crate) struct Gpu {
     pub layout: wgpu::BindGroupLayout,
     pipeline_layout: wgpu::PipelineLayout,
     pipelines: HashMap<&'static str, wgpu::RenderPipeline>,
+    /// Modules for user shaders, keyed by their (unique) entry point.
+    pub custom_modules: HashMap<&'static str, wgpu::ShaderModule>,
     pub sampler: wgpu::Sampler,
     pub sampler_mirror: wgpu::Sampler,
     /// 1x1 transparent black, bound to unused texture slots.
@@ -128,6 +130,7 @@ impl Gpu {
             layout,
             pipeline_layout,
             pipelines: HashMap::new(),
+            custom_modules: HashMap::new(),
             sampler,
             sampler_mirror,
             blank,
@@ -148,7 +151,8 @@ impl Gpu {
     }
 
     pub fn pipeline(&mut self, entry: &'static str) -> &wgpu::RenderPipeline {
-        let Self { device, module, pipeline_layout, pipelines, .. } = self;
+        let Self { device, module, pipeline_layout, pipelines, custom_modules, .. } = self;
+        let module = custom_modules.get(entry).unwrap_or(module);
         // Mapping surfaces are real quads blended onto the output; everything else is a
         // fullscreen triangle that overwrites its target.
         let surface = entry == "fs_surface";

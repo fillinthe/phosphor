@@ -1,24 +1,5 @@
 // Built-in generators (sources with no input). Parameters: P(0..15).
 
-fn hash21(p: vec2f) -> f32 {
-    return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
-}
-
-fn value_noise(p: vec2f) -> f32 {
-    let i = floor(p);
-    let f = fract(p);
-    let w = f * f * (3.0 - 2.0 * f);
-    let a = hash21(i);
-    let b = hash21(i + vec2f(1.0, 0.0));
-    let c = hash21(i + vec2f(0.0, 1.0));
-    let d = hash21(i + vec2f(1.0, 1.0));
-    return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
-}
-
-fn centered(uv: vec2f) -> vec2f {
-    return (uv - 0.5) * vec2f(aspect(), 1.0);
-}
-
 @fragment
 fn gen_plasma(in: VOut) -> @location(0) vec4f {
     let p = centered(in.uv) * P(1u);

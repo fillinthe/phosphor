@@ -2426,6 +2426,7 @@ dependencies = [
  "mdns-sd",
  "midir",
  "phosphor-engine",
+ "phosphor-isf",
  "rfd",
  "rosc",
  "rustfft",
