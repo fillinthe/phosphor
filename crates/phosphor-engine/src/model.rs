@@ -340,6 +340,80 @@ pub enum ControlTarget {
     EffectEnabled(u64),
     TriggerClip { layer: u64, slot: usize },
     TriggerColumn(usize),
+    LayerSpeed(u64),
+    LayerFxBypass(u64),
+    /// App-wide controls (tempo, launch settings, audio…).
+    App(AppControl),
+}
+
+/// App-wide mappable controls.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AppControl {
+    Tempo,
+    TapTempo,
+    Resync,
+    FollowAudio,
+    LaunchFade,
+    FadeTime,
+    LaunchTiming,
+    MasterFxBypass,
+    AudioGain,
+    KickThreshold,
+    Syphon,
+}
+
+impl AppControl {
+    pub const ALL: [AppControl; 11] = [
+        AppControl::Tempo,
+        AppControl::TapTempo,
+        AppControl::Resync,
+        AppControl::FollowAudio,
+        AppControl::LaunchFade,
+        AppControl::FadeTime,
+        AppControl::LaunchTiming,
+        AppControl::MasterFxBypass,
+        AppControl::AudioGain,
+        AppControl::KickThreshold,
+        AppControl::Syphon,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            AppControl::Tempo => "Tempo (BPM)",
+            AppControl::TapTempo => "Tap tempo",
+            AppControl::Resync => "Resync beat",
+            AppControl::FollowAudio => "Follow audio on/off",
+            AppControl::LaunchFade => "Launch: fade on/off",
+            AppControl::FadeTime => "Launch: fade time",
+            AppControl::LaunchTiming => "Launch: now / beat / bar",
+            AppControl::MasterFxBypass => "Master FX bypass",
+            AppControl::AudioGain => "Audio gain",
+            AppControl::KickThreshold => "Kick threshold",
+            AppControl::Syphon => "Syphon on/off",
+        }
+    }
+
+    /// The built-in OSC path segment, e.g. /phosphor/tempo.
+    pub fn osc(self) -> &'static str {
+        match self {
+            AppControl::Tempo => "tempo",
+            AppControl::TapTempo => "tap",
+            AppControl::Resync => "resync",
+            AppControl::FollowAudio => "follow",
+            AppControl::LaunchFade => "launch/fade",
+            AppControl::FadeTime => "launch/time",
+            AppControl::LaunchTiming => "launch/timing",
+            AppControl::MasterFxBypass => "fxbypass",
+            AppControl::AudioGain => "audio/gain",
+            AppControl::KickThreshold => "audio/kick",
+            AppControl::Syphon => "syphon",
+        }
+    }
+
+    /// On/off controls: pads and keys flip them on each press.
+    pub fn is_toggle(self) -> bool {
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -185,6 +185,22 @@ impl State {
         }
     }
 
+    /// Carries out an app-wide control from a controller (value 0..1, or `control::FLIP`).
+    pub fn app_control(&mut self, a: phosphor_engine::AppControl, v: f32, now: f64) {
+        use crate::control::{FLIP, unit_to};
+        use phosphor_engine::AppControl as A;
+        let press = v > 0.5;
+        match a {
+            A::Tempo => self.clock.bpm = unit_to(v, 40.0, 300.0, false),
+            A::TapTempo if press => self.clock.tap(now),
+            A::Resync if press => self.clock.resync(now),
+            A::FollowAudio => self.clock.follow_audio = if v == FLIP { !self.clock.follow_audio } else { press },
+            A::AudioGain => self.audio.gain = unit_to(v, 0.1, 10.0, true),
+            A::KickThreshold => self.audio.beats.sensitivity = unit_to(v, 1.1, 3.0, false),
+            _ => {}
+        }
+    }
+
     /// Puts a source on a layer using the launch settings (cut/fade, now/beat/bar).
     pub fn launch_source(&mut self, layer: u64, source: phosphor_engine::SourceSpec, values: Vec<f32>, name: String, now: f64) {
         self.trigger(Trigger::Source { layer, source, values, name }, now);
@@ -1426,12 +1442,12 @@ impl PhosphorApp {
             control.poll(comp);
             control.apply(comp, now as f32);
         }
-        for (layer, n) in std::mem::take(&mut self.state.control.triggers) {
-            let t = match layer {
-                Some(layer) => Trigger::Clip { layer, slot: n },
-                None => Trigger::Column(n),
-            };
-            self.state.trigger(t, now);
+        for d in std::mem::take(&mut self.state.control.triggers) {
+            match d {
+                crate::control::Deferred::Clip(layer, slot) => self.state.trigger(Trigger::Clip { layer, slot }, now),
+                crate::control::Deferred::Column(col) => self.state.trigger(Trigger::Column(col), now),
+                crate::control::Deferred::App(a, v) => self.state.app_control(a, v, now),
+            }
         }
         {
             let st = &mut self.state;
