@@ -21,6 +21,8 @@ pub struct BenchConfig {
     pub tab: Option<String>,
     /// Save a picture of the whole Phosphor window here at the end (checks UI changes).
     pub ui_shot: Option<String>,
+    /// A live input layer: "format|url" (e.g. "lavfi|testsrc=size=640x360:rate=30", "avfoundation|FaceTime HD Camera").
+    pub live: Option<String>,
     /// Open the default audio input and report its level.
     pub audio: bool,
     /// A .phosphor project to load instead of building one from the flags.
@@ -63,6 +65,7 @@ impl BenchConfig {
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
                 ("--ui-shot", Some(v)) => cfg.ui_shot = Some(v),
+                ("--live", Some(v)) => cfg.live = Some(v),
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
                 ("--remote-password", Some(v)) => cfg.remote_password = Some(v),
@@ -111,6 +114,11 @@ impl BenchConfig {
         if let Some((w, h)) = self.size {
             comp.width = w;
             comp.height = h;
+        }
+        if let Some((format, url)) = self.live.as_deref().and_then(|l| l.split_once('|')) {
+            let layer = comp.add_layer();
+            layer.source = phosphor_engine::SourceSpec::Live { name: "Live".into(), format: format.into(), url: url.into() };
+            return comp;
         }
         let mut sources: Vec<Box<dyn Fn(&mut phosphor_engine::LayerState)>> = Vec::new();
         for g in &self.generators {

@@ -48,6 +48,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+  <key>NSCameraUsageDescription</key><string>Phosphor uses cameras and capture cards as live video layers.</string>
   <key>NSMicrophoneUsageDescription</key><string>Phosphor listens to audio input so visuals can react to music.</string>
   <key>NSLocalNetworkUsageDescription</key><string>Phosphor receives OSC from controllers and streams to viewers on your network.</string>
   <key>NSBonjourServices</key><array><string>_osc._udp</string></array>

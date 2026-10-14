@@ -44,6 +44,9 @@ impl PhosphorApp {
             audio_level: avg(|s| s.audio_level),
         };
         println!("SUMMARY {}", summary.to_json());
+        for (layer, e) in &self.state.media.errors {
+            println!("LAYER_ERROR {layer}: {e}");
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(dir) = run.cfg.export.clone() {
             let req = crate::export::Request {
