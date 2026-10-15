@@ -108,6 +108,10 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
             st.notice = (!missing.is_empty()).then(|| format!("Not connected right now: {}", missing.join(", ")));
         }
     });
+    if st.comp.outputs.iter().any(|o| !o.screen.is_empty()) {
+        ui.checkbox(&mut st.comp.outputs_on_open, "Open outputs on their screens when this project opens")
+            .on_hover_text("For a venue: outputs go fullscreen on the screens they were last sent to, at launch and when you open this project");
+    }
     #[cfg(target_os = "macos")]
     syphon_row(ui, st);
     #[cfg(target_os = "macos")]

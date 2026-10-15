@@ -192,7 +192,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Surface (slice) sources: each surface shows the mix or one layer; "Also in the mix" per layer
 - [x] Outputs remember their screen (by name, numbered for identical projectors); "All to their screens"
 - [ ] Mapping: slice "input from another output"
-- [ ] Open outputs on their saved screens automatically when a project opens (setting)
+- [x] Open outputs on their saved screens automatically when a project opens (per-project setting, off by default)
 - [ ] Bezier mask edges
 - [x] Per-output identify / colour correction, surface blend curve
 - [ ] Per-surface color correction / brightness

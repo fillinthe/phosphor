@@ -207,6 +207,9 @@ impl PhosphorApp {
             app.show_start = Some(0);
             app.state.project_path = None;
         }
+        if app.bench.is_none() {
+            app.state.outputs_on_open();
+        }
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");
         }
