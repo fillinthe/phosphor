@@ -27,7 +27,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Layers with opacity, 10 blend modes, solo, bypass | all | ✅ |
 | Layer groups (mixed first, own effects/opacity) | Resolume | ✅ |
 | A/B crossfader | Resolume, VDMX | ✅ |
-| **Layer as mask / track matte** (alpha or luma of a layer cuts the layers below) | Resolume, VDMX | ⬜ next |
+| Layer as mask / track matte (brightness, inverted, alpha) | Resolume, VDMX | ✅ |
 | Layer source = another layer / output (feedback, re-routing) | VDMX | 🔨 (Rutt-Etra can read another layer) |
 | Text layers | all | ✅ |
 | Generators (shaders), ISF import (341/406 shaders) | all | ✅ |

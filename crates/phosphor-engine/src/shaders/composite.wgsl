@@ -52,6 +52,14 @@ fn fs_composite(in: VOut) -> @location(0) vec4f {
     if (any(st < vec2f(0.0)) || any(st > vec2f(1.0))) {
         s = vec4f(0.0);
     }
+    if (u.mode >= 10u) {
+        // Track matte: this layer's brightness / alpha keeps or cuts what's below; opacity = how much.
+        var m = dot(s.rgb, vec3f(0.2126, 0.7152, 0.0722));
+        if (u.mode == 11u) { m = 1.0 - m; }
+        if (u.mode == 12u) { m = s.a; }
+        let k = mix(1.0, clamp(m, 0.0, 1.0), u.opacity);
+        return vec4f(dst.rgb * k, dst.a * k);
+    }
     let a = s.a * u.opacity;
     let blended = clamp(blend(dst.rgb, s.rgb, u.mode), vec3f(0.0), vec3f(1.0));
     return vec4f(mix(dst.rgb, blended, a), a + dst.a * (1.0 - a));

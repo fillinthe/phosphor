@@ -17,10 +17,14 @@ pub enum BlendMode {
     Darken,
     Subtract,
     Exclusion,
+    /// Track mattes: the layer isn't shown; its brightness (or alpha) cuts out the layers below it.
+    LumaMask,
+    InverseLumaMask,
+    AlphaMask,
 }
 
 impl BlendMode {
-    pub const ALL: [BlendMode; 10] = [
+    pub const ALL: [BlendMode; 13] = [
         BlendMode::Normal,
         BlendMode::Add,
         BlendMode::Multiply,
@@ -31,6 +35,9 @@ impl BlendMode {
         BlendMode::Darken,
         BlendMode::Subtract,
         BlendMode::Exclusion,
+        BlendMode::LumaMask,
+        BlendMode::InverseLumaMask,
+        BlendMode::AlphaMask,
     ];
 
     pub fn name(self) -> &'static str {
@@ -45,10 +52,18 @@ impl BlendMode {
             BlendMode::Darken => "Darken",
             BlendMode::Subtract => "Subtract",
             BlendMode::Exclusion => "Exclusion",
+            BlendMode::LumaMask => "Mask (brightness)",
+            BlendMode::InverseLumaMask => "Mask (inverted)",
+            BlendMode::AlphaMask => "Mask (alpha)",
         }
     }
 
-    /// Index understood by `blend()` in composite.wgsl.
+    /// Cuts the layers below instead of drawing itself.
+    pub fn is_mask(self) -> bool {
+        matches!(self, BlendMode::LumaMask | BlendMode::InverseLumaMask | BlendMode::AlphaMask)
+    }
+
+    /// Index understood by `blend()` / `fs_composite` in composite.wgsl (10–12 = masks).
     pub(crate) fn shader_index(self) -> u32 {
         self.index() as u32
     }
