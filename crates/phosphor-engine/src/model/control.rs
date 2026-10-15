@@ -2,7 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-
 /// Where an external controller (MIDI, OSC) message comes from.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ControlSource {

@@ -1,0 +1,333 @@
+//! External control: MIDI (every input port) and OSC (UDP) in, with learn mode, applied to any
+//! parameter each frame. The OSC port is advertised over Zeroconf (`_osc._udp`) so TouchOSC and
+//! similar apps discover Phosphor by name.
+
+use std::collections::HashMap;
+use std::sync::mpsc;
+
+use phosphor_engine::{AppControl, Choice, Composition, ControlMap, ControlSource, ControlTarget, EffectState, shaders};
+
+/// Controller actions the composition can't carry out by itself; the app handles them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Deferred {
+    Clip(u64, usize),
+    Column(usize),
+    /// Value 0..1, or `FLIP` to toggle an on/off control.
+    App(AppControl, f32),
+    /// Jump a layer's movie to this fraction of its length.
+    Scrub(u64, f32),
+}
+
+/// Sent instead of a value when a pad or key press should flip an on/off control.
+pub const FLIP: f32 = -1.0;
+
+/// Pads and keys send press (1) / release (0); on/off targets toggle on press instead of following.
+fn momentary(source: &ControlSource) -> bool {
+    matches!(source, ControlSource::MidiNote { .. } | ControlSource::Key { .. })
+}
+
+fn is_toggle(comp: &Composition, target: &ControlTarget) -> bool {
+    match target {
+        ControlTarget::LayerEnabled(_) | ControlTarget::EffectEnabled(_) | ControlTarget::LayerFxBypass(_) => true,
+        ControlTarget::App(a) => a.is_toggle(),
+        ControlTarget::Surface(id) => comp.surface.widget(*id).is_some_and(|w| w.kind == phosphor_engine::WidgetKind::Toggle),
+        _ => false,
+    }
+}
+
+fn toggled(current: bool, v: f32) -> bool {
+    if v == FLIP { !current } else { v > 0.5 }
+}
+
+pub const DEFAULT_OSC_PORT: u16 = 8000;
+/// Where controllers listen for feedback (TouchOSC's default receive port).
+pub const DEFAULT_FEEDBACK_PORT: u16 = 9000;
+/// Feedback is checked this often (seconds); only changed values are sent.
+const FEEDBACK_EVERY: f64 = 0.05;
+/// OSC senders heard from within this long get feedback (seconds).
+const FEEDBACK_SENDER_TTL: u64 = 600;
+
+#[derive(Clone, Debug)]
+pub struct Incoming {
+    pub source: ControlSource,
+    /// Normalised 0..1.
+    pub value: f32,
+}
+
+/// An OSC sender seen on the network.
+#[derive(Clone, Debug)]
+pub struct OscSender {
+    pub ip: String,
+    pub count: u64,
+    pub last_address: String,
+    pub last_seen: std::time::Instant,
+    /// Has used a built-in /phosphor/… address (its layout follows Phosphor's own addresses).
+    pub uses_builtin: bool,
+}
+
+/// Who's talking to us, shared with the listener threads.
+#[derive(Default)]
+pub struct Activity {
+    pub osc: std::collections::BTreeMap<String, OscSender>,
+    pub osc_blocked: std::collections::BTreeSet<String>,
+    pub midi_seen: std::collections::HashMap<String, std::time::Instant>,
+}
+
+pub struct ControlHub {
+    rx: mpsc::Receiver<Incoming>,
+    tx: mpsc::Sender<Incoming>,
+    /// Connected (enabled) MIDI inputs.
+    pub midi_ports: Vec<String>,
+    /// Every MIDI input on the system, enabled or not.
+    pub midi_all: Vec<String>,
+    /// MIDI inputs switched off in the Devices panel.
+    pub midi_disabled: std::collections::BTreeSet<String>,
+    pub activity: std::sync::Arc<std::sync::Mutex<Activity>>,
+    pub osc_port: u16,
+    pub osc_status: String,
+    pub local_ip: Option<String>,
+    pub last: Option<Incoming>,
+    /// Target waiting for the next message to bind to.
+    pub learning: Option<ControlTarget>,
+    /// Listen: catch the next input (any knob, pad, key or OSC message) into `heard`.
+    pub listen_source: bool,
+    pub heard: Option<ControlSource>,
+    /// Clip/column launches and app-wide controls from controllers, for the app to carry out.
+    pub triggers: Vec<Deferred>,
+    /// Send current values back to controllers (OSC to every recent sender on `feedback_port`, MIDI to the
+    /// outputs of the same devices) so faders, encoders and LEDs follow changes made anywhere else.
+    pub feedback: bool,
+    pub feedback_port: u16,
+    fresh: HashMap<ControlSource, f32>,
+    /// Last value sent to (or received from) each controller input: only changes go out, nothing echoes back.
+    sent: HashMap<ControlSource, f32>,
+    feedback_ips: Vec<String>,
+    next_feedback: f64,
+    #[cfg(not(target_arch = "wasm32"))]
+    backend: native::Backend,
+}
+
+/// Controller settings kept between launches.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct ControlSettings {
+    pub osc_port: u16,
+    pub feedback: bool,
+    pub feedback_port: u16,
+}
+
+impl Default for ControlSettings {
+    fn default() -> Self {
+        Self { osc_port: DEFAULT_OSC_PORT, feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT }
+    }
+}
+
+impl ControlHub {
+    /// Opens MIDI and OSC with saved settings.
+    pub fn with_settings(s: ControlSettings) -> Self {
+        let mut hub = Self::new_unopened();
+        hub.osc_port = s.osc_port;
+        hub.feedback = s.feedback;
+        hub.feedback_port = s.feedback_port;
+        hub.reconnect();
+        hub
+    }
+
+    pub fn settings(&self) -> ControlSettings {
+        ControlSettings { osc_port: self.osc_port, feedback: self.feedback, feedback_port: self.feedback_port }
+    }
+
+    #[cfg(test)]
+    pub fn new() -> Self {
+        let mut hub = Self::new_unopened();
+        hub.reconnect();
+        hub
+    }
+
+    fn new_unopened() -> Self {
+        let (tx, rx) = mpsc::channel();
+        Self {
+            rx,
+            tx,
+            midi_ports: Vec::new(),
+            midi_all: Vec::new(),
+            midi_disabled: Default::default(),
+            activity: Default::default(),
+            osc_port: DEFAULT_OSC_PORT,
+            osc_status: "OSC off".into(),
+            local_ip: None,
+            last: None,
+            learning: None,
+            listen_source: false,
+            heard: None,
+            triggers: Vec::new(),
+            feedback: true,
+            feedback_port: DEFAULT_FEEDBACK_PORT,
+            fresh: HashMap::new(),
+            sent: HashMap::new(),
+            feedback_ips: Vec::new(),
+            next_feedback: 0.0,
+            #[cfg(not(target_arch = "wasm32"))]
+            backend: native::Backend::default(),
+        }
+    }
+
+    /// (Re)opens every MIDI input and the OSC listener.
+    pub fn reconnect(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (all, open) = self.backend.open_midi(self.tx.clone(), &self.midi_disabled, self.activity.clone());
+            self.midi_all = all;
+            self.midi_ports = open;
+            self.local_ip = local_ip();
+            self.osc_status = match self.backend.open_osc(self.osc_port, self.tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
+                Ok(()) => format!(
+                    "OSC listening on udp/{} at {}",
+                    self.osc_port,
+                    self.local_ip.clone().unwrap_or_else(|| "this machine".into())
+                ),
+                Err(e) => format!("OSC failed: {e}"),
+            };
+        }
+    }
+
+    /// Drains incoming messages; binds the learning target if one is waiting.
+    pub fn poll(&mut self, comp: &mut Composition) {
+        while let Ok(msg) = self.rx.try_recv() {
+            self.handle(comp, msg);
+        }
+    }
+
+    /// Feeds a message from inside the app (keyboard) through the same path as MIDI/OSC.
+    pub fn inject(&mut self, comp: &mut Composition, msg: Incoming) {
+        self.handle(comp, msg);
+    }
+
+    fn handle(&mut self, comp: &mut Composition, msg: Incoming) {
+        if self.listen_source {
+            self.listen_source = false;
+            self.heard = Some(msg.source.clone());
+        } else if let Some(target) = self.learning.take() {
+            comp.control_maps.retain(|m| m.target != target);
+            comp.control_maps.push(ControlMap::new(msg.source.clone(), target));
+        }
+        self.fresh.insert(msg.source.clone(), msg.value);
+        self.sent.insert(msg.source.clone(), msg.value);
+        self.last = Some(msg);
+    }
+
+    /// Sends values that changed since the last check back to controllers. Cheap when nothing listens.
+    pub fn feedback(&mut self, comp: &Composition, now: f64) {
+        if !self.feedback || now < self.next_feedback {
+            return;
+        }
+        self.next_feedback = now + FEEDBACK_EVERY;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (ips, builtin): (Vec<String>, bool) = {
+                let a = self.activity.lock().unwrap();
+                let live: Vec<&OscSender> = a.osc.values().filter(|s| s.last_seen.elapsed().as_secs() < FEEDBACK_SENDER_TTL && !a.osc_blocked.contains(&s.ip)).collect();
+                (live.iter().map(|s| s.ip.clone()).collect(), live.iter().any(|s| s.uses_builtin))
+            };
+            if ips != self.feedback_ips {
+                // A device joined (or left): send it everything once.
+                self.sent.clear();
+                self.feedback_ips = ips;
+            }
+            let midi = self.backend.has_midi_out();
+            if self.feedback_ips.is_empty() && !midi {
+                return;
+            }
+            let mut out: Vec<(ControlSource, f32)> = Vec::new();
+            for map in comp.control_maps.iter().filter(|m| m.enabled) {
+                if matches!(map.source, ControlSource::Key { .. }) {
+                    continue;
+                }
+                if let Some(v) = get_target(comp, &map.target) {
+                    out.push((map.source.clone(), map.range.unapply(v)));
+                }
+            }
+            if builtin {
+                for (t, _) in all_targets(comp) {
+                    if let Some(v) = get_target(comp, &t) {
+                        out.push((ControlSource::Osc { address: default_osc_address(&t) }, v));
+                    }
+                }
+            }
+            for (source, v) in out {
+                if self.sent.get(&source).is_some_and(|old| (old - v).abs() < 0.002) {
+                    continue;
+                }
+                self.sent.insert(source.clone(), v);
+                match &source {
+                    ControlSource::Osc { address } => self.backend.send_osc(&self.feedback_ips, self.feedback_port, address, v),
+                    ControlSource::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | channel, *cc, (v * 127.0).round() as u8]),
+                    ControlSource::MidiNote { channel, note } => self.backend.send_midi(&[0x90 | channel, *note, if v > 0.5 { 127 } else { 0 }]),
+                    ControlSource::Key { .. } => {}
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = comp;
+    }
+
+    /// Writes this frame's values into their targets, then forgets them so the UI stays in charge
+    /// until the controller moves again.
+    pub fn apply(&mut self, comp: &mut Composition, now: f32) {
+        if self.fresh.is_empty() {
+            return;
+        }
+        for map in comp.control_maps.clone() {
+            if !map.enabled {
+                continue;
+            }
+            let Some(v) = self.fresh.get(&map.source).copied() else { continue };
+            let v = if momentary(&map.source) && is_toggle(comp, &map.target) {
+                if v <= 0.5 {
+                    continue;
+                }
+                FLIP
+            } else {
+                map.range.apply(v)
+            };
+            set_target(comp, &map.target, v, &mut self.triggers);
+        }
+        let _ = now;
+        // Built-in addresses work without any mapping: /phosphor/master, /phosphor/layer/3/opacity…
+        let osc: Vec<(String, f32)> = self
+            .fresh
+            .iter()
+            .filter_map(|(s, v)| match s {
+                ControlSource::Osc { address } if address.starts_with("/phosphor/") => Some((address.clone(), *v)),
+                _ => None,
+            })
+            .collect();
+        if !osc.is_empty() {
+            let targets = all_targets(comp);
+            for (address, v) in osc {
+                if let Some((t, _)) = targets.iter().find(|(t, _)| default_osc_address(t) == address) {
+                    set_target(comp, &t.clone(), v, &mut self.triggers);
+                }
+            }
+        }
+        self.fresh.clear();
+    }
+}
+
+pub fn local_ip() -> Option<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::local_ip()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        None
+    }
+}
+
+mod targets;
+pub use targets::*;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(test)]
+mod tests;
