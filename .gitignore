@@ -10,3 +10,4 @@
 /media/test/*.gif
 /vendor/*.framework
 /.playwright-mcp
+/backups
