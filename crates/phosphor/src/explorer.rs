@@ -36,8 +36,6 @@ pub struct ExplorerState {
     pub preview_mode: PreviewMode,
     /// Recently added effects (most recent first).
     pub recent: Vec<String>,
-    /// Live tiles refresh at 30 fps, not every display frame.
-    pub live_tick: i64,
     pub search: String,
     /// "" = all, "★" = favourites, otherwise a category name.
     pub category: String,
@@ -138,9 +136,11 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     });
     ui.add_space(2.0);
 
-    let tick = ui.ctx().input(|i| (i.time * 30.0) as i64);
-    let live_frame = tick != st.explorer.live_tick;
-    st.explorer.live_tick = tick;
+    // Live previews refresh ~30 times a second, spread over frames (a few tiles per frame) so the GPU work is even
+    // instead of every tile landing on the same frame.
+    let groups = (ui.ctx().input(|i| 1.0 / (30.0 * i.stable_dt.max(1e-3))).round() as u64).clamp(1, 8);
+    let frame = ui.ctx().cumulative_pass_nr();
+    let mut shown = 0u64;
     let filtered: Vec<(usize, &'static shaders::ShaderDesc)> = list
         .iter()
         .enumerate()
@@ -171,7 +171,8 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 // Only tiles on screen get a preview; how often it refreshes depends on the mode.
                 if st.explorer.preview_mode != PreviewMode::Off {
                     let item = if st.explorer.sources { PreviewItem::Generator(desc.id.to_string()) } else { PreviewItem::Effect(preview_fx(desc, *i)) };
-                    let live = (st.explorer.preview_mode == PreviewMode::Live && live_frame) || resp.hovered();
+                    let live = (st.explorer.preview_mode == PreviewMode::Live && (frame + shown).is_multiple_of(groups)) || resp.hovered();
+                    shown += 1;
                     st.preview_wants.push((key.clone(), item, live));
                 }
                 let pic = egui::Rect::from_min_size(rect.min, egui::vec2(tile_w, tile_w / aspect));
