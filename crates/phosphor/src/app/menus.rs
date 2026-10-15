@@ -32,6 +32,14 @@ impl PhosphorApp {
             }
             A::Save => st.save_project(),
             A::SaveAs => st.save_project_as(),
+            A::SaveToAccount => {
+                let name = st.cloud_project.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| st.account_ui.name.trim().to_string());
+                match st.cloud_project.clone() {
+                    Some((id, _)) if st.account.signed_in() && st.account.can_store() => st.account.save(ctx, &id, &name, &st.comp.to_json()),
+                    _ => self.show_tab(crate::panels::Tab::Account),
+                }
+            }
+            A::OpenFromAccount => self.show_tab(crate::panels::Tab::Account),
             A::Import => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {

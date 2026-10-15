@@ -1,3 +1,4 @@
+mod account;
 mod app;
 mod audio;
 mod bench;

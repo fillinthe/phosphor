@@ -13,6 +13,7 @@ log = "0.4"
 egui_dock = { version = "0.21", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
 web-time = "1"
+ehttp = "0.6"
 egui-phosphor = "0.14"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
