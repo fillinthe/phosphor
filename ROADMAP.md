@@ -153,7 +153,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Ableton Link, effect-based transitions
 - [x] Master crossfader (A/B groups)
 - [x] Layer groups: mixed first, then opacity/blend/effects like one layer; fold, move as a block, slice source
-- [ ] Groups: controller targets (group opacity/on), group strip in the Mixer, Group shortcut (⌘G)
+- [x] Groups: controller targets (group opacity/on/bypass), opacity modulation, group strip in the Mixer, ⌘G / ⇧⌘G
 
 ### Phase 3: Modular control (VDMX-style)
 - [x] Dockable, rearrangeable panels; layout saved with the project

@@ -1,4 +1,4 @@
-//! Mixer: one fader strip per layer.
+//! Mixer: one fader strip per layer, one per group (after its members) and MASTER.
 
 use super::*;
 
@@ -19,67 +19,94 @@ pub(crate) fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulatio
     }
 }
 
+/// One Mixer strip: card, thumbnail (click selects) and name; `body` adds the controls. Returns true when clicked.
+fn strip(ui: &mut egui::Ui, id: u64, is_sel: bool, thumb: Option<egui::TextureId>, aspect: f32, lit: bool, name: RichText, body: impl FnOnce(&mut egui::Ui)) -> bool {
+    let card_id = egui::Id::new(("mixer_strip", id));
+    let bg = card_background(ui, card_id);
+    let mut clicked = false;
+    let frame = card_frame(ui, is_sel).inner_margin(egui::Margin::same(5)).show(ui, |ui| {
+        ui.set_width(78.0);
+        ui.vertical_centered(|ui| {
+            clicked = thumbnail(ui, thumb, egui::vec2(72.0, 72.0 / aspect), lit).clicked();
+            ui.label(name);
+            body(ui);
+        });
+    });
+    remember_card(ui, card_id, frame.response.rect);
+    clicked || bg.is_some_and(|b| b.clicked())
+}
+
+fn short(name: &str) -> String {
+    if name.chars().count() > 11 { format!("{}…", name.chars().take(10).collect::<String>()) } else { name.to_string() }
+}
+
+/// ON toggle with Learn on right-click (layers and groups).
+fn on_toggle(ui: &mut egui::Ui, enabled: &mut bool, target: ControlTarget) {
+    let on = ui.toggle_value(enabled, RichText::new("ON").small());
+    mapped_badge(ui, &on, &target);
+    on.right_menu(|ui| learn_items(ui, &target));
+}
+
 pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
     let height = (ui.available_height() - 210.0).clamp(80.0, 600.0);
     let State { comp, selected, layer_textures, texture, .. } = st;
     crossfader(ui, comp);
     let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
+    let tex = |id: u64| layer_textures.get(&id).map(|(t, _)| *t);
+    let phosphor_engine::Composition { layers, groups, master_fade, master_fade_mod, .. } = comp;
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
-            for layer in comp.layers.iter_mut() {
-                let is_sel = *selected == Some(layer.id);
-                let card_id = egui::Id::new(("mixer_strip", layer.id));
-                let bg = card_background(ui, card_id);
-                let frame = card_frame(ui, is_sel).inner_margin(egui::Margin::same(5)).show(ui, |ui| {
-                    ui.set_width(78.0);
-                    ui.vertical_centered(|ui| {
-                        let tex = layer_textures.get(&layer.id).map(|(t, _)| *t);
-                        let muted = any_solo && !layer.solo;
-                        if thumbnail(ui, tex, egui::vec2(72.0, 72.0 / aspect), layer.enabled && !muted).clicked() {
-                            *selected = Some(layer.id);
-                        }
-                        let mut name = layer.name.clone();
-                        if name.chars().count() > 11 {
-                            name = format!("{}…", name.chars().take(10).collect::<String>());
-                        }
-                        ui.label(RichText::new(name).small().strong());
-                        fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
-                        percent_field(ui, &mut layer.opacity);
-                        ui.horizontal(|ui| {
-                            let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small());
-                            mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
-                            on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
-                            ui.toggle_value(&mut layer.solo, RichText::new("S").small());
-                        });
-                        ui.horizontal(|ui| {
-                            for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
-                                let on = layer.group == g;
-                                if ui.selectable_label(on, RichText::new(g.name()).small().strong()).on_hover_text("Crossfader side (click again for none)").clicked() {
-                                    layer.group = if on { phosphor_engine::CrossGroup::None } else { g };
-                                }
-                            }
-                        });
-                        choice_combo(ui, ("mix_blend", layer.id), &mut layer.blend, 70.0, true);
+            let count = layers.len();
+            for i in 0..count {
+                let layer = &mut layers[i];
+                let muted = any_solo && !layer.solo;
+                let name = RichText::new(short(&layer.name)).small().strong();
+                let lit = layer.enabled && !muted;
+                if strip(ui, layer.id, *selected == Some(layer.id), tex(layer.id), aspect, lit, name, |ui| {
+                    fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
+                    percent_field(ui, &mut layer.opacity);
+                    ui.horizontal(|ui| {
+                        on_toggle(ui, &mut layer.enabled, ControlTarget::LayerEnabled(layer.id));
+                        ui.toggle_value(&mut layer.solo, RichText::new("S").small());
                     });
-                });
-                remember_card(ui, card_id, frame.response.rect);
-                if bg.is_some_and(|b| b.clicked()) {
+                    ui.horizontal(|ui| {
+                        for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
+                            let on = layer.group == g;
+                            if ui.selectable_label(on, RichText::new(g.name()).small().strong()).on_hover_text("Crossfader side (click again for none)").clicked() {
+                                layer.group = if on { phosphor_engine::CrossGroup::None } else { g };
+                            }
+                        }
+                    });
+                    choice_combo(ui, ("mix_blend", layer.id), &mut layer.blend, 70.0, true);
+                }) {
                     *selected = Some(layer.id);
+                }
+                // A group's strip follows its last member, like a bus.
+                let parent = layers[i].parent;
+                if let Some(gid) = parent
+                    && layers.get(i + 1).and_then(|l| l.parent) != Some(gid)
+                    && let Some(g) = groups.iter_mut().find(|g| g.id == gid)
+                {
+                    let name = RichText::new(format!("{} {}", icon::STACK, short(&g.name))).small().strong().color(ACCENT);
+                    if strip(ui, g.id, *selected == Some(g.id), tex(g.id), aspect, g.enabled, name, |ui| {
+                        fader(ui, &mut g.opacity, &mut g.opacity_mod, ControlTarget::LayerOpacity(g.id), height);
+                        percent_field(ui, &mut g.opacity);
+                        on_toggle(ui, &mut g.enabled, ControlTarget::LayerEnabled(g.id));
+                        choice_combo(ui, ("mix_group_blend", g.id), &mut g.blend, 70.0, true);
+                    }) {
+                        *selected = Some(g.id);
+                    }
                 }
             }
             // Master strip.
-            card_frame(ui, *selected == Some(MASTER_ID)).inner_margin(egui::Margin::same(5)).show(ui, |ui| {
-                ui.set_width(78.0);
-                ui.vertical_centered(|ui| {
-                    if thumbnail(ui, *texture, egui::vec2(72.0, 72.0 / aspect), true).clicked() {
-                        *selected = Some(MASTER_ID);
-                    }
-                    ui.label(RichText::new("MASTER").small().strong().color(ACCENT));
-                    fader(ui, &mut comp.master_fade, &mut comp.master_fade_mod, ControlTarget::MasterFade, height);
-                    percent_field(ui, &mut comp.master_fade);
-                });
-            });
+            let name = RichText::new("MASTER").small().strong().color(ACCENT);
+            if strip(ui, MASTER_ID, *selected == Some(MASTER_ID), *texture, aspect, true, name, |ui| {
+                fader(ui, master_fade, master_fade_mod, ControlTarget::MasterFade, height);
+                percent_field(ui, master_fade);
+            }) {
+                *selected = Some(MASTER_ID);
+            }
         });
     });
 }

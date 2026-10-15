@@ -1,6 +1,6 @@
 //! Layer groups in the Layers panel (group card above its members) and the Inspector.
 
-use phosphor_engine::LayerGroup;
+use phosphor_engine::{Composition, LayerGroup};
 
 use super::*;
 
@@ -42,7 +42,9 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
             }
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    ui.toggle_value(&mut g.enabled, RichText::new("ON").small().strong()).on_hover_text("Group on/off");
+                    let on = ui.toggle_value(&mut g.enabled, RichText::new("ON").small().strong()).on_hover_text("Group on/off · right-click to Learn");
+                    mapped_badge(ui, &on, &ControlTarget::LayerEnabled(g.id));
+                    on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(g.id)));
                     let name = RichText::new(format!("{} {}", icon::STACK, g.name)).strong().size(12.5);
                     let width = (ui.available_width() - 3.0 * (ui.spacing().interact_size.y + ui.spacing().item_spacing.x)).max(24.0);
                     let r = ui.scope(|ui| {
@@ -64,12 +66,20 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
                 ui.horizontal(|ui| {
                     ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
                     let r = guarded!(ui, g.opacity, Slider::new(&mut g.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Group opacity");
+                    mapped_badge(ui, &r, &ControlTarget::LayerOpacity(g.id));
+                    mod_marker(ui, &r, g.opacity, 0.0, 1.0, g.opacity_mod.as_ref());
+                    if control_menu(&r, Some(&ControlTarget::LayerOpacity(g.id)), Some(&mut g.opacity_mod)) {
+                        g.opacity = 1.0;
+                    }
                     value_bubble(ui, &r, format!("{:.0}%", g.opacity * 100.0));
                     percent_field(ui, &mut g.opacity);
+                    mod_button(ui, &mut g.opacity_mod);
                 });
                 ui.horizontal(|ui| {
                     choice_combo(ui, ("group_blend", g.id), &mut g.blend, 104.0, false);
-                    fx_badge(ui, &g.effects, &mut g.fx_bypass);
+                    if let Some(r) = fx_badge(ui, &g.effects, &mut g.fx_bypass) {
+                        map_menu(ui, &r, ControlTarget::LayerFxBypass(g.id));
+                    }
                     if !g.in_mix {
                         hint(ui, "surfaces only");
                     }
@@ -128,6 +138,25 @@ pub(crate) fn fx_badge(ui: &mut egui::Ui, effects: &[EffectState], bypass: &mut 
     Some(r)
 }
 
+/// Groups a layer with the one below it (or alone at the bottom) and selects the group (menu, ⌘G).
+pub(crate) fn group_with_below(comp: &mut Composition, selected: &mut Option<u64>, layer: u64) {
+    let Some(i) = comp.layers.iter().position(|l| l.id == layer) else { return };
+    if comp.layers[i].parent.is_some() {
+        return;
+    }
+    let below = i.checked_sub(1).map(|b| comp.layers[b].id);
+    let ids: Vec<u64> = std::iter::once(layer).chain(below).collect();
+    if let Some(g) = comp.create_group(&ids) {
+        *selected = Some(g);
+    }
+}
+
+/// The group a selection belongs to: the group itself or a member layer's group.
+pub(crate) fn selected_group(comp: &Composition, selected: Option<u64>) -> Option<u64> {
+    let id = selected?;
+    comp.group(id).map(|g| g.id).or_else(|| comp.layers.iter().find(|l| l.id == id)?.parent)
+}
+
 /// Applies a group card's action.
 pub(crate) fn apply_group_action(st: &mut State, gid: u64, action: GroupAction) {
     match action {
@@ -161,7 +190,11 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
             ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(f32::INFINITY));
         });
         hint(ui, "A group mixes its layers together first; its opacity, blend and effects then apply to that mix.");
-        guarded!(ui, g.opacity, Slider::new(&mut g.opacity, 0.0..=1.0).text("Opacity"));
+        let r = guarded!(ui, g.opacity, Slider::new(&mut g.opacity, 0.0..=1.0).text("Opacity"));
+        mapped_badge(ui, &r, &ControlTarget::LayerOpacity(g.id));
+        if control_menu(&r, Some(&ControlTarget::LayerOpacity(g.id)), Some(&mut g.opacity_mod)) {
+            g.opacity = 1.0;
+        }
         ui.horizontal(|ui| {
             ui.label("Blend");
             choice_combo(ui, ("group_blend_insp", g.id), &mut g.blend, 120.0, false);

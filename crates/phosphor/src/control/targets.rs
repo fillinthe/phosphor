@@ -32,9 +32,10 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
     let effect = |id: &u64| find_effect(comp, *id);
     Some(match target {
         ControlTarget::MasterFade => comp.master_fade,
-        ControlTarget::LayerOpacity(id) => layer(id)?.opacity,
-        ControlTarget::LayerEnabled(id) => on(layer(id)?.enabled),
-        ControlTarget::LayerFxBypass(id) => on(layer(id)?.fx_bypass),
+        // Opacity, on/off and bypass also drive groups (same id space as layers).
+        ControlTarget::LayerOpacity(id) => comp.mix_controls(*id)?.0,
+        ControlTarget::LayerEnabled(id) => on(comp.mix_controls(*id)?.1),
+        ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
         ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
         ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
@@ -115,8 +116,8 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             }
         }
         ControlTarget::LayerFxBypass(id) => {
-            if let Some(l) = comp.layer_mut(*id) {
-                l.fx_bypass = toggled(l.fx_bypass, v);
+            if let Some(m) = comp.mix_controls_mut(*id) {
+                *m.fx_bypass = toggled(*m.fx_bypass, v);
             }
         }
         ControlTarget::LayerSpeed(id) => {
@@ -153,13 +154,13 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         },
         ControlTarget::MasterFade => comp.master_fade = v.clamp(0.0, 1.0),
         ControlTarget::LayerOpacity(id) => {
-            if let Some(l) = comp.layer_mut(*id) {
-                l.opacity = v.clamp(0.0, 1.0);
+            if let Some(m) = comp.mix_controls_mut(*id) {
+                *m.opacity = v.clamp(0.0, 1.0);
             }
         }
         ControlTarget::LayerEnabled(id) => {
-            if let Some(l) = comp.layer_mut(*id) {
-                l.enabled = toggled(l.enabled, v);
+            if let Some(m) = comp.mix_controls_mut(*id) {
+                *m.enabled = toggled(*m.enabled, v);
             }
         }
         ControlTarget::GeneratorParam { layer, index } => {
@@ -226,6 +227,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     };
     effects("MASTER", &comp.master_effects, &mut out);
     for g in &comp.groups {
+        out.push((ControlTarget::LayerOpacity(g.id), format!("{} · opacity", g.name)));
+        out.push((ControlTarget::LayerEnabled(g.id), format!("{} · on/off", g.name)));
+        out.push((ControlTarget::LayerFxBypass(g.id), format!("{} · effects bypass", g.name)));
         effects(&g.name, &g.effects, &mut out);
     }
     for l in &comp.layers {

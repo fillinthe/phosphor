@@ -570,8 +570,9 @@ impl Engine {
         } else {
             res.feed = None;
         }
-        if g.enabled && g.in_mix && g.opacity > 0.001 {
-            self.push_blend(frame, FitMode::Stretch, g.opacity, g.blend, 0, current, ctx.canvas, ctx.time, passes);
+        let opacity = modulate(g.opacity, 0.0, 1.0, g.opacity_mod.as_ref(), ctx.mods);
+        if g.enabled && g.in_mix && opacity > 0.001 {
+            self.push_blend(frame, FitMode::Stretch, opacity, g.blend, 0, current, ctx.canvas, ctx.time, passes);
         }
     }
 }

@@ -192,3 +192,22 @@ fn locks_to_midi_clock_from_a_real_midi_port() {
     let (_, beats) = hub.midi_clock.position().expect("running after Start");
     assert!((beats - 59.0 / 24.0).abs() < 0.01, "beats {beats}");
 }
+
+#[test]
+fn groups_answer_layer_mix_targets() {
+    let mut hub = ControlHub::new();
+    let mut comp = Composition::default();
+    let a = comp.add_layer().id;
+    let b = comp.add_layer().id;
+    let g = comp.create_group(&[a, b]).unwrap();
+    let osc = |a: String| ControlSource::Osc { address: a };
+
+    send(&mut hub, &mut comp, osc(format!("/phosphor/layer/{g}/opacity")), 0.25);
+    assert!((comp.group(g).unwrap().opacity - 0.25).abs() < 1e-6);
+    assert_eq!(get_target(&comp, &ControlTarget::LayerOpacity(g)), Some(0.25));
+    send(&mut hub, &mut comp, osc(format!("/phosphor/layer/{g}/on")), 0.0);
+    assert!(!comp.group(g).unwrap().enabled);
+    // Members are untouched, and the group is listed as a target.
+    assert!(comp.layers.iter().all(|l| l.opacity == 1.0 && l.enabled));
+    assert!(all_targets(&comp).iter().any(|(t, _)| *t == ControlTarget::LayerFxBypass(g)));
+}
