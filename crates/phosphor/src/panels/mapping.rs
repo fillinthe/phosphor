@@ -274,6 +274,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     guarded!(ui, s.blend_gamma, Slider::new(&mut s.blend_gamma, 0.5..=4.0).text("Blend curve").fixed_decimals(2))
                         .on_hover_text("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.");
                 }
+                color_grade_editor(ui, s.id, &mut s.color);
                 ui.horizontal(|ui| {
                     let mut on = s.mesh.is_some();
                     let (mut cols, mut rows) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));

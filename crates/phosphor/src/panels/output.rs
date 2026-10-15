@@ -268,10 +268,10 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
     });
 }
 
-/// Colour correction for one output: match projectors and screens to each other.
+/// Colour correction for an output or a mapping surface: match projectors, screens and materials.
 pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_engine::ColorGrade) {
     let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
-    egui::CollapsingHeader::new(title).id_salt(("output_color", id)).show(ui, |ui| {
+    egui::CollapsingHeader::new(title).id_salt(("color_grade", id)).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
         guarded!(ui, g.brightness, Slider::new(&mut g.brightness, -1.0..=1.0).text("Brightness").fixed_decimals(2));
         guarded!(ui, g.contrast, Slider::new(&mut g.contrast, 0.0..=3.0).text("Contrast").fixed_decimals(2));

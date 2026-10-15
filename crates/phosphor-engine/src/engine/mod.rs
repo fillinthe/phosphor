@@ -486,6 +486,7 @@ impl Engine {
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     u.p[5] = g0;
                     u.p[6] = g1;
+                    [u.p[7], u.p[8]] = s.color.uniforms();
                     passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
@@ -503,6 +504,7 @@ impl Engine {
                 u.p[4] = [inv[8], s.feather, s.blend_gamma - 1.0, 0.0];
                 u.p[5] = g0;
                 u.p[6] = g1;
+                [u.p[7], u.p[8]] = s.color.uniforms();
                 passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
             self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
