@@ -113,7 +113,18 @@ pub(crate) fn qr_code(ui: &mut egui::Ui, text: &str, size: f32) {
 // Devices: everything connected to this Mac, with disconnect / block / disable.
 
 pub(crate) fn ago(t: std::time::Instant) -> String {
-    let s = t.elapsed().as_secs();
+    short_duration(t.elapsed().as_secs())
+}
+
+/// "5m ago", "3h ago", "2d ago" for a Unix time in seconds (server timestamps).
+pub(crate) fn ago_secs(unix: i64) -> String {
+    let now = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+    let s = (now - unix).max(0) as u64;
+    if s >= 86_400 { format!("{}d ago", s / 86_400) } else { format!("{} ago", short_duration(s)) }
+}
+
+/// 42s · 5m · 3h07m
+pub(crate) fn short_duration(s: u64) -> String {
     if s < 60 {
         format!("{s}s")
     } else if s < 3600 {

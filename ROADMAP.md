@@ -226,7 +226,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 
 ### Phase 6: Accounts & sync
 - [ ] Project format: versioned JSON (layout + composition + mappings), already serde
-- [ ] Phosphor account service: sign-in, project/layout storage
+- [x] Phosphor account service (phosphorfx.com): sign-in, Pro project storage, in-app Account panel
+- [ ] Layouts and control surfaces in the account
 - [ ] Sync projects, UI layouts, control surfaces and mappings across devices
 - [ ] Media handling: references plus an optional cloud media library
 

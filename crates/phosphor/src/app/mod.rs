@@ -162,6 +162,10 @@ pub struct State {
     pub fx_fades: Vec<(u64, f32, f32, f32)>,
     /// The project file being worked on (Save writes here).
     pub project_path: Option<String>,
+    /// phosphorfx.com account and the project open from it (id, name).
+    pub account: crate::account::Account,
+    pub account_ui: crate::panels::AccountUi,
+    pub cloud_project: Option<(String, String)>,
     pub recent: Vec<String>,
     pub history: crate::history::History,
     pub export: ExportUi,
@@ -501,6 +505,31 @@ impl eframe::App for PhosphorApp {
                 let _ = std::fs::write(dir.join("recovery.json"), json);
             }
             crate::recovery::end_session();
+        }
+    }
+}
+
+impl PhosphorApp {
+    /// Projects opened from / saved to the phosphorfx.com account (see `account.rs`).
+    pub(crate) fn account_events(&mut self, ctx: &egui::Context) {
+        let st = &mut self.state;
+        for e in st.account.tick(ctx) {
+            match e {
+                crate::account::Event::Opened(id, name, json) => match Composition::from_json(&json) {
+                    Ok(comp) => {
+                        st.load_composition(comp);
+                        st.project_path = None;
+                        st.account_ui.name = name.clone();
+                        st.notice = Some(format!("Opened {name} from your account. Undo (⌘Z) brings the previous project back."));
+                        st.cloud_project = Some((id, name));
+                    }
+                    Err(err) => st.notice = Some(format!("Couldn't open {name}: {err}")),
+                },
+                crate::account::Event::Saved(id, name) => {
+                    st.notice = Some(format!("Saved {name} to your account"));
+                    st.cloud_project = Some((id, name));
+                }
+            }
         }
     }
 }

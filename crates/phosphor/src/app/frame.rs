@@ -11,6 +11,7 @@ impl PhosphorApp {
         self.state.comp.ensure_outputs();
         self.state.comp.sync_media_bin();
         self.state.thumbs.poll(&ctx);
+        self.account_events(&ctx);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(engine) = self.state.engine.as_mut() {
             self.state.isf.poll(engine);

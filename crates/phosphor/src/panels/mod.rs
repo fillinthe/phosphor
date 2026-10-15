@@ -8,11 +8,13 @@ use egui_phosphor::regular as icon;
 use phosphor_engine::{BlendMode, ControlTarget, EffectState, FitMode, LayerState, MASTER_ID, Mapping, ModSource, Modulation, ParamMod, PlayDirection, SourceSpec, TransitionKind, shaders};
 use serde::{Deserialize, Serialize};
 
+use crate::account::Account;
 use crate::app::{State, Trigger};
 use crate::theme::{ACCENT, WARN};
 
 pub(crate) use crate::ui::*;
 
+mod account;
 mod audio;
 mod clips;
 mod control;
@@ -31,6 +33,7 @@ mod preview;
 mod stream;
 mod surface;
 
+pub(crate) use account::*;
 pub(crate) use audio::*;
 pub(crate) use clips::*;
 pub(crate) use control::*;
@@ -70,10 +73,11 @@ pub enum Tab {
     Mixer,
     Devices,
     Surface,
+    Account,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 17] = [
+    pub const ALL: [Tab; 18] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -91,6 +95,7 @@ impl Tab {
         Tab::Mixer,
         Tab::Devices,
         Tab::Surface,
+        Tab::Account,
     ];
 
     pub fn title(self) -> String {
@@ -116,6 +121,7 @@ impl Tab {
             Tab::Mixer => "Mixer",
             Tab::Devices => "Devices",
             Tab::Surface => "Control Surface",
+            Tab::Account => "Account",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -162,6 +168,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Mixer => mixer(ui, self.st),
             Tab::Devices => devices(ui, self.st),
             Tab::Surface => surface(ui, self.st),
+            Tab::Account => account(ui, self.st),
         }
     }
 
