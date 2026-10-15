@@ -78,7 +78,7 @@ fn fitted(uv: vec2f, xf: vec4f, which: u32) -> vec4f {
 }
 
 // Clip transition: tex0 = incoming (fit in uv_xform), tex1 = outgoing (fit in p[0]),
-// opacity = progress, mode = kind (0 crossfade, 1 dip to black, 2 wipe).
+// opacity = progress, mode = kind (0 crossfade, 1 dip to black, 2 wipe, 3 blend with mode p[1].x).
 @fragment
 fn fs_crossfade(in: VOut) -> @location(0) vec4f {
     let a = fitted(in.uv, u.uv_xform, 0u);
@@ -93,6 +93,14 @@ fn fs_crossfade(in: VOut) -> @location(0) vec4f {
     if (u.mode == 2u) {
         let edge = smoothstep(t - 0.015, t + 0.015, in.uv.x);
         return mix(a, b, edge);
+    }
+    if (u.mode == 3u) {
+        // First half: the new source blends in over the old; second half: the old one fades away.
+        let both = vec4f(clamp(blend(b.rgb, a.rgb, u32(u.p[1].x)), vec3f(0.0), vec3f(1.0)), max(a.a, b.a));
+        if (t < 0.5) {
+            return mix(b, both, t * 2.0);
+        }
+        return mix(both, a, t * 2.0 - 1.0);
     }
     return mix(b, a, t);
 }

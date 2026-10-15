@@ -133,21 +133,66 @@ pub enum TransitionKind {
     Crossfade,
     DipToBlack,
     Wipe,
+    /// Blend transitions: the new source comes in with that blend mode over the old, then the old fades away.
+    Add,
+    Screen,
+    Subtract,
+    Multiply,
+    Lighten,
+    Darken,
+    Difference,
+    Overlay,
 }
 
 impl TransitionKind {
-    pub const ALL: [TransitionKind; 3] = [TransitionKind::Crossfade, TransitionKind::DipToBlack, TransitionKind::Wipe];
+    pub const ALL: [TransitionKind; 11] = [
+        TransitionKind::Crossfade,
+        TransitionKind::DipToBlack,
+        TransitionKind::Wipe,
+        TransitionKind::Add,
+        TransitionKind::Screen,
+        TransitionKind::Subtract,
+        TransitionKind::Multiply,
+        TransitionKind::Lighten,
+        TransitionKind::Darken,
+        TransitionKind::Difference,
+        TransitionKind::Overlay,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             TransitionKind::Crossfade => "Crossfade",
             TransitionKind::DipToBlack => "Dip to black",
             TransitionKind::Wipe => "Wipe",
+            TransitionKind::Add => "Add",
+            TransitionKind::Screen => "Screen",
+            TransitionKind::Subtract => "Subtract",
+            TransitionKind::Multiply => "Multiply",
+            TransitionKind::Lighten => "Lighten",
+            TransitionKind::Darken => "Darken",
+            TransitionKind::Difference => "Difference",
+            TransitionKind::Overlay => "Overlay",
         }
     }
 
+    /// The blend mode a blend transition passes through.
+    pub fn blend(self) -> Option<BlendMode> {
+        Some(match self {
+            TransitionKind::Add => BlendMode::Add,
+            TransitionKind::Screen => BlendMode::Screen,
+            TransitionKind::Subtract => BlendMode::Subtract,
+            TransitionKind::Multiply => BlendMode::Multiply,
+            TransitionKind::Lighten => BlendMode::Lighten,
+            TransitionKind::Darken => BlendMode::Darken,
+            TransitionKind::Difference => BlendMode::Difference,
+            TransitionKind::Overlay => BlendMode::Overlay,
+            _ => return None,
+        })
+    }
+
+    /// `fs_crossfade` mode: 0 crossfade, 1 dip, 2 wipe, 3 blend (mode in p[1].x).
     pub(crate) fn shader_index(self) -> u32 {
-        self.index() as u32
+        if self.blend().is_some() { 3 } else { self.index() as u32 }
     }
 }
 
@@ -214,5 +259,21 @@ mod crossfader_tests {
         assert_eq!((CrossGroup::A.gain(0.5), CrossGroup::B.gain(0.5)), (1.0, 1.0));
         assert_eq!((CrossGroup::A.gain(1.0), CrossGroup::B.gain(1.0)), (0.0, 1.0));
         assert_eq!(CrossGroup::None.gain(1.0), 1.0);
+    }
+}
+
+#[cfg(test)]
+mod transition_tests {
+    use super::{BlendMode, TransitionKind};
+
+    #[test]
+    fn blend_transitions_use_their_blend_mode_and_old_ones_keep_their_shader_index() {
+        assert_eq!(TransitionKind::Wipe.shader_index(), 2);
+        assert_eq!(TransitionKind::Crossfade.blend(), None);
+        for k in TransitionKind::ALL.iter().filter(|k| k.blend().is_some()) {
+            assert_eq!(k.shader_index(), 3);
+            assert_eq!(k.blend().unwrap().name(), k.name());
+        }
+        assert_eq!(TransitionKind::Subtract.blend(), Some(BlendMode::Subtract));
     }
 }

@@ -117,6 +117,7 @@ impl Engine {
         u.resolution = [w as f32, h as f32];
         u.opacity = t.progress(time);
         u.mode = t.kind.shader_index();
+        u.p[1][0] = t.kind.blend().map_or(0, |b| b.shader_index()) as f32;
         u.uv_xform = fit_transform(in_size, canvas, fit);
         u.p[0] = fit_transform(out_size, canvas, fit);
         passes.push(Pass { entry: "fs_crossfade", target: result.clone(), tex0: in_view, tex1: Some(out_view), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
