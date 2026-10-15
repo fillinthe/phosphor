@@ -150,7 +150,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Clip banks A–D (pages of 9 columns), bar-quantise
 - [x] Detach any panel into its own OS window (tab menu → Detach; closing it docks it back)
 - [x] MIDI clock in (tempo + beat after Start)
-- [ ] Ableton Link, effect-based transitions
+- [x] Blend transitions (Add, Screen, Subtract, Multiply, Lighten, Darken, Difference, Overlay)
+- [ ] Ableton Link, effect-based transitions (any effect shader as a transition)
 - [x] Master crossfader (A/B groups)
 - [x] Layer groups: mixed first, then opacity/blend/effects like one layer; fold, move as a block, slice source
 - [x] Groups: controller targets (group opacity/on/bypass), opacity modulation, group strip in the Mixer, ⌘G / ⇧⌘G

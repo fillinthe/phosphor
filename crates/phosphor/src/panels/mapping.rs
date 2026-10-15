@@ -374,9 +374,9 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
 pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup]) {
     ui.horizontal(|ui| {
         ui.label("Shows");
-        let current = s.layer.map_or("Mix (all layers)".into(), |id| groups.iter().find(|g| g.id == id).map_or_else(|| crate::ui::layer_name(layers, id), |g| g.name.clone()));
+        let current = s.layer.map_or("Whole composition".into(), |id| groups.iter().find(|g| g.id == id).map_or_else(|| crate::ui::layer_name(layers, id), |g| g.name.clone()));
         egui::ComboBox::from_id_salt(("surface_source", s.id)).width(170.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut s.layer, None, "Mix (all layers)");
+            ui.selectable_value(&mut s.layer, None, "Whole composition");
             ui.separator();
             for g in groups.iter() {
                 ui.selectable_value(&mut s.layer, Some(g.id), format!("Group: {}", g.name));
@@ -384,7 +384,7 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
             crate::ui::layer_items(ui, layers, &mut s.layer, Some);
         })
         .response
-        .on_hover_text("Send one layer to just this surface (its own picture, with its effects), or show the whole mix");
+        .on_hover_text("Send one layer to just this surface (its own picture, with its effects), or show the whole composition (everything in the mix, with MASTER effects)");
         let tip = "Off: only surfaces that pick it show it, not the mix or other surfaces";
         if let Some(l) = s.layer.and_then(|id| layers.iter_mut().find(|l| l.id == id)) {
             ui.checkbox(&mut l.in_mix, "Also in the mix").on_hover_text(tip);
