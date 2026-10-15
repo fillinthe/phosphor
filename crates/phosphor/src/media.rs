@@ -69,6 +69,73 @@ pub struct MediaManager {
     /// Syphon layers whose source isn't there yet (the other app may start later): next retry time.
     #[cfg(target_os = "macos")]
     syphon_waiting: HashMap<u64, f64>,
+    /// Zero-copy video frames still on screen or in flight on the GPU, per (layer, outgoing): kept alive a
+    /// few frames so the decoder never reuses memory the GPU is reading.
+    #[cfg(not(target_arch = "wasm32"))]
+    held: Held,
+}
+
+/// Per (layer, outgoing): recent zero-copy frames (kept alive while the GPU may read them) and the GPU
+/// wrappers made for each decoder buffer (reused when the decoder cycles back to it: no per-frame setup).
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+struct ZeroCopy {
+    recent: std::collections::VecDeque<video::surface::PixelBuffer>,
+    planes: Vec<(usize, wgpu::Texture, wgpu::Texture)>,
+}
+#[cfg(target_os = "macos")]
+type Held = HashMap<(u64, bool), ZeroCopy>;
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "macos")))]
+type Held = ();
+
+/// Puts a decoded frame on a layer (or its outgoing side of a transition): uploads pixels or GPU blocks, or
+/// wraps a hardware frame's memory with no copy; reusable buffers go back to the player.
+#[cfg(not(target_arch = "wasm32"))]
+fn show_frame(engine: &mut Engine, held: &mut Held, player: &video::VideoPlayer, id: u64, outgoing: bool, frame: video::VideoFrame) {
+    match &frame {
+        video::VideoFrame::Nv12 { width, height, luma, luma_stride, chroma, chroma_stride } => {
+            if outgoing {
+                engine.upload_nv12_outgoing(id, *width, *height, luma, *luma_stride, chroma, *chroma_stride);
+            } else {
+                engine.upload_nv12(id, *width, *height, luma, *luma_stride, chroma, *chroma_stride);
+            }
+        }
+        video::VideoFrame::Rgba { width, height, data } => {
+            if outgoing {
+                engine.upload_rgba_outgoing(id, *width, *height, data);
+            } else {
+                engine.upload_rgba(id, *width, *height, data);
+            }
+        }
+        video::VideoFrame::Compressed { width, height, format, data } => engine.upload_compressed(id, outgoing, *width, *height, *format, data),
+        #[cfg(target_os = "macos")]
+        video::VideoFrame::Surface(_) => {}
+    }
+    #[cfg(target_os = "macos")]
+    if let video::VideoFrame::Surface(pb) = frame {
+        let zc = held.entry((id, outgoing)).or_default();
+        let key = pb.surface_id();
+        let cached = zc.planes.iter().find(|(k, l, _)| *k == key && (l.width(), l.height()) == pb.size()).map(|(_, l, c)| (l.clone(), c.clone()));
+        let planes = cached.or_else(|| {
+            let (l, c) = pb.planes(engine.device())?;
+            if zc.planes.len() >= 12 {
+                zc.planes.remove(0);
+            }
+            zc.planes.push((key, l.clone(), c.clone()));
+            Some((l, c))
+        });
+        if let Some((luma, chroma)) = planes {
+            engine.set_layer_nv12_textures(id, outgoing, luma, chroma);
+        }
+        zc.recent.push_back(pb);
+        while zc.recent.len() > 3 {
+            zc.recent.pop_front();
+        }
+        return;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = held;
+    player.recycle(frame);
 }
 
 impl MediaManager {
@@ -174,6 +241,8 @@ impl MediaManager {
         #[cfg(not(target_arch = "wasm32"))]
         self.players.retain(|id, _| live.contains(id));
         #[cfg(target_os = "macos")]
+        self.held.retain(|(id, _), _| live.contains(id));
+        #[cfg(target_os = "macos")]
         self.syphon.retain(|id, _| live.contains(id));
         #[cfg(target_os = "macos")]
         self.syphon_waiting.retain(|id, _| live.contains(id));
@@ -210,14 +279,7 @@ impl MediaManager {
                 continue;
             }
             if let Some(frame) = player.poll_frame(now) {
-                match &frame {
-                    video::VideoFrame::Nv12 { width, height, luma, luma_stride, chroma, chroma_stride } => {
-                        engine.upload_nv12(layer.id, *width, *height, luma, *luma_stride, chroma, *chroma_stride);
-                    }
-                    video::VideoFrame::Rgba { width, height, data } => engine.upload_rgba(layer.id, *width, *height, data),
-                    video::VideoFrame::Compressed { width, height, format, data } => engine.upload_compressed(layer.id, false, *width, *height, *format, data),
-                }
-                player.recycle(frame);
+                show_frame(engine, &mut self.held, player, layer.id, false, frame);
             }
             if let Some(err) = player.error() {
                 self.errors.entry(layer.id).or_insert_with(|| err.to_string());
@@ -254,14 +316,7 @@ impl MediaManager {
         for (id, player) in &mut self.outgoing {
             player.set_playing(true);
             if let Some(frame) = player.poll_frame(now) {
-                match &frame {
-                    video::VideoFrame::Nv12 { width, height, luma, luma_stride, chroma, chroma_stride } => {
-                        engine.upload_nv12_outgoing(*id, *width, *height, luma, *luma_stride, chroma, *chroma_stride);
-                    }
-                    video::VideoFrame::Rgba { width, height, data } => engine.upload_rgba_outgoing(*id, *width, *height, data),
-                    video::VideoFrame::Compressed { width, height, format, data } => engine.upload_compressed(*id, true, *width, *height, *format, data),
-                }
-                player.recycle(frame);
+                show_frame(engine, &mut self.held, player, *id, true, frame);
             }
         }
         #[cfg(target_arch = "wasm32")]

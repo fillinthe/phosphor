@@ -30,6 +30,19 @@ impl Engine {
         );
     }
 
+    /// A video frame's luma (R8) and chroma (RG8) planes as textures someone else made (zero-copy hardware
+    /// video: the decoder's own memory). The caller keeps the memory alive while frames are in flight.
+    pub fn set_layer_nv12_textures(&mut self, layer: u64, outgoing: bool, luma: wgpu::Texture, chroma: wgpu::Texture) {
+        let target = |texture: wgpu::Texture| {
+            let size = texture.size();
+            let view = texture.create_view(&Default::default());
+            Target { texture, view, width: size.width, height: size.height }
+        };
+        let res = self.layers.entry(layer).or_default();
+        let slot = if outgoing { &mut res.media_out } else { &mut res.media };
+        *slot = Some(Media::Nv12 { luma: target(luma), chroma: target(chroma) });
+    }
+
     /// The GPU can sample block-compressed (BC/DXT) textures: Hap movies skip CPU decoding.
     pub fn compressed_supported(&self) -> bool {
         self.gpu.device.features().contains(wgpu::Features::TEXTURE_COMPRESSION_BC)

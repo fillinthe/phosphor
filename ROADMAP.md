@@ -113,7 +113,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Hap on the GPU: DXT blocks uploaded as BC1/BC3 textures, Hap Q converted in the shader (720p Hap 25% → 1.2% CPU, Hap Q 39% → 2.8%)
 - [x] Hap R (BC7) on the GPU
 - [ ] Hap Q Alpha on the GPU (still decodes on the CPU)
-- [ ] Zero-copy video: VideoToolbox IOSurface → Metal texture → wgpu (skip the CPU copy)
+- [x] Zero-copy video: VideoToolbox IOSurface → Metal textures → wgpu (8-bit 4:2:0; 4K H.264 38% → 16% CPU)
+- [ ] Zero-copy for 10-bit (P010) and full-range video
 - [ ] Ship FFmpeg inside the .app (LGPL build, decoders only) instead of relying on Homebrew
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
 - [x] Live camera / capture card input, network streams (RTSP/SRT/HLS), Syphon In

@@ -463,6 +463,17 @@ impl Decoder {
             let (width, height) = (self.dec.width(), self.dec.height());
             return Ok(VideoFrame::Compressed { width, height, format: self.hap_format, data: buf.clone() });
         }
+        #[cfg(target_os = "macos")]
+        if zero_copy() {
+            // SAFETY: a VideoToolbox frame's data[3] is its CVPixelBufferRef.
+            let f = unsafe { &*self.frame.as_ptr() };
+            if f.format == Px::AV_PIX_FMT_VIDEOTOOLBOX as i32
+                && let Some(pb) = unsafe { super::surface::PixelBuffer::retain_nv12(f.data[3] as *mut std::ffi::c_void) }
+            {
+                sh.hardware.store(true, Ordering::Relaxed);
+                return Ok(VideoFrame::Surface(pb));
+            }
+        }
         let src = self.download(sh)?;
         self.scaler.convert(src, sh)
     }

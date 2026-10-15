@@ -74,6 +74,9 @@ impl PhosphorApp {
         let render_state = cc.wgpu_render_state.clone();
         let engine = render_state.as_ref().map(|rs| Engine::new(rs.device.clone(), rs.queue.clone()));
         #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(target_os = "macos")]
+        crate::media::video::set_zero_copy(engine.is_some() && std::env::var_os("PHOSPHOR_COPY_VIDEO").is_none());
+        #[cfg(not(target_arch = "wasm32"))]
         crate::media::video::set_gpu_hap(engine.as_ref().is_some_and(|e| e.compressed_supported()) && std::env::var_os("PHOSPHOR_CPU_HAP").is_none());
         let now = cc.egui_ctx.input(|i| i.time);
 

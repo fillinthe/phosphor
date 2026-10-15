@@ -148,6 +148,8 @@ impl Scaler {
         };
         let (dst, stride): ([*mut u8; 4], [i32; 4]) = match &mut out {
             VideoFrame::Compressed { .. } => return Err("compressed frames aren't converted".into()),
+            #[cfg(target_os = "macos")]
+            VideoFrame::Surface(_) => return Err("surface frames aren't converted".into()),
             VideoFrame::Rgba { data, .. } => (
                 [
                     data.as_mut_ptr(),
