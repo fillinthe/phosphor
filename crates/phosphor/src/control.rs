@@ -318,6 +318,10 @@ fn scaled(p: &shaders::Param, v: f32) -> f32 {
     p.min + v.clamp(0.0, 1.0) * (p.max - p.min)
 }
 
+pub fn find_effect(comp: &Composition, id: u64) -> Option<&EffectState> {
+    comp.master_effects.iter().chain(comp.layers.iter().flat_map(|l| l.effects.iter())).find(|e| e.id == id)
+}
+
 pub fn find_effect_mut(comp: &mut Composition, id: u64) -> Option<&mut EffectState> {
     comp.master_effects.iter_mut().chain(comp.layers.iter_mut().flat_map(|l| l.effects.iter_mut())).find(|e| e.id == id)
 }
@@ -342,7 +346,7 @@ fn choice_unit(i: usize, n: usize) -> f32 {
 pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
     let on = |b: bool| if b { 1.0 } else { 0.0 };
     let layer = |id: &u64| comp.layers.iter().find(|l| l.id == *id);
-    let effect = |id: &u64| comp.master_effects.iter().chain(comp.layers.iter().flat_map(|l| l.effects.iter())).find(|e| e.id == *id);
+    let effect = |id: &u64| find_effect(comp, *id);
     Some(match target {
         ControlTarget::MasterFade => comp.master_fade,
         ControlTarget::LayerOpacity(id) => layer(id)?.opacity,
