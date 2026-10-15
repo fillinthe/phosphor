@@ -285,6 +285,17 @@ impl State {
         self.comp = comp;
         self.comp.ensure_outputs();
         self.notice = None;
+        self.outputs_on_open();
+    }
+
+    /// Projects set to "open outputs on their screens" do so when loaded (and at launch).
+    pub fn outputs_on_open(&mut self) {
+        if self.comp.outputs_on_open {
+            let missing = self.send_outputs_to_screens();
+            if !missing.is_empty() {
+                self.notice = Some(format!("Outputs not opened, screen not connected: {}", missing.join(", ")));
+            }
+        }
     }
 
     /// Fires a trigger now, or queues it for the next beat when quantise is on.
