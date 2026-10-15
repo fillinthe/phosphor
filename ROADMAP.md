@@ -211,7 +211,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Record to disk: .mp4 (H.264) or .mov (ProRes 422 HQ, VideoToolbox)
 - [x] Audio in the stream: pick any AVFoundation input (mic, interface, BlackHole loopback) → AAC 160k
 - [ ] HEVC option; RTMPS; WHIP (WebRTC)
-- [ ] Multiple simultaneous destinations; connection health graph; auto-reconnect
+- [x] Auto-reconnect for streams (2/4/8/15 s back-off)
+- [ ] Multiple simultaneous destinations; connection health graph
 - [x] OBS-friendly: Syphon and NDI outputs
 - [ ] Virtual camera (CoreMediaIO extension; needs an Apple Developer ID to install)
 
