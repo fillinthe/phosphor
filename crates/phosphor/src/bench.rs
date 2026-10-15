@@ -31,6 +31,8 @@ pub struct BenchConfig {
     pub send_output: Option<String>,
     /// Open the default audio input and report its level.
     pub audio: bool,
+    /// Play movie sound (bench runs are silent otherwise).
+    pub sound: bool,
     /// A .phosphor project to load instead of building one from the flags.
     pub project: Option<String>,
     /// Record the run to this file (.mp4 = H.264, .mov = ProRes) to exercise the streaming path.
@@ -82,6 +84,11 @@ impl BenchConfig {
                 ("--previews", Some(v)) => cfg.previews = v.parse().unwrap_or(0),
                 ("--column", Some(v)) => cfg.trigger_column = v.parse::<usize>().ok().map(|c| c.saturating_sub(1)),
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
+                ("--sound", _) => {
+                    cfg.sound = true;
+                    i += 1;
+                    continue;
+                }
                 ("--audio", _) => {
                     cfg.audio = true;
                     i += 1;

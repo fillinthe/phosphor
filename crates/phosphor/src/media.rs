@@ -270,6 +270,9 @@ impl MediaManager {
         #[cfg(not(target_arch = "wasm32"))]
         for layer in &comp.layers {
             let Some(player) = self.players.get_mut(&layer.id) else { continue };
+            // During a transition the sound crossfades too (the outgoing player gets the rest below).
+            let fade_in = layer.transition.as_ref().map_or(1.0, |t| t.progress(now as f32));
+            player.set_volume(comp.sound_gain(layer) * fade_in);
             player.set_playing(layer.playing && layer.enabled);
             player.set_rate(layer.rate);
             player.set_looping(layer.looping);
@@ -314,6 +317,10 @@ impl MediaManager {
         }
         #[cfg(not(target_arch = "wasm32"))]
         for (id, player) in &mut self.outgoing {
+            let gain = comp.layers.iter().find(|l| l.id == *id).map_or(0.0, |l| {
+                comp.sound_gain(l) * (1.0 - l.transition.as_ref().map_or(1.0, |t| t.progress(now as f32)))
+            });
+            player.set_volume(gain);
             player.set_playing(true);
             if let Some(frame) = player.poll_frame(now) {
                 show_frame(engine, &mut self.held, player, *id, true, frame);
@@ -360,6 +367,19 @@ impl MediaManager {
         }
         #[cfg(target_arch = "wasm32")]
         Vec::new()
+    }
+
+    /// The layer's movie has a sound track.
+    pub fn has_sound(&self, layer: u64) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            return self.players.get(&layer).is_some_and(|p| p.has_sound());
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = layer;
+            false
+        }
     }
 
     /// Codec and decoder details for a movie layer, for the Inspector.

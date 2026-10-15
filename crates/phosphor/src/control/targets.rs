@@ -37,6 +37,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerEnabled(id) => on(comp.mix_controls(*id)?.1),
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
+        ControlTarget::LayerVolume(id) => layer(id)?.volume / 2.0,
         ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
         ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
         ControlTarget::LayerDirection(id) => {
@@ -62,6 +63,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::FadeTime => to_unit(comp.launch.fade_secs, 0.05, 10.0, true),
             AppControl::LaunchTiming => comp.launch.timing.unit(),
             AppControl::LaunchStyle => comp.launch.style.unit(),
+            AppControl::MasterVolume => comp.volume / 2.0,
             AppControl::MasterFxBypass => on(comp.master_fx_bypass),
             AppControl::Syphon => on(comp.syphon),
             AppControl::Ndi => on(comp.ndi.enabled),
@@ -121,6 +123,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 *m.fx_bypass = toggled(*m.fx_bypass, v);
             }
         }
+        ControlTarget::LayerVolume(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                l.volume = v.clamp(0.0, 1.0) * 2.0;
+            }
+        }
         ControlTarget::LayerSpeed(id) => {
             if let Some(l) = comp.layer_mut(*id) {
                 l.rate = unit_to(v, 0.1, 4.0, true);
@@ -147,6 +154,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             AppControl::FadeTime => comp.launch.fade_secs = unit_to(v, 0.05, 10.0, true),
             AppControl::LaunchTiming => comp.launch.timing = Choice::from_unit(v),
             AppControl::LaunchStyle => comp.set_launch_style(Choice::from_unit(v)),
+            AppControl::MasterVolume => comp.volume = v.clamp(0.0, 1.0) * 2.0,
             AppControl::MasterFxBypass => comp.master_fx_bypass = toggled(comp.master_fx_bypass, v),
             AppControl::Syphon => comp.syphon = toggled(comp.syphon, v),
             AppControl::Ndi => comp.ndi.enabled = toggled(comp.ndi.enabled, v),
@@ -241,6 +249,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         out.push((ControlTarget::LayerFxBypass(l.id), format!("{} · effects bypass", l.name)));
         if matches!(l.source, phosphor_engine::SourceSpec::Movie { .. }) {
             out.push((ControlTarget::LayerScrub(l.id), format!("{} · scrub", l.name)));
+            out.push((ControlTarget::LayerVolume(l.id), format!("{} · volume", l.name)));
             out.push((ControlTarget::LayerLoopIn(l.id), format!("{} · loop in", l.name)));
             out.push((ControlTarget::LayerLoopOut(l.id), format!("{} · loop out", l.name)));
             out.push((ControlTarget::LayerDirection(l.id), format!("{} · direction", l.name)));
@@ -280,6 +289,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerLoopOut(id) => format!("/phosphor/layer/{id}/loop/out"),
         ControlTarget::LayerDirection(id) => format!("/phosphor/layer/{id}/direction"),
         ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
+        ControlTarget::LayerVolume(id) => format!("/phosphor/layer/{id}/volume"),
         ControlTarget::Surface(id) => format!("/phosphor/surface/{id}"),
         ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
         ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),

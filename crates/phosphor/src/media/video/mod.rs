@@ -131,8 +131,11 @@ pub struct VideoPlayer {
     /// Seek generation: frames decoded before the latest seek carry an older number and are dropped.
     generation: u64,
     mode: PlayMode,
-    /// Media time (seconds into the movie) of the frame on screen.
+    /// Media time (seconds into the movie) of the frame on screen, and its presentation time.
     shown: f64,
+    shown_pts: f64,
+    /// The movie's sound (None = no audio track, or sound off).
+    sound: Option<sound::ClipAudio>,
 }
 
 enum Msg {
@@ -186,7 +189,9 @@ impl VideoPlayer {
         init();
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
         let dec = Decoder::open(path).map_err(|e| format!("{name}: {e}"))?;
-        Self::start(name, dec, false)
+        let mut p = Self::start(name, dec, false)?;
+        p.sound = sound::ClipAudio::open(path);
+        Ok(p)
     }
 
     /// Opens a live input: an FFmpeg input device (`format`, e.g. "avfoundation" for cameras) or,
@@ -252,6 +257,8 @@ impl VideoPlayer {
             generation: 0,
             mode: PlayMode::default(),
             shown: 0.0,
+            shown_pts: 0.0,
+            sound: None,
         })
     }
 
@@ -340,6 +347,7 @@ impl VideoPlayer {
             match self.pending.take() {
                 Some((pts, media, frame)) if pts <= self.clock + 1e-3 => {
                     self.shown = media;
+                    self.shown_pts = pts;
                     if let Some(old) = out.replace(frame) {
                         self.shared.recycle(old);
                     }
@@ -353,7 +361,35 @@ impl VideoPlayer {
         self.shared
             .clock
             .store(self.clock.to_bits(), Ordering::Relaxed);
+        self.update_sound();
         out
+    }
+
+    /// Tells the sound thread where the picture is (between frames too).
+    fn update_sound(&mut self) {
+        let Some(s) = &self.sound else { return };
+        let ahead = (self.clock - self.shown_pts).clamp(0.0, 0.1);
+        let stopped = self.end.is_some() && !self.looping;
+        let f = sound::Follow {
+            pos: self.shown + ahead,
+            playing: self.playing && self.mode.direction == PlayDirection::Forward && !stopped,
+            rate: self.rate,
+            looping: self.looping,
+            range: self.mode.range,
+            generation: self.generation,
+        };
+        s.follow(f);
+    }
+
+    /// Sound volume (0 = silent; 1 = as recorded).
+    pub fn set_volume(&self, gain: f32) {
+        if let Some(s) = &self.sound {
+            s.set_gain(gain);
+        }
+    }
+
+    pub fn has_sound(&self) -> bool {
+        self.sound.is_some()
     }
 
     /// Live: the newest frame that arrived since the last call (older ones are dropped, so latency
@@ -395,6 +431,7 @@ impl VideoPlayer {
         self.shared.cv.notify_all();
         self.clock = t;
         self.shown = t;
+        self.shown_pts = t;
         self.end = None;
         if let Some((_, _, f)) = self.pending.take() {
             self.shared.recycle(f);
@@ -450,6 +487,7 @@ impl VideoPlayer {
 
 impl Drop for VideoPlayer {
     fn drop(&mut self) {
+        self.sound = None;
         if let Ok(mut ctl) = self.shared.ctl.lock() {
             ctl.quit = true;
         }
@@ -477,6 +515,7 @@ fn err(e: ff::Error) -> String {
 mod convert;
 mod decoder;
 mod hap;
+pub mod sound;
 #[cfg(target_os = "macos")]
 pub mod surface;
 #[cfg(test)]

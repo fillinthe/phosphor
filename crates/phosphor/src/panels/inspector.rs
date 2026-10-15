@@ -28,6 +28,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let thumb = st.layer_textures.get(&sel).map(|(t, _)| *t);
         let info = st.media.video_info(sel);
         let position = st.media.position(sel);
+        let has_sound = st.media.has_sound(sel);
         let mut seek_to: Option<f64> = None;
         let layer = st.comp.layer_mut(sel).unwrap();
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
@@ -111,6 +112,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 });
                 let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
                 map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
+                if has_sound {
+                    sound_row(ui, layer);
+                }
                 ui.separator();
             }
             fx_action = effects_editor(ui, &mut layer.effects, clipboard_len);
@@ -122,6 +126,20 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     if let Some(action) = fx_action {
         apply_fx_action(st, sel, action);
     }
+}
+
+/// Movie sound: volume (mappable) and whether it fades with the layer's opacity.
+fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
+    ui.horizontal(|ui| {
+        let icon = if layer.volume <= 0.001 { icon::SPEAKER_SIMPLE_X } else { icon::SPEAKER_SIMPLE_HIGH };
+        if ui.small_button(icon).on_hover_text("Mute / unmute").clicked() {
+            layer.volume = if layer.volume <= 0.001 { 1.0 } else { 0.0 };
+        }
+        let r = guarded!(ui, layer.volume, Slider::new(&mut layer.volume, 0.0..=2.0).text("Volume").show_value(false));
+        value_bubble(ui, &r, format!("{:.0}%", layer.volume * 100.0));
+        map_menu(ui, &r, ControlTarget::LayerVolume(layer.id));
+    });
+    ui.checkbox(&mut layer.volume_follows_opacity, "Sound follows opacity").on_hover_text("Fading the layer (or its group, or the crossfader) fades its sound too");
 }
 
 /// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, colour,

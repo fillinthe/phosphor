@@ -49,6 +49,8 @@ pub enum ControlTarget {
     SurfaceY(u64),
     /// App-wide controls (tempo, launch settings, audio…).
     App(AppControl),
+    /// A movie layer's sound volume (0..1 = silent..2×).
+    LayerVolume(u64),
 }
 
 /// App-wide mappable controls.
@@ -70,10 +72,12 @@ pub enum AppControl {
     Crossfader,
     /// Which Control Surface page shows (0..1 across the pages).
     SurfacePage,
+    /// Movie sound, all layers (0..1 = silent..2×).
+    MasterVolume,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 15] = [
+    pub const ALL: [AppControl; 16] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -89,6 +93,7 @@ impl AppControl {
         AppControl::Ndi,
         AppControl::Crossfader,
         AppControl::SurfacePage,
+        AppControl::MasterVolume,
     ];
 
     pub fn name(self) -> &'static str {
@@ -108,6 +113,7 @@ impl AppControl {
             AppControl::Ndi => "NDI on/off",
             AppControl::Crossfader => "Crossfader (A ↔ B)",
             AppControl::SurfacePage => "Control Surface page",
+            AppControl::MasterVolume => "Master volume (movie sound)",
         }
     }
 
@@ -129,6 +135,7 @@ impl AppControl {
             AppControl::Ndi => "ndi",
             AppControl::Crossfader => "crossfader",
             AppControl::SurfacePage => "surface/page",
+            AppControl::MasterVolume => "volume",
         }
     }
 
