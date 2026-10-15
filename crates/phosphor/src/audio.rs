@@ -16,6 +16,29 @@ pub struct AudioAnalysis {
     pub confidence: f32,
 }
 
+/// Envelope follower: how fast a signal rises (attack) and falls (release), in seconds (0 attack = instant).
+/// Used by the audio meters, so every audio-driven modulation can snap up on a kick and fade out slowly.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Envelope {
+    pub attack: f32,
+    pub release: f32,
+}
+
+impl Default for Envelope {
+    fn default() -> Self {
+        Self { attack: 0.0, release: 0.15 }
+    }
+}
+
+impl Envelope {
+    /// Moves `s` toward `v` over `dt` seconds.
+    pub fn follow(&self, s: &mut f32, v: f32, dt: f32) {
+        let time = if v > *s { self.attack } else { self.release };
+        *s = if time <= 0.001 { v } else { *s + (v - *s) * (1.0 - (-dt / time).exp()) };
+    }
+}
+
+
 /// Kick/beat detection from low-frequency energy, plus a tempo estimate from the gaps between beats.
 pub struct BeatTracker {
     /// Higher = needs a stronger kick (1.2 … 3).
@@ -132,8 +155,8 @@ mod native {
         devices: Vec<String>,
         current: Option<String>,
         pub gain: f32,
-        /// Seconds for a meter to fall to ~37% after a peak.
-        pub release: f32,
+        /// How the meters (and everything modulated by them) rise and fall.
+        pub envelope: super::Envelope,
         fft: Arc<dyn Fft<f32>>,
         window: Vec<f32>,
         raw: Vec<f32>,
@@ -156,7 +179,7 @@ mod native {
                 devices: Vec::new(),
                 current: None,
                 gain: 1.0,
-                release: 0.15,
+                envelope: Default::default(),
                 fft: FftPlanner::new().plan_fft_forward(FFT_SIZE),
                 window,
                 raw: vec![0.0; FFT_SIZE],
@@ -325,8 +348,8 @@ mod native {
                 })
                 .collect();
 
-            let fall = 1.0 - (-dt / self.release.max(0.01)).exp();
-            let follow = |s: &mut f32, v: f32| *s = if v > *s { v } else { *s + (v - *s) * fall };
+            let env = self.envelope;
+            let follow = |s: &mut f32, v: f32| env.follow(s, v, dt);
             follow(&mut self.analysis.level, targets[0]);
             follow(&mut self.analysis.low, targets[1]);
             follow(&mut self.analysis.mid, targets[2]);
@@ -350,13 +373,13 @@ mod stub {
     /// Browser audio input arrives with the WebRTC work; until then the panel shows silence.
     pub struct AudioInput {
         pub gain: f32,
-        pub release: f32,
+        pub envelope: super::Envelope,
         pub beats: super::BeatTracker,
     }
 
     impl AudioInput {
         pub fn new() -> Self {
-            Self { gain: 1.0, release: 0.15, beats: Default::default() }
+            Self { gain: 1.0, envelope: Default::default(), beats: Default::default() }
         }
         pub fn devices(&self) -> &[String] {
             &[]
@@ -412,5 +435,23 @@ mod tests {
         assert!((22..=26).contains(&hits), "hits {hits}");
         assert!((a.bpm - 120.0).abs() < 3.0, "bpm {}", a.bpm);
         assert!(a.confidence > 0.8, "confidence {}", a.confidence);
+    }
+}
+
+#[cfg(test)]
+mod envelope_tests {
+    use super::Envelope;
+
+    #[test]
+    fn attack_and_release_shape_the_signal() {
+        let mut s = 0.0;
+        Envelope::default().follow(&mut s, 1.0, 0.016);
+        assert_eq!(s, 1.0, "no attack: instant");
+        let slow = Envelope { attack: 0.2, release: 0.5 };
+        let mut s = 0.0;
+        slow.follow(&mut s, 1.0, 0.2);
+        assert!((s - 0.632).abs() < 0.01, "one attack time reaches ~63%: {s}");
+        slow.follow(&mut s, 0.0, 0.5);
+        assert!((s - 0.632 * 0.368).abs() < 0.01, "one release time falls to ~37%: {s}");
     }
 }
