@@ -272,11 +272,7 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
         ui.add(egui::TextEdit::singleline(&mut w.label).desired_width(170.0));
     });
     ui.horizontal(|ui| {
-        ComboBox::from_id_salt(("widget_kind", id)).width(90.0).selected_text(w.kind.name()).show_ui(ui, |ui| {
-            for k in WidgetKind::ALL {
-                ui.selectable_value(&mut w.kind, k, k.name());
-            }
-        });
+        choice_combo(ui, ("widget_kind", id), &mut w.kind, 90.0, false);
         for c in PALETTE {
             let (r, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::click());
             ui.painter().circle_filled(r.center(), 7.0, rgb(c));

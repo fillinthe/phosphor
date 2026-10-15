@@ -291,16 +291,8 @@ pub(crate) fn layer_card(
                     mod_button(ui, &mut layer.opacity_mod);
                 });
                 ui.horizontal(|ui| {
-                    ComboBox::from_id_salt(("blend", layer.id)).width(104.0).selected_text(layer.blend.name()).show_ui(ui, |ui| {
-                        for mode in BlendMode::ALL {
-                            ui.selectable_value(&mut layer.blend, mode, mode.name());
-                        }
-                    });
-                    ComboBox::from_id_salt(("fit", layer.id)).width(74.0).selected_text(layer.fit.name()).show_ui(ui, |ui| {
-                        for mode in FitMode::ALL {
-                            ui.selectable_value(&mut layer.fit, mode, mode.name());
-                        }
-                    });
+                    choice_combo(ui, ("blend", layer.id), &mut layer.blend, 104.0, false);
+                    choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
                     let fx = layer.effects.iter().filter(|e| e.enabled).count();
                     if fx > 0 {
                         let mut active = !layer.fx_bypass;

@@ -17,10 +17,7 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
         map_menu(ui, &secs, ControlTarget::App(phosphor_engine::AppControl::FadeTime));
     }
     ui.separator();
-    for t in phosphor_engine::LaunchTiming::ALL {
-        let r = ui.selectable_value(&mut comp.launch.timing, t, t.name());
-        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming));
-    }
+    choice_buttons(ui, &mut comp.launch.timing, |ui, r| map_menu(ui, r, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming)));
 }
 
 pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {

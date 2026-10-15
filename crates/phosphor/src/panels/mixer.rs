@@ -60,11 +60,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                                 }
                             }
                         });
-                        ComboBox::from_id_salt(("mix_blend", layer.id)).width(70.0).selected_text(RichText::new(layer.blend.name()).small()).show_ui(ui, |ui| {
-                            for mode in BlendMode::ALL {
-                                ui.selectable_value(&mut layer.blend, mode, mode.name());
-                            }
-                        });
+                        choice_combo(ui, ("mix_blend", layer.id), &mut layer.blend, 70.0, true);
                     });
                 });
                 remember_card(ui, card_id, frame.response.rect);

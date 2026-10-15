@@ -271,3 +271,25 @@ pub(crate) fn hint(ui: &mut egui::Ui, text: impl Into<egui::RichText>) -> egui::
         ui.add(label.wrap())
     }
 }
+
+/// A drop-down for any `Choice` setting (blend mode, fit, transition…). `small` for tight spots (Mixer strips).
+pub(crate) fn choice_combo<T: phosphor_engine::Choice>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, value: &mut T, width: f32, small: bool) -> egui::Response {
+    let text = |s: &str| if small { egui::RichText::new(s).small() } else { egui::RichText::new(s) };
+    egui::ComboBox::from_id_salt(id)
+        .width(width)
+        .selected_text(text(value.label()))
+        .show_ui(ui, |ui| {
+            for &o in T::OPTIONS {
+                ui.selectable_value(value, o, o.label());
+            }
+        })
+        .response
+}
+
+/// A row of buttons for any `Choice` setting; `each` gets every button (to attach mapping menus, hover text…).
+pub(crate) fn choice_buttons<T: phosphor_engine::Choice>(ui: &mut egui::Ui, value: &mut T, mut each: impl FnMut(&mut egui::Ui, &egui::Response)) {
+    for &o in T::OPTIONS {
+        let r = ui.selectable_value(value, o, o.label());
+        each(ui, &r);
+    }
+}

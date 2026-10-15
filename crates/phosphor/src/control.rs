@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-use phosphor_engine::{AppControl, Composition, ControlMap, ControlSource, ControlTarget, EffectState, shaders};
+use phosphor_engine::{AppControl, Choice, Composition, ControlMap, ControlSource, ControlTarget, EffectState, shaders};
 
 /// Controller actions the composition can't carry out by itself; the app handles them.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -336,11 +336,6 @@ fn param_unit(p: &shaders::Param, x: f32) -> f32 {
     to_unit(x, p.min, p.max, false)
 }
 
-/// One of `n` choices as the 0..1 value that `set_target` maps back to it.
-fn choice_unit(i: usize, n: usize) -> f32 {
-    (i as f32 + 0.5) / n.max(1) as f32
-}
-
 /// The current 0..1 value of a target, the inverse of `set_target` (controller feedback, surfaces, remote).
 /// None for triggers and for controls that live outside the composition (tempo, audio).
 pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
@@ -356,8 +351,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
         ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
         ControlTarget::LayerDirection(id) => {
-            let (all, dir) = (phosphor_engine::PlayDirection::ALL, layer(id)?.direction);
-            choice_unit(all.iter().position(|d| *d == dir)?, all.len())
+            layer(id)?.direction.unit()
         }
         ControlTarget::GeneratorParam { layer: lid, index } => {
             let l = layer(lid)?;
@@ -377,10 +371,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::App(a) => match a {
             AppControl::LaunchFade => on(comp.launch.fade),
             AppControl::FadeTime => to_unit(comp.launch.fade_secs, 0.05, 10.0, true),
-            AppControl::LaunchTiming => {
-                let all = phosphor_engine::LaunchTiming::ALL;
-                choice_unit(all.iter().position(|t| *t == comp.launch.timing)?, all.len())
-            }
+            AppControl::LaunchTiming => comp.launch.timing.unit(),
             AppControl::MasterFxBypass => on(comp.master_fx_bypass),
             AppControl::Syphon => on(comp.syphon),
             AppControl::Ndi => on(comp.ndi.enabled),
@@ -456,18 +447,14 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         }
         ControlTarget::LayerDirection(id) => {
             if let Some(l) = comp.layer_mut(*id) {
-                let all = phosphor_engine::PlayDirection::ALL;
-                l.direction = all[((v.clamp(0.0, 1.0) * all.len() as f32) as usize).min(all.len() - 1)];
+                l.direction = Choice::from_unit(v);
             }
         }
         ControlTarget::LayerScrub(id) => out.push(Deferred::Scrub(*id, v.clamp(0.0, 1.0))),
         ControlTarget::App(a) => match a {
             AppControl::LaunchFade => comp.launch.fade = toggled(comp.launch.fade, v),
             AppControl::FadeTime => comp.launch.fade_secs = unit_to(v, 0.05, 10.0, true),
-            AppControl::LaunchTiming => {
-                let all = phosphor_engine::LaunchTiming::ALL;
-                comp.launch.timing = all[((v.clamp(0.0, 1.0) * all.len() as f32) as usize).min(all.len() - 1)];
-            }
+            AppControl::LaunchTiming => comp.launch.timing = Choice::from_unit(v),
             AppControl::MasterFxBypass => comp.master_fx_bypass = toggled(comp.master_fx_bypass, v),
             AppControl::Syphon => comp.syphon = toggled(comp.syphon, v),
             AppControl::Ndi => comp.ndi.enabled = toggled(comp.ndi.enabled, v),
