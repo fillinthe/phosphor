@@ -26,7 +26,7 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
 pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let aspect = st.aspect();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let tap = ui.button(label(icon::METRONOME, "Tap")).on_hover_text("Tap 3+ times to set the tempo");
         map_menu(ui, &tap, ControlTarget::App(phosphor_engine::AppControl::TapTempo));
         if tap.clicked() {
@@ -65,12 +65,11 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 st.clip_page = i;
             }
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button(label(icon::PLUS, "Column")).clicked() {
-                st.comp.clip_columns += 1;
-            }
-            ui.weak("Keys 1–9 trigger this bank's columns · drop media onto a cell · right-click a cell");
-        });
+        ui.separator();
+        if ui.button(label(icon::PLUS, "Column")).clicked() {
+            st.comp.clip_columns += 1;
+        }
+        hint(ui, "Keys 1–9 trigger this bank's columns · drop media onto a cell · right-click a cell");
     });
     ui.add_space(4.0);
     let cols = st.comp.clip_columns.max(1);
@@ -171,7 +170,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             if n == 0 {
-                ui.weak("Add layers first; each layer gets a row of clip slots.");
+                hint(ui, "Add layers first; each layer gets a row of clip slots.");
             }
         });
     }

@@ -17,14 +17,14 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     if st.displays.is_empty() {
-        ui.weak("No displays found.");
+        hint(ui, "No displays found.");
     }
     for d in st.displays.clone() {
         ui.horizontal(|ui| {
             let icon_name = if d.main { icon::LAPTOP } else { icon::PROJECTOR_SCREEN };
             ui.label(format!("{icon_name} {}", d.label()));
             if d.main {
-                ui.weak("(this screen)");
+                hint(ui, "(this screen)");
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("Send Output 1 here").on_hover_text("Opens the first output fullscreen on this display, no menu bar").clicked() {
@@ -60,7 +60,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.end_row();
     });
-    ui.weak("In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
+    hint(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
     ui.separator();
 
     let s = st.stats.latest;
@@ -160,7 +160,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                                 }
                             }
                             if displays.is_empty() {
-                                ui.weak("No displays found");
+                                hint(ui, "No displays found");
                             }
                         });
                         if count > 1 && ui.small_button(icon::TRASH).on_hover_text("Remove output").clicked() {
@@ -189,7 +189,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
 pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         if !st.syphon.available {
-            ui.weak("Syphon unavailable (framework missing)");
+            hint(ui, "Syphon unavailable (framework missing)");
             return;
         }
         let hover = "Publish the composition as \"Phosphor\" — pick it in MadMapper, Resolume, OBS (Syphon Client), VDMX…";
@@ -210,7 +210,7 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         let Some(lib) = crate::ndi::Ndi::library() else {
             ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
-            ui.weak("needs NDI Tools for Mac (then restart Phosphor, not the Mac)");
+            hint(ui, "needs NDI Tools for Mac (then restart Phosphor, not the Mac)");
             if ui.small_button("Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab("https://ndi.video/tools/"));
             }

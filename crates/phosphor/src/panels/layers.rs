@@ -21,7 +21,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         if ui.button(label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
         }
-        ui.weak("Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
+        hint(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
     });
     ui.add_space(2.0);
     let aspect = st.aspect();
@@ -186,7 +186,7 @@ pub(crate) fn master_card(
                 if ui.selectable_label(is_selected, RichText::new("MASTER").strong().size(12.5).color(ACCENT)).clicked() {
                     select = true;
                 }
-                ui.weak("Effects here run over all layers");
+                hint(ui, "Effects here run over all layers");
                 let fx = effects.iter().filter(|e| e.enabled).count();
                 if fx > 0 {
                     let mut active = !*bypass;
@@ -375,7 +375,9 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option
         if ui.button(icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
             action = Some(LayerAction::BrowseSources);
         }
-        ComboBox::from_id_salt(("source", layer.id)).width(150.0).selected_text(layer.source.label()).show_ui(ui, |ui| {
+        // Leave room for the Open and Live icon buttons so the row never runs off the card.
+        let width = (ui.available_width() - 2.0 * (ui.spacing().interact_size.y + 2.0 * ui.spacing().item_spacing.x)).clamp(60.0, 180.0);
+        ComboBox::from_id_salt(("source", layer.id)).width(width).selected_text(layer.source.label()).show_ui(ui, |ui| {
             if ui.selectable_label(layer.source == SourceSpec::None, "No source").clicked() {
                 layer.source = SourceSpec::None;
             }
@@ -387,7 +389,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option
                 }
             }
         });
-        if ui.button(label(icon::FOLDER_OPEN, "Open")).on_hover_text("Image or movie file (or drag one onto the window)").clicked() {
+        if ui.button(icon::FOLDER_OPEN).on_hover_text("Open an image or movie file (or drag one onto the window)").clicked() {
             action = Some(LayerAction::OpenFile);
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -402,7 +404,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
     let mut picked = None;
-    let r = ui.menu_button(label(icon::VIDEO_CAMERA, "Live"), |ui| {
+    let r = ui.menu_button(icon::VIDEO_CAMERA, |ui| {
         ui.set_min_width(260.0);
         let cams_id = egui::Id::new("live_cameras");
         let mut cams: Option<Vec<String>> = ui.ctx().data(|d| d.get_temp(cams_id));
@@ -412,7 +414,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
         let list = cams.clone().unwrap_or_default();
         ui.label(RichText::new("Cameras & capture cards").small().color(Color32::GRAY));
         if list.is_empty() {
-            ui.weak("None found.");
+            hint(ui, "None found.");
         }
         for name in &list {
             if ui.button(label(icon::VIDEO_CAMERA, name)).clicked() {
@@ -435,7 +437,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
             ui.label(RichText::new("Syphon (other apps)").small().color(Color32::GRAY));
             let servers = crate::syphon::servers();
             if servers.is_empty() {
-                ui.weak("No app is publishing Syphon right now.");
+                hint(ui, "No app is publishing Syphon right now.");
             }
             for s in servers {
                 if ui.button(label(icon::SHARE_NETWORK, &s.label())).clicked() {
@@ -457,6 +459,6 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
         });
         ui.ctx().data_mut(|d| d.insert_temp(url_id, url));
     });
-    r.response.on_hover_text("Camera, capture card or network stream (RTSP, SRT, HLS, RTMP)");
+    r.response.on_hover_text("Live input: camera, capture card or network stream (RTSP, SRT, HLS, RTMP)");
     picked
 }

@@ -5,7 +5,7 @@ use super::*;
 pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
     let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id)) else {
-        ui.weak("Select a layer (or MASTER) to edit its source and effects.");
+        hint(ui, "Select a layer (or MASTER) to edit its source and effects.");
         return;
     };
     let clipboard_len = st.fx_clipboard.len();
@@ -17,7 +17,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             let w = ui.available_width().min(360.0);
             thumbnail(ui, tex, egui::vec2(w, w / aspect), true);
             ui.label(RichText::new("MASTER").strong().color(ACCENT));
-            ui.weak("These effects run over the whole mix, after every layer has been blended.");
+            hint(ui, "These effects run over the whole mix, after every layer has been blended.");
             ui.separator();
             fx_action = effects_editor(ui, &mut st.comp.master_effects, clipboard_len);
         });
@@ -53,13 +53,13 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                         ui.selectable_value(&mut layer.transition_kind, k, k.name());
                     }
                 });
-                ui.weak("time and Cut/Fade: Launch settings (Clips panel)");
+                hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
             });
             ui.separator();
             if matches!(layer.source, SourceSpec::Movie { .. }) {
                 ui.label(RichText::new("Playback").strong());
                 if let Some(info) = &info {
-                    ui.weak(info);
+                    hint(ui, info);
                 }
                 if let Some((pos, dur)) = position {
                     seek_to = scrub_bar(ui, pos, dur);

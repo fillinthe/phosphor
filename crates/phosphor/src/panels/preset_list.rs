@@ -36,7 +36,7 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
         ui.add_space(8.0);
         ui.label(RichText::new("Yours").strong());
         if st.presets.user.is_empty() {
-            ui.weak("Nothing saved yet. Name the current look above and save it.");
+            hint(ui, "Nothing saved yet. Name the current look above and save it.");
         }
         for p in &st.presets.user {
             ui.horizontal(|ui| {

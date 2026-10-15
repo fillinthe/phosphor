@@ -214,7 +214,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
         st.selected_surface = Some(id);
     }
-    ui.weak("Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
+    hint(ui, "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
 
     let State { comp, selected_surface, .. } = st;
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
@@ -237,7 +237,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 180.0).max(80.0);
         if o.mapping.surfaces.is_empty() {
-            ui.weak("No surfaces yet. Add one, then drag its corners.");
+            hint(ui, "No surfaces yet. Add one, then drag its corners.");
         }
         for (i, s) in o.mapping.surfaces.iter_mut().enumerate() {
             let is_selected = *selected_surface == Some(s.id);
@@ -316,7 +316,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     ui.toggle_value(&mut m.enabled, RichText::new("ON").small().strong());
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
                     ui.toggle_value(&mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
-                    ui.weak(format!("{} points", m.points.len()));
+                    hint(ui, format!("{} points", m.points.len()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button(icon::TRASH).on_hover_text("Delete mask").clicked() {
                             remove_mask = Some(i);

@@ -117,7 +117,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         ui.colored_label(WARN, msg.as_str());
     }
     ui.add_space(6.0);
-    ui.weak("Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio.");
+    hint(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio.");
     #[cfg(not(target_arch = "wasm32"))]
     if choose_file {
         st.dialogs.save_file(crate::dialogs::Purpose::StreamFile, ("Video", &["mp4", "mov"]), "Phosphor recording.mp4");

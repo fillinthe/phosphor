@@ -127,13 +127,13 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             }
             None => {
                 let verb = if st.explorer.sources { "use it" } else { "add it" };
-                ui.weak(format!("Click to pick · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
+                crate::ui::hint(ui, format!("Click to pick · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
-            ui.weak(status).on_hover_text("ISF shaders from /Library/Graphics/ISF and ~/Library/Graphics/ISF. Skipped ones need multi-pass or feedback support.");
+            crate::ui::hint(ui, status).on_hover_text("ISF shaders from /Library/Graphics/ISF and ~/Library/Graphics/ISF. Skipped ones need multi-pass or feedback support.");
         });
     });
     ui.add_space(2.0);
@@ -156,7 +156,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     let mut action: Option<TileAction> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if filtered.is_empty() {
-            ui.weak("Nothing matches. Clear the search or pick another category.");
+            crate::ui::hint(ui, "Nothing matches. Clear the search or pick another category.");
         }
         let tile_w = 152.0;
         let tile = egui::vec2(tile_w, tile_w / aspect + 30.0);
@@ -230,7 +230,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                             ui.close();
                         }
                     } else {
-                        ui.weak("Multi-pass / 3D effect: not editable yet");
+                        crate::ui::hint(ui, "Multi-pass / 3D effect: not editable yet");
                     }
                 });
             }
@@ -407,7 +407,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             if st.editor.shaders.is_empty() {
-                ui.weak("No shaders yet.");
+                crate::ui::hint(ui, "No shaders yet.");
             }
             for (i, sh) in st.editor.shaders.iter().enumerate() {
                 let name = custom::parse_header(&sh.source).map(|h| h.name).unwrap_or_else(|_| sh.slug.clone());
@@ -437,8 +437,8 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.add_space(20.0);
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Shader Editor").strong().size(16.0));
-            ui.weak("Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
-            ui.weak("Start with + Effect, or right-click any effect in the explorer → Edit a copy.");
+            crate::ui::hint(ui, "Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
+            crate::ui::hint(ui, "Start with + Effect, or right-click any effect in the explorer → Edit a copy.");
         });
         return;
     };
@@ -465,7 +465,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         if let Some(t) = st.preview_tex(&format!("edit:{id}")) {
             panels::paint_texture(ui.painter(), t, rect);
         }
-        ui.weak(if is_generator { "Live preview" } else { "Live preview on the selected layer" });
+        crate::ui::hint(ui, if is_generator { "Live preview" } else { "Live preview on the selected layer" });
         ui.add_space(4.0);
         let ok = compiled && st.editor.shaders[idx].error.is_none();
         ui.add_enabled_ui(ok, |ui| {
@@ -508,7 +508,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         match &sh.error {
             Some(_) => ui.colored_label(WARN, "● error"),
             None if sh.compiled => ui.colored_label(ACCENT, "● compiled · saved"),
-            None => ui.weak("not compiled"),
+            None => crate::ui::hint(ui, "not compiled"),
         };
     });
     if let Some(e) = &sh.error {
@@ -687,10 +687,10 @@ pub fn palette(ctx: &egui::Context, st: &mut State) -> Option<Command> {
                     }
                 }
                 if ranked.is_empty() {
-                    ui.weak("No matches");
+                    crate::ui::hint(ui, "No matches");
                 }
                 ui.add_space(2.0);
-                ui.weak("↑↓ to move · Enter to run · Esc to close");
+                crate::ui::hint(ui, "↑↓ to move · Enter to run · Esc to close");
             });
         });
     if enter && let Some((_, _, cmd)) = ranked.get(st.palette.selected) {
@@ -786,7 +786,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
         }
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             if shown.is_empty() {
-                ui.weak("Nothing matches.");
+                crate::ui::hint(ui, "Nothing matches.");
             }
             let tile_w = 128.0;
             let tile = egui::vec2(tile_w, tile_w / aspect + 20.0);
@@ -824,7 +824,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
                 }
             });
         });
-        ui.weak("Click adds and closes · Shift-click adds more · Esc closes");
+        crate::ui::hint(ui, "Click adds and closes · Shift-click adds more · Esc closes");
     });
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         open = false;

@@ -33,7 +33,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
         });
     });
     if effects.is_empty() {
-        ui.weak("No effects yet. Effects run top to bottom; drag the handle to reorder.");
+        hint(ui, "No effects yet. Effects run top to bottom; drag the handle to reorder.");
     }
     let mut remove = None;
     let mut swap = None;
@@ -80,7 +80,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                     }
                 });
                 if fx.mix < 0.999 {
-                    ui.weak(format!("{:.0}%", fx.mix * 100.0));
+                    hint(ui, format!("{:.0}%", fx.mix * 100.0));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.small_button(icon::TRASH).on_hover_text("Remove effect").clicked() {

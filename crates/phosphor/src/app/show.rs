@@ -51,7 +51,7 @@ impl PhosphorApp {
                             ui.spinner();
                             ui.label(&p.step);
                         });
-                        ui.weak("The show keeps running while this works.");
+                        crate::ui::hint(ui, "The show keeps running while this works.");
                     }
                     Some(p) => {
                         if let Some(app) = &p.output {
@@ -60,7 +60,7 @@ impl PhosphorApp {
                             if let Some(z) = &p.zip {
                                 ui.label(format!("Zip: {}", z.display()));
                             }
-                            ui.weak("Copy it to the other Mac and double-click. First time: right-click → Open (it isn't notarized yet).");
+                            crate::ui::hint(ui, "Copy it to the other Mac and double-click. First time: right-click → Open (it isn't notarized yet).");
                             ui.horizontal(|ui| {
                                 if ui.button(label_text(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
                                     let _ = std::process::Command::new("open").arg("-R").arg(app).spawn();
@@ -88,7 +88,7 @@ impl PhosphorApp {
                         ui.checkbox(&mut st.export.autostart, "Open the outputs full screen when the show starts");
                         ui.checkbox(&mut st.export.zip, "Also make a .zip (easier to send)");
                         let (files, bytes, missing) = *st.export.summary.get_or_insert_with(|| crate::export::summary(&st.comp));
-                        ui.weak(format!("{files} media file(s), {:.1} MB · {} output(s) · {} mapping(s)", bytes as f64 / 1e6, st.comp.outputs.len(), st.comp.control_maps.len()));
+                        crate::ui::hint(ui, format!("{files} media file(s), {:.1} MB · {} output(s) · {} mapping(s)", bytes as f64 / 1e6, st.comp.outputs.len(), st.comp.control_maps.len()));
                         if missing > 0 {
                             ui.colored_label(egui::Color32::from_rgb(255, 196, 70), format!("{missing} file(s) can't be found and will be left out"));
                         }

@@ -165,10 +165,10 @@ pub(crate) fn output_toggle(ui: &mut egui::Ui, on: &mut bool, glyph: &str, name:
 pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
     match status {
         OutputStatus::Off => {
-            ui.weak("off");
+            hint(ui, "off");
         }
         OutputStatus::Waiting(text) => {
-            ui.weak(text);
+            hint(ui, text);
         }
         OutputStatus::Receiving(n) => {
             ui.label(RichText::new(format!("{} {n} receiving", icon::CHECK_CIRCLE)).small().color(ACCENT));
@@ -225,4 +225,15 @@ pub(crate) fn value_bubble(ui: &egui::Ui, slider: &egui::Response, text: impl In
     painter.rect_filled(rect, 4.0, Color32::from_rgb(20, 22, 24));
     painter.rect_stroke(rect, 4.0, Stroke::new(1.0, ACCENT), StrokeKind::Outside);
     painter.galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
+}
+
+/// Grey help text. In a row it shrinks to the space left (full text on hover) instead of
+/// overlapping its neighbours; on its own line it wraps.
+pub(crate) fn hint(ui: &mut egui::Ui, text: impl Into<egui::RichText>) -> egui::Response {
+    let label = egui::Label::new(text.into().weak());
+    if ui.layout().main_dir().is_horizontal() {
+        ui.add(label.truncate())
+    } else {
+        ui.add(label.wrap())
+    }
 }

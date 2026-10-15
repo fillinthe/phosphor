@@ -157,9 +157,9 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     let State { comp, thumbs, .. } = st;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
-            ui.weak("Empty. Import files, watch a folder, or drop files onto the window.");
+            hint(ui, "Empty. Import files, watch a folder, or drop files onto the window.");
         } else if shown.is_empty() {
-            ui.weak("Nothing matches this filter.");
+            hint(ui, "Nothing matches this filter.");
         }
         for group in groups {
             let all = group == "\u{0}all";

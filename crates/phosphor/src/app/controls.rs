@@ -86,7 +86,7 @@ impl PhosphorApp {
             egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(40, 34, 14)).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!("{} Learning: {name}", icon::BROADCAST)).color(egui::Color32::from_rgb(255, 205, 90)));
-                    ui.weak("move a knob, send OSC, or press a key");
+                    crate::ui::hint(ui, "move a knob, send OSC, or press a key");
                     if ui.small_button("Cancel (Esc)").clicked() {
                         self.state.control.learning = None;
                     }

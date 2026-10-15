@@ -81,9 +81,9 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         let an = audio.analysis();
         if an.bpm > 0.0 {
             ui.monospace(format!("{:.1} BPM", an.bpm));
-            ui.weak(format!("{:.0}% steady", an.confidence * 100.0));
+            hint(ui, format!("{:.0}% steady", an.confidence * 100.0));
         } else {
-            ui.weak("listening for a beat…");
+            hint(ui, "listening for a beat…");
         }
     });
     let kick = guarded!(ui, audio.beats.sensitivity, Slider::new(&mut audio.beats.sensitivity, 1.1..=3.0).text("Kick threshold").fixed_decimals(2))
@@ -93,8 +93,8 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         let r = ui.toggle_value(follow_audio, label(icon::METRONOME, "Follow audio"))
             .on_hover_text("Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick");
         map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
-        ui.weak("Also: Audio beat (kick) under any slider's wave button.");
+        hint(ui, "Also: Audio beat (kick) under any slider's wave button.");
     });
     ui.add_space(4.0);
-    ui.weak(format!("Press {} next to any slider to drive it with these signals or an LFO.", icon::WAVE_SINE));
+    hint(ui, format!("Press {} next to any slider to drive it with these signals or an LFO.", icon::WAVE_SINE));
 }

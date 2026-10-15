@@ -46,7 +46,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
             }
         });
         ui.toggle_value(&mut cfg.grid, icon::GRID_FOUR).on_hover_text("Thirds and centre guides");
-        ui.weak("Drag the tab anywhere, or right-click it → Detach for its own window");
+        hint(ui, "Drag the tab anywhere, or right-click it → Detach for its own window");
     });
     st.monitors.insert(n, cfg);
     let rect = ui.available_rect_before_wrap();

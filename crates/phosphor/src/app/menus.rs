@@ -248,7 +248,7 @@ impl PhosphorApp {
                         }
                         Entry::Dynamic("Panels") => {
                             ui.menu_button("Panels", |ui| {
-                                ui.weak("Drag any tab to move it; drag it outside to float it.");
+                                crate::ui::hint(ui, "Drag any tab to move it; drag it outside to float it.");
                                 for (i, tab) in Tab::ALL.iter().enumerate() {
                                     let open = self.detached.contains(tab) || self.dock.find_tab(tab).is_some();
                                     if ui.selectable_label(open, tab.title()).clicked() {
