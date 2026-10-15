@@ -40,9 +40,9 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
             });
             ui.label(RichText::new("Columns").small().color(Color32::GRAY));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
-            ui.weak("Drag to move · corner to resize · right-click to map");
+            hint(ui, "Drag to move · corner to resize · right-click to map");
         } else if st.comp.surface.widgets.is_empty() {
-            ui.weak("Empty. Turn on Edit and add buttons, faders and pads.");
+            hint(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
     });
 
@@ -292,7 +292,7 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
         ui.add_space(4.0);
         let axis = if w.kind == WidgetKind::XyPad { "Horizontal (X) drives" } else { "Drives" };
         ui.label(RichText::new(axis).strong());
-        ui.weak("Each target gets this widget's value, rescaled to its from–to range.");
+        hint(ui, "Each target gets this widget's value, rescaled to its from–to range.");
         binding_list(ui, ("bindings", id), targets, &mut w.bindings);
         if w.kind == WidgetKind::XyPad {
             ui.add_space(4.0);
@@ -300,7 +300,7 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
             binding_list(ui, ("bindings_y", id), targets, &mut w.bindings_y);
         }
         ui.add_space(4.0);
-        ui.weak(format!("OSC: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));
+        hint(ui, format!("OSC: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));
     }
     ui.add_space(6.0);
     ui.horizontal(|ui| {

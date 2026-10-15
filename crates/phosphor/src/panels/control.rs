@@ -6,9 +6,9 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     let control = &mut st.control;
     ui.label(RichText::new("MIDI").strong());
     if control.midi_ports.is_empty() {
-        ui.weak("No MIDI inputs found. Plug in a controller and press Reconnect.");
+        hint(ui, "No MIDI inputs found. Plug in a controller and press Reconnect.");
     } else {
-        ui.weak(format!("Listening on: {}", control.midi_ports.join(", ")));
+        hint(ui, format!("Listening on: {}", control.midi_ports.join(", ")));
     }
     ui.horizontal(|ui| {
         ui.label(RichText::new("OSC").strong());
@@ -17,11 +17,11 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             control.reconnect();
         }
     });
-    ui.weak(&control.osc_status);
-    ui.weak("TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
+    hint(ui, &control.osc_status);
+    hint(ui, "TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
     match &control.last {
         Some(m) => ui.monospace(format!("last input: {}  {:.3}", m.source.label(), m.value)),
-        None => ui.weak("No controller messages received yet."),
+        None => hint(ui, "No controller messages received yet."),
     };
     ui.separator();
 
@@ -47,7 +47,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     let listening = control.listen_source;
     ui.horizontal(|ui| {
         ui.label(RichText::new("Mappings").strong());
-        ui.weak(format!("{}", comp.control_maps.len()));
+        hint(ui, format!("{}", comp.control_maps.len()));
         if listening {
             ui.label(RichText::new(format!("{} Listening… touch a knob, pad or key, or send OSC", icon::EAR)).color(Color32::from_rgb(255, 205, 90)));
             ui.ctx().request_repaint();
@@ -97,7 +97,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     let mut remove = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.control_maps.is_empty() && map_draft.is_none() {
-            ui.weak("None yet. Press Listen and move a control, or right-click any slider or button → Listen, or use MAP in the top bar.");
+            hint(ui, "None yet. Press Listen and move a control, or right-click any slider or button → Listen, or use MAP in the top bar.");
         }
         egui::Grid::new("mappings").num_columns(6).striped(true).spacing([6.0, 3.0]).show(ui, |ui| {
             for (i, m) in comp.control_maps.iter_mut().enumerate() {

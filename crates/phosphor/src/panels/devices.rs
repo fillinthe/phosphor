@@ -8,16 +8,16 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("{} Phones & browsers", icon::DEVICE_MOBILE)).strong());
             if st.net.running() {
-                ui.weak(st.net.url());
+                hint(ui, st.net.url());
             } else {
-                ui.weak("session is off (Session panel)");
+                hint(ui, "session is off (Session panel)");
             }
         });
         #[cfg(not(target_arch = "wasm32"))]
         {
             let peers = st.net.peers();
             if peers.is_empty() {
-                ui.weak("Nobody connected.");
+                hint(ui, "Nobody connected.");
             }
             egui::Grid::new("peers").num_columns(5).striped(true).spacing([10.0, 4.0]).show(ui, |ui| {
                 for p in &peers {
@@ -30,7 +30,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                     ui.label(format!("{glyph} {}", p.device));
                     ui.monospace(&p.ip);
                     ui.label(RichText::new(what).small());
-                    ui.weak(ago(p.since));
+                    hint(ui, ago(p.since));
                     ui.horizontal(|ui| {
                         if ui.small_button("Disconnect").on_hover_text("Drops it now; it can reconnect").clicked() {
                             st.net.disconnect(p.id);
@@ -67,7 +67,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         });
         let all = st.control.midi_all.clone();
         if all.is_empty() {
-            ui.weak("No MIDI devices found.");
+            hint(ui, "No MIDI devices found.");
         }
         let seen = st.control.activity.lock().unwrap().midi_seen.clone();
         let mut changed = false;
@@ -95,20 +95,20 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         // OSC senders.
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("{} OSC senders", icon::BROADCAST)).strong());
-            ui.weak(&st.control.osc_status);
+            hint(ui, &st.control.osc_status);
         });
         let (senders, blocked) = {
             let a = st.control.activity.lock().unwrap();
             (a.osc.values().cloned().collect::<Vec<_>>(), a.osc_blocked.clone())
         };
         if senders.is_empty() {
-            ui.weak("No OSC received yet.");
+            hint(ui, "No OSC received yet.");
         }
         for s in senders {
             ui.horizontal(|ui| {
                 activity_dot(ui, Some(s.last_seen));
                 ui.monospace(&s.ip);
-                ui.weak(format!("{} msgs · {}", s.count, s.last_address));
+                hint(ui, format!("{} msgs · {}", s.count, s.last_address));
                 let is_blocked = blocked.contains(&s.ip);
                 let text = if is_blocked { "Unblock" } else { "Block" };
                 if ui.small_button(text).clicked() {
@@ -128,7 +128,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         if st.audio.is_open() {
             ui.label(st.audio.current().unwrap_or("Default input"));
         } else {
-            ui.weak("off (Audio panel)");
+            hint(ui, "off (Audio panel)");
         }
         ui.separator();
         ui.label(RichText::new(format!("{} Outputs", icon::PROJECTOR_SCREEN)).strong());
@@ -141,7 +141,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             let open = windows.iter().any(|(id, on)| *id == o.id && *on);
             ui.horizontal(|ui| {
                 ui.label(&o.name);
-                ui.weak(if open { "window open" } else { "closed" });
+                hint(ui, if open { "window open" } else { "closed" });
             });
         }
     });

@@ -36,7 +36,7 @@ impl PhosphorApp {
             });
             ui.checkbox(&mut draft.1, "Open with this layout when Phosphor starts");
             if self.layouts.saved.iter().any(|l| l.name == draft.0.trim()) {
-                ui.weak("Replaces the saved layout with this name.");
+                crate::ui::hint(ui, "Replaces the saved layout with this name.");
             }
             save |= ui.add_enabled(!draft.0.trim().is_empty(), egui::Button::new("Save")).clicked();
         });

@@ -64,7 +64,7 @@ impl PhosphorApp {
             egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(20, 44, 32)).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!("{} Recovered after an unexpected quit", icon::LIFEBUOY)).color(theme::ACCENT).strong());
-                    ui.weak("project, layout, outputs, session and audio were restored");
+                    crate::ui::hint(ui, "project, layout, outputs, session and audio were restored");
                     if was_streaming && ui.button(format!("{} Resume stream", icon::BROADCAST)).clicked() {
                         let (w, h) = (self.state.comp.width, self.state.comp.height);
                         let now = ui.ctx().input(|i| i.time);

@@ -5,7 +5,7 @@ use super::*;
 pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     let State { net, notice, audio, remote_password, require_password, .. } = st;
     ui.label(RichText::new("Session").strong());
-    ui.weak("Anyone on your network opens the link and sees the output live; they can send their music back.");
+    hint(ui, "Anyone on your network opens the link and sees the output live; they can send their music back.");
     ui.horizontal(|ui| {
         ui.add_enabled_ui(!net.running(), |ui| {
             guarded!(ui, net.port, egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
@@ -36,7 +36,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         });
         ui.separator();
         ui.label(RichText::new(format!("{} Phone / tablet remote", icon::DEVICE_MOBILE)).strong());
-        ui.weak("Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
+        hint(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
         ui.horizontal(|ui| {
             ui.checkbox(require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");
@@ -57,7 +57,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                     ui.ctx().copy_text(remote.clone());
                 }
                 ui.monospace(format!("remotes connected: {}", net.remotes.load(std::sync::atomic::Ordering::Relaxed)));
-                ui.weak("Tip: Share ▸ Add to Home Screen makes it full-screen like an app.");
+                hint(ui, "Tip: Share ▸ Add to Home Screen makes it full-screen like an app.");
             });
         });
         ui.separator();
@@ -74,7 +74,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             ui.colored_label(ACCENT, "Audio analysis is listening to session viewers");
         }
         ui.add_space(4.0);
-        ui.weak("Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
+        hint(ui, "Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
     }
     if let Some(msg) = notice {
         ui.colored_label(WARN, msg.as_str());

@@ -48,7 +48,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     });
     ui.menu_button(label(icon::PLUG, "Map to…"), |ui| {
         ui.set_min_width(300.0);
-        ui.weak("Type an input by hand (or use Listen above):");
+        hint(ui, "Type an input by hand (or use Listen above):");
         let id = egui::Id::new(("map_draft", format!("{target:?}")));
         let mut draft: phosphor_engine::ControlSource = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(phosphor_engine::ControlSource::MidiCc { channel: 0, cc: 1 });
         let mut set = false;
