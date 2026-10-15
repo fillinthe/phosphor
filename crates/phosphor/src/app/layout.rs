@@ -297,6 +297,14 @@ impl Layouts {
     }
 }
 
+/// What the account keeps of your layouts: every saved one, the startup choice and the arrangement in use.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub(crate) struct AccountLayouts {
+    pub layouts: Layouts,
+    pub current: Option<SavedLayout>,
+}
+
 pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] =
     &[("Default", default_layout), ("Performance", layout_performance), ("Mapping", layout_mapping)];
 

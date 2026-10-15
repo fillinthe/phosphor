@@ -147,6 +147,8 @@ impl PhosphorApp {
             title: String::new(),
             show_start: None,
             layouts,
+            cloud_layouts_applied: false,
+            cloud_layouts_check: 5.0,
             layout_draft: None,
             last_ui: (web_time::Instant::now(), 0.0),
             hidden_pacer: Default::default(),

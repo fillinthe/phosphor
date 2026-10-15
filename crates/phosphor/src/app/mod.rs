@@ -445,6 +445,9 @@ pub struct PhosphorApp {
     detached: Vec<Tab>,
     /// Built-in and saved layouts, and which opens at startup.
     layouts: Layouts,
+    /// Layouts from the account were applied this session; next upload check (seconds).
+    cloud_layouts_applied: bool,
+    cloud_layouts_check: f64,
     /// Save Layout window: (name, open at startup).
     layout_draft: Option<(String, bool)>,
     /// When the last UI frame ran (wall clock) and its egui time: `logic` keeps the show going
@@ -522,6 +525,7 @@ impl eframe::App for PhosphorApp {
 impl PhosphorApp {
     /// Projects opened from / saved to the phosphorfx.com account (see `account.rs`).
     pub(crate) fn account_events(&mut self, ctx: &egui::Context) {
+        self.sync_layouts(ctx);
         let st = &mut self.state;
         #[cfg(target_arch = "wasm32")]
         if let Some((name, json)) = crate::web_files::take_opened() {
@@ -534,6 +538,7 @@ impl PhosphorApp {
                 Err(e) => st.notice = Some(format!("Couldn't open {name}: {e}")),
             }
         }
+        let mut cloud_layouts = None;
         for e in st.account.tick(ctx) {
             match e {
                 crate::account::Event::Opened(id, name, json) => match Composition::from_json(&json) {
@@ -550,7 +555,45 @@ impl PhosphorApp {
                     st.notice = Some(format!("Saved {name} to your account"));
                     st.cloud_project = Some((id, name));
                 }
+                crate::account::Event::Layouts(text) => cloud_layouts = Some(text),
             }
+        }
+        if let Some(text) = cloud_layouts {
+            self.apply_account_layouts(&text);
+        }
+    }
+
+    /// Layouts from your account: saved ones are added (same name: the account's wins), and the arrangement you
+    /// last used anywhere opens, once per session (signing in on a new computer brings your workspace along).
+    fn apply_account_layouts(&mut self, text: &str) {
+        let Some(cloud) = layout::from_text::<layout::AccountLayouts>(text) else { return };
+        for l in &cloud.layouts.saved {
+            self.layouts.save(&l.name, &l.dock, &l.detached);
+        }
+        if self.layouts.startup.is_none() {
+            self.layouts.startup = cloud.layouts.startup.clone();
+        }
+        if !self.cloud_layouts_applied
+            && let Some(cur) = cloud.current
+        {
+            self.dock = cur.dock;
+            self.detached = cur.detached;
+            self.state.notice = Some("Your layout from your account is open".into());
+        }
+        self.cloud_layouts_applied = true;
+        self.install_native_menu();
+    }
+
+    /// Uploads your layouts when signed in and they changed (checked every 30 s; the account skips unchanged text).
+    fn sync_layouts(&mut self, ctx: &egui::Context) {
+        let now = ctx.input(|i| i.time);
+        if now < self.cloud_layouts_check || !self.state.account.signed_in() {
+            return;
+        }
+        self.cloud_layouts_check = now + 30.0;
+        let current = layout::SavedLayout { name: "Current".into(), dock: self.dock.clone(), detached: self.detached.clone() };
+        if let Some(text) = layout::to_text(&layout::AccountLayouts { layouts: self.layouts.clone(), current: Some(current) }) {
+            self.state.account.push_layouts(ctx, &text);
         }
     }
 }

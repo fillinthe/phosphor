@@ -1,4 +1,4 @@
-//! Account panel: sign in, and (Pro) projects stored in your phosphorfx.com account.
+//! Account panel: sign in (optional in the Mac app), projects kept in your phosphorfx.com account, layouts synced.
 
 use super::*;
 
@@ -36,7 +36,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     };
     ui.horizontal(|ui| {
         ui.label(&user.email);
-        let plan = if a.can_store() { RichText::new("Pro").color(ACCENT).strong() } else { RichText::new("Free").color(Color32::GRAY) };
+        let plan = if a.pro() { RichText::new("Pro").color(ACCENT).strong() } else { RichText::new("Free").color(Color32::GRAY) };
         ui.label(plan);
         if ui.small_button("Account page").clicked() {
             a.open_web(&ctx, "/account/");
@@ -46,22 +46,15 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     ui.separator();
-    if !a.can_store() {
-        ui.label("Saving projects to your account is part of Phosphor Pro: your shows open on any computer you sign in on.");
-        if Account::web() {
-            hint(ui, "In the browser, projects are kept only in your account.");
-        } else {
-            hint(ui, "File › Save keeps projects on this computer, free.");
-        }
-        if ui.button(label(icon::STAR, "See Pro")).clicked() {
-            a.open_web(&ctx, "/#pricing");
-        }
-        return;
-    }
     if let Some((used, max)) = a.storage {
         let frac = if max > 0 { used as f32 / max as f32 } else { 0.0 };
         ui.add(egui::ProgressBar::new(frac).desired_height(6.0).fill(ACCENT.gamma_multiply(0.6)));
-        hint(ui, format!("{:.1} MB of {} MB used", used as f64 / 1_048_576.0, max >> 20));
+        ui.horizontal(|ui| {
+            hint(ui, format!("{:.1} MB of {} MB used · your layouts are kept here too", used as f64 / 1_048_576.0, max >> 20));
+            if !a.pro() && ui.small_button(label(icon::STAR, "More space")).on_hover_text("Phosphor Pro: 1 GB").clicked() {
+                a.open_web(&ctx, "/#pricing");
+            }
+        });
     }
     if f.name.is_empty() {
         f.name = cloud_project
@@ -139,7 +132,7 @@ fn sign_in_form(ui: &mut egui::Ui, ctx: &egui::Context, a: &mut Account, f: &mut
         }
         return;
     }
-    ui.label("Sign in with your phosphorfx.com account to keep projects there (Pro).");
+    ui.label("Optional: sign in to keep your projects and layouts in your phosphorfx.com account (free).");
     egui::Grid::new("signin").num_columns(2).show(ui, |ui| {
         ui.label("Email");
         ui.add(egui::TextEdit::singleline(&mut f.email).desired_width(220.0));

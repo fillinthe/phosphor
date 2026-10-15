@@ -147,7 +147,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Clip banks A–D (pages of 9 columns), bar-quantise
 - [x] Detach any panel into its own OS window (tab menu → Detach; closing it docks it back)
 - [ ] Ableton Link, MIDI clock in, effect-based transitions
-- [ ] Master crossfader (A/B groups)
+- [x] Master crossfader (A/B groups)
 - [ ] Layer groups
 
 ### Phase 3: Modular control (VDMX-style)
@@ -227,7 +227,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 ### Phase 6: Accounts & sync
 - [ ] Project format: versioned JSON (layout + composition + mappings), already serde
 - [x] Phosphor account service (phosphorfx.com): sign-in, Pro project storage, in-app Account panel
-- [ ] Layouts and control surfaces in the account
+- [x] Layouts in the account (sync)
+- [ ] Control surfaces in the account
 - [ ] Sync projects, UI layouts, control surfaces and mappings across devices
 - [ ] Media handling: references plus an optional cloud media library
 
