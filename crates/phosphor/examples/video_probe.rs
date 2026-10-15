@@ -1,9 +1,9 @@
-//! Throwaway probe for media/video.rs: plays each file against a simulated 60 Hz clock.
+//! Throwaway probe for media/video: plays each file against a simulated 60 Hz clock.
 //! Usage: video_probe FILE...            (probe)
 //!        video_probe --gen-hap DIR      (write synthetic Hap/Hap Alpha/Hap Q test movies)
 
 #[allow(dead_code)]
-#[path = "../src/media/video.rs"]
+#[path = "../src/media/video/mod.rs"]
 mod video;
 
 use std::time::{Duration, Instant};

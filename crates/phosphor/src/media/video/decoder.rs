@@ -1,0 +1,623 @@
+//! The decoder thread: FFmpeg demux + decode (VideoToolbox when it can), seeks, loop regions, reverse and
+//! ping-pong, and the presentation clock the player follows.
+
+use super::*;
+
+/// Decoder state owned by the background thread.
+pub(super) struct Decoder {
+    path: String,
+    input: ff::format::context::Input,
+    stream: usize,
+    tb: f64,
+    start_ts: i64,
+    default_dur: f64,
+    pub(super) duration: Option<f64>,
+    pub(super) codec: String,
+    pub(super) dec: ff::decoder::Video,
+    /// VideoToolbox was attached; cleared if it fails before the first frame.
+    hw: bool,
+    frame: ff::frame::Video,
+    mapped: ff::frame::Video,
+    scaler: Scaler,
+    eof_sent: bool,
+    /// First pts of the file, subtracted so playback starts at 0.
+    origin: Option<i64>,
+    last_rel: f64,
+    /// Longest media time seen (the movie's length when the container doesn't say).
+    loop_len: f64,
+    /// Presentation time of the next frame sent. Grows by each frame's duration whichever way the
+    /// movie plays, so loops, reverse and ping-pong all look like one continuous stream to the player.
+    out_clock: Option<f64>,
+    /// Times the movie has looped or turned around (0 = first pass).
+    passes: u32,
+    /// Media time of the last frame sent.
+    last_sent: f64,
+    /// Playing backwards: frames before `rev_end` are decoded a chunk at a time into `rev_buf`
+    /// and sent from the back.
+    reversing: bool,
+    rev_end: f64,
+    rev_buf: Vec<(f64, f64, VideoFrame)>,
+    frames_in_loop: u64,
+    skips: u32,
+    errors: u32,
+    live: bool,
+    /// Tag for frames sent (the seek they belong to).
+    generation: u64,
+    /// After a seek: decode and drop frames until this media time.
+    seek_target: Option<f64>,
+    /// Live pacing: (first pts, when it arrived). Inputs that run faster than real time (test
+    /// sources, recorded streams) are slowed to their timestamps; cameras already are.
+    live_start: Option<(f64, std::time::Instant)>,
+}
+
+impl Decoder {
+    pub(super) fn open(path: &str) -> Result<Self, String> {
+        let input = ff::format::input(&path).map_err(|e| format!("can't open ({e})"))?;
+        Self::from_input(path, input, false)
+    }
+
+    pub(super) fn open_live(format: &str, url: &str, options: &[(&str, &str)]) -> Result<Self, String> {
+        static DEVICES: Once = Once::new();
+        DEVICES.call_once(ff::device::register_all);
+        let mut dict = ff::Dictionary::new();
+        for (k, v) in options {
+            dict.set(k, v);
+        }
+        let ctx = if format.is_empty() {
+            ff::format::input_with_dictionary(&url, dict).map_err(|e| format!("can't open ({e})"))?
+        } else {
+            let fmt = ff::device::input::video()
+                .find(|f| match f {
+                    ff::Format::Input(i) => i.name() == format,
+                    _ => false,
+                })
+                .ok_or_else(|| format!("input type \"{format}\" isn't available"))?;
+            match ff::format::open_with(&url, &fmt, dict).map_err(|e| format!("can't open ({e})"))? {
+                ff::format::context::Context::Input(i) => i,
+                _ => return Err("not an input".into()),
+            }
+        };
+        Self::from_input(url, ctx, true)
+    }
+
+    fn from_input(path: &str, input: ff::format::context::Input, live: bool) -> Result<Self, String> {
+        let st = input
+            .streams()
+            .best(ff::media::Type::Video)
+            .ok_or("no video stream")?;
+        let stream = st.index();
+        let tb = f64::from(st.time_base());
+        let tb = if tb > 0.0 { tb } else { 1.0 / 90_000.0 };
+        let fps = f64::from(st.avg_frame_rate());
+        let default_dur = if fps > 0.0 && fps < 1000.0 {
+            1.0 / fps
+        } else {
+            1.0 / 30.0
+        };
+        let duration = if input.duration() > 0 {
+            Some(input.duration() as f64 / f64::from(ff::ffi::AV_TIME_BASE))
+        } else if st.duration() > 0 {
+            Some(st.duration() as f64 * tb)
+        } else {
+            None
+        };
+        let start_ts = if st.start_time() != NOPTS {
+            st.start_time()
+        } else {
+            0
+        };
+        let (dec, codec, hw) = open_decoder(&input, stream, true)?;
+        Ok(Self {
+            path: path.to_string(),
+            input,
+            stream,
+            tb,
+            start_ts,
+            default_dur,
+            duration,
+            codec,
+            dec,
+            hw,
+            frame: ff::frame::Video::empty(),
+            mapped: ff::frame::Video::empty(),
+            scaler: Scaler::default(),
+            eof_sent: false,
+            origin: None,
+            last_rel: -1.0,
+            loop_len: 0.0,
+            out_clock: None,
+            passes: 0,
+            last_sent: 0.0,
+            reversing: false,
+            rev_end: 0.0,
+            rev_buf: Vec::new(),
+            frames_in_loop: 0,
+            skips: 0,
+            errors: 0,
+            live,
+            live_start: None,
+            generation: 0,
+            seek_target: None,
+        })
+    }
+
+    pub(super) fn run(&mut self, sh: &Shared, tx: &SyncSender<Msg>) -> Result<(), String> {
+        loop {
+            let (seek, mode) = match sh.ctl.lock() {
+                Ok(mut c) if !c.quit => (c.seek.take(), c.mode),
+                _ => return Ok(()),
+            };
+            if let Some((t, generation)) = seek {
+                self.generation = generation;
+                self.out_clock = None;
+                self.drop_reverse(sh);
+                self.reversing = mode.direction == PlayDirection::Reverse && !self.live;
+                if self.reversing {
+                    // Include the frame on screen at `t`.
+                    self.rev_end = t + 1e-4;
+                } else {
+                    self.seek_to(t)?;
+                }
+            }
+            let (lo, hi) = self.bounds(mode);
+            if self.reversing {
+                if !self.reverse_step(sh, tx, mode, lo, hi)? {
+                    return Ok(());
+                }
+                continue;
+            }
+            let more = match self.next_frame() {
+                Ok(more) => more,
+                Err(e) if self.hw && self.origin.is_none() => {
+                    self.fallback_to_software(&e, sh)?;
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            if !more && self.live {
+                return Err("the input stopped (unplugged or closed?)".into());
+            }
+            if !more {
+                if self.frames_in_loop == 0 && self.hw && self.origin.is_none() {
+                    self.fallback_to_software("no frames", sh)?;
+                    continue;
+                }
+                if self.frames_in_loop == 0 {
+                    return Err("no decodable video frames".into());
+                }
+                // Single-frame files (stills) never need re-decoding.
+                let still = self.frames_in_loop == 1 && self.passes == 0 && mode == PlayMode::default();
+                if !self.at_end(sh, tx, mode, lo, hi, still)? {
+                    return Ok(());
+                }
+                continue;
+            }
+            sh.decoded.fetch_add(1, Ordering::Relaxed);
+            let (rel, dur) = self.timing();
+            // After a seek, frames before the target only lead up to it.
+            if let Some(target) = self.seek_target {
+                // Drop frames whose display time ends at or before the target (the one shown at
+                // `target` is the one whose interval contains it).
+                if rel + dur <= target + 1e-6 {
+                    continue;
+                }
+                self.seek_target = None;
+            }
+            if !self.live && mode.range.is_some() {
+                if rel >= hi - 1e-6 {
+                    if !self.at_end(sh, tx, mode, lo, hi, false)? {
+                        return Ok(());
+                    }
+                    continue;
+                }
+                if rel + dur <= lo + 1e-6 {
+                    // Before the in point (it moved, or a seek landed there).
+                    self.jump(lo)?;
+                    continue;
+                }
+            }
+            let pts = self.next_pts(rel, dur);
+            if self.late(sh, pts, dur) {
+                continue;
+            }
+            if self.live {
+                let (rel0, t0) = *self.live_start.get_or_insert((rel, std::time::Instant::now()));
+                let ahead = (rel - rel0) - t0.elapsed().as_secs_f64();
+                if ahead > 0.002 {
+                    std::thread::sleep(std::time::Duration::from_secs_f64(ahead.min(0.25)));
+                } else if ahead < -1.0 {
+                    // Fell far behind (stall, clock jump): re-anchor instead of racing to catch up.
+                    self.live_start = Some((rel, std::time::Instant::now()));
+                }
+            }
+            let src = self.download(sh)?;
+            let out = self.scaler.convert(src, sh)?;
+            self.last_sent = rel;
+            if tx.send(Msg::Frame(self.generation, pts, rel, out)).is_err() {
+                return Ok(());
+            }
+        }
+    }
+
+    /// Loop region in seconds (the whole movie when none is set).
+    fn bounds(&self, mode: PlayMode) -> (f64, f64) {
+        let len = match self.duration {
+            Some(d) if d > 0.0 => d,
+            _ if self.loop_len > 0.0 => self.loop_len,
+            _ => f64::INFINITY,
+        };
+        match mode.range {
+            Some((a, b)) => (a.clamp(0.0, len), b.min(len)),
+            None => (0.0, len),
+        }
+    }
+
+    fn next_pts(&mut self, rel: f64, dur: f64) -> f64 {
+        let pts = *self.out_clock.get_or_insert(rel);
+        self.out_clock = Some(pts + dur);
+        pts
+    }
+
+    /// True if a frame at `pts` is already too late to show (skipped, but never too many in a row).
+    fn late(&mut self, sh: &Shared, pts: f64, dur: f64) -> bool {
+        let clock = f64::from_bits(sh.clock.load(Ordering::Relaxed));
+        if !self.live && pts + dur < clock - LATE && self.skips < MAX_SKIP {
+            self.skips += 1;
+            sh.skipped.fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
+        self.skips = 0;
+        false
+    }
+
+    /// Reached the end of the loop region (or of the movie) going either way: loop, turn around,
+    /// or stop until looping is switched back on. Returns false when the player is gone.
+    fn at_end(&mut self, sh: &Shared, tx: &SyncSender<Msg>, mode: PlayMode, lo: f64, hi: f64, still: bool) -> Result<bool, String> {
+        if still || !sh.ctl.lock().is_ok_and(|c| c.looping) {
+            if tx.send(Msg::End(self.out_clock.unwrap_or(0.0))).is_err() {
+                return Ok(false);
+            }
+            let Ok(mut ctl) = sh.ctl.lock() else {
+                return Ok(false);
+            };
+            while !ctl.quit && ctl.seek.is_none() && (still || !ctl.looping) {
+                ctl = match sh.cv.wait(ctl) {
+                    Ok(c) => c,
+                    Err(_) => return Ok(false),
+                };
+            }
+            if ctl.quit {
+                return Ok(false);
+            }
+            if ctl.seek.is_some() {
+                // Handled at the top of the loop.
+                return Ok(true);
+            }
+        }
+        self.passes += 1;
+        match (self.reversing, mode.direction) {
+            (false, PlayDirection::PingPong) => {
+                self.reversing = true;
+                self.rev_end = self.last_sent;
+            }
+            (false, _) => self.jump(lo)?,
+            (true, PlayDirection::PingPong) => {
+                self.reversing = false;
+                self.jump(lo)?;
+                // Don't show the turning frame twice.
+                self.seek_target = Some(self.last_sent);
+            }
+            (true, _) => self.rev_end = hi,
+        }
+        Ok(true)
+    }
+
+    /// Continues forward from `t` (loop jump: the presentation clock keeps running).
+    fn jump(&mut self, t: f64) -> Result<(), String> {
+        if t <= 1e-6 { self.rewind() } else { self.seek_to(t) }
+    }
+
+    fn drop_reverse(&mut self, sh: &Shared) {
+        for (_, _, f) in self.rev_buf.drain(..) {
+            sh.recycle(f);
+        }
+    }
+
+    /// One step of reverse play: send the next buffered frame, or decode the chunk before the
+    /// last one. Returns false when the player is gone.
+    fn reverse_step(&mut self, sh: &Shared, tx: &SyncSender<Msg>, mode: PlayMode, lo: f64, hi: f64) -> Result<bool, String> {
+        if let Some((rel, dur, frame)) = self.rev_buf.pop() {
+            let pts = self.next_pts(rel, dur);
+            if self.late(sh, pts, dur) {
+                sh.recycle(frame);
+                return Ok(true);
+            }
+            self.last_sent = rel;
+            return Ok(tx.send(Msg::Frame(self.generation, pts, rel, frame)).is_ok());
+        }
+        if !hi.is_finite() {
+            // Unknown length: can't start from the end.
+            self.reversing = false;
+            return Ok(true);
+        }
+        self.rev_end = self.rev_end.min(hi);
+        if self.rev_end <= lo + 1e-6 {
+            return self.at_end(sh, tx, mode, lo, hi, false);
+        }
+        // Decode from the keyframe before the chunk; keep (convert) only the chunk's frames.
+        let t0 = (self.rev_end - REVERSE_CHUNK_FRAMES * self.default_dur).max(lo);
+        self.seek_to(t0)?;
+        self.seek_target = None;
+        loop {
+            if !self.next_frame()? {
+                break;
+            }
+            sh.decoded.fetch_add(1, Ordering::Relaxed);
+            let (rel, dur) = self.timing();
+            if rel >= self.rev_end - 1e-6 {
+                break;
+            }
+            if rel + dur <= t0 + 1e-6 {
+                continue;
+            }
+            let src = self.download(sh)?;
+            let out = self.scaler.convert(src, sh)?;
+            self.rev_buf.push((rel, dur, out));
+        }
+        self.rev_end = self.rev_buf.first().map_or(t0, |f| f.0);
+        Ok(true)
+    }
+
+    /// Decodes the next frame into `self.frame`. Returns false at end of stream.
+    fn next_frame(&mut self) -> Result<bool, String> {
+        loop {
+            match self.dec.receive_frame(&mut self.frame) {
+                Ok(()) => {
+                    self.errors = 0;
+                    return Ok(true);
+                }
+                Err(ff::Error::Eof) => return Ok(false),
+                Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
+                // Tolerate isolated corrupt frames; give up on a stream that never recovers.
+                Err(e) if (self.hw && self.origin.is_none()) || self.errors > 100 => {
+                    return Err(format!("decode failed ({e})"));
+                }
+                Err(e) => {
+                    self.errors += 1;
+                    log::debug!("{}: decode error ({e})", self.path);
+                }
+            }
+            if self.eof_sent {
+                return Ok(false);
+            }
+            loop {
+                let mut pkt = ff::Packet::empty();
+                match pkt.read(&mut self.input) {
+                    Ok(()) if pkt.stream() == self.stream => {
+                        if let Err(e) = self.dec.send_packet(&pkt) {
+                            if self.hw && self.origin.is_none() {
+                                return Err(format!("decode failed ({e})"));
+                            }
+                            log::debug!("{}: skipping bad packet ({e})", self.path);
+                            continue;
+                        }
+                        break;
+                    }
+                    Ok(()) => {}
+                    Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
+                    Err(_) => {
+                        let _ = self.dec.send_eof();
+                        self.eof_sent = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Frame time relative to the loop start, and frame duration, in seconds.
+    fn timing(&mut self) -> (f64, f64) {
+        let f = unsafe { &*self.frame.as_ptr() };
+        let ts = if f.best_effort_timestamp != NOPTS {
+            f.best_effort_timestamp
+        } else {
+            f.pts
+        };
+        let dur = if f.duration > 0 {
+            f.duration as f64 * self.tb
+        } else {
+            self.default_dur
+        };
+        let mut rel = if ts == NOPTS {
+            self.last_rel + dur
+        } else {
+            let origin = *self.origin.get_or_insert(ts);
+            (ts - origin) as f64 * self.tb
+        };
+        // Keep time strictly increasing within a loop even with broken timestamps.
+        if rel <= self.last_rel {
+            rel = self.last_rel + 1e-4;
+        }
+        rel = rel.max(0.0);
+        self.last_rel = rel;
+        self.loop_len = self.loop_len.max(rel + dur);
+        self.frames_in_loop += 1;
+        (rel, dur)
+    }
+
+    fn fallback_to_software(&mut self, why: &str, sh: &Shared) -> Result<(), String> {
+        log::info!(
+            "{}: hardware decode failed ({why}), using software",
+            self.path
+        );
+        (self.dec, self.codec, self.hw) = open_decoder(&self.input, self.stream, false)?;
+        if let Ok(mut c) = sh.codec.lock() {
+            c.clone_from(&self.codec);
+        }
+        self.rewind()
+    }
+
+    /// Jumps to `t` seconds (the keyframe before it; `seek_target` drops frames up to `t`).
+    fn seek_to(&mut self, t: f64) -> Result<(), String> {
+        let ts = self.start_ts + (t / self.tb) as i64;
+        // SAFETY: seeking the demuxer we own, on this thread.
+        let ok = unsafe { ffi::av_seek_frame(self.input.as_mut_ptr(), self.stream as i32, ts, ffi::AVSEEK_FLAG_BACKWARD) >= 0 };
+        if !ok {
+            self.input = ff::format::input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
+        }
+        self.dec.flush();
+        self.eof_sent = false;
+        self.last_rel = -1.0;
+        self.frames_in_loop = 0;
+        self.seek_target = Some(t);
+        Ok(())
+    }
+
+    fn rewind(&mut self) -> Result<(), String> {
+        let ok = unsafe {
+            ffi::av_seek_frame(
+                self.input.as_mut_ptr(),
+                self.stream as i32,
+                self.start_ts,
+                ffi::AVSEEK_FLAG_BACKWARD,
+            ) >= 0
+        };
+        if !ok {
+            self.input =
+                ff::format::input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
+        }
+        self.dec.flush();
+        self.eof_sent = false;
+        self.last_rel = -1.0;
+        self.loop_len = self.loop_len.max(1e-3);
+        self.frames_in_loop = 0;
+        Ok(())
+    }
+
+    /// Returns a CPU-accessible frame, mapping VideoToolbox surfaces when needed.
+    fn download(&mut self, sh: &Shared) -> Result<*const ffi::AVFrame, String> {
+        unsafe {
+            let f = self.frame.as_ptr();
+            if (*f).format != Px::AV_PIX_FMT_VIDEOTOOLBOX as i32 {
+                return Ok(f);
+            }
+            sh.hardware.store(true, Ordering::Relaxed);
+            let m = self.mapped.as_mut_ptr();
+            ffi::av_frame_unref(m);
+            if ffi::av_hwframe_map(m, f, ffi::AV_HWFRAME_MAP_READ as i32) < 0 {
+                ffi::av_frame_unref(m);
+                let r = ffi::av_hwframe_transfer_data(m, f, 0);
+                if r < 0 {
+                    return Err(format!(
+                        "hardware frame download failed ({})",
+                        ff::Error::from(r)
+                    ));
+                }
+            }
+            (*m).color_range = (*f).color_range;
+            (*m).colorspace = (*f).colorspace;
+            Ok(m)
+        }
+    }
+}
+
+/// Opens a decoder for `stream`, attaching VideoToolbox when `try_hw` and the codec supports it.
+fn open_decoder(
+    input: &ff::format::context::Input,
+    stream: usize,
+    try_hw: bool,
+) -> Result<(ff::decoder::Video, String, bool), String> {
+    use ff::codec::Id;
+    let st = input.stream(stream).ok_or("bad stream")?;
+    let alpha_mode = st.metadata().get("alpha_mode") == Some("1");
+    let params = st.parameters();
+    let id = params.id();
+    let src_fmt = unsafe { (*params.as_ptr()).format };
+    let has_alpha = alpha_mode || fmt_flags(src_fmt) & ffi::AV_PIX_FMT_FLAG_ALPHA as u64 != 0;
+    // Codecs VideoToolbox handles on Apple Silicon; others (MPEG-4 Part 2...) only log init failures.
+    let try_hw =
+        try_hw && !has_alpha && matches!(id, Id::H264 | Id::HEVC | Id::PRORES | Id::VP9 | Id::AV1);
+
+    let codec = match id {
+        // libavcodec's native VP8/VP9 decoders drop the alpha side channel; libvpx keeps it.
+        Id::VP9 if alpha_mode => ff::decoder::find_by_name("libvpx-vp9"),
+        Id::VP8 if alpha_mode => ff::decoder::find_by_name("libvpx"),
+        // The native AV1 decoder is hwaccel-only; libdav1d (the default) is the software path.
+        Id::AV1 if try_hw => ff::decoder::find_by_name("av1"),
+        _ => None,
+    }
+    .or_else(|| ff::decoder::find(id))
+    .ok_or_else(|| format!("unsupported codec ({id:?})"))?;
+
+    let mut ctx = ff::codec::Context::from_parameters(params).map_err(err)?;
+    let hw = try_hw && unsafe { attach_videotoolbox(ctx.as_mut_ptr(), codec.as_ptr()) };
+    unsafe { (*ctx.as_mut_ptr()).pkt_timebase = (*st.as_ptr()).time_base };
+    if !hw {
+        let threads = std::thread::available_parallelism()
+            .map_or(4, |n| n.get())
+            .min(8);
+        ctx.set_threading(ff::codec::threading::Config {
+            kind: ff::codec::threading::Type::Frame,
+            count: threads,
+        });
+    }
+    let dec = ctx
+        .decoder()
+        .open_as(codec)
+        .and_then(|o| o.video())
+        .map_err(|e| format!("can't open {} decoder ({e})", codec.name()))?;
+    if dec.width() == 0 || dec.height() == 0 {
+        return Err("video has no size".into());
+    }
+    Ok((dec, codec.name().to_string(), hw))
+}
+
+/// Enables VideoToolbox on `ctx` if the decoder supports it. FFmpeg falls back to software
+/// automatically if the hwaccel can't handle a particular stream.
+unsafe fn attach_videotoolbox(ctx: *mut ffi::AVCodecContext, codec: *const ffi::AVCodec) -> bool {
+    unsafe {
+        let mut supported = false;
+        for i in 0.. {
+            let cfg = ffi::avcodec_get_hw_config(codec, i);
+            if cfg.is_null() {
+                break;
+            }
+            if (*cfg).device_type == ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX
+                && (*cfg).methods & ffi::AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX as i32 != 0
+            {
+                supported = true;
+                break;
+            }
+        }
+        if !supported {
+            return false;
+        }
+        let mut dev: *mut ffi::AVBufferRef = ptr::null_mut();
+        let r = ffi::av_hwdevice_ctx_create(
+            &mut dev,
+            ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
+            ptr::null(),
+            ptr::null_mut(),
+            0,
+        );
+        if r < 0 || dev.is_null() {
+            return false;
+        }
+        (*ctx).hw_device_ctx = dev;
+        (*ctx).get_format = Some(pick_videotoolbox);
+        true
+    }
+}
+
+unsafe extern "C" fn pick_videotoolbox(ctx: *mut ffi::AVCodecContext, fmts: *const Px) -> Px {
+    unsafe {
+        let mut p = fmts;
+        while *p != Px::AV_PIX_FMT_NONE {
+            if *p == Px::AV_PIX_FMT_VIDEOTOOLBOX {
+                return *p;
+            }
+            p = p.add(1);
+        }
+        ffi::avcodec_default_get_format(ctx, fmts)
+    }
+}
