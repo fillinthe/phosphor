@@ -47,6 +47,7 @@ fn play(p: &mut VideoPlayer, t0: Instant, secs: f64, rate: f32, media: &mut f64,
                 VideoFrame::Nv12 { .. } => "NV12",
                 VideoFrame::Rgba { .. } => "RGBA",
                 VideoFrame::Compressed { .. } => "GPU blocks",
+                VideoFrame::Surface(_) => "zero-copy",
             };
             p.recycle(f);
         }
