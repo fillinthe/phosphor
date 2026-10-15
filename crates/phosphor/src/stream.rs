@@ -104,6 +104,16 @@ pub struct Streamer {
     pacer: crate::pacing::FramePacer,
     pub frame_size: (u32, u32),
     started: Option<f64>,
+    /// Size the user started streaming at; while set, a dropped network stream reconnects by itself.
+    wanted: Option<(u32, u32)>,
+    /// Next reconnect attempt (app seconds) and how many in a row so far.
+    retry_at: Option<f64>,
+    retries: u32,
+}
+
+/// Seconds before reconnect attempt `n` (1, 2, 3…): 2, 4, 8, then every 15.
+pub fn reconnect_delay(n: u32) -> f64 {
+    (2.0 * 2f64.powi(n.saturating_sub(1).min(3) as i32)).min(15.0)
 }
 
 /// AVFoundation audio capture devices as (index, name), from FFmpeg's device listing.
@@ -152,6 +162,9 @@ impl Streamer {
             pacer: Default::default(),
             frame_size: (0, 0),
             started: None,
+            wanted: None,
+            retry_at: None,
+            retries: 0,
         }
     }
 
@@ -176,12 +189,52 @@ impl Streamer {
             return Err("Streaming from the browser arrives with network sessions".into());
         }
         #[cfg(not(target_arch = "wasm32"))]
-        self.start_native(width, height, now)
+        {
+            self.start_native(width, height, now)?;
+            self.wanted = Some((width, height));
+            self.retries = 0;
+            self.retry_at = None;
+            Ok(())
+        }
+    }
+
+    /// While a network stream should be running but isn't (FFmpeg exited: connection lost, server
+    /// hiccup), restarts it with growing pauses. Recordings to a file never restart (they'd overwrite it).
+    fn keep_alive(&mut self, now: f64) {
+        let Some((w, h)) = self.wanted else { return };
+        if self.running() || self.settings.destination == Destination::File {
+            if !self.running() {
+                self.wanted = None;
+            }
+            return;
+        }
+        let at = *self.retry_at.get_or_insert_with(|| {
+            self.retries += 1;
+            now + reconnect_delay(self.retries)
+        });
+        if now < at {
+            let mut s = self.shared.lock().unwrap();
+            s.status = format!("Connection lost · reconnecting in {:.0} s (try {})", (at - now).ceil(), self.retries);
+            s.error = true;
+            return;
+        }
+        self.retry_at = None;
+        let started = self.started;
+        #[cfg(not(target_arch = "wasm32"))]
+        match self.start_native(w, h, now) {
+            Ok(()) => {
+                // Elapsed time keeps counting from the first start.
+                self.started = started.or(Some(now));
+                let mut s = self.shared.lock().unwrap();
+                s.status = format!("{} · reconnected (try {})", s.status, self.retries);
+            }
+            Err(e) => self.shared.lock().unwrap().status = format!("Reconnect failed: {e}"),
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn start_native(&mut self, width: u32, height: u32, now: f64) -> Result<(), String> {
-        self.stop();
+        self.close();
         let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found. Install it with: brew install ffmpeg")?;
         let s = &self.settings;
         let (fmt, target) = s.target();
@@ -283,8 +336,15 @@ impl Streamer {
         Ok(())
     }
 
-    /// Closes the pipe so FFmpeg finishes the file / stream, and reaps it in the background.
+    /// Stops for good (no reconnecting): closes the pipe so FFmpeg finishes the file / stream.
     pub fn stop(&mut self) {
+        self.wanted = None;
+        self.retry_at = None;
+        self.close();
+    }
+
+    /// Closes the pipe and reaps FFmpeg in the background.
+    fn close(&mut self) {
         self.tx = None;
         self.started = None;
         #[cfg(not(target_arch = "wasm32"))]
@@ -299,6 +359,7 @@ impl Streamer {
 
     /// Blocking variant for benchmarks: waits for FFmpeg to exit.
     pub fn stop_and_wait(&mut self) {
+        self.wanted = None;
         self.tx = None;
         self.started = None;
         std::thread::sleep(std::time::Duration::from_millis(50));
@@ -309,6 +370,7 @@ impl Streamer {
 
     /// True when the next frame at the stream's frame rate is due.
     pub fn frame_due(&mut self, now: f64) -> bool {
+        self.keep_alive(now);
         self.running() && self.pacer.due(now, self.settings.fps)
     }
 
@@ -334,5 +396,43 @@ impl Streamer {
                 self.started = None;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn reconnects_back_off_to_every_15_seconds() {
+        let d: Vec<f64> = (1..=6).map(super::reconnect_delay).collect();
+        assert_eq!(d, vec![2.0, 4.0, 8.0, 15.0, 15.0, 15.0]);
+    }
+
+    /// A stream to a server that isn't there drops; Phosphor waits, tries again, and stops trying after Stop.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_dropped_stream_reconnects_until_stopped() {
+        use super::*;
+        if ffmpeg_path().is_none() {
+            return;
+        }
+        let settings = StreamSettings { destination: Destination::CustomRtmp, rtmp_url: "rtmp://127.0.0.1:1/live".into(), stream_key: "test".into(), fps: 10, height: 0, audio_device: -1, ..Default::default() };
+        let mut s = Streamer::new(settings);
+        s.start(64, 36, 0.0).unwrap();
+        let frame = vec![0u8; 64 * 36 * 4];
+        // FFmpeg can't connect and exits; frames start failing.
+        let mut t = 0.0;
+        while s.running() && t < 10.0 {
+            s.push(64, 36, frame.clone());
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            t += 0.05;
+        }
+        assert!(!s.running(), "FFmpeg should have given up on a closed port");
+        s.frame_due(t);
+        assert!(s.status().0.contains("reconnecting"), "{}", s.status().0);
+        s.frame_due(t + 2.1);
+        assert!(s.running(), "restarted after 2 s");
+        s.stop();
+        s.frame_due(t + 100.0);
+        assert!(!s.running(), "Stop means stop");
     }
 }
