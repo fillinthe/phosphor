@@ -152,7 +152,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] MIDI clock in (tempo + beat after Start)
 - [ ] Ableton Link, effect-based transitions
 - [x] Master crossfader (A/B groups)
-- [ ] Layer groups
+- [x] Layer groups: mixed first, then opacity/blend/effects like one layer; fold, move as a block, slice source
+- [ ] Groups: controller targets (group opacity/on), group strip in the Mixer, Group shortcut (⌘G)
 
 ### Phase 3: Modular control (VDMX-style)
 - [x] Dockable, rearrangeable panels; layout saved with the project
@@ -190,7 +191,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Circle and triangle masks (Mapping › + Mask)
 - [x] Surface (slice) sources: each surface shows the mix or one layer; "Also in the mix" per layer
 - [x] Outputs remember their screen (by name, numbered for identical projectors); "All to their screens"
-- [ ] Mapping: groups of layers as a surface source (after layer groups); slice "input from another output"
+- [ ] Mapping: slice "input from another output"
 - [ ] Open outputs on their saved screens automatically when a project opens (setting)
 - [ ] Bezier mask edges
 - [x] Per-output identify / colour correction, surface blend curve

@@ -14,6 +14,9 @@ impl PhosphorApp {
             return;
         }
         let started = *run.started.get_or_insert(now);
+        if let Some(id) = run.cfg.select.take_if(|_| now - started >= 0.5) {
+            self.state.selected = Some(id);
+        }
         if let Some(col) = run.cfg.trigger_column.take_if(|_| now - started >= run.cfg.trigger_at) {
             self.state.trigger(Trigger::Column(col), now);
             return;

@@ -4,13 +4,16 @@ use super::*;
 
 pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
-    let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id)) else {
+    let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id) || st.comp.group(*id).is_some()) else {
         hint(ui, "Select a layer (or MASTER) to edit its source and effects.");
         return;
     };
     let clipboard_len = st.fx_clipboard.len();
     let mut fx_action: Option<FxAction> = None;
-    if sel == MASTER_ID {
+    if let Some(g) = st.comp.groups.iter_mut().find(|g| g.id == sel) {
+        let thumb = st.layer_textures.get(&sel).map(|(t, _)| *t);
+        fx_action = group_inspector(ui, g, thumb, aspect, clipboard_len);
+    } else if sel == MASTER_ID {
         let tex = st.texture;
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);

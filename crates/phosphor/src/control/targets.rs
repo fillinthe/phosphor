@@ -7,11 +7,11 @@ fn scaled(p: &shaders::Param, v: f32) -> f32 {
 }
 
 pub fn find_effect(comp: &Composition, id: u64) -> Option<&EffectState> {
-    comp.master_effects.iter().chain(comp.layers.iter().flat_map(|l| l.effects.iter())).find(|e| e.id == id)
+    comp.all_effects().find(|e| e.id == id)
 }
 
 pub fn find_effect_mut(comp: &mut Composition, id: u64) -> Option<&mut EffectState> {
-    comp.master_effects.iter_mut().chain(comp.layers.iter_mut().flat_map(|l| l.effects.iter_mut())).find(|e| e.id == id)
+    comp.all_effects_mut().find(|e| e.id == id)
 }
 
 /// Inverse of `unit_to`: where `x` sits in the range, 0..1.
@@ -225,6 +225,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         }
     };
     effects("MASTER", &comp.master_effects, &mut out);
+    for g in &comp.groups {
+        effects(&g.name, &g.effects, &mut out);
+    }
     for l in &comp.layers {
         out.push((ControlTarget::LayerOpacity(l.id), format!("{} · opacity", l.name)));
         out.push((ControlTarget::LayerEnabled(l.id), format!("{} · on/off", l.name)));

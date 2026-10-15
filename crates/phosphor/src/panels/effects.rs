@@ -137,20 +137,14 @@ pub(crate) fn apply_fx_action(st: &mut State, target: u64, action: FxAction) {
         FxAction::Browse(pos) => st.fx_browser = Some(crate::explorer::FxBrowser::new(target, false, pos)),
         FxAction::Duplicate(i) => {
             let id = st.comp.new_id();
-            let chain = if target == MASTER_ID { Some(&mut st.comp.master_effects) } else { st.comp.layer_mut(target).map(|l| &mut l.effects) };
-            if let Some(chain) = chain
+            if let Some(chain) = st.comp.effects_mut(target)
                 && let Some(fx) = chain.get(i).cloned()
             {
                 chain.insert(i + 1, phosphor_engine::EffectState { id, ..fx });
             }
         }
         FxAction::CopyChain => {
-            let chain = if target == MASTER_ID {
-                st.comp.master_effects.clone()
-            } else {
-                st.comp.layers.iter().find(|l| l.id == target).map(|l| l.effects.clone()).unwrap_or_default()
-            };
-            st.fx_clipboard = chain;
+            st.fx_clipboard = st.comp.effects(target).cloned().unwrap_or_default();
         }
         FxAction::PasteChain => append_effects(st, target, st.fx_clipboard.clone()),
     }
@@ -159,10 +153,8 @@ pub(crate) fn apply_fx_action(st: &mut State, target: u64, action: FxAction) {
 /// Appends effects (copied or saved) to a layer's chain or MASTER, with fresh ids.
 pub fn append_effects(st: &mut State, target: u64, effects: Vec<phosphor_engine::EffectState>) {
     let effects = st.comp.adopt_effects(effects);
-    if target == MASTER_ID {
-        st.comp.master_effects.extend(effects);
-    } else if let Some(l) = st.comp.layer_mut(target) {
-        l.effects.extend(effects);
+    if let Some(chain) = st.comp.effects_mut(target) {
+        chain.extend(effects);
     }
 }
 
@@ -176,9 +168,7 @@ pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
     st.explorer.recent.retain(|r| r != effect);
     st.explorer.recent.insert(0, effect.to_string());
     st.explorer.recent.truncate(12);
-    if target == MASTER_ID {
-        st.comp.master_effects.push(fx);
-    } else if let Some(l) = st.comp.layer_mut(target) {
-        l.effects.push(fx);
+    if let Some(chain) = st.comp.effects_mut(target) {
+        chain.push(fx);
     }
 }
