@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::shaders;
 
+use super::TriggerMode;
+
 /// What feeds a layer. Media is referenced, never embedded: the app resolves it into
 /// GPU textures via `Engine::upload_rgba` / `Engine::upload_nv12`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -73,6 +75,8 @@ pub struct Clip {
     pub name: String,
     pub source: SourceSpec,
     pub generator_values: Vec<f32>,
+    /// Normal / toggle / flash / piano.
+    pub trigger: TriggerMode,
 }
 
 impl Clip {

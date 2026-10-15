@@ -1,6 +1,7 @@
 //! Clip grid and launch settings.
 
 use super::*;
+use phosphor_engine::TriggerMode;
 
 /// Columns per bank page.
 pub const CLIP_PAGE_SIZE: usize = 9;
@@ -87,6 +88,15 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let page_offset = st.clip_page * CLIP_PAGE_SIZE;
     let cell = egui::vec2(96.0, 96.0 / aspect + 16.0);
     let mut triggers: Vec<Trigger> = Vec::new();
+    let mut releases: Vec<(u64, usize)> = Vec::new();
+    // The flash/piano cell held down with the mouse (released when the button comes up anywhere).
+    let held_id = egui::Id::new("clip_cell_held");
+    let held: Option<(u64, usize)> = ui.ctx().data(|d| d.get_temp(held_id));
+    let (pressed, released) = ui.input(|i| (i.pointer.primary_pressed(), i.pointer.primary_released()));
+    if released && let Some(h) = held {
+        releases.push(h);
+        ui.ctx().data_mut(|d| d.remove::<(u64, usize)>(held_id));
+    }
     let mut set_cell: Option<(usize, usize, usize)> = None; // (layer idx, slot, media idx)
     let mut use_current: Option<(usize, usize)> = None;
     let mut clear: Option<(usize, usize)> = None;
@@ -109,8 +119,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             for idx in (0..n).rev() {
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(110.0, cell.y), Sense::hover());
-                    ui.painter().text(r.left_center() + egui::vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, &layer.name, egui::FontId::proportional(13.0), Color32::LIGHT_GRAY);
+                    row_header(ui, layer, egui::vec2(110.0, cell.y));
                     for c in page_offset..page_offset + cols {
                         let clip = layer.clips.get(c);
                         let (rect, resp) = ui.allocate_exact_size(cell, Sense::click());
@@ -136,6 +145,15 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                     name = format!("{}…", name.chars().take(13).collect::<String>());
                                 }
                                 p.text(egui::pos2(rect.left() + 3.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(10.5), Color32::LIGHT_GRAY);
+                                let badge = match k.trigger {
+                                    TriggerMode::Normal => None,
+                                    TriggerMode::Toggle => Some("T"),
+                                    TriggerMode::Flash => Some("F"),
+                                    TriggerMode::Piano => Some("P"),
+                                };
+                                if let Some(b) = badge {
+                                    p.text(egui::pos2(rect.right() - 4.0, rect.top() + 3.0), egui::Align2::RIGHT_TOP, b, egui::FontId::monospace(11.0), ACCENT);
+                                }
                             }
                             _ => {
                                 p.text(rect.center(), egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(18.0), Color32::from_gray(70));
@@ -152,20 +170,34 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                         if let Some(m) = resp.dnd_release_payload::<MediaDrag>() {
                             set_cell = Some((idx, c, m.0));
                         }
-                        if resp.clicked() {
+                        // Flash / piano clips play from the moment the button goes down until it comes up.
+                        let momentary = clip.is_some_and(|k| !k.is_empty() && matches!(k.trigger, TriggerMode::Flash | TriggerMode::Piano));
+                        if momentary {
+                            if pressed && resp.hovered() {
+                                triggers.push(Trigger::Clip { layer: layer.id, slot: c });
+                                ui.ctx().data_mut(|d| d.insert_temp(held_id, (layer.id, c)));
+                            }
+                        } else if resp.clicked() {
                             match clip {
                                 Some(k) if !k.is_empty() => triggers.push(Trigger::Clip { layer: layer.id, slot: c }),
                                 _ => use_current = Some((idx, c)),
                             }
                         }
                         mapped_badge(ui, &resp, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
+                        let filled = clip.is_some_and(|k| !k.is_empty());
                         resp.right_menu(|ui| {
-                            if clip.is_some_and(|k| !k.is_empty()) {
+                            if filled {
                                 if ui.button(label(icon::PLAY, "Trigger")).clicked() {
                                     triggers.push(Trigger::Clip { layer: layer.id, slot: c });
                                     ui.close();
                                 }
                                 learn_items(ui, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
+                                ui.separator();
+                                ui.label(RichText::new("When pressed").small().strong());
+                                let k = layer.clip_slot_mut(c);
+                                for m in TriggerMode::ALL {
+                                    ui.radio_value(&mut k.trigger, m, m.name());
+                                }
                                 ui.separator();
                             }
                             if ui.button("Store the layer's current source here").clicked() {
@@ -220,4 +252,51 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     for t in triggers {
         st.trigger(t, now);
     }
+    for (layer, slot) in releases {
+        st.release_clip(layer, slot, now);
+    }
+}
+
+/// The layer's name at the start of its clip row; click for autopilot (plays the next / a random clip by itself).
+fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: egui::Vec2) {
+    use phosphor_engine::Autopilot;
+    ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_min_size(size);
+        ui.add_space((size.y - 40.0).max(0.0) / 2.0);
+        let name: String = layer.name.chars().take(14).collect();
+        ui.menu_button(RichText::new(name).color(Color32::LIGHT_GRAY), |ui| {
+            ui.set_min_width(220.0);
+            ui.label(RichText::new(format!("{} Autopilot", icon::AIRPLANE_TILT)).strong());
+            hint(ui, "Plays another clip by itself when this one is done.");
+            for a in Autopilot::ALL {
+                ui.radio_value(&mut layer.autopilot, a, a.name());
+            }
+            if layer.autopilot != Autopilot::Off {
+                ui.separator();
+                let mut at_end = layer.autopilot_beats <= 0.0;
+                ui.horizontal(|ui| {
+                    if ui.radio_value(&mut at_end, true, "When the clip ends").changed() {
+                        layer.autopilot_beats = 0.0;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if ui.radio_value(&mut at_end, false, "After").changed() {
+                        layer.autopilot_beats = 16.0;
+                    }
+                    if !at_end {
+                        guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));
+                    }
+                });
+                if at_end {
+                    hint(ui, "Stills, generators and live inputs have no end: they move on after 16 beats.");
+                }
+            }
+        })
+        .response
+        .on_hover_text("Click for autopilot");
+        if layer.autopilot != Autopilot::Off {
+            let when = if layer.autopilot_beats > 0.0 { format!("{:.0} beats", layer.autopilot_beats) } else { "at end".into() };
+            ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(ACCENT));
+        }
+    });
 }

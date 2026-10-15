@@ -171,6 +171,13 @@ pub struct LayerState {
     pub clips: Vec<Clip>,
     pub transition_secs: f32,
     pub transition_kind: TransitionKind,
+    /// Plays the next / previous / a random clip by itself.
+    pub autopilot: Autopilot,
+    /// Autopilot moves on after this many beats (0 = when the clip ends).
+    pub autopilot_beats: f32,
+    /// What a flash clip goes back to when released.
+    #[serde(skip)]
+    pub flash_return: Option<Box<Clip>>,
     #[serde(skip)]
     pub transition: Option<Transition>,
     #[serde(skip)]
@@ -208,6 +215,9 @@ impl Default for LayerState {
             clips: Vec::new(),
             transition_secs: 0.5,
             transition_kind: TransitionKind::Crossfade,
+            autopilot: Autopilot::Off,
+            autopilot_beats: 0.0,
+            flash_return: None,
             transition: None,
             active_clip: None,
         }

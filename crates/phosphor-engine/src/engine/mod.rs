@@ -366,9 +366,10 @@ impl Engine {
             if !layer.enabled {
                 continue;
             }
-            let Some(mut frame) =
-                self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, w, h, time, mods, &mut passes)
-            else {
+            let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, w, h, time, mods, &mut passes);
+            // A stopped clip fades out to nothing over its transition.
+            let fading_out = incoming.is_none() && layer.transition.as_ref().is_some_and(|t| t.progress(time) < 1.0);
+            let Some(mut frame) = incoming.or_else(|| fading_out.then(|| Frame::Rgb { view: self.gpu.blank.clone(), w: 1, h: 1 })) else {
                 continue;
             };
             match &layer.transition {

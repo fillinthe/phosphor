@@ -78,6 +78,7 @@ impl PhosphorApp {
                 }
             }
             st.comp.expire_transitions(now as f32);
+            st.run_autopilot(now);
         }
         if let Some(n) = self.bench.as_ref().map(|b| b.cfg.previews).filter(|n| *n > 0) {
             for (i, d) in phosphor_engine::shaders::all_effects().iter().cycle().take(n).enumerate() {
