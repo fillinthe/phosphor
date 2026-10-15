@@ -156,6 +156,8 @@ pub struct LayerState {
     pub direction: PlayDirection,
     /// Crossfader side (Mixer).
     pub group: CrossGroup,
+    /// The layer group it belongs to (`Composition::groups`); members sit next to each other in the stack.
+    pub parent: Option<u64>,
     /// Loop region as fractions of the movie (0..1), so it survives switching clips and maps like any slider.
     pub loop_in: f32,
     pub loop_out: f32,
@@ -193,6 +195,7 @@ impl Default for LayerState {
             looping: true,
             direction: PlayDirection::Forward,
             group: CrossGroup::None,
+            parent: None,
             loop_in: 0.0,
             loop_out: 1.0,
             loop_beats: 0.0,

@@ -54,12 +54,12 @@ impl Engine {
         }
     }
 
-    pub(super) fn push_thumbnail(&mut self, layer: &LayerState, frame: &Frame, canvas: (u32, u32), thumb_h: u32, passes: &mut Vec<Pass>) {
-        let res = self.layers.entry(layer.id).or_default();
+    pub(super) fn push_thumbnail(&mut self, id: u64, fit: FitMode, frame: &Frame, canvas: (u32, u32), thumb_h: u32, passes: &mut Vec<Pass>) {
+        let res = self.layers.entry(id).or_default();
         Target::ensure(&mut res.thumbnail, &self.gpu.device, "thumbnail", THUMBNAIL_WIDTH, thumb_h);
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [THUMBNAIL_WIDTH as f32, thumb_h as f32];
-        u.uv_xform = fit_transform(frame.size(), canvas, layer.fit);
+        u.uv_xform = fit_transform(frame.size(), canvas, fit);
         let (tex0, tex2, yuv) = frame.clone().bind();
         u.yuv = yuv;
         passes.push(Pass {

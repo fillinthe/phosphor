@@ -30,6 +30,8 @@ pub struct Composition {
     pub master_fade: f32,
     /// Index 0 is the bottom of the stack.
     pub layers: Vec<LayerState>,
+    /// Layer groups (members point at them with `LayerState::parent`).
+    pub groups: Vec<LayerGroup>,
     pub next_id: u64,
     /// Legacy single-output mapping; moved into `outputs[0]` on load.
     pub mapping: Mapping,
@@ -59,7 +61,7 @@ pub struct Composition {
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new(), crossfader: 0.5 }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new(), crossfader: 0.5 }
     }
 }
 
@@ -298,7 +300,9 @@ impl Composition {
     }
 
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json)
+        let mut comp: Self = serde_json::from_str(json)?;
+        comp.normalize_groups();
+        Ok(comp)
     }
 }
 

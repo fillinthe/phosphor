@@ -1,0 +1,212 @@
+//! Layer groups: neighbouring layers mixed together first, then treated like one layer (opacity, blend, effects).
+//! All stack rules live here so the Layers panel, drag and drop and controllers share them.
+
+use std::collections::HashSet;
+
+use serde::{Deserialize, Serialize};
+
+use super::*;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LayerGroup {
+    /// From `Composition::new_id`, so it never clashes with a layer id (a mapping surface can show either).
+    pub id: u64,
+    pub name: String,
+    pub enabled: bool,
+    pub opacity: f32,
+    pub blend: BlendMode,
+    /// Run on the group's mixed picture.
+    pub effects: Vec<EffectState>,
+    pub fx_bypass: bool,
+    /// Blended into the mix. Off = only mapping surfaces that pick this group show it.
+    pub in_mix: bool,
+    /// Members hidden in the Layers panel.
+    pub collapsed: bool,
+}
+
+impl Default for LayerGroup {
+    fn default() -> Self {
+        Self { id: 0, name: "Group".into(), enabled: true, opacity: 1.0, blend: BlendMode::Normal, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false }
+    }
+}
+
+impl Composition {
+    pub fn group(&self, id: u64) -> Option<&LayerGroup> {
+        self.groups.iter().find(|g| g.id == id)
+    }
+
+    pub fn group_mut(&mut self, id: u64) -> Option<&mut LayerGroup> {
+        self.groups.iter_mut().find(|g| g.id == id)
+    }
+
+    /// Stack positions (bottom, top) of a group's members.
+    pub fn group_span(&self, id: u64) -> Option<(usize, usize)> {
+        let first = self.layers.iter().position(|l| l.parent == Some(id))?;
+        let last = self.layers.iter().rposition(|l| l.parent == Some(id))?;
+        Some((first, last))
+    }
+
+    /// Puts these layers in a new group (taking them out of any group they were in). They gather where the top one is.
+    pub fn create_group(&mut self, layers: &[u64]) -> Option<u64> {
+        let members: Vec<u64> = layers.iter().copied().filter(|id| self.layers.iter().any(|l| l.id == *id)).collect();
+        if members.is_empty() {
+            return None;
+        }
+        let id = self.new_id();
+        let n = self.groups.len() + 1;
+        self.groups.push(LayerGroup { id, name: format!("Group {n}"), ..Default::default() });
+        for l in self.layers.iter_mut().filter(|l| members.contains(&l.id)) {
+            l.parent = Some(id);
+        }
+        self.normalize_groups();
+        Some(id)
+    }
+
+    /// Dissolves a group; its layers stay where they are.
+    pub fn ungroup(&mut self, id: u64) {
+        for l in self.layers.iter_mut().filter(|l| l.parent == Some(id)) {
+            l.parent = None;
+        }
+        self.groups.retain(|g| g.id != id);
+    }
+
+    /// Moves a layer one step up (towards the top) or down. A member at its group's edge steps out of the group;
+    /// a layer next to a group jumps over the whole group.
+    pub fn move_layer(&mut self, id: u64, up: bool) {
+        let Some(i) = self.layers.iter().position(|l| l.id == id) else { return };
+        let Some(j) = (if up { i.checked_add(1).filter(|j| *j < self.layers.len()) } else { i.checked_sub(1) }) else {
+            // Already at the end of the stack: only leaving the group is left to do.
+            self.layers[i].parent = None;
+            self.normalize_groups();
+            return;
+        };
+        let (mine, theirs) = (self.layers[i].parent, self.layers[j].parent);
+        match (mine, theirs) {
+            (Some(g), Some(h)) if g == h => self.layers.swap(i, j),
+            (Some(_), _) => self.layers[i].parent = None,
+            (None, Some(h)) => {
+                let Some((a, b)) = self.group_span(h) else { return };
+                let layer = self.layers.remove(i);
+                self.layers.insert(if up { b } else { a }, layer);
+            }
+            (None, None) => self.layers.swap(i, j),
+        }
+        self.normalize_groups();
+    }
+
+    /// Moves a whole group one step (past the next layer, or past the next group as a whole).
+    pub fn move_group(&mut self, id: u64, up: bool) {
+        let Some((a, b)) = self.group_span(id) else { return };
+        let len = b - a + 1;
+        if up {
+            let Some(next) = self.layers.get(b + 1) else { return };
+            let end = next.parent.and_then(|h| self.group_span(h)).map_or(b + 1, |(_, d)| d);
+            self.layers[a..=end].rotate_left(len);
+        } else {
+            let Some(prev) = a.checked_sub(1).and_then(|p| self.layers.get(p)) else { return };
+            let start = prev.parent.and_then(|h| self.group_span(h)).map_or(a - 1, |(c, _)| c);
+            self.layers[start..=b].rotate_right(len);
+        }
+    }
+
+    /// Drag and drop: `from` goes where `onto` is and joins `onto`'s group (or leaves its own).
+    pub fn drop_layer(&mut self, from: u64, onto: u64) {
+        if from == onto {
+            return;
+        }
+        let (Some(a), Some(b)) = (self.layers.iter().position(|l| l.id == from), self.layers.iter().position(|l| l.id == onto)) else { return };
+        let parent = self.layers[b].parent;
+        let mut moved = self.layers.remove(a);
+        moved.parent = parent;
+        self.layers.insert(b, moved);
+        self.normalize_groups();
+    }
+
+    /// Repairs groups after any change (or loading): unknown groups are dropped, empty groups removed, and each
+    /// group's members gathered next to each other at its top member's place.
+    pub fn normalize_groups(&mut self) {
+        let known: HashSet<u64> = self.groups.iter().map(|g| g.id).collect();
+        for l in &mut self.layers {
+            if l.parent.is_some_and(|p| !known.contains(&p)) {
+                l.parent = None;
+            }
+        }
+        let layers = &self.layers;
+        self.groups.retain(|g| layers.iter().any(|l| l.parent == Some(g.id)));
+        for id in self.groups.iter().map(|g| g.id).collect::<Vec<_>>() {
+            let at: Vec<usize> = self.layers.iter().enumerate().filter(|(_, l)| l.parent == Some(id)).map(|(i, _)| i).collect();
+            let (first, top) = (at[0], at[at.len() - 1]);
+            if top - first + 1 == at.len() {
+                continue;
+            }
+            let mut members = Vec::with_capacity(at.len());
+            for &i in at.iter().rev() {
+                members.push(self.layers.remove(i));
+            }
+            members.reverse();
+            let start = top + 1 - members.len();
+            self.layers.splice(start..start, members);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Layers named by id, bottom first, with their group ids.
+    fn stack(c: &Composition) -> Vec<(u64, Option<u64>)> {
+        c.layers.iter().map(|l| (l.id, l.parent)).collect()
+    }
+
+    fn comp(n: usize) -> Composition {
+        let mut c = Composition::default();
+        for _ in 0..n {
+            c.add_layer();
+        }
+        c
+    }
+
+    #[test]
+    fn grouping_gathers_members_at_the_top_one() {
+        let mut c = comp(4); // ids 1..=4, bottom to top
+        let g = c.create_group(&[1, 3]).unwrap();
+        assert_eq!(stack(&c), vec![(2, None), (1, Some(g)), (3, Some(g)), (4, None)]);
+        assert_eq!(c.group_span(g), Some((1, 2)));
+    }
+
+    #[test]
+    fn moving_steps_out_of_groups_and_over_them() {
+        let mut c = comp(4);
+        let g = c.create_group(&[2, 3]).unwrap();
+        // 1 jumps over the whole group.
+        c.move_layer(1, true);
+        assert_eq!(stack(&c), vec![(2, Some(g)), (3, Some(g)), (1, None), (4, None)]);
+        // Inside the group: swap.
+        c.move_layer(2, true);
+        assert_eq!(stack(&c), vec![(3, Some(g)), (2, Some(g)), (1, None), (4, None)]);
+        // At the group's top edge: leaves the group, stays put.
+        c.move_layer(2, true);
+        assert_eq!(stack(&c), vec![(3, Some(g)), (2, None), (1, None), (4, None)]);
+        // Last member leaves at the bottom of the stack: group disappears.
+        c.move_layer(3, false);
+        assert!(c.groups.is_empty());
+    }
+
+    #[test]
+    fn groups_move_as_blocks_and_drops_join() {
+        let mut c = comp(5);
+        let g = c.create_group(&[1, 2]).unwrap();
+        let h = c.create_group(&[3, 4]).unwrap();
+        c.move_group(g, true);
+        assert_eq!(stack(&c), vec![(3, Some(h)), (4, Some(h)), (1, Some(g)), (2, Some(g)), (5, None)]);
+        c.move_group(g, false);
+        assert_eq!(stack(&c), vec![(1, Some(g)), (2, Some(g)), (3, Some(h)), (4, Some(h)), (5, None)]);
+        c.drop_layer(5, 1);
+        assert_eq!(c.layers.iter().find(|l| l.id == 5).unwrap().parent, Some(g));
+        assert_eq!(c.group_span(g).map(|(a, b)| b - a), Some(2));
+        c.ungroup(h);
+        assert!(c.layers.iter().all(|l| l.parent != Some(h)) && c.group(h).is_none());
+    }
+}
