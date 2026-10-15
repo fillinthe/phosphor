@@ -21,8 +21,9 @@ pub(crate) fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulatio
 
 pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
-    let height = (ui.available_height() - 150.0).clamp(80.0, 600.0);
+    let height = (ui.available_height() - 210.0).clamp(80.0, 600.0);
     let State { comp, selected, layer_textures, texture, .. } = st;
+    crossfader(ui, comp);
     let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
@@ -51,6 +52,14 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                             on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
                             ui.toggle_value(&mut layer.solo, RichText::new("S").small());
                         });
+                        ui.horizontal(|ui| {
+                            for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
+                                let on = layer.group == g;
+                                if ui.selectable_label(on, RichText::new(g.name()).small().strong()).on_hover_text("Crossfader side (click again for none)").clicked() {
+                                    layer.group = if on { phosphor_engine::CrossGroup::None } else { g };
+                                }
+                            }
+                        });
                         ComboBox::from_id_salt(("mix_blend", layer.id)).width(70.0).selected_text(RichText::new(layer.blend.name()).small()).show_ui(ui, |ui| {
                             for mode in BlendMode::ALL {
                                 ui.selectable_value(&mut layer.blend, mode, mode.name());
@@ -76,5 +85,28 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 });
             });
         });
+    });
+}
+
+/// The A ↔ B crossfader across the top of the Mixer; double-click centres it.
+fn crossfader(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
+    let target = ControlTarget::App(phosphor_engine::AppControl::Crossfader);
+    let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("A").strong());
+        ui.spacing_mut().slider_width = (ui.available_width() - 40.0).clamp(120.0, 520.0);
+        let r = guarded!(ui, comp.crossfader, Slider::new(&mut comp.crossfader, 0.0..=1.0).show_value(false));
+        let r = r.on_hover_text(if used { "Crossfader: left = A layers, right = B layers, centre = both · double-click to centre" } else { "Crossfader: set layers to A or B below" });
+        if r.double_clicked() {
+            comp.crossfader = 0.5;
+        }
+        value_bubble(ui, &r, match comp.crossfader {
+            x if x < 0.01 => "A".to_string(),
+            x if x > 0.99 => "B".to_string(),
+            x => format!("A {:.0}% · B {:.0}%", phosphor_engine::CrossGroup::A.gain(x) * 100.0, phosphor_engine::CrossGroup::B.gain(x) * 100.0),
+        });
+        mapped_badge(ui, &r, &target);
+        map_menu(ui, &r, target);
+        ui.label(RichText::new("B").strong());
     });
 }

@@ -291,6 +291,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             AppControl::MasterFxBypass => comp.master_fx_bypass = toggled(comp.master_fx_bypass, v),
             AppControl::Syphon => comp.syphon = toggled(comp.syphon, v),
             AppControl::Ndi => comp.ndi.enabled = toggled(comp.ndi.enabled, v),
+            AppControl::Crossfader => comp.crossfader = v.clamp(0.0, 1.0),
             _ => out.push(Deferred::App(*a, v)),
         },
         ControlTarget::MasterFade => comp.master_fade = v.clamp(0.0, 1.0),
