@@ -56,6 +56,7 @@ const KEY_RECENT_PROJECTS: &str = "recent_projects";
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_WATCHED: &str = "watched_folders";
+const KEY_CONTROL: &str = "control";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]

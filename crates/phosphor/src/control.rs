@@ -40,6 +40,12 @@ fn toggled(current: bool, v: f32) -> bool {
 }
 
 pub const DEFAULT_OSC_PORT: u16 = 8000;
+/// Where controllers listen for feedback (TouchOSC's default receive port).
+pub const DEFAULT_FEEDBACK_PORT: u16 = 9000;
+/// Feedback is checked this often (seconds); only changed values are sent.
+const FEEDBACK_EVERY: f64 = 0.05;
+/// OSC senders heard from within this long get feedback (seconds).
+const FEEDBACK_SENDER_TTL: u64 = 600;
 
 #[derive(Clone, Debug)]
 pub struct Incoming {
@@ -55,6 +61,8 @@ pub struct OscSender {
     pub count: u64,
     pub last_address: String,
     pub last_seen: std::time::Instant,
+    /// Has used a built-in /phosphor/… address (its layout follows Phosphor's own addresses).
+    pub uses_builtin: bool,
 }
 
 /// Who's talking to us, shared with the listener threads.
@@ -86,15 +94,59 @@ pub struct ControlHub {
     pub heard: Option<ControlSource>,
     /// Clip/column launches and app-wide controls from controllers, for the app to carry out.
     pub triggers: Vec<Deferred>,
+    /// Send current values back to controllers (OSC to every recent sender on `feedback_port`, MIDI to the
+    /// outputs of the same devices) so faders, encoders and LEDs follow changes made anywhere else.
+    pub feedback: bool,
+    pub feedback_port: u16,
     fresh: HashMap<ControlSource, f32>,
+    /// Last value sent to (or received from) each controller input: only changes go out, nothing echoes back.
+    sent: HashMap<ControlSource, f32>,
+    feedback_ips: Vec<String>,
+    next_feedback: f64,
     #[cfg(not(target_arch = "wasm32"))]
     backend: native::Backend,
 }
 
+/// Controller settings kept between launches.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct ControlSettings {
+    pub osc_port: u16,
+    pub feedback: bool,
+    pub feedback_port: u16,
+}
+
+impl Default for ControlSettings {
+    fn default() -> Self {
+        Self { osc_port: DEFAULT_OSC_PORT, feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT }
+    }
+}
+
 impl ControlHub {
+    /// Opens MIDI and OSC with saved settings.
+    pub fn with_settings(s: ControlSettings) -> Self {
+        let mut hub = Self::new_unopened();
+        hub.osc_port = s.osc_port;
+        hub.feedback = s.feedback;
+        hub.feedback_port = s.feedback_port;
+        hub.reconnect();
+        hub
+    }
+
+    pub fn settings(&self) -> ControlSettings {
+        ControlSettings { osc_port: self.osc_port, feedback: self.feedback, feedback_port: self.feedback_port }
+    }
+
+    #[cfg(test)]
     pub fn new() -> Self {
+        let mut hub = Self::new_unopened();
+        hub.reconnect();
+        hub
+    }
+
+    fn new_unopened() -> Self {
         let (tx, rx) = mpsc::channel();
-        let mut hub = Self {
+        Self {
             rx,
             tx,
             midi_ports: Vec::new(),
@@ -109,12 +161,15 @@ impl ControlHub {
             listen_source: false,
             heard: None,
             triggers: Vec::new(),
+            feedback: true,
+            feedback_port: DEFAULT_FEEDBACK_PORT,
             fresh: HashMap::new(),
+            sent: HashMap::new(),
+            feedback_ips: Vec::new(),
+            next_feedback: 0.0,
             #[cfg(not(target_arch = "wasm32"))]
             backend: native::Backend::default(),
-        };
-        hub.reconnect();
-        hub
+        }
     }
 
     /// (Re)opens every MIDI input and the OSC listener.
@@ -157,7 +212,63 @@ impl ControlHub {
             comp.control_maps.push(ControlMap::new(msg.source.clone(), target));
         }
         self.fresh.insert(msg.source.clone(), msg.value);
+        self.sent.insert(msg.source.clone(), msg.value);
         self.last = Some(msg);
+    }
+
+    /// Sends values that changed since the last check back to controllers. Cheap when nothing listens.
+    pub fn feedback(&mut self, comp: &Composition, now: f64) {
+        if !self.feedback || now < self.next_feedback {
+            return;
+        }
+        self.next_feedback = now + FEEDBACK_EVERY;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (ips, builtin): (Vec<String>, bool) = {
+                let a = self.activity.lock().unwrap();
+                let live: Vec<&OscSender> = a.osc.values().filter(|s| s.last_seen.elapsed().as_secs() < FEEDBACK_SENDER_TTL && !a.osc_blocked.contains(&s.ip)).collect();
+                (live.iter().map(|s| s.ip.clone()).collect(), live.iter().any(|s| s.uses_builtin))
+            };
+            if ips != self.feedback_ips {
+                // A device joined (or left): send it everything once.
+                self.sent.clear();
+                self.feedback_ips = ips;
+            }
+            let midi = self.backend.has_midi_out();
+            if self.feedback_ips.is_empty() && !midi {
+                return;
+            }
+            let mut out: Vec<(ControlSource, f32)> = Vec::new();
+            for map in comp.control_maps.iter().filter(|m| m.enabled) {
+                if matches!(map.source, ControlSource::Key { .. }) {
+                    continue;
+                }
+                if let Some(v) = get_target(comp, &map.target) {
+                    out.push((map.source.clone(), map.range.unapply(v)));
+                }
+            }
+            if builtin {
+                for (t, _) in all_targets(comp) {
+                    if let Some(v) = get_target(comp, &t) {
+                        out.push((ControlSource::Osc { address: default_osc_address(&t) }, v));
+                    }
+                }
+            }
+            for (source, v) in out {
+                if self.sent.get(&source).is_some_and(|old| (old - v).abs() < 0.002) {
+                    continue;
+                }
+                self.sent.insert(source.clone(), v);
+                match &source {
+                    ControlSource::Osc { address } => self.backend.send_osc(&self.feedback_ips, self.feedback_port, address, v),
+                    ControlSource::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | channel, *cc, (v * 127.0).round() as u8]),
+                    ControlSource::MidiNote { channel, note } => self.backend.send_midi(&[0x90 | channel, *note, if v > 0.5 { 127 } else { 0 }]),
+                    ControlSource::Key { .. } => {}
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = comp;
     }
 
     /// Writes this frame's values into their targets, then forgets them so the UI stays in charge
@@ -209,6 +320,71 @@ fn scaled(p: &shaders::Param, v: f32) -> f32 {
 
 pub fn find_effect_mut(comp: &mut Composition, id: u64) -> Option<&mut EffectState> {
     comp.master_effects.iter_mut().chain(comp.layers.iter_mut().flat_map(|l| l.effects.iter_mut())).find(|e| e.id == id)
+}
+
+/// Inverse of `unit_to`: where `x` sits in the range, 0..1.
+pub fn to_unit(x: f32, min: f32, max: f32, log: bool) -> f32 {
+    let v = if log { (x / min).ln() / (max / min).ln() } else { (x - min) / (max - min) };
+    if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
+}
+
+fn param_unit(p: &shaders::Param, x: f32) -> f32 {
+    to_unit(x, p.min, p.max, false)
+}
+
+/// One of `n` choices as the 0..1 value that `set_target` maps back to it.
+fn choice_unit(i: usize, n: usize) -> f32 {
+    (i as f32 + 0.5) / n.max(1) as f32
+}
+
+/// The current 0..1 value of a target, the inverse of `set_target` (controller feedback, surfaces, remote).
+/// None for triggers and for controls that live outside the composition (tempo, audio).
+pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
+    let on = |b: bool| if b { 1.0 } else { 0.0 };
+    let layer = |id: &u64| comp.layers.iter().find(|l| l.id == *id);
+    let effect = |id: &u64| comp.master_effects.iter().chain(comp.layers.iter().flat_map(|l| l.effects.iter())).find(|e| e.id == *id);
+    Some(match target {
+        ControlTarget::MasterFade => comp.master_fade,
+        ControlTarget::LayerOpacity(id) => layer(id)?.opacity,
+        ControlTarget::LayerEnabled(id) => on(layer(id)?.enabled),
+        ControlTarget::LayerFxBypass(id) => on(layer(id)?.fx_bypass),
+        ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
+        ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
+        ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
+        ControlTarget::LayerDirection(id) => {
+            let (all, dir) = (phosphor_engine::PlayDirection::ALL, layer(id)?.direction);
+            choice_unit(all.iter().position(|d| *d == dir)?, all.len())
+        }
+        ControlTarget::GeneratorParam { layer: lid, index } => {
+            let l = layer(lid)?;
+            let phosphor_engine::SourceSpec::Generator(g) = &l.source else { return None };
+            let p = shaders::generator(g)?.params.get(*index)?;
+            param_unit(p, l.generator_values.get(*index).copied().unwrap_or(p.default))
+        }
+        ControlTarget::EffectParam { effect: eid, index } => {
+            let fx = effect(eid)?;
+            let p = shaders::effect(&fx.effect)?.params.get(*index)?;
+            param_unit(p, fx.values.get(*index).copied().unwrap_or(p.default))
+        }
+        ControlTarget::EffectMix(id) => effect(id)?.mix,
+        ControlTarget::EffectEnabled(id) => on(effect(id)?.enabled),
+        ControlTarget::Surface(id) => comp.surface.widgets.iter().find(|w| w.id == *id)?.value,
+        ControlTarget::SurfaceY(id) => comp.surface.widgets.iter().find(|w| w.id == *id)?.value_y,
+        ControlTarget::App(a) => match a {
+            AppControl::LaunchFade => on(comp.launch.fade),
+            AppControl::FadeTime => to_unit(comp.launch.fade_secs, 0.05, 10.0, true),
+            AppControl::LaunchTiming => {
+                let all = phosphor_engine::LaunchTiming::ALL;
+                choice_unit(all.iter().position(|t| *t == comp.launch.timing)?, all.len())
+            }
+            AppControl::MasterFxBypass => on(comp.master_fx_bypass),
+            AppControl::Syphon => on(comp.syphon),
+            AppControl::Ndi => on(comp.ndi.enabled),
+            AppControl::Crossfader => comp.crossfader,
+            _ => return None,
+        },
+        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) => return None,
+    })
 }
 
 /// Maps 0..1 onto a range, logarithmically when `log`.
@@ -449,6 +625,10 @@ mod native {
     #[derive(Default)]
     pub struct Backend {
         midi: Vec<midir::MidiInputConnection<()>>,
+        /// Outputs of the same devices as the open inputs (controller feedback: motor faders, LED rings).
+        midi_out: Vec<midir::MidiOutputConnection>,
+        /// Socket feedback goes out from.
+        osc_out: Option<UdpSocket>,
         osc_stop: Option<Arc<AtomicBool>>,
         mdns: Option<mdns_sd::ServiceDaemon>,
     }
@@ -462,6 +642,7 @@ mod native {
             activity: Arc<std::sync::Mutex<super::Activity>>,
         ) -> (Vec<String>, Vec<String>) {
             self.midi.clear();
+            self.midi_out.clear();
             let mut all = Vec::new();
             let mut open = Vec::new();
             let Ok(probe) = midir::MidiInput::new("Phosphor") else { return (all, open) };
@@ -491,7 +672,47 @@ mod native {
                     open.push(name);
                 }
             }
+            // Feedback goes to the outputs whose names match an open input (one device, two directions).
+            if let Ok(probe) = midir::MidiOutput::new("Phosphor") {
+                for port in probe.ports() {
+                    let name = probe.port_name(&port).unwrap_or_default();
+                    if !open.contains(&name) {
+                        continue;
+                    }
+                    if let Ok(output) = midir::MidiOutput::new("Phosphor")
+                        && let Ok(conn) = output.connect(&port, "phosphor-out")
+                    {
+                        self.midi_out.push(conn);
+                    }
+                }
+            }
             (all, open)
+        }
+
+        pub fn has_midi_out(&self) -> bool {
+            !self.midi_out.is_empty()
+        }
+
+        pub fn send_midi(&mut self, msg: &[u8]) {
+            for c in &mut self.midi_out {
+                let _ = c.send(msg);
+            }
+        }
+
+        /// One float message to every recipient; never blocks (UDP).
+        pub fn send_osc(&mut self, ips: &[String], port: u16, address: &str, value: f32) {
+            if ips.is_empty() {
+                return;
+            }
+            if self.osc_out.is_none() {
+                self.osc_out = UdpSocket::bind("0.0.0.0:0").and_then(|s| s.set_nonblocking(true).map(|()| s)).ok();
+            }
+            let Some(sock) = &self.osc_out else { return };
+            let msg = rosc::OscPacket::Message(rosc::OscMessage { addr: address.to_string(), args: vec![rosc::OscType::Float(value)] });
+            let Ok(bytes) = rosc::encoder::encode(&msg) else { return };
+            for ip in ips {
+                let _ = sock.send_to(&bytes, (ip.as_str(), port));
+            }
         }
 
         pub fn open_osc(&mut self, port: u16, tx: mpsc::Sender<Incoming>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
@@ -525,7 +746,9 @@ mod native {
                                 count: 0,
                                 last_address: String::new(),
                                 last_seen: std::time::Instant::now(),
+                                uses_builtin: false,
                             });
+                            e.uses_builtin |= address.starts_with("/phosphor/");
                             e.count += 1;
                             e.last_address = address;
                             e.last_seen = std::time::Instant::now();
@@ -694,5 +917,68 @@ mod tests {
         send(&mut hub, &mut comp, ControlSource::Osc { address: "/x".into() }, 0.4);
         assert_eq!(hub.heard, Some(ControlSource::Osc { address: "/x".into() }));
         assert!(!hub.listen_source);
+    }
+
+    /// Reading a control back gives what was set (feedback, surfaces and the remote rely on it).
+    #[test]
+    fn get_target_reads_back_what_set_target_wrote() {
+        let mut comp = Composition::starter();
+        let mut out = Vec::new();
+        let mut checked = 0;
+        for (t, name) in all_targets(&comp) {
+            if get_target(&comp, &t).is_none() {
+                continue;
+            }
+            for v in [0.0, 0.3, 1.0] {
+                set_target(&mut comp, &t, v, &mut out);
+                let back = get_target(&comp, &t).unwrap();
+                let toggle = is_toggle(&comp, &t);
+                let choice = matches!(t, ControlTarget::App(AppControl::LaunchTiming) | ControlTarget::LayerDirection(_));
+                let want = if toggle { if v > 0.5 { 1.0 } else { 0.0 } } else { v };
+                if choice {
+                    let mut again = Vec::new();
+                    let before = comp.clone();
+                    set_target(&mut comp, &t, back, &mut again);
+                    assert_eq!(comp, before, "{name}: choice {v} read back as {back} picks another option");
+                } else {
+                    assert!((back - want).abs() < 0.01, "{name}: set {v}, read back {back}");
+                }
+            }
+            checked += 1;
+        }
+        assert!(checked > 10, "only {checked} targets checked");
+    }
+
+    /// A TouchOSC-style device that sent a built-in address gets changes made elsewhere, once each.
+    #[test]
+    fn osc_feedback_reaches_the_sender() {
+        use std::net::UdpSocket;
+        let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_571, feedback: true, feedback_port: 18_572 });
+        let device = UdpSocket::bind("127.0.0.1:18572").unwrap();
+        device.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
+        let msg = rosc::encoder::encode(&rosc::OscPacket::Message(rosc::OscMessage { addr: "/phosphor/master".into(), args: vec![rosc::OscType::Float(0.8)] })).unwrap();
+        device.send_to(&msg, "127.0.0.1:18571").unwrap();
+        let mut comp = Composition::starter();
+        for _ in 0..50 {
+            hub.poll(&mut comp);
+            if hub.last.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        hub.apply(&mut comp, 0.0);
+        assert!((comp.master_fade - 0.8).abs() < 1e-3, "controller moved master");
+        hub.feedback(&comp, 1.0); // first contact: everything once
+        let mut buf = [0u8; 4096];
+        while device.recv(&mut buf).is_ok() {}
+        comp.master_fade = 0.25; // moved with the mouse
+        hub.feedback(&comp, 2.0);
+        let n = device.recv(&mut buf).expect("feedback for the master fader");
+        let (_, packet) = rosc::decoder::decode_udp(&buf[..n]).unwrap();
+        let rosc::OscPacket::Message(m) = packet else { panic!("bundle") };
+        assert_eq!(m.addr, "/phosphor/master");
+        assert_eq!(m.args, vec![rosc::OscType::Float(0.25)]);
+        hub.feedback(&comp, 3.0); // unchanged: nothing more
+        assert!(device.recv(&mut buf).is_err(), "unchanged values must not be resent");
     }
 }

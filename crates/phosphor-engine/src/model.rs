@@ -532,6 +532,13 @@ impl ValueRange {
     pub fn is_default(&self) -> bool {
         *self == Self::default()
     }
+
+    /// The controller value (0..1) that `apply` would turn into `target` (controller feedback).
+    pub fn unapply(&self, target: f32) -> f32 {
+        let span = self.max - self.min;
+        let v = if span.abs() < 1e-6 { 0.0 } else { ((target - self.min) / span).clamp(0.0, 1.0) };
+        if self.invert { 1.0 - v } else { v }
+    }
 }
 
 /// One thing a control drives, with its range. Used by controller mappings and surface widgets.

@@ -19,6 +19,14 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     });
     hint(ui, &control.osc_status);
     hint(ui, "TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
+    ui.horizontal(|ui| {
+        ui.checkbox(&mut control.feedback, "Send feedback")
+            .on_hover_text("Controllers follow Phosphor: values changed here (mouse, phone, other controllers) go back to TouchOSC faders and to MIDI controllers with motor faders or LED rings");
+        ui.add_enabled_ui(control.feedback, |ui| {
+            guarded!(ui, control.feedback_port, egui::DragValue::new(&mut control.feedback_port).range(1024..=65535).prefix("to port "))
+                .on_hover_text("The port your OSC controller listens on (TouchOSC: the connection's receive port, 9000 by default)");
+        });
+    });
     match &control.last {
         Some(m) => ui.monospace(format!("last input: {}  {:.3}", m.source.label(), m.value)),
         None => hint(ui, "No controller messages received yet."),

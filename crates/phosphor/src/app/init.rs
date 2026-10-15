@@ -84,7 +84,7 @@ impl PhosphorApp {
                 preset_name: String::new(),
                 notice: None,
                 audio: AudioInput::new(),
-                control: ControlHub::new(),
+                control: ControlHub::with_settings(stored(KEY_CONTROL).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()),
                 listen_for: None,
                 map_draft: None,
                 map_search: String::new(),
