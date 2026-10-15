@@ -131,12 +131,8 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
 
 pub fn duplicate_layer(st: &mut State, id: u64) {
     let Some(i) = st.comp.layers.iter().position(|l| l.id == id) else { return };
-    let mut copy = st.comp.layers[i].clone();
-    copy.id = st.comp.new_id();
+    let mut copy = st.comp.adopt_layer(st.comp.layers[i].clone());
     copy.name = format!("{} copy", copy.name);
-    for fx in &mut copy.effects {
-        fx.id = st.comp.new_id();
-    }
     st.selected = Some(copy.id);
     st.comp.layers.insert(i + 1, copy);
 }

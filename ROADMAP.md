@@ -173,7 +173,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Right-click any control → Learn, or type a mapping (OSC address, MIDI CC/note, key); every control also
       answers a built-in OSC address with no setup (/phosphor/master, /phosphor/layer/<id>/opacity, /phosphor/fx/<id>/<n>…)
 - [x] Keyboard mapping (Learn or type a key)
-- [ ] Presets / snapshots per layer, effect, and whole project
+- [x] Presets per layer, effect chain and whole project (Presets panel)
 
 ### Phase 4: Projection mapping (MadMapper-easy)
 - [x] Surfaces: corner-pinned quads with true perspective (homography), any number per output

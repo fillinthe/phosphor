@@ -114,6 +114,11 @@ pub struct State {
     pub presets: PresetStore,
     /// Saved output + mapping setups (Mapping panel › Venues) and the name being typed.
     pub venues: PresetStore,
+    /// Saved layers and effect chains (Presets panel), with the names being typed.
+    pub layer_presets: PresetStore,
+    pub chain_presets: PresetStore,
+    pub layer_preset_name: String,
+    pub chain_preset_name: String,
     pub venue_name: String,
     pub preset_name: String,
     /// A message worth showing the user (save failed, bad preset, …).
