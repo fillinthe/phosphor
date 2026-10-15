@@ -63,6 +63,12 @@ impl PhosphorApp {
         }
         let known: Vec<Tab> = stored(KEY_KNOWN_TABS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         ensure_new_tabs(&mut dock, &known);
+        // Account moved from the bottom panels to the top bar (2026-10-15): take it out of saved layouts once.
+        if stored(KEY_ACCOUNT_TAB_MOVED).is_none()
+            && let Some(path) = dock.find_tab(&Tab::Account)
+        {
+            let _ = dock.remove_tab(path);
+        }
 
         let comp_bpm = comp.bpm;
         let render_state = cc.wgpu_render_state.clone();
@@ -134,6 +140,9 @@ impl PhosphorApp {
                 account: Default::default(),
                 account_ui: Default::default(),
                 cloud_project: None,
+                account_window: false,
+                account_hello: bench.is_none() && !cfg!(target_arch = "wasm32") && stored(KEY_ACCOUNT_HELLO).is_none(),
+                account_hello_never: false,
                 recent: stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 history: Default::default(),
                 export: Default::default(),

@@ -57,6 +57,8 @@ pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_WATCHED: &str = "watched_folders";
 const KEY_CONTROL: &str = "control";
+const KEY_ACCOUNT_HELLO: &str = "account_hello_never";
+const KEY_ACCOUNT_TAB_MOVED: &str = "account_tab_moved";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -167,6 +169,10 @@ pub struct State {
     pub account: crate::account::Account,
     pub account_ui: crate::panels::AccountUi,
     pub cloud_project: Option<(String, String)>,
+    /// Account window open (top bar), and the startup hello about accounts (until "Don't show again").
+    pub account_window: bool,
+    pub account_hello: bool,
+    pub account_hello_never: bool,
     pub recent: Vec<String>,
     pub history: crate::history::History,
     pub export: ExportUi,

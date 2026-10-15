@@ -38,10 +38,10 @@ impl PhosphorApp {
                 let name = st.cloud_project.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| st.account_ui.name.trim().to_string());
                 match st.cloud_project.clone() {
                     Some((id, _)) if st.account.signed_in() => st.account.save(ctx, &id, &name, &st.comp.to_json()),
-                    _ => self.show_tab(crate::panels::Tab::Account),
+                    _ => self.state.account_window = true,
                 }
             }
-            A::OpenFromAccount => self.show_tab(crate::panels::Tab::Account),
+            A::OpenFromAccount => self.state.account_window = true,
             A::Import => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
@@ -119,6 +119,7 @@ impl PhosphorApp {
             A::Notes => open_doc("NOTES.md"),
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
+            A::Donate => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com/donate/")),
             A::Panel(i) => {
                 if let Some(tab) = Tab::ALL.get(i).copied() {
                     self.toggle_panel(tab);
@@ -192,6 +193,7 @@ impl PhosphorApp {
                     self.state.control.learning = None;
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    account_button(ui, &mut self.state);
                     let s = self.state.stats.latest;
                     let wide = ui.available_width() > 460.0;
                     if wide {
@@ -343,4 +345,55 @@ pub(crate) fn open_doc(name: &str) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = name;
+}
+
+/// Top bar: who's signed in (or "Sign in"); opens the Account window.
+fn account_button(ui: &mut egui::Ui, st: &mut State) {
+    let text = match &st.account.user {
+        Some(u) => {
+            let name = u.email.split('@').next().unwrap_or(&u.email);
+            let short: String = name.chars().take(14).collect();
+            format!("{} {short}", icon::USER_CIRCLE)
+        }
+        None => format!("{} Sign in", icon::USER_CIRCLE),
+    };
+    let hover = if st.account.user.is_some() { "Your phosphorfx.com account: projects and layouts" } else { "Optional: a free phosphorfx.com account keeps your projects and layouts on every computer" };
+    if ui.selectable_label(st.account_window, text).on_hover_text(hover).clicked() {
+        st.account_window = !st.account_window;
+    }
+}
+
+impl PhosphorApp {
+    /// The Account window (top bar button, File › Save to / Open from Account), and the one-time hello that
+    /// mentions the free account at startup.
+    pub(crate) fn account_windows(&mut self, ctx: &egui::Context) {
+        let st = &mut self.state;
+        if st.account_window {
+            let mut open = true;
+            egui::Window::new(format!("{} Account", icon::USER_CIRCLE)).open(&mut open).collapsible(false).resizable(true).default_width(440.0).default_height(420.0).show(ctx, |ui| {
+                crate::panels::account(ui, st);
+            });
+            st.account_window = open;
+        }
+        if st.account_hello && st.account.checked && st.account.user.is_none() && !st.account_window {
+            let mut close = false;
+            egui::Window::new("Welcome to Phosphor").collapsible(false).resizable(false).anchor(egui::Align2::RIGHT_TOP, [-12.0, 44.0]).show(ctx, |ui| {
+                ui.set_max_width(320.0);
+                ui.label("Phosphor is free. A free phosphorfx.com account keeps your projects and layouts on every computer you use. It's optional.");
+                ui.horizontal(|ui| {
+                    if ui.button(format!("{} Sign in or create one", icon::USER_CIRCLE)).clicked() {
+                        st.account_window = true;
+                        close = true;
+                    }
+                    if ui.button("Not now").clicked() {
+                        close = true;
+                    }
+                });
+                ui.checkbox(&mut st.account_hello_never, "Don't show this again");
+            });
+            if close {
+                st.account_hello = false;
+            }
+        }
+    }
 }

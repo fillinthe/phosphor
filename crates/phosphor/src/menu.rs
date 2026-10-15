@@ -42,6 +42,7 @@ pub enum Action {
     /// View ▸ Layouts (index into the layout list).
     Layout(usize),
     SaveLayout,
+    Donate,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -125,6 +126,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Notes, "Notes — What's New", None),
             I(A::Roadmap, "Roadmap", None),
             I(A::Website, "phosphorfx.com", None),
+            I(A::Donate, "Donate to Phosphor…", None),
         ],
     ),
 ];

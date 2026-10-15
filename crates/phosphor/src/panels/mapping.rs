@@ -323,6 +323,12 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 });
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().slider_width = (ui.available_width() - 90.0).max(60.0);
+                    let r = guarded!(ui, m.feather, Slider::new(&mut m.feather, 0.0..=0.2).text("Soft edge").show_value(false))
+                        .on_hover_text("Fade the mask's edge (0 = hard); the fade is centred on the outline");
+                    value_bubble(ui, &r, if m.feather > 0.0 { format!("{:.1}% of the output", m.feather * 100.0) } else { "hard edge".into() });
+                });
             });
             ui.add_space(4.0);
         }

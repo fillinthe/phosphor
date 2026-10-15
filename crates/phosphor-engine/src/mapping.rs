@@ -130,26 +130,75 @@ pub struct Mask {
     pub points: Vec<[f32; 2]>,
     /// Black out everything *outside* the shape instead.
     pub invert: bool,
+    /// Soft edge width in output space (0 = hard edge); the fade is centred on the outline.
+    pub feather: f32,
 }
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0 }
     }
 }
 
+/// Triangles filling `outer` (minus `hole`), each vertex (x, y, darkness, 0).
+fn fill(outer: &[[f32; 2]], hole: Option<&[[f32; 2]]>, darkness: f32) -> Vec<[f32; 4]> {
+    let mut data: Vec<f64> = outer.iter().flat_map(|p| [p[0] as f64, p[1] as f64]).collect();
+    let mut holes = Vec::new();
+    if let Some(h) = hole {
+        holes.push(outer.len());
+        data.extend(h.iter().flat_map(|p| [p[0] as f64, p[1] as f64]));
+    }
+    let Ok(idx) = earcutr::earcut(&data, &holes, 2) else { return Vec::new() };
+    idx.into_iter().map(|i| [data[i * 2] as f32, data[i * 2 + 1] as f32, darkness, 0.0]).collect()
+}
+
+/// The polygon moved `d` outward (negative = inward), corners mitred (limited, so sharp corners don't spike).
+pub fn offset_polygon(points: &[[f32; 2]], d: f32) -> Vec<[f32; 2]> {
+    let n = points.len();
+    let area: f32 = (0..n).map(|i| points[i][0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * points[i][1]).sum();
+    let outward = |a: [f32; 2], b: [f32; 2]| {
+        let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
+        let len = (ex * ex + ey * ey).sqrt().max(1e-9);
+        if area > 0.0 { [ey / len, -ex / len] } else { [-ey / len, ex / len] }
+    };
+    (0..n)
+        .map(|i| {
+            let (p0, p1, p2) = (points[(i + n - 1) % n], points[i], points[(i + 1) % n]);
+            let (n1, n2) = (outward(p0, p1), outward(p1, p2));
+            let m = [n1[0] + n2[0], n1[1] + n2[1]];
+            let ml = (m[0] * m[0] + m[1] * m[1]).sqrt();
+            if ml < 1e-6 {
+                return [p1[0] + n1[0] * d, p1[1] + n1[1] * d];
+            }
+            let m = [m[0] / ml, m[1] / ml];
+            let k = d / (m[0] * n1[0] + m[1] * n1[1]).max(0.3);
+            [p1[0] + m[0] * k, p1[1] + m[1] * k]
+        })
+        .collect()
+}
+
 impl Mask {
-    /// Triangles (x, y, 0, 0) covering what this mask blacks out.
+    /// Triangles (x, y, darkness, 0) covering what this mask blacks out; with a feather, a band along the
+    /// outline fades from black to clear.
     pub fn triangles(&self) -> Vec<[f32; 4]> {
         if self.points.len() < 3 {
             return Vec::new();
         }
-        let poly: Vec<f64> = self.points.iter().flat_map(|p| [p[0] as f64, p[1] as f64]).collect();
-        // Inverted: the whole output with the shape cut out as a hole.
-        let (data, holes): (Vec<f64>, Vec<usize>) =
-            if self.invert { ([0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0].into_iter().chain(poly).collect(), vec![4]) } else { (poly, Vec::new()) };
-        let Ok(idx) = earcutr::earcut(&data, &holes, 2) else { return Vec::new() };
-        idx.into_iter().map(|i| [data[i * 2] as f32, data[i * 2 + 1] as f32, 0.0, 0.0]).collect()
+        const OUTPUT: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let half = self.feather.max(0.0) / 2.0;
+        if half <= 0.0 {
+            // Inverted: the whole output with the shape cut out as a hole.
+            return if self.invert { fill(&OUTPUT, Some(&self.points), 1.0) } else { fill(&self.points, None, 1.0) };
+        }
+        let (inner, outer) = (offset_polygon(&self.points, -half), offset_polygon(&self.points, half));
+        let (mut out, d_in, d_out) = if self.invert { (fill(&OUTPUT, Some(&outer), 1.0), 0.0, 1.0) } else { (fill(&inner, None, 1.0), 1.0, 0.0) };
+        let n = inner.len();
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let (a, b, c, d) = ([inner[i][0], inner[i][1], d_in, 0.0], [inner[j][0], inner[j][1], d_in, 0.0], [outer[j][0], outer[j][1], d_out, 0.0], [outer[i][0], outer[i][1], d_out, 0.0]);
+            out.extend_from_slice(&[a, b, c, a, c, d]);
+        }
+        out
     }
 }
 
@@ -362,5 +411,35 @@ mod tests {
     fn degenerate_quad_is_rejected() {
         let line = [[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0]];
         assert!(quad_to_square(&line).is_none());
+    }
+}
+
+#[cfg(test)]
+mod feather_tests {
+    use super::*;
+
+    #[test]
+    fn offset_moves_a_square_in_and_out_whichever_way_it_was_drawn() {
+        let sq = vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]];
+        let rev: Vec<[f32; 2]> = sq.iter().rev().copied().collect();
+        for poly in [sq, rev] {
+            let grown = offset_polygon(&poly, 0.05);
+            let shrunk = offset_polygon(&poly, -0.05);
+            let span = |p: &[[f32; 2]]| p.iter().map(|q| q[0]).fold(f32::MIN, f32::max) - p.iter().map(|q| q[0]).fold(f32::MAX, f32::min);
+            assert!((span(&grown) - 0.3).abs() < 1e-4 && (span(&shrunk) - 0.1).abs() < 1e-4, "{grown:?} {shrunk:?}");
+        }
+    }
+
+    #[test]
+    fn feathered_mask_fades_across_its_edge() {
+        let hard = Mask::default();
+        assert!(hard.triangles().iter().all(|v| v[2] == 1.0));
+        let soft = Mask { feather: 0.04, ..Default::default() };
+        let t = soft.triangles();
+        assert!(t.iter().any(|v| v[2] == 0.0) && t.iter().any(|v| v[2] == 1.0));
+        // The clear edge sits outside the shape, the solid one inside.
+        assert!(t.iter().filter(|v| v[2] == 0.0).all(|v| v[0] < 0.4 || v[0] > 0.6 || v[1] < 0.4 || v[1] > 0.6));
+        let inv = Mask { feather: 0.04, invert: true, ..Default::default() };
+        assert!(inv.triangles().iter().filter(|v| v[2] == 0.0).all(|v| v[0] > 0.4 && v[0] < 0.6 && v[1] > 0.4 && v[1] < 0.6));
     }
 }

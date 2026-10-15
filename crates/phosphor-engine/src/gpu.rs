@@ -212,7 +212,7 @@ impl Gpu {
                     compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: FORMAT,
-                        blend: if surface || entry == "fs_mesh" {
+                        blend: if surface || entry == "fs_mesh" || entry == "fs_mask" {
                             Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                         } else if rutt {
                             Some(wgpu::BlendState { color: additive, alpha: additive })
