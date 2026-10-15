@@ -41,5 +41,8 @@ impl PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.state.monitors) {
             storage.set_string(KEY_MONITORS, json);
         }
+        if let Ok(json) = serde_json::to_string(&self.state.control.settings()) {
+            storage.set_string(KEY_CONTROL, json);
+        }
     }
 }

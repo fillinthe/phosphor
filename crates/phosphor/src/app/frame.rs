@@ -56,6 +56,7 @@ impl PhosphorApp {
             let State { control, comp, .. } = &mut self.state;
             control.poll(comp);
             control.apply(comp, now as f32);
+            control.feedback(comp, now);
         }
         for d in std::mem::take(&mut self.state.control.triggers) {
             self.state.run_deferred(d, now);
