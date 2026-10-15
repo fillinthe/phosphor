@@ -12,14 +12,24 @@ pub trait Choice: Copy + PartialEq + 'static {
 
     /// The option a 0..1 controller value picks.
     fn from_unit(v: f32) -> Self {
-        let n = Self::OPTIONS.len();
-        Self::OPTIONS[((v.clamp(0.0, 1.0) * n as f32) as usize).min(n - 1)]
+        Self::OPTIONS[pick(v, Self::OPTIONS.len())]
     }
 
     /// The 0..1 value that picks this option (the middle of its slice).
     fn unit(self) -> f32 {
-        (self.index() as f32 + 0.5) / Self::OPTIONS.len() as f32
+        pick_unit(self.index(), Self::OPTIONS.len())
     }
+}
+
+/// Which of `n` equal slices of 0..1 a controller value falls in (for lists whose length changes, like pages).
+pub fn pick(v: f32, n: usize) -> usize {
+    let n = n.max(1);
+    ((v.clamp(0.0, 1.0) * n as f32) as usize).min(n - 1)
+}
+
+/// The 0..1 value in the middle of slice `i` of `n` (the inverse of `pick`).
+pub fn pick_unit(i: usize, n: usize) -> f32 {
+    (i as f32 + 0.5) / n.max(1) as f32
 }
 
 /// Implements `Choice` from a type's own `ALL` list and `name()`.

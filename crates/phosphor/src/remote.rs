@@ -58,11 +58,11 @@ pub fn state_json(st: &State) -> String {
         .map(|w| {
             let [r, g, b] = w.color;
             json!({"id": w.id, "kind": format!("{:?}", w.kind), "x": w.x, "y": w.y, "w": w.w, "h": w.h, "label": w.label,
-                "color": format!("#{r:02x}{g:02x}{b:02x}"), "value": round(w.value), "value_y": round(w.value_y)})
+                "color": format!("#{r:02x}{g:02x}{b:02x}"), "value": round(w.value), "value_y": round(w.value_y), "page": w.page})
         })
         .collect();
     json!({
-        "surface": {"columns": comp.surface.columns, "widgets": surface},
+        "surface": {"columns": comp.surface.columns, "widgets": surface, "pages": comp.surface.pages},
         "bpm": comp.bpm,
         "master": round(comp.master_fade),
         "columns": comp.clip_columns,

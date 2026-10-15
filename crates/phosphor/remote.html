@@ -58,6 +58,10 @@
   nav button.on { color:var(--acc); background:transparent; }
   .page { display:none; } .page.on { display:block; }
   #surface { display:grid; gap:6px; }
+  #surftabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  #surftabs:empty { display:none; }
+  #surftabs button { padding:8px 14px; border-radius:10px; border:1px solid var(--line); background:transparent; color:inherit; font:inherit; }
+  #surftabs button.on { background:var(--accent, #5be89a); color:#06140c; border-color:transparent; }
   #surface .w { border-radius:12px; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; text-align:center;
                 font-size:13px; user-select:none; -webkit-user-select:none; touch-action:none; position:relative; overflow:hidden; }
   #surface .w.lbl { border:none; font-weight:600; }
@@ -90,7 +94,7 @@
 <div class="section" id="mastersec">
   <div class="row"><span class="label">MASTER</span><div id="master"></div><span class="val" id="masterv"></span></div>
 </div>
-<div class="page" id="p-surface"><div class="section"><div id="surface"></div><p class="hint" id="surfhint"></p></div></div>
+<div class="page" id="p-surface"><div class="section"><div id="surftabs"></div><div id="surface"></div><p class="hint" id="surfhint"></p></div></div>
 <div class="page on" id="p-mixer"><div class="section"><div id="strips"></div></div></div>
 <div class="page" id="p-clips"><div class="section"><div id="clips"></div><p class="hint">Tap a cell to trigger · tap a number to trigger the whole column</p></div></div>
 <div class="page" id="p-ctrl"><div class="section" id="params"></div></div>
@@ -195,10 +199,24 @@ function render() {
 // Control Surface: the widgets you built on the Mac, on the same grid. Every move goes back as
 // {t:'set', target, v} through the same path as the Mac's own controls.
 function setTarget(target, v) { queue(JSON.stringify(target), { t: 'set', target, v }); }
+let surfPage = Number(localStorage.getItem('surfPage') || 0); // each phone keeps its own page
 function renderSurface() {
-  const sf = state.surface || { columns: 12, widgets: [] };
+  const all = state.surface || { columns: 12, widgets: [], pages: ['Main'] };
+  const pages = all.pages && all.pages.length ? all.pages : ['Main'];
+  if (surfPage >= pages.length) surfPage = 0;
+  const tabs = $('#surftabs');
+  const tsig = pages.join('|') + '#' + surfPage;
+  if (tabs.dataset.sig !== tsig) {
+    tabs.dataset.sig = tsig; tabs.innerHTML = '';
+    if (pages.length > 1) pages.forEach((name, i) => {
+      const b = document.createElement('button'); b.textContent = name; if (i === surfPage) b.className = 'on';
+      b.onclick = () => { surfPage = i; localStorage.setItem('surfPage', i); renderSurface(); };
+      tabs.appendChild(b);
+    });
+  }
+  const sf = { ...all, widgets: all.widgets.filter(w => (w.page || 0) === surfPage) };
   const box = $('#surface');
-  const sig = sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color].join(',')).join('|');
+  const sig = surfPage + '#' + sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color].join(',')).join('|');
   if (box.dataset.sig !== sig) {
     box.dataset.sig = sig; box.innerHTML = '';
     const cell = Math.max(28, (box.clientWidth || window.innerWidth - 24) / sf.columns - 6);
