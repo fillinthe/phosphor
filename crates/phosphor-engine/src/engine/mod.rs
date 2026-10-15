@@ -163,6 +163,7 @@ pub struct Engine {
     output_generation: u64,
     uniform_buffer: Option<wgpu::Buffer>,
     uniform_capacity: usize,
+    bind_cache: encode::BindCache,
     capture: Capture,
     frame_index: u64,
     /// One target per configured output, at that output's size.
@@ -195,6 +196,7 @@ impl Engine {
             output_generation: 0,
             uniform_buffer: None,
             uniform_capacity: 0,
+            bind_cache: Default::default(),
             capture: Capture::default(),
             frame_index: 0,
             output_targets: HashMap::new(),

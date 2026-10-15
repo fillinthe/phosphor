@@ -252,7 +252,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 ### Engineering
 - [ ] Render on its own thread / own swapchain per output, decoupled from UI repaint
 - [ ] GPU timestamp queries for real GPU frame time
-- [ ] Cache bind groups instead of creating them per pass — measured: 40 live explorer previews cost ~2 ms
+- [x] Cache bind groups (`BindCache`): 40 previews ~95% → ~88% app CPU; render time unchanged (~2.1 ms)
+- [ ] Find what the remaining ~2 ms for 40 previews is (likely 40 separate render passes; try batching)
       CPU/frame (30% → 105% of a core), nearly all pass/bind-group setup; explorer defaults to Hover previews
 - [ ] Benchmark suite vs VDMX (CPU, memory, frame time, same clips)
 - [ ] Crash reporting (opt-in), auto-update

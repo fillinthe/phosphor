@@ -2,10 +2,41 @@
 
 use super::*;
 
+/// Bind groups by the views they bind (tex0, tex1, tex2, buf0..buf7): most passes bind the same textures every
+/// frame, so the group is made once. Groups unused for a frame are dropped (they keep their textures alive).
+#[derive(Default)]
+pub(super) struct BindCache {
+    current: HashMap<[wgpu::TextureView; 11], wgpu::BindGroup>,
+    previous: HashMap<[wgpu::TextureView; 11], wgpu::BindGroup>,
+}
+
+impl BindCache {
+    /// Starts a frame: what wasn't used last frame goes.
+    fn next_frame(&mut self) {
+        self.previous = std::mem::take(&mut self.current);
+    }
+
+    fn clear(&mut self) {
+        self.current.clear();
+        self.previous.clear();
+    }
+
+    fn get(&mut self, key: [wgpu::TextureView; 11], make: impl FnOnce(&[wgpu::TextureView; 11]) -> wgpu::BindGroup) -> wgpu::BindGroup {
+        if let Some(g) = self.current.get(&key) {
+            return g.clone();
+        }
+        let g = self.previous.remove(&key).unwrap_or_else(|| make(&key));
+        self.current.insert(key, g.clone());
+        g
+    }
+}
+
 impl Engine {
     pub(super) fn encode(&mut self, passes: &[Pass]) {
         let stride = self.gpu.uniform_stride as usize;
+        self.bind_cache.next_frame();
         if self.uniform_capacity < passes.len() {
+            self.bind_cache.clear();
             self.uniform_capacity = passes.len().next_power_of_two().max(16);
             self.uniform_buffer = Some(self.gpu.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("uniforms"),
@@ -26,9 +57,24 @@ impl Engine {
             self.gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame") });
         for (i, pass) in passes.iter().enumerate() {
             let blank = &self.gpu.blank;
-            let bind_group = self.gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            let view = |v: Option<&wgpu::TextureView>| v.unwrap_or(blank).clone();
+            let key = [
+                pass.tex0.clone(),
+                view(pass.tex1.as_ref()),
+                view(pass.tex2.as_ref()),
+                view(pass.bufs.first()),
+                view(pass.bufs.get(1)),
+                view(pass.bufs.get(2)),
+                view(pass.bufs.get(3)),
+                view(pass.bufs.get(4)),
+                view(pass.bufs.get(5)),
+                view(pass.bufs.get(6)),
+                view(pass.bufs.get(7)),
+            ];
+            let (device, layout, sampler, sampler_mirror) = (&self.gpu.device, &self.gpu.layout, &self.gpu.sampler, &self.gpu.sampler_mirror);
+            let bind_group = self.bind_cache.get(key, |k| device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
-                layout: &self.gpu.layout,
+                layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -38,30 +84,21 @@ impl Engine {
                             size: wgpu::BufferSize::new(std::mem::size_of::<Uniforms>() as u64),
                         }),
                     },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.gpu.sampler) },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&self.gpu.sampler_mirror),
-                    },
-                    wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&pass.tex0) },
-                    wgpu::BindGroupEntry {
-                        binding: 4,
-                        resource: wgpu::BindingResource::TextureView(pass.tex1.as_ref().unwrap_or(blank)),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 5,
-                        resource: wgpu::BindingResource::TextureView(pass.tex2.as_ref().unwrap_or(blank)),
-                    },
-                    wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::TextureView(pass.bufs.first().unwrap_or(blank)) },
-                    wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::TextureView(pass.bufs.get(1).unwrap_or(blank)) },
-                    wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::TextureView(pass.bufs.get(2).unwrap_or(blank)) },
-                    wgpu::BindGroupEntry { binding: 9, resource: wgpu::BindingResource::TextureView(pass.bufs.get(3).unwrap_or(blank)) },
-                    wgpu::BindGroupEntry { binding: 10, resource: wgpu::BindingResource::TextureView(pass.bufs.get(4).unwrap_or(blank)) },
-                    wgpu::BindGroupEntry { binding: 11, resource: wgpu::BindingResource::TextureView(pass.bufs.get(5).unwrap_or(blank)) },
-                    wgpu::BindGroupEntry { binding: 12, resource: wgpu::BindingResource::TextureView(pass.bufs.get(6).unwrap_or(blank)) },
-                    wgpu::BindGroupEntry { binding: 13, resource: wgpu::BindingResource::TextureView(pass.bufs.get(7).unwrap_or(blank)) },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
+                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler_mirror) },
+                    wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&k[0]) },
+                    wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::TextureView(&k[1]) },
+                    wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&k[2]) },
+                    wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::TextureView(&k[3]) },
+                    wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::TextureView(&k[4]) },
+                    wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::TextureView(&k[5]) },
+                    wgpu::BindGroupEntry { binding: 9, resource: wgpu::BindingResource::TextureView(&k[6]) },
+                    wgpu::BindGroupEntry { binding: 10, resource: wgpu::BindingResource::TextureView(&k[7]) },
+                    wgpu::BindGroupEntry { binding: 11, resource: wgpu::BindingResource::TextureView(&k[8]) },
+                    wgpu::BindGroupEntry { binding: 12, resource: wgpu::BindingResource::TextureView(&k[9]) },
+                    wgpu::BindGroupEntry { binding: 13, resource: wgpu::BindingResource::TextureView(&k[10]) },
                 ],
-            });
+            }));
             // Surfaces, meshes and masks draw on top of what the output already has.
             let surface = matches!(pass.entry, "fs_surface" | "fs_mesh" | "fs_mask");
             let vertices = match pass.entry {
