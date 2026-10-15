@@ -55,6 +55,7 @@ impl PhosphorApp {
         {
             let State { control, comp, .. } = &mut self.state;
             control.poll(comp);
+            control.poll_clock(now);
             control.apply(comp, now as f32);
             control.feedback(comp, now);
         }
@@ -63,6 +64,7 @@ impl PhosphorApp {
         }
         {
             let st = &mut self.state;
+            st.clock.follow_midi_clock(now, &st.control.midi_clock);
             st.comp.bpm = st.clock.bpm;
             let beat = st.clock.tick(now);
             let fire_now = match st.comp.launch.timing {

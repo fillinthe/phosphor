@@ -45,6 +45,11 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             let color = if lit { ACCENT.gamma_multiply(1.0 - 0.6 * phase) } else { Color32::from_gray(60) };
             ui.painter().circle_filled(r.center(), if lit { 5.0 } else { 4.0 }, color);
         }
+        if st.control.midi_clock.active(now) {
+            let bpm = st.control.midi_clock.bpm().map_or("…".to_string(), |b| format!("{b:.1}"));
+            ui.toggle_value(&mut st.clock.follow_midi, RichText::new(format!("MIDI {bpm}")).small().strong())
+                .on_hover_text("MIDI clock is coming in: tempo follows it, and after a Start the beat does too. Click to ignore it.");
+        }
         let auto = ui.toggle_value(&mut st.clock.follow_audio, RichText::new("AUTO").small().strong()).on_hover_text("Follow the audio beat detector (tempo and beat)");
         map_menu(ui, &auto, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
         if st.mod_inputs.audio_beat > 0.05 {

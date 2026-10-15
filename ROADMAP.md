@@ -146,7 +146,8 @@ Legend: [x] done · [~] in progress · [ ] not started
       "Beat" modulation source for beat-synced parameters
 - [x] Clip banks A–D (pages of 9 columns), bar-quantise
 - [x] Detach any panel into its own OS window (tab menu → Detach; closing it docks it back)
-- [ ] Ableton Link, MIDI clock in, effect-based transitions
+- [x] MIDI clock in (tempo + beat after Start)
+- [ ] Ableton Link, effect-based transitions
 - [x] Master crossfader (A/B groups)
 - [ ] Layer groups
 
