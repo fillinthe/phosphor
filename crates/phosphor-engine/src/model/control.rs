@@ -67,10 +67,12 @@ pub enum AppControl {
     Syphon,
     Ndi,
     Crossfader,
+    /// Which Control Surface page shows (0..1 across the pages).
+    SurfacePage,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 13] = [
+    pub const ALL: [AppControl; 14] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -84,6 +86,7 @@ impl AppControl {
         AppControl::Syphon,
         AppControl::Ndi,
         AppControl::Crossfader,
+        AppControl::SurfacePage,
     ];
 
     pub fn name(self) -> &'static str {
@@ -101,6 +104,7 @@ impl AppControl {
             AppControl::Syphon => "Syphon on/off",
             AppControl::Ndi => "NDI on/off",
             AppControl::Crossfader => "Crossfader (A ↔ B)",
+            AppControl::SurfacePage => "Control Surface page",
         }
     }
 
@@ -120,6 +124,7 @@ impl AppControl {
             AppControl::Syphon => "syphon",
             AppControl::Ndi => "ndi",
             AppControl::Crossfader => "crossfader",
+            AppControl::SurfacePage => "surface/page",
         }
     }
 

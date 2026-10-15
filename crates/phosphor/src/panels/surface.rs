@@ -29,11 +29,9 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
         ui.toggle_value(&mut edit, label(icon::PENCIL_SIMPLE, "Edit")).on_hover_text("Edit: add, move (drag), resize (drag the corner) and wire up widgets. Off: play them.");
         if edit {
             ui.menu_button(label(icon::PLUS, "Add"), |ui| {
-                for kind in WidgetKind::ALL {
-                    if ui.button(kind.name()).clicked() {
-                        let (w, h) = kind.default_size();
-                        let (x, y) = st.comp.surface.free_spot(w, h);
-                        selected = Some(st.comp.surface.add(kind, x, y));
+                for &kind in <WidgetKind as phosphor_engine::Choice>::OPTIONS {
+                    if ui.button(phosphor_engine::Choice::label(kind)).clicked() {
+                        selected = Some(st.comp.surface.add(kind));
                         ui.close();
                     }
                 }
@@ -41,10 +39,12 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
             ui.label(RichText::new("Columns").small().color(Color32::GRAY));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
             hint(ui, "Drag to move · corner to resize · right-click to map");
-        } else if st.comp.surface.widgets.is_empty() {
+        } else if st.comp.surface.on_page().next().is_none() {
             hint(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
     });
+
+    page_tabs(ui, &mut st.comp.surface, edit);
 
     let targets = crate::control::all_targets(&st.comp);
     let inspector = edit && selected.is_some_and(|id| st.comp.surface.widget(id).is_some());
@@ -55,7 +55,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal_top(|ui| {
         let canvas_w = (ui.available_width() - if inspector { 330.0 } else { 0.0 }).max(200.0);
         let cols = st.comp.surface.columns.max(1) as f32;
-        let used_rows = st.comp.surface.widgets.iter().map(|w| w.y + w.h).fold(0.0f32, f32::max);
+        let used_rows = st.comp.surface.on_page().map(|w| w.y + w.h).fold(0.0f32, f32::max);
         let rows = used_rows + if edit { 2.0 } else { 0.0 };
         // Square cells that fit the whole surface in the panel (across and down); scroll only when tiny.
         let avail_h = ui.available_height() - 4.0;
@@ -72,7 +72,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             let pointer = ui.ctx().input(|i| i.pointer.interact_pos());
-            for w in &st.comp.surface.widgets {
+            for w in st.comp.surface.on_page() {
                 let rect = egui::Rect::from_min_size(canvas.min + egui::vec2(w.x * cell, w.y * cell), egui::vec2(w.w * cell, w.h * cell)).shrink(3.0);
                 let id = egui::Id::new(("surface_widget", w.id));
                 let target = ControlTarget::Surface(w.id);
@@ -304,12 +304,7 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
         delete = ui.button(label(icon::TRASH, "Delete")).clicked();
     });
     if duplicate {
-        let mut copy = st.comp.surface.widget(id).cloned().unwrap_or_default();
-        let (x, y) = st.comp.surface.free_spot(copy.w, copy.h);
-        copy.id = st.comp.surface.next_id;
-        st.comp.surface.next_id += 1;
-        (copy.x, copy.y) = (x, y);
-        st.comp.surface.widgets.push(copy);
+        st.comp.surface.duplicate(id);
     }
     if delete {
         st.comp.surface.widgets.retain(|w| w.id != id);
@@ -318,4 +313,41 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
         return false;
     }
     true
+}
+
+/// Page tabs above the surface: click to switch; in Edit, add pages and right-click one to rename or delete it.
+fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: bool) {
+    if sf.pages.is_empty() {
+        sf.pages.push("Main".into());
+    }
+    if sf.pages.len() < 2 && !edit {
+        return;
+    }
+    let mut remove = None;
+    ui.horizontal_wrapped(|ui| {
+        let current = sf.current_page();
+        for i in 0..sf.pages.len() {
+            let r = ui.selectable_label(current == i, &sf.pages[i]);
+            map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::SurfacePage));
+            if r.clicked() {
+                sf.page = i;
+            }
+            if edit {
+                r.right_menu(|ui| {
+                    ui.label(RichText::new("Page name").small());
+                    ui.text_edit_singleline(&mut sf.pages[i]);
+                    if sf.pages.len() > 1 && ui.button(label(icon::TRASH, "Delete page and its widgets")).clicked() {
+                        remove = Some(i);
+                        ui.close();
+                    }
+                });
+            }
+        }
+        if edit && ui.small_button(label(icon::PLUS, "Page")).on_hover_text("Add a page (right-click a page to rename or delete it)").clicked() {
+            sf.add_page();
+        }
+    });
+    if let Some(i) = remove {
+        sf.remove_page(i);
+    }
 }

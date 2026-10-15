@@ -58,7 +58,7 @@ fn surface_widgets_drive_bindings() {
     let a = comp.add_layer().id;
     let b = comp.add_layer().id;
     // A fader driving two layers: one straight 0.2–0.8, one inverted.
-    let fader = comp.surface.add(WidgetKind::Fader, 0.0, 0.0);
+    let fader = comp.surface.add(WidgetKind::Fader);
     let w = comp.surface.widget_mut(fader).unwrap();
     w.bindings.push(Binding { target: ControlTarget::LayerOpacity(a), range: ValueRange { min: 0.2, max: 0.8, invert: false } });
     w.bindings.push(Binding { target: ControlTarget::LayerOpacity(b), range: ValueRange { min: 0.0, max: 1.0, invert: true } });
@@ -74,7 +74,7 @@ fn surface_widgets_drive_bindings() {
     assert!(comp.layer_mut(b).unwrap().opacity < 1e-3);
 
     // A key flips a surface toggle, which switches a layer.
-    let tog = comp.surface.add(WidgetKind::Toggle, 2.0, 0.0);
+    let tog = comp.surface.add(WidgetKind::Toggle);
     comp.surface.widget_mut(tog).unwrap().bindings.push(Binding { target: ControlTarget::LayerEnabled(a), range: ValueRange::default() });
     let key = ControlSource::Key { key: "T".into() };
     comp.control_maps.push(ControlMap::new(key.clone(), ControlTarget::Surface(tog)));
@@ -86,8 +86,8 @@ fn surface_widgets_drive_bindings() {
     assert!(!comp.layer_mut(a).unwrap().enabled);
 
     // Two widgets driving each other don't loop forever.
-    let x = comp.surface.add(WidgetKind::Slider, 0.0, 2.0);
-    let y = comp.surface.add(WidgetKind::Slider, 0.0, 3.0);
+    let x = comp.surface.add(WidgetKind::Slider);
+    let y = comp.surface.add(WidgetKind::Slider);
     comp.surface.widget_mut(x).unwrap().bindings.push(Binding { target: ControlTarget::Surface(y), range: ValueRange::default() });
     comp.surface.widget_mut(y).unwrap().bindings.push(Binding { target: ControlTarget::Surface(x), range: ValueRange::default() });
     let mut out = Vec::new();
@@ -118,7 +118,7 @@ fn get_target_reads_back_what_set_target_wrote() {
             set_target(&mut comp, &t, v, &mut out);
             let back = get_target(&comp, &t).unwrap();
             let toggle = is_toggle(&comp, &t);
-            let choice = matches!(t, ControlTarget::App(AppControl::LaunchTiming) | ControlTarget::LayerDirection(_));
+            let choice = matches!(t, ControlTarget::App(AppControl::LaunchTiming | AppControl::SurfacePage) | ControlTarget::LayerDirection(_));
             let want = if toggle { if v > 0.5 { 1.0 } else { 0.0 } } else { v };
             if choice {
                 let mut again = Vec::new();
