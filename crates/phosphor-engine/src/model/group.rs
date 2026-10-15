@@ -15,6 +15,7 @@ pub struct LayerGroup {
     pub name: String,
     pub enabled: bool,
     pub opacity: f32,
+    pub opacity_mod: Option<Modulation>,
     pub blend: BlendMode,
     /// Run on the group's mixed picture.
     pub effects: Vec<EffectState>,
@@ -25,9 +26,16 @@ pub struct LayerGroup {
     pub collapsed: bool,
 }
 
+/// A layer's or group's mix controls, borrowed (see `Composition::mix_controls_mut`).
+pub struct MixControls<'a> {
+    pub opacity: &'a mut f32,
+    pub enabled: &'a mut bool,
+    pub fx_bypass: &'a mut bool,
+}
+
 impl Default for LayerGroup {
     fn default() -> Self {
-        Self { id: 0, name: "Group".into(), enabled: true, opacity: 1.0, blend: BlendMode::Normal, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false }
+        Self { id: 0, name: "Group".into(), enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false }
     }
 }
 
@@ -38,6 +46,22 @@ impl Composition {
 
     pub fn group_mut(&mut self, id: u64) -> Option<&mut LayerGroup> {
         self.groups.iter_mut().find(|g| g.id == id)
+    }
+
+    /// The mix controls (opacity, on/off, effects bypass) of a layer or a group: what controllers drive.
+    pub fn mix_controls(&self, id: u64) -> Option<(f32, bool, bool)> {
+        match self.layers.iter().find(|l| l.id == id) {
+            Some(l) => Some((l.opacity, l.enabled, l.fx_bypass)),
+            None => self.group(id).map(|g| (g.opacity, g.enabled, g.fx_bypass)),
+        }
+    }
+
+    pub fn mix_controls_mut(&mut self, id: u64) -> Option<MixControls<'_>> {
+        if let Some(i) = self.layers.iter().position(|l| l.id == id) {
+            let l = &mut self.layers[i];
+            return Some(MixControls { opacity: &mut l.opacity, enabled: &mut l.enabled, fx_bypass: &mut l.fx_bypass });
+        }
+        self.group_mut(id).map(|g| MixControls { opacity: &mut g.opacity, enabled: &mut g.enabled, fx_bypass: &mut g.fx_bypass })
     }
 
     /// The effect chain of MASTER (`MASTER_ID`), a layer or a group.

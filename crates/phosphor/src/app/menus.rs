@@ -99,6 +99,19 @@ impl PhosphorApp {
                     panels::remove_layer(st, id);
                 }
             }
+            A::Group => {
+                if let Some(id) = selected_layer {
+                    panels::group_with_below(&mut st.comp, &mut st.selected, id);
+                }
+            }
+            A::Ungroup => {
+                if let Some(g) = panels::selected_group(&st.comp, st.selected) {
+                    st.comp.ungroup(g);
+                    if st.selected == Some(g) {
+                        st.selected = st.comp.layers.last().map(|l| l.id);
+                    }
+                }
+            }
             A::Palette => st.palette.toggle(),
             A::MapMode => {
                 st.map_mode = !st.map_mode;
@@ -227,6 +240,8 @@ impl PhosphorApp {
                                 Action::Undo => can_undo,
                                 Action::Redo => can_redo,
                                 Action::DuplicateLayer | Action::DeleteLayer => has_layer,
+                                Action::Group => has_layer && self.state.selected.and_then(|id| self.state.comp.layers.iter().find(|l| l.id == id)).is_some_and(|l| l.parent.is_none()),
+                                Action::Ungroup => panels::selected_group(&self.state.comp, self.state.selected).is_some(),
                                 Action::Syphon | Action::Ndi => cfg!(target_os = "macos"),
                                 _ => true,
                             };

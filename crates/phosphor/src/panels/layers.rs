@@ -119,11 +119,8 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             comp.move_layer(id, false);
         }
         Some((i, LayerAction::GroupWithBelow)) => {
-            let below = i.checked_sub(1).map(|b| comp.layers[b].id);
-            let ids: Vec<u64> = std::iter::once(comp.layers[i].id).chain(below).collect();
-            if let Some(g) = comp.create_group(&ids) {
-                *selected = Some(g);
-            }
+            let id = comp.layers[i].id;
+            group_with_below(comp, selected, id);
         }
         Some((i, LayerAction::LeaveGroup)) => {
             comp.layers[i].parent = None;
@@ -400,7 +397,7 @@ pub(crate) fn layer_card(
                 action = Some(LayerAction::LeaveGroup);
                 ui.close();
             }
-        } else if ui.button(label(icon::STACK, "Group with the layer below")).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
+        } else if ui.button(label(icon::STACK, "Group with the layer below (⌘G)")).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
             action = Some(LayerAction::GroupWithBelow);
             ui.close();
         }
