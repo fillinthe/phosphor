@@ -187,7 +187,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Per-output identify / colour correction, surface blend curve
 - [ ] Per-surface color correction / brightness
 - [x] Save mapping with the project
-- [ ] Quick-recall mapping presets per venue
+- [x] Quick-recall mapping presets per venue (Mapping › Venues)
 
 ### Phase 5: Effects & interop
 - [x] ISF import (`crates/phosphor-isf`): GLSL → WGSL via naga; 264 of 406 shaders on this Mac convert

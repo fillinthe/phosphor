@@ -157,6 +157,35 @@ impl Composition {
         }
     }
 
+    /// A venue: every output with its mapping (surfaces, mesh, masks), size and colour, as JSON to save by name.
+    pub fn venue_json(&self) -> String {
+        serde_json::to_string_pretty(&self.outputs).unwrap_or_default()
+    }
+
+    /// Recalls a saved venue: replaces the outputs. Outputs keep this project's ids in order (open projector
+    /// windows stay where they are); extra outputs, surfaces and masks get fresh ids so nothing clashes.
+    pub fn apply_venue(&mut self, json: &str) -> Result<(), String> {
+        let mut outputs: Vec<OutputConfig> = serde_json::from_str(json).map_err(|e| format!("not a venue ({e})"))?;
+        if outputs.is_empty() {
+            return Err("that venue has no outputs".into());
+        }
+        let keep: Vec<u64> = self.outputs.iter().map(|o| o.id).collect();
+        for (i, o) in outputs.iter_mut().enumerate() {
+            o.id = match keep.get(i) {
+                Some(id) => *id,
+                None => self.new_id(),
+            };
+            for s in &mut o.mapping.surfaces {
+                s.id = self.new_id();
+            }
+            for m in &mut o.mapping.masks {
+                m.id = self.new_id();
+            }
+        }
+        self.outputs = outputs;
+        Ok(())
+    }
+
     pub fn add_output(&mut self) -> u64 {
         let id = self.new_id();
         let name = format!("Output {}", self.outputs.len() + 1);
@@ -250,5 +279,37 @@ impl Composition {
 
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
+    }
+}
+
+#[cfg(test)]
+mod venue_tests {
+    use super::*;
+
+    #[test]
+    fn a_venue_comes_back_with_fresh_ids() {
+        let mut a = Composition::default();
+        a.ensure_outputs();
+        let sid = a.new_id();
+        a.outputs[0].mapping.add_surface(sid);
+        let mid = a.new_id();
+        a.outputs[0].mapping.add_mask(mid).feather = 0.05;
+        let json = a.venue_json();
+        let mut b = Composition::default();
+        for _ in 0..10 {
+            b.new_id();
+        }
+        b.apply_venue(&json).unwrap();
+        assert_eq!(b.outputs.len(), 1);
+        assert_eq!(b.outputs[0].mapping.masks[0].feather, 0.05);
+        let ids = [b.outputs[0].id, b.outputs[0].mapping.surfaces[0].id, b.outputs[0].mapping.masks[0].id];
+        assert!(ids.iter().all(|i| *i >= 10), "renumbered past b's ids: {ids:?}");
+        // An existing output keeps its id (its projector window stays open).
+        let mut c = Composition::default();
+        c.ensure_outputs();
+        let before = c.outputs[0].id;
+        c.apply_venue(&json).unwrap();
+        assert_eq!(c.outputs[0].id, before);
+        assert!(b.apply_venue("{}").is_err());
     }
 }

@@ -112,6 +112,9 @@ pub struct State {
     /// Output being edited in the Mapping panel.
     pub mapping_output: u64,
     pub presets: PresetStore,
+    /// Saved output + mapping setups (Mapping panel › Venues) and the name being typed.
+    pub venues: PresetStore,
+    pub venue_name: String,
     pub preset_name: String,
     /// A message worth showing the user (save failed, bad preset, …).
     pub notice: Option<String>,
@@ -212,6 +215,12 @@ impl State {
     }
 
     /// Remembers the project file (title, Save, Open Recent).
+    /// Closes output windows whose output no longer exists (removed, or replaced by a venue).
+    pub fn close_stale_outputs(&mut self) {
+        let live: std::collections::HashSet<u64> = self.comp.outputs.iter().map(|o| o.id).collect();
+        self.output.lock().unwrap().retain(|id, _| live.contains(id));
+    }
+
     pub fn set_project_path(&mut self, path: &str) {
         self.project_path = Some(path.to_string());
         self.recent.retain(|p| p != path);
