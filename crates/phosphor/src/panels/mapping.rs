@@ -180,7 +180,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     let mut edit_on_output = st.output.lock().unwrap().get(&oid).is_some_and(|o| o.edit_mapping);
     let canvas = (st.comp.width, st.comp.height);
     let mut add_surface = false;
-    let mut add_mask = false;
+    let mut add_mask: Option<phosphor_engine::mapping::MaskShape> = None;
     {
         let State { comp, output, .. } = st;
         let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
@@ -191,9 +191,16 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             if ui.button(label(icon::PLUS, "Surface")).clicked() {
                 add_surface = true;
             }
-            if ui.button(label(icon::PLUS, "Mask")).on_hover_text("A shape that blacks out part of this output (doors, faces, the booth…)").clicked() {
-                add_mask = true;
-            }
+            ui.menu_button(label(icon::PLUS, "Mask"), |ui| {
+                for &shape in <phosphor_engine::mapping::MaskShape as phosphor_engine::Choice>::OPTIONS {
+                    if ui.button(shape.name()).clicked() {
+                        add_mask = Some(shape);
+                        ui.close();
+                    }
+                }
+            })
+            .response
+            .on_hover_text("A shape that blacks out part of this output (doors, faces, the booth…); drag its points to fit");
             if ui.checkbox(&mut edit_on_output, "Edit on output (E)").on_hover_text("Show draggable handles in this output's window").changed() {
                 output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
             }
@@ -207,10 +214,11 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
         st.selected_surface = Some(id);
     }
-    if add_mask {
+    if let Some(shape) = add_mask {
         let id = st.comp.new_id();
         if let Some(o) = st.comp.output_mut(oid) {
-            o.mapping.add_mask(id);
+            let (w, h) = if o.width > 0 && o.height > 0 { (o.width, o.height) } else { canvas };
+            o.mapping.add_mask_shape(id, shape, w as f32 / h.max(1) as f32);
             o.mapping.enabled = true;
         }
         st.selected_surface = Some(id);

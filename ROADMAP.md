@@ -184,7 +184,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Multiple outputs (one window per projector), each with its own surfaces
 - [x] Mesh warp (Catmull-Rom grid up to 8×8), polygon masks with invert
 - [x] Mask feather (soft edges)
-- [ ] Circle masks, bezier edges
+- [x] Circle and triangle masks (Mapping › + Mask)
+- [ ] Bezier mask edges
 - [x] Per-output identify / colour correction, surface blend curve
 - [ ] Per-surface color correction / brightness
 - [x] Save mapping with the project
