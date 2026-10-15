@@ -143,6 +143,26 @@ impl Composition {
         self.layers.iter_mut().find(|l| l.id == id)
     }
 
+    /// Effects from elsewhere (clipboard, a saved chain) with fresh ids for this project.
+    pub fn adopt_effects(&mut self, mut effects: Vec<EffectState>) -> Vec<EffectState> {
+        for fx in &mut effects {
+            fx.id = self.new_id();
+        }
+        effects
+    }
+
+    /// A layer from elsewhere (a copy, a saved layer) with fresh ids for it, its effects and clips.
+    pub fn adopt_layer(&mut self, mut layer: LayerState) -> LayerState {
+        layer.id = self.new_id();
+        layer.effects = self.adopt_effects(std::mem::take(&mut layer.effects));
+        for c in &mut layer.clips {
+            c.id = self.new_id();
+        }
+        layer.active_clip = None;
+        layer.transition = None;
+        layer
+    }
+
     pub fn new_effect(&mut self, effect_id: &str) -> Option<EffectState> {
         let desc = shaders::effect(effect_id)?;
         Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new() })
@@ -311,5 +331,24 @@ mod venue_tests {
         c.apply_venue(&json).unwrap();
         assert_eq!(c.outputs[0].id, before);
         assert!(b.apply_venue("{}").is_err());
+    }
+}
+
+#[cfg(test)]
+mod adopt_tests {
+    use super::*;
+
+    #[test]
+    fn adopted_layers_get_fresh_ids_everywhere() {
+        let mut comp = Composition::starter();
+        let mut layer = comp.layers[0].clone();
+        layer.effects = vec![comp.new_effect("invert").unwrap(), comp.new_effect("blur").unwrap()];
+        layer.clips = vec![Clip { id: 7, ..Default::default() }];
+        let before: Vec<u64> = comp.layers.iter().map(|l| l.id).collect();
+        let copy = comp.adopt_layer(layer.clone());
+        assert!(!before.contains(&copy.id));
+        assert!(copy.effects.iter().zip(&layer.effects).all(|(a, b)| a.id != b.id));
+        assert_ne!(copy.clips[0].id, 7);
+        assert_eq!(copy.effects.len(), 2);
     }
 }

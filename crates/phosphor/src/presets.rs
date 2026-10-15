@@ -24,6 +24,16 @@ impl PresetStore {
         Self { user: Vec::new(), loaded: false, folder: "presets", ext: "phosphor", builtin: BUILTIN_LOOKS }
     }
 
+    /// Single layers (source, effects, blend…) to drop into any project.
+    pub fn layers() -> Self {
+        Self { user: Vec::new(), loaded: false, folder: "layers", ext: "layer", builtin: &[] }
+    }
+
+    /// Effect chains to add to any layer or MASTER.
+    pub fn chains() -> Self {
+        Self { user: Vec::new(), loaded: false, folder: "effect-chains", ext: "chain", builtin: &[] }
+    }
+
     /// Output + mapping setups per venue (Mapping panel).
     pub fn venues() -> Self {
         Self { user: Vec::new(), loaded: false, folder: "venues", ext: "venue", builtin: &[] }

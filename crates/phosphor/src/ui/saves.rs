@@ -22,9 +22,13 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
     ui.horizontal(|ui| {
         ui.add(egui::TextEdit::singleline(name).hint_text(format!("Name this {what}")).desired_width(180.0));
         if ui.button(label(icon::FLOPPY_DISK, &format!("Save {what}"))).clicked() {
-            match store.save(name, &current()) {
-                Ok(()) => name.clear(),
-                Err(e) => action = Some(SaveAction::Error(e)),
+            let json = current();
+            if json.is_empty() {
+                action = Some(SaveAction::Error(format!("Nothing to save: select a {what} first")));
+            } else if let Err(e) = store.save(name, &json) {
+                action = Some(SaveAction::Error(e));
+            } else {
+                name.clear();
             }
         }
     });

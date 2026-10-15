@@ -152,16 +152,17 @@ pub(crate) fn apply_fx_action(st: &mut State, target: u64, action: FxAction) {
             };
             st.fx_clipboard = chain;
         }
-        FxAction::PasteChain => {
-            for mut fx in st.fx_clipboard.clone() {
-                fx.id = st.comp.new_id();
-                if target == MASTER_ID {
-                    st.comp.master_effects.push(fx);
-                } else if let Some(l) = st.comp.layer_mut(target) {
-                    l.effects.push(fx);
-                }
-            }
-        }
+        FxAction::PasteChain => append_effects(st, target, st.fx_clipboard.clone()),
+    }
+}
+
+/// Appends effects (copied or saved) to a layer's chain or MASTER, with fresh ids.
+pub fn append_effects(st: &mut State, target: u64, effects: Vec<phosphor_engine::EffectState>) {
+    let effects = st.comp.adopt_effects(effects);
+    if target == MASTER_ID {
+        st.comp.master_effects.extend(effects);
+    } else if let Some(l) = st.comp.layer_mut(target) {
+        l.effects.extend(effects);
     }
 }
 
