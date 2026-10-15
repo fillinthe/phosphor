@@ -1,4 +1,5 @@
-//! Your phosphorfx.com account: sign in, and (Pro) projects stored in the account.
+//! Your phosphorfx.com account (optional in the Mac app, required in the browser): projects and your layouts are
+//! kept in it. Free accounts keep a few projects; Pro buys space.
 //! One client for the Mac app and the browser (ehttp). Browser: same origin, the HttpOnly session cookie travels
 //! with every request. Mac app: a bearer token from a "desktop" sign-in, kept in Phosphor's settings folder.
 //! Server: the account service. Replies arrive on a channel; `poll` once per frame applies them.
@@ -9,13 +10,13 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 
 /// The server refuses bigger projects; said before a long upload.
 const MAX_PROJECT_BYTES: usize = 20 << 20;
+/// Name of the account entry holding all your layouts (server "layouts" list).
+const LAYOUTS_DOC: &str = "Phosphor layouts";
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Entitlements {
     #[serde(default)]
     pub plan: String,
-    #[serde(default, rename = "maxBytes")]
-    pub max_bytes: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -71,6 +72,10 @@ enum Reply {
     Saved(String, String),
     Opened(String, String, String),
     Deleted,
+    /// The layouts entry: its id (None = not saved yet).
+    LayoutsFound(Option<String>),
+    LayoutsText(String),
+    LayoutsSaved(String),
     Error(String),
 }
 
@@ -80,6 +85,8 @@ pub enum Event {
     Opened(String, String, String),
     /// Saved: (id, name).
     Saved(String, String),
+    /// Your layouts as stored in the account (RON text from `app::layout`).
+    Layouts(String),
 }
 
 pub struct Account {
@@ -95,6 +102,12 @@ pub struct Account {
     /// The last sign-in needs the authenticator code.
     pub need_code: bool,
     started: bool,
+    /// Account entry of the layouts, once looked up (Some(None) = none saved yet).
+    layouts_doc: Option<Option<String>>,
+    /// Last layouts text uploaded or downloaded, so unchanged layouts aren't sent again.
+    layouts_sent: String,
+    /// The account's layouts are on their way: don't upload over them before they arrive.
+    layouts_waiting: bool,
     token: String,
     tx: Sender<Reply>,
     rx: Receiver<Reply>,
@@ -107,7 +120,7 @@ impl Default for Account {
         let base = web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default();
         #[cfg(not(target_arch = "wasm32"))]
         let base = std::env::var("PHOSPHOR_CLOUD_URL").unwrap_or_else(|_| "https://phosphorfx.com".into());
-        let mut a = Self { base, user: None, ent: Entitlements::default(), projects: Vec::new(), storage: None, error: String::new(), busy: 0, checked: false, need_code: false, started: false, token: String::new(), tx, rx };
+        let mut a = Self { base, user: None, ent: Entitlements::default(), projects: Vec::new(), storage: None, error: String::new(), busy: 0, checked: false, need_code: false, started: false, layouts_doc: None, layouts_sent: String::new(), layouts_waiting: false, token: String::new(), tx, rx };
         a.token = load_token();
         a
     }
@@ -122,9 +135,42 @@ impl Account {
         self.user.is_some()
     }
 
-    /// Projects can be stored in the account (Pro, or an admin).
-    pub fn can_store(&self) -> bool {
-        self.ent.plan == "pro" || self.ent.max_bytes > 0 || self.user.as_ref().is_some_and(|u| u.role.contains("admin"))
+    /// Pro (or an admin): more space in the account.
+    pub fn pro(&self) -> bool {
+        self.ent.plan == "pro" || self.user.as_ref().is_some_and(|u| u.role.contains("admin"))
+    }
+
+    /// Finds the layouts entry and downloads it (arrives as `Event::Layouts`).
+    fn fetch_layouts(&mut self, ctx: &egui::Context) {
+        self.request(ctx, "GET", "/api/layouts", None, |status, text| {
+            let v: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
+            if status >= 400 {
+                return Reply::Error(error_of(status, &v));
+            }
+            let docs: Vec<ProjectInfo> = serde_json::from_value(v.get("layouts").cloned().unwrap_or_default()).unwrap_or_default();
+            Reply::LayoutsFound(docs.into_iter().find(|d| d.name == LAYOUTS_DOC).map(|d| d.id))
+        });
+    }
+
+    /// Uploads your layouts if they changed since the last upload (call when they change; cheap otherwise).
+    pub fn push_layouts(&mut self, ctx: &egui::Context, text: &str) {
+        let Some(doc) = self.layouts_doc.clone() else { return }; // not looked up yet (or signed out)
+        if self.user.is_none() || self.layouts_waiting || text == self.layouts_sent {
+            return;
+        }
+        self.layouts_sent = text.to_string();
+        let body = serde_json::json!({"name": LAYOUTS_DOC, "data": serde_json::to_string(text).unwrap_or_default()});
+        let (method, path) = match doc {
+            Some(id) => ("PUT", format!("/api/layouts/{id}")),
+            None => {
+                self.layouts_doc = None; // no second POST (duplicate entry) until this one answers
+                ("POST", "/api/layouts".to_string())
+            }
+        };
+        self.request(ctx, method, &path, Some(body), |status, text| match doc_of(status, text) {
+            Ok(d) => Reply::LayoutsSaved(d.id),
+            Err(e) => Reply::Error(e),
+        });
     }
 
     fn request(&mut self, ctx: &egui::Context, method: &str, path: &str, body: Option<serde_json::Value>, on: impl 'static + Send + FnOnce(u16, &str) -> Reply) {
@@ -259,6 +305,7 @@ impl Account {
                         }
                         self.error.clear();
                         self.refresh(ctx);
+                        self.fetch_layouts(ctx);
                     }
                 }
                 Reply::SignedOut | Reply::Expired => {
@@ -266,6 +313,8 @@ impl Account {
                     self.user = None;
                     self.projects.clear();
                     self.storage = None;
+                    self.layouts_doc = None;
+                    self.layouts_sent.clear();
                     self.token.clear();
                     store_token(&self.token);
                     if expired {
@@ -281,6 +330,22 @@ impl Account {
                 }
                 Reply::Opened(id, name, json) => out.push(Event::Opened(id, name, json)),
                 Reply::Deleted => self.refresh(ctx),
+                Reply::LayoutsFound(id) => {
+                    if let Some(id) = &id {
+                        self.layouts_waiting = true;
+                        self.request(ctx, "GET", &format!("/api/layouts/{id}"), None, |status, text| match doc_of(status, text) {
+                            Ok(d) => Reply::LayoutsText(serde_json::from_str::<String>(&d.data).unwrap_or_default()),
+                            Err(e) => Reply::Error(e),
+                        });
+                    }
+                    self.layouts_doc = Some(id);
+                }
+                Reply::LayoutsText(text) => {
+                    self.layouts_waiting = false;
+                    self.layouts_sent = text.clone();
+                    out.push(Event::Layouts(text));
+                }
+                Reply::LayoutsSaved(id) => self.layouts_doc = Some(Some(id)),
                 Reply::Error(e) => {
                     self.checked = true;
                     self.error = e;
@@ -372,7 +437,6 @@ mod tests {
         a.sign_in(&ctx, &email, &password, "");
         pump(&mut a, &ctx, |a| a.user.is_some() || !a.error.is_empty());
         assert!(a.user.is_some(), "sign in: {}", a.error);
-        assert!(a.can_store(), "test account must be Pro");
         let json = phosphor_engine::Composition::starter().to_json();
         a.save(&ctx, "", "Round trip", &json);
         let ev = pump(&mut a, &ctx, |a| a.projects.iter().any(|p| p.name == "Round trip"));
@@ -387,5 +451,28 @@ mod tests {
         a.sign_out(&ctx);
         pump(&mut a, &ctx, |a| a.user.is_none());
         assert!(a.user.is_none());
+    }
+
+    /// Layouts saved from one computer arrive on another after signing in (live server, as above).
+    #[test]
+    #[ignore]
+    fn layouts_follow_the_account() {
+        let (Ok(email), Ok(password)) = (std::env::var("PHOSPHOR_TEST_EMAIL"), std::env::var("PHOSPHOR_TEST_PASSWORD")) else { return };
+        let ctx = egui::Context::default();
+        let text = format!("(test: {})", web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).unwrap().as_millis());
+        let mut first = Account { token: String::new(), ..Default::default() };
+        first.sign_in(&ctx, &email, &password, "");
+        pump(&mut first, &ctx, |a| a.layouts_doc.is_some() && !a.layouts_waiting);
+        first.push_layouts(&ctx, &text);
+        pump(&mut first, &ctx, |a| matches!(a.layouts_doc, Some(Some(_))));
+        let mut second = Account { token: String::new(), ..Default::default() };
+        second.sign_in(&ctx, &email, &password, "");
+        let ev = pump(&mut second, &ctx, |a| a.layouts_doc.is_some() && !a.layouts_waiting);
+        let got = ev.iter().find_map(|e| if let Event::Layouts(t) = e { Some(t.clone()) } else { None });
+        assert_eq!(got.as_deref(), Some(text.as_str()));
+        // unchanged text isn't uploaded again
+        let busy = second.busy;
+        second.push_layouts(&ctx, &text);
+        assert_eq!(second.busy, busy);
     }
 }
