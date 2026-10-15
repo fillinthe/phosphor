@@ -5,6 +5,7 @@
 mod choice;
 mod composition;
 mod control;
+mod group;
 mod layer;
 mod options;
 mod output;
@@ -14,6 +15,7 @@ mod surface;
 pub use choice::*;
 pub use composition::*;
 pub use control::*;
+pub use group::*;
 pub use layer::*;
 pub use options::*;
 pub use output::*;
