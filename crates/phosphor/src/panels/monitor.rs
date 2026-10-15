@@ -28,7 +28,7 @@ pub fn monitor_source_name(st: &State, n: u8) -> String {
     match st.monitors.get(&n).map(|c| c.source).unwrap_or(MonitorSource::Mix) {
         MonitorSource::Output => "Output".into(),
         MonitorSource::Mix => "Mix".into(),
-        MonitorSource::Layer(id) => st.comp.layers.iter().find(|l| l.id == id).map_or("(removed layer)".into(), |l| l.name.clone()),
+        MonitorSource::Layer(id) => crate::ui::layer_name(&st.comp.layers, id),
     }
 }
 
@@ -41,9 +41,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
             ui.selectable_value(&mut cfg.source, MonitorSource::Output, "Output (what the projector sees)");
             ui.selectable_value(&mut cfg.source, MonitorSource::Mix, "Mix (before mapping)");
             ui.separator();
-            for l in st.comp.layers.iter().rev() {
-                ui.selectable_value(&mut cfg.source, MonitorSource::Layer(l.id), format!("Layer: {}", l.name));
-            }
+            crate::ui::layer_items(ui, &st.comp.layers, &mut cfg.source, MonitorSource::Layer);
         });
         ui.toggle_value(&mut cfg.grid, icon::GRID_FOUR).on_hover_text("Thirds and centre guides");
         hint(ui, "Drag the tab anywhere, or right-click it → Detach for its own window");

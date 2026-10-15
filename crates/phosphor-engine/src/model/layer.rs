@@ -141,6 +141,8 @@ pub struct LayerState {
     pub solo: bool,
     /// Skip this layer's effect chain (quick A/B without touching the chain).
     pub fx_bypass: bool,
+    /// Blended into the mix. Off = only mapping surfaces that pick this layer show it.
+    pub in_mix: bool,
     pub opacity: f32,
     pub blend: BlendMode,
     pub fit: FitMode,
@@ -178,6 +180,7 @@ impl Default for LayerState {
             enabled: true,
             solo: false,
             fx_bypass: false,
+            in_mix: true,
             opacity: 1.0,
             blend: BlendMode::Normal,
             fit: FitMode::Fill,

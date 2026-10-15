@@ -293,3 +293,15 @@ pub(crate) fn choice_buttons<T: phosphor_engine::Choice>(ui: &mut egui::Ui, valu
         each(ui, &r);
     }
 }
+
+/// A layer's name for pickers ("(removed layer)" if it's gone).
+pub fn layer_name(layers: &[phosphor_engine::LayerState], id: u64) -> String {
+    layers.iter().find(|l| l.id == id).map_or("(removed layer)".into(), |l| l.name.clone())
+}
+
+/// One choice per layer (top of the stack first) inside a combo box or menu; `make` turns a layer id into the value.
+pub fn layer_items<T: PartialEq>(ui: &mut egui::Ui, layers: &[phosphor_engine::LayerState], value: &mut T, make: impl Fn(u64) -> T) {
+    for l in layers.iter().rev() {
+        ui.selectable_value(value, make(l.id), format!("Layer: {}", l.name));
+    }
+}
