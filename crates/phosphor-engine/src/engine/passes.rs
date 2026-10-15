@@ -62,6 +62,11 @@ impl Engine {
                         w: luma.width,
                         h: luma.height,
                     }),
+                    Media::Compressed { target: t, format } => Some(if *format == CompressedFormat::Bc3YCoCg {
+                        Frame::YCoCg { view: t.view.clone(), w: t.width, h: t.height }
+                    } else {
+                        Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height }
+                    }),
                 }
             }
         }
@@ -89,13 +94,15 @@ impl Engine {
         let to_rgb = |frame: Frame, slot: &mut Option<Target>, passes: &mut Vec<Pass>| -> (wgpu::TextureView, (u32, u32)) {
             match frame {
                 Frame::Rgb { view, w, h } => (view, (w, h)),
-                Frame::Yuv { luma, chroma, w, h } => {
+                other => {
+                    let (w, h) = other.size();
                     Target::ensure(slot, device, "transition", w, h);
                     let view = slot.as_ref().unwrap().view.clone();
+                    let (tex0, tex2, yuv) = other.bind();
                     let mut u = base;
                     u.resolution = [w as f32, h as f32];
-                    u.yuv = 1;
-                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0: luma, tex1: None, tex2: Some(chroma), uniforms: u, mesh: None, bufs: Vec::new() });
+                    u.yuv = yuv;
+                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0, tex1: None, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
                     (view, (w, h))
                 }
             }
@@ -211,14 +218,15 @@ impl Engine {
         let mut input_idx: Option<usize> = None;
         let mut input = match frame {
             Frame::Rgb { view, .. } => view,
-            Frame::Yuv { luma, chroma, .. } => {
+            other => {
+                let (tex0, tex2, yuv) = other.bind();
                 passes.push(Pass {
                     entry: "fs_to_rgb",
                     target: views[0].clone(),
-                    tex0: luma,
+                    tex0,
                     tex1: None,
-                    tex2: Some(chroma),
-                    uniforms: Uniforms { yuv: 1, ..base }, mesh: None, bufs: Vec::new() });
+                    tex2,
+                    uniforms: Uniforms { yuv, ..base }, mesh: None, bufs: Vec::new() });
                 input_idx = Some(0);
                 views[0].clone()
             }

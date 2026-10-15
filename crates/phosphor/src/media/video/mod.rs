@@ -51,12 +51,30 @@ pub enum VideoFrame {
         height: u32,
         data: Vec<u8>,
     },
+    /// GPU blocks straight from a Hap movie (DXT1/DXT5 rows of 4×4 blocks); uploaded without decoding.
+    Compressed {
+        width: u32,
+        height: u32,
+        format: phosphor_engine::CompressedFormat,
+        data: Vec<u8>,
+    },
+}
+
+/// The GPU can take Hap's blocks directly (set once the GPU is known; off = FFmpeg decodes Hap on the CPU).
+static GPU_HAP: AtomicBool = AtomicBool::new(false);
+
+pub fn set_gpu_hap(on: bool) {
+    GPU_HAP.store(on, Ordering::Relaxed);
+}
+
+fn gpu_hap() -> bool {
+    GPU_HAP.load(Ordering::Relaxed)
 }
 
 impl VideoFrame {
     pub fn size(&self) -> (u32, u32) {
         match self {
-            Self::Nv12 { width, height, .. } | Self::Rgba { width, height, .. } => {
+            Self::Nv12 { width, height, .. } | Self::Rgba { width, height, .. } | Self::Compressed { width, height, .. } => {
                 (*width, *height)
             }
         }
@@ -141,7 +159,7 @@ impl Shared {
         let mut pool = self.pool.lock().ok()?;
         let i = pool
             .iter()
-            .position(|f| f.is_rgba() == rgba && f.size() == (w, h))?;
+            .position(|f| f.is_rgba() == rgba && !matches!(f, VideoFrame::Compressed { .. }) && f.size() == (w, h))?;
         Some(pool.swap_remove(i))
     }
 }
@@ -442,6 +460,7 @@ fn err(e: ff::Error) -> String {
 
 mod convert;
 mod decoder;
+mod hap;
 #[cfg(test)]
 mod tests;
 

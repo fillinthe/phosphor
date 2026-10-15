@@ -39,6 +39,20 @@ mod ndi;
 mod thumbs;
 mod theme;
 
+/// eframe's GPU setup plus block-compressed textures when the GPU has them (Hap movies decode on the GPU).
+#[cfg(not(target_arch = "wasm32"))]
+fn gpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
+    use eframe::egui_wgpu::{WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew};
+    let mut setup = WgpuSetupCreateNew::without_display_handle();
+    let base = setup.device_descriptor.clone();
+    setup.device_descriptor = std::sync::Arc::new(move |adapter| {
+        let mut d = base(adapter);
+        d.required_features |= adapter.features() & eframe::wgpu::Features::TEXTURE_COMPRESSION_BC;
+        d
+    });
+    WgpuConfiguration { wgpu_setup: WgpuSetup::CreateNew(setup), ..Default::default() }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn app_icon() -> std::sync::Arc<eframe::egui::IconData> {
     let rgba = image::load_from_memory(include_bytes!("../../../assets/icon-1024.png")).map(|i| i.to_rgba8()).ok();
@@ -91,6 +105,7 @@ fn main() -> eframe::Result {
             .with_icon(app_icon()),
         // A benchmark must start from a clean slate, not yesterday's project.
         persist_window: bench.is_none(),
+        wgpu_options: gpu_options(),
         ..Default::default()
     };
     eframe::run_native(show::storage_name(), options, Box::new(move |cc| Ok(Box::new(app::PhosphorApp::new(cc, bench)))))

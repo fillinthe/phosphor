@@ -12,6 +12,15 @@ fn sample_source(st: vec2f) -> vec4f {
         );
         return vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)), 1.0);
     }
+    if (u.yuv == 2u) {
+        // Hap Q: scaled YCoCg in DXT5 (r = Co, g = Cg, b = scale, a = Y), per the Hap reference shader.
+        let c = textureSampleLevel(tex0, samp, st, 0.0) + vec4f(-128.0 / 255.0, -128.0 / 255.0, 0.0, 0.0);
+        let scale = c.b * (255.0 / 8.0) + 1.0;
+        let co = c.r / scale;
+        let cg = c.g / scale;
+        let rgb = vec3f(c.a + co - cg, c.a + cg, c.a - co - cg);
+        return vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)), 1.0);
+    }
     return textureSampleLevel(tex0, samp, st, 0.0);
 }
 

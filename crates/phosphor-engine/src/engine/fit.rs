@@ -8,13 +8,8 @@ pub(super) fn push_fit_copy(target: wgpu::TextureView, frame: &Frame, canvas: (u
     u.resolution = [size.0 as f32, size.1 as f32];
     u.opacity = 1.0;
     u.uv_xform = fit_transform(frame.size(), canvas, fit);
-    let (tex0, tex2) = match frame.clone() {
-        Frame::Rgb { view, .. } => (view, None),
-        Frame::Yuv { luma, chroma, .. } => {
-            u.yuv = 1;
-            (luma, Some(chroma))
-        }
-    };
+    let (tex0, tex2, yuv) = frame.clone().bind();
+    u.yuv = yuv;
     passes.push(Pass { entry: "fs_composite", target, tex0, tex1: None, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
 }
 
