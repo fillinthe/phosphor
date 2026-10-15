@@ -1,0 +1,475 @@
+//! Movie sound. Each movie with an audio track decodes it on its own thread, following the picture's
+//! position (seeks, loops, in/out points, speed = tape-style pitch), into a short buffer. One output
+//! stream mixes every clip; it opens with the first clip that has sound and closes after the last one.
+//! Reverse play and pauses are silent.
+
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex, Weak};
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+use ff::ffi;
+use ffmpeg_next as ff;
+
+/// Sound decoded ahead of what's heard (seconds).
+const AHEAD: f64 = 0.12;
+/// Picture and sound further apart than this (seconds) → the sound jumps to the picture.
+const DRIFT: f64 = 0.15;
+
+static ENABLED: AtomicBool = AtomicBool::new(true);
+/// Output sample rate once the device is open (0 = not open).
+static OUT_RATE: AtomicU32 = AtomicU32::new(0);
+static OUTPUT_RUNNING: AtomicBool = AtomicBool::new(false);
+static CLIPS: Mutex<Vec<Weak<Clip>>> = Mutex::new(Vec::new());
+/// Sample frames the output has taken from clips (diagnostics: bench prints it).
+static PLAYED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// (output sample rate, 0 = closed; sample frames played from clips so far).
+pub fn stats() -> (u32, u64) {
+    (OUT_RATE.load(Ordering::Relaxed), PLAYED.load(Ordering::Relaxed))
+}
+
+/// Off = movies open without sound (bench runs, tests).
+pub fn set_enabled(on: bool) {
+    ENABLED.store(on, Ordering::Relaxed);
+}
+
+/// Where the picture is, so the sound can follow it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct Follow {
+    /// Media time (seconds) being shown now.
+    pub pos: f64,
+    /// Forward and running (paused / reverse = silent).
+    pub playing: bool,
+    pub rate: f64,
+    pub looping: bool,
+    pub range: Option<(f64, f64)>,
+    /// Bumped by every seek: the sound jumps straight away.
+    pub generation: u64,
+}
+
+struct Clip {
+    /// Stereo, interleaved, at the output rate.
+    buf: Mutex<VecDeque<f32>>,
+    gain: AtomicU32,
+    /// Gain last applied by the mixer (ramped towards `gain` so changes never click).
+    applied: AtomicU32,
+    follow: Mutex<Follow>,
+    quit: AtomicBool,
+}
+
+pub(super) struct ClipAudio {
+    clip: Arc<Clip>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl ClipAudio {
+    /// Starts the sound of `path`, or None when it has no audio track (or sound is off).
+    pub fn open(path: &str) -> Option<Self> {
+        if !ENABLED.load(Ordering::Relaxed) {
+            return None;
+        }
+        let track = Track::open(path)?;
+        let clip = Arc::new(Clip {
+            buf: Mutex::new(VecDeque::new()),
+            gain: AtomicU32::new(1f32.to_bits()),
+            applied: AtomicU32::new(0f32.to_bits()),
+            follow: Mutex::new(Follow { rate: 1.0, looping: true, ..Default::default() }),
+            quit: AtomicBool::new(false),
+        });
+        CLIPS.lock().ok()?.push(Arc::downgrade(&clip));
+        ensure_output();
+        let c = clip.clone();
+        let name = path.rsplit('/').next().unwrap_or(path).to_string();
+        let thread = std::thread::Builder::new().name(format!("sound: {name}")).spawn(move || track.run(&c)).ok()?;
+        Some(Self { clip, thread: Some(thread) })
+    }
+
+    pub fn follow(&self, f: Follow) {
+        if let Ok(mut cur) = self.clip.follow.lock() {
+            *cur = f;
+        }
+    }
+
+    pub fn set_gain(&self, g: f32) {
+        self.clip.gain.store(g.clamp(0.0, 4.0).to_bits(), Ordering::Relaxed);
+    }
+}
+
+impl Drop for ClipAudio {
+    fn drop(&mut self) {
+        self.clip.quit.store(true, Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// The audio track of a file and its decoder.
+struct Track {
+    path: String,
+    input: ff::format::context::Input,
+    stream: usize,
+    tb: f64,
+    /// The picture's start time (seconds): sound times are measured from it, like the picture's.
+    origin: f64,
+    dec: ff::decoder::Audio,
+    frame: ff::frame::Audio,
+}
+
+impl Track {
+    fn open(path: &str) -> Option<Self> {
+        let input = ff::format::input(&path).ok()?;
+        let st = input.streams().best(ff::media::Type::Audio)?;
+        let stream = st.index();
+        let tb = f64::from(st.time_base());
+        let origin = input
+            .streams()
+            .best(ff::media::Type::Video)
+            .map(|v| if v.start_time() != i64::MIN { v.start_time() as f64 * f64::from(v.time_base()) } else { 0.0 })
+            .unwrap_or(0.0);
+        let ctx = ff::codec::Context::from_parameters(st.parameters()).ok()?;
+        let dec = ctx.decoder().audio().ok()?;
+        Some(Self { path: path.to_string(), input, stream, tb: if tb > 0.0 { tb } else { 1.0 / 48_000.0 }, origin, dec, frame: ff::frame::Audio::empty() })
+    }
+
+    fn run(mut self, clip: &Clip) {
+        // Wait for the output to open (it tells us its rate).
+        let mut out_rate = 0;
+        for _ in 0..200 {
+            out_rate = OUT_RATE.load(Ordering::Relaxed);
+            if out_rate > 0 || clip.quit.load(Ordering::Relaxed) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if out_rate == 0 {
+            return;
+        }
+        let out_rate_f = out_rate as f64;
+        let mut res: Option<(Resampler, f64)> = None;
+        // Media time of the next sample pushed; None = jump to the picture first.
+        let mut next_t: Option<f64> = None;
+        // After a jump: output samples to drop until the exact target time.
+        let mut trim_to: Option<f64> = None;
+        let mut generation = 0;
+        let mut at_end = false;
+        while !clip.quit.load(Ordering::Relaxed) {
+            let f = clip.follow.lock().map(|f| *f).unwrap_or_default();
+            if !f.playing || f.rate <= 0.0 {
+                clip.clear();
+                next_t = None;
+                std::thread::sleep(Duration::from_millis(15));
+                continue;
+            }
+            let queued = clip.queued() as f64 / out_rate_f;
+            let heard = next_t.map(|t| t - queued * f.rate);
+            let drifted = heard.is_some_and(|h| (h - f.pos).abs() > DRIFT);
+            if next_t.is_none() || drifted || f.generation != generation {
+                generation = f.generation;
+                clip.clear();
+                let target = f.pos;
+                if self.seek(target).is_err() {
+                    return;
+                }
+                next_t = Some(target);
+                trim_to = Some(target);
+                res = None;
+                at_end = false;
+                continue;
+            }
+            if queued > AHEAD {
+                std::thread::sleep(Duration::from_millis(5));
+                continue;
+            }
+            // In/out points: back to the in point.
+            if let (Some((lo, hi)), Some(t)) = (f.range, next_t)
+                && t >= hi
+            {
+                let _ = self.seek(lo);
+                next_t = Some(lo);
+                trim_to = Some(lo);
+                continue;
+            }
+            match self.next_frame() {
+                Some(()) => at_end = false,
+                None => {
+                    // End of the track: loop with the picture, or wait for it.
+                    if f.looping && !at_end {
+                        let lo = f.range.map_or(0.0, |r| r.0);
+                        let _ = self.seek(lo);
+                        next_t = Some(lo);
+                        trim_to = Some(lo);
+                        at_end = true;
+                    } else {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    continue;
+                }
+            }
+            let ts = self.frame.pts().unwrap_or(i64::MIN);
+            let start = if ts != i64::MIN { ts as f64 * self.tb - self.origin } else { next_t.unwrap_or(0.0) };
+            let src_rate = self.frame.rate().max(1);
+            let dur = self.frame.samples() as f64 / src_rate as f64;
+            // Speed changes pitch, like tape: resample to out_rate / rate.
+            let dst_rate = (out_rate_f / f.rate).round().clamp(4000.0, 768_000.0);
+            if res.as_ref().is_none_or(|(r, d)| *d != dst_rate || !r.matches(&self.frame)) {
+                res = Resampler::new(&self.frame, dst_rate as u32).map(|r| (r, dst_rate));
+            }
+            let Some((r, _)) = res.as_mut() else {
+                log::warn!("{}: can't play this sound format", self.path);
+                return;
+            };
+            let Some(samples) = r.run(&self.frame) else { continue };
+            let mut skip = 0;
+            if let Some(target) = trim_to {
+                if start + dur <= target {
+                    next_t = Some(start + dur);
+                    continue;
+                }
+                skip = (((target - start).max(0.0)) * dst_rate) as usize * 2;
+                trim_to = None;
+            }
+            if let Ok(mut b) = clip.buf.lock() {
+                b.extend(samples.iter().skip(skip.min(samples.len())));
+            }
+            next_t = Some(start + dur);
+        }
+    }
+
+    /// Next decoded frame into `self.frame`; None at the end of the track.
+    fn next_frame(&mut self) -> Option<()> {
+        loop {
+            match self.dec.receive_frame(&mut self.frame) {
+                Ok(()) => return Some(()),
+                Err(ff::Error::Eof) => return None,
+                Err(_) => {}
+            }
+            loop {
+                let mut pkt = ff::Packet::empty();
+                match pkt.read(&mut self.input) {
+                    Ok(()) if pkt.stream() == self.stream => {
+                        let _ = self.dec.send_packet(&pkt);
+                        break;
+                    }
+                    Ok(()) => {}
+                    Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
+                    Err(_) => {
+                        let _ = self.dec.send_eof();
+                        // Drain what's left; then the next receive says Eof.
+                        return match self.dec.receive_frame(&mut self.frame) {
+                            Ok(()) => Some(()),
+                            Err(_) => None,
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    fn seek(&mut self, t: f64) -> Result<(), String> {
+        let ts = ((t + self.origin).max(0.0) / self.tb) as i64;
+        // SAFETY: seeking the demuxer this thread owns.
+        let ok = unsafe { ffi::av_seek_frame(self.input.as_mut_ptr(), self.stream as i32, ts, ffi::AVSEEK_FLAG_BACKWARD) >= 0 };
+        if !ok {
+            self.input = ff::format::input(&self.path).map_err(|e| e.to_string())?;
+        }
+        self.dec.flush();
+        Ok(())
+    }
+}
+
+/// Any decoded sound → stereo f32 at the output rate.
+struct Resampler {
+    ctx: ff::software::resampling::Context,
+    src: (ff::format::Sample, u32, i32),
+    dst_rate: u32,
+}
+
+impl Resampler {
+    fn new(f: &ff::frame::Audio, dst_rate: u32) -> Option<Self> {
+        let layout = if f.channel_layout().channels() > 0 { f.channel_layout() } else { ff::ChannelLayout::default(f.channels() as i32) };
+        let ctx = ff::software::resampling::Context::get(
+            f.format(),
+            layout,
+            f.rate(),
+            ff::format::Sample::F32(ff::format::sample::Type::Packed),
+            ff::ChannelLayout::STEREO,
+            dst_rate,
+        )
+        .ok()?;
+        Some(Self { ctx, src: (f.format(), f.rate(), f.channels() as i32), dst_rate })
+    }
+
+    fn matches(&self, f: &ff::frame::Audio) -> bool {
+        self.src == (f.format(), f.rate(), f.channels() as i32)
+    }
+
+    /// Converted samples (stereo interleaved).
+    fn run(&mut self, f: &ff::frame::Audio) -> Option<Vec<f32>> {
+        let cap = (f.samples() as u64 * self.dst_rate as u64 / self.src.1.max(1) as u64) as usize + 256;
+        let mut out = ff::frame::Audio::new(ff::format::Sample::F32(ff::format::sample::Type::Packed), cap, ff::ChannelLayout::STEREO);
+        self.ctx.run(f, &mut out).ok()?;
+        let n = out.samples() * 2;
+        let bytes = out.data(0);
+        Some(bytes[..(n * 4).min(bytes.len())].chunks_exact(4).map(|b| f32::from_ne_bytes([b[0], b[1], b[2], b[3]])).collect())
+    }
+}
+
+impl Clip {
+    fn clear(&self) {
+        if let Ok(mut b) = self.buf.lock() {
+            b.clear();
+        }
+    }
+
+    /// Frames waiting to be heard.
+    fn queued(&self) -> usize {
+        self.buf.lock().map_or(0, |b| b.len() / 2)
+    }
+}
+
+/// Opens the output stream on its own thread (cpal streams stay on the thread that made them). It closes
+/// itself a couple of seconds after the last clip with sound goes away.
+fn ensure_output() {
+    if OUTPUT_RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let started = std::thread::Builder::new().name("sound out".into()).spawn(|| {
+        if let Err(e) = run_output() {
+            log::warn!("sound output: {e}");
+        }
+        OUT_RATE.store(0, Ordering::Relaxed);
+        OUTPUT_RUNNING.store(false, Ordering::SeqCst);
+    });
+    if started.is_err() {
+        OUTPUT_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
+
+fn run_output() -> Result<(), String> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    let host = cpal::default_host();
+    let device = host.default_output_device().ok_or("no sound output device")?;
+    let supported = device.default_output_config().map_err(|e| e.to_string())?;
+    let channels = supported.channels().max(1) as usize;
+    let rate = supported.sample_rate();
+    let config: cpal::StreamConfig = supported.config();
+    let mut scratch: Vec<f32> = Vec::new();
+    let mut mix = move |out: &mut [f32]| {
+        let frames = out.len() / channels;
+        scratch.clear();
+        scratch.resize(frames * 2, 0.0);
+        mix_clips(&mut scratch);
+        for (i, frame) in out.chunks_mut(channels).enumerate() {
+            let (l, r) = (scratch[i * 2], scratch[i * 2 + 1]);
+            match frame.len() {
+                1 => frame[0] = 0.5 * (l + r),
+                _ => {
+                    frame[0] = l;
+                    frame[1] = r;
+                    frame[2..].iter_mut().for_each(|s| *s = 0.0);
+                }
+            }
+        }
+    };
+    let err_fn = |e: cpal::Error| log::warn!("sound output: {e}");
+    let stream = match supported.sample_format() {
+        cpal::SampleFormat::F32 => device.build_output_stream(config, move |d: &mut [f32], _| mix(d), err_fn, None),
+        cpal::SampleFormat::I16 => {
+            let mut tmp = Vec::new();
+            device.build_output_stream(
+                config,
+                move |d: &mut [i16], _| {
+                    tmp.resize(d.len(), 0.0);
+                    mix(&mut tmp);
+                    for (o, s) in d.iter_mut().zip(&tmp) {
+                        *o = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+                    }
+                },
+                err_fn,
+                None,
+            )
+        }
+        other => return Err(format!("unsupported output format {other:?}")),
+    }
+    .map_err(|e| e.to_string())?;
+    stream.play().map_err(|e| e.to_string())?;
+    OUT_RATE.store(rate, Ordering::Relaxed);
+    let mut idle = 0;
+    loop {
+        std::thread::sleep(Duration::from_millis(250));
+        let alive = CLIPS.lock().map_or(0, |mut c| {
+            c.retain(|w| w.strong_count() > 0);
+            c.len()
+        });
+        idle = if alive == 0 { idle + 1 } else { 0 };
+        if idle >= 8 {
+            return Ok(());
+        }
+    }
+}
+
+/// Adds every clip's next samples into `out` (stereo interleaved), ramping gain changes.
+fn mix_clips(out: &mut [f32]) {
+    let clips: Vec<Arc<Clip>> = match CLIPS.try_lock() {
+        Ok(c) => c.iter().filter_map(Weak::upgrade).collect(),
+        Err(_) => return,
+    };
+    let frames = out.len() / 2;
+    for clip in clips {
+        let target = f32::from_bits(clip.gain.load(Ordering::Relaxed));
+        let from = f32::from_bits(clip.applied.load(Ordering::Relaxed));
+        let Ok(mut buf) = clip.buf.lock() else { continue };
+        let n = frames.min(buf.len() / 2);
+        for i in 0..n {
+            let g = from + (target - from) * (i as f32 / frames.max(1) as f32);
+            out[i * 2] += buf.pop_front().unwrap_or(0.0) * g;
+            out[i * 2 + 1] += buf.pop_front().unwrap_or(0.0) * g;
+        }
+        clip.applied.store(target.to_bits(), Ordering::Relaxed);
+        PLAYED.fetch_add(n as u64, Ordering::Relaxed);
+    }
+    for s in out.iter_mut() {
+        *s = s.clamp(-1.0, 1.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sound follows the picture: after a jump to 0.9 s the test beep (1.0–1.1 s) arrives ~0.1 s into the buffer.
+    #[test]
+    fn sound_starts_where_the_picture_is() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../media/test/av.mp4");
+        let track = Track::open(path).expect("test movie has sound");
+        // No device in tests: pretend one is open at 48 kHz and read the buffer directly.
+        OUT_RATE.store(48_000, Ordering::Relaxed);
+        let clip = Arc::new(Clip {
+            buf: Mutex::new(VecDeque::new()),
+            gain: AtomicU32::new(1f32.to_bits()),
+            applied: AtomicU32::new(0),
+            follow: Mutex::new(Follow { pos: 0.9, playing: true, rate: 1.0, looping: true, range: None, generation: 1 }),
+            quit: AtomicBool::new(false),
+        });
+        let c = clip.clone();
+        let t = std::thread::spawn(move || track.run(&c));
+        let mut samples = Vec::new();
+        for _ in 0..200 {
+            std::thread::sleep(Duration::from_millis(5));
+            if let Ok(mut b) = clip.buf.lock() {
+                samples.extend(b.drain(..));
+            }
+            if samples.len() >= 48_000 / 2 * 2 {
+                break;
+            }
+        }
+        clip.quit.store(true, Ordering::Relaxed);
+        t.join().unwrap();
+        let first_loud = samples.chunks(2).position(|f| f[0].abs() > 0.1).expect("beep heard");
+        let at = first_loud as f64 / 48_000.0;
+        assert!((at - 0.1).abs() < 0.02, "beep at {at:.3} s after the jump, expected 0.100");
+    }
+}

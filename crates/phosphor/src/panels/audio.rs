@@ -1,8 +1,16 @@
-//! Audio input, analysis and beat detector.
+//! Movie sound volume, audio input, analysis and beat detector.
 
 use super::*;
 
 pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(format!("{} Movie sound", icon::SPEAKER_SIMPLE_HIGH)).strong());
+        let comp = &mut st.comp;
+        let r = guarded!(ui, comp.volume, Slider::new(&mut comp.volume, 0.0..=2.0).show_value(false)).on_hover_text("Master volume for every movie's sound (each layer has its own in the Inspector)");
+        value_bubble(ui, &r, format!("{:.0}%", comp.volume * 100.0));
+        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MasterVolume));
+    });
+    ui.separator();
     let State { audio, notice, mod_inputs, clock, .. } = st;
     let follow_audio = &mut clock.follow_audio;
     ui.horizontal(|ui| {

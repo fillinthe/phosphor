@@ -59,11 +59,13 @@ pub struct Composition {
     pub bpm: f32,
     /// Send outputs to their saved screens when this project opens (venue setups).
     pub outputs_on_open: bool,
+    /// Master volume for movie sound.
+    pub volume: f32,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0 }
     }
 }
 
@@ -142,6 +144,21 @@ impl Composition {
         let transition_kind = self.launch.style;
         self.layers.push(LayerState { id, name, transition_kind, ..Default::default() });
         self.layers.last_mut().unwrap()
+    }
+
+    /// How loud a layer's movie sound plays: its volume × the master volume; silent while the layer or its
+    /// group is off or another layer is soloed; follows opacity (layer, group, crossfader) unless turned off.
+    pub fn sound_gain(&self, layer: &LayerState) -> f32 {
+        let group = layer.parent.and_then(|g| self.group(g));
+        let soloed_out = !layer.solo && self.layers.iter().any(|l| l.enabled && l.solo);
+        if !layer.enabled || soloed_out || group.is_some_and(|g| !g.enabled) {
+            return 0.0;
+        }
+        let mut g = layer.volume * self.volume;
+        if layer.volume_follows_opacity {
+            g *= layer.opacity * layer.group.gain(self.crossfader) * group.map_or(1.0, |g| g.opacity);
+        }
+        g.max(0.0)
     }
 
     /// One fade style for every layer (and new ones).

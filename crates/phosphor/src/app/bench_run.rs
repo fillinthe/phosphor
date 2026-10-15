@@ -84,6 +84,11 @@ impl PhosphorApp {
         }
         let an = self.state.audio.analysis();
         println!("BEAT bpm {:.1} confidence {:.2} clock {:.1}", an.bpm, an.confidence, self.state.clock.bpm);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (rate, played) = crate::media::video::sound::stats();
+            println!("SOUND output {rate} Hz, {played} sample frames played");
+        }
         println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
         if self.state.stream.running() {
             self.state.stream.stop_and_wait();

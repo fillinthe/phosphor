@@ -149,6 +149,10 @@ pub struct LayerState {
     pub generator_values: Vec<f32>,
     pub generator_mods: Vec<ParamMod>,
     pub opacity_mod: Option<Modulation>,
+    /// Movie sound volume (1 = as recorded).
+    pub volume: f32,
+    /// Sound fades with the layer's opacity (and its group's).
+    pub volume_follows_opacity: bool,
     pub effects: Vec<EffectState>,
     pub playing: bool,
     pub rate: f32,
@@ -189,6 +193,8 @@ impl Default for LayerState {
             generator_values: Vec::new(),
             generator_mods: Vec::new(),
             opacity_mod: None,
+            volume: 1.0,
+            volume_follows_opacity: true,
             effects: Vec::new(),
             playing: true,
             rate: 1.0,
