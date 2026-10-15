@@ -25,6 +25,8 @@ impl PhosphorApp {
         if let Some(path) = run.cfg.ui_shot.clone() {
             if !run.shot_requested {
                 run.shot_requested = true;
+                // A covered window isn't painted on macOS, so the picture would never come: come to the front first.
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
                 return;
             }

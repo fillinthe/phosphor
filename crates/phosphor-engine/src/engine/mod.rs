@@ -64,6 +64,8 @@ struct LayerResources {
     multipass: HashMap<u64, PassBuffers>,
     media: Option<Media>,
     thumbnail: Option<Target>,
+    /// Full-size picture of the layer alone, while a mapping surface shows it.
+    feed: Option<Target>,
 }
 
 /// A multi-pass shader's buffers: two textures each (read one, write the other), and which is
@@ -338,6 +340,9 @@ impl Engine {
             self.monitor_targets.resize_with(monitors.len(), || None);
         }
         let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
+        // Layers shown on their own by a mapping surface, and their pictures this frame.
+        let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.mapping.layer_feeds()).collect();
+        let mut feeds: HashMap<u64, wgpu::TextureView> = HashMap::new();
         for layer in &comp.layers {
             // Faded-out layers still render (into their thumbnail) so they can be cued before going live.
             if !layer.enabled {
@@ -363,6 +368,15 @@ impl Engine {
             }
             let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &comp.layers, &mut passes) };
             self.push_thumbnail(layer, &frame, (w, h), thumb_h, &mut passes);
+            if wanted.contains(&layer.id) {
+                let res = self.layers.entry(layer.id).or_default();
+                Target::ensure(&mut res.feed, &device, "layer feed", w, h);
+                let view = res.feed.as_ref().unwrap().view.clone();
+                push_fit_copy(view.clone(), &frame, (w, h), layer.fit, (w, h), &mut passes);
+                feeds.insert(layer.id, view);
+            } else if let Some(res) = self.layers.get_mut(&layer.id) {
+                res.feed = None;
+            }
             for i in 0..monitors.len() {
                 let (src, mw, mh) = monitors[i];
                 if src == layer.id {
@@ -371,7 +385,7 @@ impl Engine {
                     push_fit_copy(view, &frame, (w, h), layer.fit, (mw, mh), &mut passes);
                 }
             }
-            let muted = any_solo && !layer.solo;
+            let muted = (any_solo && !layer.solo) || !layer.in_mix;
             let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader) };
             if opacity <= 0.001 {
                 continue;
@@ -446,6 +460,11 @@ impl Engine {
             u.opacity = 0.0;
             passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             for s in o.mapping.surfaces.iter().filter(|s| s.enabled) {
+                // A layer's own picture (black while that layer is off); the mix if the layer is gone.
+                let src = match s.layer {
+                    Some(id) if comp.layers.iter().any(|l| l.id == id) => feeds.get(&id).cloned().unwrap_or_else(|| self.gpu.blank.clone()),
+                    _ => master.clone(),
+                };
                 // Mesh warp: one pass drawing the cached, finely subdivided mesh.
                 if let Some(m) = &s.mesh {
                     let hash = hash_points(&m.points, &[m.cols, m.rows]);
@@ -458,7 +477,7 @@ impl Engine {
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     u.p[5] = g0;
                     u.p[6] = g1;
-                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
                 let Some(inv) = mapping::quad_to_square(&s.corners) else { continue };
@@ -475,7 +494,7 @@ impl Engine {
                 u.p[4] = [inv[8], s.feather, s.blend_gamma - 1.0, 0.0];
                 u.p[5] = g0;
                 u.p[6] = g1;
-                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
             self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
         }

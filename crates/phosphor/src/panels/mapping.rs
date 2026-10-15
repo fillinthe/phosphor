@@ -226,6 +226,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     hint(ui, "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
 
     let State { comp, selected_surface, .. } = st;
+    let layers = &mut comp.layers;
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
     let (ow, oh) = o.size(canvas);
     let aspect = ow as f32 / oh.max(1) as f32;
@@ -266,6 +267,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 });
+                surface_source(ui, s, layers);
                 guarded!(ui, s.opacity, Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
                 guarded!(ui, s.feather, Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
                 if s.feather > 0.0 {
@@ -287,7 +289,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         s.set_mesh(on, cols, rows);
                     }
                 });
-                ui.collapsing("Input region (part of the mix shown)", |ui| {
+                ui.collapsing("Input region (part of the picture shown)", |ui| {
                     guarded!(ui, s.input[0], Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
                     guarded!(ui, s.input[1], Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
                     guarded!(ui, s.input[2], Slider::new(&mut s.input[2], 0.05..=1.0).text("Width"));
@@ -367,6 +369,25 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// Venues: save every output's setup (surfaces, mesh, masks, size, colour) under a name and recall it at the next gig.
+/// What a surface shows: the mix or one layer; for a layer, whether it also stays in the mix.
+fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState]) {
+    ui.horizontal(|ui| {
+        ui.label("Shows");
+        let current = s.layer.map_or("Mix (all layers)".into(), |id| crate::ui::layer_name(layers, id));
+        egui::ComboBox::from_id_salt(("surface_source", s.id)).width(170.0).selected_text(current).show_ui(ui, |ui| {
+            ui.selectable_value(&mut s.layer, None, "Mix (all layers)");
+            ui.separator();
+            crate::ui::layer_items(ui, layers, &mut s.layer, Some);
+        })
+        .response
+        .on_hover_text("Send one layer to just this surface (its own picture, with its effects), or show the whole mix");
+        if let Some(l) = s.layer.and_then(|id| layers.iter_mut().find(|l| l.id == id)) {
+            ui.checkbox(&mut l.in_mix, "Also in the mix")
+                .on_hover_text("Off: this layer only appears on surfaces that pick it, not in the mix or on other surfaces");
+        }
+    });
+}
+
 fn venue_menu(ui: &mut egui::Ui, st: &mut State) {
     let action = ui
         .menu_button(label(icon::MAP_PIN, "Venues"), |ui| {

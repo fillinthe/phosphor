@@ -1,0 +1,148 @@
+{
+ "width": 1920,
+ "height": 1080,
+ "next_id": 40,
+ "layers": [
+  {
+   "id": 1,
+   "name": "Plasma",
+   "source": {
+    "Generator": "plasma"
+   },
+   "generator_values": [
+    1.0,
+    6.0,
+    0.0
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Rings",
+   "source": {
+    "Generator": "rings"
+   },
+   "generator_values": [
+    10.0,
+    1.0,
+    0.5
+   ],
+   "blend": "Screen",
+   "opacity": 0.6
+  }
+ ],
+ "master_effects": [
+  {
+   "id": 5,
+   "effect": "invert",
+   "enabled": true,
+   "values": [
+    1.0
+   ]
+  }
+ ],
+ "outputs": [
+  {
+   "id": 30,
+   "name": "Projector",
+   "enabled": true,
+   "mapping": {
+    "enabled": true,
+    "surfaces": [
+     {
+      "id": 31,
+      "name": "Plasma only",
+      "enabled": true,
+      "corners": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        0.33,
+        0.0
+       ],
+       [
+        0.33,
+        1.0
+       ],
+       [
+        0.0,
+        1.0
+       ]
+      ],
+      "layer": 1,
+      "input": [
+       0,
+       0,
+       1,
+       1
+      ],
+      "opacity": 1.0
+     },
+     {
+      "id": 32,
+      "name": "Rings only",
+      "enabled": true,
+      "corners": [
+       [
+        0.34,
+        0.0
+       ],
+       [
+        0.66,
+        0.0
+       ],
+       [
+        0.66,
+        1.0
+       ],
+       [
+        0.34,
+        1.0
+       ]
+      ],
+      "layer": 2,
+      "input": [
+       0,
+       0,
+       1,
+       1
+      ],
+      "opacity": 1.0
+     },
+     {
+      "id": 33,
+      "name": "Mix",
+      "enabled": true,
+      "corners": [
+       [
+        0.67,
+        0.0
+       ],
+       [
+        1.0,
+        0.0
+       ],
+       [
+        1.0,
+        1.0
+       ],
+       [
+        0.67,
+        1.0
+       ]
+      ],
+      "layer": null,
+      "input": [
+       0,
+       0,
+       1,
+       1
+      ],
+      "opacity": 1.0
+     }
+    ]
+   }
+  }
+ ]
+}

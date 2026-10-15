@@ -12,7 +12,9 @@ pub struct Surface {
     pub enabled: bool,
     /// Top-left, top-right, bottom-right, bottom-left.
     pub corners: [[f32; 2]; 4],
-    /// Region of the master frame this surface shows: x, y, width, height in 0..1.
+    /// What this surface shows: `None` = the mix, `Some(id)` = just that layer (its own picture, before blending).
+    pub layer: Option<u64>,
+    /// Region of that picture this surface shows: x, y, width, height in 0..1.
     pub input: [f32; 4],
     pub opacity: f32,
     /// Soft-edge width as a fraction of the surface (0 = hard edge). Overlap two surfaces'
@@ -249,6 +251,7 @@ impl Default for Surface {
             name: "Surface".into(),
             enabled: true,
             corners: [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+            layer: None,
             input: [0.0, 0.0, 1.0, 1.0],
             opacity: 1.0,
             feather: 0.0,
@@ -324,6 +327,11 @@ impl Mapping {
         let surface = Surface::new(id, self.surfaces.len());
         self.surfaces.push(surface);
         self.surfaces.last_mut().unwrap()
+    }
+
+    /// Layers that enabled surfaces show on their own (they need a full-size picture rendered).
+    pub fn layer_feeds(&self) -> impl Iterator<Item = u64> + '_ {
+        self.surfaces.iter().filter(|s| self.enabled && s.enabled).filter_map(|s| s.layer)
     }
 
     /// Surfaces are drawn when mapping is on and there is at least one enabled.
