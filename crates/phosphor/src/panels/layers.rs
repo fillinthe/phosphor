@@ -247,7 +247,17 @@ pub(crate) fn layer_card(
                         .on_hover_text("Solo: only soloed layers reach the mix");
                     let name = RichText::new(&layer.name).strong().size(12.5);
                     let name = if muted { name.color(Color32::GRAY) } else { name };
-                    if ui.selectable_label(is_selected, name).clicked() {
+                    // The name shrinks (full name on hover) so it never runs under the buttons on the right.
+                    // Narrow cards drop the up/down arrows (drag the thumbnail, or right-click › Move up/down).
+                    let button = ui.spacing().interact_size.y + ui.spacing().item_spacing.x;
+                    let arrows = ui.available_width() - 4.0 * button >= 90.0;
+                    let reserve = if arrows { 4.0 } else { 2.0 } * button;
+                    let width = (ui.available_width() - reserve).max(24.0);
+                    let r = ui.scope(|ui| {
+                        ui.set_max_width(width);
+                        ui.add(egui::Button::selectable(is_selected, name).truncate())
+                    });
+                    if r.inner.clicked() {
                         select = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -257,10 +267,10 @@ pub(crate) fn layer_card(
                         if ui.small_button(icon::COPY).on_hover_text("Duplicate layer").clicked() {
                             action = Some(LayerAction::Duplicate);
                         }
-                        if ui.small_button(icon::ARROW_DOWN).on_hover_text("Move down the stack").clicked() {
+                        if arrows && ui.small_button(icon::ARROW_DOWN).on_hover_text("Move down the stack").clicked() {
                             action = Some(LayerAction::Down);
                         }
-                        if ui.small_button(icon::ARROW_UP).on_hover_text("Move up the stack").clicked() {
+                        if arrows && ui.small_button(icon::ARROW_UP).on_hover_text("Move up the stack").clicked() {
                             action = Some(LayerAction::Up);
                         }
                     });

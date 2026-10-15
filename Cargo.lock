@@ -2638,6 +2638,7 @@ dependencies = [
  "env_logger",
  "ffmpeg-next",
  "image",
+ "js-sys",
  "libc",
  "log",
  "mdns-sd",
