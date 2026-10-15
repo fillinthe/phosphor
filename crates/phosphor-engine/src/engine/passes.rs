@@ -1,0 +1,295 @@
+//! Per-layer passes: resolving a source into a frame, transitions, multi-pass shaders and effect chains.
+
+use super::*;
+
+impl Engine {
+    /// Resolves a source spec into a frame, rendering generators into the layer's slot
+    /// (`outgoing` selects the transition slot).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn resolve_spec(
+        &mut self,
+        layer_id: u64,
+        spec: &SourceSpec,
+        values: &[f32],
+        value_mods: &[crate::model::ParamMod],
+        outgoing: bool,
+        w: u32,
+        h: u32,
+        time: f32,
+        mods: &ModInputs,
+        passes: &mut Vec<Pass>,
+    ) -> Option<Frame> {
+        match spec {
+            SourceSpec::None => None,
+            SourceSpec::Generator(id) => {
+                let desc = shaders::generator(id)?;
+                if !self.ensure_module(desc.entry) {
+                    return None;
+                }
+                let device = &self.gpu.device;
+                let res = self.layers.entry(layer_id).or_default();
+                let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
+                Target::ensure(slot, device, "generator", w, h);
+                let target = slot.as_ref().unwrap();
+                if let Some(plan) = shaders::pass_plan(desc.entry) {
+                    let out = target.view.clone();
+                    let params = resolve_params(desc, values, value_mods, mods);
+                    let key = if outgoing { GENERATOR_OUT_KEY } else { GENERATOR_KEY };
+                    let blank = self.gpu.blank.clone();
+                    let view = self.run_plan(layer_id, key, desc.entry, &plan, &params, blank, out, (w, h), time, passes);
+                    return Some(Frame::Rgb { view, w, h });
+                }
+                let mut u = Uniforms::with_params(&resolve_params(desc, values, value_mods, mods));
+                u.resolution = [w as f32, h as f32];
+                u.time = time;
+                passes.push(Pass {
+                    entry: desc.entry,
+                    target: target.view.clone(),
+                    tex0: self.gpu.blank.clone(),
+                    tex1: None,
+                    tex2: None,
+                    uniforms: u, mesh: None, bufs: Vec::new() });
+                Some(Frame::Rgb { view: target.view.clone(), w, h })
+            }
+            SourceSpec::Image { .. } | SourceSpec::Movie { .. } | SourceSpec::Live { .. } | SourceSpec::Text(_) => {
+                let res = self.layers.entry(layer_id).or_default();
+                let slot = if outgoing { &res.media_out } else { &res.media };
+                match slot.as_ref()? {
+                    Media::Rgba(t) => Some(Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height }),
+                    Media::Nv12 { luma, chroma } => Some(Frame::Yuv {
+                        luma: luma.view.clone(),
+                        chroma: chroma.view.clone(),
+                        w: luma.width,
+                        h: luma.height,
+                    }),
+                }
+            }
+        }
+    }
+
+    /// Blends the outgoing source into the incoming one at the canvas size.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn crossfade(
+        &mut self,
+        layer_id: u64,
+        incoming: Frame,
+        outgoing: Frame,
+        t: &crate::model::Transition,
+        time: f32,
+        fit: FitMode,
+        canvas: (u32, u32),
+        passes: &mut Vec<Pass>,
+    ) -> Frame {
+        let (w, h) = canvas;
+        let device = &self.gpu.device;
+        let res = self.layers.entry(layer_id).or_default();
+        let mut base = Uniforms::with_params(&[]);
+        base.time = time;
+        // YUV sources first become RGB at their own size.
+        let to_rgb = |frame: Frame, slot: &mut Option<Target>, passes: &mut Vec<Pass>| -> (wgpu::TextureView, (u32, u32)) {
+            match frame {
+                Frame::Rgb { view, w, h } => (view, (w, h)),
+                Frame::Yuv { luma, chroma, w, h } => {
+                    Target::ensure(slot, device, "transition", w, h);
+                    let view = slot.as_ref().unwrap().view.clone();
+                    let mut u = base;
+                    u.resolution = [w as f32, h as f32];
+                    u.yuv = 1;
+                    passes.push(Pass { entry: "fs_to_rgb", target: view.clone(), tex0: luma, tex1: None, tex2: Some(chroma), uniforms: u, mesh: None, bufs: Vec::new() });
+                    (view, (w, h))
+                }
+            }
+        };
+        let [slot_in, slot_out, slot_result] = &mut res.trans;
+        let (in_view, in_size) = to_rgb(incoming, slot_in, passes);
+        let (out_view, out_size) = to_rgb(outgoing, slot_out, passes);
+        Target::ensure(slot_result, device, "transition", w, h);
+        let result = slot_result.as_ref().unwrap().view.clone();
+        let mut u = base;
+        u.resolution = [w as f32, h as f32];
+        u.opacity = t.progress(time);
+        u.mode = t.kind.shader_index();
+        u.uv_xform = fit_transform(in_size, canvas, fit);
+        u.p[0] = fit_transform(out_size, canvas, fit);
+        passes.push(Pass { entry: "fs_crossfade", target: result.clone(), tex0: in_view, tex1: Some(out_view), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+        Frame::Rgb { view: result, w, h }
+    }
+
+    /// Runs a multi-pass shader (ISF PASSES) for one effect or generator: each pass renders into
+    /// the back copy of its buffer (or `out`) while every pass reads the front copies of all
+    /// buffers, so nothing is read and written at once and persistent buffers feed back.
+    /// Returns the view with the result (`out`, or the last buffer if no pass targets the output).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn run_plan(
+        &mut self,
+        res_id: u64,
+        key: u64,
+        entry: &'static str,
+        plan: &shaders::PassPlan,
+        params: &[f32],
+        input: wgpu::TextureView,
+        out: wgpu::TextureView,
+        (w, h): (u32, u32),
+        time: f32,
+        passes: &mut Vec<Pass>,
+    ) -> wgpu::TextureView {
+        let device = self.gpu.device.clone();
+        let blank = self.gpu.blank.clone();
+        let frame = self.frame_index as f32;
+        let n = plan.buffers.min(shaders::MAX_BUFFERS);
+        let bufs = self.layers.entry(res_id).or_default().multipass.entry(key).or_default();
+        bufs.slots.resize_with(n, Default::default);
+        bufs.front.resize(n, 0);
+        let var = |name: &str| -> Option<f64> {
+            match name {
+                "$WIDTH" => Some(w as f64),
+                "$HEIGHT" => Some(h as f64),
+                _ => plan.vars.iter().find(|(v, _)| v == name).and_then(|(_, i)| params.get(*i)).map(|v| *v as f64),
+            }
+        };
+        let size = |e: &Option<String>, full: u32| e.as_deref().and_then(|e| crate::expr::eval(e, &var)).map_or(full, |v| (v.max(1.0) as u32).min(8192));
+        let mut result = out.clone();
+        for (k, pp) in plan.passes.iter().enumerate() {
+            let views: Vec<wgpu::TextureView> =
+                (0..n).map(|b| bufs.slots[b][bufs.front[b]].as_ref().map_or_else(|| blank.clone(), |t| t.view.clone())).collect();
+            let (target, tw, th) = match pp.target {
+                Some(b) if b < n => {
+                    let (bw, bh) = (size(&pp.width, w), size(&pp.height, h));
+                    for slot in bufs.slots[b].iter_mut() {
+                        Target::ensure(slot, &device, "pass buffer", bw, bh);
+                    }
+                    let write = 1 - bufs.front[b];
+                    bufs.front[b] = write;
+                    let view = bufs.slots[b][write].as_ref().unwrap().view.clone();
+                    (view, bw, bh)
+                }
+                _ => (out.clone(), w, h),
+            };
+            let mut u = Uniforms::with_params(params);
+            u.resolution = [tw as f32, th as f32];
+            u.time = time;
+            // PASSINDEX, FRAMEINDEX, TIMEDELTA (the reserved last vec4).
+            u.p[11] = [k as f32, frame, 1.0 / 60.0, 0.0];
+            result = target.clone();
+            passes.push(Pass { entry, target, tex0: input.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: views });
+        }
+        result
+    }
+
+    /// Runs the layer's enabled effects at the source's native resolution (ping-pong).
+    pub(super) fn apply_effects(
+        &mut self,
+        res_id: u64,
+        effects: &[EffectState],
+        frame: Frame,
+        time: f32,
+        mods: &ModInputs,
+        all_layers: &[LayerState],
+        passes: &mut Vec<Pass>,
+    ) -> Frame {
+        let chain: Vec<_> = effects
+            .iter()
+            .filter(|e| e.enabled)
+            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix)))
+            .collect();
+        if chain.is_empty() {
+            return frame;
+        }
+        let (w, h) = frame.size();
+        let device = &self.gpu.device;
+        let res = self.layers.entry(res_id).or_default();
+        for slot in &mut res.fx {
+            Target::ensure(slot, device, "fx", w, h);
+        }
+        let views: Vec<_> = res.fx.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
+        let mut base = Uniforms::with_params(&[]);
+        base.resolution = [w as f32, h as f32];
+        base.time = time;
+
+        // Ping-pong across three views, never writing the one being read or the one holding
+        // the chain's dry input.
+        let mut input_idx: Option<usize> = None;
+        let mut input = match frame {
+            Frame::Rgb { view, .. } => view,
+            Frame::Yuv { luma, chroma, .. } => {
+                passes.push(Pass {
+                    entry: "fs_to_rgb",
+                    target: views[0].clone(),
+                    tex0: luma,
+                    tex1: None,
+                    tex2: Some(chroma),
+                    uniforms: Uniforms { yuv: 1, ..base }, mesh: None, bufs: Vec::new() });
+                input_idx = Some(0);
+                views[0].clone()
+            }
+        };
+        let parity = (self.frame_index % 2) as usize;
+        for (desc, fx_id, values, param_mods, mix) in chain {
+            if !self.ensure_module(desc.entry) {
+                continue;
+            }
+            let dry = input.clone();
+            let dry_idx = input_idx;
+            let params = resolve_params(desc, values, param_mods, mods);
+            if let Some(plan) = shaders::pass_plan(desc.entry) {
+                // Multi-pass shader (ISF PASSES): its own buffers, output into a free chain view.
+                let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
+                let result = self.run_plan(res_id, fx_id, desc.entry, &plan, &params, input.clone(), views[i].clone(), (w, h), time, passes);
+                input_idx = (result == views[i]).then_some(i);
+                input = result;
+            } else {
+                let sub = shaders::multipass(desc.entry);
+                let entries: Vec<&'static str> = if sub.is_empty() { vec![desc.entry] } else { sub.to_vec() };
+                let last_index = entries.len() - 1;
+                for (k, entry) in entries.into_iter().enumerate() {
+                    let mut u = Uniforms::with_params(&params);
+                    u.resolution = base.resolution;
+                    u.time = time;
+                    let mut tex1 = None;
+                    let mut tex2 = None;
+                    let mut next_idx: Option<usize> = None;
+                    let target = if entry == "fs_rutt" || entry == "fs_rutt_points" {
+                        let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
+                        let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
+                        // Optional displacement from another layer's picture (its live thumbnail).
+                        let other = params.get(12).copied().unwrap_or(0.0) as usize;
+                        if other > 0 && let Some(l) = all_layers.get(other - 1) {
+                            tex2 = self.layers.get(&l.id).and_then(|r| r.thumbnail.as_ref()).map(|t| t.view.clone());
+                        }
+                        let res = self.layers.entry(res_id).or_default();
+                        Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
+                        u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
+                        res.rutt.as_ref().unwrap().view.clone()
+                    } else if entry == "fx_trails" || entry == "fx_slitscan" {
+                        // History effects write one slot while reading the other.
+                        let res = self.layers.entry(res_id).or_default();
+                        let slots = res.history.entry(fx_id).or_default();
+                        for slot in slots.iter_mut() {
+                            Target::ensure(slot, &self.gpu.device, "history", w, h);
+                        }
+                        tex1 = Some(slots[1 - parity].as_ref().unwrap().view.clone());
+                        slots[parity].as_ref().unwrap().view.clone()
+                    } else {
+                        let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
+                        next_idx = Some(i);
+                        views[i].clone()
+                    };
+                    if k == last_index && entry == "fx_glow_add" {
+                        tex1 = Some(dry.clone());
+                    }
+                    passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
+                    input = target;
+                    input_idx = next_idx;
+                }
+            }
+            if mix < 0.999 {
+                let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
+                let u = Uniforms { opacity: mix, ..base };
+                passes.push(Pass { entry: "fs_mix", target: views[i].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+                input = views[i].clone();
+                input_idx = Some(i);
+            }
+        }
+        Frame::Rgb { view: input, w, h }
+    }
+}
