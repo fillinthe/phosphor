@@ -47,7 +47,7 @@ fn gpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
     let base = setup.device_descriptor.clone();
     setup.device_descriptor = std::sync::Arc::new(move |adapter| {
         let mut d = base(adapter);
-        d.required_features |= adapter.features() & eframe::wgpu::Features::TEXTURE_COMPRESSION_BC;
+        d.required_features |= adapter.features() & (eframe::wgpu::Features::TEXTURE_COMPRESSION_BC | eframe::wgpu::Features::TEXTURE_FORMAT_16BIT_NORM);
         d
     });
     WgpuConfiguration { wgpu_setup: WgpuSetup::CreateNew(setup), ..Default::default() }

@@ -56,11 +56,12 @@ impl Engine {
                 let slot = if outgoing { &res.media_out } else { &res.media };
                 match slot.as_ref()? {
                     Media::Rgba(t) => Some(Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height }),
-                    Media::Nv12 { luma, chroma } => Some(Frame::Yuv {
+                    Media::Nv12 { luma, chroma, full_range } => Some(Frame::Yuv {
                         luma: luma.view.clone(),
                         chroma: chroma.view.clone(),
                         w: luma.width,
                         h: luma.height,
+                        full_range: *full_range,
                     }),
                     Media::Compressed { target: t, format } => Some(if *format == CompressedFormat::Bc3YCoCg {
                         Frame::YCoCg { view: t.view.clone(), w: t.width, h: t.height }

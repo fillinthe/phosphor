@@ -76,6 +76,8 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         #[cfg(target_os = "macos")]
         crate::media::video::set_zero_copy(engine.is_some() && std::env::var_os("PHOSPHOR_COPY_VIDEO").is_none());
+        #[cfg(target_os = "macos")]
+        crate::media::video::surface::set_sixteen_bit(engine.as_ref().is_some_and(|e| e.device().features().contains(wgpu::Features::TEXTURE_FORMAT_16BIT_NORM)));
         #[cfg(not(target_arch = "wasm32"))]
         crate::media::video::set_gpu_hap(engine.as_ref().is_some_and(|e| e.compressed_supported()) && std::env::var_os("PHOSPHOR_CPU_HAP").is_none());
         let now = cc.egui_ctx.input(|i| i.time);

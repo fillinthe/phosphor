@@ -13,8 +13,8 @@ use crate::shaders;
 /// Media uploaded by the app for a layer.
 enum Media {
     Rgba(Target),
-    /// Bi-planar video frame: luma (R8) + interleaved chroma (RG8).
-    Nv12 { luma: Target, chroma: Target },
+    /// Bi-planar video frame: luma (R8/R16) + interleaved chroma (RG8/RG16); TV range unless `full_range`.
+    Nv12 { luma: Target, chroma: Target, full_range: bool },
     /// Block-compressed frame straight from a Hap movie (BC1/BC3); `ycocg` = Hap Q colour.
     Compressed { target: Target, format: CompressedFormat },
 }
@@ -101,7 +101,7 @@ pub enum PreviewItem {
 #[derive(Clone)]
 enum Frame {
     Rgb { view: wgpu::TextureView, w: u32, h: u32 },
-    Yuv { luma: wgpu::TextureView, chroma: wgpu::TextureView, w: u32, h: u32 },
+    Yuv { luma: wgpu::TextureView, chroma: wgpu::TextureView, w: u32, h: u32, full_range: bool },
     /// Hap Q: scaled YCoCg in a BC3 texture.
     YCoCg { view: wgpu::TextureView, w: u32, h: u32 },
 }
@@ -113,12 +113,13 @@ impl Frame {
         }
     }
 
-    /// What a pass samples for this frame: (tex0, tex2, `Uniforms::yuv` conversion: 0 RGB, 1 NV12, 2 YCoCg).
+    /// What a pass samples for this frame: (tex0, tex2, `Uniforms::yuv` conversion: 0 RGB, 1 NV12 TV range,
+    /// 2 Hap Q YCoCg, 3 NV12 full range).
     /// Every shader reading a source goes through `sample_source`, which uses these.
     fn bind(self) -> (wgpu::TextureView, Option<wgpu::TextureView>, u32) {
         match self {
             Frame::Rgb { view, .. } => (view, None, 0),
-            Frame::Yuv { luma, chroma, .. } => (luma, Some(chroma), 1),
+            Frame::Yuv { luma, chroma, full_range, .. } => (luma, Some(chroma), if full_range { 3 } else { 1 }),
             Frame::YCoCg { view, .. } => (view, None, 2),
         }
     }

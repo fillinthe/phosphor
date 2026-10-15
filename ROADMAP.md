@@ -114,7 +114,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Hap R (BC7) on the GPU
 - [ ] Hap Q Alpha on the GPU (still decodes on the CPU)
 - [x] Zero-copy video: VideoToolbox IOSurface → Metal textures → wgpu (8-bit 4:2:0; 4K H.264 38% → 16% CPU)
-- [ ] Zero-copy for 10-bit (P010) and full-range video
+- [x] Zero-copy for 10-bit (P010) and full-range video
 - [ ] Ship FFmpeg inside the .app (LGPL build, decoders only) instead of relying on Homebrew
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
 - [x] Live camera / capture card input, network streams (RTSP/SRT/HLS), Syphon In

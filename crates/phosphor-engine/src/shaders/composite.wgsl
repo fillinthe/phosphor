@@ -1,10 +1,14 @@
 // Layer compositing, YUV conversion, and the final output pass.
 
 fn sample_source(st: vec2f) -> vec4f {
-    if (u.yuv == 1u) {
-        // BT.709, video range
-        let y = (textureSampleLevel(tex0, samp, st, 0.0).r - 16.0 / 255.0) * (255.0 / 219.0);
-        let c = (textureSampleLevel(tex2, samp, st, 0.0).rg - vec2f(128.0 / 255.0)) * (255.0 / 224.0);
+    if (u.yuv == 1u || u.yuv == 3u) {
+        // BT.709; 1 = TV range (16–235), 3 = full range (0–255). 10-bit planes normalise the same way.
+        var y = textureSampleLevel(tex0, samp, st, 0.0).r;
+        var c = textureSampleLevel(tex2, samp, st, 0.0).rg - vec2f(128.0 / 255.0);
+        if (u.yuv == 1u) {
+            y = (y - 16.0 / 255.0) * (255.0 / 219.0);
+            c = c * (255.0 / 224.0);
+        }
         let rgb = vec3f(
             y + 1.5748 * c.y,
             y - 0.1873 * c.x - 0.4681 * c.y,

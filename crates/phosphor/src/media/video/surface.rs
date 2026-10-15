@@ -1,6 +1,6 @@
 //! Zero-copy hardware video (macOS): a VideoToolbox frame is a CVPixelBuffer backed by an IOSurface. Its two
 //! planes (luma R8, chroma RG8) become Metal textures on that IOSurface and then wgpu textures: no CPU copy,
-//! no upload. Only 8-bit 4:2:0 video range ('420v'); other formats take the copying path.
+//! no upload. 4:2:0 in 8 or 10 bits, TV or full range; anything else takes the copying path.
 
 use std::ffi::c_void;
 
@@ -23,11 +23,18 @@ unsafe extern "C" {
     fn CFRelease(cf: *const c_void);
 }
 
-/// '420v': bi-planar 4:2:0, 8-bit, video range.
-const NV12_VIDEO: u32 = u32::from_be_bytes(*b"420v");
+/// Bi-planar 4:2:0 layouts VideoToolbox hands out: (code, 10-bit, full range).
+const LAYOUTS: [(&[u8; 4], bool, bool); 4] = [(b"420v", false, false), (b"420f", false, true), (b"x420", true, false), (b"xf20", true, true)];
 
-/// A retained CVPixelBuffer (released on drop). Sent from the decoder thread to the UI thread.
-pub struct PixelBuffer(*mut c_void);
+/// 10-bit frames need 16-bit textures (set once the GPU is known).
+static SIXTEEN_BIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_sixteen_bit(on: bool) {
+    SIXTEEN_BIT.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// A retained CVPixelBuffer (released on drop), with its layout. Sent from the decoder thread to the UI thread.
+pub struct PixelBuffer(*mut c_void, bool, bool);
 
 // SAFETY: CVPixelBuffers are reference-counted CoreFoundation objects, usable from any thread.
 unsafe impl Send for PixelBuffer {}
@@ -48,13 +55,18 @@ impl PixelBuffer {
         if pb.is_null() {
             return None;
         }
-        unsafe {
-            if CVPixelBufferGetPixelFormatType(pb) != NV12_VIDEO || CVPixelBufferGetIOSurface(pb).is_null() {
-                return None;
-            }
-            CFRetain(pb);
+        let code = unsafe { CVPixelBufferGetPixelFormatType(pb) }.to_be_bytes();
+        let (_, ten, full) = *LAYOUTS.iter().find(|(c, _, _)| **c == code)?;
+        if (ten && !SIXTEEN_BIT.load(std::sync::atomic::Ordering::Relaxed)) || unsafe { CVPixelBufferGetIOSurface(pb) }.is_null() {
+            return None;
         }
-        Some(Self(pb))
+        unsafe { CFRetain(pb) };
+        Some(Self(pb, ten, full))
+    }
+
+    /// Full range (0–255) rather than TV range (16–235).
+    pub fn full_range(&self) -> bool {
+        self.2
     }
 
     /// Identity of the memory behind the frame (the decoder cycles through a few of these).
@@ -103,9 +115,14 @@ impl PixelBuffer {
             // SAFETY: the hal texture matches `desc`.
             Some(unsafe { device.create_texture_from_hal::<wgpu::hal::api::Metal>(hal_tex, &desc, wgpu::TextureUses::RESOURCE) })
         };
-        // MTLPixelFormatR8Unorm = 10, MTLPixelFormatRG8Unorm = 30.
-        let luma = plane(0, wgpu::TextureFormat::R8Unorm, 10, w, h)?;
-        let chroma = plane(1, wgpu::TextureFormat::Rg8Unorm, 30, w.div_ceil(2), h.div_ceil(2))?;
+        // MTLPixelFormat R8Unorm = 10, RG8Unorm = 30, R16Unorm = 20, RG16Unorm = 60 (10-bit sits in the high bits).
+        let (lf, lm, cf, cm) = if self.1 {
+            (wgpu::TextureFormat::R16Unorm, 20, wgpu::TextureFormat::Rg16Unorm, 60)
+        } else {
+            (wgpu::TextureFormat::R8Unorm, 10, wgpu::TextureFormat::Rg8Unorm, 30)
+        };
+        let luma = plane(0, lf, lm, w, h)?;
+        let chroma = plane(1, cf, cm, w.div_ceil(2), h.div_ceil(2))?;
         Some((luma, chroma))
     }
 }
