@@ -140,6 +140,46 @@ impl Default for Mask {
     }
 }
 
+/// Starting shapes for a new mask (every point can be dragged afterwards).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MaskShape {
+    Rectangle,
+    Circle,
+    Triangle,
+}
+
+impl MaskShape {
+    pub const ALL: [MaskShape; 3] = [MaskShape::Rectangle, MaskShape::Circle, MaskShape::Triangle];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            MaskShape::Rectangle => "Rectangle",
+            MaskShape::Circle => "Circle",
+            MaskShape::Triangle => "Triangle",
+        }
+    }
+
+    /// Outline points (output space 0..1) centred, about a fifth of the output tall.
+    pub fn points(self, aspect: f32) -> Vec<[f32; 2]> {
+        let (r, rx) = (0.2, 0.2 / aspect.max(0.1));
+        match self {
+            MaskShape::Rectangle => vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]],
+            MaskShape::Circle => (0..32).map(|i| {
+                let a = i as f32 / 32.0 * std::f32::consts::TAU;
+                [0.5 + rx * a.cos(), 0.5 + r * a.sin()]
+            }).collect(),
+            MaskShape::Triangle => vec![[0.5, 0.5 - r], [0.5 + rx * 1.15, 0.5 + r * 0.6], [0.5 - rx * 1.15, 0.5 + r * 0.6]],
+        }
+    }
+}
+
+impl crate::model::Choice for MaskShape {
+    const OPTIONS: &'static [Self] = &MaskShape::ALL;
+    fn label(self) -> &'static str {
+        self.name()
+    }
+}
+
 /// Triangles filling `outer` (minus `hole`), each vertex (x, y, darkness, 0).
 fn fill(outer: &[[f32; 2]], hole: Option<&[[f32; 2]]>, darkness: f32) -> Vec<[f32; 4]> {
     let mut data: Vec<f64> = outer.iter().flat_map(|p| [p[0] as f64, p[1] as f64]).collect();
@@ -292,8 +332,13 @@ impl Mapping {
     }
 
     pub fn add_mask(&mut self, id: u64) -> &mut Mask {
+        self.add_mask_shape(id, MaskShape::Rectangle, 16.0 / 9.0)
+    }
+
+    /// A new mask of `shape` in the middle of an output `aspect` (width / height) wide, so circles look round.
+    pub fn add_mask_shape(&mut self, id: u64, shape: MaskShape, aspect: f32) -> &mut Mask {
         let n = self.masks.len() + 1;
-        self.masks.push(Mask { id, name: format!("Mask {n}"), ..Default::default() });
+        self.masks.push(Mask { id, name: format!("{} {n}", shape.name()), points: shape.points(aspect), ..Default::default() });
         self.masks.last_mut().unwrap()
     }
 
@@ -428,6 +473,18 @@ mod feather_tests {
             let span = |p: &[[f32; 2]]| p.iter().map(|q| q[0]).fold(f32::MIN, f32::max) - p.iter().map(|q| q[0]).fold(f32::MAX, f32::min);
             assert!((span(&grown) - 0.3).abs() < 1e-4 && (span(&shrunk) - 0.1).abs() < 1e-4, "{grown:?} {shrunk:?}");
         }
+    }
+
+    #[test]
+    fn mask_shapes_start_in_the_middle_and_circles_are_round_on_screen() {
+        for shape in MaskShape::ALL {
+            let pts = shape.points(16.0 / 9.0);
+            assert!(pts.len() >= 3 && pts.iter().all(|p| (0.2..0.8).contains(&p[0]) && (0.2..0.8).contains(&p[1])), "{shape:?}");
+        }
+        let c = MaskShape::Circle.points(16.0 / 9.0);
+        let w = c.iter().map(|p| p[0]).fold(f32::MIN, f32::max) - c.iter().map(|p| p[0]).fold(f32::MAX, f32::min);
+        let h = c.iter().map(|p| p[1]).fold(f32::MIN, f32::max) - c.iter().map(|p| p[1]).fold(f32::MAX, f32::min);
+        assert!((w * 1920.0 - h * 1080.0).abs() < 2.0, "{} px wide vs {} px tall", w * 1920.0, h * 1080.0);
     }
 
     #[test]
