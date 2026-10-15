@@ -110,7 +110,8 @@ Legend: [x] done · [~] in progress · [ ] not started
       software fallback for everything else (MPEG-4, GIF, alpha formats), seamless looping,
       bounded 3-frame queue, pause = zero CPU
 - [x] Animated GIF, Hap / Hap Alpha / Hap Q (CPU DXT decode for now)
-- [ ] Hap on the GPU: upload DXT blocks as BC1/BC3 textures (cuts Hap Q CPU from ~44% to ~0)
+- [x] Hap on the GPU: DXT blocks uploaded as BC1/BC3 textures, Hap Q converted in the shader (720p Hap 25% → 1.2% CPU, Hap Q 39% → 2.8%)
+- [ ] Hap R (BC7) and Hap Q Alpha on the GPU (they still decode on the CPU)
 - [ ] Zero-copy video: VideoToolbox IOSurface → Metal texture → wgpu (skip the CPU copy)
 - [ ] Ship FFmpeg inside the .app (LGPL build, decoders only) instead of relying on Homebrew
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`

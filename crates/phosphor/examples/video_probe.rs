@@ -46,6 +46,7 @@ fn play(p: &mut VideoPlayer, t0: Instant, secs: f64, rate: f32, media: &mut f64,
             run.kind = match f {
                 VideoFrame::Nv12 { .. } => "NV12",
                 VideoFrame::Rgba { .. } => "RGBA",
+                VideoFrame::Compressed { .. } => "GPU blocks",
             };
             p.recycle(f);
         }
@@ -212,6 +213,13 @@ fn gen_hap(dir: &str) -> Result<(), ffmpeg_next::Error> {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // --gpu-hap: Hap frames come out as GPU blocks (what the app does when the GPU supports BC textures).
+    let args: Vec<String> = if args.first().map(String::as_str) == Some("--gpu-hap") {
+        video::set_gpu_hap(true);
+        args[1..].to_vec()
+    } else {
+        args
+    };
     if args.first().map(String::as_str) == Some("--gen-hap") {
         if let Err(e) = gen_hap(args.get(1).map_or(".", |s| s.as_str())) {
             eprintln!("gen-hap failed: {e}");

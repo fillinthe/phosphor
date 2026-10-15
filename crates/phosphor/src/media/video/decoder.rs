@@ -5,6 +5,9 @@ use super::*;
 
 /// Decoder state owned by the background thread.
 pub(super) struct Decoder {
+    /// Hap played on the GPU: the current frame's blocks (None = FFmpeg decodes pixels).
+    hap: Option<Vec<u8>>,
+    hap_format: phosphor_engine::CompressedFormat,
     path: String,
     input: ff::format::context::Input,
     stream: usize,
@@ -107,7 +110,11 @@ impl Decoder {
             0
         };
         let (dec, codec, hw) = open_decoder(&input, stream, true)?;
+        // Hap goes to the GPU as it is stored (blocks), skipping FFmpeg's CPU texture decoder.
+        let hap = (gpu_hap() && st_is_hap(&input, stream)).then(Vec::new);
         Ok(Self {
+            hap,
+            hap_format: phosphor_engine::CompressedFormat::Bc1,
             path: path.to_string(),
             input,
             stream,
@@ -230,8 +237,7 @@ impl Decoder {
                     self.live_start = Some((rel, std::time::Instant::now()));
                 }
             }
-            let src = self.download(sh)?;
-            let out = self.scaler.convert(src, sh)?;
+            let out = self.picture(sh)?;
             self.last_sent = rel;
             if tx.send(Msg::Frame(self.generation, pts, rel, out)).is_err() {
                 return Ok(());
@@ -360,8 +366,7 @@ impl Decoder {
             if rel + dur <= t0 + 1e-6 {
                 continue;
             }
-            let src = self.download(sh)?;
-            let out = self.scaler.convert(src, sh)?;
+            let out = self.picture(sh)?;
             self.rev_buf.push((rel, dur, out));
         }
         self.rev_end = self.rev_buf.first().map_or(t0, |f| f.0);
@@ -370,6 +375,9 @@ impl Decoder {
 
     /// Decodes the next frame into `self.frame`. Returns false at end of stream.
     fn next_frame(&mut self) -> Result<bool, String> {
+        if self.hap.is_some() {
+            return self.next_hap_frame();
+        }
         loop {
             match self.dec.receive_frame(&mut self.frame) {
                 Ok(()) => {
@@ -413,6 +421,50 @@ impl Decoder {
                 }
             }
         }
+    }
+
+    /// Hap on the GPU: the next packet's blocks into `self.hap`, its timing into `self.frame` (so `timing`,
+    /// seeks, loops and reverse work unchanged). A Hap flavour the GPU path can't take falls back to FFmpeg.
+    fn next_hap_frame(&mut self) -> Result<bool, String> {
+        loop {
+            let mut pkt = ff::Packet::empty();
+            match pkt.read(&mut self.input) {
+                Ok(()) if pkt.stream() == self.stream => {
+                    let Some(buf) = self.hap.as_mut() else { return Ok(false) };
+                    let Some(data) = pkt.data() else { continue };
+                    match super::hap::decode(data, buf) {
+                        Ok(format) => self.hap_format = format,
+                        Err(e) => {
+                            log::info!("{}: {e}; decoding on the CPU instead", self.path);
+                            self.hap = None;
+                            self.rewind()?;
+                            return self.next_frame();
+                        }
+                    }
+                    // SAFETY: plain fields of the frame we own; `timing` reads them like a decoded frame's.
+                    unsafe {
+                        let f = self.frame.as_mut_ptr();
+                        (*f).pts = pkt.pts().unwrap_or(NOPTS);
+                        (*f).best_effort_timestamp = (*f).pts;
+                        (*f).duration = pkt.duration();
+                    }
+                    return Ok(true);
+                }
+                Ok(()) => {}
+                Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
+                Err(_) => return Ok(false),
+            }
+        }
+    }
+
+    /// The picture for the frame just decoded: GPU blocks (Hap) or converted pixels (everything else).
+    fn picture(&mut self, sh: &Shared) -> Result<VideoFrame, String> {
+        if let Some(buf) = &self.hap {
+            let (width, height) = (self.dec.width(), self.dec.height());
+            return Ok(VideoFrame::Compressed { width, height, format: self.hap_format, data: buf.clone() });
+        }
+        let src = self.download(sh)?;
+        self.scaler.convert(src, sh)
     }
 
     /// Frame time relative to the loop start, and frame duration, in seconds.
@@ -620,4 +672,8 @@ unsafe extern "C" fn pick_videotoolbox(ctx: *mut ffi::AVCodecContext, fmts: *con
         }
         ffi::avcodec_default_get_format(ctx, fmts)
     }
+}
+
+fn st_is_hap(input: &ff::format::context::Input, stream: usize) -> bool {
+    input.stream(stream).is_some_and(|s| s.parameters().id() == ff::codec::Id::HAP)
 }

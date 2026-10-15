@@ -215,6 +215,7 @@ impl MediaManager {
                         engine.upload_nv12(layer.id, *width, *height, luma, *luma_stride, chroma, *chroma_stride);
                     }
                     video::VideoFrame::Rgba { width, height, data } => engine.upload_rgba(layer.id, *width, *height, data),
+                    video::VideoFrame::Compressed { width, height, format, data } => engine.upload_compressed(layer.id, false, *width, *height, *format, data),
                 }
                 player.recycle(frame);
             }
@@ -258,6 +259,7 @@ impl MediaManager {
                         engine.upload_nv12_outgoing(*id, *width, *height, luma, *luma_stride, chroma, *chroma_stride);
                     }
                     video::VideoFrame::Rgba { width, height, data } => engine.upload_rgba_outgoing(*id, *width, *height, data),
+                    video::VideoFrame::Compressed { width, height, format, data } => engine.upload_compressed(*id, true, *width, *height, *format, data),
                 }
                 player.recycle(frame);
             }

@@ -60,13 +60,8 @@ impl Engine {
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [THUMBNAIL_WIDTH as f32, thumb_h as f32];
         u.uv_xform = fit_transform(frame.size(), canvas, layer.fit);
-        let (tex0, tex2) = match frame.clone() {
-            Frame::Rgb { view, .. } => (view, None),
-            Frame::Yuv { luma, chroma, .. } => {
-                u.yuv = 1;
-                (luma, Some(chroma))
-            }
-        };
+        let (tex0, tex2, yuv) = frame.clone().bind();
+        u.yuv = yuv;
         passes.push(Pass {
             entry: "fs_composite",
             target: res.thumbnail.as_ref().unwrap().view.clone(),

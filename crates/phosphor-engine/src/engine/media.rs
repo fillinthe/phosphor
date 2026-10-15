@@ -30,6 +30,44 @@ impl Engine {
         );
     }
 
+    /// The GPU can sample block-compressed (BC/DXT) textures: Hap movies skip CPU decoding.
+    pub fn compressed_supported(&self) -> bool {
+        self.gpu.device.features().contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
+    }
+
+    /// Uploads a block-compressed frame (Hap: DXT1/DXT5 blocks, rows of 4×4 blocks) for a layer, reusing
+    /// the texture while size and format stay the same. `width`/`height` must be multiples of 4.
+    pub fn upload_compressed(&mut self, layer: u64, outgoing: bool, width: u32, height: u32, format: CompressedFormat, blocks: &[u8]) {
+        let (bw, bh) = (width.div_ceil(4), height.div_ceil(4));
+        if blocks.len() < (bw * bh * format.block_bytes()) as usize || !self.compressed_supported() {
+            return;
+        }
+        let res = self.layers.entry(layer).or_default();
+        let slot = if outgoing { &mut res.media_out } else { &mut res.media };
+        let reuse = matches!(slot, Some(Media::Compressed { target, format: f }) if target.width == bw * 4 && target.height == bh * 4 && *f == format);
+        if !reuse {
+            let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("hap"),
+                size: wgpu::Extent3d { width: bw * 4, height: bh * 4, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: format.texture_format(),
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&Default::default());
+            *slot = Some(Media::Compressed { target: Target { texture, view, width: bw * 4, height: bh * 4 }, format });
+        }
+        let Some(Media::Compressed { target, .. }) = slot else { return };
+        self.gpu.queue.write_texture(
+            target.texture.as_image_copy(),
+            blocks,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bw * format.block_bytes()), rows_per_image: Some(bh) },
+            target.texture.size(),
+        );
+    }
+
     /// Uses a GPU texture another app (or the system) produced as a layer's picture, with no copy:
     /// Syphon input. It must be sampleable on this device.
     pub fn set_layer_texture(&mut self, layer: u64, texture: wgpu::Texture) {

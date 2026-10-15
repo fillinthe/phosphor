@@ -15,6 +15,33 @@ enum Media {
     Rgba(Target),
     /// Bi-planar video frame: luma (R8) + interleaved chroma (RG8).
     Nv12 { luma: Target, chroma: Target },
+    /// Block-compressed frame straight from a Hap movie (BC1/BC3); `ycocg` = Hap Q colour.
+    Compressed { target: Target, format: CompressedFormat },
+}
+
+/// GPU block-compressed picture formats (Hap): the GPU samples them directly, no CPU decoding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompressedFormat {
+    /// DXT1: Hap.
+    Bc1,
+    /// DXT5: Hap Alpha.
+    Bc3,
+    /// DXT5 holding scaled YCoCg: Hap Q (converted to RGB in the shader).
+    Bc3YCoCg,
+}
+
+impl CompressedFormat {
+    pub fn texture_format(self) -> wgpu::TextureFormat {
+        match self {
+            CompressedFormat::Bc1 => wgpu::TextureFormat::Bc1RgbaUnorm,
+            CompressedFormat::Bc3 | CompressedFormat::Bc3YCoCg => wgpu::TextureFormat::Bc3RgbaUnorm,
+        }
+    }
+
+    /// Bytes per 4×4 block.
+    pub fn block_bytes(self) -> u32 {
+        if self == CompressedFormat::Bc1 { 8 } else { 16 }
+    }
 }
 
 #[derive(Default)]
@@ -72,12 +99,24 @@ pub enum PreviewItem {
 enum Frame {
     Rgb { view: wgpu::TextureView, w: u32, h: u32 },
     Yuv { luma: wgpu::TextureView, chroma: wgpu::TextureView, w: u32, h: u32 },
+    /// Hap Q: scaled YCoCg in a BC3 texture.
+    YCoCg { view: wgpu::TextureView, w: u32, h: u32 },
 }
 
 impl Frame {
     fn size(&self) -> (u32, u32) {
         match self {
-            Frame::Rgb { w, h, .. } | Frame::Yuv { w, h, .. } => (*w, *h),
+            Frame::Rgb { w, h, .. } | Frame::Yuv { w, h, .. } | Frame::YCoCg { w, h, .. } => (*w, *h),
+        }
+    }
+
+    /// What a pass samples for this frame: (tex0, tex2, `Uniforms::yuv` conversion: 0 RGB, 1 NV12, 2 YCoCg).
+    /// Every shader reading a source goes through `sample_source`, which uses these.
+    fn bind(self) -> (wgpu::TextureView, Option<wgpu::TextureView>, u32) {
+        match self {
+            Frame::Rgb { view, .. } => (view, None, 0),
+            Frame::Yuv { luma, chroma, .. } => (luma, Some(chroma), 1),
+            Frame::YCoCg { view, .. } => (view, None, 2),
         }
     }
 }
@@ -340,13 +379,8 @@ impl Engine {
             u.opacity = opacity;
             u.mode = layer.blend.shader_index();
             u.uv_xform = fit_transform((sw, sh), (w, h), layer.fit);
-            let (tex0, tex2) = match frame {
-                Frame::Rgb { view, .. } => (view, None),
-                Frame::Yuv { luma, chroma, .. } => {
-                    u.yuv = 1;
-                    (luma, Some(chroma))
-                }
-            };
+            let (tex0, tex2, yuv) = frame.bind();
+            u.yuv = yuv;
             passes.push(Pass {
                 entry: "fs_composite",
                 target: self.accum[next].as_ref().unwrap().view.clone(),

@@ -3,7 +3,7 @@ use super::{VideoFrame, VideoPlayer};
 fn luma(f: &VideoFrame) -> Vec<u8> {
     match f {
         VideoFrame::Nv12 { luma, .. } => luma.clone(),
-        VideoFrame::Rgba { data, .. } => data.clone(),
+        VideoFrame::Rgba { data, .. } | VideoFrame::Compressed { data, .. } => data.clone(),
     }
 }
 
