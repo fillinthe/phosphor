@@ -53,11 +53,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             }
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Fade style").strong());
-                ComboBox::from_id_salt(("trans", layer.id)).width(120.0).selected_text(layer.transition_kind.name()).show_ui(ui, |ui| {
-                    for k in TransitionKind::ALL {
-                        ui.selectable_value(&mut layer.transition_kind, k, k.name());
-                    }
-                });
+                choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
                 hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
             });
             ui.separator();
@@ -107,10 +103,8 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                     }
                     ui.checkbox(&mut layer.looping, "Loop");
                     ui.separator();
-                    for d in PlayDirection::ALL {
-                        let r = ui.selectable_value(&mut layer.direction, d, d.name());
-                        map_menu(ui, &r, ControlTarget::LayerDirection(layer.id));
-                    }
+                    let target = ControlTarget::LayerDirection(layer.id);
+                    choice_buttons(ui, &mut layer.direction, |ui, r| map_menu(ui, r, target.clone()));
                 });
                 let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
                 map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
