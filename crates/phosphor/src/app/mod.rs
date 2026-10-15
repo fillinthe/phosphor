@@ -367,11 +367,29 @@ impl State {
     }
 
     pub fn send_output_id_to(&mut self, id: u64, display: crate::screens::Display) {
+        self.displays = crate::screens::displays();
+        if let Some(o) = self.comp.output_mut(id) {
+            o.screen = crate::screens::screen_key(&self.displays, &display);
+        }
         let mut map = self.output.lock().unwrap();
         let out = map.entry(id).or_default();
         out.open = true;
         out.display = Some(display.id);
         out.place = Some((display, 0, 0));
+    }
+
+    /// Sends every enabled output to the screen saved for it. Returns the names of saved screens that aren't connected.
+    pub fn send_outputs_to_screens(&mut self) -> Vec<String> {
+        self.displays = crate::screens::displays();
+        let mut missing = Vec::new();
+        let wanted: Vec<(u64, String)> = self.comp.outputs.iter().filter(|o| o.enabled && !o.screen.is_empty()).map(|o| (o.id, o.screen.clone())).collect();
+        for (id, key) in wanted {
+            match crate::screens::find_screen(&self.displays, &key) {
+                Some(d) => self.send_output_id_to(id, d),
+                None => missing.push(key),
+            }
+        }
+        missing
     }
 
     /// Opens every enabled output's window, or closes them all if any is open.

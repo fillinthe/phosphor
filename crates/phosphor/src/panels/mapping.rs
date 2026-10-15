@@ -370,7 +370,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
 
 /// Venues: save every output's setup (surfaces, mesh, masks, size, colour) under a name and recall it at the next gig.
 /// What a surface shows: the mix or one layer; for a layer, whether it also stays in the mix.
-fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState]) {
+pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState]) {
     ui.horizontal(|ui| {
         ui.label("Shows");
         let current = s.layer.map_or("Mix (all layers)".into(), |id| crate::ui::layer_name(layers, id));

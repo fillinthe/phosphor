@@ -20,6 +20,42 @@ impl Display {
     }
 }
 
+/// A name that finds this screen again after a restart or re-plug (display ids can change): its name, plus
+/// " #2", " #3"… when several screens share it, counted left to right.
+pub fn screen_key(all: &[Display], d: &Display) -> String {
+    let mut same: Vec<&Display> = all.iter().filter(|o| o.name == d.name).collect();
+    if same.len() < 2 {
+        return d.name.clone();
+    }
+    same.sort_by(|a, b| (a.x, a.y).partial_cmp(&(b.x, b.y)).unwrap_or(std::cmp::Ordering::Equal));
+    let n = same.iter().position(|o| o.id == d.id).unwrap_or(0) + 1;
+    if n == 1 { d.name.clone() } else { format!("{} #{n}", d.name) }
+}
+
+/// The connected screen saved as `key` (see `screen_key`).
+pub fn find_screen(all: &[Display], key: &str) -> Option<Display> {
+    if key.is_empty() {
+        return None;
+    }
+    all.iter().find(|d| screen_key(all, d) == key).cloned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_named_screens_are_numbered_left_to_right() {
+        let d = |id, name: &str, x| Display { id, name: name.into(), x, y: 0.0, w: 100.0, h: 100.0, pixels: (1920, 1080), main: false };
+        let all = vec![d(7, "EPSON", 300.0), d(3, "Built-in", 0.0), d(9, "EPSON", 100.0)];
+        assert_eq!(screen_key(&all, &all[1]), "Built-in");
+        assert_eq!(screen_key(&all, &all[2]), "EPSON");
+        assert_eq!(screen_key(&all, &all[0]), "EPSON #2");
+        assert_eq!(find_screen(&all, "EPSON #2").map(|d| d.id), Some(7));
+        assert_eq!(find_screen(&all, "Gone"), None);
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod cg {
     #[repr(C)]

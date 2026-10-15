@@ -188,6 +188,10 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Mesh warp (Catmull-Rom grid up to 8×8), polygon masks with invert
 - [x] Mask feather (soft edges)
 - [x] Circle and triangle masks (Mapping › + Mask)
+- [x] Surface (slice) sources: each surface shows the mix or one layer; "Also in the mix" per layer
+- [x] Outputs remember their screen (by name, numbered for identical projectors); "All to their screens"
+- [ ] Mapping: groups of layers as a surface source (after layer groups); slice "input from another output"
+- [ ] Open outputs on their saved screens automatically when a project opens (setting)
 - [ ] Bezier mask edges
 - [x] Per-output identify / colour correction, surface blend curve
 - [ ] Per-surface color correction / brightness
