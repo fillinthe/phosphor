@@ -1,7 +1,9 @@
 #!/bin/bash
-# Builds Phosphor.app (release) with its icon, ad-hoc signs it, and installs it to /Applications.
-#   scripts/bundle-mac.sh            build + install
+# Builds Phosphor.app (release) with its icon, signs it, and installs it to /Applications.
+#   scripts/bundle-mac.sh            build + install (ad-hoc signed: runs on this Mac)
 #   scripts/bundle-mac.sh --no-install
+#   SIGN_ID="Developer ID Application: …" scripts/bundle-mac.sh --no-install
+#       signs for other Macs (hardened runtime + entitlements); then scripts/notarize-mac.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION=$(grep -m1 '^version' crates/phosphor/Cargo.toml | cut -d'"' -f2)
@@ -62,12 +64,24 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP" >/dev/null
+# Sign inside-out (libraries, framework, then the app); --deep is not reliable for this.
+SIGN_ID="${SIGN_ID:--}"
+if [[ "$SIGN_ID" == "-" ]]; then
+  SIGN_ARGS=(--force --sign -)
+else
+  SIGN_ARGS=(--force --timestamp --options runtime --sign "$SIGN_ID")
+fi
+for lib in "$APP"/Contents/Frameworks/*.dylib; do codesign "${SIGN_ARGS[@]}" "$lib" >/dev/null; done
+codesign "${SIGN_ARGS[@]}" "$APP/Contents/Frameworks/Syphon.framework" >/dev/null
+codesign "${SIGN_ARGS[@]}" --entitlements scripts/Phosphor.entitlements "$APP" >/dev/null
+codesign --verify --deep --strict "$APP"
 echo "built $APP ($(du -sh "$APP" | cut -f1))"
 
 if [[ "${1:-}" != "--no-install" ]]; then
   rm -rf /Applications/Phosphor.app
   cp -R "$APP" /Applications/
   touch /Applications/Phosphor.app
+  # Tell Finder/Dock about the new copy so its icon shows straight away.
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Phosphor.app || true
   echo "installed /Applications/Phosphor.app"
 fi

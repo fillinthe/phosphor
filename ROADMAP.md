@@ -268,4 +268,4 @@ Legend: [x] done · [~] in progress · [ ] not started
       CPU/frame (30% → 105% of a core), nearly all pass/bind-group setup; explorer defaults to Hover previews
 - [ ] Benchmark suite vs VDMX (CPU, memory, frame time, same clips)
 - [ ] Crash reporting (opt-in), auto-update
-- [ ] Code signing + notarization
+- [ ] Code signing + notarization: scripts ready (`SIGN_ID=… scripts/bundle-mac.sh`, `scripts/notarize-mac.sh`); needs the owner's Developer ID certificate + notary login
