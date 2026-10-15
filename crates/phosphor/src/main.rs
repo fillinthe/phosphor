@@ -1,4 +1,5 @@
 mod account;
+mod text;
 #[cfg(target_arch = "wasm32")]
 mod web_files;
 mod app;

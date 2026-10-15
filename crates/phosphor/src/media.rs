@@ -86,7 +86,8 @@ impl MediaManager {
                 if let Some(p) = self.players.remove(&layer.id) {
                     self.outgoing.insert(layer.id, p);
                 }
-            } else {
+            } else if !(matches!(self.loaded.get(&layer.id), Some(SourceSpec::Text(_))) && matches!(layer.source, SourceSpec::Text(_))) {
+                // (Retyped text keeps showing the old words until the new picture is ready: no flash.)
                 engine.clear_media(layer.id);
                 #[cfg(target_os = "macos")]
                 self.syphon.remove(&layer.id);
@@ -130,6 +131,25 @@ impl MediaManager {
                 },
                 SourceSpec::Movie { .. } => {
                     self.errors.insert(layer.id, "Video playback in the browser is coming soon".into());
+                }
+                SourceSpec::Text(style) => {
+                    let (w, h) = (comp.width, comp.height);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let (tx, _) = self.decoded.get_or_insert_with(std::sync::mpsc::channel);
+                        let tx = tx.clone();
+                        let (id, spec, style) = (layer.id, layer.source.clone(), style.clone());
+                        std::thread::spawn(move || {
+                            let _ = tx.send((id, spec, crate::text::render(&style, w, h)));
+                        });
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    match crate::text::render(style, w, h) {
+                        Ok(img) => engine.upload_rgba(layer.id, img.width(), img.height(), img.as_raw()),
+                        Err(e) => {
+                            self.errors.insert(layer.id, e);
+                        }
+                    }
                 }
                 #[cfg(target_os = "macos")]
                 SourceSpec::Live { format, .. } if format == "syphon" => {

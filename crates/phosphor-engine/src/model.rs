@@ -141,6 +141,38 @@ pub enum SourceSpec {
     /// A live input: camera, capture card, or a network stream. `format` is the FFmpeg input
     /// ("avfoundation" for cameras, empty to detect from `url`), `url` the device name or address.
     Live { name: String, format: String, url: String },
+    /// Words drawn by the app into the layer's picture (see `TextStyle`).
+    Text(TextStyle),
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextAlign {
+    Left,
+    #[default]
+    Center,
+    Right,
+}
+
+/// A text layer: what it says and how it looks. Drawn at the composition size whenever it changes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TextStyle {
+    pub text: String,
+    /// "builtin:sans" / "builtin:mono", or a font file path with an optional "#index" (collections).
+    pub font: String,
+    /// Letter height as a fraction of the picture height.
+    pub size: f32,
+    pub color: [u8; 4],
+    pub align: TextAlign,
+    /// Dark outline width as a fraction of the letter height (0 = none).
+    pub outline: f32,
+    pub line_spacing: f32,
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self { text: "PHOSPHOR".into(), font: "builtin:sans".into(), size: 0.18, color: [255, 255, 255, 255], align: TextAlign::Center, outline: 0.0, line_spacing: 1.0 }
+    }
 }
 
 impl SourceSpec {
@@ -149,6 +181,11 @@ impl SourceSpec {
             SourceSpec::None => "No source".into(),
             SourceSpec::Generator(id) => shaders::generator(id).map_or(id.clone(), |g| g.name.to_string()),
             SourceSpec::Image { name, .. } | SourceSpec::Movie { name, .. } | SourceSpec::Live { name, .. } => name.clone(),
+            SourceSpec::Text(t) => {
+                let first = t.text.lines().next().unwrap_or("").trim();
+                let short: String = first.chars().take(24).collect();
+                format!("Text: {}{}", short, if first.chars().count() > 24 { "…" } else { "" })
+            }
         }
     }
 }

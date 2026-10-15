@@ -195,7 +195,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
       Optical Flow and lit (normals) Rutt-Etra rendering. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)
-- [ ] Text / title source
+- [x] Text / title source (any installed font, size, colour, alignment, outline)
 - [x] Syphon in/out, NDI out
 - [ ] NDI in
 - [ ] Recording to ProRes / Hap

@@ -10,6 +10,8 @@ use phosphor_engine::{BlendMode, Composition};
 pub struct BenchConfig {
     pub seconds: f64,
     pub generators: Vec<String>,
+    /// `--text "words"`: a text layer on top.
+    pub texts: Vec<String>,
     pub images: Vec<String>,
     pub movies: Vec<String>,
     pub effects: Vec<String>,
@@ -60,6 +62,7 @@ impl BenchConfig {
                     cfg.seconds = v.parse().unwrap_or(10.0);
                 }
                 ("--gen", Some(v)) => cfg.generators.push(v),
+                ("--text", Some(v)) => cfg.texts.push(v),
                 ("--image", Some(v)) => cfg.images.push(v),
                 ("--movie", Some(v)) => cfg.movies.push(v),
                 ("--fx", Some(v)) => cfg.effects.push(v),
@@ -135,6 +138,10 @@ impl BenchConfig {
         for p in &self.movies {
             let p = p.clone();
             sources.push(Box::new(move |l| l.source = crate::media::spec_for_path(&p)));
+        }
+        for t in &self.texts {
+            let t = t.replace("\\n", "\n");
+            sources.push(Box::new(move |l| l.source = phosphor_engine::SourceSpec::Text(phosphor_engine::TextStyle { text: t.clone(), ..crate::text::default_style() })));
         }
         for (i, set_source) in sources.iter().enumerate() {
             let effects: Vec<_> = self.effects.iter().filter_map(|e| comp.new_effect(e)).collect();
