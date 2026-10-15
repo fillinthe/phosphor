@@ -184,6 +184,8 @@ impl MediaManager {
             player.set_playing(layer.playing && layer.enabled);
             player.set_rate(layer.rate);
             player.set_looping(layer.looping);
+            let range = player.duration().and_then(|d| layer.loop_range(d, comp.bpm));
+            player.set_mode(layer.direction, range);
             if !layer.enabled {
                 continue;
             }

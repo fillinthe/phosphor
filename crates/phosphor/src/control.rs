@@ -14,6 +14,8 @@ pub enum Deferred {
     Column(usize),
     /// Value 0..1, or `FLIP` to toggle an on/off control.
     App(AppControl, f32),
+    /// Jump a layer's movie to this fraction of its length.
+    Scrub(u64, f32),
 }
 
 /// Sent instead of a value when a pad or key press should flip an on/off control.
@@ -262,6 +264,23 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 l.rate = unit_to(v, 0.1, 4.0, true);
             }
         }
+        ControlTarget::LayerLoopIn(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                l.loop_in = v.clamp(0.0, 1.0);
+            }
+        }
+        ControlTarget::LayerLoopOut(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                l.loop_out = v.clamp(0.0, 1.0);
+            }
+        }
+        ControlTarget::LayerDirection(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                let all = phosphor_engine::PlayDirection::ALL;
+                l.direction = all[((v.clamp(0.0, 1.0) * all.len() as f32) as usize).min(all.len() - 1)];
+            }
+        }
+        ControlTarget::LayerScrub(id) => out.push(Deferred::Scrub(*id, v.clamp(0.0, 1.0))),
         ControlTarget::App(a) => match a {
             AppControl::LaunchFade => comp.launch.fade = toggled(comp.launch.fade, v),
             AppControl::FadeTime => comp.launch.fade_secs = unit_to(v, 0.05, 10.0, true),
@@ -353,6 +372,12 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         out.push((ControlTarget::LayerEnabled(l.id), format!("{} · on/off", l.name)));
         out.push((ControlTarget::LayerSpeed(l.id), format!("{} · speed", l.name)));
         out.push((ControlTarget::LayerFxBypass(l.id), format!("{} · effects bypass", l.name)));
+        if matches!(l.source, phosphor_engine::SourceSpec::Movie { .. }) {
+            out.push((ControlTarget::LayerScrub(l.id), format!("{} · scrub", l.name)));
+            out.push((ControlTarget::LayerLoopIn(l.id), format!("{} · loop in", l.name)));
+            out.push((ControlTarget::LayerLoopOut(l.id), format!("{} · loop out", l.name)));
+            out.push((ControlTarget::LayerDirection(l.id), format!("{} · direction", l.name)));
+        }
         for (slot, clip) in l.clips.iter().enumerate() {
             if !clip.is_empty() {
                 out.push((ControlTarget::TriggerClip { layer: l.id, slot }, format!("{} · clip {} ({})", l.name, slot + 1, clip.name)));
@@ -384,6 +409,10 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::TriggerColumn(col) => format!("/phosphor/column/{}", col + 1),
         ControlTarget::LayerSpeed(id) => format!("/phosphor/layer/{id}/speed"),
         ControlTarget::LayerFxBypass(id) => format!("/phosphor/layer/{id}/fxbypass"),
+        ControlTarget::LayerLoopIn(id) => format!("/phosphor/layer/{id}/loop/in"),
+        ControlTarget::LayerLoopOut(id) => format!("/phosphor/layer/{id}/loop/out"),
+        ControlTarget::LayerDirection(id) => format!("/phosphor/layer/{id}/direction"),
+        ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
         ControlTarget::Surface(id) => format!("/phosphor/surface/{id}"),
         ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
         ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),

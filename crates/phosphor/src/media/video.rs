@@ -21,6 +21,19 @@ const LATE: f64 = 0.05;
 /// ...but never more than this many in a row, so slow decoders still show something.
 const MAX_SKIP: u32 = 8;
 const NOPTS: i64 = i64::MIN;
+/// Reverse play decodes this many frames at a time, then shows them backwards (bounds memory:
+/// ~37 MB at 1080p; intra-frame codecs like ProRes and Hap reverse at no extra cost, long-GOP
+/// H.264/HEVC re-decode from the keyframe for each chunk).
+const REVERSE_CHUNK_FRAMES: f64 = 12.0;
+
+pub use phosphor_engine::PlayDirection;
+
+/// How the decoder walks the movie: direction and an optional loop region (seconds).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct PlayMode {
+    direction: PlayDirection,
+    range: Option<(f64, f64)>,
+}
 
 pub enum VideoFrame {
     /// 4:2:0 bi-planar, video range (BT.709 assumed), tightly or stride-packed rows.
@@ -74,7 +87,7 @@ pub struct VideoPlayer {
     looping: bool,
     clock: f64,
     last_now: Option<f64>,
-    pending: Option<(f64, VideoFrame)>,
+    pending: Option<(f64, f64, VideoFrame)>,
     end: Option<f64>,
     error: Option<String>,
     duration: Option<f64>,
@@ -83,11 +96,14 @@ pub struct VideoPlayer {
     live: bool,
     /// Seek generation: frames decoded before the latest seek carry an older number and are dropped.
     generation: u64,
+    mode: PlayMode,
+    /// Media time (seconds into the movie) of the frame on screen.
+    shown: f64,
 }
 
 enum Msg {
-    /// (seek generation, presentation time, frame)
-    Frame(u64, f64, VideoFrame),
+    /// (seek generation, presentation time, media time, frame)
+    Frame(u64, f64, f64, VideoFrame),
     End(f64),
     Error(String),
 }
@@ -106,6 +122,7 @@ struct Shared {
 
 struct Ctl {
     looping: bool,
+    mode: PlayMode,
     quit: bool,
     /// Jump to this media time (seconds) and tag following frames with `generation`.
     seek: Option<(f64, u64)>,
@@ -159,6 +176,7 @@ impl VideoPlayer {
         let shared = Arc::new(Shared {
             ctl: Mutex::new(Ctl {
                 looping: true,
+                mode: PlayMode::default(),
                 quit: false,
                 seek: None,
             }),
@@ -198,6 +216,8 @@ impl VideoPlayer {
             size,
             live,
             generation: 0,
+            mode: PlayMode::default(),
+            shown: 0.0,
         })
     }
 
@@ -218,6 +238,24 @@ impl VideoPlayer {
             ctl.looping = looping;
         }
         self.shared.cv.notify_all();
+    }
+
+    /// Direction and loop region (seconds; None = whole movie). Changing direction restarts
+    /// decoding from the frame on screen so it turns around exactly there.
+    pub fn set_mode(&mut self, direction: PlayDirection, range: Option<(f64, f64)>) {
+        let mode = PlayMode { direction, range };
+        if self.live || self.mode == mode {
+            return;
+        }
+        let turned = self.mode.direction != direction;
+        self.mode = mode;
+        if let Ok(mut ctl) = self.shared.ctl.lock() {
+            ctl.mode = mode;
+        }
+        self.shared.cv.notify_all();
+        if turned {
+            self.seek(self.shown);
+        }
     }
 
     /// Called once per rendered frame with a monotonic clock in seconds. Returns the newest frame
@@ -242,13 +280,13 @@ impl VideoPlayer {
         loop {
             if self.pending.is_none() {
                 match rx.try_recv() {
-                    Ok(Msg::Frame(generation, _, frame)) if generation != self.generation => {
+                    Ok(Msg::Frame(generation, _, _, frame)) if generation != self.generation => {
                         // From before the last seek.
                         self.shared.recycle(frame);
                     }
-                    Ok(Msg::Frame(_, pts, frame)) => {
+                    Ok(Msg::Frame(_, pts, media, frame)) => {
                         self.end = None;
-                        self.pending = Some((pts, frame));
+                        self.pending = Some((pts, media, frame));
                     }
                     Ok(Msg::End(at)) => {
                         self.end = Some(at);
@@ -266,7 +304,8 @@ impl VideoPlayer {
                 }
             }
             match self.pending.take() {
-                Some((pts, frame)) if pts <= self.clock + 1e-3 => {
+                Some((pts, media, frame)) if pts <= self.clock + 1e-3 => {
+                    self.shown = media;
                     if let Some(old) = out.replace(frame) {
                         self.shared.recycle(old);
                     }
@@ -290,7 +329,7 @@ impl VideoPlayer {
         let mut out: Option<VideoFrame> = None;
         for msg in rx.try_iter() {
             match msg {
-                Msg::Frame(_, _, frame) => {
+                Msg::Frame(_, _, _, frame) => {
                     if let Some(old) = out.replace(frame) {
                         self.shared.recycle(old);
                     }
@@ -321,14 +360,15 @@ impl VideoPlayer {
         }
         self.shared.cv.notify_all();
         self.clock = t;
+        self.shown = t;
         self.end = None;
-        if let Some((_, f)) = self.pending.take() {
+        if let Some((_, _, f)) = self.pending.take() {
             self.shared.recycle(f);
         }
         // Unblock the decoder if it's waiting on a full queue.
         if let Some(rx) = &self.rx {
             for msg in rx.try_iter() {
-                if let Msg::Frame(_, _, f) = msg {
+                if let Msg::Frame(_, _, _, f) = msg {
                     self.shared.recycle(f);
                 }
             }
@@ -338,10 +378,7 @@ impl VideoPlayer {
 
     /// Where the clip is (seconds from its start), for the scrub bar and crash recovery.
     pub fn position(&self) -> f64 {
-        match self.duration {
-            Some(d) if d > 0.0 => self.clock.rem_euclid(d),
-            _ => self.clock,
-        }
+        self.shown
     }
 
     /// Returns a frame's buffers for reuse by the decoder (optional; avoids reallocations).
@@ -423,10 +460,20 @@ struct Decoder {
     /// First pts of the file, subtracted so playback starts at 0.
     origin: Option<i64>,
     last_rel: f64,
-    /// Media time at which the current loop started.
-    offset: f64,
-    /// End of the current loop, relative to `offset`.
+    /// Longest media time seen (the movie's length when the container doesn't say).
     loop_len: f64,
+    /// Presentation time of the next frame sent. Grows by each frame's duration whichever way the
+    /// movie plays, so loops, reverse and ping-pong all look like one continuous stream to the player.
+    out_clock: Option<f64>,
+    /// Times the movie has looped or turned around (0 = first pass).
+    passes: u32,
+    /// Media time of the last frame sent.
+    last_sent: f64,
+    /// Playing backwards: frames before `rev_end` are decoded a chunk at a time into `rev_buf`
+    /// and sent from the back.
+    reversing: bool,
+    rev_end: f64,
+    rev_buf: Vec<(f64, f64, VideoFrame)>,
     frames_in_loop: u64,
     skips: u32,
     errors: u32,
@@ -514,8 +561,13 @@ impl Decoder {
             eof_sent: false,
             origin: None,
             last_rel: -1.0,
-            offset: 0.0,
             loop_len: 0.0,
+            out_clock: None,
+            passes: 0,
+            last_sent: 0.0,
+            reversing: false,
+            rev_end: 0.0,
+            rev_buf: Vec::new(),
             frames_in_loop: 0,
             skips: 0,
             errors: 0,
@@ -528,13 +580,28 @@ impl Decoder {
 
     fn run(&mut self, sh: &Shared, tx: &SyncSender<Msg>) -> Result<(), String> {
         loop {
-            let seek = match sh.ctl.lock() {
-                Ok(mut c) if !c.quit => c.seek.take(),
+            let (seek, mode) = match sh.ctl.lock() {
+                Ok(mut c) if !c.quit => (c.seek.take(), c.mode),
                 _ => return Ok(()),
             };
             if let Some((t, generation)) = seek {
-                self.seek_to(t)?;
                 self.generation = generation;
+                self.out_clock = None;
+                self.drop_reverse(sh);
+                self.reversing = mode.direction == PlayDirection::Reverse && !self.live;
+                if self.reversing {
+                    // Include the frame on screen at `t`.
+                    self.rev_end = t + 1e-4;
+                } else {
+                    self.seek_to(t)?;
+                }
+            }
+            let (lo, hi) = self.bounds(mode);
+            if self.reversing {
+                if !self.reverse_step(sh, tx, mode, lo, hi)? {
+                    return Ok(());
+                }
+                continue;
             }
             let more = match self.next_frame() {
                 Ok(more) => more,
@@ -555,38 +622,15 @@ impl Decoder {
                 if self.frames_in_loop == 0 {
                     return Err("no decodable video frames".into());
                 }
-                let end = self.offset + self.loop_len;
                 // Single-frame files (stills) never need re-decoding.
-                let still = self.frames_in_loop == 1 && self.offset == 0.0;
-                if still || !sh.ctl.lock().is_ok_and(|c| c.looping) {
-                    if tx.send(Msg::End(end)).is_err() {
-                        return Ok(());
-                    }
-                    let Ok(mut ctl) = sh.ctl.lock() else {
-                        return Ok(());
-                    };
-                    while !ctl.quit && ctl.seek.is_none() && (still || !ctl.looping) {
-                        ctl = match sh.cv.wait(ctl) {
-                            Ok(c) => c,
-                            Err(_) => return Ok(()),
-                        };
-                    }
-                    if ctl.quit {
-                        return Ok(());
-                    }
-                    if ctl.seek.is_some() {
-                        // Handled at the top of the loop.
-                        continue;
-                    }
+                let still = self.frames_in_loop == 1 && self.passes == 0 && mode == PlayMode::default();
+                if !self.at_end(sh, tx, mode, lo, hi, still)? {
+                    return Ok(());
                 }
-                self.rewind()?;
-                self.offset = end;
                 continue;
             }
             sh.decoded.fetch_add(1, Ordering::Relaxed);
             let (rel, dur) = self.timing();
-            let pts = self.offset + rel;
-            let clock = f64::from_bits(sh.clock.load(Ordering::Relaxed));
             // After a seek, frames before the target only lead up to it.
             if let Some(target) = self.seek_target {
                 // Drop frames whose display time ends at or before the target (the one shown at
@@ -596,28 +640,169 @@ impl Decoder {
                 }
                 self.seek_target = None;
             }
-            if !self.live && pts + dur < clock - LATE && self.skips < MAX_SKIP {
-                self.skips += 1;
-                sh.skipped.fetch_add(1, Ordering::Relaxed);
+            if !self.live && mode.range.is_some() {
+                if rel >= hi - 1e-6 {
+                    if !self.at_end(sh, tx, mode, lo, hi, false)? {
+                        return Ok(());
+                    }
+                    continue;
+                }
+                if rel + dur <= lo + 1e-6 {
+                    // Before the in point (it moved, or a seek landed there).
+                    self.jump(lo)?;
+                    continue;
+                }
+            }
+            let pts = self.next_pts(rel, dur);
+            if self.late(sh, pts, dur) {
                 continue;
             }
-            self.skips = 0;
             if self.live {
-                let (pts0, t0) = *self.live_start.get_or_insert((pts, std::time::Instant::now()));
-                let ahead = (pts - pts0) - t0.elapsed().as_secs_f64();
+                let (rel0, t0) = *self.live_start.get_or_insert((rel, std::time::Instant::now()));
+                let ahead = (rel - rel0) - t0.elapsed().as_secs_f64();
                 if ahead > 0.002 {
                     std::thread::sleep(std::time::Duration::from_secs_f64(ahead.min(0.25)));
                 } else if ahead < -1.0 {
                     // Fell far behind (stall, clock jump): re-anchor instead of racing to catch up.
-                    self.live_start = Some((pts, std::time::Instant::now()));
+                    self.live_start = Some((rel, std::time::Instant::now()));
                 }
             }
             let src = self.download(sh)?;
             let out = self.scaler.convert(src, sh)?;
-            if tx.send(Msg::Frame(self.generation, pts, out)).is_err() {
+            self.last_sent = rel;
+            if tx.send(Msg::Frame(self.generation, pts, rel, out)).is_err() {
                 return Ok(());
             }
         }
+    }
+
+    /// Loop region in seconds (the whole movie when none is set).
+    fn bounds(&self, mode: PlayMode) -> (f64, f64) {
+        let len = match self.duration {
+            Some(d) if d > 0.0 => d,
+            _ if self.loop_len > 0.0 => self.loop_len,
+            _ => f64::INFINITY,
+        };
+        match mode.range {
+            Some((a, b)) => (a.clamp(0.0, len), b.min(len)),
+            None => (0.0, len),
+        }
+    }
+
+    fn next_pts(&mut self, rel: f64, dur: f64) -> f64 {
+        let pts = *self.out_clock.get_or_insert(rel);
+        self.out_clock = Some(pts + dur);
+        pts
+    }
+
+    /// True if a frame at `pts` is already too late to show (skipped, but never too many in a row).
+    fn late(&mut self, sh: &Shared, pts: f64, dur: f64) -> bool {
+        let clock = f64::from_bits(sh.clock.load(Ordering::Relaxed));
+        if !self.live && pts + dur < clock - LATE && self.skips < MAX_SKIP {
+            self.skips += 1;
+            sh.skipped.fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
+        self.skips = 0;
+        false
+    }
+
+    /// Reached the end of the loop region (or of the movie) going either way: loop, turn around,
+    /// or stop until looping is switched back on. Returns false when the player is gone.
+    fn at_end(&mut self, sh: &Shared, tx: &SyncSender<Msg>, mode: PlayMode, lo: f64, hi: f64, still: bool) -> Result<bool, String> {
+        if still || !sh.ctl.lock().is_ok_and(|c| c.looping) {
+            if tx.send(Msg::End(self.out_clock.unwrap_or(0.0))).is_err() {
+                return Ok(false);
+            }
+            let Ok(mut ctl) = sh.ctl.lock() else {
+                return Ok(false);
+            };
+            while !ctl.quit && ctl.seek.is_none() && (still || !ctl.looping) {
+                ctl = match sh.cv.wait(ctl) {
+                    Ok(c) => c,
+                    Err(_) => return Ok(false),
+                };
+            }
+            if ctl.quit {
+                return Ok(false);
+            }
+            if ctl.seek.is_some() {
+                // Handled at the top of the loop.
+                return Ok(true);
+            }
+        }
+        self.passes += 1;
+        match (self.reversing, mode.direction) {
+            (false, PlayDirection::PingPong) => {
+                self.reversing = true;
+                self.rev_end = self.last_sent;
+            }
+            (false, _) => self.jump(lo)?,
+            (true, PlayDirection::PingPong) => {
+                self.reversing = false;
+                self.jump(lo)?;
+                // Don't show the turning frame twice.
+                self.seek_target = Some(self.last_sent);
+            }
+            (true, _) => self.rev_end = hi,
+        }
+        Ok(true)
+    }
+
+    /// Continues forward from `t` (loop jump: the presentation clock keeps running).
+    fn jump(&mut self, t: f64) -> Result<(), String> {
+        if t <= 1e-6 { self.rewind() } else { self.seek_to(t) }
+    }
+
+    fn drop_reverse(&mut self, sh: &Shared) {
+        for (_, _, f) in self.rev_buf.drain(..) {
+            sh.recycle(f);
+        }
+    }
+
+    /// One step of reverse play: send the next buffered frame, or decode the chunk before the
+    /// last one. Returns false when the player is gone.
+    fn reverse_step(&mut self, sh: &Shared, tx: &SyncSender<Msg>, mode: PlayMode, lo: f64, hi: f64) -> Result<bool, String> {
+        if let Some((rel, dur, frame)) = self.rev_buf.pop() {
+            let pts = self.next_pts(rel, dur);
+            if self.late(sh, pts, dur) {
+                sh.recycle(frame);
+                return Ok(true);
+            }
+            self.last_sent = rel;
+            return Ok(tx.send(Msg::Frame(self.generation, pts, rel, frame)).is_ok());
+        }
+        if !hi.is_finite() {
+            // Unknown length: can't start from the end.
+            self.reversing = false;
+            return Ok(true);
+        }
+        self.rev_end = self.rev_end.min(hi);
+        if self.rev_end <= lo + 1e-6 {
+            return self.at_end(sh, tx, mode, lo, hi, false);
+        }
+        // Decode from the keyframe before the chunk; keep (convert) only the chunk's frames.
+        let t0 = (self.rev_end - REVERSE_CHUNK_FRAMES * self.default_dur).max(lo);
+        self.seek_to(t0)?;
+        self.seek_target = None;
+        loop {
+            if !self.next_frame()? {
+                break;
+            }
+            sh.decoded.fetch_add(1, Ordering::Relaxed);
+            let (rel, dur) = self.timing();
+            if rel >= self.rev_end - 1e-6 {
+                break;
+            }
+            if rel + dur <= t0 + 1e-6 {
+                continue;
+            }
+            let src = self.download(sh)?;
+            let out = self.scaler.convert(src, sh)?;
+            self.rev_buf.push((rel, dur, out));
+        }
+        self.rev_end = self.rev_buf.first().map_or(t0, |f| f.0);
+        Ok(true)
     }
 
     /// Decodes the next frame into `self.frame`. Returns false at end of stream.
@@ -721,7 +906,6 @@ impl Decoder {
         self.eof_sent = false;
         self.last_rel = -1.0;
         self.frames_in_loop = 0;
-        self.offset = 0.0;
         self.seek_target = Some(t);
         Ok(())
     }
@@ -1117,5 +1301,64 @@ mod seek_tests {
         let landed = play(&mut jumped, 0.0, 0.0).expect("a frame after seeking");
         let diff: u64 = reference.iter().zip(&landed).map(|(a, b)| a.abs_diff(*b) as u64).sum::<u64>() / reference.len().max(1) as u64;
         assert!(diff <= 1, "picture after seek differs from playing to 1.5 s (mean diff {diff})");
+    }
+
+    /// Media times of the frames shown while playing `secs` on a fake clock.
+    fn positions(p: &mut VideoPlayer, secs: f64) -> Vec<f64> {
+        let mut out = Vec::new();
+        let mut t = 0.0;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while t <= secs && std::time::Instant::now() < deadline {
+            for _ in 0..300 {
+                if let Some(f) = p.poll_frame(t) {
+                    out.push(p.position());
+                    p.recycle(f);
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            t += 1.0 / 30.0;
+        }
+        out
+    }
+
+    fn clip() -> Option<&'static str> {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../media/test/h264.mp4");
+        std::path::Path::new(path).exists().then_some(path)
+    }
+
+    /// Reverse play shows earlier and earlier frames, wrapping from the start to the end.
+    #[test]
+    fn reverse_plays_backwards_and_loops() {
+        let Some(path) = clip() else { return };
+        let mut p = VideoPlayer::open(path).unwrap();
+        p.poll_frame(0.0);
+        p.set_mode(super::PlayDirection::Reverse, None);
+        let pos = positions(&mut p, 4.0);
+        assert!(pos.len() > 60, "too few frames ({})", pos.len());
+        let down = pos.windows(2).filter(|w| w[1] < w[0]).count();
+        let wraps = pos.windows(2).filter(|w| w[1] > w[0] + 1.0).count();
+        assert!(down >= pos.len() * 9 / 10 - 2, "not playing backwards: {pos:?}");
+        assert!(wraps >= 1, "never wrapped to the end: {pos:?}");
+    }
+
+    /// A loop region keeps playback inside it; ping-pong turns around at both ends.
+    #[test]
+    fn loop_region_and_ping_pong() {
+        let Some(path) = clip() else { return };
+        let mut p = VideoPlayer::open(path).unwrap();
+        p.set_mode(super::PlayDirection::Forward, Some((0.5, 1.0)));
+        let pos = positions(&mut p, 2.0);
+        let late = &pos[pos.len() / 4..];
+        assert!(late.iter().all(|t| (0.45..1.0).contains(t)), "left the loop region: {pos:?}");
+        let mut q = VideoPlayer::open(path).unwrap();
+        q.set_mode(super::PlayDirection::PingPong, Some((0.5, 1.0)));
+        let pos = positions(&mut q, 3.0);
+        let late = &pos[pos.len() / 6..];
+        assert!(late.iter().all(|t| (0.45..1.0).contains(t)), "left the loop region: {pos:?}");
+        let turns = late.windows(3).filter(|w| (w[1] - w[0]).signum() != (w[2] - w[1]).signum()).count();
+        assert!(turns >= 2, "never turned around: {pos:?}");
+        let jumps = late.windows(2).filter(|w| (w[1] - w[0]).abs() > 0.2).count();
+        assert_eq!(jumps, 0, "ping-pong jumped instead of turning: {pos:?}");
     }
 }

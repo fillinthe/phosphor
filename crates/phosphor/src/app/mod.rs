@@ -283,6 +283,11 @@ impl State {
             crate::control::Deferred::Clip(layer, slot) => self.trigger(Trigger::Clip { layer, slot }, now),
             crate::control::Deferred::Column(col) => self.trigger(Trigger::Column(col), now),
             crate::control::Deferred::App(a, v) => self.app_control(a, v, now),
+            crate::control::Deferred::Scrub(layer, v) => {
+                if let Some((_, dur)) = self.media.position(layer) {
+                    self.media.seek(layer, v as f64 * dur);
+                }
+            }
         }
     }
 

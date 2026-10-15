@@ -76,6 +76,28 @@ impl FitMode {
     }
 }
 
+/// Which way a movie plays.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlayDirection {
+    #[default]
+    Forward,
+    Reverse,
+    /// Forward to the out point, back to the in point, and again.
+    PingPong,
+}
+
+impl PlayDirection {
+    pub const ALL: [PlayDirection; 3] = [PlayDirection::Forward, PlayDirection::Reverse, PlayDirection::PingPong];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            PlayDirection::Forward => "Forward",
+            PlayDirection::Reverse => "Reverse",
+            PlayDirection::PingPong => "Ping-pong",
+        }
+    }
+}
+
 /// What feeds a layer. Media is referenced, never embedded: the app resolves it into
 /// GPU textures via `Engine::upload_rgba` / `Engine::upload_nv12`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -345,6 +367,13 @@ pub enum ControlTarget {
     TriggerColumn(usize),
     LayerSpeed(u64),
     LayerFxBypass(u64),
+    /// Movie loop in / out point (0..1 of the movie).
+    LayerLoopIn(u64),
+    LayerLoopOut(u64),
+    /// Forward / reverse / ping-pong (0..1 picks one of three).
+    LayerDirection(u64),
+    /// Jump a movie to a point (0..1 of its length).
+    LayerScrub(u64),
     /// A widget on the Control Surface (its main value).
     Surface(u64),
     /// An XY pad's vertical value.
@@ -648,6 +677,12 @@ pub struct LayerState {
     pub playing: bool,
     pub rate: f32,
     pub looping: bool,
+    pub direction: PlayDirection,
+    /// Loop region as fractions of the movie (0..1), so it survives switching clips and maps like any slider.
+    pub loop_in: f32,
+    pub loop_out: f32,
+    /// Beat loop: when > 0 the loop is this many beats long from `loop_in` (overrides `loop_out`).
+    pub loop_beats: f32,
     /// Clip slots, by column.
     pub clips: Vec<Clip>,
     pub transition_secs: f32,
@@ -677,6 +712,10 @@ impl Default for LayerState {
             playing: true,
             rate: 1.0,
             looping: true,
+            direction: PlayDirection::Forward,
+            loop_in: 0.0,
+            loop_out: 1.0,
+            loop_beats: 0.0,
             clips: Vec::new(),
             transition_secs: 0.5,
             transition_kind: TransitionKind::Crossfade,
@@ -687,6 +726,22 @@ impl Default for LayerState {
 }
 
 impl LayerState {
+    /// The loop region in seconds for a movie of `duration` at `bpm`, or None for the whole movie.
+    pub fn loop_range(&self, duration: f64, bpm: f32) -> Option<(f64, f64)> {
+        let lo = (self.loop_in.clamp(0.0, 1.0) as f64) * duration;
+        let hi = if self.loop_beats > 0.0 {
+            lo + self.loop_beats as f64 * 60.0 / bpm.max(1.0) as f64
+        } else {
+            self.loop_out.clamp(0.0, 1.0) as f64 * duration
+        }
+        .min(duration);
+        if lo <= 1e-6 && hi >= duration - 1e-6 {
+            return None;
+        }
+        // At least a frame or two long.
+        Some((lo.min(duration - 0.05).max(0.0), hi.max(lo + 0.05)))
+    }
+
     /// Starts a `secs`-long transition from the current source (0 = cut).
     pub fn start_transition(&mut self, now: f32, secs: f32) {
         if secs > 0.01 && self.source != SourceSpec::None {

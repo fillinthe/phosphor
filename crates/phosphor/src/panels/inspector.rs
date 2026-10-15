@@ -62,7 +62,37 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                     hint(ui, info);
                 }
                 if let Some((pos, dur)) = position {
-                    seek_to = scrub_bar(ui, pos, dur);
+                    let (mut lo, mut hi) = (layer.loop_in, layer.loop_out);
+                    seek_to = scrub_bar(ui, pos, dur, (layer.loop_beats <= 0.0).then_some((&mut lo, &mut hi)));
+                    if (lo, hi) != (layer.loop_in, layer.loop_out) {
+                        layer.loop_in = lo.min(hi - 0.01).max(0.0);
+                        layer.loop_out = hi.max(lo + 0.01).min(1.0);
+                    }
+                    let at = (pos / dur.max(1e-6)) as f32;
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Section").small().color(Color32::GRAY));
+                        let r = ui.button("In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
+                        map_menu(ui, &r, ControlTarget::LayerLoopIn(layer.id));
+                        if r.clicked() {
+                            layer.loop_in = at.min(layer.loop_out - 0.01).max(0.0);
+                        }
+                        let r = ui.button("Out").on_hover_text("Loop ends here");
+                        map_menu(ui, &r, ControlTarget::LayerLoopOut(layer.id));
+                        if r.clicked() {
+                            layer.loop_out = at.max(layer.loop_in + 0.01).min(1.0);
+                            layer.loop_beats = 0.0;
+                        }
+                        let beats = if layer.loop_beats > 0.0 { format!("{} beats", layer.loop_beats) } else { "Beats: off".into() };
+                        ComboBox::from_id_salt(("loop_beats", layer.id)).width(84.0).selected_text(beats).show_ui(ui, |ui| {
+                            ui.selectable_value(&mut layer.loop_beats, 0.0, "Off (use Out)");
+                            for b in [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0] {
+                                ui.selectable_value(&mut layer.loop_beats, b, format!("{b} beats"));
+                            }
+                        }).response.on_hover_text("Loop a number of beats from In, at the current tempo");
+                        if (layer.loop_in, layer.loop_out, layer.loop_beats) != (0.0, 1.0, 0.0) && ui.small_button("Clear").on_hover_text("Play the whole clip").clicked() {
+                            (layer.loop_in, layer.loop_out, layer.loop_beats) = (0.0, 1.0, 0.0);
+                        }
+                    });
                 }
                 ui.horizontal(|ui| {
                     let text = if layer.playing { label(icon::PAUSE, "Pause") } else { label(icon::PLAY, "Play") };
@@ -71,6 +101,11 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                         seek_to = Some(0.0);
                     }
                     ui.checkbox(&mut layer.looping, "Loop");
+                    ui.separator();
+                    for d in PlayDirection::ALL {
+                        let r = ui.selectable_value(&mut layer.direction, d, d.name());
+                        map_menu(ui, &r, ControlTarget::LayerDirection(layer.id));
+                    }
                 });
                 let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
                 map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));

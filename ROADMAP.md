@@ -114,7 +114,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Zero-copy video: VideoToolbox IOSurface → Metal texture → wgpu (skip the CPU copy)
 - [ ] Ship FFmpeg inside the .app (LGPL build, decoders only) instead of relying on Homebrew
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
-- [ ] Live camera / capture card input
+- [x] Live camera / capture card input, network streams (RTSP/SRT/HLS), Syphon In
 - [x] Media bin with thumbnails (background FFmpeg frame grabs), import files, click or drag onto layers
 - [x] Media organising: favourites, your own collections, search, filter (videos/images/favourites/collection),
       sort (name/newest/type), tile size, rename
@@ -135,7 +135,8 @@ Legend: [x] done · [~] in progress · [ ] not started
       (rescan every 10 s, background thread); bin grouped by folder; "Fill clips of the selected layer" from a folder
 - [x] File dialogs never pause the show (sheets; results arrive next frame); images decode in the background
 - [x] Seamless looping, speed 0.1–4×
-- [ ] Scrubbing, reverse, in/out points, beat-length quantised loops
+- [x] Scrubbing (frame-exact seek, Inspector scrub bar)
+- [x] Reverse, ping-pong, in/out points (drag on the scrub bar), beat-length loops; all mappable
 
 ### Phase 2: Performance (Resolume-style play)
 - [x] Clips grid: layers × columns; click a cell, a column header, keys 1–9, or a MIDI/OSC-learned trigger
@@ -151,8 +152,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 
 ### Phase 3: Modular control (VDMX-style)
 - [x] Dockable, rearrangeable panels; layout saved with the project
-- [ ] **Control surfaces**: freeform canvases where you place buttons, sliders, XY pads and
-      color pickers anywhere, and resize them
+- [x] **Control surfaces**: buttons, toggles, faders, sliders, XY pads, labels; each drives many targets with ranges
+- [ ] Control surface: multiple pages, colour pickers
 - [x] Data sources: audio input analysis (level, low/mid/high, 32-band spectrum) + LFOs (sine/tri/ramp/square),
       random (S&H), 8-step sequencer, beat; **tempo sync** (1/4 beat … 8 bars), Add or **Sweep a range** (from/to),
       invert, live meter; a green tick on every modulated slider shows where it really is
@@ -168,7 +169,7 @@ Legend: [x] done · [~] in progress · [ ] not started
       Phosphor control surface; `.tosc` importer to map an existing layout
 - [x] Right-click any control → Learn, or type a mapping (OSC address, MIDI CC/note, key); every control also
       answers a built-in OSC address with no setup (/phosphor/master, /phosphor/layer/<id>/opacity, /phosphor/fx/<id>/<n>…)
-- [ ] Keyboard mapping
+- [x] Keyboard mapping (Learn or type a key)
 - [ ] Presets / snapshots per layer, effect, and whole project
 
 ### Phase 4: Projection mapping (MadMapper-easy)
@@ -177,21 +178,25 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Input region per surface (slice of the master), per-surface opacity, soft edge for projector blending
 - [x] Alignment grid test pattern with orientation marker
 - [x] Choose the output screen: Output ▾ menu / Screens list → window moves there and goes fullscreen (no menu bar)
-- [ ] Multiple outputs (one window per projector), each with its own surfaces
-- [ ] Mesh warp (bezier grid), triangle, circle, bezier masks
-- [ ] Per-output identify / colour correction
+- [x] Multiple outputs (one window per projector), each with its own surfaces
+- [x] Mesh warp (Catmull-Rom grid up to 8×8), polygon masks with invert
+- [ ] Mask feather, circle masks, bezier edges
+- [x] Per-output identify / colour correction, surface blend curve
 - [ ] Per-surface color correction / brightness
-- [ ] Save mapping with the project; quick-recall mapping presets per venue
+- [x] Save mapping with the project
+- [ ] Quick-recall mapping presets per venue
 
 ### Phase 5: Effects & interop
 - [x] ISF import (`crates/phosphor-isf`): GLSL → WGSL via naga; 264 of 406 shaders on this Mac convert
       (233/327 of /Library/Graphics/ISF); converted in the background, compiled lazily (2 per frame)
-- [ ] ISF multi-pass / persistent buffers, >16 params, imported images (the 131 skipped shaders)
+- [x] ISF multi-pass / persistent buffers, up to 44 params (341/406 convert)
+- [ ] ISF imported images, FLOAT buffers, MadMapper includes
 - [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
       Optical Flow and lit (normals) Rutt-Etra rendering. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)
 - [ ] Text / title source
-- [ ] Syphon in/out (macOS), NDI in/out (optional plugin)
+- [x] Syphon in/out, NDI out
+- [ ] NDI in
 - [ ] Recording to ProRes / Hap
 - [ ] Spout (Windows, if we ship there)
 
@@ -202,7 +207,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Audio in the stream: pick any AVFoundation input (mic, interface, BlackHole loopback) → AAC 160k
 - [ ] HEVC option; RTMPS; WHIP (WebRTC)
 - [ ] Multiple simultaneous destinations; connection health graph; auto-reconnect
-- [ ] OBS-friendly: Syphon (macOS) and NDI outputs, plus a virtual camera (CoreMediaIO extension)
+- [x] OBS-friendly: Syphon and NDI outputs
+- [ ] Virtual camera (CoreMediaIO extension; needs an Apple Developer ID to install)
 
 ### Phase 5c: Network players & remote audio (play *through* other machines)
 - [x] **Session** (v1, LAN): built-in server; any browser (laptop, phone, Pi) opens the link and sees the
@@ -213,7 +219,8 @@ Legend: [x] done · [~] in progress · [ ] not started
       without the Chrome insecure-origin flag
 - [ ] **Phosphor Player** for Raspberry Pi / small PCs: a headless build that either plays the
       stream or renders the project itself from a synced clock (tiny bandwidth, perfect sync)
-- [ ] Session page: QR code / short link, viewer list, per-viewer audio level meters
+- [x] Session page: QR code, viewer list (Devices panel)
+- [ ] Per-viewer audio level meters
 - [ ] Local network discovery (Zeroconf) for players; NDI/Syphon remain for pro setups
 - [ ] Multiple players in sync (shared timecode), each with its own output mapping (Phase 4)
 
