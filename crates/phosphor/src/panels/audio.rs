@@ -45,7 +45,10 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     }
     let gain = guarded!(ui, audio.gain, Slider::new(&mut audio.gain, 0.1..=10.0).text("Gain").logarithmic(true));
     map_menu(ui, &gain, ControlTarget::App(phosphor_engine::AppControl::AudioGain));
-    guarded!(ui, audio.release, Slider::new(&mut audio.release, 0.02..=0.6).text("Release (s)"));
+    guarded!(ui, audio.envelope.attack, Slider::new(&mut audio.envelope.attack, 0.0..=0.5).text("Attack (s)"))
+        .on_hover_text("How fast the levels rise: 0 = instantly (punchy), higher = smoother swells");
+    guarded!(ui, audio.envelope.release, Slider::new(&mut audio.envelope.release, 0.02..=2.0).text("Release (s)"))
+        .on_hover_text("How fast the levels fall after a hit: short = flickery, long = slow fades");
     ui.separator();
     for (name, v) in [
         ("Level", mod_inputs.audio_level),

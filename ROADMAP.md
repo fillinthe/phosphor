@@ -160,8 +160,8 @@ Legend: [x] done · [~] in progress · [ ] not started
       random (S&H), 8-step sequencer, beat; **tempo sync** (1/4 beat … 8 bars), Add or **Sweep a range** (from/to),
       invert, live meter; a green tick on every modulated slider shows where it really is
 - [x] `~` button on every slider and layer opacity: modulate by any data source with amount/rate
-- [ ] Step sequencers, beat detection / BPM-synced LFOs, envelope followers with attack
-- [ ] Map any data source to any parameter (right-click → "Control with…")
+- [x] Step sequencers, beat detection / BPM-synced LFOs, envelope follower (attack + release on the audio levels)
+- [x] Map any data source to any parameter (the ~ button on every slider)
 - [x] MIDI in (all ports, CC + notes) and OSC in (UDP, any numeric arg) with **Learn**: pick a target
       (master fade, layer opacity/on-off, any generator/effect parameter, mix, on/off), press Learn, move a control
 - [x] OSC port advertised over Zeroconf (`_osc._udp`) so TouchOSC lists "Phosphor"
