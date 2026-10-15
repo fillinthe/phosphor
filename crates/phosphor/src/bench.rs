@@ -21,6 +21,8 @@ pub struct BenchConfig {
     pub export: Option<String>,
     /// Bring this panel to the front (its title, e.g. "Control Surface"), for screenshots.
     pub tab: Option<String>,
+    /// Select this layer/group id (after the project loads), for UI shots of the Inspector.
+    pub select: Option<u64>,
     /// Save a picture of the whole Phosphor window here at the end (checks UI changes).
     pub ui_shot: Option<String>,
     /// A live input layer: "format|url" (e.g. "lavfi|testsrc=size=640x360:rate=30", "avfoundation|FaceTime HD Camera").
@@ -69,6 +71,7 @@ impl BenchConfig {
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
+                ("--select", Some(v)) => cfg.select = v.parse().ok(),
                 ("--ui-shot", Some(v)) => cfg.ui_shot = Some(v),
                 ("--live", Some(v)) => cfg.live = Some(v),
                 ("--send-output", Some(v)) => cfg.send_output = Some(v),

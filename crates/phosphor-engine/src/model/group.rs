@@ -40,6 +40,33 @@ impl Composition {
         self.groups.iter_mut().find(|g| g.id == id)
     }
 
+    /// The effect chain of MASTER (`MASTER_ID`), a layer or a group.
+    pub fn effects(&self, target: u64) -> Option<&Vec<EffectState>> {
+        if target == crate::MASTER_ID {
+            return Some(&self.master_effects);
+        }
+        self.layers.iter().find(|l| l.id == target).map(|l| &l.effects).or_else(|| self.group(target).map(|g| &g.effects))
+    }
+
+    pub fn effects_mut(&mut self, target: u64) -> Option<&mut Vec<EffectState>> {
+        if target == crate::MASTER_ID {
+            return Some(&mut self.master_effects);
+        }
+        match self.layers.iter_mut().find(|l| l.id == target) {
+            Some(l) => Some(&mut l.effects),
+            None => self.groups.iter_mut().find(|g| g.id == target).map(|g| &mut g.effects),
+        }
+    }
+
+    /// Every effect in the project (MASTER, layers, groups).
+    pub fn all_effects(&self) -> impl Iterator<Item = &EffectState> {
+        self.master_effects.iter().chain(self.layers.iter().flat_map(|l| l.effects.iter())).chain(self.groups.iter().flat_map(|g| g.effects.iter()))
+    }
+
+    pub fn all_effects_mut(&mut self) -> impl Iterator<Item = &mut EffectState> {
+        self.master_effects.iter_mut().chain(self.layers.iter_mut().flat_map(|l| l.effects.iter_mut())).chain(self.groups.iter_mut().flat_map(|g| g.effects.iter_mut()))
+    }
+
     /// Stack positions (bottom, top) of a group's members.
     pub fn group_span(&self, id: u64) -> Option<(usize, usize)> {
         let first = self.layers.iter().position(|l| l.parent == Some(id))?;

@@ -9,7 +9,7 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
     }
     let target = st.selected.unwrap_or(MASTER_ID);
     let layer = st.comp.layers.iter().find(|l| l.id == target).cloned();
-    let chain = if target == MASTER_ID { st.comp.master_effects.clone() } else { layer.as_ref().map(|l| l.effects.clone()).unwrap_or_default() };
+    let chain = st.comp.effects(target).cloned().unwrap_or_default();
     let (mut look, mut layer_pick, mut chain_pick) = (None, None, None);
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         let State { presets, preset_name, layer_presets, layer_preset_name, chain_presets, chain_preset_name, comp, .. } = &mut *st;

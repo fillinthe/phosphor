@@ -11,6 +11,10 @@ pub(crate) enum LayerAction {
     Down,
     Duplicate,
     Remove,
+    /// New group from this layer and the one below it.
+    GroupWithBelow,
+    /// Take the layer out of its group.
+    LeaveGroup,
     ClearSource,
     /// Put this source on the layer (through the launch settings).
     Launch(SourceSpec),
@@ -33,6 +37,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let mut drop: Option<(u64, u64)> = None;
     let mut media_drop: Option<(usize, usize)> = None;
     let mut palette_drop: Option<(u64, crate::explorer::PaletteDrag)> = None;
+    let mut group_action: Option<(u64, GroupAction)> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass);
         if pick {
@@ -43,12 +48,45 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.add_space(4.0);
         for idx in (0..count).rev() {
+            // A group's card goes above its top member; folded groups hide their members.
+            let parent = comp.layers[idx].parent;
+            if let Some(gid) = parent {
+                let top = comp.layers.get(idx + 1).is_none_or(|l| l.parent != Some(gid));
+                let members = comp.layers.iter().filter(|l| l.parent == Some(gid)).count();
+                if top && let Some(g) = comp.groups.iter_mut().find(|g| g.id == gid) {
+                    let thumb = layer_textures.get(&gid).map(|(t, _)| *t);
+                    let out = group_card(ui, g, thumb, aspect, *selected == Some(gid), members);
+                    if out.select {
+                        *selected = Some(gid);
+                    }
+                    if let Some(a) = out.action {
+                        group_action = Some((gid, a));
+                    }
+                    if let Some(from) = out.dropped
+                        && let Some(top_member) = comp.layers.get(idx)
+                    {
+                        drop = Some((from, top_member.id));
+                    }
+                    ui.add_space(4.0);
+                }
+                if comp.group(gid).is_some_and(|g| g.collapsed) {
+                    continue;
+                }
+            }
             let layer = &mut comp.layers[idx];
             let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
             let err = media.errors.get(&layer.id).cloned();
             let is_selected = *selected == Some(layer.id);
             let muted = any_solo && !layer.solo;
-            let out = layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref());
+            let out = if parent.is_some() {
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    ui.vertical(|ui| layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref())).inner
+                })
+                .inner
+            } else {
+                layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref())
+            };
             if out.select {
                 *selected = Some(layer.id);
             }
@@ -68,17 +106,29 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     let media_launch = media_drop.and_then(|(idx, m)| Some((comp.layers.get(idx)?.id, comp.media_bin.get(m)?.clone())));
-    if let Some((from, onto)) = drop
-        && from != onto
-        && let Some(a) = comp.layers.iter().position(|l| l.id == from)
-        && let Some(b) = comp.layers.iter().position(|l| l.id == onto)
-    {
-        let moved = comp.layers.remove(a);
-        comp.layers.insert(b, moved);
+    if let Some((from, onto)) = drop {
+        comp.drop_layer(from, onto);
     }
     match action {
-        Some((i, LayerAction::Up)) if i + 1 < count => comp.layers.swap(i, i + 1),
-        Some((i, LayerAction::Down)) if i > 0 => comp.layers.swap(i, i - 1),
+        Some((i, LayerAction::Up)) => {
+            let id = comp.layers[i].id;
+            comp.move_layer(id, true);
+        }
+        Some((i, LayerAction::Down)) => {
+            let id = comp.layers[i].id;
+            comp.move_layer(id, false);
+        }
+        Some((i, LayerAction::GroupWithBelow)) => {
+            let below = i.checked_sub(1).map(|b| comp.layers[b].id);
+            let ids: Vec<u64> = std::iter::once(comp.layers[i].id).chain(below).collect();
+            if let Some(g) = comp.create_group(&ids) {
+                *selected = Some(g);
+            }
+        }
+        Some((i, LayerAction::LeaveGroup)) => {
+            comp.layers[i].parent = None;
+            comp.normalize_groups();
+        }
         Some((i, LayerAction::Duplicate)) => {
             let id = comp.layers[i].id;
             duplicate_layer(st, id);
@@ -120,6 +170,9 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
         _ => {}
     }
+    if let Some((gid, a)) = group_action {
+        apply_group_action(st, gid, a);
+    }
     if let Some((target, d)) = palette_drop {
         crate::explorer::apply_palette(st, d, Some(target));
     }
@@ -140,6 +193,7 @@ pub fn duplicate_layer(st: &mut State, id: u64) {
 pub fn remove_layer(st: &mut State, id: u64) {
     let Some(i) = st.comp.layers.iter().position(|l| l.id == id) else { return };
     st.comp.layers.remove(i);
+    st.comp.normalize_groups();
     if st.selected == Some(id) {
         st.selected = st.comp.layers.get(i.saturating_sub(1)).or(st.comp.layers.last()).map(|l| l.id);
     }
@@ -289,15 +343,8 @@ pub(crate) fn layer_card(
                 ui.horizontal(|ui| {
                     choice_combo(ui, ("blend", layer.id), &mut layer.blend, 104.0, false);
                     choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
-                    let fx = layer.effects.iter().filter(|e| e.enabled).count();
-                    if fx > 0 {
-                        let mut active = !layer.fx_bypass;
-                        let color = if active { ACCENT } else { Color32::GRAY };
-                        let r = ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass this layer's effects · right-click to map");
+                    if let Some(r) = fx_badge(ui, &layer.effects, &mut layer.fx_bypass) {
                         map_menu(ui, &r, ControlTarget::LayerFxBypass(layer.id));
-                        if r.changed() {
-                            layer.fx_bypass = !active;
-                        }
                     }
                 });
             });
@@ -345,6 +392,16 @@ pub(crate) fn layer_card(
         }
         if ui.button("Clear source").clicked() {
             action = Some(LayerAction::ClearSource);
+            ui.close();
+        }
+        ui.separator();
+        if layer.parent.is_some() {
+            if ui.button(label(icon::SELECTION_SLASH, "Take out of the group")).clicked() {
+                action = Some(LayerAction::LeaveGroup);
+                ui.close();
+            }
+        } else if ui.button(label(icon::STACK, "Group with the layer below")).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
+            action = Some(LayerAction::GroupWithBelow);
             ui.close();
         }
         ui.separator();

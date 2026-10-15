@@ -140,10 +140,11 @@ impl PhosphorApp {
                 }
                 *texture_generation = engine.output_generation();
             }
-            for layer in &comp.layers {
-                let Some(t) = engine.layer_thumbnail(layer.id) else { continue };
+            // Layers and groups both have thumbnails.
+            for lid in comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)) {
+                let Some(t) = engine.layer_thumbnail(lid) else { continue };
                 let key = (t.width, t.height);
-                match layer_textures.get_mut(&layer.id) {
+                match layer_textures.get_mut(&lid) {
                     Some((_, k)) if *k == key => {}
                     Some((id, k)) => {
                         renderer.update_egui_texture_from_wgpu_texture(&rs.device, &t.view, linear, *id);
@@ -151,7 +152,7 @@ impl PhosphorApp {
                     }
                     None => {
                         let id = renderer.register_native_texture(&rs.device, &t.view, linear);
-                        layer_textures.insert(layer.id, (id, key));
+                        layer_textures.insert(lid, (id, key));
                     }
                 }
             }
@@ -209,7 +210,7 @@ impl PhosphorApp {
                 }
             }
             layer_textures.retain(|id, (tex, _)| {
-                let live = comp.layers.iter().any(|l| l.id == *id);
+                let live = comp.layers.iter().any(|l| l.id == *id) || comp.group(*id).is_some();
                 if !live {
                     renderer.free_texture(tex);
                 }
