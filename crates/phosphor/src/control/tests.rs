@@ -166,3 +166,29 @@ fn osc_feedback_reaches_the_sender() {
     hub.feedback(&comp, 3.0); // unchanged: nothing more
     assert!(device.recv(&mut buf).is_err(), "unchanged values must not be resent");
 }
+
+/// A virtual MIDI device on this Mac sends 128 BPM clock with a Start; the hub's MIDI clock locks to it.
+#[cfg(target_os = "macos")]
+#[test]
+fn locks_to_midi_clock_from_a_real_midi_port() {
+    use midir::os::unix::VirtualOutput;
+    let Ok(out) = midir::MidiOutput::new("phosphor-test") else { return };
+    let Ok(mut port) = out.create_virtual("Phosphor Test Clock") else { return };
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_581, feedback: false, feedback_port: 18_582 });
+    assert!(hub.midi_ports.iter().any(|p| p.contains("Phosphor Test Clock")), "virtual port not opened: {:?}", hub.midi_ports);
+    let start = std::time::Instant::now();
+    let tick = std::time::Duration::from_secs_f64(60.0 / 128.0 / 24.0);
+    port.send(&[0xFA]).unwrap();
+    for i in 0..60u32 {
+        port.send(&[0xF8]).unwrap();
+        std::thread::sleep((start + tick * (i + 1)).saturating_duration_since(std::time::Instant::now()));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let now = 100.0;
+    hub.poll_clock(now);
+    let bpm = hub.midi_clock.bpm().expect("tempo from the ticks");
+    assert!((bpm - 128.0).abs() < 2.0, "bpm {bpm}");
+    assert!(hub.midi_clock.active(now));
+    let (_, beats) = hub.midi_clock.position().expect("running after Start");
+    assert!((beats - 59.0 / 24.0).abs() < 0.01, "beats {beats}");
+}

@@ -73,9 +73,22 @@ pub struct Activity {
     pub midi_seen: std::collections::HashMap<String, std::time::Instant>,
 }
 
+/// MIDI clock and transport messages.
+#[derive(Clone, Copy, Debug)]
+pub enum ClockEvent {
+    Tick,
+    Start,
+    Continue,
+    Stop,
+}
+
 pub struct ControlHub {
     rx: mpsc::Receiver<Incoming>,
     tx: mpsc::Sender<Incoming>,
+    clock_rx: mpsc::Receiver<(ClockEvent, std::time::Instant)>,
+    clock_tx: mpsc::Sender<(ClockEvent, std::time::Instant)>,
+    /// Incoming MIDI clock (tempo and beat position); the app's clock follows it.
+    pub midi_clock: crate::clock::MidiClock,
     /// Connected (enabled) MIDI inputs.
     pub midi_ports: Vec<String>,
     /// Every MIDI input on the system, enabled or not.
@@ -146,9 +159,13 @@ impl ControlHub {
 
     fn new_unopened() -> Self {
         let (tx, rx) = mpsc::channel();
+        let (clock_tx, clock_rx) = mpsc::channel();
         Self {
             rx,
             tx,
+            clock_rx,
+            clock_tx,
+            midi_clock: Default::default(),
             midi_ports: Vec::new(),
             midi_all: Vec::new(),
             midi_disabled: Default::default(),
@@ -176,7 +193,7 @@ impl ControlHub {
     pub fn reconnect(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let (all, open) = self.backend.open_midi(self.tx.clone(), &self.midi_disabled, self.activity.clone());
+            let (all, open) = self.backend.open_midi(self.tx.clone(), self.clock_tx.clone(), &self.midi_disabled, self.activity.clone());
             self.midi_all = all;
             self.midi_ports = open;
             self.local_ip = local_ip();
@@ -195,6 +212,20 @@ impl ControlHub {
     pub fn poll(&mut self, comp: &mut Composition) {
         while let Ok(msg) = self.rx.try_recv() {
             self.handle(comp, msg);
+        }
+    }
+
+    /// Feeds clock messages into `midi_clock`, timed in app seconds (`now`) from when they arrived.
+    pub fn poll_clock(&mut self, now: f64) {
+        let instant_now = std::time::Instant::now();
+        while let Ok((e, at)) = self.clock_rx.try_recv() {
+            let t = now - instant_now.saturating_duration_since(at).as_secs_f64();
+            match e {
+                ClockEvent::Tick => self.midi_clock.tick(t),
+                ClockEvent::Start => self.midi_clock.start(t),
+                ClockEvent::Continue => self.midi_clock.resume(),
+                ClockEvent::Stop => self.midi_clock.stop(),
+            }
         }
     }
 

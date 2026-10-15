@@ -25,6 +25,7 @@ impl Backend {
     pub fn open_midi(
         &mut self,
         tx: mpsc::Sender<Incoming>,
+        clock_tx: mpsc::Sender<(super::ClockEvent, std::time::Instant)>,
         disabled: &std::collections::BTreeSet<String>,
         activity: Arc<std::sync::Mutex<super::Activity>>,
     ) -> (Vec<String>, Vec<String>) {
@@ -39,8 +40,11 @@ impl Backend {
             if disabled.contains(&name) {
                 continue;
             }
-            let Ok(input) = midir::MidiInput::new("Phosphor") else { continue };
+            let Ok(mut input) = midir::MidiInput::new("Phosphor") else { continue };
+            // Keep clock and Start/Stop (MIDI clock sync); drop SysEx and active sensing.
+            input.ignore(midir::Ignore::SysexAndActiveSense);
             let tx = tx.clone();
+            let clock_tx = clock_tx.clone();
             let activity = activity.clone();
             let seen_name = name.clone();
             let conn = input.connect(
@@ -48,6 +52,17 @@ impl Backend {
                 "phosphor-in",
                 move |_, msg, _| {
                     activity.lock().unwrap().midi_seen.insert(seen_name.clone(), std::time::Instant::now());
+                    let clock = match msg.first() {
+                        Some(0xF8) => Some(super::ClockEvent::Tick),
+                        Some(0xFA) => Some(super::ClockEvent::Start),
+                        Some(0xFB) => Some(super::ClockEvent::Continue),
+                        Some(0xFC) => Some(super::ClockEvent::Stop),
+                        _ => None,
+                    };
+                    if let Some(e) = clock {
+                        let _ = clock_tx.send((e, std::time::Instant::now()));
+                        return;
+                    }
                     if let Some(incoming) = parse_midi(msg) {
                         let _ = tx.send(incoming);
                     }
