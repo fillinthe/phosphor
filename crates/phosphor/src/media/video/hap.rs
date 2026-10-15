@@ -24,7 +24,8 @@ fn texture(ty: u8) -> Result<CompressedFormat, String> {
         0x0B => Ok(CompressedFormat::Bc1),
         0x0E => Ok(CompressedFormat::Bc3),
         0x0F => Ok(CompressedFormat::Bc3YCoCg),
-        other => Err(format!("Hap texture type {other:#x} (Hap R / Hap Q Alpha) isn't GPU-decoded yet")),
+        0x0C => Ok(CompressedFormat::Bc7),
+        other => Err(format!("Hap texture type {other:#x} (Hap Q Alpha) isn't GPU-decoded yet")),
     }
 }
 
@@ -133,8 +134,12 @@ mod tests {
         p.extend(&body);
         assert_eq!(decode(&p, &mut out).unwrap(), CompressedFormat::Bc3);
         assert_eq!(out, raw);
-        // Hap R isn't GPU-decoded (caller falls back to FFmpeg).
-        let mut p = header(4, 0xA1);
+        // Hap R is BC7.
+        let mut p = header(raw.len(), 0xAC);
+        p.extend(&raw);
+        assert_eq!(decode(&p, &mut out).unwrap(), CompressedFormat::Bc7);
+        // Hap Q Alpha (several images) isn't GPU-decoded (caller falls back to FFmpeg).
+        let mut p = header(4, 0xAD);
         p.extend([0, 0, 0, 0]);
         assert!(decode(&p, &mut out).is_err());
     }
