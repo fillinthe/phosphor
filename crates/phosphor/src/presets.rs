@@ -1,5 +1,5 @@
-//! Looks you can recall: built-in presets ship inside the binary, user presets live next to the
-//! app's settings (and later sync with the Phosphor account).
+//! Things you save by name and recall: looks (whole projects, with built-ins shipped in the binary) and venues
+//! (output + mapping setups). One store per kind, each in its own folder next to the app's settings.
 
 #[derive(Clone, Debug)]
 pub struct Preset {
@@ -7,30 +7,43 @@ pub struct Preset {
     pub json: String,
 }
 
-pub const BUILTIN: &[(&str, &str)] = &[("Neon Kaleido", include_str!("../presets/Neon Kaleido.phosphor"))];
+pub const BUILTIN_LOOKS: &[(&str, &str)] = &[("Neon Kaleido", include_str!("../presets/Neon Kaleido.phosphor"))];
 
-#[derive(Default)]
 pub struct PresetStore {
     pub user: Vec<Preset>,
     loaded: bool,
+    /// Sub-folder of the settings folder, file extension, and presets shipped with the app.
+    folder: &'static str,
+    ext: &'static str,
+    builtin: &'static [(&'static str, &'static str)],
 }
 
 impl PresetStore {
-    pub fn builtin() -> impl Iterator<Item = Preset> {
-        BUILTIN.iter().map(|(name, json)| Preset { name: name.to_string(), json: json.to_string() })
+    /// Whole looks (Presets panel).
+    pub fn looks() -> Self {
+        Self { user: Vec::new(), loaded: false, folder: "presets", ext: "phosphor", builtin: BUILTIN_LOOKS }
     }
 
-    /// Reads the user preset folder once; call again after saving or deleting.
+    /// Output + mapping setups per venue (Mapping panel).
+    pub fn venues() -> Self {
+        Self { user: Vec::new(), loaded: false, folder: "venues", ext: "venue", builtin: &[] }
+    }
+
+    pub fn builtins(&self) -> impl Iterator<Item = Preset> + '_ {
+        self.builtin.iter().map(|(name, json)| Preset { name: name.to_string(), json: json.to_string() })
+    }
+
+    /// Reads the folder once; call again after saving or deleting.
     pub fn refresh(&mut self) {
         self.loaded = true;
         self.user.clear();
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(dir) = user_dir()
+        if let Some(dir) = self.dir()
             && let Ok(entries) = std::fs::read_dir(dir)
         {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().is_some_and(|e| e == "phosphor")
+                if path.extension().is_some_and(|e| e == self.ext)
                     && let Some(stem) = path.file_stem()
                     && let Ok(json) = std::fs::read_to_string(&path)
                 {
@@ -50,36 +63,40 @@ impl PresetStore {
     pub fn save(&mut self, name: &str, json: &str) -> Result<(), String> {
         let name = name.trim();
         if name.is_empty() {
-            return Err("Give the preset a name first".into());
+            return Err("Give it a name first".into());
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let dir = user_dir().ok_or("No settings folder available")?;
+            let dir = self.dir().ok_or("No settings folder available")?;
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-            let safe: String = name.chars().map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c }).collect();
-            std::fs::write(dir.join(format!("{safe}.phosphor")), json).map_err(|e| e.to_string())?;
+            std::fs::write(dir.join(format!("{}.{}", safe(name), self.ext)), json).map_err(|e| e.to_string())?;
             self.refresh();
             Ok(())
         }
         #[cfg(target_arch = "wasm32")]
         {
             let _ = json;
-            Err("Saving presets in the browser arrives with account sync".into())
+            Err("Saving these in the browser arrives with account sync".into())
         }
     }
 
     pub fn delete(&mut self, name: &str) {
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(dir) = user_dir() {
-            let _ = std::fs::remove_file(dir.join(format!("{name}.phosphor")));
+        if let Some(dir) = self.dir() {
+            let _ = std::fs::remove_file(dir.join(format!("{}.{}", safe(name), self.ext)));
             self.refresh();
         }
         #[cfg(target_arch = "wasm32")]
         let _ = name;
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn dir(&self) -> Option<std::path::PathBuf> {
+        crate::show::storage_dir().map(|d| d.join(self.folder))
+    }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn user_dir() -> Option<std::path::PathBuf> {
-    crate::show::storage_dir().map(|d| d.join("presets"))
+/// A name that's safe as a file name.
+fn safe(name: &str) -> String {
+    name.chars().map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c }).collect()
 }

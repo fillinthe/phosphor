@@ -179,8 +179,8 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     if let Some(i) = remove {
-        let id = st.comp.outputs.remove(i).id;
-        st.output.lock().unwrap().remove(&id);
+        st.comp.outputs.remove(i);
+        st.close_stale_outputs();
     }
 }
 

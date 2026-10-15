@@ -173,6 +173,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         if ui.small_button(label(icon::PLUS, "Output")).on_hover_text("Add another output (projector / screen)").clicked() {
             st.mapping_output = st.comp.add_output();
         }
+        venue_menu(ui, st);
     });
     let oid = st.mapping_output;
     let tex = st.output_tex(oid);
@@ -354,5 +355,30 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         if let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) {
             o.mapping.surfaces.insert(i + 1, copy);
         }
+    }
+}
+
+/// Venues: save every output's setup (surfaces, mesh, masks, size, colour) under a name and recall it at the next gig.
+fn venue_menu(ui: &mut egui::Ui, st: &mut State) {
+    let action = ui
+        .menu_button(label(icon::MAP_PIN, "Venues"), |ui| {
+            ui.set_min_width(300.0);
+            hint(ui, "Your whole projection setup: every output, its surfaces, warps, masks and colour.");
+            let State { venues, venue_name, comp, .. } = &mut *st;
+            named_saves(ui, venues, venue_name, "venue", || comp.venue_json())
+        })
+        .inner
+        .flatten();
+    match action {
+        Some(SaveAction::Load(json)) => match st.comp.apply_venue(&json) {
+            Ok(()) => {
+                st.close_stale_outputs();
+                st.mapping_output = st.primary_output();
+                st.notice = Some("Venue loaded: outputs and mapping replaced (Undo brings the previous ones back)".into());
+            }
+            Err(e) => st.notice = Some(format!("Couldn't load the venue: {e}")),
+        },
+        Some(SaveAction::Error(e)) => st.notice = Some(e),
+        None => {}
     }
 }

@@ -14,9 +14,11 @@ use crate::theme::{ACCENT, WARN};
 mod binding;
 mod learn;
 mod modulation;
+mod saves;
 mod widgets;
 
 pub(crate) use binding::*;
 pub(crate) use learn::*;
 pub(crate) use modulation::*;
+pub(crate) use saves::*;
 pub(crate) use widgets::*;
