@@ -125,7 +125,7 @@ fn show_frame(engine: &mut Engine, held: &mut Held, player: &video::VideoPlayer,
             Some((l, c))
         });
         if let Some((luma, chroma)) = planes {
-            engine.set_layer_nv12_textures(id, outgoing, luma, chroma);
+            engine.set_layer_nv12_textures(id, outgoing, luma, chroma, pb.full_range());
         }
         zc.recent.push_back(pb);
         while zc.recent.len() > 3 {

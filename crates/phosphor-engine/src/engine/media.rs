@@ -32,7 +32,7 @@ impl Engine {
 
     /// A video frame's luma (R8) and chroma (RG8) planes as textures someone else made (zero-copy hardware
     /// video: the decoder's own memory). The caller keeps the memory alive while frames are in flight.
-    pub fn set_layer_nv12_textures(&mut self, layer: u64, outgoing: bool, luma: wgpu::Texture, chroma: wgpu::Texture) {
+    pub fn set_layer_nv12_textures(&mut self, layer: u64, outgoing: bool, luma: wgpu::Texture, chroma: wgpu::Texture, full_range: bool) {
         let target = |texture: wgpu::Texture| {
             let size = texture.size();
             let view = texture.create_view(&Default::default());
@@ -40,7 +40,7 @@ impl Engine {
         };
         let res = self.layers.entry(layer).or_default();
         let slot = if outgoing { &mut res.media_out } else { &mut res.media };
-        *slot = Some(Media::Nv12 { luma: target(luma), chroma: target(chroma) });
+        *slot = Some(Media::Nv12 { luma: target(luma), chroma: target(chroma), full_range });
     }
 
     /// The GPU can sample block-compressed (BC/DXT) textures: Hap movies skip CPU decoding.
@@ -108,14 +108,17 @@ impl Engine {
         let res = self.layers.entry(layer).or_default();
         let slot = if outgoing { &mut res.media_out } else { &mut res.media };
         let (cw, ch) = (width.div_ceil(2), height.div_ceil(2));
-        let reuse = matches!(slot, Some(Media::Nv12 { luma, .. }) if luma.width == width && luma.height == height);
+        // Only our own 8-bit TV-range textures are reused (zero-copy frames bring their own).
+        let reuse = matches!(slot, Some(Media::Nv12 { luma, full_range: false, .. })
+            if luma.width == width && luma.height == height && luma.texture.format() == wgpu::TextureFormat::R8Unorm && luma.texture.usage().contains(wgpu::TextureUsages::COPY_DST));
         if !reuse {
             *slot = Some(Media::Nv12 {
                 luma: Target::with_format(device, "luma", width, height, wgpu::TextureFormat::R8Unorm),
                 chroma: Target::with_format(device, "chroma", cw, ch, wgpu::TextureFormat::Rg8Unorm),
+                full_range: false,
             });
         }
-        let Some(Media::Nv12 { luma: lt, chroma: ct }) = slot else { return };
+        let Some(Media::Nv12 { luma: lt, chroma: ct, .. }) = slot else { return };
         let write = |t: &Target, data: &[u8], stride: u32| {
             self.gpu.queue.write_texture(
                 t.texture.as_image_copy(),
