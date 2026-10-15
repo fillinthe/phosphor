@@ -3,6 +3,7 @@
 //   u.p[2], u.p[3], u.p[4].x = inverse homography, row-major 3x3, output -> surface (s, t)
 //   u.uv_xform = input region (w, h, x, y) of the master frame; u.p[4].y = feather
 //   u.opacity = surface opacity * master fade; u.mode = 1 draws the alignment grid
+//   u.p[5], u.p[6] = output colour; u.p[7], u.p[8] = surface colour (`ColorGrade::uniforms`)
 
 @vertex
 fn vs_surface(@builtin(vertex_index) vi: u32) -> VOut {
@@ -37,7 +38,8 @@ fn alignment_grid(st: vec2f) -> vec3f {
 /// its input region of the frame (or the alignment grid), feathered edges, premultiplied.
 fn surface_color(st: vec2f) -> vec4f {
     let uv = u.uv_xform.zw + st * u.uv_xform.xy;
-    var rgb = grade(textureSampleLevel(tex0, samp, uv, 0.0).rgb);
+    // The surface's own colour (u.p[7] / u.p[8]), then the output's.
+    var rgb = grade(grade_with(textureSampleLevel(tex0, samp, uv, 0.0).rgb, u.p[7], u.p[8]));
     if (u.mode == 1u) {
         rgb = alignment_grid(st);
     }

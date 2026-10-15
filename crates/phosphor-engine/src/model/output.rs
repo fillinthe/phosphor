@@ -20,7 +20,7 @@ impl Default for NdiSettings {
     }
 }
 
-/// Per-output colour correction, so projectors and screens can be matched to each other.
+/// Colour correction for an output or a mapping surface, so projectors, screens and materials can be matched.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ColorGrade {
@@ -43,7 +43,7 @@ impl Default for ColorGrade {
 }
 
 impl ColorGrade {
-    /// Shader uniform form: two vec4s where all zeros means "no change" (`grade()` in common.wgsl).
+    /// Shader uniform form: two vec4s where all zeros means "no change" (`grade_with()` in common.wgsl).
     pub fn uniforms(&self) -> [[f32; 4]; 2] {
         [
             [self.brightness, self.contrast - 1.0, self.gamma - 1.0, self.saturation - 1.0],

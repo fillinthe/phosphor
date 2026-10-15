@@ -1,6 +1,6 @@
 // Shared by every pass. Must match `Uniforms` in gpu.rs (256 bytes).
 struct U {
-    p: array<vec4f, 12>,  // up to 44 shader parameters; p[11] reserved (mapping passes use the first 20 floats)
+    p: array<vec4f, 12>,  // up to 44 shader parameters; p[11] reserved (mapping passes use p[0..9])
     resolution: vec2f,    // target size in pixels
     time: f32,            // seconds
     opacity: f32,
@@ -50,11 +50,15 @@ const TAU: f32 = 6.283185307;
 
 /// Output colour correction from u.p[5] / u.p[6] (all zero = unchanged; see `ColorGrade`).
 fn grade(c: vec3f) -> vec3f {
-    let g = u.p[5];
+    return grade_with(c, u.p[5], u.p[6]);
+}
+
+/// Colour correction from a `ColorGrade::uniforms()` pair (all zero = unchanged).
+fn grade_with(c: vec3f, g: vec4f, gains: vec4f) -> vec3f {
     var x = (c - 0.5) * (1.0 + g.y) + 0.5 + g.x;
     let luma = dot(x, vec3f(0.2126, 0.7152, 0.0722));
     x = mix(vec3f(luma), x, 1.0 + g.w);
-    x = x * (vec3f(1.0) + u.p[6].xyz);
+    x = x * (vec3f(1.0) + gains.xyz);
     x = pow(max(x, vec3f(0.0)), vec3f(1.0 / max(1.0 + g.z, 0.05)));
     return clamp(x, vec3f(0.0), vec3f(1.0));
 }

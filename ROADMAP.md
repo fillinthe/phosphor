@@ -195,7 +195,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Open outputs on their saved screens automatically when a project opens (per-project setting, off by default)
 - [ ] Bezier mask edges
 - [x] Per-output identify / colour correction, surface blend curve
-- [ ] Per-surface color correction / brightness
+- [x] Per-surface color correction / brightness
 - [x] Save mapping with the project
 - [x] Quick-recall mapping presets per venue (Mapping › Venues)
 

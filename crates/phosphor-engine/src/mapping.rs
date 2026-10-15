@@ -26,6 +26,8 @@ pub struct Surface {
     /// Mesh warp: a grid of points to bend the surface onto curved or uneven objects. `None` = the
     /// plain four-corner pin (exact perspective).
     pub mesh: Option<Mesh>,
+    /// This surface's own colour correction (applied before the output's), e.g. two slices on different materials.
+    pub color: crate::ColorGrade,
 }
 
 /// A warp grid: `(cols + 1) × (rows + 1)` points in output space, row by row from the top-left.
@@ -257,6 +259,7 @@ impl Default for Surface {
             feather: 0.0,
             blend_gamma: 1.0,
             mesh: None,
+            color: crate::ColorGrade::default(),
         }
     }
 }
