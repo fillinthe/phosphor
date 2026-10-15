@@ -46,6 +46,11 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 }
                 ui.separator();
             }
+            if let SourceSpec::Text(style) = &mut layer.source {
+                ui.label(RichText::new("Text").strong());
+                text_editor(ui, style, layer.id);
+                ui.separator();
+            }
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Fade style").strong());
                 ComboBox::from_id_salt(("trans", layer.id)).width(120.0).selected_text(layer.transition_kind.name()).show_ui(ui, |ui| {
@@ -120,4 +125,36 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     if let Some(action) = fx_action {
         apply_fx_action(st, sel, action);
     }
+}
+
+/// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, colour,
+/// alignment, outline and line spacing. Changes redraw the layer in the background.
+pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) {
+    use phosphor_engine::TextAlign;
+    ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
+    ui.horizontal(|ui| {
+        let search_id = egui::Id::new(("font_search", id));
+        let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
+        ComboBox::from_id_salt(("font", id)).width(200.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
+            ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search fonts").desired_width(180.0)).request_focus();
+            let q = search.to_lowercase();
+            for f in crate::text::fonts().iter().filter(|f| q.is_empty() || f.name.to_lowercase().contains(&q)).take(400) {
+                ui.selectable_value(&mut style.font, f.id.clone(), &f.name);
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
+        let mut c = egui::Color32::from_rgba_unmultiplied(style.color[0], style.color[1], style.color[2], style.color[3]);
+        if ui.color_edit_button_srgba(&mut c).changed() {
+            style.color = c.to_srgba_unmultiplied();
+        }
+        for (a, glyph, tip) in [(TextAlign::Left, icon::TEXT_ALIGN_LEFT, "Left"), (TextAlign::Center, icon::TEXT_ALIGN_CENTER, "Centre"), (TextAlign::Right, icon::TEXT_ALIGN_RIGHT, "Right")] {
+            ui.selectable_value(&mut style.align, a, glyph).on_hover_text(tip);
+        }
+    });
+    let size = guarded!(ui, style.size, Slider::new(&mut style.size, 0.02..=0.8).text("Size").show_value(false));
+    value_bubble(ui, &size, format!("{:.0}% of the height", style.size * 100.0));
+    let outline = guarded!(ui, style.outline, Slider::new(&mut style.outline, 0.0..=0.15).text("Outline").show_value(false));
+    value_bubble(ui, &outline, if style.outline > 0.0 { format!("{:.0}%", style.outline * 100.0) } else { "off".into() });
+    guarded!(ui, style.line_spacing, Slider::new(&mut style.line_spacing, 0.6..=2.0).text("Line spacing").fixed_decimals(2));
+    hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
 }

@@ -4,6 +4,11 @@ use super::*;
 
 impl PhosphorApp {
     pub fn new(cc: &eframe::CreationContext<'_>, bench: Option<BenchConfig>) -> Self {
+        // Find installed fonts in the background so the text layer's font list opens instantly.
+        #[cfg(not(target_arch = "wasm32"))]
+        std::thread::spawn(|| {
+            crate::text::fonts();
+        });
         theme::apply(&cc.egui_ctx);
 
         let stored = |key: &str| if bench.is_none() { cc.storage.and_then(|s| s.get_string(key)) } else { None };

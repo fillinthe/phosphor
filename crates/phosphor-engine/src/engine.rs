@@ -717,7 +717,7 @@ impl Engine {
                     uniforms: u, mesh: None, bufs: Vec::new() });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
-            SourceSpec::Image { .. } | SourceSpec::Movie { .. } | SourceSpec::Live { .. } => {
+            SourceSpec::Image { .. } | SourceSpec::Movie { .. } | SourceSpec::Live { .. } | SourceSpec::Text(_) => {
                 let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &res.media_out } else { &res.media };
                 match slot.as_ref()? {

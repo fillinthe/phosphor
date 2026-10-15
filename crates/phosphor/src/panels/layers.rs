@@ -391,6 +391,9 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option
             if ui.selectable_label(layer.source == SourceSpec::None, "No source").clicked() {
                 layer.source = SourceSpec::None;
             }
+            if ui.selectable_label(matches!(layer.source, SourceSpec::Text(_)), label(icon::TEXT_T, "Text")).on_hover_text("Words on the layer: type them in the Inspector").clicked() && !matches!(layer.source, SourceSpec::Text(_)) {
+                layer.source = SourceSpec::Text(crate::text::default_style());
+            }
             ui.separator();
             for g in shaders::GENERATORS {
                 let active = matches!(&layer.source, SourceSpec::Generator(id) if id == g.id);
