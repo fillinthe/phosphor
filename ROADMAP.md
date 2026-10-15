@@ -253,10 +253,12 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Render on its own thread / own swapchain per output, decoupled from UI repaint
 - [ ] GPU timestamp queries for real GPU frame time
 - [x] Cache bind groups (`BindCache`): 40 previews ~95% → ~88% app CPU; render time unchanged (~2.1 ms)
+- [ ] (Later, after desktop todos) Import VDMX projects too (format still to check)
 - [ ] Import Resolume Arena compositions (.avc is XML): layers, clips (file paths) into clip columns, decks → pages,
   opacity/blend/BPM; effects matched by name where we have one, others listed as "not imported".
   Advanced Output XML → output surfaces. Owner has real files in ~/Documents/Resolume Arena to test with.
-- [ ] Find what the remaining ~2 ms for 40 previews is (likely 40 separate render passes; try batching)
+- [x] 40-preview cost found: ~13 µs of wgpu bookkeeping per drawing step at `encoder.finish()` (not our code).
+  Live previews now refresh in staggered groups (still 30/s each), so the cost is spread instead of a 2 ms spike.
       CPU/frame (30% → 105% of a core), nearly all pass/bind-group setup; explorer defaults to Hover previews
 - [ ] Benchmark suite vs VDMX (CPU, memory, frame time, same clips)
 - [ ] Crash reporting (opt-in), auto-update
