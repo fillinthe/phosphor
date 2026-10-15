@@ -212,8 +212,16 @@ impl State {
         self.recent.truncate(12);
     }
 
-    /// Writes the project to its file, or asks where when it has none yet.
+    /// Writes the project to its file, or asks where when it has none yet (browser: downloads it).
     pub fn save_project(&mut self) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let name = format!("{}.phosphor", self.cloud_project.as_ref().map_or("My show", |(_, n)| n.as_str()));
+            self.notice = Some(match crate::web_files::download(&name, &self.comp.to_json()) {
+                Ok(()) => format!("Downloaded {name} (File › Open loads it again)"),
+                Err(e) => format!("Download failed: {e}"),
+            });
+        }
         #[cfg(not(target_arch = "wasm32"))]
         match &self.project_path {
             Some(p) => match std::fs::write(p, self.comp.to_json()) {
@@ -225,6 +233,8 @@ impl State {
     }
 
     pub fn save_project_as(&mut self) {
+        #[cfg(target_arch = "wasm32")]
+        self.save_project();
         #[cfg(not(target_arch = "wasm32"))]
         {
             let name = self
@@ -513,6 +523,17 @@ impl PhosphorApp {
     /// Projects opened from / saved to the phosphorfx.com account (see `account.rs`).
     pub(crate) fn account_events(&mut self, ctx: &egui::Context) {
         let st = &mut self.state;
+        #[cfg(target_arch = "wasm32")]
+        if let Some((name, json)) = crate::web_files::take_opened() {
+            match Composition::from_json(&json) {
+                Ok(comp) => {
+                    st.load_composition(comp);
+                    st.cloud_project = None;
+                    st.notice = Some(format!("Opened {name}"));
+                }
+                Err(e) => st.notice = Some(format!("Couldn't open {name}: {e}")),
+            }
+        }
         for e in st.account.tick(ctx) {
             match e {
                 crate::account::Event::Opened(id, name, json) => match Composition::from_json(&json) {

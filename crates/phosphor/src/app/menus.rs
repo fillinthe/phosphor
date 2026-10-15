@@ -29,6 +29,8 @@ impl PhosphorApp {
             A::Open => {
                 #[cfg(not(target_arch = "wasm32"))]
                 st.dialogs.pick_file(crate::dialogs::Purpose::OpenProject, Some(("Phosphor project", &["phosphor"])));
+                #[cfg(target_arch = "wasm32")]
+                crate::web_files::pick_text(".phosphor,.json");
             }
             A::Save => st.save_project(),
             A::SaveAs => st.save_project_as(),
