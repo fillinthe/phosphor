@@ -10,11 +10,20 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
     ui.label(RichText::new("Launch").small().color(Color32::GRAY));
     let cut = ui.selectable_value(&mut comp.launch.fade, false, "Cut").on_hover_text("Switch instantly");
     map_menu(ui, &cut, ControlTarget::App(phosphor_engine::AppControl::LaunchFade));
-    let fade = ui.selectable_value(&mut comp.launch.fade, true, "Fade").on_hover_text("Crossfade (or the layer's transition style)");
+    let fade = ui.selectable_value(&mut comp.launch.fade, true, "Fade").on_hover_text("Fade between sources in the chosen style");
     map_menu(ui, &fade, ControlTarget::App(phosphor_engine::AppControl::LaunchFade));
     if comp.launch.fade {
         let secs = guarded!(ui, comp.launch.fade_secs, egui::DragValue::new(&mut comp.launch.fade_secs).range(0.05..=10.0).speed(0.02).fixed_decimals(2).suffix(" s"));
         map_menu(ui, &secs, ControlTarget::App(phosphor_engine::AppControl::FadeTime));
+        let mut style = comp.launch.style;
+        let r = choice_combo(ui, "launch_style", &mut style, 96.0, false).on_hover_text("Fade style for every layer (Crossfade, Wipe, Add, Screen, Subtract…). Each layer can still pick its own in the Inspector.");
+        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::LaunchStyle));
+        if style != comp.launch.style {
+            comp.set_launch_style(style);
+        }
+        if comp.layers.iter().any(|l| l.transition_kind != comp.launch.style) {
+            hint(ui, "mixed").on_hover_text("Some layers use their own fade style (Inspector)");
+        }
     }
     ui.separator();
     choice_buttons(ui, &mut comp.launch.timing, |ui, r| map_menu(ui, r, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming)));

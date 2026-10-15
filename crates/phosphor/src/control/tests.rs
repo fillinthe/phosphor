@@ -118,7 +118,7 @@ fn get_target_reads_back_what_set_target_wrote() {
             set_target(&mut comp, &t, v, &mut out);
             let back = get_target(&comp, &t).unwrap();
             let toggle = is_toggle(&comp, &t);
-            let choice = matches!(t, ControlTarget::App(AppControl::LaunchTiming | AppControl::SurfacePage) | ControlTarget::LayerDirection(_));
+            let choice = matches!(t, ControlTarget::App(AppControl::LaunchTiming | AppControl::LaunchStyle | AppControl::SurfacePage) | ControlTarget::LayerDirection(_));
             let want = if toggle { if v > 0.5 { 1.0 } else { 0.0 } } else { v };
             if choice {
                 let mut again = Vec::new();

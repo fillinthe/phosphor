@@ -184,7 +184,7 @@ impl PhosphorApp {
                     ui.horizontal(|ui| panels::launch_controls(ui, &mut self.state.comp));
                 })
                 .response
-                .on_hover_text("How clips and media land: Cut/Fade, Now/On beat/On bar");
+                .on_hover_text("How clips and media land: Cut/Fade, fade style, Now/On beat/On bar");
                 ui.menu_button(icon::CARET_DOWN, |ui| {
                     ui.label(egui::RichText::new("Send output to").strong());
                     crate::ui::screen_menu(ui, &mut self.state);
@@ -342,7 +342,11 @@ impl PhosphorApp {
 
 /// Short label for the launch settings, e.g. "Fade 0.5 s · On beat".
 pub(crate) fn launch_summary(comp: &Composition) -> String {
-    let how = if comp.launch.fade { format!("Fade {:.1}s", comp.launch.fade_secs) } else { "Cut".to_string() };
+    let how = match (comp.launch.fade, comp.launch.style) {
+        (false, _) => "Cut".to_string(),
+        (true, phosphor_engine::TransitionKind::Crossfade) => format!("Fade {:.1}s", comp.launch.fade_secs),
+        (true, style) => format!("{} {:.1}s", style.name(), comp.launch.fade_secs),
+    };
     format!("{how} · {}", comp.launch.timing.name())
 }
 

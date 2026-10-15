@@ -61,6 +61,7 @@ pub enum AppControl {
     LaunchFade,
     FadeTime,
     LaunchTiming,
+    LaunchStyle,
     MasterFxBypass,
     AudioGain,
     KickThreshold,
@@ -72,7 +73,7 @@ pub enum AppControl {
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 14] = [
+    pub const ALL: [AppControl; 15] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -80,6 +81,7 @@ impl AppControl {
         AppControl::LaunchFade,
         AppControl::FadeTime,
         AppControl::LaunchTiming,
+        AppControl::LaunchStyle,
         AppControl::MasterFxBypass,
         AppControl::AudioGain,
         AppControl::KickThreshold,
@@ -98,6 +100,7 @@ impl AppControl {
             AppControl::LaunchFade => "Launch: fade on/off",
             AppControl::FadeTime => "Launch: fade time",
             AppControl::LaunchTiming => "Launch: now / beat / bar",
+            AppControl::LaunchStyle => "Launch: fade style (all layers)",
             AppControl::MasterFxBypass => "Master FX bypass",
             AppControl::AudioGain => "Audio gain",
             AppControl::KickThreshold => "Kick threshold",
@@ -118,6 +121,7 @@ impl AppControl {
             AppControl::LaunchFade => "launch/fade",
             AppControl::FadeTime => "launch/time",
             AppControl::LaunchTiming => "launch/timing",
+            AppControl::LaunchStyle => "launch/style",
             AppControl::MasterFxBypass => "fxbypass",
             AppControl::AudioGain => "audio/gain",
             AppControl::KickThreshold => "audio/kick",

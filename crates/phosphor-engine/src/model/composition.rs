@@ -139,8 +139,17 @@ impl Composition {
     pub fn add_layer(&mut self) -> &mut LayerState {
         let id = self.new_id();
         let name = format!("Layer {}", self.layers.len() + 1);
-        self.layers.push(LayerState { id, name, ..Default::default() });
+        let transition_kind = self.launch.style;
+        self.layers.push(LayerState { id, name, transition_kind, ..Default::default() });
         self.layers.last_mut().unwrap()
+    }
+
+    /// One fade style for every layer (and new ones).
+    pub fn set_launch_style(&mut self, style: TransitionKind) {
+        self.launch.style = style;
+        for l in &mut self.layers {
+            l.transition_kind = style;
+        }
     }
 
     pub fn layer_mut(&mut self, id: u64) -> Option<&mut LayerState> {

@@ -241,11 +241,13 @@ pub struct LaunchSettings {
     pub fade: bool,
     pub fade_secs: f32,
     pub timing: LaunchTiming,
+    /// Fade style new layers start with; set from the launch bar it goes to every layer (`Composition::set_launch_style`).
+    pub style: TransitionKind,
 }
 
 impl Default for LaunchSettings {
     fn default() -> Self {
-        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now }
+        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade }
     }
 }
 
