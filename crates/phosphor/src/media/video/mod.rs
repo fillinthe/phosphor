@@ -51,6 +51,9 @@ pub enum VideoFrame {
         height: u32,
         data: Vec<u8>,
     },
+    /// A hardware-decoded frame still in the decoder's GPU-shareable memory (macOS zero-copy).
+    #[cfg(target_os = "macos")]
+    Surface(surface::PixelBuffer),
     /// GPU blocks straight from a Hap movie (DXT1/DXT5 rows of 4×4 blocks); uploaded without decoding.
     Compressed {
         width: u32,
@@ -62,6 +65,17 @@ pub enum VideoFrame {
 
 /// The GPU can take Hap's blocks directly (set once the GPU is known; off = FFmpeg decodes Hap on the CPU).
 static GPU_HAP: AtomicBool = AtomicBool::new(false);
+
+/// Hardware-decoded frames are shown straight from the decoder's memory (macOS, Metal).
+static ZERO_COPY: AtomicBool = AtomicBool::new(false);
+
+pub fn set_zero_copy(on: bool) {
+    ZERO_COPY.store(on, Ordering::Relaxed);
+}
+
+fn zero_copy() -> bool {
+    ZERO_COPY.load(Ordering::Relaxed)
+}
 
 pub fn set_gpu_hap(on: bool) {
     GPU_HAP.store(on, Ordering::Relaxed);
@@ -77,6 +91,8 @@ impl VideoFrame {
             Self::Nv12 { width, height, .. } | Self::Rgba { width, height, .. } | Self::Compressed { width, height, .. } => {
                 (*width, *height)
             }
+            #[cfg(target_os = "macos")]
+            Self::Surface(pb) => pb.size(),
         }
     }
 
@@ -159,7 +175,7 @@ impl Shared {
         let mut pool = self.pool.lock().ok()?;
         let i = pool
             .iter()
-            .position(|f| f.is_rgba() == rgba && !matches!(f, VideoFrame::Compressed { .. }) && f.size() == (w, h))?;
+            .position(|f| matches!(f, VideoFrame::Rgba { .. } | VideoFrame::Nv12 { .. }) && f.is_rgba() == rgba && f.size() == (w, h))?;
         Some(pool.swap_remove(i))
     }
 }
@@ -461,6 +477,8 @@ fn err(e: ff::Error) -> String {
 mod convert;
 mod decoder;
 mod hap;
+#[cfg(target_os = "macos")]
+pub mod surface;
 #[cfg(test)]
 mod tests;
 
