@@ -1,6 +1,6 @@
 //! Phone / tablet remote: the project state the remote page shows, and the commands it sends back.
 
-use phosphor_engine::{MASTER_ID, SourceSpec, shaders};
+use phosphor_engine::{ControlTarget, MASTER_ID, SourceSpec, shaders};
 use serde_json::{Value, json};
 
 use crate::app::{State, Trigger};
@@ -83,18 +83,35 @@ pub fn apply(st: &mut State, cmd: &Value, now: f64) {
     let id = |k: &str| cmd.get(k).and_then(Value::as_u64).unwrap_or(0);
     let flag = |k: &str| cmd.get(k).and_then(Value::as_bool).unwrap_or(false);
     let v = f("v") as f32;
+    let on = |b: bool| if b { 1.0 } else { 0.0 };
+    // Controls go through the same setter as the Mac's UI and controllers (`State::set_control`).
+    let target = match cmd.get("t").and_then(Value::as_str).unwrap_or("") {
+        "master" => Some((ControlTarget::MasterFade, v)),
+        "opacity" => Some((ControlTarget::LayerOpacity(id("layer")), v)),
+        "enabled" => Some((ControlTarget::LayerEnabled(id("layer")), on(flag("v")))),
+        "mix" => Some((ControlTarget::EffectMix(id("effect")), v)),
+        "fxon" => Some((ControlTarget::EffectEnabled(id("effect")), on(flag("v")))),
+        // Parameters arrive in their own units (the page shows min..max).
+        "gen" => {
+            let (layer, index) = (id("layer"), f("i") as usize);
+            let param = st.comp.layers.iter().find(|l| l.id == layer).and_then(|l| match &l.source {
+                SourceSpec::Generator(g) => shaders::generator(g).and_then(|d| d.params.get(index)),
+                _ => None,
+            });
+            param.map(|p| (ControlTarget::GeneratorParam { layer, index }, crate::control::to_unit(v, p.min, p.max, false)))
+        }
+        "fx" => {
+            let (effect, index) = (id("effect"), f("i") as usize);
+            let param = crate::control::find_effect(&st.comp, effect).and_then(|fx| shaders::effect(&fx.effect)).and_then(|d| d.params.get(index));
+            param.map(|p| (ControlTarget::EffectParam { effect, index }, crate::control::to_unit(v, p.min, p.max, false)))
+        }
+        _ => None,
+    };
+    if let Some((t, v)) = target {
+        st.set_control(&t, v, now);
+        return;
+    }
     match cmd.get("t").and_then(Value::as_str).unwrap_or("") {
-        "master" => st.comp.master_fade = v.clamp(0.0, 1.0),
-        "opacity" => {
-            if let Some(l) = st.comp.layer_mut(id("layer")) {
-                l.opacity = v.clamp(0.0, 1.0);
-            }
-        }
-        "enabled" => {
-            if let Some(l) = st.comp.layer_mut(id("layer")) {
-                l.enabled = flag("v");
-            }
-        }
         "solo" => {
             if let Some(l) = st.comp.layer_mut(id("layer")) {
                 l.solo = flag("v");
@@ -108,31 +125,6 @@ pub fn apply(st: &mut State, cmd: &Value, now: f64) {
         "set" => {
             if let Some(t) = cmd.get("target").and_then(|t| serde_json::from_value::<phosphor_engine::ControlTarget>(t.clone()).ok()) {
                 st.set_control(&t, v, now);
-            }
-        }
-        "gen" => {
-            let i = f("i") as usize;
-            if let Some(l) = st.comp.layer_mut(id("layer")) {
-                if l.generator_values.len() <= i {
-                    l.generator_values.resize(i + 1, 0.0);
-                }
-                l.generator_values[i] = v;
-            }
-        }
-        "fx" | "mix" | "fxon" => {
-            let eid = id("effect");
-            if let Some(fx) = crate::control::find_effect_mut(&mut st.comp, eid) {
-                match cmd.get("t").and_then(Value::as_str) {
-                    Some("fx") => {
-                        let i = f("i") as usize;
-                        if fx.values.len() <= i {
-                            fx.values.resize(i + 1, 0.0);
-                        }
-                        fx.values[i] = v;
-                    }
-                    Some("mix") => fx.mix = v.clamp(0.0, 1.0),
-                    _ => fx.enabled = flag("v"),
-                }
             }
         }
         _ => {}
