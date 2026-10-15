@@ -76,6 +76,37 @@ impl FitMode {
     }
 }
 
+/// Crossfader side of a layer: A is full with the fader left, B with it right; both are full at the centre.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CrossGroup {
+    #[default]
+    None,
+    A,
+    B,
+}
+
+impl CrossGroup {
+    pub const ALL: [CrossGroup; 3] = [CrossGroup::None, CrossGroup::A, CrossGroup::B];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            CrossGroup::None => "–",
+            CrossGroup::A => "A",
+            CrossGroup::B => "B",
+        }
+    }
+
+    /// Opacity multiplier at crossfader position `x` (0 = A, 1 = B).
+    pub fn gain(self, x: f32) -> f32 {
+        let x = x.clamp(0.0, 1.0);
+        match self {
+            CrossGroup::None => 1.0,
+            CrossGroup::A => (2.0 * (1.0 - x)).min(1.0),
+            CrossGroup::B => (2.0 * x).min(1.0),
+        }
+    }
+}
+
 /// Which way a movie plays.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayDirection {
@@ -413,10 +444,11 @@ pub enum AppControl {
     KickThreshold,
     Syphon,
     Ndi,
+    Crossfader,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 12] = [
+    pub const ALL: [AppControl; 13] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -429,6 +461,7 @@ impl AppControl {
         AppControl::KickThreshold,
         AppControl::Syphon,
         AppControl::Ndi,
+        AppControl::Crossfader,
     ];
 
     pub fn name(self) -> &'static str {
@@ -445,6 +478,7 @@ impl AppControl {
             AppControl::KickThreshold => "Kick threshold",
             AppControl::Syphon => "Syphon on/off",
             AppControl::Ndi => "NDI on/off",
+            AppControl::Crossfader => "Crossfader (A ↔ B)",
         }
     }
 
@@ -463,6 +497,7 @@ impl AppControl {
             AppControl::KickThreshold => "audio/kick",
             AppControl::Syphon => "syphon",
             AppControl::Ndi => "ndi",
+            AppControl::Crossfader => "crossfader",
         }
     }
 
@@ -678,6 +713,8 @@ pub struct LayerState {
     pub rate: f32,
     pub looping: bool,
     pub direction: PlayDirection,
+    /// Crossfader side (Mixer).
+    pub group: CrossGroup,
     /// Loop region as fractions of the movie (0..1), so it survives switching clips and maps like any slider.
     pub loop_in: f32,
     pub loop_out: f32,
@@ -713,6 +750,7 @@ impl Default for LayerState {
             rate: 1.0,
             looping: true,
             direction: PlayDirection::Forward,
+            group: CrossGroup::None,
             loop_in: 0.0,
             loop_out: 1.0,
             loop_beats: 0.0,
@@ -908,12 +946,14 @@ pub struct Composition {
     pub surface: ControlSurface,
     /// Names of your media collections.
     pub media_collections: Vec<String>,
+    /// Mixer crossfader: 0 = only A layers, 0.5 = both, 1 = only B (layers without a side ignore it).
+    pub crossfader: f32,
     pub bpm: f32,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new(), crossfader: 0.5 }
     }
 }
 
@@ -1104,5 +1144,18 @@ impl Composition {
 
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
+    }
+}
+
+#[cfg(test)]
+mod crossfader_tests {
+    use super::CrossGroup;
+
+    #[test]
+    fn both_sides_full_at_the_centre_and_alone_at_the_ends() {
+        assert_eq!((CrossGroup::A.gain(0.0), CrossGroup::B.gain(0.0)), (1.0, 0.0));
+        assert_eq!((CrossGroup::A.gain(0.5), CrossGroup::B.gain(0.5)), (1.0, 1.0));
+        assert_eq!((CrossGroup::A.gain(1.0), CrossGroup::B.gain(1.0)), (0.0, 1.0));
+        assert_eq!(CrossGroup::None.gain(1.0), 1.0);
     }
 }
