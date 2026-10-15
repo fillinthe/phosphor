@@ -584,7 +584,7 @@ impl Engine {
         if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled) {
             return;
         }
-        let hash = hash_points(mapping.masks.iter().filter(|m| m.enabled).flat_map(|m| m.points.iter()), &mapping.masks.iter().filter(|m| m.enabled).map(|m| m.points.len() as u32 * 2 + m.invert as u32).collect::<Vec<_>>());
+        let hash = hash_points(mapping.masks.iter().filter(|m| m.enabled).flat_map(|m| m.points.iter()), &mapping.masks.iter().filter(|m| m.enabled).flat_map(|m| [m.points.len() as u32 * 2 + m.invert as u32, m.feather.to_bits()]).collect::<Vec<_>>());
         let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || mapping.mask_triangles()) else { return };
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [size.0 as f32, size.1 as f32];

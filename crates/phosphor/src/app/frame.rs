@@ -119,6 +119,7 @@ impl PhosphorApp {
         self.learning_banner(&ctx);
         self.export_window(&ctx);
         self.save_layout_window(&ctx);
+        self.account_windows(&ctx);
         self.recovered_banner(&ctx);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {

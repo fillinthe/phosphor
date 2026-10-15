@@ -193,7 +193,7 @@ pub(crate) fn default_layout() -> DockState<Tab> {
     surface.split_below(
         bottom,
         0.42,
-        vec![Tab::Mixer, Tab::Surface, Tab::Library, Tab::Audio, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output, Tab::Account],
+        vec![Tab::Mixer, Tab::Surface, Tab::Library, Tab::Audio, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output],
     );
     dock
 }
@@ -202,7 +202,8 @@ pub(crate) fn default_layout() -> DockState<Tab> {
 /// on purpose stay closed.
 pub(crate) fn ensure_new_tabs(dock: &mut DockState<Tab>, known: &[Tab]) {
     for tab in Tab::ALL {
-        if !known.contains(&tab) && dock.find_tab(&tab).is_none() {
+        // Account opens as a window from the top bar, not as a panel (View › Panels can still dock it).
+        if tab != Tab::Account && !known.contains(&tab) && dock.find_tab(&tab).is_none() {
             dock.push_to_focused_leaf(tab);
         }
     }

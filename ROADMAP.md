@@ -181,7 +181,8 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Choose the output screen: Output ▾ menu / Screens list → window moves there and goes fullscreen (no menu bar)
 - [x] Multiple outputs (one window per projector), each with its own surfaces
 - [x] Mesh warp (Catmull-Rom grid up to 8×8), polygon masks with invert
-- [ ] Mask feather, circle masks, bezier edges
+- [x] Mask feather (soft edges)
+- [ ] Circle masks, bezier edges
 - [x] Per-output identify / colour correction, surface blend curve
 - [ ] Per-surface color correction / brightness
 - [x] Save mapping with the project

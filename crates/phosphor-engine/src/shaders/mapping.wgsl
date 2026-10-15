@@ -84,5 +84,6 @@ fn fs_mesh(in: VOut) -> @location(0) vec4f {
 
 @fragment
 fn fs_mask(in: VOut) -> @location(0) vec4f {
-    return vec4f(0.0, 0.0, 0.0, 1.0);
+    // Premultiplied black at the vertex's darkness (1 inside, fading across a feathered edge).
+    return vec4f(0.0, 0.0, 0.0, clamp(in.uv.x, 0.0, 1.0));
 }
