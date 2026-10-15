@@ -94,9 +94,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
     }
     match target {
         ControlTarget::TriggerClip { layer, slot } => {
-            if v > 0.5 {
-                out.push(Deferred::Clip(*layer, *slot));
-            }
+            out.push(if v > 0.5 { Deferred::Clip(*layer, *slot) } else { Deferred::ClipRelease(*layer, *slot) });
         }
         ControlTarget::TriggerColumn(col) => {
             if v > 0.5 {

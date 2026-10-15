@@ -167,6 +167,7 @@ impl PhosphorApp {
                 ndi: Default::default(),
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
+                autopilot: HashMap::new(),
                 clip_page: 0,
                 mod_inputs: ModInputs::default(),
             },

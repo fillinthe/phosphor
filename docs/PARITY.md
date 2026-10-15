@@ -13,8 +13,8 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | **Movie sound** (clip audio, layer + master volume, follows opacity, crossfades in transitions) | Resolume, VDMX | ✅ |
 | Speed, reverse, ping-pong, in/out points, beat loops, scrubbing | all | ✅ |
 | Hap / Hap Q / Hap R on the GPU, hardware H.264/HEVC/ProRes | all | ✅ (Hap Q Alpha on CPU) |
-| **Autopilot / follow actions** (next / random clip after the clip ends or N beats) | Resolume | ⬜ next |
-| **Clip trigger modes** (normal, toggle, flash/piano = only while held) | Resolume | ⬜ next |
+| Autopilot / follow actions (next / previous / random clip after the clip ends or N beats) | Resolume | ✅ |
+| Clip trigger modes (normal, toggle, flash, piano) | Resolume | ✅ |
 | Per-clip settings (speed, effects, in/out stored on the clip) | Resolume | ⬜ |
 | Beat-snapped clip speed (clip length = N beats, "BPM sync") | Resolume | ⬜ |
 | Ableton Link | Resolume, VDMX | ⬜ (licence check: Link is GPL or a commercial licence from Ableton) |

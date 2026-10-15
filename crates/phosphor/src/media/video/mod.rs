@@ -134,6 +134,8 @@ pub struct VideoPlayer {
     /// Media time (seconds into the movie) of the frame on screen, and its presentation time.
     shown: f64,
     shown_pts: f64,
+    /// Times the movie reached its end (or its out point) and went round again; +1 when it stops at the end.
+    passes: u64,
     /// The movie's sound (None = no audio track, or sound off).
     sound: Option<sound::ClipAudio>,
 }
@@ -258,6 +260,7 @@ impl VideoPlayer {
             mode: PlayMode::default(),
             shown: 0.0,
             shown_pts: 0.0,
+            passes: 0,
             sound: None,
         })
     }
@@ -330,6 +333,9 @@ impl VideoPlayer {
                         self.pending = Some((pts, media, frame));
                     }
                     Ok(Msg::End(at)) => {
+                        if self.end.is_none() {
+                            self.passes += 1;
+                        }
                         self.end = Some(at);
                         if !self.looping {
                             self.clock = self.clock.min(at);
@@ -346,6 +352,14 @@ impl VideoPlayer {
             }
             match self.pending.take() {
                 Some((pts, media, frame)) if pts <= self.clock + 1e-3 => {
+                    // Jumped back to the start (loop) or turned around (reverse / ping-pong): one pass done.
+                    let wrapped = match self.mode.direction {
+                        PlayDirection::Reverse => media > self.shown + 0.05,
+                        _ => media < self.shown - 0.05,
+                    };
+                    if wrapped {
+                        self.passes += 1;
+                    }
                     self.shown = media;
                     self.shown_pts = pts;
                     if let Some(old) = out.replace(frame) {
@@ -386,6 +400,11 @@ impl VideoPlayer {
         if let Some(s) = &self.sound {
             s.set_gain(gain);
         }
+    }
+
+    /// How many times the movie has played through (autopilot moves on when this changes).
+    pub fn passes(&self) -> u64 {
+        self.passes
     }
 
     pub fn has_sound(&self) -> bool {

@@ -5,6 +5,7 @@
 mod choice;
 mod composition;
 mod control;
+mod clip_play;
 mod group;
 mod layer;
 mod options;
@@ -13,6 +14,7 @@ mod source;
 mod surface;
 
 pub use choice::*;
+pub use clip_play::*;
 pub use composition::*;
 pub use control::*;
 pub use group::*;
@@ -22,4 +24,4 @@ pub use output::*;
 pub use source::*;
 pub use surface::*;
 
-choice!(BlendMode, FitMode, CrossGroup, PlayDirection, TransitionKind, LaunchTiming, WidgetKind);
+choice!(BlendMode, FitMode, CrossGroup, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, Autopilot);

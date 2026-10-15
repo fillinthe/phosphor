@@ -11,6 +11,8 @@ use phosphor_engine::{AppControl, Choice, Composition, ControlMap, ControlSource
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Deferred {
     Clip(u64, usize),
+    /// A clip pad / key was let go (flash and piano clips react).
+    ClipRelease(u64, usize),
     Column(usize),
     /// Value 0..1, or `FLIP` to toggle an on/off control.
     App(AppControl, f32),

@@ -369,6 +369,19 @@ impl MediaManager {
         Vec::new()
     }
 
+    /// How many times a layer's movie has played through (None = not a movie).
+    pub fn passes(&self, layer: u64) -> Option<u64> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            return self.players.get(&layer).filter(|p| p.duration().is_some()).map(|p| p.passes());
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = layer;
+            None
+        }
+    }
+
     /// The layer's movie has a sound track.
     pub fn has_sound(&self, layer: u64) -> bool {
         #[cfg(not(target_arch = "wasm32"))]

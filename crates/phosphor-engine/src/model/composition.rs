@@ -267,6 +267,21 @@ impl Composition {
         }
     }
 
+    /// A clip button went down (its trigger mode decides: play, toggle off, flash…).
+    pub fn press_clip(&mut self, layer: u64, slot: usize, now: f32) {
+        let secs = self.launch_secs();
+        if let Some(l) = self.layer_mut(layer) {
+            l.press_clip(slot, now, secs);
+        }
+    }
+
+    pub fn release_clip(&mut self, layer: u64, slot: usize, now: f32) {
+        let secs = self.launch_secs();
+        if let Some(l) = self.layer_mut(layer) {
+            l.release_clip(slot, now, secs);
+        }
+    }
+
     /// Puts a new source on a layer using the launch fade.
     pub fn set_layer_source(&mut self, layer: u64, source: SourceSpec, values: Vec<f32>, name: String, now: f32) {
         let secs = self.launch_secs();

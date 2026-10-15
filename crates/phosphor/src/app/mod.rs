@@ -23,6 +23,7 @@ use crate::thumbs::Thumbs;
 use crate::theme;
 
 
+mod autopilot;
 mod bench_run;
 mod controls;
 mod files;
@@ -97,6 +98,8 @@ pub enum Trigger {
 pub struct State {
     pub comp: Composition,
     pub engine: Option<Engine>,
+    /// Autopilot's per-layer state (which clip, since when).
+    pub(crate) autopilot: HashMap<u64, autopilot::AutoRun>,
     render_state: Option<egui_wgpu::RenderState>,
     pub texture: Option<egui::TextureId>,
     texture_generation: u64,
@@ -327,6 +330,7 @@ impl State {
     pub fn run_deferred(&mut self, d: crate::control::Deferred, now: f64) {
         match d {
             crate::control::Deferred::Clip(layer, slot) => self.trigger(Trigger::Clip { layer, slot }, now),
+            crate::control::Deferred::ClipRelease(layer, slot) => self.release_clip(layer, slot, now),
             crate::control::Deferred::Column(col) => self.trigger(Trigger::Column(col), now),
             crate::control::Deferred::App(a, v) => self.app_control(a, v, now),
             crate::control::Deferred::Scrub(layer, v) => {
@@ -353,6 +357,11 @@ impl State {
         }
     }
 
+    /// A clip button was let go: flash clips go back, piano clips stop (right away, never quantized).
+    pub fn release_clip(&mut self, layer: u64, slot: usize, now: f64) {
+        self.comp.release_clip(layer, slot, now as f32);
+    }
+
     /// Puts a source on a layer using the launch settings (cut/fade, now/beat/bar).
     pub fn launch_source(&mut self, layer: u64, source: phosphor_engine::SourceSpec, values: Vec<f32>, name: String, now: f64) {
         self.trigger(Trigger::Source { layer, source, values, name }, now);
@@ -360,7 +369,7 @@ impl State {
 
     fn fire(&mut self, t: Trigger, now: f32) {
         match t {
-            Trigger::Clip { layer, slot } => self.comp.trigger_clip(layer, slot, now),
+            Trigger::Clip { layer, slot } => self.comp.press_clip(layer, slot, now),
             Trigger::Column(col) => self.comp.trigger_column(col, now),
             Trigger::Source { layer, source, values, name } => self.comp.set_layer_source(layer, source, values, name, now),
         }
