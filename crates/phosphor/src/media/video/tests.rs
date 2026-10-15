@@ -4,6 +4,9 @@ fn luma(f: &VideoFrame) -> Vec<u8> {
     match f {
         VideoFrame::Nv12 { luma, .. } => luma.clone(),
         VideoFrame::Rgba { data, .. } | VideoFrame::Compressed { data, .. } => data.clone(),
+        // Tests run with zero-copy off; a surface has no CPU pixels to compare.
+        #[cfg(target_os = "macos")]
+        VideoFrame::Surface(_) => Vec::new(),
     }
 }
 
