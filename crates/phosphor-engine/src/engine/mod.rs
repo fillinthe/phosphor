@@ -28,6 +28,8 @@ pub enum CompressedFormat {
     Bc3,
     /// DXT5 holding scaled YCoCg: Hap Q (converted to RGB in the shader).
     Bc3YCoCg,
+    /// BPTC: Hap R.
+    Bc7,
 }
 
 impl CompressedFormat {
@@ -35,6 +37,7 @@ impl CompressedFormat {
         match self {
             CompressedFormat::Bc1 => wgpu::TextureFormat::Bc1RgbaUnorm,
             CompressedFormat::Bc3 | CompressedFormat::Bc3YCoCg => wgpu::TextureFormat::Bc3RgbaUnorm,
+            CompressedFormat::Bc7 => wgpu::TextureFormat::Bc7RgbaUnorm,
         }
     }
 
