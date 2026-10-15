@@ -101,6 +101,12 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         if ui.small_button(label(icon::HASH, "Identify")).on_hover_text("Show each output's number on its window").clicked() {
             st.identify_outputs(now);
         }
+        if st.comp.outputs.iter().any(|o| o.enabled && !o.screen.is_empty())
+            && ui.small_button(label(icon::PROJECTOR_SCREEN, "All to their screens")).on_hover_text("Open every output fullscreen on the screen it was last sent to").clicked()
+        {
+            let missing = st.send_outputs_to_screens();
+            st.notice = (!missing.is_empty()).then(|| format!("Not connected right now: {}", missing.join(", ")));
+        }
     });
     #[cfg(target_os = "macos")]
     syphon_row(ui, st);
@@ -116,6 +122,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         let mut toggle = false;
         let mut send: Option<crate::screens::Display> = None;
         let displays = st.displays.clone();
+        let layers = &mut st.comp.layers;
         let o = &mut st.comp.outputs[i];
         card_frame(ui, false).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -169,6 +176,29 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     });
                 });
             });
+            if !o.screen.is_empty() {
+                ui.horizontal(|ui| {
+                    let connected = crate::screens::find_screen(&displays, &o.screen).is_some();
+                    let (glyph, color) = if connected { (icon::CHECK_CIRCLE, ACCENT) } else { (icon::WARNING, Color32::from_rgb(230, 160, 60)) };
+                    ui.label(RichText::new(format!("{glyph} Screen: {}", o.screen)).small().color(color))
+                        .on_hover_text(if connected { "Saved with the project; \"All to their screens\" sends it here" } else { "That screen isn't connected right now" });
+                    if ui.small_button(icon::X).on_hover_text("Forget this screen").clicked() {
+                        o.screen.clear();
+                    }
+                });
+            }
+            if !o.mapping.surfaces.is_empty() {
+                let title = format!("{} surfaces{}", o.mapping.surfaces.len(), if o.mapping.enabled { "" } else { " (mapping off)" });
+                egui::CollapsingHeader::new(title).id_salt(("out_surfaces", id)).show(ui, |ui| {
+                    for s in o.mapping.surfaces.iter_mut() {
+                        ui.horizontal(|ui| {
+                            ui.toggle_value(&mut s.enabled, RichText::new("ON").small());
+                            ui.label(&s.name);
+                        });
+                        super::mapping::surface_source(ui, s, layers);
+                    }
+                });
+            }
             color_grade_editor(ui, id, &mut o.color);
         });
         if toggle {

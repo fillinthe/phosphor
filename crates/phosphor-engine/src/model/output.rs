@@ -71,11 +71,13 @@ pub struct OutputConfig {
     pub syphon: bool,
     /// Colour correction for this output.
     pub color: ColorGrade,
+    /// The screen/projector this output goes to (`screens::screen_key`), "" = not chosen. Saved with the project.
+    pub screen: String,
 }
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default() }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new() }
     }
 }
 
