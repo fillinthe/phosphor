@@ -17,6 +17,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Clip trigger modes (normal, toggle, flash, piano) | Resolume | ✅ |
 | Per-clip settings (speed, direction, in/out, BPM sync, effects stored on the clip) | Resolume | ✅ |
 | BPM sync (clip length = N beats, follows tempo) | Resolume | ✅ |
+| **Match the beat**: the movie's own visual rhythm detected and locked to the tempo (loop in + beats set) | — | ✅ (beyond the others) |
 | Ableton Link | Resolume, VDMX | ✅ |
 | Cue list (fades, follow-on, GO/back mappable) + timecode (show clock, MIDI timecode, LTC audio) | Resolume Arena, MadMapper | ✅ |
 | Audio playback of an audio-only file as a layer (sound + visualiser) | Resolume | ⬜ |

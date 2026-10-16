@@ -122,6 +122,8 @@ impl PhosphorApp {
                 net_audio: Vec::new(),
                 jam: Default::default(),
                 bug: crate::support::BugReport::new(),
+                #[cfg(not(target_arch = "wasm32"))]
+                rhythm: Default::default(),
                 updater: crate::update::Updater::with_skipped(stored(KEY_UPDATE_SKIP).unwrap_or_default()),
                 remote_password: stored(KEY_REMOTE_PASSWORD).unwrap_or_default(),
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),

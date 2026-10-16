@@ -7,6 +7,8 @@ use phosphor_engine::{Composition, Engine, SourceSpec};
 #[cfg(not(target_arch = "wasm32"))]
 pub mod live;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod rhythm;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod video;
 
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
