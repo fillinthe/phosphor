@@ -66,6 +66,7 @@ const KEY_FAVORITES: &str = "favorites";
 const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
 const KEY_REMOTE_PASSWORD: &str = "remote_password";
+const KEY_UPDATE_SKIP: &str = "update_skip";
 const KEY_RECENT_PROJECTS: &str = "recent_projects";
 /// In-window menu clicks, queued for `menu_actions`.
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
@@ -170,6 +171,8 @@ pub struct State {
     net_audio: Vec<f32>,
     /// Audience play: whose turn it is.
     pub jam: play::Jam,
+    pub bug: crate::support::BugReport,
+    pub updater: crate::update::Updater,
     /// Password phones need to control (viewing never needs it). Empty = no password.
     pub remote_password: String,
     pub require_password: bool,

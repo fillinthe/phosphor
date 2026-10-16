@@ -13,6 +13,7 @@ impl PhosphorApp {
         self.state.comp.sync_media_bin();
         self.state.thumbs.poll(&ctx);
         self.account_events(&ctx);
+        self.state.updater.tick(&ctx, now);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(engine) = self.state.engine.as_mut() {
             self.state.isf.poll(engine);
@@ -35,7 +36,7 @@ impl PhosphorApp {
             run.started = None;
             run.samples.clear();
             let quick = run.cfg.quick.take().unwrap_or_default();
-            self.bench_quick(&quick, now);
+            self.bench_quick(&ctx, &quick, now);
         }
         ctx.data_mut(|d| {
             d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs);
@@ -133,6 +134,8 @@ impl PhosphorApp {
         self.export_window(&ctx);
         self.save_layout_window(&ctx);
         self.account_windows(&ctx);
+        crate::support::bug_window(&ctx, &mut self.state);
+        crate::update::update_window(&ctx, &mut self.state.updater);
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.import_windows(&ctx);

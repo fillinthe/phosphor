@@ -141,7 +141,12 @@ impl PhosphorApp {
             A::Notes => open_doc("NOTES.md"),
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
-            A::Donate => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com/donate/")),
+            A::Donate => ctx.open_url(egui::OpenUrl::new_tab(crate::support::DONATE_URL)),
+            A::ReportBug => st.bug.open = true,
+            A::CheckUpdates => {
+                st.updater.window = true;
+                st.updater.check(ctx);
+            }
             A::Panel(i) => {
                 if let Some(tab) = Tab::ALL.get(i).copied() {
                     self.toggle_panel(tab);
@@ -241,6 +246,11 @@ impl PhosphorApp {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     account_button(ui, &mut self.state);
+                    crate::support::donate_button(ui);
+                    if ui.button(icon::BUG).on_hover_text("Report a bug").clicked() {
+                        self.state.bug.open = true;
+                    }
+                    self.state.updater.top_bar_button(ui);
                     let s = self.state.stats.latest;
                     let wide = ui.available_width() > 460.0;
                     if wide {

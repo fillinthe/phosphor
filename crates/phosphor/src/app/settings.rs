@@ -34,6 +34,7 @@ impl PhosphorApp {
             storage.set_string(KEY_RECENT_PROJECTS, json);
         }
         storage.set_string(KEY_PROJECT_PATH, self.state.project_path.clone().unwrap_or_default());
+        storage.set_string(KEY_UPDATE_SKIP, self.state.updater.skipped.clone());
         storage.set_string(KEY_REMOTE_PASSWORD, if self.state.require_password { self.state.remote_password.clone() } else { String::new() });
         if let Ok(json) = serde_json::to_string(&self.state.explorer.recent) {
             storage.set_string(KEY_RECENT, json);

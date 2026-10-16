@@ -273,5 +273,6 @@ Legend: [x] done · [~] in progress · [ ] not started
   Live previews now refresh in staggered groups (still 30/s each), so the cost is spread instead of a 2 ms spike.
       CPU/frame (30% → 105% of a core), nearly all pass/bind-group setup; explorer defaults to Hover previews
 - [ ] Benchmark suite vs VDMX (CPU, memory, frame time, same clips)
-- [ ] Crash reporting (opt-in), auto-update
+- [x] In-app bug report (GitHub issue / clipboard), in-app update from GitHub releases (`scripts/release-github.sh` publishes); Donate in the top bar
+- [ ] Crash reporting that sends on its own (opt-in); a private bug-report endpoint
 - [ ] Code signing + notarization: scripts ready (`SIGN_ID=… scripts/bundle-mac.sh`, `scripts/notarize-mac.sh`); needs the owner's Developer ID certificate + notary login
