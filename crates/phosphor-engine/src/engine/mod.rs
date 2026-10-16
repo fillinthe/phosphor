@@ -478,6 +478,10 @@ impl Engine {
                 // A layer's own picture (black while that layer is off); the mix if the layer is gone.
                 let src = match s.layer {
                     Some(id) if comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() => feeds.get(&id).cloned().unwrap_or_else(|| self.gpu.blank.clone()),
+                    // Another output's finished picture (this frame's if drawn already, else the last one).
+                    Some(id) if id != o.id && comp.outputs.iter().any(|x| x.id == id) => {
+                        self.output_targets.get(&id).and_then(|t| t.as_ref()).map_or_else(|| self.gpu.blank.clone(), |t| t.view.clone())
+                    }
                     _ => master.clone(),
                 };
                 // Mesh warp: one pass drawing the cached, finely subdivided mesh.

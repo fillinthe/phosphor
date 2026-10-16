@@ -227,6 +227,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     hint(ui, "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
 
     let State { comp, selected_surface, .. } = st;
+    let others: Vec<(u64, String)> = comp.outputs.iter().filter(|o| o.id != oid).map(|o| (o.id, o.name.clone())).collect();
     let (layers, groups) = (&mut comp.layers, &mut comp.groups);
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
     let (ow, oh) = o.size(canvas);
@@ -268,7 +269,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 });
-                surface_source(ui, s, layers, groups);
+                surface_source(ui, s, layers, groups, &others);
                 ui.horizontal(|ui| {
                     ui.label("Shape");
                     choice_buttons(ui, &mut s.shape, |_, _| {});
@@ -377,10 +378,14 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
 
 /// Venues: save every output's setup (surfaces, mesh, masks, size, colour) under a name and recall it at the next gig.
 /// What a surface shows: the mix or one layer; for a layer, whether it also stays in the mix.
-pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup]) {
+/// `outputs`: the other outputs (id, name), whose finished picture a slice can show.
+pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], outputs: &[(u64, String)]) {
     ui.horizontal(|ui| {
         ui.label("Shows");
-        let current = s.layer.map_or("Whole composition".into(), |id| groups.iter().find(|g| g.id == id).map_or_else(|| crate::ui::layer_name(layers, id), |g| g.name.clone()));
+        let current = s.layer.map_or("Whole composition".into(), |id| match outputs.iter().find(|(o, _)| *o == id) {
+            Some((_, name)) => format!("Output: {name}"),
+            None => groups.iter().find(|g| g.id == id).map_or_else(|| crate::ui::layer_name(layers, id), |g| g.name.clone()),
+        });
         egui::ComboBox::from_id_salt(("surface_source", s.id)).width(170.0).selected_text(current).show_ui(ui, |ui| {
             ui.selectable_value(&mut s.layer, None, "Whole composition");
             ui.separator();
@@ -388,6 +393,12 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
                 ui.selectable_value(&mut s.layer, Some(g.id), format!("Group: {}", g.name));
             }
             crate::ui::layer_items(ui, layers, &mut s.layer, Some);
+            if !outputs.is_empty() {
+                ui.separator();
+                for (id, name) in outputs {
+                    ui.selectable_value(&mut s.layer, Some(*id), format!("Output: {name}")).on_hover_text("That output's finished picture (its slices, warps and masks)");
+                }
+            }
         })
         .response
         .on_hover_text("Send one layer to just this surface (its own picture, with its effects), or show the whole composition (everything in the mix, with MASTER effects)");
