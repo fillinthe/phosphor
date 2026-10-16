@@ -151,8 +151,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                     TriggerMode::Flash => Some("F"),
                                     TriggerMode::Piano => Some("P"),
                                 };
-                                if let Some(b) = badge {
-                                    p.text(egui::pos2(rect.right() - 4.0, rect.top() + 3.0), egui::Align2::RIGHT_TOP, b, egui::FontId::monospace(11.0), ACCENT);
+                                let own = if k.own.is_some() { "S" } else { "" };
+                                let badge = format!("{}{own}", badge.unwrap_or(""));
+                                if !badge.is_empty() {
+                                    p.text(egui::pos2(rect.right() - 4.0, rect.top() + 3.0), egui::Align2::RIGHT_TOP, badge, egui::FontId::monospace(11.0), ACCENT);
                                 }
                             }
                             _ => {
@@ -194,9 +196,19 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                 learn_items(ui, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
                                 ui.separator();
                                 ui.label(RichText::new("When pressed").small().strong());
+                                let current = layer.clip_settings();
                                 let k = layer.clip_slot_mut(c);
                                 for m in TriggerMode::ALL {
                                     ui.radio_value(&mut k.trigger, m, m.name());
+                                }
+                                ui.separator();
+                                let mut own = k.own.is_some();
+                                if ui
+                                    .checkbox(&mut own, "Keeps its own settings")
+                                    .on_hover_text("Speed, direction, loop, BPM sync and effects are saved with this clip and come back when it's triggered (starts from the layer's current settings)")
+                                    .changed()
+                                {
+                                    k.own = own.then_some(current);
                                 }
                                 ui.separator();
                             }

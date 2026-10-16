@@ -81,6 +81,21 @@ pub struct Clip {
     pub generator_values: Vec<f32>,
     /// Normal / toggle / flash / piano.
     pub trigger: TriggerMode,
+    /// The clip's own playback settings and effects (Resolume-style); None = it uses the layer's.
+    pub own: Option<ClipSettings>,
+}
+
+/// What a clip remembers when it keeps its own settings.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ClipSettings {
+    pub rate: f32,
+    pub direction: crate::PlayDirection,
+    pub loop_in: f32,
+    pub loop_out: f32,
+    pub loop_beats: f32,
+    pub sync_beats: f32,
+    pub effects: Vec<crate::EffectState>,
 }
 
 impl Clip {

@@ -197,6 +197,9 @@ impl Composition {
         layer.effects = self.adopt_effects(std::mem::take(&mut layer.effects));
         for c in &mut layer.clips {
             c.id = self.new_id();
+            if let Some(own) = &mut c.own {
+                own.effects = self.adopt_effects(std::mem::take(&mut own.effects));
+            }
         }
         layer.active_clip = None;
         layer.transition = None;
@@ -311,6 +314,7 @@ impl Composition {
     pub fn expire_transitions(&mut self, now: f32) {
         for l in &mut self.layers {
             l.expire_transition(now);
+            l.keep_clip_settings();
         }
     }
 
