@@ -47,7 +47,16 @@ fn blend(b: vec3f, s: vec3f, mode: u32) -> vec3f {
 @fragment
 fn fs_composite(in: VOut) -> @location(0) vec4f {
     let dst = textureSampleLevel(tex1, samp, in.uv, 0.0);
-    let st = in.uv * u.uv_xform.xy + u.uv_xform.zw;
+    // Layer transform (u.p[10].w = on): p[9] = (x, y offset, x scale, y scale), p[10] = (cos, sin, aspect).
+    var uv = in.uv;
+    if (u.p[10].w > 0.5) {
+        var q = uv - vec2f(0.5) - u.p[9].xy;
+        q.x = q.x * u.p[10].z;
+        q = vec2f(u.p[10].x * q.x + u.p[10].y * q.y, -u.p[10].y * q.x + u.p[10].x * q.y);
+        q.x = q.x / u.p[10].z;
+        uv = q / u.p[9].zw + vec2f(0.5);
+    }
+    let st = uv * u.uv_xform.xy + u.uv_xform.zw;
     var s = sample_source(st);
     if (any(st < vec2f(0.0)) || any(st > vec2f(1.0))) {
         s = vec4f(0.0);

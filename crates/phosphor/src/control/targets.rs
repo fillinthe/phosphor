@@ -38,6 +38,10 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
         ControlTarget::LayerVolume(id) => layer(id)?.volume / 2.0,
+        ControlTarget::LayerX(id) => (layer(id)?.transform.x + 1.0) / 2.0,
+        ControlTarget::LayerY(id) => (layer(id)?.transform.y + 1.0) / 2.0,
+        ControlTarget::LayerScale(id) => to_unit(layer(id)?.transform.scale, 0.05, 4.0, true),
+        ControlTarget::LayerRotation(id) => (layer(id)?.transform.rotation + 180.0) / 360.0,
         ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
         ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
         ControlTarget::LayerDirection(id) => {
@@ -141,6 +145,18 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::LayerVolume(id) => {
             if let Some(l) = comp.layer_mut(*id) {
                 l.volume = v.clamp(0.0, 1.0) * 2.0;
+            }
+        }
+        ControlTarget::LayerX(id) | ControlTarget::LayerY(id) | ControlTarget::LayerScale(id) | ControlTarget::LayerRotation(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                let v = v.clamp(0.0, 1.0);
+                let t = &mut l.transform;
+                match target {
+                    ControlTarget::LayerX(_) => t.x = v * 2.0 - 1.0,
+                    ControlTarget::LayerY(_) => t.y = v * 2.0 - 1.0,
+                    ControlTarget::LayerScale(_) => t.scale = unit_to(v, 0.05, 4.0, true),
+                    _ => t.rotation = v * 360.0 - 180.0,
+                }
             }
         }
         ControlTarget::LayerSpeed(id) => {
@@ -263,6 +279,10 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         out.push((ControlTarget::LayerEnabled(l.id), format!("{} · on/off", l.name)));
         out.push((ControlTarget::LayerSpeed(l.id), format!("{} · speed", l.name)));
         out.push((ControlTarget::LayerFxBypass(l.id), format!("{} · effects bypass", l.name)));
+        out.push((ControlTarget::LayerX(l.id), format!("{} · position X", l.name)));
+        out.push((ControlTarget::LayerY(l.id), format!("{} · position Y", l.name)));
+        out.push((ControlTarget::LayerScale(l.id), format!("{} · scale", l.name)));
+        out.push((ControlTarget::LayerRotation(l.id), format!("{} · rotation", l.name)));
         if matches!(l.source, phosphor_engine::SourceSpec::Movie { .. }) {
             out.push((ControlTarget::LayerScrub(l.id), format!("{} · scrub", l.name)));
             out.push((ControlTarget::LayerVolume(l.id), format!("{} · volume", l.name)));
@@ -306,6 +326,10 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerDirection(id) => format!("/phosphor/layer/{id}/direction"),
         ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
         ControlTarget::LayerVolume(id) => format!("/phosphor/layer/{id}/volume"),
+        ControlTarget::LayerX(id) => format!("/phosphor/layer/{id}/x"),
+        ControlTarget::LayerY(id) => format!("/phosphor/layer/{id}/y"),
+        ControlTarget::LayerScale(id) => format!("/phosphor/layer/{id}/scale"),
+        ControlTarget::LayerRotation(id) => format!("/phosphor/layer/{id}/rotation"),
         ControlTarget::Surface(id) => format!("/phosphor/surface/{id}"),
         ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
         ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),

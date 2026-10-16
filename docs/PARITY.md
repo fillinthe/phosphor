@@ -24,7 +24,8 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 ## Mixing & layers
 | Feature | Who has it | Phosphor |
 |---|---|---|
-| Layers with opacity, 10 blend modes, solo, bypass | all | ✅ |
+| Layers with opacity, 10 blend modes + 3 masks, solo, bypass | all | ✅ |
+| Layer transform (position, scale, rotation, stretch, flip; modulatable) | all | ✅ |
 | Layer groups (mixed first, own effects/opacity) | Resolume | ✅ |
 | A/B crossfader | Resolume, VDMX | ✅ |
 | Layer as mask / track matte (brightness, inverted, alpha) | Resolume, VDMX | ✅ |

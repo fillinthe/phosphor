@@ -149,6 +149,8 @@ pub struct LayerState {
     pub generator_values: Vec<f32>,
     pub generator_mods: Vec<ParamMod>,
     pub opacity_mod: Option<Modulation>,
+    /// Position, size, rotation and flips in the composition.
+    pub transform: LayerTransform,
     /// Movie sound volume (1 = as recorded).
     pub volume: f32,
     /// Sound fades with the layer's opacity (and its group's).
@@ -186,6 +188,37 @@ pub struct LayerState {
     pub active_clip: Option<u64>,
 }
 
+/// Where a layer sits in the composition (applied when it's mixed; effects run before it).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LayerTransform {
+    /// Offset from the centre as a fraction of the composition (x right, y up).
+    pub x: f32,
+    pub y: f32,
+    pub scale: f32,
+    /// Extra width / height stretch (1 = none).
+    pub stretch_x: f32,
+    pub stretch_y: f32,
+    /// Degrees, clockwise.
+    pub rotation: f32,
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub scale_mod: Option<Modulation>,
+    pub rotation_mod: Option<Modulation>,
+}
+
+impl Default for LayerTransform {
+    fn default() -> Self {
+        Self { x: 0.0, y: 0.0, scale: 1.0, stretch_x: 1.0, stretch_y: 1.0, rotation: 0.0, flip_x: false, flip_y: false, scale_mod: None, rotation_mod: None }
+    }
+}
+
+impl LayerTransform {
+    pub fn is_identity(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 impl Default for LayerState {
     fn default() -> Self {
         Self {
@@ -202,6 +235,7 @@ impl Default for LayerState {
             generator_values: Vec::new(),
             generator_mods: Vec::new(),
             opacity_mod: None,
+            transform: LayerTransform::default(),
             volume: 1.0,
             volume_follows_opacity: true,
             effects: Vec::new(),
