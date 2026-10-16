@@ -123,7 +123,7 @@ impl State {
         let url = self.net.play_url();
         let Some(dir) = crate::show::storage_dir() else { return };
         let path = dir.join("scan-to-play.png");
-        let Some(png) = crate::ui::qr_png(&url, 1024) else { return };
+        let Some(png) = qr_card(&url, &self.comp.play.title) else { return };
         if std::fs::write(&path, png).is_err() {
             self.notice = Some("Couldn't write the QR picture".into());
             return;
@@ -136,4 +136,34 @@ impl State {
         self.launch_source(id, spec, Vec::new(), QR_LAYER.into(), now);
         self.selected = Some(id);
     }
+}
+
+/// The picture for the output: the code with the title and the address under it, white card, 16:9 safe.
+#[cfg(not(target_arch = "wasm32"))]
+fn qr_card(url: &str, title: &str) -> Option<Vec<u8>> {
+    use image::{GenericImage, Rgba, RgbaImage};
+    let qr = image::load_from_memory(&crate::ui::qr_png(url, 900)?).ok()?.to_rgba8();
+    let (w, cap_h) = (1280u32, 300u32);
+    let h = qr.height() + cap_h + 40;
+    let mut card = RgbaImage::from_pixel(w, h, Rgba([255, 255, 255, 255]));
+    let x = (w - qr.width()) / 2;
+    card.copy_from(&qr, x, 20).ok()?;
+    // Short address for people to type if the camera won't: drop the scheme.
+    let short = url.trim_start_matches("http://").trim_end_matches('/');
+    let text = if title.trim().is_empty() { short.to_string() } else { format!("{}\n{short}", title.trim()) };
+    let style = phosphor_engine::TextStyle { text, size: 0.3, color: [20, 20, 20, 255], outline: 0.0, line_spacing: 1.1, ..crate::text::default_style() };
+    if let Ok(caption) = crate::text::render(&style, w, cap_h) {
+        let y0 = qr.height() + 30;
+        for (px, py, p) in caption.enumerate_pixels().map(|(x, y, p)| (x, y, *p)) {
+            if p[3] > 0 && py + y0 < h {
+                let bg = card.get_pixel(px, py + y0);
+                let a = p[3] as u32;
+                let mix = |c: u8, b: u8| ((c as u32 * a + b as u32 * (255 - a)) / 255) as u8;
+                card.put_pixel(px, py + y0, Rgba([mix(p[0], bg[0]), mix(p[1], bg[1]), mix(p[2], bg[2]), 255]));
+            }
+        }
+    }
+    let mut out = std::io::Cursor::new(Vec::new());
+    card.write_to(&mut out, image::ImageFormat::Png).ok()?;
+    Some(out.into_inner())
 }

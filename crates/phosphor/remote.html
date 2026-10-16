@@ -135,7 +135,7 @@
 let ws = null, state = null, touching = new Set(), pending = new Map(), raf = 0;
 // Audience play: /play is the same page in guest mode. `me` is this phone's seat; the Mac says whose turn it is.
 const guest = location.pathname.startsWith('/play');
-let me = null, endsAt = null;
+let me = null, endsAt = null, wasMine = false, thanksUntil = 0;
 if (guest) { document.body.classList.add('guest', 'locked'); document.title = 'Phosphor · Play'; }
 const $ = s => document.querySelector(s);
 const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
@@ -251,6 +251,10 @@ function renderPlay() {
     const who = i < 0 ? 'Joining the line…' : i === 0 ? "<b>You're next.</b>" : `You're <b>${i + 1}</b> in line.`;
     st.innerHTML = who + (p.current == null ? '' : ' Someone is playing now.');
   }
+  // The moment a turn ends: say thanks for a few seconds.
+  if (wasMine && !mine && p.on) { $('#playstat').innerHTML = '<b>Thanks, that was you!</b> Next person\'s turn.'; thanksUntil = Date.now() + 4000; }
+  else if (thanksUntil > Date.now() && !mine) { $('#playstat').innerHTML = '<b>Thanks, that was you!</b> Next person\'s turn.'; }
+  wasMine = mine;
   document.body.classList.toggle('locked', !mine);
   document.body.classList.toggle('fixedpage', p.page != null);
   clock();
