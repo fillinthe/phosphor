@@ -51,3 +51,9 @@ Prints one JSON stats line per second and a `SUMMARY` line.
 ```bash
 cargo test   # includes WGSL validation of every shader, no GPU needed
 ```
+
+## License
+
+GPL-3.0-or-later (see `LICENSE`). Phosphor links GPL libraries (FFmpeg's GPL build, Ableton Link), so the app is GPL too:
+use it, change it, share it, and share your changes under the same terms. `vendor/eframe` keeps its MIT/Apache-2.0
+licence; Syphon's licence is in `vendor/Syphon-LICENSE.txt`.
