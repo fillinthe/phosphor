@@ -2,7 +2,7 @@
 
 Website: https://phosphorfx.com
 
-A real-time VJ / live-visuals app: VDMX-style modular interface, MadMapper-style mapping (planned),
+A real-time VJ / live-visuals app: VDMX-style modular interface, MadMapper-style projection mapping and LED pixel mapping,
 one engine for macOS, iPadOS/iOS and the browser. Rust + wgpu (Metal natively, WebGPU on the web) + egui.
 
 - `crates/phosphor-engine`: platform-independent render graph, WGSL shaders, project model
