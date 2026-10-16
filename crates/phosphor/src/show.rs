@@ -22,6 +22,8 @@ pub struct Manifest {
     /// The panel layout at export time (opens the same way).
     /// RON text of the app's SavedLayout.
     pub layout: Option<String>,
+    /// Open locked (player mode); the password that unlocks it (empty = none).
+    pub lock: Option<String>,
 }
 
 pub struct Bundled {

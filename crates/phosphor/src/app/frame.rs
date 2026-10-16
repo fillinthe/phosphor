@@ -7,7 +7,9 @@ impl PhosphorApp {
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
 
-        self.handle_dropped_files(&ctx);
+        if !self.lock.active {
+            self.handle_dropped_files(&ctx);
+        }
         self.state.clip_cells.clear();
         self.state.comp.ensure_outputs();
         self.state.comp.sync_media_bin();
@@ -98,7 +100,11 @@ impl PhosphorApp {
             }
         }
         self.render(now);
-        self.top_bar(ui);
+        if self.lock.active {
+            self.locked_top_bar(ui);
+        } else {
+            self.top_bar(ui);
+        }
         rescue_windows(&mut self.dock, ctx.content_rect(), std::mem::take(&mut self.gather_windows));
 
         egui::CentralPanel::no_frame().show(ui, |ui| {
@@ -117,9 +123,12 @@ impl PhosphorApp {
         });
         self.detached_windows(&ctx);
         crate::explorer::fx_browser_window(&ctx, &mut self.state);
-        if let Some(cmd) = crate::explorer::palette(&ctx, &mut self.state) {
+        if !self.lock.active
+            && let Some(cmd) = crate::explorer::palette(&ctx, &mut self.state)
+        {
             self.run_command(cmd, now);
         }
+        self.lock_window(&ctx);
         if let Some(tab) = self.state.open_tab.take() {
             self.show_tab(tab);
         }

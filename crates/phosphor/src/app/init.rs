@@ -193,6 +193,7 @@ impl PhosphorApp {
             title: String::new(),
             show_start: None,
             layouts,
+            lock: lock::Lock::from_setting(&stored(KEY_LOCK).unwrap_or_default()),
             cloud_layouts_applied: false,
             cloud_layouts_check: 5.0,
             layout_draft: None,
@@ -228,6 +229,10 @@ impl PhosphorApp {
         if app.bench.is_none() && crate::show::bundled().is_some() {
             app.show_start = Some(0);
             app.state.project_path = None;
+            // An exported show may open locked (player mode) with its own unlock password.
+            if let Some(p) = crate::show::bundled().and_then(|b| b.manifest.lock.clone()) {
+                app.lock = lock::Lock { active: true, password: p, ..Default::default() };
+            }
         }
         if app.bench.is_none() {
             app.state.outputs_on_open();

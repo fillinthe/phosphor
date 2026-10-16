@@ -75,6 +75,7 @@ impl PhosphorApp {
                             dest: dest.clone(),
                             zip: st.export.zip,
                             autostart: st.export.autostart,
+                            lock: st.export.lock.then(|| st.export.lock_password.clone()),
                             screens,
                             layout: current_layout.clone(),
                         };

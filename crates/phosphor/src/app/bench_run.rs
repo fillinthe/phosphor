@@ -68,6 +68,7 @@ impl PhosphorApp {
                 name: "Bench Show".into(),
                 dest: dir.into(),
                 zip: true,
+                lock: None,
                 autostart: false,
                 screens: Vec::new(),
                 layout: None,
@@ -129,6 +130,10 @@ impl PhosphorApp {
                 self.state.updater.test = true;
                 self.state.updater.window = true;
                 self.state.updater.check(ctx);
+                continue;
+            }
+            if name == "lock" {
+                self.lock_now(String::new());
                 continue;
             }
             if name == "bug" || name == "bugout" {

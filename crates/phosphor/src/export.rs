@@ -30,6 +30,7 @@ pub struct Request {
     pub dest: PathBuf,
     pub zip: bool,
     pub autostart: bool,
+    pub lock: Option<String>,
     pub screens: Vec<(u64, String)>,
     pub layout: Option<String>,
 }
@@ -157,6 +158,7 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
         screens: req.screens,
         autostart: req.autostart,
         layout: req.layout,
+        lock: req.lock,
     };
     std::fs::write(show.join(MANIFEST), serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     if !failed.is_empty() {

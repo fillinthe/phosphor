@@ -60,7 +60,7 @@ impl PhosphorApp {
                             if let Some(z) = &p.zip {
                                 ui.label(format!("Zip: {}", z.display()));
                             }
-                            crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time: right-click {} Open (it isn't notarized yet).", icon::ARROW_RIGHT));
+                            crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
                             ui.horizontal(|ui| {
                                 if ui.button(label_text(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
                                     let _ = std::process::Command::new("open").arg("-R").arg(app).spawn();
@@ -87,6 +87,10 @@ impl PhosphorApp {
                         });
                         ui.checkbox(&mut st.export.autostart, "Open the outputs full screen when the show starts");
                         ui.checkbox(&mut st.export.zip, "Also make a .zip (easier to send)");
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other Mac: just the preview, clips, keys, controllers and outputs");
+                            ui.add_enabled(st.export.lock, egui::TextEdit::singleline(&mut st.export.lock_password).password(true).hint_text("unlock password (optional)").desired_width(170.0));
+                        });
                         let (files, bytes, missing) = *st.export.summary.get_or_insert_with(|| crate::export::summary(&st.comp));
                         crate::ui::hint(ui, format!("{files} media file(s), {:.1} MB · {} output(s) · {} mapping(s)", bytes as f64 / 1e6, st.comp.outputs.len(), st.comp.control_maps.len()));
                         if missing > 0 {

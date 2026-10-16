@@ -59,8 +59,8 @@ app that's much smaller and lighter on the CPU.
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
 9. **ISF gaps**: ~~multi-pass / feedback / >16 params / imported images / 12 buffers / _imgRect~~ ✔ (318/327 ISF, 15/42 MadMapper
    Materials). Next: MadMapper includes (MadNoise, MadSDF: 28 Materials shaders, clean-room), 45+ params (3), `curve`/`floatRange` (3)
-9b. ~~Export show~~ done (File → Export Show). Next: a locked "player only" mode (hide editing, password to
-    unlock), Windows/Linux players, and notarized exports
+9b. ~~Export show~~ done (File → Export Show). ~~Locked "player only" mode~~ ✔ (View › Lock Controls, password,
+    exports can open locked). Next: Windows/Linux players, notarized exports
 9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with
     disconnect / block / disable
 9d. ~~Syphon out~~ ~~NDI out~~ done — next: NDI per output, NDI audio, NDI *input* (receive sources as layers), bundle the NDI SDK runtime
