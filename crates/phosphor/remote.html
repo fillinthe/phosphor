@@ -395,6 +395,9 @@ function connect() {
   ws.onclose = () => { $('#dot').classList.remove('on'); $('#status').textContent = 'reconnecting…'; setTimeout(connect, 1000); };
 }
 connect();
+// Turning the phone or resizing the window: lay the surface grid out again for the new width.
+let resizeTimer = 0;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { const b = $('#surface'); if (b) { b.dataset.sig = ''; if (state) render(); } }, 150); });
 </script>
 </body>
 </html>
