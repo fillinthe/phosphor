@@ -91,8 +91,9 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         let color = if m.enabled { MASK_COLOR } else { Color32::GRAY };
         let is_selected = *selected == Some(m.id);
         let pts: Vec<egui::Pos2> = m.points.iter().map(|p| to_screen(*p)).collect();
-        if pts.len() >= 2 {
-            ui.painter().add(egui::Shape::closed_line(pts.clone(), Stroke::new(if is_selected { 2.0 } else { 1.0 }, color)));
+        let outline: Vec<egui::Pos2> = m.outline().iter().map(|p| to_screen(*p)).collect();
+        if outline.len() >= 2 {
+            ui.painter().add(egui::Shape::closed_line(outline, Stroke::new(if is_selected { 2.0 } else { 1.0 }, color)));
         }
         let n = m.points.len().max(1) as f32;
         let centre = m.points.iter().fold([0.0, 0.0], |a, p| [a[0] + p[0] / n, a[1] + p[1] / n]);
@@ -268,6 +269,10 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     });
                 });
                 surface_source(ui, s, layers, groups);
+                ui.horizontal(|ui| {
+                    ui.label("Shape");
+                    choice_buttons(ui, &mut s.shape, |_, _| {});
+                });
                 guarded!(ui, s.opacity, Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
                 guarded!(ui, s.feather, Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
                 if s.feather > 0.0 {
@@ -328,6 +333,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     ui.toggle_value(&mut m.enabled, RichText::new("ON").small().strong());
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
                     ui.toggle_value(&mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
+                    ui.toggle_value(&mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (add points by double-clicking an edge)");
                     hint(ui, format!("{} points", m.points.len()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button(icon::TRASH).on_hover_text("Delete mask").clicked() {

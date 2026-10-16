@@ -45,8 +45,19 @@ fn surface_color(st: vec2f) -> vec4f {
     }
     let f = max(u.p[4].y, 1e-4);
     // Soft edge, shaped by the blend curve (u.p[4].z + 1) so overlapping projectors even out.
-    let soft = pow(smoothstep(0.0, f, st.x) * smoothstep(0.0, f, 1.0 - st.x)
-        * smoothstep(0.0, f, st.y) * smoothstep(0.0, f, 1.0 - st.y), 1.0 + u.p[4].z);
+    var edge = smoothstep(0.0, f, st.x) * smoothstep(0.0, f, 1.0 - st.x) * smoothstep(0.0, f, st.y) * smoothstep(0.0, f, 1.0 - st.y);
+    // Slice shape (u.p[4].w): 1 = ellipse, 2 = triangle (apex at the top), each with the same soft edge.
+    let shape = u32(u.p[4].w + 0.5);
+    if (shape == 1u) {
+        let d = 0.5 - length(st - vec2f(0.5));
+        edge = smoothstep(-fwidth(d), max(f, fwidth(d)), d);
+    } else if (shape == 2u) {
+        // Distance inside the two slanted sides and the base.
+        let side = (st.y - 2.0 * abs(st.x - 0.5)) / sqrt(5.0);
+        let d = min(side, 1.0 - st.y);
+        edge = smoothstep(-fwidth(d), max(f, fwidth(d)), d);
+    }
+    let soft = pow(edge, 1.0 + u.p[4].z);
     let inside = select(0.0, 1.0, all(st >= vec2f(-1e-4)) && all(st <= vec2f(1.0 + 1e-4)));
     let a = u.opacity * soft * inside;
     return vec4f(rgb * a, a);

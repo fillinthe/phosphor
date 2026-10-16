@@ -54,8 +54,8 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Edit on the projector output, alignment grid, identify | all | ✅ |
 | Venue presets | — | ✅ |
 | DMX / Art-Net / sACN pixel mapping (LED strips and matrices) | MadMapper, Resolume Arena | ✅ (fixture profiles for moving heads ⬜) |
-| Bezier mask edges | MadMapper, Resolume | ⬜ |
-| Line / circle / triangle *surfaces* (not just masks) | MadMapper | ⬜ |
+| Curved mask edges (smooth curve through the points) | MadMapper, Resolume | ✅ |
+| Ellipse / triangle slices (follow perspective and mesh) | MadMapper | ✅ (line surfaces ⬜) |
 | Slice input from another output | Resolume | ⬜ |
 | 3D projection mapping onto models | MadMapper | ➖ (large; later) |
 | Lasers | MadMapper | ➖ |
