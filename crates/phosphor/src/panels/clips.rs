@@ -117,12 +117,12 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         if ui.button(label(icon::PLUS, "Column")).clicked() {
             st.comp.clip_columns += 1;
         }
-        hint(ui, "Keys 1–9 trigger this bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
+        hint(ui, "Keys 1–9 trigger the lit bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
     });
     ui.add_space(4.0);
-    // A bank shows up to nine columns (keys 1–9); big projects page through banks.
-    let cols = st.comp.clip_columns.clamp(1, CLIP_PAGE_SIZE);
-    let page_offset = st.clip_page * CLIP_PAGE_SIZE;
+    // Every column is in the grid (scroll sideways); the bank says which nine the keys 1–9 hit.
+    let cols = st.comp.clip_columns.max(1);
+    let bank = st.clip_page;
     let cell = egui::vec2(96.0, 96.0 / aspect + 16.0);
     let mut triggers: Vec<Trigger> = Vec::new();
     let mut releases: Vec<(u64, usize)> = Vec::new();
@@ -147,8 +147,12 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             // Column headers trigger whole columns.
             ui.horizontal(|ui| {
                 ui.allocate_exact_size(egui::vec2(110.0, 22.0), Sense::hover());
-                for c in page_offset..page_offset + cols {
-                    let head = ui.add_sized([cell.x, 22.0], egui::Button::new(format!("{} {}", icon::PLAY, c + 1))).on_hover_text("Trigger this column on every layer · right-click to Learn");
+                for c in 0..cols {
+                    let keyed = c / CLIP_PAGE_SIZE == bank;
+                    let text = RichText::new(format!("{} {}", icon::PLAY, c + 1));
+                    let text = if keyed { text.color(ACCENT) } else { text };
+                    let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
+                    let head = ui.add_sized([cell.x, 22.0], egui::Button::new(text)).on_hover_text(tip);
                     if head.clicked() {
                         triggers.push(Trigger::Column(c));
                     }
@@ -163,7 +167,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     if row_header(ui, layer, egui::vec2(110.0, cell.y)) {
                         fill_row = Some(layer.id);
                     }
-                    for c in page_offset..page_offset + cols {
+                    for c in 0..cols {
                         let clip = layer.clips.get(c);
                         let (rect, resp) = ui.allocate_exact_size(cell, Sense::click());
                         if ui.is_rect_visible(rect) {

@@ -95,27 +95,25 @@ pub(crate) fn qr_cells(text: &str) -> Option<(usize, Vec<bool>)> {
     Some((n, code.to_colors().iter().map(|c| *c == qrcode::Color::Dark).collect()))
 }
 
-/// The same code as a PNG (black on white, a quiet zone around it): for a layer on the output.
+/// The code as a picture about `size` px wide: `fg` modules on `bg` (transparent = [0,0,0,0]), quiet zone included.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn qr_png(text: &str, size: u32) -> Option<Vec<u8>> {
+pub(crate) fn qr_image(text: &str, size: u32, fg: [u8; 4], bg: [u8; 4]) -> Option<image::RgbaImage> {
     let (n, dark) = qr_cells(text)?;
     let quiet = 4;
     let cell = (size / (n as u32 + quiet * 2)).max(1);
     let side = cell * (n as u32 + quiet * 2);
-    let mut img = image::GrayImage::from_pixel(side, side, image::Luma([255u8]));
+    let mut img = image::RgbaImage::from_pixel(side, side, image::Rgba(bg));
     for (i, d) in dark.iter().enumerate() {
         if *d {
             let (x, y) = ((i % n) as u32 + quiet, (i / n) as u32 + quiet);
             for dy in 0..cell {
                 for dx in 0..cell {
-                    img.put_pixel(x * cell + dx, y * cell + dy, image::Luma([0u8]));
+                    img.put_pixel(x * cell + dx, y * cell + dy, image::Rgba(fg));
                 }
             }
         }
     }
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).ok()?;
-    Some(out.into_inner())
+    Some(img)
 }
 
 pub(crate) fn qr_code(ui: &mut egui::Ui, text: &str, size: f32) {

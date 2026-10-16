@@ -6,7 +6,8 @@ use serde_json::{Value, json};
 use crate::app::{State, Trigger};
 
 /// What the remote page needs: mixer, clip grid, and the selected layer's controls.
-pub fn state_json(st: &State, now: f64) -> String {
+pub fn state_json(st: &mut State, now: f64) -> String {
+    let play = st.play_json(now);
     let comp = &st.comp;
     let thumbs = st.net.thumb_versions();
     let layers: Vec<Value> = comp
@@ -72,7 +73,7 @@ pub fn state_json(st: &State, now: f64) -> String {
         "selected": selected,
         "layers": layers,
         "params": params,
-        "play": st.play_json(now),
+        "play": play,
     })
     .to_string()
 }
@@ -85,7 +86,7 @@ fn round(v: f32) -> f64 {
 /// on their turn and for the controls the show allows (`State::guest_may`).
 pub fn apply(st: &mut State, cmd: &Value, now: f64) {
     if let Some(from) = cmd.get("_from").and_then(Value::as_u64)
-        && !st.guest_may(from, cmd)
+        && !st.guest_may(from, cmd, now)
     {
         return;
     }

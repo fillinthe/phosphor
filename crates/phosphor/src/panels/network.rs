@@ -114,6 +114,18 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         ui.label("Title");
         ui.add(egui::TextEdit::singleline(&mut play.title).desired_width(160.0));
     });
+    let style_changed = ui
+        .horizontal(|ui| {
+            ui.label("Code on the output");
+            choice_combo(ui, "qr_style", &mut play.qr_style, 190.0, false).changed() | ui.checkbox(&mut play.qr_caption, "Words under it").changed()
+        })
+        .inner;
+    #[cfg(not(target_arch = "wasm32"))]
+    if style_changed {
+        st.refresh_play_qr(now);
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = style_changed;
     let url = st.net.play_url();
     let on_output = st.comp.layers.iter().any(|l| l.name == crate::app::play::QR_LAYER);
     let mut toggle = false;
@@ -130,11 +142,11 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                     toggle = true;
                 }
             });
-            let waiting = st.play_queue().len();
-            match st.jam.current {
-                Some((id, _)) => {
+            let waiting = st.play_queue(now).len();
+            match st.current_player_label(now) {
+                Some(name) => {
                     let left = st.play_left(now).map(|s| format!(" · {}:{:02} left", s as u32 / 60, s as u32 % 60)).unwrap_or_default();
-                    ui.colored_label(ACCENT, format!("{} Playing: {}{left}", icon::HAND_WAVING, st.peer_label(id)));
+                    ui.colored_label(ACCENT, format!("{} Playing: {name}{left}", icon::HAND_WAVING));
                 }
                 None => {
                     hint(ui, "Nobody playing yet.");
@@ -144,6 +156,8 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
             let _ = on_output;
         });
     });
+    #[cfg(target_arch = "wasm32")]
+    let _ = toggle;
     #[cfg(not(target_arch = "wasm32"))]
     if toggle {
         st.toggle_play_qr(now);
