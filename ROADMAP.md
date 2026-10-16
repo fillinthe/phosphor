@@ -260,7 +260,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] GPU timestamp queries for real GPU frame time
 - [x] Cache bind groups (`BindCache`): 40 previews ~95% → ~88% app CPU; render time unchanged (~2.1 ms)
 - [ ] (Later, after desktop todos) Import VDMX projects too (format still to check)
-- [ ] Import Resolume Arena compositions (.avc is XML): layers, clips (file paths) into clip columns, decks → pages,
+- [x] Import Resolume Arena compositions (.avc is XML) — layers, clips, decks, tempo, size; + Find Missing Media: layers, clips (file paths) into clip columns, decks → pages,
   opacity/blend/BPM; effects matched by name where we have one, others listed as "not imported".
   Advanced Output XML → output surfaces. Owner has real files in ~/Documents/Resolume Arena to test with.
 - [x] 40-preview cost found: ~13 µs of wgpu bookkeeping per drawing step at `encoder.finish()` (not our code).

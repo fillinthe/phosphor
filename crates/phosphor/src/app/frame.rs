@@ -125,6 +125,11 @@ impl PhosphorApp {
         self.export_window(&ctx);
         self.save_layout_window(&ctx);
         self.account_windows(&ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.import_windows(&ctx);
+            self.state.poll_relink();
+        }
         self.recovered_banner(&ctx);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {

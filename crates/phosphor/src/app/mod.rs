@@ -30,6 +30,8 @@ pub(crate) use cues::format_tc;
 mod controls;
 mod files;
 mod frame;
+#[cfg(not(target_arch = "wasm32"))]
+mod import;
 mod init;
 mod layout;
 mod menus;
@@ -103,6 +105,12 @@ pub struct State {
     /// LED / DMX sender (Art-Net, sACN).
     #[cfg(not(target_arch = "wasm32"))]
     pub dmx: crate::dmx::DmxOut,
+    /// A Resolume composition waiting for the deck choice.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub avc_import: Option<import::AvcImport>,
+    /// A missing-media search running in the background.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub relink: Option<std::sync::mpsc::Receiver<import::Relinked>>,
     /// The cue list while the show runs.
     pub cue_run: cues::CueRun,
     /// Autopilot's per-layer state (which clip, since when).

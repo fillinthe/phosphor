@@ -16,6 +16,8 @@ pub enum Purpose {
     StreamFile,
     ExportShow,
     TouchOsc,
+    ImportResolume,
+    RelinkFolder,
 }
 
 pub struct Dialogs {

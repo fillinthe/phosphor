@@ -42,6 +42,14 @@ impl PhosphorApp {
                 }
             }
             A::OpenFromAccount => self.state.account_window = true,
+            A::ImportResolume => {
+                #[cfg(not(target_arch = "wasm32"))]
+                st.dialogs.pick_file(crate::dialogs::Purpose::ImportResolume, Some(("Resolume composition", &["avc"])));
+            }
+            A::FindMissing => {
+                #[cfg(not(target_arch = "wasm32"))]
+                st.dialogs.pick_folder(crate::dialogs::Purpose::RelinkFolder);
+            }
             A::Import => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {

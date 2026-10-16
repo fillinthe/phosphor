@@ -1,0 +1,135 @@
+//! Importing other apps' projects (Resolume compositions: pick decks, open as a new project) and finding
+//! media that moved (search a folder by file name and relink).
+
+use std::sync::mpsc::Receiver;
+
+use super::*;
+use crate::import::resolume::{AvcFile, read, to_composition};
+
+/// A Resolume composition read and waiting for the deck choice.
+pub struct AvcImport {
+    pub file: AvcFile,
+    pub chosen: Vec<bool>,
+}
+
+/// Paths found by a relink search: (old path, new path), and how many were looked for.
+pub type Relinked = (Vec<(String, String)>, usize);
+
+impl State {
+    /// Reads a .avc file and opens the deck chooser.
+    pub fn begin_resolume_import(&mut self, path: &str) {
+        match read(path) {
+            Ok(file) => {
+                let chosen = file.decks.iter().map(|d| d.files() > 0).collect();
+                self.avc_import = Some(AvcImport { file, chosen });
+            }
+            Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
+        }
+    }
+
+    /// Media files the project uses that aren't where it says.
+    pub fn missing_media(&self) -> Vec<String> {
+        self.comp.media_paths().into_iter().filter(|p| !std::path::Path::new(p).exists()).collect()
+    }
+
+    /// Looks through `folder` (and everything inside) for the missing files by name, in the background.
+    pub fn start_relink(&mut self, folder: std::path::PathBuf) {
+        let missing = self.missing_media();
+        if missing.is_empty() {
+            self.notice = Some("No media is missing.".into());
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.relink = Some(rx);
+        self.notice = Some(format!("Looking for {} missing files in {}…", missing.len(), folder.display()));
+        std::thread::spawn(move || {
+            let wanted: HashMap<String, Vec<String>> = missing.iter().fold(HashMap::new(), |mut m, p| {
+                if let Some(name) = std::path::Path::new(p).file_name() {
+                    m.entry(name.to_string_lossy().to_lowercase()).or_default().push(p.clone());
+                }
+                m
+            });
+            let mut found = Vec::new();
+            let mut stack = vec![folder];
+            while let Some(dir) = stack.pop() {
+                let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+                for e in entries.flatten() {
+                    let path = e.path();
+                    if path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                        continue;
+                    }
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else if let Some(olds) = path.file_name().and_then(|n| wanted.get(&n.to_string_lossy().to_lowercase())) {
+                        for old in olds {
+                            found.push((old.clone(), path.to_string_lossy().to_string()));
+                        }
+                    }
+                }
+            }
+            let _ = tx.send((found, missing.len()));
+        });
+    }
+
+    /// Applies a finished relink search. Call once per frame.
+    pub(crate) fn poll_relink(&mut self) {
+        let Some(Ok((found, total))) = self.relink.as_ref().map(Receiver::try_recv) else { return };
+        self.relink = None;
+        let map: HashMap<String, String> = found.into_iter().collect();
+        self.comp.map_paths(|p| map.get(p).cloned().unwrap_or_else(|| p.to_string()));
+        // Files that changed path need reloading on their layers.
+        self.media = Default::default();
+        self.notice = Some(format!("Found {} of {} missing files.", map.len(), total));
+    }
+}
+
+impl PhosphorApp {
+    /// The "Import from Resolume" deck chooser.
+    pub(crate) fn import_windows(&mut self, ctx: &egui::Context) {
+        let Some(imp) = &mut self.state.avc_import else { return };
+        let mut open = true;
+        let mut go = false;
+        egui::Window::new(format!("{} Import from Resolume", icon::DOWNLOAD_SIMPLE)).open(&mut open).collapsible(false).resizable(true).default_width(460.0).show(ctx, |ui| {
+            ui.label(egui::RichText::new(&imp.file.name).strong());
+            crate::ui::hint(ui, format!("{} × {} · {} layers{}", imp.file.width, imp.file.height, imp.file.layers.len(), imp.file.bpm.map_or(String::new(), |b| format!(" · {b:.1} BPM"))));
+            ui.add_space(4.0);
+            ui.label("Decks to bring in (they go side by side in the clip columns):");
+            egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+                for (i, d) in imp.file.decks.iter().enumerate() {
+                    let text = format!("{} — {} clips with media, {} columns", d.name, d.files(), d.columns);
+                    ui.checkbox(&mut imp.chosen[i], text);
+                }
+            });
+            ui.horizontal(|ui| {
+                if ui.small_button("All").clicked() {
+                    imp.chosen.iter_mut().for_each(|c| *c = true);
+                }
+                if ui.small_button("None").clicked() {
+                    imp.chosen.iter_mut().for_each(|c| *c = false);
+                }
+            });
+            crate::ui::hint(ui, "Layers, clips (video and image files), clip names, tempo and canvas size come across. Resolume's generators, effects and mapping don't.");
+            ui.add_space(6.0);
+            go = ui.add_enabled(imp.chosen.iter().any(|c| *c), egui::Button::new(crate::ui::label(icon::CHECK, "Open as a new project"))).clicked();
+        });
+        if go {
+            let imp = self.state.avc_import.take().unwrap();
+            let decks: Vec<usize> = imp.chosen.iter().enumerate().filter(|(_, c)| **c).map(|(i, _)| i).collect();
+            let (comp, skipped) = to_composition(&imp.file, &decks);
+            self.state.load_composition(comp);
+            self.state.project_path = None;
+            self.state.clip_page = 0;
+            let missing = self.state.missing_media().len();
+            let mut msg = format!("Imported {} from Resolume.", imp.file.name);
+            if skipped > 0 {
+                msg.push_str(&format!(" {skipped} clips without a media file (generators, audio, Resolume sources) were left out."));
+            }
+            if missing > 0 {
+                msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
+            }
+            self.state.notice = Some(msg);
+        } else if !open {
+            self.state.avc_import = None;
+        }
+    }
+}
