@@ -105,6 +105,14 @@ impl State {
         }
     }
 
+    /// Host: end the current turn now (the next person gets the controls).
+    pub fn skip_turn(&mut self) {
+        if let Some((who, _)) = self.jam.current.take() {
+            self.jam.served.push(who);
+            self.jam.missing_since = None;
+        }
+    }
+
     /// Seat of the guest at the controls (what the page compares its own seat with).
     fn current_seat(&self, guests: &[Guest]) -> Option<u64> {
         let who = self.jam.current.as_ref()?.0.clone();

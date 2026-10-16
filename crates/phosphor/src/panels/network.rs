@@ -146,7 +146,12 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
             match st.current_player_label(now) {
                 Some(name) => {
                     let left = st.play_left(now).map(|s| format!(" · {}:{:02} left", s as u32 / 60, s as u32 % 60)).unwrap_or_default();
-                    ui.colored_label(ACCENT, format!("{} Playing: {name}{left}", icon::HAND_WAVING));
+                    ui.horizontal(|ui| {
+                        ui.colored_label(ACCENT, format!("{} Playing: {name}{left}", icon::HAND_WAVING));
+                        if ui.small_button("Skip").on_hover_text("End this turn now; the next person gets the controls").clicked() {
+                            st.skip_turn();
+                        }
+                    });
                 }
                 None => {
                     hint(ui, "Nobody playing yet.");
