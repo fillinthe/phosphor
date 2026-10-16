@@ -47,6 +47,8 @@ pub enum Action {
     Layout(usize),
     SaveLayout,
     Donate,
+    ReportBug,
+    CheckUpdates,
     /// Quick menu: one-click visuals.
     Quick(crate::app::Quick),
 }
@@ -150,6 +152,9 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Roadmap, "Roadmap", None),
             I(A::Website, "phosphorfx.com", None),
             I(A::Donate, "Donate to Phosphor…", None),
+            S,
+            I(A::ReportBug, "Report a Bug…", None),
+            I(A::CheckUpdates, "Check for Updates…", None),
         ],
     ),
 ];

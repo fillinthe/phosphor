@@ -121,9 +121,22 @@ impl PhosphorApp {
     }
 
     /// Bench `--quick a,b`: Quick actions on the project the bench runs.
-    pub(crate) fn bench_quick(&mut self, names: &str, now: f64) {
+    pub(crate) fn bench_quick(&mut self, ctx: &egui::Context, names: &str, now: f64) {
         use super::Quick as Q;
         for name in names.split(',').filter(|n| !n.is_empty()) {
+            if name == "update" {
+                // Updater end to end against PHOSPHOR_UPDATE_URL: check, install, print UPDATE_READY.
+                self.state.updater.test = true;
+                self.state.updater.window = true;
+                self.state.updater.check(ctx);
+                continue;
+            }
+            if name == "bug" || name == "bugout" {
+                self.state.bug.open = true;
+                self.state.bug.detached = name == "bugout";
+                self.state.bug.text = "Example: dragging a movie onto the Clips grid shows a black cell.".into();
+                continue;
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if name == "qr" {
                 // Audience play: put the QR code layer on the output.

@@ -82,6 +82,7 @@
   #lock input { flex:1; min-width:140px; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; }
   #lockmsg { width:100%; color:var(--dim); font-size:12px; }
   .hint { color:var(--dim); font-size:12px; }
+  #support { text-align:center; padding-top:18px; } #support a { color:#ff8ca0; text-decoration:none; }
   /* Audience play (/play): the Control Surface, clip columns and Surprise, one guest at a time. */
   #play, #playbtns { display:none; }
   body.guest #play, body.guest #playbtns { display:block; }
@@ -122,6 +123,7 @@
 <div class="page on" id="p-mixer"><div class="section"><div id="strips"></div></div></div>
 <div class="page" id="p-clips"><div class="section"><div id="clips"></div><p class="hint">Tap a cell to trigger · tap a number to trigger the whole column</p></div></div>
 <div class="page" id="p-ctrl"><div class="section"><img id="selth" alt=""><div id="params"></div></div></div>
+<footer class="section hint" id="support">Phosphor is free and open source · <a href="https://phosphorfx.com/donate/" target="_blank" rel="noopener">&#9829; Support it</a></footer>
 <nav>
   <button data-p="surface">Surface</button>
   <button data-p="mixer" class="on">Mixer</button>

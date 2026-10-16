@@ -30,6 +30,7 @@ mod recovery;
 mod remote;
 mod screens;
 mod stats;
+mod support;
 mod stream;
 #[cfg(not(target_arch = "wasm32"))]
 mod show;
@@ -46,6 +47,7 @@ mod ndi;
 mod thumbs;
 #[cfg(not(target_arch = "wasm32"))]
 mod tosc;
+mod update;
 mod theme;
 
 /// eframe's GPU setup plus block-compressed textures when the GPU has them (Hap movies decode on the GPU).
