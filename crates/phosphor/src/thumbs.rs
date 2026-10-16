@@ -37,6 +37,15 @@ impl Thumbs {
         None
     }
 
+    /// A thumbnail made right here (text clips): `build` runs once per key and the picture is kept.
+    pub fn get_or_build(&mut self, ctx: &egui::Context, key: &str, build: impl FnOnce() -> Option<egui::ColorImage>) -> Option<egui::TextureId> {
+        if !self.cache.contains_key(key) {
+            let handle = build().map(|img| ctx.load_texture(format!("thumb:{key}"), img, egui::TextureOptions::LINEAR));
+            self.cache.insert(key.to_string(), handle);
+        }
+        self.cache.get(key).and_then(|h| h.as_ref().map(|h| h.id()))
+    }
+
     pub fn is_pending(&self, path: &str) -> bool {
         self.pending.contains(path)
     }

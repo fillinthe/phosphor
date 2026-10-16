@@ -96,7 +96,10 @@ pub const PREVIEW_WIDTH: u32 = 192;
 #[derive(Clone, Debug)]
 pub enum PreviewItem {
     Effect(crate::model::EffectState),
+    /// A generator at its default settings (explorer tiles).
     Generator(String),
+    /// A generator with given settings (clip thumbnails).
+    Clip(String, Vec<f32>),
 }
 
 /// A frame source after it has been resolved for this frame.

@@ -10,6 +10,12 @@ use egui_phosphor::regular as icon;
 use phosphor_engine::{Composition, Engine, Mapping, ModInputs, wgpu};
 
 pub(crate) use files::file_drag_point;
+
+/// `State::preview_tex` for code that has split `State` into fields.
+pub(crate) fn preview_lookup(keys: &[String], textures: &[(egui::TextureId, (u32, u32))], key: &str) -> Option<egui::TextureId> {
+    let i = keys.iter().position(|k| k == key)?;
+    textures.get(i).map(|(t, _)| *t)
+}
 pub use quick::{Quick, quick_menu, quick_row};
 use crate::audio::AudioInput;
 use crate::bench::BenchConfig;
@@ -173,10 +179,10 @@ pub struct State {
     pub palette: crate::explorer::PaletteState,
     /// Previews requested by panels this frame (key, item); rendered on the next frame.
     pub preview_wants: Vec<(String, phosphor_engine::PreviewItem, bool)>,
-    preview_keys: Vec<String>,
+    pub(crate) preview_keys: Vec<String>,
     /// When stills were last refreshed.
     preview_refreshed: f64,
-    preview_textures: Vec<(egui::TextureId, (u32, u32))>,
+    pub(crate) preview_textures: Vec<(egui::TextureId, (u32, u32))>,
     /// A panel to bring to the front (set by explorer actions and the palette).
     pub open_tab: Option<Tab>,
     pub fx_browser: Option<crate::explorer::FxBrowser>,
@@ -241,10 +247,9 @@ impl State {
         self.monitor_textures.get(i).map(|(t, _)| *t)
     }
 
-    /// A rendered explorer/editor preview by key (from the previous frame).
+    /// A rendered explorer/editor/clip preview by key (from the previous frame).
     pub fn preview_tex(&self, key: &str) -> Option<egui::TextureId> {
-        let i = self.preview_keys.iter().position(|k| k == key)?;
-        self.preview_textures.get(i).map(|(t, _)| *t)
+        preview_lookup(&self.preview_keys, &self.preview_textures, key)
     }
 
     /// Remembers the project file (title, Save, Open Recent).
