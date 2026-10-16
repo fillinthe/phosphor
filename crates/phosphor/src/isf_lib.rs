@@ -16,6 +16,20 @@ pub struct Loaded {
     wgsl: String,
     /// Multi-pass shaders: how their passes run (empty plan = single pass).
     plan: Option<shaders::PassPlan>,
+    /// `IMPORTED` pictures, decoded on the scanner thread: (buffer slot, width, height, RGBA).
+    images: Vec<(usize, u32, u32, Vec<u8>)>,
+}
+
+/// Decodes the pictures an ISF shader imports (paths relative to the shader file); missing ones are skipped.
+fn load_images(shader_path: &std::path::Path, images: &[(usize, String)]) -> Vec<(usize, u32, u32, Vec<u8>)> {
+    let dir = shader_path.parent().unwrap_or(std::path::Path::new("."));
+    images
+        .iter()
+        .filter_map(|(slot, rel)| {
+            let img = image::open(dir.join(rel)).ok()?.to_rgba8();
+            Some((*slot, img.width(), img.height(), img.into_raw()))
+        })
+        .collect()
 }
 
 pub struct IsfLibrary {
@@ -84,6 +98,15 @@ fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
     if sh.pass_plan.len() <= 1 && sh.buffers.is_empty() {
         return None;
     }
+    // A single-pass shader with imported pictures still runs through the plan (that's where buffers bind).
+    if sh.pass_plan.is_empty() {
+        return Some(shaders::PassPlan {
+            passes: vec![shaders::PlanPass::default()],
+            buffers: sh.buffers.len(),
+            vars: Vec::new(),
+            images: sh.images.iter().map(|(slot, _)| *slot).collect(),
+        });
+    }
     let index = |t: &Option<String>| t.as_ref().and_then(|t| sh.buffers.iter().position(|b| b == t));
     Some(shaders::PassPlan {
         passes: sh
@@ -93,6 +116,7 @@ fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
             .collect(),
         buffers: sh.buffers.len(),
         vars: sh.inputs.iter().filter_map(|i| Some((i.name.clone(), i.offset?))).collect(),
+        images: sh.images.iter().map(|(slot, _)| *slot).collect(),
     })
 }
 
@@ -133,7 +157,8 @@ impl IsfLibrary {
                                 if !sh.credit.is_empty() {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
-                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), wgsl: sh.wgsl })
+                                let images = load_images(&path, &sh.images);
+                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, wgsl: sh.wgsl })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
                             Err(e) => Err(format!("{e:?}")),
@@ -163,6 +188,9 @@ impl IsfLibrary {
                     shaders::set_custom_info(desc.id, "ISF", leak(l.about));
                     if let Some(plan) = l.plan {
                         shaders::set_pass_plan(desc.entry, plan);
+                    }
+                    for (slot, w, h, rgba) in l.images {
+                        engine.set_plan_image(desc.entry, slot, w, h, &rgba);
                     }
                     engine.register_lazy(desc, l.wgsl);
                     self.loaded += 1;

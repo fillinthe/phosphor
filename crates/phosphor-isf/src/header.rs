@@ -32,7 +32,8 @@ pub(crate) struct Header {
     pub persistent: bool,
     /// Each entry of `PASSES`, in order.
     pub pass_specs: Vec<PassSpec>,
-    pub imported: bool,
+    /// `IMPORTED` pictures: (name used in the shader, file path relative to the shader).
+    pub imported: Vec<(String, String)>,
     /// MadMapper `GENERATORS` of type `time_base`: (name, speed expression).
     pub time_bases: Vec<(String, String)>,
     /// Input types we cannot represent (first one wins).
@@ -270,11 +271,18 @@ pub(crate) fn parse_header(json: &str) -> Result<Header, IsfError> {
             })
             .collect();
     }
-    h.imported = obj.get("IMPORTED").is_some_and(|v| match v {
-        Value::Object(m) => !m.is_empty(),
-        Value::Array(a) => !a.is_empty(),
-        _ => false,
-    });
+    h.imported = match obj.get("IMPORTED") {
+        Some(Value::Object(m)) => m.iter().filter_map(|(name, v)| Some((name.clone(), v.get("PATH").map(str_of).filter(|p| !p.is_empty())?))).collect(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| {
+                let name = v.get("NAME").map(str_of).unwrap_or_default();
+                let path = v.get("PATH").map(str_of).unwrap_or_default();
+                (!name.is_empty() && !path.is_empty()).then_some((name, path))
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
     if let Some(Value::Array(gens)) = obj.get("GENERATORS") {
         for g in gens {
             let name = g.get("NAME").map(str_of).unwrap_or_default();

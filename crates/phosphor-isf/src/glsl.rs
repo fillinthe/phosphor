@@ -371,9 +371,11 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
     );
     // Multi-pass buffers: textures named like their TARGET, so IMG_PIXEL(name, …) samples them.
     let mut seen: Vec<&str> = Vec::new();
-    for t in header.pass_specs.iter().filter_map(|p| p.target.as_deref()) {
+    let imported = header.imported.iter().map(|(n, _)| n.as_str());
+    for t in header.pass_specs.iter().filter_map(|p| p.target.as_deref()).chain(imported) {
         if !seen.contains(&t) && seen.len() < crate::MAX_BUFFERS {
             s.push_str(&format!("layout(binding={}) uniform texture2D {t};\n", crate::BUFFER_BINDING + seen.len()));
+            s.push_str(&format!("#define _{t}_imgRect vec4(0.0, 0.0, vec2(textureSize({t}, 0)))\n"));
             seen.push(t);
         }
     }
@@ -389,6 +391,8 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
             (IsfInputKind::Point2D { .. }, Some(o), _) => ("vec2", param_expr(o, 2)),
             (IsfInputKind::Image | IsfInputKind::Audio, _, Some(t)) => {
                 s.push_str(&format!("#define {} phosphor_tex{t}\n", input.name));
+                // ISF's `_<name>_imgRect` (x, y, width, height of the picture in its texture): ours fill the texture.
+                s.push_str(&format!("#define _{}_imgRect vec4(0.0, 0.0, vec2(textureSize(phosphor_tex{t}, 0)))\n", input.name));
                 continue;
             }
             _ => continue,

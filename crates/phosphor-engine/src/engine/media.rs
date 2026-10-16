@@ -30,6 +30,18 @@ impl Engine {
         );
     }
 
+    /// A picture an ISF shader imports (`IMPORTED`): bound at buffer `slot` whenever `entry` runs.
+    pub fn set_plan_image(&mut self, entry: &'static str, slot: usize, width: u32, height: u32, rgba: &[u8]) {
+        let target = Target::new(&self.gpu.device, "plan image", width, height);
+        self.gpu.queue.write_texture(
+            target.texture.as_image_copy(),
+            rgba,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: None },
+            target.texture.size(),
+        );
+        self.plan_images.insert((entry, slot), target);
+    }
+
     /// A video frame's luma (R8) and chroma (RG8) planes as textures someone else made (zero-copy hardware
     /// video: the decoder's own memory). The caller keeps the memory alive while frames are in flight.
     pub fn set_layer_nv12_textures(&mut self, layer: u64, outgoing: bool, luma: wgpu::Texture, chroma: wgpu::Texture, full_range: bool) {

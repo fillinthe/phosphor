@@ -2,12 +2,15 @@
 
 use super::*;
 
-/// Bind groups by the views they bind (tex0, tex1, tex2, buf0..buf7): most passes bind the same textures every
+/// Textures in a bind group: tex0, tex1, tex2 and the multi-pass buffers.
+pub(super) const BIND_TEXTURES: usize = 3 + crate::shaders::MAX_BUFFERS;
+
+/// Bind groups by the views they bind (tex0, tex1, tex2, buf0..): most passes bind the same textures every
 /// frame, so the group is made once. Groups unused for a frame are dropped (they keep their textures alive).
 #[derive(Default)]
 pub(super) struct BindCache {
-    current: HashMap<[wgpu::TextureView; 11], wgpu::BindGroup>,
-    previous: HashMap<[wgpu::TextureView; 11], wgpu::BindGroup>,
+    current: HashMap<[wgpu::TextureView; BIND_TEXTURES], wgpu::BindGroup>,
+    previous: HashMap<[wgpu::TextureView; BIND_TEXTURES], wgpu::BindGroup>,
 }
 
 impl BindCache {
@@ -21,7 +24,7 @@ impl BindCache {
         self.previous.clear();
     }
 
-    fn get(&mut self, key: [wgpu::TextureView; 11], make: impl FnOnce(&[wgpu::TextureView; 11]) -> wgpu::BindGroup) -> wgpu::BindGroup {
+    fn get(&mut self, key: [wgpu::TextureView; BIND_TEXTURES], make: impl FnOnce(&[wgpu::TextureView; BIND_TEXTURES]) -> wgpu::BindGroup) -> wgpu::BindGroup {
         if let Some(g) = self.current.get(&key) {
             return g.clone();
         }
@@ -58,19 +61,12 @@ impl Engine {
         for (i, pass) in passes.iter().enumerate() {
             let blank = &self.gpu.blank;
             let view = |v: Option<&wgpu::TextureView>| v.unwrap_or(blank).clone();
-            let key = [
-                pass.tex0.clone(),
-                view(pass.tex1.as_ref()),
-                view(pass.tex2.as_ref()),
-                view(pass.bufs.first()),
-                view(pass.bufs.get(1)),
-                view(pass.bufs.get(2)),
-                view(pass.bufs.get(3)),
-                view(pass.bufs.get(4)),
-                view(pass.bufs.get(5)),
-                view(pass.bufs.get(6)),
-                view(pass.bufs.get(7)),
-            ];
+            let key: [wgpu::TextureView; BIND_TEXTURES] = std::array::from_fn(|i| match i {
+                0 => pass.tex0.clone(),
+                1 => view(pass.tex1.as_ref()),
+                2 => view(pass.tex2.as_ref()),
+                i => view(pass.bufs.get(i - 3)),
+            });
             let (device, layout, sampler, sampler_mirror) = (&self.gpu.device, &self.gpu.layout, &self.gpu.sampler, &self.gpu.sampler_mirror);
             let bind_group = self.bind_cache.get(key, |k| device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
@@ -86,6 +82,7 @@ impl Engine {
                     },
                     wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
                     wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler_mirror) },
+                    // tex0, tex1, tex2, buf0.. at bindings 3.. (see common.wgsl).
                     wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&k[0]) },
                     wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::TextureView(&k[1]) },
                     wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&k[2]) },
@@ -97,6 +94,10 @@ impl Engine {
                     wgpu::BindGroupEntry { binding: 11, resource: wgpu::BindingResource::TextureView(&k[8]) },
                     wgpu::BindGroupEntry { binding: 12, resource: wgpu::BindingResource::TextureView(&k[9]) },
                     wgpu::BindGroupEntry { binding: 13, resource: wgpu::BindingResource::TextureView(&k[10]) },
+                    wgpu::BindGroupEntry { binding: 14, resource: wgpu::BindingResource::TextureView(&k[11]) },
+                    wgpu::BindGroupEntry { binding: 15, resource: wgpu::BindingResource::TextureView(&k[12]) },
+                    wgpu::BindGroupEntry { binding: 16, resource: wgpu::BindingResource::TextureView(&k[13]) },
+                    wgpu::BindGroupEntry { binding: 17, resource: wgpu::BindingResource::TextureView(&k[14]) },
                 ],
             }));
             // Surfaces, meshes and masks draw on top of what the output already has.

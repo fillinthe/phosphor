@@ -102,6 +102,10 @@ impl Gpu {
                 tex_entry(11),
                 tex_entry(12),
                 tex_entry(13),
+                tex_entry(14),
+                tex_entry(15),
+                tex_entry(16),
+                tex_entry(17),
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
