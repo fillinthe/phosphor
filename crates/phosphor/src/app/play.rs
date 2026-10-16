@@ -12,13 +12,22 @@ pub const QR_LAYER: &str = "Scan to play";
 
 #[derive(Default)]
 pub struct Jam {
-    /// Who has the controls (their identity) and when their turn started.
-    pub current: Option<(String, f64)>,
-    /// Identities that already had a turn this round (cleared when everyone has played).
+    /// Who has the controls right now (up to `AudiencePlay::players` at once).
+    pub current: Vec<Player>,
+    /// Identities that already had a turn this round (cleared when everyone waiting has played).
     served: Vec<String>,
     /// When each identity first showed up: the line is in arrival order even across reconnects.
     seen: std::collections::HashMap<String, f64>,
-    /// The player's phone dropped off at this time; they keep the turn for a few seconds (Wi-Fi blips, app switch).
+}
+
+/// One person at the controls.
+#[derive(Clone, Debug)]
+pub struct Player {
+    pub who: String,
+    pub started: f64,
+    /// Which of the simultaneous places they hold (decides their Surface page).
+    pub slot: usize,
+    /// Their phone dropped off at this time; they keep the turn for a few seconds (Wi-Fi blips, app switch).
     missing_since: Option<f64>,
 }
 
@@ -29,6 +38,15 @@ const GRACE: f64 = 6.0;
 struct Guest {
     who: String,
     seat: u64,
+}
+
+/// What the panel and the page show about a player.
+pub struct PlayerStatus {
+    pub who: String,
+    pub seat: u64,
+    pub label: String,
+    pub page: Option<usize>,
+    pub left: Option<f64>,
 }
 
 impl State {
@@ -47,22 +65,27 @@ impl State {
             out.push(Guest { who, seat: p.id });
         }
         // Forget people who've been gone a while (a token that comes back later starts at the end).
-        let present: Vec<&String> = out.iter().map(|g| &g.who).collect();
-        let seen = &mut self.jam.seen;
-        seen.retain(|k, t| present.contains(&k) || now - *t < 600.0);
-        for g in &out {
-            if let Some(t) = seen.get_mut(&g.who)
-                && !present.contains(&&g.who)
-            {
-                *t = now;
-            }
-        }
+        let present: Vec<String> = out.iter().map(|g| g.who.clone()).collect();
+        self.jam.seen.retain(|k, t| present.contains(k) || now - *t < 600.0);
         let seen = &self.jam.seen;
         out.sort_by(|a, b| seen.get(&a.who).partial_cmp(&seen.get(&b.who)).unwrap_or(std::cmp::Ordering::Equal));
         out
     }
 
-    /// Once per frame: ends turns that ran out (or whose guest left) and hands the controls to the next guest.
+    /// How many people play at once.
+    fn player_slots(&self) -> usize {
+        self.comp.play.players.clamp(1, 8) as usize
+    }
+
+    /// The Surface page a place plays: the chosen page, else (several players) one page per place.
+    pub fn slot_page(&self, slot: usize) -> Option<usize> {
+        if let Some(p) = self.comp.play.surface_page {
+            return Some(p);
+        }
+        (self.player_slots() > 1).then(|| slot % self.comp.surface.pages.len().max(1))
+    }
+
+    /// Once per frame: ends turns that ran out (or whose guest left) and hands free places to the next guests.
     pub(crate) fn run_play(&mut self, now: f64) {
         if !self.comp.play.enabled || !self.net.running() {
             self.jam = Jam::default();
@@ -70,83 +93,118 @@ impl State {
         }
         let guests = self.guests(now);
         let turn = self.comp.play.turn_secs.max(5) as f64;
-        if let Some((who, started)) = self.jam.current.clone() {
-            let present = guests.iter().any(|g| g.who == who);
-            let gone = match (present, self.jam.missing_since) {
+        let slots = self.player_slots();
+        let playing: Vec<String> = self.jam.current.iter().map(|p| p.who.clone()).collect();
+        let waiting = guests.iter().filter(|g| !playing.contains(&g.who)).count();
+        // Turns end when the clock runs out (only while someone waits) or the phone has been gone a while.
+        let mut ended: Vec<String> = Vec::new();
+        for p in &mut self.jam.current {
+            let present = guests.iter().any(|g| g.who == p.who);
+            let gone = match (present, p.missing_since) {
                 (true, _) => {
-                    self.jam.missing_since = None;
+                    p.missing_since = None;
                     false
                 }
                 (false, None) => {
-                    self.jam.missing_since = Some(now);
+                    p.missing_since = Some(now);
                     false
                 }
                 (false, Some(t)) => now - t > GRACE,
             };
-            // One guest alone keeps the controls; the clock only runs while someone is waiting.
-            if guests.len() <= 1 {
-                self.jam.current = Some((who.clone(), now));
+            if waiting == 0 {
+                p.started = now;
             }
-            let over = now - started >= turn && guests.len() > 1;
-            if gone || over {
-                self.jam.served.push(who);
-                self.jam.current = None;
-                self.jam.missing_since = None;
+            if gone || (now - p.started >= turn && waiting > 0) {
+                ended.push(p.who.clone());
             }
         }
-        if self.jam.current.is_none() && !guests.is_empty() {
-            self.jam.served.retain(|s| guests.iter().any(|g| g.who == *s));
-            if guests.iter().all(|g| self.jam.served.contains(&g.who)) {
-                self.jam.served.clear();
+        for who in &ended {
+            self.jam.current.retain(|p| p.who != *who);
+            self.jam.served.push(who.clone());
+        }
+        // Fewer places than before (setting lowered): the newest players step back into the line.
+        while self.jam.current.len() > slots {
+            if let Some(p) = self.jam.current.pop() {
+                self.jam.served.retain(|s| *s != p.who);
             }
-            if let Some(next) = guests.iter().find(|g| !self.jam.served.contains(&g.who)) {
-                self.jam.current = Some((next.who.clone(), now));
+        }
+        // Fill free places from the line: unserved first; when everyone waiting has played, a new round.
+        self.jam.served.retain(|s| guests.iter().any(|g| g.who == *s));
+        let mut guard = 0;
+        while self.jam.current.len() < slots && guard < 16 {
+            guard += 1;
+            let playing: Vec<String> = self.jam.current.iter().map(|p| p.who.clone()).collect();
+            let next = guests.iter().find(|g| !playing.contains(&g.who) && !self.jam.served.contains(&g.who));
+            match next {
+                Some(g) => {
+                    let taken: Vec<usize> = self.jam.current.iter().map(|p| p.slot).collect();
+                    let slot = (0..slots).find(|s| !taken.contains(s)).unwrap_or(0);
+                    self.jam.current.push(Player { who: g.who.clone(), started: now, slot, missing_since: None });
+                }
+                None => {
+                    let anyone_waiting = guests.iter().any(|g| !playing.contains(&g.who));
+                    if anyone_waiting && !self.jam.served.is_empty() {
+                        self.jam.served.clear();
+                    } else {
+                        break;
+                    }
+                }
             }
         }
     }
 
-    /// Host: end the current turn now (the next person gets the controls).
-    pub fn skip_turn(&mut self) {
-        if let Some((who, _)) = self.jam.current.take() {
-            self.jam.served.push(who);
-            self.jam.missing_since = None;
+    /// Host: end one player's turn now (or everyone's with `None`); the next people get the controls.
+    pub fn skip_turn(&mut self, who: Option<&str>) {
+        let ended: Vec<String> = self.jam.current.iter().filter(|p| who.is_none_or(|w| p.who == w)).map(|p| p.who.clone()).collect();
+        for w in ended {
+            self.jam.current.retain(|p| p.who != w);
+            self.jam.served.push(w);
         }
     }
 
-    /// Seat of the guest at the controls (what the page compares its own seat with).
-    fn current_seat(&self, guests: &[Guest]) -> Option<u64> {
-        let who = self.jam.current.as_ref()?.0.clone();
-        guests.iter().find(|g| g.who == who).map(|g| g.seat)
-    }
-
-    /// Guests after the current player, in the order they'll get the controls (seat ids).
+    /// Guests not at the controls, in the order they'll get them (seat ids).
     pub fn play_queue(&mut self, now: f64) -> Vec<u64> {
         let guests = self.guests(now);
-        let cur = self.jam.current.as_ref().map(|c| c.0.clone());
-        let later = |served: bool| guests.iter().filter(|g| Some(&g.who) != cur.as_ref() && self.jam.served.contains(&g.who) == served).map(|g| g.seat).collect::<Vec<_>>();
+        let playing: Vec<String> = self.jam.current.iter().map(|p| p.who.clone()).collect();
+        let later = |served: bool| {
+            guests.iter().filter(|g| !playing.contains(&g.who) && self.jam.served.contains(&g.who) == served).map(|g| g.seat).collect::<Vec<_>>()
+        };
         let mut q = later(false);
         q.extend(later(true));
         q
     }
 
-    /// Seconds left in the current turn (None = no one is waiting, so no limit).
-    pub fn play_left(&mut self, now: f64) -> Option<f64> {
-        let started = self.jam.current.as_ref()?.1;
-        (self.guests(now).len() > 1).then(|| (self.comp.play.turn_secs.max(5) as f64 - (now - started)).max(0.0))
+    /// Everyone at the controls, with their seat, device, page and time left (None = nobody waiting, no clock).
+    pub fn players(&mut self, now: f64) -> Vec<PlayerStatus> {
+        let guests = self.guests(now);
+        let playing: Vec<String> = self.jam.current.iter().map(|p| p.who.clone()).collect();
+        let waiting = guests.iter().filter(|g| !playing.contains(&g.who)).count();
+        let turn = self.comp.play.turn_secs.max(5) as f64;
+        let peers = self.net.peers();
+        let mut out = Vec::new();
+        for p in &self.jam.current {
+            let Some(g) = guests.iter().find(|g| g.who == p.who) else { continue };
+            let label = peers.iter().find(|x| x.id == g.seat).map(|x| x.device.clone()).unwrap_or_else(|| format!("#{}", g.seat));
+            let left = (waiting > 0).then(|| (turn - (now - p.started)).max(0.0));
+            out.push(PlayerStatus { who: p.who.clone(), seat: g.seat, label, page: self.slot_page(p.slot), left });
+        }
+        out
     }
 
     /// What the play page needs, part of the remote state JSON.
     pub fn play_json(&mut self, now: f64) -> Value {
-        let guests = self.guests(now);
-        let current = self.current_seat(&guests);
-        let (left, queue) = (self.play_left(now), self.play_queue(now));
+        let players = self.players(now);
+        let queue = self.play_queue(now);
+        let soonest = players.iter().filter_map(|p| p.left).fold(None, |m: Option<f64>, l| Some(m.map_or(l, |m| m.min(l))));
         let p = &self.comp.play;
+        let list: Vec<Value> = players.iter().map(|x| json!({"seat": x.seat, "page": x.page, "left": x.left})).collect();
         json!({
             "on": p.enabled,
             "title": p.title,
             "turn": p.turn_secs,
-            "current": current,
-            "left": left,
+            "players": list,
+            "current": players.first().map(|x| x.seat),
+            "left": soonest,
             "queue": queue,
             "page": p.surface_page,
             "columns": if p.columns { self.comp.clip_columns } else { 0 },
@@ -154,17 +212,16 @@ impl State {
         })
     }
 
-    /// May the guest in seat `from` send this command right now? Only the player, only the
-    /// controls the show allows: the Control Surface (its chosen page), clip columns, Surprise.
+    /// May the guest in seat `from` send this command right now? Only a player, only the
+    /// controls the show allows: the Control Surface (their page), clip columns, Surprise.
     pub fn guest_may(&mut self, from: u64, cmd: &Value, now: f64) -> bool {
         if !self.comp.play.enabled {
             return false;
         }
         let guests = self.guests(now);
-        let who = guests.iter().find(|g| g.seat == from).map(|g| g.who.clone());
-        if who.is_none() || who != self.jam.current.as_ref().map(|c| c.0.clone()) {
-            return false;
-        }
+        let Some(who) = guests.iter().find(|g| g.seat == from).map(|g| g.who.clone()) else { return false };
+        let Some(slot) = self.jam.current.iter().find(|p| p.who == who).map(|p| p.slot) else { return false };
+        let page = self.slot_page(slot);
         let p = &self.comp.play;
         match cmd.get("t").and_then(Value::as_str).unwrap_or("") {
             "column" => p.columns,
@@ -175,17 +232,10 @@ impl State {
                     ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => id,
                     _ => return false,
                 };
-                self.comp.surface.widgets.iter().any(|w| w.id == widget && p.surface_page.is_none_or(|pg| w.page == pg))
+                self.comp.surface.widgets.iter().any(|w| w.id == widget && page.is_none_or(|pg| w.page == pg))
             }
             _ => false,
         }
-    }
-
-    /// The device label of whoever has the controls.
-    pub fn current_player_label(&mut self, now: f64) -> Option<String> {
-        let guests = self.guests(now);
-        let seat = self.current_seat(&guests)?;
-        Some(self.net.peers().iter().find(|p| p.id == seat).map(|p| p.device.clone()).unwrap_or_else(|| format!("#{seat}")))
     }
 
     /// Redraws the code layer after a style or title change (no-op when it isn't shown).

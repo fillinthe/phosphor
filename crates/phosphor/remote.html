@@ -242,21 +242,23 @@ function renderPlay() {
   const p = state.play || {};
   $('#playtitle').textContent = p.title || 'Take the controls';
   const st = $('#playstat');
-  const mine = p.on && me != null && p.current === me;
-  endsAt = p.left == null ? null : Date.now() + p.left * 1000;
+  const minePlayer = (p.players || []).find(x => x.seat === me);
+  const mine = p.on && me != null && !!minePlayer;
+  const left = mine ? minePlayer.left : p.left;
+  endsAt = left == null ? null : Date.now() + left * 1000;
   if (!p.on) st.textContent = 'Audience play is off right now. Keep watching the screen!';
   else if (mine) st.innerHTML = '<b>Your turn!</b> Everything below changes the visuals' + (endsAt == null ? '.' : ' until the clock runs out.');
   else {
     const i = (p.queue || []).indexOf(me);
     const who = i < 0 ? 'Joining the line…' : i === 0 ? "<b>You're next.</b>" : `You're <b>${i + 1}</b> in line.`;
-    st.innerHTML = who + (p.current == null ? '' : ' Someone is playing now.');
+    st.innerHTML = who + ((p.players || []).length ? (p.players.length > 1 ? ` ${p.players.length} people are playing now.` : ' Someone is playing now.') : '');
   }
   // The moment a turn ends: say thanks for a few seconds.
   if (wasMine && !mine && p.on) { $('#playstat').innerHTML = '<b>Thanks, that was you!</b> Next person\'s turn.'; thanksUntil = Date.now() + 4000; }
   else if (thanksUntil > Date.now() && !mine) { $('#playstat').innerHTML = '<b>Thanks, that was you!</b> Next person\'s turn.'; }
   wasMine = mine;
   document.body.classList.toggle('locked', !mine);
-  document.body.classList.toggle('fixedpage', p.page != null);
+  document.body.classList.toggle('fixedpage', p.page != null || (minePlayer && minePlayer.page != null));
   clock();
   const cols = $('#playcols');
   const n = p.columns || 0;
@@ -273,7 +275,10 @@ let surfPage = Number(localStorage.getItem('surfPage') || 0); // each phone keep
 function renderSurface() {
   const all = state.surface || { columns: 12, widgets: [], pages: ['Main'] };
   const pages = all.pages && all.pages.length ? all.pages : ['Main'];
-  if (guest && state.play && state.play.page != null) surfPage = state.play.page;
+  if (guest && state.play) {
+    const mp = (state.play.players || []).find(x => x.seat === me);
+    if (mp && mp.page != null) surfPage = mp.page; else if (state.play.page != null) surfPage = state.play.page;
+  }
   if (surfPage >= pages.length) surfPage = 0;
   const tabs = $('#surftabs');
   const tsig = pages.join('|') + '#' + surfPage;

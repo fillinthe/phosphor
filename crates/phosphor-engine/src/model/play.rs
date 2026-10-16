@@ -9,6 +9,8 @@ pub struct AudiencePlay {
     pub enabled: bool,
     /// How long one person has the controls.
     pub turn_secs: u32,
+    /// How many people play at once (each gets a Surface page when no page is chosen).
+    pub players: u32,
     /// Control Surface page guests get (None = every page).
     pub surface_page: Option<usize>,
     /// Guests may trigger clip columns.
@@ -60,6 +62,6 @@ impl QrStyle {
 
 impl Default for AudiencePlay {
     fn default() -> Self {
-        Self { enabled: false, turn_secs: 60, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), qr_style: QrStyle::default(), qr_caption: true }
+        Self { enabled: false, turn_secs: 60, players: 1, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), qr_style: QrStyle::default(), qr_caption: true }
     }
 }
