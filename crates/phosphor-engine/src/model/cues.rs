@@ -51,16 +51,19 @@ pub enum TimecodeSource {
     ShowClock,
     /// MIDI timecode (MTC) from any MIDI input.
     Midi,
+    /// Audio timecode (LTC / SMPTE) on the audio input (Audio panel), either of the first two channels.
+    Ltc,
 }
 
 impl TimecodeSource {
-    pub const ALL: [TimecodeSource; 3] = [TimecodeSource::Off, TimecodeSource::ShowClock, TimecodeSource::Midi];
+    pub const ALL: [TimecodeSource; 4] = [TimecodeSource::Off, TimecodeSource::ShowClock, TimecodeSource::Midi, TimecodeSource::Ltc];
 
     pub fn name(self) -> &'static str {
         match self {
             TimecodeSource::Off => "No timecode",
             TimecodeSource::ShowClock => "Show clock",
             TimecodeSource::Midi => "MIDI timecode",
+            TimecodeSource::Ltc => "Audio timecode (LTC)",
         }
     }
 }

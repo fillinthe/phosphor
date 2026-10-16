@@ -18,6 +18,7 @@ mod folders;
 mod isf_lib;
 mod media;
 mod net;
+mod ltc;
 mod pacing;
 mod panels;
 mod ui;
