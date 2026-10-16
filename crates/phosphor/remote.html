@@ -82,6 +82,21 @@
   #lock input { flex:1; min-width:140px; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; }
   #lockmsg { width:100%; color:var(--dim); font-size:12px; }
   .hint { color:var(--dim); font-size:12px; }
+  /* Audience play (/play): the Control Surface, clip columns and Surprise, one guest at a time. */
+  #play, #playbtns { display:none; }
+  body.guest #play, body.guest #playbtns { display:block; }
+  body.guest nav, body.guest #mastersec, body.guest #tap, body.guest #timing, body.guest #lock, body.guest #prevwrap,
+  body.guest .page:not(#p-surface), body.guest.fixedpage #surftabs { display:none !important; }
+  body.guest #p-surface { display:block; }
+  body.guest.locked #surface, body.guest.locked #playbtns { pointer-events:none; opacity:.35; filter:grayscale(1); }
+  #playtitle { font-size:22px; font-weight:700; letter-spacing:.02em; }
+  #playstat { margin-top:6px; font-size:16px; color:var(--dim); }
+  #playstat b { color:var(--acc); }
+  #playclock { font-variant-numeric: tabular-nums; font-size:40px; font-weight:700; color:var(--ink); margin-top:4px; }
+  body.guest.locked #playclock { color:var(--dim); }
+  #playcols { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  #playcols button, #playsurprise { flex:1; min-width:64px; padding:16px 0; font-size:16px; font-weight:600; }
+  #playsurprise { width:100%; background:#2b1d3a; border-color:#b78cff; color:#d9c3ff; }
 </style>
 </head>
 <body>
@@ -98,10 +113,12 @@
   <button id="pwgo" class="big">Unlock</button>
 </div>
 <div id="prevwrap"><img id="prev" alt=""></div>
+<div id="play"><div class="section"><div id="playtitle"></div><div id="playstat"></div><div id="playclock"></div></div></div>
 <div class="section" id="mastersec">
   <div class="row"><span class="label">MASTER</span><div id="master"></div><span class="val" id="masterv"></span></div>
 </div>
 <div class="page" id="p-surface"><div class="section"><div id="surftabs"></div><div id="surface"></div><p class="hint" id="surfhint"></p></div></div>
+<div id="playbtns"><div class="section"><div id="playcols"></div><button id="playsurprise">Surprise me</button></div></div>
 <div class="page on" id="p-mixer"><div class="section"><div id="strips"></div></div></div>
 <div class="page" id="p-clips"><div class="section"><div id="clips"></div><p class="hint">Tap a cell to trigger · tap a number to trigger the whole column</p></div></div>
 <div class="page" id="p-ctrl"><div class="section"><img id="selth" alt=""><div id="params"></div></div></div>
@@ -114,6 +131,10 @@
 </nav>
 <script>
 let ws = null, state = null, touching = new Set(), pending = new Map(), raf = 0;
+// Audience play: /play is the same page in guest mode. `me` is this phone's seat; the Mac says whose turn it is.
+const guest = location.pathname.startsWith('/play');
+let me = null, endsAt = null;
+if (guest) { document.body.classList.add('guest', 'locked'); document.title = 'Phosphor · Play'; }
 const $ = s => document.querySelector(s);
 const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
 // Coalesce slider moves to one message per animation frame per control.
@@ -141,6 +162,7 @@ function setIfIdle(el, v) { if (el && !touching.has(el.dataset.key)) el.setValue
 
 function render() {
   if (!state) return;
+  if (guest) renderPlay();
   $('#bpm').textContent = state.bpm.toFixed(1) + ' bpm';
   const tb = $('#timing'); tb.textContent = { Now: 'Now', Beat: 'Beat', Bar: 'Bar' }[state.timing] || 'Now'; tb.classList.toggle('on', state.timing && state.timing !== 'Now');
   setIfIdle($('#master'), state.master); $('#masterv').textContent = Math.round(state.master * 100) + '%';
@@ -207,6 +229,37 @@ function render() {
   renderSurface();
   state.params.forEach(p => { const r = box.querySelector(`[data-key="${CSS.escape(p.key)}"]`); if (r) setIfIdle(r, p.value); if (p.fx) { const b = box.querySelector(`[data-fxon="${p.fx}"]`); if (b) b.classList.toggle('on', p.fxon); } });
 }
+function clock() {
+  const el = $('#playclock');
+  if (endsAt == null) { el.textContent = ''; return; }
+  const s = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+  el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+setInterval(clock, 500);
+function renderPlay() {
+  const p = state.play || {};
+  $('#playtitle').textContent = p.title || 'Take the controls';
+  const st = $('#playstat');
+  const mine = p.on && me != null && p.current === me;
+  endsAt = p.left == null ? null : Date.now() + p.left * 1000;
+  if (!p.on) st.textContent = 'Audience play is off right now. Keep watching the screen!';
+  else if (mine) st.innerHTML = '<b>Your turn!</b> Everything below changes the visuals' + (endsAt == null ? '.' : ' until the clock runs out.');
+  else {
+    const i = (p.queue || []).indexOf(me);
+    const who = i < 0 ? 'Joining the line…' : i === 0 ? "<b>You're next.</b>" : `You're <b>${i + 1}</b> in line.`;
+    st.innerHTML = who + (p.current == null ? '' : ' Someone is playing now.');
+  }
+  document.body.classList.toggle('locked', !mine);
+  document.body.classList.toggle('fixedpage', p.page != null);
+  clock();
+  const cols = $('#playcols');
+  const n = p.columns || 0;
+  if (+cols.dataset.n !== n) {
+    cols.dataset.n = n; cols.innerHTML = '';
+    for (let c = 0; c < n; c++) { const b = document.createElement('button'); b.dataset.col = c; b.textContent = c + 1; cols.appendChild(b); }
+  }
+  $('#playsurprise').style.display = p.surprise ? '' : 'none';
+}
 // Control Surface: the widgets you built on the Mac, on the same grid. Every move goes back as
 // {t:'set', target, v} through the same path as the Mac's own controls.
 function setTarget(target, v) { queue(JSON.stringify(target), { t: 'set', target, v }); }
@@ -214,6 +267,7 @@ let surfPage = Number(localStorage.getItem('surfPage') || 0); // each phone keep
 function renderSurface() {
   const all = state.surface || { columns: 12, widgets: [], pages: ['Main'] };
   const pages = all.pages && all.pages.length ? all.pages : ['Main'];
+  if (guest && state.play && state.play.page != null) surfPage = state.play.page;
   if (surfPage >= pages.length) surfPage = 0;
   const tabs = $('#surftabs');
   const tsig = pages.join('|') + '#' + surfPage;
@@ -294,6 +348,7 @@ document.addEventListener('click', e => {
   if (t.dataset.p) { document.querySelectorAll('nav button[data-p]').forEach(b => b.classList.toggle('on', b === t)); document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'p-' + t.dataset.p)); }
 });
 $('#tap').onclick = () => send({ t: 'tap' });
+$('#playsurprise').onclick = () => send({ t: 'surprise' });
 $('#timing').onclick = () => { const order = ['Now', 'Beat', 'Bar']; const cur = state ? state.timing : 'Now'; send({ t: 'timing', v: order[(order.indexOf(cur) + 1) % 3] }); };
 const master = slider('master', 0, 1, 1, v => queue('master', { t: 'master', v }));
 master.id = 'master'; $('#master').replaceWith(master);
@@ -319,10 +374,11 @@ $('#pwgo').onclick = () => { const p = $('#pw').value; localStorage.setItem('pho
 $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwgo').click(); });
 
 function connect() {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/control');
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (guest ? '/guest' : '/control'));
   ws.onopen = () => { $('#dot').classList.add('on'); $('#status').textContent = viewOnly ? 'watching' : 'connected'; };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
+    if (m.you !== undefined) { me = m.you; if (state) render(); return; }
     if (m.auth !== undefined) return auth(m.auth);
     state = m; render();
   };

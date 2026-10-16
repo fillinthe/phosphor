@@ -18,6 +18,8 @@ pub enum PeerKind {
     Remote,
     Viewer,
     Audio,
+    /// Audience member on the play page (takes turns; see `app::play`).
+    Guest,
 }
 
 /// A phone/tablet/browser connected to the session.
@@ -224,6 +226,11 @@ impl NetSession {
         format!("{}remote", self.url())
     }
 
+    /// The audience page (QR code for the room).
+    pub fn play_url(&self) -> String {
+        format!("{}play", self.url())
+    }
+
     pub fn url(&self) -> String {
         let ip = crate::control::local_ip().unwrap_or_else(|| "localhost".into());
         format!("http://{ip}:{}/", self.port)
@@ -421,7 +428,12 @@ mod native {
         let device = super::device_label(&request);
         if path.starts_with("/control") {
             let seat = super::Seat::join(&registry, super::PeerKind::Remote, &ip, &device);
-            control_socket(stream, running, remote, seat);
+            control_socket(stream, running, remote, seat, false);
+            return;
+        }
+        if path.starts_with("/guest") {
+            let seat = super::Seat::join(&registry, super::PeerKind::Guest, &ip, &device);
+            control_socket(stream, running, remote, seat, true);
             return;
         }
         if path.starts_with("/audio") {
@@ -487,7 +499,8 @@ mod native {
                     }
                 }
             }
-            p if p.starts_with("/remote") => {
+            // The remote page doubles as the audience page (it reads its own path).
+            p if p.starts_with("/remote") || p.starts_with("/play") => {
                 let body = REMOTE_HTML.as_bytes();
                 let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
                 let _ = stream.write_all(body);
@@ -502,20 +515,28 @@ mod native {
 
     /// Remote control: pushes the project state whenever it changes and queues the commands the
     /// page sends back (JSON objects like {"t":"opacity","layer":3,"v":0.5}).
-    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: super::RemoteHub, seat: super::Seat) {
+    /// A guest (audience play) needs no password: it learns its seat number, every command it sends
+    /// carries it as `_from`, and the Mac decides whose turn it is.
+    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: super::RemoteHub, seat: super::Seat, guest: bool) {
         let (state, cmds, count, password) = remote;
         let _ = stream.set_nodelay(true);
         let Ok(mut ws) = tungstenite::accept(stream) else { return };
         let _ = ws.get_mut().set_read_timeout(Some(Duration::from_millis(30)));
-        count.fetch_add(1, Ordering::Relaxed);
+        // Guests aren't "remotes": they don't unlock layer thumbnails or count in the Session panel.
+        if !guest {
+            count.fetch_add(1, Ordering::Relaxed);
+        }
         let mut sent = u64::MAX;
         // The password this socket proved it knows (None = not authorised, unless none is set).
         let mut granted: Option<Option<String>> = None;
         let mut told: Option<bool> = None;
+        if guest && ws.send(tungstenite::Message::Text(serde_json::json!({ "you": seat.id }).to_string().into())).is_err() {
+            return;
+        }
         while running.load(Ordering::Relaxed) && !seat.kicked() {
             let current = password.lock().unwrap().clone();
-            let allowed = current.is_none() || granted.as_ref() == Some(&current);
-            if told != Some(allowed) {
+            let allowed = guest || current.is_none() || granted.as_ref() == Some(&current);
+            if !guest && told != Some(allowed) {
                 seat.set_controlling(allowed);
                 let msg = serde_json::json!({ "auth": if allowed { "ok" } else { "required" } }).to_string();
                 if ws.send(tungstenite::Message::Text(msg.as_str().into())).is_err() {
@@ -532,7 +553,14 @@ mod native {
             }
             match ws.read() {
                 Ok(tungstenite::Message::Text(t)) => {
-                    let Ok(v) = serde_json::from_str::<serde_json::Value>(t.as_str()) else { continue };
+                    let Ok(mut v) = serde_json::from_str::<serde_json::Value>(t.as_str()) else { continue };
+                    if guest {
+                        if let Some(o) = v.as_object_mut() {
+                            o.insert("_from".into(), serde_json::json!(seat.id));
+                            cmds.lock().unwrap().push(v);
+                        }
+                        continue;
+                    }
                     if v.get("t").and_then(|t| t.as_str()) == Some("auth") {
                         let tried = v.get("password").and_then(|p| p.as_str()).unwrap_or("");
                         if current.as_deref().is_some_and(|p| p == tried) {
@@ -555,7 +583,9 @@ mod native {
                 Err(_) => break,
             }
         }
-        count.fetch_sub(1, Ordering::Relaxed);
+        if !guest {
+            count.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 
     /// Viewer microphone: first a text message `rate:<hz>`, then binary little-endian f32 mono

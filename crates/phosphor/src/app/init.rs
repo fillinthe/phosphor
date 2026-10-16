@@ -120,6 +120,7 @@ impl PhosphorApp {
                 stream_audio_devices: Vec::new(),
                 net: NetSession::new(),
                 net_audio: Vec::new(),
+                jam: Default::default(),
                 remote_password: stored(KEY_REMOTE_PASSWORD).unwrap_or_default(),
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
                 #[cfg(not(target_arch = "wasm32"))]

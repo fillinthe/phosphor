@@ -44,6 +44,7 @@ mod init;
 mod layout;
 mod menus;
 mod outputs;
+pub(crate) mod play;
 mod quick;
 mod recovery;
 mod render;
@@ -167,6 +168,8 @@ pub struct State {
     pub stream_audio_devices: Vec<(i32, String)>,
     pub net: NetSession,
     net_audio: Vec<f32>,
+    /// Audience play: whose turn it is.
+    pub jam: play::Jam,
     /// Password phones need to control (viewing never needs it). Empty = no password.
     pub remote_password: String,
     pub require_password: bool,

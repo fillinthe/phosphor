@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::app::{State, Trigger};
 
 /// What the remote page needs: mixer, clip grid, and the selected layer's controls.
-pub fn state_json(st: &State) -> String {
+pub fn state_json(st: &State, now: f64) -> String {
     let comp = &st.comp;
     let thumbs = st.net.thumb_versions();
     let layers: Vec<Value> = comp
@@ -72,6 +72,7 @@ pub fn state_json(st: &State) -> String {
         "selected": selected,
         "layers": layers,
         "params": params,
+        "play": st.play_json(now),
     })
     .to_string()
 }
@@ -80,8 +81,14 @@ fn round(v: f32) -> f64 {
     (v as f64 * 1000.0).round() / 1000.0
 }
 
-/// Applies one command from a remote.
+/// Applies one command from a remote. Guests (audience play) carry `_from`; they only get through
+/// on their turn and for the controls the show allows (`State::guest_may`).
 pub fn apply(st: &mut State, cmd: &Value, now: f64) {
+    if let Some(from) = cmd.get("_from").and_then(Value::as_u64)
+        && !st.guest_may(from, cmd)
+    {
+        return;
+    }
     let f = |k: &str| cmd.get(k).and_then(Value::as_f64).unwrap_or(0.0);
     let id = |k: &str| cmd.get(k).and_then(Value::as_u64).unwrap_or(0);
     let flag = |k: &str| cmd.get(k).and_then(Value::as_bool).unwrap_or(false);
@@ -124,6 +131,7 @@ pub fn apply(st: &mut State, cmd: &Value, now: f64) {
         "clip" => st.trigger(Trigger::Clip { layer: id("layer"), slot: f("slot") as usize }, now),
         "column" => st.trigger(Trigger::Column(f("col") as usize), now),
         "tap" => st.clock.tap(now),
+        "surprise" => st.quick(crate::app::Quick::Surprise, now),
         // Launch timing (quantize): "Now" / "Beat" / "Bar".
         "timing" => {
             if let Some(t) = cmd.get("v").and_then(|v| serde_json::from_value::<phosphor_engine::LaunchTiming>(v.clone()).ok()) {
