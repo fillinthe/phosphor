@@ -9,6 +9,8 @@ use crate::net::PeerKind;
 
 /// Name of the layer that shows the QR code on the output.
 pub const QR_LAYER: &str = "Scan to play";
+/// Name of the text layer that shows who's playing.
+pub const NOW_PLAYING_LAYER: &str = "Now playing";
 
 #[derive(Default)]
 pub struct Jam {
@@ -153,6 +155,43 @@ impl State {
         }
     }
 
+    /// Keeps the "Now playing" text layer in step with the players (a line at the bottom of the picture);
+    /// removes it when the setting is off or nobody plays.
+    pub(crate) fn update_now_playing(&mut self, now: f64) {
+        let names: Vec<String> = if self.comp.play.enabled && self.comp.play.show_names {
+            self.players(now).into_iter().filter(|p| !p.label.is_empty()).map(|p| p.label).collect()
+        } else {
+            Vec::new()
+        };
+        let existing = self.comp.layers.iter().position(|l| l.name == NOW_PLAYING_LAYER);
+        if names.is_empty() {
+            if let Some(i) = existing {
+                let id = self.comp.layers[i].id;
+                crate::panels::remove_layer(self, id);
+            }
+            return;
+        }
+        let text = format!("Now playing: {}", names.join("  ·  "));
+        let style = phosphor_engine::TextStyle { text, size: 0.07, outline: 0.08, ..crate::text::default_style() };
+        match existing {
+            Some(i) => {
+                if let phosphor_engine::SourceSpec::Text(cur) = &self.comp.layers[i].source
+                    && cur.text == style.text
+                {
+                    return;
+                }
+                self.comp.layers[i].source = phosphor_engine::SourceSpec::Text(style);
+            }
+            None => {
+                let layer = self.comp.add_layer();
+                layer.name = NOW_PLAYING_LAYER.into();
+                layer.source = phosphor_engine::SourceSpec::Text(style);
+                // Along the bottom edge, out of the way of the picture.
+                layer.transform.y = -0.42;
+            }
+        }
+    }
+
     /// Host: end one player's turn now (or everyone's with `None`); the next people get the controls.
     pub fn skip_turn(&mut self, who: Option<&str>) {
         let ended: Vec<String> = self.jam.current.iter().filter(|p| who.is_none_or(|w| p.who == w)).map(|p| p.who.clone()).collect();
@@ -184,7 +223,11 @@ impl State {
         let mut out = Vec::new();
         for p in &self.jam.current {
             let Some(g) = guests.iter().find(|g| g.who == p.who) else { continue };
-            let label = peers.iter().find(|x| x.id == g.seat).map(|x| x.device.clone()).unwrap_or_else(|| format!("#{}", g.seat));
+            let label = peers
+                .iter()
+                .find(|x| x.id == g.seat)
+                .map(|x| if x.name.is_empty() { x.device.clone() } else { x.name.clone() })
+                .unwrap_or_else(|| format!("#{}", g.seat));
             let left = (waiting > 0).then(|| (turn - (now - p.started)).max(0.0));
             out.push(PlayerStatus { who: p.who.clone(), seat: g.seat, label, page: self.slot_page(p.slot), left });
         }

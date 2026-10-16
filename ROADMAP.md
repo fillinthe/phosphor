@@ -40,7 +40,8 @@ app that's much smaller and lighter on the CPU.
    - [x] Audience play: QR code (also as a layer on the output), guests take timed turns at the Control Surface / columns / Surprise
    - [ ] HTTPS so passwords aren't sent in clear text
    - [x] Audience play: caption on the code, reconnect keeps the place, several players at once (one per Surface page)
-   - [ ] Audience play: player name on the output; cool-down per phone
+   - [x] Audience play: player names (typed on the phone) on the output
+   - [ ] Audience play: cool-down per phone
    - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,

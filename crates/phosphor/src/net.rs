@@ -34,6 +34,8 @@ pub struct Peer {
     pub controlling: bool,
     /// Guests: the id their browser remembers, so a reconnect is the same person.
     pub token: String,
+    /// Guests: the name they typed (shown in the panel and, if on, on the output).
+    pub name: String,
 }
 
 /// Everyone connected, plus disconnect requests and blocked addresses.
@@ -58,7 +60,7 @@ impl Seat {
         let mut r = reg.lock().unwrap();
         r.next += 1;
         let id = r.next;
-        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false, token: String::new() });
+        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false, token: String::new(), name: String::new() });
         Self { reg: reg.clone(), id }
     }
 
@@ -66,9 +68,10 @@ impl Seat {
         self.reg.lock().unwrap().kicked.contains(&self.id)
     }
 
-    fn set_token(&self, token: &str) {
+    fn set_token(&self, token: &str, name: &str) {
         if let Some(p) = self.reg.lock().unwrap().peers.iter_mut().find(|p| p.id == self.id) {
             p.token = token.chars().filter(|c| c.is_ascii_alphanumeric()).take(40).collect();
+            p.name = name.chars().filter(|c| !c.is_control()).take(24).collect::<String>().trim().to_string();
         }
     }
 
@@ -564,7 +567,7 @@ mod native {
                     let Ok(mut v) = serde_json::from_str::<serde_json::Value>(t.as_str()) else { continue };
                     if guest {
                         if v.get("t").and_then(|t| t.as_str()) == Some("hello") {
-                            seat.set_token(v.get("token").and_then(|t| t.as_str()).unwrap_or(""));
+                            seat.set_token(v.get("token").and_then(|t| t.as_str()).unwrap_or(""), v.get("name").and_then(|t| t.as_str()).unwrap_or(""));
                             continue;
                         }
                         if let Some(o) = v.as_object_mut() {

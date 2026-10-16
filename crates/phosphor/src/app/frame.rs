@@ -92,6 +92,7 @@ impl PhosphorApp {
             st.run_autopilot(now);
             st.run_cues(now);
             st.run_play(now);
+            st.update_now_playing(now);
         }
         if let Some(n) = self.bench.as_ref().map(|b| b.cfg.previews).filter(|n| *n > 0) {
             for (i, d) in phosphor_engine::shaders::all_effects().iter().cycle().take(n).enumerate() {

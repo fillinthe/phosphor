@@ -103,6 +103,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         ui.checkbox(&mut play.columns, "Clip columns");
         ui.checkbox(&mut play.surprise, "Surprise button");
     });
+    ui.checkbox(&mut play.show_names, "Show the players' names on the output").on_hover_text("A \"Now playing: …\" text layer along the bottom; guests type their name on the play page");
     ui.horizontal(|ui| {
         ui.label("Surface page");
         let pages = &st.comp.surface.pages;
