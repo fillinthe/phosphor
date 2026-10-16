@@ -171,8 +171,8 @@ Legend: [x] done · [~] in progress · [ ] not started
       (master fade, layer opacity/on-off, any generator/effect parameter, mix, on/off), press Learn, move a control
 - [x] OSC port advertised over Zeroconf (`_osc._udp`) so TouchOSC lists "Phosphor"
 - [x] OSC feedback (TouchOSC faders follow Phosphor) and MIDI out to the same devices (motor faders, LED rings)
-- [ ] OSC Query
-- [ ] **TouchOSC integration**: OSC in/out with Zeroconf (`_osc._udp`), OSC Query, and a `.tosc`
+- [x] OSC Query (`_oscjson._tcp`, namespace with values/ranges)
+- [x] **TouchOSC integration** (export done; .tosc import still to do): OSC in/out with Zeroconf (`_osc._udp`), OSC Query, and a `.tosc`
       exporter (zlib XML, `<lexml version='4'>` node tree) that generates a TouchOSC layout from any
       Phosphor control surface; `.tosc` importer to map an existing layout
 - [x] Right-click any control → Learn, or type a mapping (OSC address, MIDI CC/note, key); every control also

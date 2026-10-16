@@ -83,6 +83,15 @@ impl PhosphorApp {
                         });
                     }
                 }
+                Purpose::TouchOsc => {
+                    if let Some(p) = paths.first() {
+                        let p = p.with_extension("tosc");
+                        st.notice = Some(match std::fs::write(&p, crate::tosc::export(&st.comp)) {
+                            Ok(()) => format!("TouchOSC layout saved: {} (open it in TouchOSC, then add a UDP connection to this Mac)", p.display()),
+                            Err(e) => format!("Couldn't save the TouchOSC layout: {e}"),
+                        });
+                    }
+                }
                 Purpose::StreamFile => {
                     if let Some(p) = paths.first() {
                         st.stream.settings.file_path = p.to_string_lossy().to_string();

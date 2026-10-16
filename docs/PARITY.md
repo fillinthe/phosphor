@@ -41,7 +41,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | LFO / audio / step sequencer / random / envelope → any parameter | VDMX | ✅ |
 | MIDI + OSC learn, feedback, MIDI out, keyboard | all | ✅ |
 | Phone / tablet remote with no setup | — | ✅ (beyond the others) |
-| OSC Query, TouchOSC layout export | VDMX | ⬜ |
+| OSC Query, TouchOSC layout export | VDMX | ✅ |
 | Presets: looks, layers, chains, venues | all | ✅ |
 
 ## Mapping (MadMapper's core)

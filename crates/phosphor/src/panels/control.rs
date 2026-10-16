@@ -18,7 +18,18 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     hint(ui, &control.osc_status);
-    hint(ui, "TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
+    ui.horizontal_wrapped(|ui| {
+        hint(ui, "TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui
+            .button(label(icon::EXPORT, "Export TouchOSC layout…"))
+            .on_hover_text("A ready-made TouchOSC layout from your Control Surface (or master, layers and columns if you haven't built one), already sending Phosphor's addresses")
+            .clicked()
+        {
+            st.dialogs.save_file(crate::dialogs::Purpose::TouchOsc, ("TouchOSC layout", &["tosc"]), "Phosphor.tosc");
+        }
+    });
+    let control = &mut st.control;
     ui.horizontal(|ui| {
         ui.checkbox(&mut control.feedback, "Send feedback")
             .on_hover_text("Controllers follow Phosphor: values changed here (mouse, phone, other controllers) go back to TouchOSC faders and to MIDI controllers with motor faders or LED rings");
