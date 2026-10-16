@@ -34,6 +34,37 @@ impl Destination {
     }
 }
 
+/// What a recording to a file is encoded as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum FileFormat {
+    /// By the file name: .mp4 = H.264, .mov = ProRes 422.
+    #[default]
+    Auto,
+    /// Hap (DXT1): plays back with almost no CPU in VJ apps.
+    Hap,
+    /// Hap Alpha (DXT5): keeps transparency.
+    HapAlpha,
+}
+
+impl FileFormat {
+    pub const ALL: [FileFormat; 3] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            FileFormat::Auto => "H.264 (.mp4) / ProRes (.mov)",
+            FileFormat::Hap => "Hap (.mov)",
+            FileFormat::HapAlpha => "Hap Alpha (.mov)",
+        }
+    }
+}
+
+impl phosphor_engine::Choice for FileFormat {
+    const OPTIONS: &'static [Self] = &FileFormat::ALL;
+    fn label(self) -> &'static str {
+        self.name()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StreamSettings {
@@ -42,6 +73,7 @@ pub struct StreamSettings {
     pub stream_key: String,
     pub srt_url: String,
     pub file_path: String,
+    pub file_format: FileFormat,
     /// 0 = same as canvas.
     pub height: u32,
     pub fps: u32,
@@ -58,6 +90,7 @@ impl Default for StreamSettings {
             stream_key: String::new(),
             srt_url: "srt://host:9000?mode=caller".into(),
             file_path: String::new(),
+            file_format: FileFormat::Auto,
             height: 1080,
             fps: 30,
             kbps: 6000,
@@ -232,9 +265,60 @@ impl Streamer {
         }
     }
 
+    /// Recording to Hap: Phosphor encodes and writes the movie itself (no FFmpeg program needed).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn start_hap(&mut self, width: u32, height: u32, now: f64) -> Result<(), String> {
+        let s = &self.settings;
+        if s.file_path.trim().is_empty() {
+            return Err("Choose a file first".into());
+        }
+        let path = std::path::Path::new(s.file_path.trim()).with_extension("mov").to_string_lossy().to_string();
+        let alpha = s.file_format == FileFormat::HapAlpha;
+        let fps = s.fps.clamp(1, 120);
+        let mut writer = crate::media::video::hap_encode::HapWriter::create(&path, width, height, fps, alpha)?;
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Msg>(4);
+        let shared = self.shared.clone();
+        std::thread::Builder::new()
+            .name("phosphor-hap-record".into())
+            .spawn(move || {
+                let mut last: Vec<u8> = Vec::new();
+                while let Ok(msg) = rx.recv() {
+                    if let Msg::Frame(f) = msg {
+                        last = f;
+                    }
+                    if last.is_empty() {
+                        continue;
+                    }
+                    if let Err(e) = writer.write(&last) {
+                        let mut s = shared.lock().unwrap();
+                        s.status = format!("Recording stopped: {e}");
+                        s.error = true;
+                        break;
+                    }
+                    shared.lock().unwrap().sent += 1;
+                }
+                if let Err(e) = writer.finish() {
+                    let mut s = shared.lock().unwrap();
+                    s.status = format!("Couldn't finish the movie: {e}");
+                    s.error = true;
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        self.tx = Some(tx);
+        self.frame_size = (width, height);
+        self.pacer.reset(now);
+        self.started = Some(now);
+        let kind = if alpha { "Hap Alpha" } else { "Hap" };
+        *self.shared.lock().unwrap() = Shared { status: format!("Recording {kind} · {path}"), ..Default::default() };
+        Ok(())
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn start_native(&mut self, width: u32, height: u32, now: f64) -> Result<(), String> {
         self.close();
+        if self.settings.destination == Destination::File && self.settings.file_format != FileFormat::Auto {
+            return self.start_hap(width, height, now);
+        }
         let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found. Install it with: brew install ffmpeg")?;
         let s = &self.settings;
         let (fmt, target) = s.target();

@@ -51,6 +51,13 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                         choose_file = true;
                     }
                 });
+                ui.horizontal(|ui| {
+                    ui.label("Format");
+                    choice_combo(ui, "record_format", &mut s.file_format, 200.0, false);
+                    if s.file_format != crate::stream::FileFormat::Auto {
+                        hint(ui, "Hap is encoded by Phosphor at the full canvas size; the movie plays back with almost no CPU in Phosphor, VDMX, Resolume and MadMapper.");
+                    }
+                });
             }
         }
         ui.horizontal(|ui| {
