@@ -18,6 +18,9 @@ impl PhosphorApp {
 
     pub(crate) fn run_action(&mut self, ctx: &egui::Context, a: crate::menu::Action, now: f64) {
         use crate::menu::Action as A;
+        if self.lock.active && !super::lock::allowed_when_locked(&a) {
+            return;
+        }
         let st = &mut self.state;
         let selected_layer = st.selected.filter(|id| *id != phosphor_engine::MASTER_ID && st.comp.layers.iter().any(|l| l.id == *id));
         match a {
@@ -82,6 +85,7 @@ impl PhosphorApp {
                 }
             }
             A::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            A::Lock => self.lock.window = true,
             A::Undo => {
                 if let Some(c) = st.history.undo(&st.comp) {
                     st.comp = c;

@@ -42,6 +42,7 @@ mod frame;
 mod import;
 mod init;
 mod layout;
+pub(crate) mod lock;
 mod menus;
 mod outputs;
 pub(crate) mod play;
@@ -67,6 +68,7 @@ const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
 const KEY_REMOTE_PASSWORD: &str = "remote_password";
 const KEY_UPDATE_SKIP: &str = "update_skip";
+const KEY_LOCK: &str = "lock";
 const KEY_RECENT_PROJECTS: &str = "recent_projects";
 /// In-window menu clicks, queued for `menu_actions`.
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
@@ -528,6 +530,9 @@ pub struct ExportUi {
     pub name: String,
     pub zip: bool,
     pub autostart: bool,
+    /// Open the exported show locked; the password to unlock it (empty = no password).
+    pub lock: bool,
+    pub lock_password: String,
     /// (media files, bytes, missing), worked out when the window opens.
     pub summary: Option<(usize, u64, usize)>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -560,6 +565,8 @@ pub struct PhosphorApp {
     detached: Vec<Tab>,
     /// Built-in and saved layouts, and which opens at startup.
     layouts: Layouts,
+    /// Locked player mode (see `lock.rs`).
+    pub(crate) lock: lock::Lock,
     /// Layouts from the account were applied this session; next upload check (seconds).
     cloud_layouts_applied: bool,
     cloud_layouts_check: f64,

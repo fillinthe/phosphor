@@ -46,6 +46,8 @@ pub enum Action {
     /// View ▸ Layouts (index into the layout list).
     Layout(usize),
     SaveLayout,
+    /// Lock / unlock the controls (player mode).
+    Lock,
     Donate,
     ReportBug,
     CheckUpdates,
@@ -128,6 +130,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::ResetLayout, "Reset Layout", None),
             I(A::AddMonitor, "Add Monitor", None),
             I(A::Gather, "Gather Floating Windows", None),
+            S,
+            I(A::Lock, "Lock Controls… / Unlock", Some((true, Key::L))),
             S,
             I(A::ZoomIn, "Zoom In", Some((false, Key::Equals))),
             I(A::ZoomOut, "Zoom Out", Some((false, Key::Minus))),
