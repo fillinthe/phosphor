@@ -37,7 +37,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Feature | Who has it | Phosphor |
 |---|---|---|
 | Dockable panels, layouts, detach to windows | VDMX | ✅ |
-| Control surfaces you build (buttons, faders, XY, pages) | VDMX | ✅ (colour picker ⬜) |
+| Control surfaces you build (buttons, faders, XY, colour, pages) | VDMX | ✅ |
 | LFO / audio / step sequencer / random / envelope → any parameter | VDMX | ✅ |
 | MIDI + OSC learn, feedback, MIDI out, keyboard | all | ✅ |
 | Phone / tablet remote with no setup | — | ✅ (beyond the others) |

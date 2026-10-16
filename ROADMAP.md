@@ -160,7 +160,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Dockable, rearrangeable panels; layout saved with the project
 - [x] **Control surfaces**: buttons, toggles, faders, sliders, XY pads, labels; each drives many targets with ranges
 - [x] Control surface: multiple pages (Mac + phone, page switch mappable)
-- [ ] Control surface: colour pickers
+- [x] Control surface: colour pickers
 - [x] Data sources: audio input analysis (level, low/mid/high, 32-band spectrum) + LFOs (sine/tri/ramp/square),
       random (S&H), 8-step sequencer, beat; **tempo sync** (1/4 beat … 8 bars), Add or **Sweep a range** (from/to),
       invert, live meter; a green tick on every modulated slider shows where it really is

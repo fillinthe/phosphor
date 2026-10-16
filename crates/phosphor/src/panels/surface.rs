@@ -51,6 +51,8 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
     let mut sets: Vec<(ControlTarget, f32)> = Vec::new();
     let mut grab: Option<Grab> = ui.ctx().data(|d| d.get_temp(grab_id)).flatten();
     let mut open_editor: Option<u64> = None;
+    // A colour widget's brightness strip was dragged: (widget, brightness).
+    let mut brightness: Option<(u64, f32)> = None;
 
     ui.horizontal_top(|ui| {
         let canvas_w = (ui.available_width() - if inspector { 330.0 } else { 0.0 }).max(200.0);
@@ -131,6 +133,23 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                             }
                         }
                     }
+                    WidgetKind::Color => {
+                        if (resp.dragged_by(egui::PointerButton::Primary) || resp.clicked())
+                            && let Some(p) = pointer
+                        {
+                            let (x, _) = pos(p);
+                            let strip = color_strip(rect);
+                            if strip.contains(resp.interact_pointer_pos().unwrap_or(p)) {
+                                brightness = Some((w.id, x));
+                            } else {
+                                // Saturation measured over the square above the strip.
+                                let sq = color_square(rect);
+                                let sat = (1.0 - (p.y - sq.top()) / sq.height()).clamp(0.0, 1.0);
+                                sets.push((target.clone(), x));
+                                sets.push((ControlTarget::SurfaceY(w.id), sat));
+                            }
+                        }
+                    }
                     WidgetKind::Label => {}
                 }
                 draw_widget(&painter, w, rect, false);
@@ -138,7 +157,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                     continue;
                 }
                 mapped_badge(ui, &resp, &target);
-                let is_xy = w.kind == WidgetKind::XyPad;
+                let is_xy = matches!(w.kind, WidgetKind::XyPad | WidgetKind::Color);
                 let wid = w.id;
                 resp.on_hover_text(binding_summary(w, &targets)).right_menu(|ui| {
                     if is_xy {
@@ -194,6 +213,13 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
     if let Some(id) = open_editor {
         edit = true;
         selected = Some(id);
+    }
+    if let Some((id, b)) = brightness
+        && let Some(w) = st.comp.surface.widget_mut(id)
+    {
+        w.value_z = b;
+        // Re-send the colour at the new brightness.
+        sets.push((ControlTarget::Surface(id), w.value));
     }
     for (t, v) in sets {
         st.set_control(&t, v, now);
@@ -253,6 +279,49 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             p.circle_filled(pt, 7.0, c);
             p.text(rect.left_top() + egui::vec2(6.0, 4.0), egui::Align2::LEFT_TOP, &w.label, font, Color32::WHITE);
         }
+        WidgetKind::Color => {
+            let sq = color_square(rect);
+            // Hue across, saturation up (at the widget's brightness).
+            let mut mesh = egui::Mesh::default();
+            let (cols, rows) = (12, 2);
+            let probe = |h: f32, s: f32| {
+                let mut t = w.clone();
+                (t.value, t.value_y) = (h, s);
+                let [r, g, b] = t.rgb();
+                Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
+            };
+            for j in 0..=rows {
+                for i in 0..=cols {
+                    let (u, v) = (i as f32 / cols as f32, j as f32 / rows as f32);
+                    mesh.colored_vertex(egui::pos2(sq.left() + u * sq.width(), sq.bottom() - v * sq.height()), probe(u, v));
+                }
+            }
+            for j in 0..rows {
+                for i in 0..cols {
+                    let a = j * (cols + 1) + i;
+                    mesh.add_triangle(a, a + 1, a + cols + 2);
+                    mesh.add_triangle(a, a + cols + 2, a + cols + 1);
+                }
+            }
+            p.add(egui::Shape::mesh(mesh));
+            let strip = color_strip(rect);
+            let [r, g, b] = { let mut t = w.clone(); t.value_z = 1.0; t.rgb() };
+            let full = Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
+            let mut m2 = egui::Mesh::default();
+            m2.colored_vertex(strip.left_top(), Color32::BLACK);
+            m2.colored_vertex(strip.right_top(), full);
+            m2.colored_vertex(strip.right_bottom(), full);
+            m2.colored_vertex(strip.left_bottom(), Color32::BLACK);
+            m2.add_triangle(0, 1, 2);
+            m2.add_triangle(0, 2, 3);
+            p.add(egui::Shape::mesh(m2));
+            let pt = egui::pos2(sq.left() + sq.width() * w.value, sq.bottom() - sq.height() * w.value_y);
+            p.circle_stroke(pt, 6.0, Stroke::new(2.0, Color32::WHITE));
+            let bx = strip.left() + strip.width() * w.value_z;
+            p.line_segment([egui::pos2(bx, strip.top()), egui::pos2(bx, strip.bottom())], Stroke::new(2.0, Color32::WHITE));
+            p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
+            p.text(sq.left_top() + egui::vec2(6.0, 4.0), egui::Align2::LEFT_TOP, &w.label, font, Color32::WHITE);
+        }
         WidgetKind::Label => {
             if edit {
                 p.rect_filled(rect, 4.0, Color32::from_gray(26));
@@ -286,10 +355,23 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
     });
     if w.kind != WidgetKind::Label {
         ui.add_space(4.0);
-        let axis = if w.kind == WidgetKind::XyPad { "Horizontal (X) drives" } else { "Drives" };
+        let axis = match w.kind {
+            WidgetKind::XyPad => "Horizontal (X) drives",
+            WidgetKind::Color => "Red drives",
+            _ => "Drives",
+        };
         ui.label(RichText::new(axis).strong());
         hint(ui, "Each target gets this widget's value, rescaled to its from–to range.");
         binding_list(ui, ("bindings", id), targets, &mut w.bindings);
+        if w.kind == WidgetKind::Color {
+            ui.add_space(4.0);
+            ui.label(RichText::new("Green drives").strong());
+            binding_list(ui, ("bindings_y", id), targets, &mut w.bindings_y);
+            ui.add_space(4.0);
+            ui.label(RichText::new("Blue drives").strong());
+            binding_list(ui, ("bindings_z", id), targets, &mut w.bindings_z);
+            hint(ui, "A controller on this widget moves the hue (its Y mapping: saturation).");
+        }
         if w.kind == WidgetKind::XyPad {
             ui.add_space(4.0);
             ui.label(RichText::new("Vertical (Y) drives").strong());
@@ -350,4 +432,17 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
     if let Some(i) = remove {
         sf.remove_page(i);
     }
+}
+
+/// A colour widget's hue / saturation square (above the brightness strip).
+fn color_square(rect: egui::Rect) -> egui::Rect {
+    let mut r = rect.shrink(3.0);
+    r.set_bottom(r.bottom() - (rect.height() * 0.16).clamp(10.0, 22.0) - 3.0);
+    r
+}
+
+/// A colour widget's brightness strip along the bottom.
+fn color_strip(rect: egui::Rect) -> egui::Rect {
+    let r = rect.shrink(3.0);
+    egui::Rect::from_min_max(egui::pos2(r.left(), r.bottom() - (rect.height() * 0.16).clamp(10.0, 22.0)), r.max)
 }
