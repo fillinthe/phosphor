@@ -33,6 +33,8 @@ impl PhosphorApp {
             }
             run.started = None;
             run.samples.clear();
+            let quick = run.cfg.quick.take().unwrap_or_default();
+            self.bench_quick(&quick, now);
         }
         ctx.data_mut(|d| {
             d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs);

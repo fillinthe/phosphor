@@ -47,6 +47,8 @@ pub enum Action {
     Layout(usize),
     SaveLayout,
     Donate,
+    /// Quick menu: one-click visuals.
+    Quick(crate::app::Quick),
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -60,6 +62,7 @@ pub enum Entry {
 }
 
 use Action as A;
+use crate::app::Quick as Q;
 use Entry::{Dynamic as D, Item as I, Sep as S};
 
 pub const MENUS: &[(&str, &[Entry])] = &[
@@ -100,6 +103,18 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             S,
             I(A::Palette, "Command Palette…", Some((false, Key::K))),
             I(A::MapMode, "Map Mode (MIDI / OSC / Keys)", Some((true, Key::M))),
+        ],
+    ),
+    (
+        "Quick",
+        &[
+            I(A::Quick(Q::Surprise), Q::Surprise.label(), Some((false, Key::R))),
+            I(A::Quick(Q::SurpriseLayer), Q::SurpriseLayer.label(), Some((true, Key::R))),
+            I(A::Quick(Q::Shuffle), Q::Shuffle.label(), Some((false, Key::J))),
+            I(A::Quick(Q::React), Q::React.label(), Some((true, Key::J))),
+            S,
+            I(A::Quick(Q::Fill), Q::Fill.label(), None),
+            I(A::Quick(Q::InstantSet), Q::InstantSet.label(), None),
         ],
     ),
     (
@@ -200,6 +215,8 @@ pub mod native {
             K::D => Code::KeyD,
             K::G => Code::KeyG,
             K::K => Code::KeyK,
+            K::R => Code::KeyR,
+            K::J => Code::KeyJ,
             K::M => Code::KeyM,
             K::Equals => Code::Equal,
             K::Minus => Code::Minus,

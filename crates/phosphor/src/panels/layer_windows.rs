@@ -28,6 +28,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     let mut layer_action: Option<(u64, LayerAction)> = None;
     let mut fx_actions: Vec<(u64, FxAction)> = Vec::new();
     let mut seeks: Vec<(u64, f64)> = Vec::new();
+    let mut quick: Vec<(u64, crate::app::Quick)> = Vec::new();
     let height = ui.available_height();
     let State { comp, selected, layer_textures, media: manager, .. } = st;
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
@@ -64,6 +65,9 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                             layer_action = Some((id, a));
                         }
                         opacity_row(ui, layer);
+                        if let Some(q) = crate::app::quick_row(ui) {
+                            quick.push((id, q));
+                        }
                         ui.horizontal(|ui| {
                             choice_combo(ui, ("lw_blend", id), &mut layer.blend, 120.0, false);
                             choice_combo(ui, ("lw_fit", id), &mut layer.fit, 74.0, false);
@@ -92,6 +96,9 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     for (id, t) in seeks {
         st.media.seek(id, t);
+    }
+    for (id, q) in quick {
+        st.quick_on(q, Some(id), now);
     }
     for (id, a) in fx_actions {
         apply_fx_action(st, id, a);

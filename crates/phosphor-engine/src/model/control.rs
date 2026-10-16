@@ -86,10 +86,14 @@ pub enum AppControl {
     CueBack,
     /// Ableton Link on/off.
     Link,
+    /// A random look on every layer (`Composition::surprise`).
+    Surprise,
+    /// New values for the selected layer's generator and effects.
+    Shuffle,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 20] = [
+    pub const ALL: [AppControl; 22] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -110,6 +114,8 @@ impl AppControl {
         AppControl::CueGo,
         AppControl::CueBack,
         AppControl::Link,
+        AppControl::Surprise,
+        AppControl::Shuffle,
     ];
 
     pub fn name(self) -> &'static str {
@@ -134,6 +140,8 @@ impl AppControl {
             AppControl::CueGo => "Cue list: GO (next cue)",
             AppControl::CueBack => "Cue list: back",
             AppControl::Link => "Ableton Link on/off",
+            AppControl::Surprise => "Surprise me (random look, all layers)",
+            AppControl::Shuffle => "Shuffle the selected layer",
         }
     }
 
@@ -160,6 +168,8 @@ impl AppControl {
             AppControl::CueGo => "cue/go",
             AppControl::CueBack => "cue/back",
             AppControl::Link => "link",
+            AppControl::Surprise => "surprise",
+            AppControl::Shuffle => "shuffle",
         }
     }
 

@@ -17,9 +17,18 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Clip trigger modes (normal, toggle, flash, piano) | Resolume | ✅ |
 | Per-clip settings (speed, direction, in/out, BPM sync, effects stored on the clip) | Resolume | ✅ |
 | BPM sync (clip length = N beats, follows tempo) | Resolume | ✅ |
-| Ableton Link | Resolume, VDMX | ⬜ (licence check: Link is GPL or a commercial licence from Ableton) |
+| Ableton Link | Resolume, VDMX | ✅ |
 | Cue list (fades, follow-on, GO/back mappable) + timecode (show clock, MIDI timecode, LTC audio) | Resolume Arena, MadMapper | ✅ |
 | Audio playback of an audio-only file as a layer (sound + visualiser) | Resolume | ⬜ |
+
+## Speed (getting visuals up fast)
+| Feature | Who has it | Phosphor |
+|---|---|---|
+| Randomize a parameter / effect | Resolume (per parameter) | ✅ Shuffle a whole layer (⌘J, mappable) |
+| One-click random look for the whole show | — | ✅ Surprise (⌘R, mappable pad) |
+| Instant audio/beat motion on a layer | — | ✅ React (⇧⌘J) |
+| Fill a clip row with variations / ready-made set | — | ✅ Fill · Instant Set |
+| Command palette for everything | — | ✅ ⌘K |
 
 ## Mixing & layers
 | Feature | Who has it | Phosphor |

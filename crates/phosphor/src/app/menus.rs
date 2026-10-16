@@ -121,6 +121,7 @@ impl PhosphorApp {
                 }
             }
             A::Palette => st.palette.toggle(),
+            A::Quick(q) => st.quick(q, now),
             A::MapMode => {
                 st.map_mode = !st.map_mode;
                 st.control.learning = None;
@@ -183,6 +184,17 @@ impl PhosphorApp {
                 ui.separator();
                 if ui.button(format!("{} Layer", icon::PLUS)).clicked() {
                     self.state.add_layer();
+                }
+                // One-click visuals: the dice = Surprise me; the arrow = every Quick action.
+                let dice = ui.button(format!("{} Surprise", icon::DICE_FIVE)).on_hover_text(format!("{} (⌘R). Right-click to map a pad or key.", super::Quick::Surprise.about()));
+                crate::ui::map_menu(ui, &dice, phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Surprise));
+                if dice.clicked() {
+                    self.state.quick(super::Quick::Surprise, now);
+                }
+                let mut picked = None;
+                ui.menu_button(icon::CARET_DOWN, |ui| picked = super::quick_menu(ui)).response.on_hover_text("Quick visuals: shuffle, react to the music, fill clips, instant set");
+                if let Some(q) = picked {
+                    self.state.quick(q, now);
                 }
                 let output_label = if self.state.output_open() { format!("{} Output", icon::STOP) } else { format!("{} Output", icon::PLAY) };
                 if ui.button(output_label).on_hover_text("Output window. F = fullscreen, Esc = exit").clicked() {

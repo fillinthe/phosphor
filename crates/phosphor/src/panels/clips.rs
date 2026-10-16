@@ -137,6 +137,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut set_cell: Option<(usize, usize, usize)> = None; // (layer idx, slot, media idx)
     let mut use_current: Option<(usize, usize)> = None;
     let mut clear: Option<(usize, usize)> = None;
+    let mut fill_row: Option<u64> = None;
     {
         let State { comp, thumbs, .. } = st;
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
@@ -156,7 +157,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             for idx in (0..n).rev() {
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
-                    row_header(ui, layer, egui::vec2(110.0, cell.y));
+                    if row_header(ui, layer, egui::vec2(110.0, cell.y)) {
+                        fill_row = Some(layer.id);
+                    }
                     for c in page_offset..page_offset + cols {
                         let clip = layer.clips.get(c);
                         let (rect, resp) = ui.allocate_exact_size(cell, Sense::click());
@@ -277,6 +280,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         slot.source = crate::media::spec_for_path(&item.path);
         slot.name = item.name;
         slot.generator_values.clear();
+        slot.mods.clear();
         if slot.id == 0 {
             slot.id = id * 1000 + c as u64 + 1;
         }
@@ -284,15 +288,19 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     if let Some((idx, c)) = use_current
         && let Some(layer) = st.comp.layers.get_mut(idx)
     {
-        let (src, vals, name, id) = (layer.source.clone(), layer.generator_values.clone(), layer.name.clone(), layer.id);
+        let (src, vals, mods, name, id) = (layer.source.clone(), layer.generator_values.clone(), layer.generator_mods.clone(), layer.name.clone(), layer.id);
         if src != SourceSpec::None {
             let slot = layer.clip_slot_mut(c);
             slot.source = src;
             slot.generator_values = vals;
+            slot.mods = mods;
             slot.name = name;
             slot.id = id * 1000 + c as u64 + 1;
             layer.active_clip = Some(slot.id);
         }
+    }
+    if let Some(id) = fill_row {
+        st.quick_on(crate::app::Quick::Fill, Some(id), now);
     }
     if let Some((idx, c)) = clear
         && let Some(layer) = st.comp.layers.get_mut(idx)
@@ -309,14 +317,22 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// The layer's name at the start of its clip row; click for autopilot (plays the next / a random clip by itself).
-fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: egui::Vec2) {
+/// The layer name at the start of a clip row: click for autopilot and "fill with variations" (returns true for that).
+fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: egui::Vec2) -> bool {
     use phosphor_engine::Autopilot;
+    let mut fill = false;
     ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
         ui.set_min_size(size);
         ui.add_space((size.y - 40.0).max(0.0) / 2.0);
         let name: String = layer.name.chars().take(14).collect();
         ui.menu_button(RichText::new(name).color(Color32::LIGHT_GRAY), |ui| {
             ui.set_min_width(220.0);
+            let q = crate::app::Quick::Fill;
+            if ui.button(format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
+                fill = true;
+                ui.close();
+            }
+            ui.separator();
             ui.label(RichText::new(format!("{} Autopilot", icon::AIRPLANE_TILT)).strong());
             hint(ui, "Plays another clip by itself when this one is done.");
             for a in Autopilot::ALL {
@@ -344,12 +360,13 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: 
             }
         })
         .response
-        .on_hover_text("Click for autopilot");
+        .on_hover_text("Click for autopilot and fill with variations");
         if layer.autopilot != Autopilot::Off {
             let when = if layer.autopilot_beats > 0.0 { format!("{:.0} beats", layer.autopilot_beats) } else { "at end".into() };
             ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(ACCENT));
         }
     });
+    fill
 }
 
 /// Bank letters: A–Z, then AA, AB…

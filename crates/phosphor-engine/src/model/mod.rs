@@ -12,6 +12,7 @@ mod group;
 mod layer;
 mod options;
 mod output;
+mod quick;
 mod source;
 mod surface;
 
@@ -25,6 +26,7 @@ pub use group::*;
 pub use layer::*;
 pub use options::*;
 pub use output::*;
+pub use quick::*;
 pub use source::*;
 pub use surface::*;
 
