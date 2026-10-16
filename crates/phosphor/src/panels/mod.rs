@@ -18,6 +18,7 @@ mod account;
 mod audio;
 mod clips;
 mod control;
+mod cues;
 mod devices;
 mod effects;
 mod groups;
@@ -39,6 +40,7 @@ pub(crate) use account::*;
 pub(crate) use audio::*;
 pub(crate) use clips::*;
 pub(crate) use control::*;
+pub(crate) use cues::*;
 pub(crate) use devices::*;
 pub(crate) use effects::*;
 pub(crate) use groups::*;
@@ -79,10 +81,11 @@ pub enum Tab {
     Surface,
     Account,
     Leds,
+    Cues,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 19] = [
+    pub const ALL: [Tab; 20] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -102,6 +105,7 @@ impl Tab {
         Tab::Surface,
         Tab::Account,
         Tab::Leds,
+        Tab::Cues,
     ];
 
     pub fn title(self) -> String {
@@ -129,6 +133,7 @@ impl Tab {
             Tab::Surface => "Control Surface",
             Tab::Account => "Account",
             Tab::Leds => "LED / DMX",
+            Tab::Cues => "Cues",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -177,6 +182,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Surface => surface(ui, self.st),
             Tab::Account => account(ui, self.st),
             Tab::Leds => leds(ui, self.st),
+            Tab::Cues => cues(ui, self.st),
         }
     }
 

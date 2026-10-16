@@ -168,6 +168,7 @@ impl PhosphorApp {
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
                 autopilot: HashMap::new(),
+                cue_run: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 dmx: Default::default(),
                 clip_page: 0,
@@ -214,6 +215,9 @@ impl PhosphorApp {
         }
         if app.bench.is_none() {
             app.state.outputs_on_open();
+        }
+        if app.bench.as_ref().is_some_and(|b| b.cfg.show_clock) {
+            app.state.cue_run.clock.toggle(now);
         }
         if open_audio && let Err(e) = app.state.audio.open(None) {
             eprintln!("audio input: {e}");

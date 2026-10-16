@@ -76,10 +76,13 @@ pub enum AppControl {
     MasterVolume,
     /// LED / DMX output on/off.
     Dmx,
+    /// Cue list: next cue / previous cue.
+    CueGo,
+    CueBack,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 17] = [
+    pub const ALL: [AppControl; 19] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -97,6 +100,8 @@ impl AppControl {
         AppControl::SurfacePage,
         AppControl::MasterVolume,
         AppControl::Dmx,
+        AppControl::CueGo,
+        AppControl::CueBack,
     ];
 
     pub fn name(self) -> &'static str {
@@ -118,6 +123,8 @@ impl AppControl {
             AppControl::SurfacePage => "Control Surface page",
             AppControl::MasterVolume => "Master volume (movie sound)",
             AppControl::Dmx => "LED / DMX on/off",
+            AppControl::CueGo => "Cue list: GO (next cue)",
+            AppControl::CueBack => "Cue list: back",
         }
     }
 
@@ -141,6 +148,8 @@ impl AppControl {
             AppControl::SurfacePage => "surface/page",
             AppControl::MasterVolume => "volume",
             AppControl::Dmx => "dmx",
+            AppControl::CueGo => "cue/go",
+            AppControl::CueBack => "cue/back",
         }
     }
 

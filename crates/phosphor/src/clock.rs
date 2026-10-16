@@ -90,6 +90,75 @@ impl Clock {
 }
 
 /// MIDI clock (24 ticks per beat) as it arrives: tempo from recent tick spacing, beat position since Start.
+/// MIDI timecode (MTC) from quarter-frame messages: eight pieces make one full time; between them the time
+/// runs on from the last full one while messages keep coming (it stops when they stop).
+#[derive(Default)]
+pub struct Mtc {
+    pieces: [u8; 8],
+    seen: u8,
+    /// (timecode seconds, app time it was true).
+    base: Option<(f64, f64)>,
+    last: f64,
+    pub fps: f64,
+}
+
+impl Mtc {
+    pub fn quarter(&mut self, data: u8, t: f64) {
+        let piece = (data >> 4) as usize & 7;
+        self.pieces[piece] = data & 0x0f;
+        self.seen |= 1 << piece;
+        self.last = t;
+        if piece == 7 && self.seen == 0xff {
+            let p = &self.pieces;
+            let fps = match (p[7] >> 1) & 3 {
+                0 => 24.0,
+                1 => 25.0,
+                2 => 29.97,
+                _ => 30.0,
+            };
+            let frames = (p[0] | (p[1] & 1) << 4) as f64;
+            let secs = (p[2] | (p[3] & 3) << 4) as f64;
+            let mins = (p[4] | (p[5] & 3) << 4) as f64;
+            let hours = (p[6] | (p[7] & 1) << 4) as f64;
+            // A full time takes two frames to send; it described the frame when the first piece left.
+            let tc = hours * 3600.0 + mins * 60.0 + secs + (frames + 2.0) / fps;
+            self.base = Some((tc, t));
+            self.fps = fps;
+            self.seen = 0;
+        }
+    }
+
+    /// The timecode now (seconds), or None when no MTC has arrived in the last two seconds.
+    pub fn time(&self, now: f64) -> Option<f64> {
+        let (tc, at) = self.base?;
+        if now - self.last > 2.0 {
+            return None;
+        }
+        // Running while quarter frames keep arriving; frozen when they pause.
+        let running = now - self.last < 0.25;
+        Some(if running { tc + (now - at) } else { tc + (self.last - at) })
+    }
+}
+
+#[cfg(test)]
+mod mtc_tests {
+    use super::Mtc;
+
+    #[test]
+    fn reads_quarter_frames() {
+        let mut m = Mtc::default();
+        // 01:02:03:04 at 25 fps.
+        let (h, mi, s, f) = (1u8, 2u8, 3u8, 4u8);
+        let pieces = [f & 15, f >> 4, s & 15, s >> 4, mi & 15, mi >> 4, h & 15, (h >> 4) | (1 << 1)];
+        for (i, v) in pieces.iter().enumerate() {
+            m.quarter(((i as u8) << 4) | v, 10.0 + i as f64 * 0.01);
+        }
+        let t = m.time(10.07).unwrap();
+        assert!((t - (3723.0 + 6.0 / 25.0)).abs() < 1e-6, "{t}");
+        assert!(m.time(13.0).is_none());
+    }
+}
+
 #[derive(Default)]
 pub struct MidiClock {
     times: std::collections::VecDeque<f64>,

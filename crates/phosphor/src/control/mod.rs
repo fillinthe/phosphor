@@ -78,6 +78,8 @@ pub struct Activity {
 /// MIDI clock and transport messages.
 #[derive(Clone, Copy, Debug)]
 pub enum ClockEvent {
+    /// MIDI timecode quarter frame (its data byte).
+    Quarter(u8),
     Tick,
     Start,
     Continue,
@@ -91,6 +93,8 @@ pub struct ControlHub {
     clock_tx: mpsc::Sender<(ClockEvent, std::time::Instant)>,
     /// Incoming MIDI clock (tempo and beat position); the app's clock follows it.
     pub midi_clock: crate::clock::MidiClock,
+    /// MIDI timecode in (cue list).
+    pub mtc: crate::clock::Mtc,
     /// Connected (enabled) MIDI inputs.
     pub midi_ports: Vec<String>,
     /// Every MIDI input on the system, enabled or not.
@@ -168,6 +172,7 @@ impl ControlHub {
             clock_rx,
             clock_tx,
             midi_clock: Default::default(),
+            mtc: Default::default(),
             midi_ports: Vec::new(),
             midi_all: Vec::new(),
             midi_disabled: Default::default(),
@@ -223,6 +228,7 @@ impl ControlHub {
         while let Ok((e, at)) = self.clock_rx.try_recv() {
             let t = now - instant_now.saturating_duration_since(at).as_secs_f64();
             match e {
+                ClockEvent::Quarter(d) => self.mtc.quarter(d, t),
                 ClockEvent::Tick => self.midi_clock.tick(t),
                 ClockEvent::Start => self.midi_clock.start(t),
                 ClockEvent::Continue => self.midi_clock.resume(),

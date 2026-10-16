@@ -63,11 +63,13 @@ pub struct Composition {
     pub volume: f32,
     /// LED / DMX pixel mapping (Art-Net, sACN).
     pub dmx: DmxSettings,
+    /// Show control: cues to step through or fire on timecode.
+    pub cues: CueList,
 }
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, dmx: DmxSettings::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 

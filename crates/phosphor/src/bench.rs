@@ -33,6 +33,8 @@ pub struct BenchConfig {
     pub audio: bool,
     /// Play movie sound (bench runs are silent otherwise).
     pub sound: bool,
+    /// Start the cue list's show clock at launch (timecoded cues).
+    pub show_clock: bool,
     /// A .phosphor project to load instead of building one from the flags.
     pub project: Option<String>,
     /// Record the run to this file (.mp4 = H.264, .mov = ProRes) to exercise the streaming path.
@@ -84,6 +86,11 @@ impl BenchConfig {
                 ("--previews", Some(v)) => cfg.previews = v.parse().unwrap_or(0),
                 ("--column", Some(v)) => cfg.trigger_column = v.parse::<usize>().ok().map(|c| c.saturating_sub(1)),
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
+                ("--show-clock", _) => {
+                    cfg.show_clock = true;
+                    i += 1;
+                    continue;
+                }
                 ("--sound", _) => {
                     cfg.sound = true;
                     i += 1;
