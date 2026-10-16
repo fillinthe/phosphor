@@ -28,6 +28,35 @@ pub struct Surface {
     pub mesh: Option<Mesh>,
     /// This surface's own colour correction (applied before the output's), e.g. two slices on different materials.
     pub color: crate::ColorGrade,
+    /// Cut to an ellipse or triangle inside the quad (follows perspective and mesh warp).
+    pub shape: SliceShape,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SliceShape {
+    #[default]
+    Rectangle,
+    Ellipse,
+    Triangle,
+}
+
+impl SliceShape {
+    pub const ALL: [SliceShape; 3] = [SliceShape::Rectangle, SliceShape::Ellipse, SliceShape::Triangle];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            SliceShape::Rectangle => "Rectangle",
+            SliceShape::Ellipse => "Ellipse",
+            SliceShape::Triangle => "Triangle",
+        }
+    }
+}
+
+impl crate::model::Choice for SliceShape {
+    const OPTIONS: &'static [Self] = &SliceShape::ALL;
+    fn label(self) -> &'static str {
+        self.name()
+    }
 }
 
 /// A warp grid: `(cols + 1) × (rows + 1)` points in output space, row by row from the top-left.
@@ -136,11 +165,13 @@ pub struct Mask {
     pub invert: bool,
     /// Soft edge width in output space (0 = hard edge); the fade is centred on the outline.
     pub feather: f32,
+    /// The outline is a smooth curve through the points (Catmull-Rom) instead of straight lines.
+    pub smooth: bool,
 }
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0 }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false }
     }
 }
 
@@ -222,19 +253,40 @@ pub fn offset_polygon(points: &[[f32; 2]], d: f32) -> Vec<[f32; 2]> {
 }
 
 impl Mask {
+    /// The outline as drawn: the points, or a smooth closed curve through them (12 steps per side).
+    pub fn outline(&self) -> Vec<[f32; 2]> {
+        let n = self.points.len();
+        if !self.smooth || n < 3 {
+            return self.points.clone();
+        }
+        const STEPS: usize = 12;
+        let p = |i: usize| self.points[i % n];
+        let mut out = Vec::with_capacity(n * STEPS);
+        for i in 0..n {
+            let (p0, p1, p2, p3) = (p(i + n - 1), p(i), p(i + 1), p(i + 2));
+            for k in 0..STEPS {
+                let t = k as f32 / STEPS as f32;
+                out.push([catmull(p0[0], p1[0], p2[0], p3[0], t), catmull(p0[1], p1[1], p2[1], p3[1], t)]);
+            }
+        }
+        out
+    }
+
     /// Triangles (x, y, darkness, 0) covering what this mask blacks out; with a feather, a band along the
     /// outline fades from black to clear.
     pub fn triangles(&self) -> Vec<[f32; 4]> {
         if self.points.len() < 3 {
             return Vec::new();
         }
+        let outline = self.outline();
+        let points = &outline;
         const OUTPUT: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
         let half = self.feather.max(0.0) / 2.0;
         if half <= 0.0 {
             // Inverted: the whole output with the shape cut out as a hole.
-            return if self.invert { fill(&OUTPUT, Some(&self.points), 1.0) } else { fill(&self.points, None, 1.0) };
+            return if self.invert { fill(&OUTPUT, Some(points), 1.0) } else { fill(points, None, 1.0) };
         }
-        let (inner, outer) = (offset_polygon(&self.points, -half), offset_polygon(&self.points, half));
+        let (inner, outer) = (offset_polygon(points, -half), offset_polygon(points, half));
         let (mut out, d_in, d_out) = if self.invert { (fill(&OUTPUT, Some(&outer), 1.0), 0.0, 1.0) } else { (fill(&inner, None, 1.0), 1.0, 0.0) };
         let n = inner.len();
         for i in 0..n {
@@ -260,6 +312,7 @@ impl Default for Surface {
             blend_gamma: 1.0,
             mesh: None,
             color: crate::ColorGrade::default(),
+            shape: SliceShape::Rectangle,
         }
     }
 }

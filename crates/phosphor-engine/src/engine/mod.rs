@@ -489,7 +489,7 @@ impl Engine {
                     u.opacity = s.opacity * fade;
                     u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
                     u.mode = o.mapping.test_pattern as u32;
-                    u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
+                    u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, s.shape as u32 as f32];
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
@@ -507,7 +507,7 @@ impl Engine {
                 u.p[1] = [c[2][0], c[2][1], c[3][0], c[3][1]];
                 u.p[2] = [inv[0], inv[1], inv[2], inv[3]];
                 u.p[3] = [inv[4], inv[5], inv[6], inv[7]];
-                u.p[4] = [inv[8], s.feather, s.blend_gamma - 1.0, 0.0];
+                u.p[4] = [inv[8], s.feather, s.blend_gamma - 1.0, s.shape as u32 as f32];
                 u.p[5] = g0;
                 u.p[6] = g1;
                 [u.p[7], u.p[8]] = s.color.uniforms();
