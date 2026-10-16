@@ -98,6 +98,9 @@ pub enum Trigger {
 pub struct State {
     pub comp: Composition,
     pub engine: Option<Engine>,
+    /// LED / DMX sender (Art-Net, sACN).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub dmx: crate::dmx::DmxOut,
     /// Autopilot's per-layer state (which clip, since when).
     pub(crate) autopilot: HashMap<u64, autopilot::AutoRun>,
     render_state: Option<egui_wgpu::RenderState>,

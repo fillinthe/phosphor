@@ -38,6 +38,8 @@ impl PhosphorApp {
             syphon,
             #[cfg(target_os = "macos")]
             ndi,
+            #[cfg(not(target_arch = "wasm32"))]
+            dmx,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -84,8 +86,24 @@ impl PhosphorApp {
         let mwants = std::mem::take(monitor_wants);
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
+        // LED / DMX: sample the fixtures' pixels from this frame when the lights want one.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let points = if comp.dmx.enabled { comp.dmx.sample_points() } else { Vec::new() };
+            engine.set_sample_points(&points);
+            if dmx.frame_due(now, &comp.dmx) {
+                engine.request_samples();
+            }
+        }
         let t0 = web_time::Instant::now();
         let info = engine.render(comp, now as f32, mod_inputs);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(colors) = engine.take_samples()
+            && comp.dmx.enabled
+        {
+            let universes = comp.dmx.universes(&colors);
+            dmx.send(&comp.dmx, &universes);
+        }
         let render_secs = t0.elapsed().as_secs_f64();
         #[cfg(target_os = "macos")]
         {

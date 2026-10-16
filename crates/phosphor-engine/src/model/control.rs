@@ -74,10 +74,12 @@ pub enum AppControl {
     SurfacePage,
     /// Movie sound, all layers (0..1 = silent..2×).
     MasterVolume,
+    /// LED / DMX output on/off.
+    Dmx,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 16] = [
+    pub const ALL: [AppControl; 17] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -94,6 +96,7 @@ impl AppControl {
         AppControl::Crossfader,
         AppControl::SurfacePage,
         AppControl::MasterVolume,
+        AppControl::Dmx,
     ];
 
     pub fn name(self) -> &'static str {
@@ -114,6 +117,7 @@ impl AppControl {
             AppControl::Crossfader => "Crossfader (A ↔ B)",
             AppControl::SurfacePage => "Control Surface page",
             AppControl::MasterVolume => "Master volume (movie sound)",
+            AppControl::Dmx => "LED / DMX on/off",
         }
     }
 
@@ -136,12 +140,13 @@ impl AppControl {
             AppControl::Crossfader => "crossfader",
             AppControl::SurfacePage => "surface/page",
             AppControl::MasterVolume => "volume",
+            AppControl::Dmx => "dmx",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx)
     }
 }
 

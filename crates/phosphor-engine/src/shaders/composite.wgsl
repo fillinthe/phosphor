@@ -121,6 +121,15 @@ fn fs_mix(in: VOut) -> @location(0) vec4f {
     return mix(dry, wet, u.opacity);
 }
 
+// LED / DMX pixel mapping: tex1 holds one point per pixel (x, y as 16-bit, packed in RGBA8);
+// sample the program (tex0) there.
+@fragment
+fn fs_sample(in: VOut) -> @location(0) vec4f {
+    let q = textureLoad(tex1, vec2i(in.pos.xy), 0) * 255.0;
+    let uv = vec2f(round(q.r) * 256.0 + round(q.g), round(q.b) * 256.0 + round(q.a)) / 65535.0;
+    return textureSampleLevel(tex0, samp, uv, 0.0);
+}
+
 // Accumulator -> output texture, applying the master fader.
 @fragment
 fn fs_finalize(in: VOut) -> @location(0) vec4f {
