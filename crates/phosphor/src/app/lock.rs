@@ -15,6 +15,8 @@ pub struct Lock {
     pub window: bool,
     pub draft: String,
     pub wrong: bool,
+    /// The panels as they were before locking, put back on unlock.
+    pub saved: Option<(egui_dock::DockState<crate::panels::Tab>, Vec<crate::panels::Tab>)>,
 }
 
 impl Lock {
@@ -43,14 +45,19 @@ impl PhosphorApp {
         self.lock.password = password;
         self.lock.window = false;
         self.lock.draft.clear();
-        // The performance layout: big preview and the clip grid, nothing to edit with.
-        if let Some(i) = super::layout::LAYOUTS.iter().position(|(n, _)| *n == "Performance") {
-            self.switch_workspace(i);
+        // Preview, mixer and the clip grid; everything else comes back on unlock.
+        if self.lock.saved.is_none() {
+            self.lock.saved = Some((self.dock.clone(), std::mem::take(&mut self.detached)));
         }
+        self.dock = super::layout::layout_locked();
         self.state.map_mode = false;
     }
 
     pub(crate) fn unlock(&mut self) {
+        if let Some((dock, detached)) = self.lock.saved.take() {
+            self.dock = dock;
+            self.detached = detached;
+        }
         self.lock = Lock::default();
     }
 
