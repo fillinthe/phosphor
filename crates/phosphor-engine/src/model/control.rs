@@ -51,6 +51,11 @@ pub enum ControlTarget {
     App(AppControl),
     /// A movie layer's sound volume (0..1 = silent..2×).
     LayerVolume(u64),
+    /// Layer transform: position (0..1 = left/bottom..right/top), scale (0..1 = 0.05×..4×, log), rotation (0..1 = -180..180°).
+    LayerX(u64),
+    LayerY(u64),
+    LayerScale(u64),
+    LayerRotation(u64),
 }
 
 /// App-wide mappable controls.

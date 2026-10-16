@@ -138,6 +138,8 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 }
                 ui.separator();
             }
+            transform_editor(ui, layer);
+            ui.separator();
             fx_action = effects_editor(ui, &mut layer.effects, clipboard_len);
         });
         if let Some(t) = seek_to {
@@ -147,6 +149,43 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     if let Some(action) = fx_action {
         apply_fx_action(st, sel, action);
     }
+}
+
+/// Position, scale, rotation and flips of a layer (all mappable; scale and rotation can be modulated).
+fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
+    let id = layer.id;
+    let t = &mut layer.transform;
+    let title = if t.is_identity() { label(icon::ARROWS_OUT_CARDINAL, "Transform") } else { label(icon::ARROWS_OUT_CARDINAL, "Transform (moved)") };
+    egui::CollapsingHeader::new(title).id_salt(("transform", id)).show(ui, |ui| {
+        let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32| {
+            ui.horizontal(|ui| {
+                let r = guarded!(ui, *value, Slider::new(value, range).text(text).logarithmic(log).fixed_decimals(2));
+                mapped_badge(ui, &r, &target);
+                if let Some(m) = m {
+                    if control_menu(&r, Some(&target), Some(&mut *m)) {
+                        *value = reset;
+                    }
+                    mod_button(ui, m);
+                } else if control_menu(&r, Some(&target), None) {
+                    *value = reset;
+                }
+            });
+        };
+        row(ui, &mut t.x, -1.0..=1.0, "X", ControlTarget::LayerX(id), None, false, 0.0);
+        row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), None, false, 0.0);
+        row(ui, &mut t.scale, 0.05..=4.0, "Scale", ControlTarget::LayerScale(id), Some(&mut t.scale_mod), true, 1.0);
+        row(ui, &mut t.rotation, -180.0..=180.0, "Rotation °", ControlTarget::LayerRotation(id), Some(&mut t.rotation_mod), false, 0.0);
+        ui.horizontal(|ui| {
+            guarded!(ui, t.stretch_x, egui::DragValue::new(&mut t.stretch_x).range(0.05..=8.0).speed(0.01).prefix("width ×"));
+            guarded!(ui, t.stretch_y, egui::DragValue::new(&mut t.stretch_y).range(0.05..=8.0).speed(0.01).prefix("height ×"));
+            ui.toggle_value(&mut t.flip_x, "Flip ↔");
+            ui.toggle_value(&mut t.flip_y, "Flip ↕");
+            if ui.add_enabled(!t.is_identity(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset"))).clicked() {
+                *t = Default::default();
+            }
+        });
+        hint(ui, "Tip: put an LFO on Rotation (~ button) to spin a layer, or the audio level on Scale to pulse it.");
+    });
 }
 
 /// Movie sound: volume (mappable) and whether it fades with the layer's opacity.

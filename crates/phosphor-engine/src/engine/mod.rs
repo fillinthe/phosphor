@@ -414,11 +414,11 @@ impl Engine {
             if opacity <= 0.001 {
                 continue;
             }
-
+            let place = transform_uniforms(&layer.transform, (w, h), mods);
             if open_group.is_some() {
-                self.push_blend(frame, layer.fit, opacity, layer.blend, 2, &mut group_current, (w, h), time, &mut passes);
+                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 2, &mut group_current, (w, h), time, &mut passes);
             } else {
-                self.push_blend(frame, layer.fit, opacity, layer.blend, 0, &mut current, (w, h), time, &mut passes);
+                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 0, &mut current, (w, h), time, &mut passes);
             }
             layers_drawn += 1;
         }
@@ -530,6 +530,22 @@ impl Engine {
     }
 }
 
+/// A layer's transform as `fs_composite` uniforms (p[9], p[10]); None when it sits as it is.
+fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModInputs) -> Option<[[f32; 4]; 2]> {
+    if t.is_identity() {
+        return None;
+    }
+    let scale = modulate(t.scale, 0.01, 8.0, t.scale_mod.as_ref(), mods);
+    let rotation = modulate(t.rotation, -180.0, 180.0, t.rotation_mod.as_ref(), mods);
+    let flip = |f: bool| if f { -1.0 } else { 1.0 };
+    let sx = (scale * t.stretch_x).max(0.001) * flip(t.flip_x);
+    let sy = (scale * t.stretch_y).max(0.001) * flip(t.flip_y);
+    let a = rotation.to_radians();
+    let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
+    // y is up for people, down in texture space.
+    Some([[t.x, -t.y, sx, sy], [a.cos(), a.sin(), aspect, 1.0]])
+}
+
 /// What mixing a stack needs besides the engine (so helpers don't take ten arguments).
 struct MixCtx<'a> {
     canvas: (u32, u32),
@@ -544,7 +560,7 @@ struct MixCtx<'a> {
 impl Engine {
     /// Blends `frame` onto a stack (accum `base`/`base + 1`, ping-ponged; `current` = which holds it so far).
     #[allow(clippy::too_many_arguments)]
-    fn push_blend(&self, frame: Frame, fit: FitMode, opacity: f32, blend: BlendMode, base: usize, current: &mut Option<usize>, canvas: (u32, u32), time: f32, passes: &mut Vec<Pass>) {
+    fn push_blend(&self, frame: Frame, fit: FitMode, opacity: f32, blend: BlendMode, place: Option<[[f32; 4]; 2]>, base: usize, current: &mut Option<usize>, canvas: (u32, u32), time: f32, passes: &mut Vec<Pass>) {
         let next = current.map_or(0, |c| 1 - c);
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [canvas.0 as f32, canvas.1 as f32];
@@ -552,6 +568,10 @@ impl Engine {
         u.opacity = opacity;
         u.mode = blend.shader_index();
         u.uv_xform = fit_transform(frame.size(), canvas, fit);
+        if let Some([a, b]) = place {
+            u.p[9] = a;
+            u.p[10] = b;
+        }
         let (tex0, tex2, yuv) = frame.bind();
         u.yuv = yuv;
         passes.push(Pass {
@@ -586,7 +606,7 @@ impl Engine {
         }
         let opacity = modulate(g.opacity, 0.0, 1.0, g.opacity_mod.as_ref(), ctx.mods);
         if g.enabled && g.in_mix && opacity > 0.001 {
-            self.push_blend(frame, FitMode::Stretch, opacity, g.blend, 0, current, ctx.canvas, ctx.time, passes);
+            self.push_blend(frame, FitMode::Stretch, opacity, g.blend, None, 0, current, ctx.canvas, ctx.time, passes);
         }
     }
 }
