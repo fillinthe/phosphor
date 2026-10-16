@@ -109,6 +109,7 @@ impl PhosphorApp {
                 venue_name: String::new(),
                 preset_name: String::new(),
                 notice: None,
+                audio_declined: false,
                 clip_cells: Vec::new(),
                 audio: AudioInput::new(),
                 control: ControlHub::with_settings(stored(KEY_CONTROL).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()),
