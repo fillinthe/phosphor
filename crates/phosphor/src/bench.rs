@@ -39,6 +39,8 @@ pub struct BenchConfig {
     pub hap: bool,
     /// Open the import chooser for this Resolume / VDMX file.
     pub import: Option<String>,
+    /// Start in this built-in workspace ("VDMX", "Mapping"…).
+    pub layout: Option<String>,
     /// A .phosphor project to load instead of building one from the flags.
     pub project: Option<String>,
     /// Record the run to this file (.mp4 = H.264, .mov = ProRes) to exercise the streaming path.
@@ -89,6 +91,7 @@ impl BenchConfig {
                 ("--watch", Some(v)) => cfg.watch = Some(v),
                 ("--previews", Some(v)) => cfg.previews = v.parse().unwrap_or(0),
                 ("--import", Some(v)) => cfg.import = Some(v),
+                ("--layout", Some(v)) => cfg.layout = Some(v),
                 ("--column", Some(v)) => cfg.trigger_column = v.parse::<usize>().ok().map(|c| c.saturating_sub(1)),
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
                 ("--hap", _) => {

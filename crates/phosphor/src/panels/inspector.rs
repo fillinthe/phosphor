@@ -40,107 +40,10 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
             });
             ui.separator();
-
-            if let SourceSpec::Generator(id) = &layer.source
-                && let Some(desc) = shaders::generator(id)
-            {
-                ui.label(RichText::new(format!("Generator · {}", desc.name)).strong());
-                for (i, p) in desc.params.iter().enumerate() {
-                    param_slider(ui, &mut layer.generator_values, &mut layer.generator_mods, i, p, Some(ControlTarget::GeneratorParam { layer: layer.id, index: i }));
-                }
-                ui.separator();
-            }
-            if let SourceSpec::Text(style) = &mut layer.source {
-                ui.label(RichText::new("Text").strong());
-                text_editor(ui, style, layer.id);
-                ui.separator();
-            }
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Fade style").strong());
-                choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
-                hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
-            });
-            ui.separator();
-            if matches!(layer.source, SourceSpec::Movie { .. }) {
-                ui.label(RichText::new("Playback").strong());
-                if let Some(info) = &info {
-                    hint(ui, info);
-                }
-                if let Some((pos, dur)) = position {
-                    let (mut lo, mut hi) = (layer.loop_in, layer.loop_out);
-                    seek_to = scrub_bar(ui, pos, dur, (layer.loop_beats <= 0.0).then_some((&mut lo, &mut hi)));
-                    if (lo, hi) != (layer.loop_in, layer.loop_out) {
-                        layer.loop_in = lo.min(hi - 0.01).max(0.0);
-                        layer.loop_out = hi.max(lo + 0.01).min(1.0);
-                    }
-                    let at = (pos / dur.max(1e-6)) as f32;
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Section").small().color(Color32::GRAY));
-                        let r = ui.button("In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
-                        map_menu(ui, &r, ControlTarget::LayerLoopIn(layer.id));
-                        if r.clicked() {
-                            layer.loop_in = at.min(layer.loop_out - 0.01).max(0.0);
-                        }
-                        let r = ui.button("Out").on_hover_text("Loop ends here");
-                        map_menu(ui, &r, ControlTarget::LayerLoopOut(layer.id));
-                        if r.clicked() {
-                            layer.loop_out = at.max(layer.loop_in + 0.01).min(1.0);
-                            layer.loop_beats = 0.0;
-                        }
-                        let beats = if layer.loop_beats > 0.0 { format!("{} beats", layer.loop_beats) } else { "Beats: off".into() };
-                        ComboBox::from_id_salt(("loop_beats", layer.id)).width(84.0).selected_text(beats).show_ui(ui, |ui| {
-                            ui.selectable_value(&mut layer.loop_beats, 0.0, "Off (use Out)");
-                            for b in [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0] {
-                                ui.selectable_value(&mut layer.loop_beats, b, format!("{b} beats"));
-                            }
-                        }).response.on_hover_text("Loop a number of beats from In, at the current tempo");
-                        if (layer.loop_in, layer.loop_out, layer.loop_beats) != (0.0, 1.0, 0.0) && ui.small_button("Clear").on_hover_text("Play the whole clip").clicked() {
-                            (layer.loop_in, layer.loop_out, layer.loop_beats) = (0.0, 1.0, 0.0);
-                        }
-                    });
-                }
-                ui.horizontal(|ui| {
-                    let text = if layer.playing { label(icon::PAUSE, "Pause") } else { label(icon::PLAY, "Play") };
-                    ui.toggle_value(&mut layer.playing, text);
-                    if ui.button(icon::SKIP_BACK).on_hover_text("Back to the start").clicked() {
-                        seek_to = Some(0.0);
-                    }
-                    ui.checkbox(&mut layer.looping, "Loop");
-                    ui.separator();
-                    let target = ControlTarget::LayerDirection(layer.id);
-                    choice_buttons(ui, &mut layer.direction, |ui, r| map_menu(ui, r, target.clone()));
-                });
-                ui.horizontal(|ui| {
-                    ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
-                        let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
-                        map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
-                    });
-                });
-                ui.horizontal(|ui| {
-                    let mut sync = layer.sync_beats > 0.0;
-                    if ui.toggle_value(&mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
-                        layer.sync_beats = if sync { 16.0 } else { 0.0 };
-                    }
-                    if sync {
-                        guarded!(ui, layer.sync_beats, egui::DragValue::new(&mut layer.sync_beats).range(1.0..=256.0).speed(0.1).suffix(" beats"));
-                        for b in [4.0, 8.0, 16.0, 32.0] {
-                            if ui.selectable_label(layer.sync_beats == b, format!("{b:.0}")).clicked() {
-                                layer.sync_beats = b;
-                            }
-                        }
-                        if layer.loop_beats > 0.0 {
-                            hint(ui, "off while a beat loop is set");
-                        }
-                    }
-                });
-                if has_sound {
-                    sound_row(ui, layer);
-                }
-                ui.separator();
-            }
-            transform_editor(ui, layer);
-            ui.separator();
-            fx_action = effects_editor(ui, &mut layer.effects, clipboard_len);
+            let media = LayerMedia { info: info.as_deref(), position, has_sound };
+            let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
+            fx_action = fx;
+            seek_to = seek;
         });
         if let Some(t) = seek_to {
             st.media.seek(sel, t);
@@ -149,6 +52,122 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     if let Some(action) = fx_action {
         apply_fx_action(st, sel, action);
     }
+}
+
+/// What a layer's movie is doing, for `layer_editor` (read before the layer is borrowed).
+pub(crate) struct LayerMedia<'a> {
+    pub info: Option<&'a str>,
+    pub position: Option<(f64, f64)>,
+    pub has_sound: bool,
+}
+
+/// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
+/// and effect chain (Inspector, and each column of the Layer Windows panel). Returns an effect-chain action and a
+/// seek the caller carries out.
+pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &LayerMedia, clipboard_len: usize) -> (Option<FxAction>, Option<f64>) {
+    let (info, position, has_sound) = (media.info, media.position, media.has_sound);
+    let mut seek_to: Option<f64> = None;
+
+        if let SourceSpec::Generator(id) = &layer.source
+            && let Some(desc) = shaders::generator(id)
+        {
+            ui.label(RichText::new(format!("Generator · {}", desc.name)).strong());
+            for (i, p) in desc.params.iter().enumerate() {
+                param_slider(ui, &mut layer.generator_values, &mut layer.generator_mods, i, p, Some(ControlTarget::GeneratorParam { layer: layer.id, index: i }));
+            }
+            ui.separator();
+        }
+        if let SourceSpec::Text(style) = &mut layer.source {
+            ui.label(RichText::new("Text").strong());
+            text_editor(ui, style, layer.id);
+            ui.separator();
+        }
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Fade style").strong());
+            choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
+            hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
+        });
+        ui.separator();
+        if matches!(layer.source, SourceSpec::Movie { .. }) {
+            ui.label(RichText::new("Playback").strong());
+            if let Some(info) = &info {
+                hint(ui, *info);
+            }
+            if let Some((pos, dur)) = position {
+                let (mut lo, mut hi) = (layer.loop_in, layer.loop_out);
+                seek_to = scrub_bar(ui, pos, dur, (layer.loop_beats <= 0.0).then_some((&mut lo, &mut hi)));
+                if (lo, hi) != (layer.loop_in, layer.loop_out) {
+                    layer.loop_in = lo.min(hi - 0.01).max(0.0);
+                    layer.loop_out = hi.max(lo + 0.01).min(1.0);
+                }
+                let at = (pos / dur.max(1e-6)) as f32;
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Section").small().color(Color32::GRAY));
+                    let r = ui.button("In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
+                    map_menu(ui, &r, ControlTarget::LayerLoopIn(layer.id));
+                    if r.clicked() {
+                        layer.loop_in = at.min(layer.loop_out - 0.01).max(0.0);
+                    }
+                    let r = ui.button("Out").on_hover_text("Loop ends here");
+                    map_menu(ui, &r, ControlTarget::LayerLoopOut(layer.id));
+                    if r.clicked() {
+                        layer.loop_out = at.max(layer.loop_in + 0.01).min(1.0);
+                        layer.loop_beats = 0.0;
+                    }
+                    let beats = if layer.loop_beats > 0.0 { format!("{} beats", layer.loop_beats) } else { "Beats: off".into() };
+                    ComboBox::from_id_salt(("loop_beats", layer.id)).width(84.0).selected_text(beats).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut layer.loop_beats, 0.0, "Off (use Out)");
+                        for b in [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0] {
+                            ui.selectable_value(&mut layer.loop_beats, b, format!("{b} beats"));
+                        }
+                    }).response.on_hover_text("Loop a number of beats from In, at the current tempo");
+                    if (layer.loop_in, layer.loop_out, layer.loop_beats) != (0.0, 1.0, 0.0) && ui.small_button("Clear").on_hover_text("Play the whole clip").clicked() {
+                        (layer.loop_in, layer.loop_out, layer.loop_beats) = (0.0, 1.0, 0.0);
+                    }
+                });
+            }
+            ui.horizontal(|ui| {
+                let text = if layer.playing { label(icon::PAUSE, "Pause") } else { label(icon::PLAY, "Play") };
+                ui.toggle_value(&mut layer.playing, text);
+                if ui.button(icon::SKIP_BACK).on_hover_text("Back to the start").clicked() {
+                    seek_to = Some(0.0);
+                }
+                ui.checkbox(&mut layer.looping, "Loop");
+                ui.separator();
+                let target = ControlTarget::LayerDirection(layer.id);
+                choice_buttons(ui, &mut layer.direction, |ui, r| map_menu(ui, r, target.clone()));
+            });
+            ui.horizontal(|ui| {
+                ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
+                    let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
+                    map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
+                });
+            });
+            ui.horizontal(|ui| {
+                let mut sync = layer.sync_beats > 0.0;
+                if ui.toggle_value(&mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
+                    layer.sync_beats = if sync { 16.0 } else { 0.0 };
+                }
+                if sync {
+                    guarded!(ui, layer.sync_beats, egui::DragValue::new(&mut layer.sync_beats).range(1.0..=256.0).speed(0.1).suffix(" beats"));
+                    for b in [4.0, 8.0, 16.0, 32.0] {
+                        if ui.selectable_label(layer.sync_beats == b, format!("{b:.0}")).clicked() {
+                            layer.sync_beats = b;
+                        }
+                    }
+                    if layer.loop_beats > 0.0 {
+                        hint(ui, "off while a beat loop is set");
+                    }
+                }
+            });
+            if has_sound {
+                sound_row(ui, layer);
+            }
+            ui.separator();
+        }
+    transform_editor(ui, layer);
+    ui.separator();
+    (effects_editor(ui, &mut layer.effects, clipboard_len), seek_to)
 }
 
 /// Position, scale, rotation and flips of a layer (all mappable; scale and rotation can be modulated).

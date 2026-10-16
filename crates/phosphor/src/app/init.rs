@@ -181,6 +181,8 @@ impl PhosphorApp {
                 mod_inputs: ModInputs::default(),
             },
             dock,
+            workspace: None,
+            workspace_docks: HashMap::new(),
             #[cfg(target_os = "macos")]
             native_menu: None,
             title: String::new(),
@@ -209,6 +211,9 @@ impl PhosphorApp {
             app.restore(s);
         }
         app.install_native_menu();
+        if let Some(i) = app.bench.as_ref().and_then(|b| b.cfg.layout.as_deref()).and_then(|n| super::layout::LAYOUTS.iter().position(|(l, _)| *l == n)) {
+            app.switch_workspace(i);
+        }
         if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.tab.clone())
             && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)
         {
