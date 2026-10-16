@@ -35,6 +35,11 @@ pub fn is_supported(name: &str) -> bool {
     IMAGE_EXTS.contains(&ext.as_str()) || MOVIE_EXTS.contains(&ext.as_str())
 }
 
+/// A clip's label for a file: its name without the extension.
+pub fn clip_name(file: &str) -> String {
+    std::path::Path::new(file).file_stem().map_or_else(|| file.to_string(), |s| s.to_string_lossy().into_owned())
+}
+
 pub fn spec_for_path(path: &str) -> SourceSpec {
     spec_for(&file_name(path), Some(path.to_string()))
 }

@@ -60,7 +60,7 @@ impl PhosphorApp {
                             if let Some(z) = &p.zip {
                                 ui.label(format!("Zip: {}", z.display()));
                             }
-                            crate::ui::hint(ui, "Copy it to the other Mac and double-click. First time: right-click → Open (it isn't notarized yet).");
+                            crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time: right-click {} Open (it isn't notarized yet).", icon::ARROW_RIGHT));
                             ui.horizontal(|ui| {
                                 if ui.button(label_text(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
                                     let _ = std::process::Command::new("open").arg("-R").arg(app).spawn();

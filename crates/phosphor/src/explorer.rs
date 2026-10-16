@@ -412,7 +412,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             }
             for (i, sh) in st.editor.shaders.iter().enumerate() {
                 let name = custom::parse_header(&sh.source).map(|h| h.name).unwrap_or_else(|_| sh.slug.clone());
-                let dot = if sh.error.is_some() { RichText::new("●").color(WARN) } else { RichText::new("●").color(ACCENT) };
+                let dot = if sh.error.is_some() { RichText::new(icon::RECORD).color(WARN) } else { RichText::new(icon::RECORD).color(ACCENT) };
                 ui.horizontal(|ui| {
                     ui.label(dot.small());
                     if ui.selectable_label(st.editor.current == Some(i), name).clicked() {
@@ -439,7 +439,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Shader Editor").strong().size(16.0));
             crate::ui::hint(ui, "Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
-            crate::ui::hint(ui, "Start with + Effect, or right-click any effect in the explorer → Edit a copy.");
+            crate::ui::hint(ui, format!("Start with + Effect, or right-click any effect in the explorer {} Edit a copy.", icon::ARROW_RIGHT));
         });
         return;
     };
@@ -488,7 +488,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         });
         ui.add_space(8.0);
         ui.collapsing("Cheat sheet", |ui| {
-            ui.monospace("src(uv) → vec4f      input picture");
+            ui.monospace("src(uv) -> vec4f     input picture");
             ui.monospace("P(0u)…P(15u)          your @params");
             ui.monospace("u.time  u.resolution");
             ui.monospace("in.uv (0..1, y down)");
@@ -507,8 +507,8 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.label(RichText::new(if is_generator { "Generator" } else { "Effect" }).strong());
         ui.monospace(&sh.slug);
         match &sh.error {
-            Some(_) => ui.colored_label(WARN, "● error"),
-            None if sh.compiled => ui.colored_label(ACCENT, "● compiled · saved"),
+            Some(_) => ui.colored_label(WARN, format!("{} error", icon::RECORD)),
+            None if sh.compiled => ui.colored_label(ACCENT, format!("{} compiled · saved", icon::RECORD)),
             None => crate::ui::hint(ui, "not compiled"),
         };
     });
@@ -695,7 +695,7 @@ pub fn palette(ctx: &egui::Context, st: &mut State) -> Option<Command> {
                     crate::ui::hint(ui, "No matches");
                 }
                 ui.add_space(2.0);
-                crate::ui::hint(ui, "↑↓ to move · Enter to run · Esc to close");
+                crate::ui::hint(ui, format!("{}{} to move · Enter to run · Esc to close", icon::ARROW_UP, icon::ARROW_DOWN));
             });
         });
     if enter && let Some((_, _, cmd)) = ranked.get(st.palette.selected) {

@@ -57,7 +57,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                     ui.ctx().copy_text(remote.clone());
                 }
                 ui.monospace(format!("remotes connected: {}", net.remotes.load(std::sync::atomic::Ordering::Relaxed)));
-                hint(ui, "Tip: Share ▸ Add to Home Screen makes it full-screen like an app.");
+                hint(ui, format!("Tip: Share {} Add to Home Screen makes it full-screen like an app.", icon::CARET_RIGHT));
             });
         });
         ui.separator();

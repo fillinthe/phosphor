@@ -8,6 +8,7 @@ impl PhosphorApp {
         let now = ctx.input(|i| i.time);
 
         self.handle_dropped_files(&ctx);
+        self.state.clip_cells.clear();
         self.state.comp.ensure_outputs();
         self.state.comp.sync_media_bin();
         self.state.thumbs.poll(&ctx);

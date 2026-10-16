@@ -9,6 +9,7 @@ use egui_dock::{DockArea, DockState, NodeIndex};
 use egui_phosphor::regular as icon;
 use phosphor_engine::{Composition, Engine, Mapping, ModInputs, wgpu};
 
+pub(crate) use files::file_drag_point;
 pub use quick::{Quick, quick_menu, quick_row};
 use crate::audio::AudioInput;
 use crate::bench::BenchConfig;
@@ -146,6 +147,8 @@ pub struct State {
     pub preset_name: String,
     /// A message worth showing the user (save failed, bad preset, …).
     pub notice: Option<String>,
+    /// Clip cells drawn last frame (screen rect, layer, slot): where files dropped from the Finder land.
+    pub clip_cells: Vec<(egui::Rect, u64, usize)>,
     pub audio: AudioInput,
     pub control: ControlHub,
     /// Mappings editor: what the next heard input is for, the new mapping being made, and search.

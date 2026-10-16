@@ -154,16 +154,16 @@ pub const MENUS: &[(&str, &[Entry])] = &[
     ),
 ];
 
-/// "⌘S" / "⇧⌘S" (or "Ctrl+S" off the Mac).
+/// "⌘S" / "Shift ⌘S" (⇧ has no glyph in the UI font; or "Ctrl+S" off the Mac).
 pub fn shortcut_text(s: Shortcut) -> String {
     let Some((shift, key)) = s else { return String::new() };
     let key = match key {
         Key::Equals => "+".to_string(),
-        Key::Enter => "↩".to_string(),
+        Key::Enter => "Return".to_string(),
         k => k.symbol_or_name().to_string(),
     };
     if cfg!(target_os = "macos") {
-        format!("{}⌘{key}", if shift { "⇧" } else { "" })
+        format!("{}⌘{key}", if shift { "Shift " } else { "" })
     } else {
         format!("Ctrl+{}{key}", if shift { "Shift+" } else { "" })
     }

@@ -297,6 +297,20 @@ impl Composition {
         }
     }
 
+    /// Puts sources into a layer's clip slots from `start` on (replacing what's there), adding columns when the row
+    /// runs out. Returns how many clips were placed.
+    pub fn place_clips(&mut self, layer: u64, start: usize, items: Vec<(String, SourceSpec)>) -> usize {
+        let items: Vec<_> = items.into_iter().filter(|(_, s)| *s != SourceSpec::None).collect();
+        let ids: Vec<u64> = items.iter().map(|_| self.new_id()).collect();
+        let Some(l) = self.layer_mut(layer) else { return 0 };
+        let n = items.len();
+        for (i, ((name, source), id)) in items.into_iter().zip(ids).enumerate() {
+            *l.clip_slot_mut(start + i) = Clip { id, name, source, ..Default::default() };
+        }
+        self.clip_columns = self.clip_columns.max(start + n);
+        n
+    }
+
     /// Puts a new source on a layer using the launch fade.
     pub fn set_layer_source(&mut self, layer: u64, source: SourceSpec, values: Vec<f32>, name: String, now: f32) {
         let secs = self.launch_secs();
@@ -413,5 +427,18 @@ mod adopt_tests {
         assert!(copy.effects.iter().zip(&layer.effects).all(|(a, b)| a.id != b.id));
         assert_ne!(copy.clips[0].id, 7);
         assert_eq!(copy.effects.len(), 2);
+    }
+
+    #[test]
+    fn place_clips_fills_a_row_and_grows_the_grid() {
+        let mut comp = Composition::default();
+        let id = comp.add_layer().id;
+        let items: Vec<_> = (0..10).map(|i| (format!("m{i}"), SourceSpec::Movie { name: format!("m{i}.mov"), path: Some(format!("/m{i}.mov")) })).collect();
+        assert_eq!(comp.place_clips(id, 3, items), 10);
+        let l = &comp.layers[0];
+        assert!(l.clips[..3].iter().all(|c| c.is_empty()));
+        assert_eq!(l.clips[12].name, "m9");
+        assert_eq!(comp.clip_columns, 13);
+        assert_ne!(l.clips[3].id, l.clips[4].id);
     }
 }

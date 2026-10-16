@@ -191,7 +191,35 @@ pub fn cover_window(title: &str, cover: Option<&Display>) -> bool {
     false
 }
 
+/// Where the mouse is on the desktop, in points from the main display's top-left (the coordinates egui's
+/// viewport rects use, before zoom). Works while macOS runs a drag from the Finder, when windows get no mouse events.
+#[cfg(target_os = "macos")]
+pub fn mouse_location() -> Option<(f32, f32)> {
+    use objc2::msg_send;
+    use objc2::runtime::AnyClass;
+    let class = AnyClass::get(c"NSEvent")?;
+    // SAFETY: a class method returning a plain struct.
+    let p: objc2_foundation::NSPoint = unsafe { msg_send![class, mouseLocation] };
+    let main_h = displays().iter().find(|m| m.main)?.h as f64;
+    Some((p.x as f32, (main_h - p.y) as f32))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn mouse_location() -> Option<(f32, f32)> {
+    None
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn cover_window(_title: &str, _cover: Option<&Display>) -> bool {
     false
+}
+
+#[cfg(all(test, target_os = "macos"))]
+#[test]
+fn mouse_location_is_on_the_desktop() {
+    let (x, y) = mouse_location().expect("mouse location");
+    let ds = displays();
+    let (x0, y0) = ds.iter().fold((f32::MAX, f32::MAX), |(a, b), d| (a.min(d.x as f32), b.min(d.y as f32)));
+    let (x1, y1) = ds.iter().fold((f32::MIN, f32::MIN), |(a, b), d| (a.max((d.x + d.w) as f32), b.max((d.y + d.h) as f32)));
+    assert!(x >= x0 && x <= x1 && y >= y0 && y <= y1, "({x}, {y}) outside {x0},{y0}–{x1},{y1}");
 }

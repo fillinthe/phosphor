@@ -233,7 +233,7 @@ impl PhosphorApp {
                 let map_text = if self.state.map_mode { map_text.color(egui::Color32::BLACK) } else { map_text };
                 if ui
                     .add(egui::Button::new(map_text).selected(self.state.map_mode).fill(if self.state.map_mode { theme::ACCENT } else { egui::Color32::TRANSPARENT }))
-                    .on_hover_text("Map mode (⇧⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")
+                    .on_hover_text("Map mode (Shift ⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")
                     .clicked()
                 {
                     self.state.map_mode = !self.state.map_mode;

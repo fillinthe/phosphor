@@ -234,7 +234,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
 /// "Drives: Layer 1 · opacity, Master fade" for the hover text.
 fn binding_summary(w: &SurfaceWidget, targets: &[(ControlTarget, String)]) -> String {
     let names = |b: &[phosphor_engine::Binding]| b.iter().map(|b| targets.iter().find(|(t, _)| *t == b.target).map_or("(removed)".to_string(), |(_, n)| n.clone())).collect::<Vec<_>>().join(", ");
-    let mut s = if w.bindings.is_empty() { "Not wired to anything yet (Edit → select it)".to_string() } else { format!("Drives: {}", names(&w.bindings)) };
+    let mut s = if w.bindings.is_empty() { format!("Not wired to anything yet (Edit {} select it)", icon::ARROW_RIGHT) } else { format!("Drives: {}", names(&w.bindings)) };
     if !w.bindings_y.is_empty() {
         s += &format!("\nY drives: {}", names(&w.bindings_y));
     }
