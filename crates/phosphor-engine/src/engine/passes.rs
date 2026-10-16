@@ -51,6 +51,21 @@ impl Engine {
                     uniforms: u, mesh: None, bufs: Vec::new() });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
+            SourceSpec::Feed { id, .. } => {
+                // Copied into the layer's own texture, so a layer can feed on itself (feedback) safely.
+                let (view, fw, fh) = if *id == MASTER_ID {
+                    self.output.as_ref().map(|t| (t.view.clone(), t.width, t.height))?
+                } else {
+                    self.layers.get(id)?.feed.as_ref().map(|t| (t.view.clone(), t.width, t.height))?
+                };
+                let device = &self.gpu.device;
+                let res = self.layers.entry(layer_id).or_default();
+                let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
+                Target::ensure(slot, device, "feed copy", w, h);
+                let target = slot.as_ref().unwrap().view.clone();
+                push_fit_copy(target.clone(), &Frame::Rgb { view, w: fw, h: fh }, (w, h), crate::FitMode::Stretch, (w, h), passes);
+                Some(Frame::Rgb { view: target, w, h })
+            }
             SourceSpec::Image { .. } | SourceSpec::Movie { .. } | SourceSpec::Live { .. } | SourceSpec::Text(_) => {
                 let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &res.media_out } else { &res.media };

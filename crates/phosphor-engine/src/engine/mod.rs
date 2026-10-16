@@ -350,7 +350,8 @@ impl Engine {
         }
         let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
         // Layers shown on their own by a mapping surface, and their pictures this frame.
-        let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.mapping.layer_feeds()).collect();
+        // Full-size pictures kept for mapping surfaces and for layers that use another layer as their source.
+        let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.mapping.layer_feeds()).chain(comp.feed_sources()).collect();
         let mut feeds: HashMap<u64, wgpu::TextureView> = HashMap::new();
         // The layer group being mixed (into accum 2–3) and which of those holds it so far.
         let mut open_group: Option<u64> = None;

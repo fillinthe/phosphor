@@ -163,6 +163,14 @@ impl Composition {
         g.max(0.0)
     }
 
+    /// Layers and groups whose finished picture another layer uses as its source.
+    pub fn feed_sources(&self) -> impl Iterator<Item = u64> + '_ {
+        self.layers.iter().filter_map(|l| match &l.source {
+            SourceSpec::Feed { id, .. } if *id != crate::MASTER_ID => Some(*id),
+            _ => None,
+        })
+    }
+
     /// One fade style for every layer (and new ones).
     pub fn set_launch_style(&mut self, style: TransitionKind) {
         self.launch.style = style;
