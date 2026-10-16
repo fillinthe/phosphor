@@ -20,7 +20,7 @@ pub(crate) fn point_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, fram
     r
 }
 
-const MASK_COLOR: Color32 = Color32::from_rgb(255, 130, 80);
+pub(crate) const MASK_COLOR: Color32 = Color32::from_rgb(255, 130, 80);
 
 /// Draws every surface (corners or mesh grid) and mask over `frame` (the rect the output occupies
 /// on screen) with draggable handles, and applies drags. Shared by the Mapping panel and the
@@ -269,39 +269,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 });
-                surface_source(ui, s, layers, groups, &others);
-                ui.horizontal(|ui| {
-                    ui.label("Shape");
-                    choice_buttons(ui, &mut s.shape, |_, _| {});
-                });
-                guarded!(ui, s.opacity, Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
-                guarded!(ui, s.feather, Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
-                if s.feather > 0.0 {
-                    guarded!(ui, s.blend_gamma, Slider::new(&mut s.blend_gamma, 0.5..=4.0).text("Blend curve").fixed_decimals(2))
-                        .on_hover_text("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.");
-                }
-                color_grade_editor(ui, s.id, &mut s.color);
-                ui.horizontal(|ui| {
-                    let mut on = s.mesh.is_some();
-                    let (mut cols, mut rows) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));
-                    let mut changed = ui.toggle_value(&mut on, label(icon::GRID_NINE, "Mesh warp")).on_hover_text("Bend the surface onto curved or uneven objects with a grid of points").changed();
-                    if on {
-                        changed |= guarded!(ui, cols, egui::DragValue::new(&mut cols).range(1..=8).prefix("cols ")).changed();
-                        changed |= guarded!(ui, rows, egui::DragValue::new(&mut rows).range(1..=8).prefix("rows ")).changed();
-                        if ui.small_button("Flatten").on_hover_text("Straighten the grid between the four corners").clicked() {
-                            s.mesh = Some(phosphor_engine::mapping::Mesh::from_corners(&s.corners, cols, rows));
-                        }
-                    }
-                    if changed {
-                        s.set_mesh(on, cols, rows);
-                    }
-                });
-                ui.collapsing("Input region (part of the picture shown)", |ui| {
-                    guarded!(ui, s.input[0], Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
-                    guarded!(ui, s.input[1], Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
-                    guarded!(ui, s.input[2], Slider::new(&mut s.input[2], 0.05..=1.0).text("Width"));
-                    guarded!(ui, s.input[3], Slider::new(&mut s.input[3], 0.05..=1.0).text("Height"));
-                });
+                surface_settings(ui, s, layers, groups, &others);
             });
             remember_card(ui, card_id, frame.response.rect);
             let resp = bg.unwrap_or_else(|| frame.response.clone());
@@ -333,8 +301,6 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                     ui.toggle_value(&mut m.enabled, RichText::new("ON").small().strong());
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
-                    ui.toggle_value(&mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
-                    ui.toggle_value(&mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (add points by double-clicking an edge)");
                     hint(ui, format!("{} points", m.points.len()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button(icon::TRASH).on_hover_text("Delete mask").clicked() {
@@ -342,12 +308,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 });
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().slider_width = (ui.available_width() - 90.0).max(60.0);
-                    let r = guarded!(ui, m.feather, Slider::new(&mut m.feather, 0.0..=0.2).text("Soft edge").show_value(false))
-                        .on_hover_text("Fade the mask's edge (0 = hard); the fade is centred on the outline");
-                    value_bubble(ui, &r, if m.feather > 0.0 { format!("{:.1}% of the output", m.feather * 100.0) } else { "hard edge".into() });
-                });
+                mask_settings(ui, m);
             });
             ui.add_space(4.0);
         }
@@ -374,6 +335,58 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             o.mapping.surfaces.insert(i + 1, copy);
         }
     }
+}
+
+/// A slice's settings: what it shows, shape, opacity, soft edge, colour, mesh warp, input region
+/// (Mapping panel cards and the Mapping Studio).
+pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], others: &[(u64, String)]) {
+    surface_source(ui, s, layers, groups, others);
+    ui.horizontal(|ui| {
+        ui.label("Shape");
+        choice_buttons(ui, &mut s.shape, |_, _| {});
+    });
+    guarded!(ui, s.opacity, Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
+    guarded!(ui, s.feather, Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
+    if s.feather > 0.0 {
+        guarded!(ui, s.blend_gamma, Slider::new(&mut s.blend_gamma, 0.5..=4.0).text("Blend curve").fixed_decimals(2))
+            .on_hover_text("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.");
+    }
+    color_grade_editor(ui, s.id, &mut s.color);
+    ui.horizontal(|ui| {
+        let mut on = s.mesh.is_some();
+        let (mut cols, mut rows) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));
+        let mut changed = ui.toggle_value(&mut on, label(icon::GRID_NINE, "Mesh warp")).on_hover_text("Bend the surface onto curved or uneven objects with a grid of points").changed();
+        if on {
+            changed |= guarded!(ui, cols, egui::DragValue::new(&mut cols).range(1..=8).prefix("cols ")).changed();
+            changed |= guarded!(ui, rows, egui::DragValue::new(&mut rows).range(1..=8).prefix("rows ")).changed();
+            if ui.small_button("Flatten").on_hover_text("Straighten the grid between the four corners").clicked() {
+                s.mesh = Some(phosphor_engine::mapping::Mesh::from_corners(&s.corners, cols, rows));
+            }
+        }
+        if changed {
+            s.set_mesh(on, cols, rows);
+        }
+    });
+    ui.collapsing("Input region (part of the picture shown)", |ui| {
+        guarded!(ui, s.input[0], Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
+        guarded!(ui, s.input[1], Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
+        guarded!(ui, s.input[2], Slider::new(&mut s.input[2], 0.05..=1.0).text("Width"));
+        guarded!(ui, s.input[3], Slider::new(&mut s.input[3], 0.05..=1.0).text("Height"));
+    });
+}
+
+/// A mask's settings: invert, smooth curve, soft edge.
+pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping::Mask) {
+    ui.horizontal(|ui| {
+        ui.toggle_value(&mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
+        ui.toggle_value(&mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (add points by double-clicking an edge)");
+    });
+    ui.horizontal(|ui| {
+        ui.spacing_mut().slider_width = (ui.available_width() - 90.0).max(60.0);
+        let r = guarded!(ui, m.feather, Slider::new(&mut m.feather, 0.0..=0.2).text("Soft edge").show_value(false))
+            .on_hover_text("Fade the mask's edge (0 = hard); the fade is centred on the outline");
+        value_bubble(ui, &r, if m.feather > 0.0 { format!("{:.1}% of the output", m.feather * 100.0) } else { "hard edge".into() });
+    });
 }
 
 /// Venues: save every output's setup (surfaces, mesh, masks, size, colour) under a name and recall it at the next gig.
@@ -411,7 +424,7 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
     });
 }
 
-fn venue_menu(ui: &mut egui::Ui, st: &mut State) {
+pub(crate) fn venue_menu(ui: &mut egui::Ui, st: &mut State) {
     let action = ui
         .menu_button(label(icon::MAP_PIN, "Venues"), |ui| {
             ui.set_min_width(300.0);

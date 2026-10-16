@@ -353,13 +353,12 @@ pub(crate) fn layout_performance() -> DockState<Tab> {
     dock
 }
 
-/// Mapping editor front and centre, with the output controls beside it.
+/// The Mapping Studio across the window, outputs / layers / preview underneath.
 pub(crate) fn layout_mapping() -> DockState<Tab> {
-    let mut dock = DockState::new(vec![Tab::Mapping]);
+    let mut dock = DockState::new(vec![Tab::Studio, Tab::Mapping]);
     let surface = dock.main_surface_mut();
-    let [left, right] = surface.split_right(NodeIndex::root(), 0.7, vec![Tab::Output, Tab::Layers]);
-    surface.split_below(right, 0.5, vec![Tab::Inspector]);
-    surface.split_below(left, 0.72, vec![Tab::Preview, Tab::Library, Tab::Presets]);
+    let [_, bottom] = surface.split_below(NodeIndex::root(), 0.76, vec![Tab::Output, Tab::Layers, Tab::Leds]);
+    surface.split_right(bottom, 0.6, vec![Tab::Preview, Tab::Inspector, Tab::Presets]);
     dock
 }
 

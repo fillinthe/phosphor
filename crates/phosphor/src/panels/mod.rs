@@ -35,6 +35,7 @@ mod output;
 mod preset_list;
 mod preview;
 mod stream;
+mod studio;
 mod surface;
 
 pub(crate) use account::*;
@@ -58,6 +59,7 @@ pub(crate) use output::*;
 pub(crate) use preset_list::*;
 pub(crate) use preview::*;
 pub(crate) use stream::*;
+pub(crate) use studio::*;
 pub(crate) use surface::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -85,10 +87,11 @@ pub enum Tab {
     Leds,
     Cues,
     LayerWindows,
+    Studio,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 21] = [
+    pub const ALL: [Tab; 22] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -110,6 +113,7 @@ impl Tab {
         Tab::Leds,
         Tab::Cues,
         Tab::LayerWindows,
+        Tab::Studio,
     ];
 
     pub fn title(self) -> String {
@@ -139,6 +143,7 @@ impl Tab {
             Tab::Leds => "LED / DMX",
             Tab::Cues => "Cues",
             Tab::LayerWindows => "Layer Windows",
+            Tab::Studio => "Mapping Studio",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -189,6 +194,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Leds => leds(ui, self.st),
             Tab::Cues => cues(ui, self.st),
             Tab::LayerWindows => layer_windows(ui, self.st),
+            Tab::Studio => studio(ui, self.st),
         }
     }
 
