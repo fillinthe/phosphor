@@ -18,7 +18,7 @@ use std::fmt;
 
 /// Maximum number of floats packed into `u.p`.
 /// vec4s in the shared uniform block (`Uniforms::p` in the engine). Must match the engine.
-pub const UNIFORM_VEC4S: usize = 12;
+pub const UNIFORM_VEC4S: usize = 16;
 /// Must equal `phosphor_engine::shaders::MAX_PARAMS`: all but the last (reserved) vec4.
 pub const MAX_PARAMS: usize = (UNIFORM_VEC4S - 1) * 4;
 /// Multi-pass buffers an ISF shader may use (texture bindings `BUFFER_BINDING..`).

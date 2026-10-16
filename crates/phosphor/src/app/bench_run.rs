@@ -56,7 +56,8 @@ impl PhosphorApp {
             passes: steady.last().map_or(0, |s| s.passes),
             audio_level: avg(|s| s.audio_level),
         };
-        println!("SUMMARY {}", summary.to_json());
+        // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
+        println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("LAYERS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.enabled, l.opacity, l.source.label())).collect::<Vec<_>>());
         for (layer, e) in &self.state.media.errors {
             println!("LAYER_ERROR {layer}: {e}");

@@ -351,9 +351,9 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
 #define vv_FragNormCoord isf_FragNormCoord\n\
 #define TIME (phosphor_u.time)\n\
 #define RENDERSIZE (phosphor_u.resolution)\n\
-#define TIMEDELTA (phosphor_u.p[11].z)\n\
-#define FRAMEINDEX (int(phosphor_u.p[11].y))\n\
-#define PASSINDEX (int(phosphor_u.p[11].x))\n\
+#define TIMEDELTA (phosphor_u.p[15].z)\n\
+#define FRAMEINDEX (int(phosphor_u.p[15].y))\n\
+#define PASSINDEX (int(phosphor_u.p[15].x))\n\
 #define DATE vec4(2026.0, 1.0, 1.0, phosphor_u.time)\n\
 #define IMG_NORM_PIXEL(img, nuv) textureLod(sampler2D(img, phosphor_samp), phosphor_flip(nuv), 0.0)\n\
 #define IMG_PIXEL(img, px) textureLod(sampler2D(img, phosphor_samp), phosphor_flip((px) / vec2(textureSize(img, 0))), 0.0)\n\

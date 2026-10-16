@@ -15,14 +15,14 @@ pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 pub(crate) struct Uniforms {
     /// Shader parameters (up to `shaders::MAX_PARAMS` floats; the last vec4 is reserved for
     /// ISF pass/frame info). Mapping passes use the first 20 floats for corners and homography.
-    pub p: [[f32; 4]; 12],
+    pub p: [[f32; 4]; 16],
     pub resolution: [f32; 2],
     pub time: f32,
     pub opacity: f32,
     pub uv_xform: [f32; 4],
     pub mode: u32,
     pub yuv: u32,
-    /// Pads to 256 bytes, the GPU's uniform offset alignment anyway (so the larger block is free).
+    /// Keeps the block 16-byte aligned (the per-pass stride rounds up to the GPU's offset alignment).
     pub _pad: [u32; 6],
 }
 

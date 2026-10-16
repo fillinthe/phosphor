@@ -2,7 +2,7 @@
 //! in `shaders/effects.wgsl` or `shaders/generators.wgsl`; parameters land in `u.p[..]`.
 
 /// Floats a shader can take: 11 of the 12 uniform vec4s (the last is reserved).
-pub const MAX_PARAMS: usize = 44;
+pub const MAX_PARAMS: usize = 60;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Param {
