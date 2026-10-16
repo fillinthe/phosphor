@@ -65,6 +65,11 @@ pub fn syphon_source(label: &str) -> SourceSpec {
     SourceSpec::Live { name: label.to_string(), format: "syphon".into(), url: label.to_string() }
 }
 
+/// The source for an NDI sender on the network (name from `ndi::sources`).
+pub fn ndi_source(name: &str) -> SourceSpec {
+    SourceSpec::Live { name: name.to_string(), format: "ndi".into(), url: name.to_string() }
+}
+
 /// Starts decoding a live source.
 pub fn open(name: &str, format: &str, url: &str) -> Result<VideoPlayer, String> {
     if format == "avfoundation" {

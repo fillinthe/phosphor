@@ -528,6 +528,21 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
                 }
             }
         }
+        #[cfg(target_os = "macos")]
+        {
+            ui.separator();
+            ui.label(RichText::new("NDI (network)").small().color(Color32::GRAY));
+            let sources = crate::ndi::sources();
+            if sources.is_empty() {
+                hint(ui, if crate::ndi::Ndi::library().is_some() { "No NDI sources found yet (they appear within a second or two)." } else { "Install the free NDI Tools (ndi.video) to receive NDI." });
+            }
+            for s in sources {
+                if ui.button(label(icon::BROADCAST, &s)).clicked() {
+                    picked = Some(crate::media::live::ndi_source(&s));
+                    ui.close();
+                }
+            }
+        }
         ui.separator();
         ui.label(RichText::new("Stream address").small().color(Color32::GRAY));
         let url_id = egui::Id::new(("live_url", layer));

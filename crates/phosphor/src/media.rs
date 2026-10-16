@@ -66,6 +66,9 @@ pub struct MediaManager {
     /// Seeks waiting for a layer's video to open (crash recovery restores positions this way).
     #[cfg(not(target_arch = "wasm32"))]
     pub pending_seek: HashMap<u64, f64>,
+    /// NDI In receivers per layer.
+    #[cfg(target_os = "macos")]
+    ndi: HashMap<u64, crate::ndi::NdiReceiver>,
     /// Syphon layers whose source isn't there yet (the other app may start later): next retry time.
     #[cfg(target_os = "macos")]
     syphon_waiting: HashMap<u64, f64>,
@@ -160,6 +163,8 @@ impl MediaManager {
                 self.syphon.remove(&layer.id);
                 #[cfg(target_os = "macos")]
                 self.syphon_waiting.remove(&layer.id);
+                #[cfg(target_os = "macos")]
+                self.ndi.remove(&layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.players.remove(&layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
@@ -219,6 +224,15 @@ impl MediaManager {
                     }
                 }
                 #[cfg(target_os = "macos")]
+                SourceSpec::Live { format, url, .. } if format == "ndi" => match crate::ndi::NdiReceiver::connect(url) {
+                    Ok(r) => {
+                        self.ndi.insert(layer.id, r);
+                    }
+                    Err(e) => {
+                        self.errors.insert(layer.id, e);
+                    }
+                },
+                #[cfg(target_os = "macos")]
                 SourceSpec::Live { format, .. } if format == "syphon" => {
                     // Connected (with retries) in update_video.
                     self.syphon_waiting.insert(layer.id, 0.0);
@@ -244,6 +258,8 @@ impl MediaManager {
         self.held.retain(|(id, _), _| live.contains(id));
         #[cfg(target_os = "macos")]
         self.syphon.retain(|id, _| live.contains(id));
+        #[cfg(target_os = "macos")]
+        self.ndi.retain(|id, _| live.contains(id));
         #[cfg(target_os = "macos")]
         self.syphon_waiting.retain(|id, _| live.contains(id));
         #[cfg(not(target_arch = "wasm32"))]
@@ -313,6 +329,14 @@ impl MediaManager {
                 && let Some(tex) = client.new_frame(engine.device())
             {
                 engine.set_layer_texture(*id, tex);
+            }
+        }
+        #[cfg(target_os = "macos")]
+        for (id, r) in &self.ndi {
+            if let Some((w, h, rgba)) = r.take()
+                && comp.layers.iter().any(|l| l.id == *id && l.enabled)
+            {
+                engine.upload_rgba(*id, w, h, &rgba);
             }
         }
         #[cfg(not(target_arch = "wasm32"))]

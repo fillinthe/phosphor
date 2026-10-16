@@ -64,7 +64,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Feature | Who has it | Phosphor |
 |---|---|---|
 | Syphon in/out, NDI out, cameras, capture cards, network streams | all | ✅ |
-| NDI in | all | ⬜ |
+| NDI in | all | ✅ |
 | Record the output (ProRes; Hap) | Resolume, VDMX | 🔨 ProRes/H.264 ✅, Hap ⬜ |
 | Stream to Twitch/YouTube, network viewers | — | ✅ |
 | Spout | Windows apps | ➖ (Mac first) |
