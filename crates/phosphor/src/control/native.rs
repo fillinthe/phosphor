@@ -53,6 +53,7 @@ impl Backend {
                 move |_, msg, _| {
                     activity.lock().unwrap().midi_seen.insert(seen_name.clone(), std::time::Instant::now());
                     let clock = match msg.first() {
+                        Some(0xF1) => Some(super::ClockEvent::Quarter(msg.get(1).copied().unwrap_or(0))),
                         Some(0xF8) => Some(super::ClockEvent::Tick),
                         Some(0xFA) => Some(super::ClockEvent::Start),
                         Some(0xFB) => Some(super::ClockEvent::Continue),

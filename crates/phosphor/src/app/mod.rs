@@ -25,6 +25,8 @@ use crate::theme;
 
 mod autopilot;
 mod bench_run;
+mod cues;
+pub(crate) use cues::format_tc;
 mod controls;
 mod files;
 mod frame;
@@ -101,6 +103,8 @@ pub struct State {
     /// LED / DMX sender (Art-Net, sACN).
     #[cfg(not(target_arch = "wasm32"))]
     pub dmx: crate::dmx::DmxOut,
+    /// The cue list while the show runs.
+    pub cue_run: cues::CueRun,
     /// Autopilot's per-layer state (which clip, since when).
     pub(crate) autopilot: HashMap<u64, autopilot::AutoRun>,
     render_state: Option<egui_wgpu::RenderState>,
@@ -356,6 +360,8 @@ impl State {
             A::FollowAudio => self.clock.follow_audio = if v == FLIP { !self.clock.follow_audio } else { press },
             A::AudioGain => self.audio.gain = unit_to(v, 0.1, 10.0, true),
             A::KickThreshold => self.audio.beats.sensitivity = unit_to(v, 1.1, 3.0, false),
+            A::CueGo if press => self.cue_next(now),
+            A::CueBack if press => self.cue_back(now),
             _ => {}
         }
     }
