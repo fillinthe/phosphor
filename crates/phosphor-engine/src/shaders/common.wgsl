@@ -1,6 +1,6 @@
 // Shared by every pass. Must match `Uniforms` in gpu.rs (256 bytes).
 struct U {
-    p: array<vec4f, 12>,  // up to 44 shader parameters; p[11] reserved (mapping passes use p[0..9])
+    p: array<vec4f, 16>,  // up to 60 shader parameters; p[15] reserved for ISF pass/frame info (mapping passes use p[0..9])
     resolution: vec2f,    // target size in pixels
     time: f32,            // seconds
     opacity: f32,

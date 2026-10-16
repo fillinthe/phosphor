@@ -217,6 +217,16 @@ pub fn cover_window(_title: &str, _cover: Option<&Display>) -> bool {
 #[cfg(all(test, target_os = "macos"))]
 #[test]
 fn mouse_location_is_on_the_desktop() {
+    // With the screen locked there is no pointer on any desktop display (and no location at all): not a failure.
+    let locked = std::process::Command::new("sh")
+        .args(["-c", "ioreg -n Root -d1 | grep -c 'CGSSessionScreenIsLocked\\\"=Yes'"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() != "0")
+        .unwrap_or(false);
+    if locked {
+        eprintln!("screen locked: skipping");
+        return;
+    }
     let (x, y) = mouse_location().expect("mouse location");
     let ds = displays();
     let (x0, y0) = ds.iter().fold((f32::MAX, f32::MAX), |(a, b), d| (a.min(d.x as f32), b.min(d.y as f32)));

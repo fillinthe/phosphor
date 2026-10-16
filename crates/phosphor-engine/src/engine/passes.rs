@@ -199,7 +199,7 @@ impl Engine {
             u.resolution = [tw as f32, th as f32];
             u.time = time;
             // PASSINDEX, FRAMEINDEX, TIMEDELTA (the reserved last vec4).
-            u.p[11] = [k as f32, frame, 1.0 / 60.0, 0.0];
+            u.p[15] = [k as f32, frame, 1.0 / 60.0, 0.0];
             result = target.clone();
             passes.push(Pass { entry, target, tex0: input.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: views });
         }
