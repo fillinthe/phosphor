@@ -140,7 +140,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut fill_row: Option<u64> = None;
     {
         let drag_at = crate::app::file_drag_point(ui.ctx());
-        let State { comp, thumbs, clip_cells, .. } = st;
+        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, .. } = st;
+        let ctx = ui.ctx().clone();
+        let thumb_h = (crate::thumbs::THUMB_W as f32 / aspect).max(1.0) as u32;
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Column headers trigger whole columns.
             ui.horizontal(|ui| {
@@ -175,6 +177,19 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                             Some(k) if !k.is_empty() => {
                                 let tex = match &k.source {
                                     SourceSpec::Image { path: Some(pth), .. } | SourceSpec::Movie { path: Some(pth), .. } => thumbs.get(pth),
+                                    // Generators render through the engine's preview slots: a still each, animated while hovered.
+                                    SourceSpec::Generator(id) => {
+                                        let key = format!("clip:{}:{:x}", k.id, hash_values(&k.generator_values));
+                                        preview_wants.push((key.clone(), phosphor_engine::PreviewItem::Clip(id.clone(), k.generator_values.clone()), resp.hovered()));
+                                        crate::app::preview_lookup(preview_keys, preview_textures, &key)
+                                    }
+                                    SourceSpec::Text(style) => {
+                                        let key = format!("text:{:x}", hash_text(style));
+                                        thumbs.get_or_build(&ctx, &key, || {
+                                            let img = crate::text::render(style, crate::thumbs::THUMB_W, thumb_h).ok()?;
+                                            Some(egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], &img.into_raw()))
+                                        })
+                                    }
                                     _ => None,
                                 };
                                 match tex {
@@ -380,4 +395,20 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: 
 fn bank_name(i: usize) -> String {
     let letter = |n: usize| char::from(b'A' + (n % 26) as u8);
     if i < 26 { letter(i).to_string() } else { format!("{}{}", letter(i / 26 - 1), letter(i % 26)) }
+}
+
+fn hash_values(values: &[f32]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for v in values {
+        v.to_bits().hash(&mut h);
+    }
+    h.finish()
+}
+
+fn hash_text(style: &phosphor_engine::TextStyle) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{style:?}").hash(&mut h);
+    h.finish()
 }

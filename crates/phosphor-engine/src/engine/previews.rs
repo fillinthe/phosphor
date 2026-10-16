@@ -47,6 +47,8 @@ impl Engine {
                 PreviewItem::Generator(id) => shaders::generator(id).and_then(|desc| {
                     self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), &desc.defaults(), &[], false, PREVIEW_WIDTH, ph, time, mods, passes)
                 }),
+                // A few seconds in, so shaders that start dark (fades, feedback) show something in a still.
+                PreviewItem::Clip(id, values) => self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), values, &[], false, PREVIEW_WIDTH, ph, time + 7.0, mods, passes),
             };
             let Some(Frame::Rgb { view, .. }) = frame else { continue };
             Target::ensure(&mut self.preview_targets[i], &self.gpu.device, "preview", PREVIEW_WIDTH, ph);
