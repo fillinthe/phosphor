@@ -232,8 +232,10 @@ function renderSurface() {
       } else {
         el = document.createElement('div'); el.dataset.key = 'sf' + w.id;
         if (w.kind === 'Label') { el.className = 'w lbl'; el.style.color = w.color; el.textContent = w.label; }
-        else if (w.kind === 'XyPad') {
-          el.className = 'w xy'; el.style.background = '#181b1e';
+        else if (w.kind === 'XyPad' || w.kind === 'Color') {
+          el.className = 'w xy';
+          // Colour: hue across, saturation up (grey at the bottom).
+          el.style.background = w.kind === 'Color' ? 'linear-gradient(to top, #808080, rgba(128,128,128,0)), linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' : '#181b1e';
           const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = w.label;
           const dot = document.createElement('div'); dot.className = 'dot'; dot.style.background = w.color; el.append(cap, dot);
           el.setValue = (x, y) => { dot.style.left = (x * 100) + '%'; dot.style.top = ((1 - y) * 100) + '%'; };
@@ -261,7 +263,7 @@ function renderSurface() {
   sf.widgets.forEach(w => {
     const el = box.querySelector(`[data-id="${w.id}"]`); if (!el || touching.has(el.dataset.key)) return;
     if (w.kind === 'Fader' || w.kind === 'Slider') el.setValue(w.value);
-    else if (w.kind === 'XyPad') el.setValue(w.value, w.value_y);
+    else if (w.kind === 'XyPad' || w.kind === 'Color') el.setValue(w.value, w.value_y);
     else if (w.kind === 'Button' || w.kind === 'Toggle') { const on = w.value > 0.5 || el.classList.contains('held'); el.style.background = on ? el.dataset.color : '#1b1f22'; el.style.color = on ? '#000' : '#eee'; el.style.borderColor = el.dataset.color; }
   });
 }

@@ -75,7 +75,7 @@ fn surface_widgets_drive_bindings() {
 
     // A key flips a surface toggle, which switches a layer.
     let tog = comp.surface.add(WidgetKind::Toggle);
-    comp.surface.widget_mut(tog).unwrap().bindings.push(Binding { target: ControlTarget::LayerEnabled(a), range: ValueRange::default() });
+    comp.surface.widget_mut(tog).unwrap().bindings.push(Binding { target: ControlTarget::LayerEnabled(a), range: phosphor_engine::ValueRange::default() });
     let key = ControlSource::Key { key: "T".into() };
     comp.control_maps.push(ControlMap::new(key.clone(), ControlTarget::Surface(tog)));
     send(&mut hub, &mut comp, key.clone(), 1.0);
@@ -88,8 +88,8 @@ fn surface_widgets_drive_bindings() {
     // Two widgets driving each other don't loop forever.
     let x = comp.surface.add(WidgetKind::Slider);
     let y = comp.surface.add(WidgetKind::Slider);
-    comp.surface.widget_mut(x).unwrap().bindings.push(Binding { target: ControlTarget::Surface(y), range: ValueRange::default() });
-    comp.surface.widget_mut(y).unwrap().bindings.push(Binding { target: ControlTarget::Surface(x), range: ValueRange::default() });
+    comp.surface.widget_mut(x).unwrap().bindings.push(Binding { target: ControlTarget::Surface(y), range: phosphor_engine::ValueRange::default() });
+    comp.surface.widget_mut(y).unwrap().bindings.push(Binding { target: ControlTarget::Surface(x), range: phosphor_engine::ValueRange::default() });
     let mut out = Vec::new();
     set_target(&mut comp, &ControlTarget::Surface(x), 0.3, &mut out);
     assert!((comp.surface.widget(y).unwrap().value - 0.3).abs() < 1e-3);
@@ -210,4 +210,23 @@ fn groups_answer_layer_mix_targets() {
     // Members are untouched, and the group is listed as a target.
     assert!(comp.layers.iter().all(|l| l.opacity == 1.0 && l.enabled));
     assert!(all_targets(&comp).iter().any(|(t, _)| *t == ControlTarget::LayerFxBypass(g)));
+}
+
+#[test]
+fn colour_widget_sends_red_green_blue() {
+    let mut comp = Composition::default();
+    let a = comp.add_layer().id;
+    let b = comp.add_layer().id;
+    let id = comp.surface.add(phosphor_engine::WidgetKind::Color);
+    let w = comp.surface.widget_mut(id).unwrap();
+    w.bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(a), range: phosphor_engine::ValueRange::default() });
+    w.bindings_y.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(b), range: phosphor_engine::ValueRange::default() });
+    let mut out = Vec::new();
+    set_target(&mut comp, &ControlTarget::SurfaceY(id), 1.0, &mut out);
+    // Hue 0, full saturation and brightness = pure red.
+    set_target(&mut comp, &ControlTarget::Surface(id), 0.0, &mut out);
+    assert_eq!((comp.layer_mut(a).unwrap().opacity, comp.layer_mut(b).unwrap().opacity), (1.0, 0.0));
+    // A third of the way round = green.
+    set_target(&mut comp, &ControlTarget::Surface(id), 1.0 / 3.0, &mut out);
+    assert!(comp.layer_mut(a).unwrap().opacity < 0.01 && comp.layer_mut(b).unwrap().opacity > 0.99);
 }

@@ -20,10 +20,12 @@ pub enum WidgetKind {
     XyPad,
     /// Just text.
     Label,
+    /// A colour (hue across, saturation up, brightness strip); drives red, green and blue targets.
+    Color,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 6] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::XyPad, WidgetKind::Label];
+    pub const ALL: [WidgetKind; 7] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Label];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -33,6 +35,7 @@ impl WidgetKind {
             WidgetKind::Slider => "Slider",
             WidgetKind::XyPad => "XY Pad",
             WidgetKind::Label => "Label",
+            WidgetKind::Color => "Colour",
         }
     }
 
@@ -44,6 +47,7 @@ impl WidgetKind {
             WidgetKind::Slider => (4.0, 1.0),
             WidgetKind::XyPad => (4.0, 4.0),
             WidgetKind::Label => (3.0, 1.0),
+            WidgetKind::Color => (4.0, 4.0),
         }
     }
 }
@@ -63,17 +67,32 @@ pub struct SurfaceWidget {
     pub label: String,
     pub color: [u8; 3],
     pub bindings: Vec<Binding>,
-    /// XY pad: what the vertical axis drives.
+    /// XY pad: what the vertical axis drives. Colour: green (and `bindings` red, `bindings_z` blue).
     pub bindings_y: Vec<Binding>,
+    pub bindings_z: Vec<Binding>,
     pub value: f32,
     pub value_y: f32,
+    /// Colour: brightness (hue = `value`, saturation = `value_y`).
+    pub value_z: f32,
     /// Which page of the surface it's on (index into `ControlSurface::pages`).
     pub page: usize,
 }
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), value: 0.0, value_y: 0.0, page: 0 }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0 }
+    }
+}
+
+impl SurfaceWidget {
+    /// A colour widget's colour, red / green / blue 0..1 (hue, saturation, brightness → RGB).
+    pub fn rgb(&self) -> [f32; 3] {
+        let (h, s, v) = (self.value.rem_euclid(1.0) * 6.0, self.value_y.clamp(0.0, 1.0), self.value_z.clamp(0.0, 1.0));
+        let f = |n: f32| {
+            let k = (n + h) % 6.0;
+            v - v * s * k.min(4.0 - k).clamp(0.0, 1.0)
+        };
+        [f(5.0), f(3.0), f(1.0)]
     }
 }
 

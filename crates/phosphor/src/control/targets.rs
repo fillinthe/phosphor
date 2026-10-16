@@ -105,6 +105,22 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => {
             let y = matches!(target, ControlTarget::SurfaceY(_));
             let Some(w) = comp.surface.widget_mut(*id) else { return };
+            if w.kind == phosphor_engine::WidgetKind::Color {
+                // Hue (X) or saturation (Y) moved: red, green and blue go to their targets.
+                if y {
+                    w.value_y = v.clamp(0.0, 1.0);
+                } else {
+                    w.value = v.clamp(0.0, 1.0);
+                }
+                let rgb = w.rgb();
+                let lists = [w.bindings.clone(), w.bindings_y.clone(), w.bindings_z.clone()];
+                for (c, list) in rgb.into_iter().zip(lists) {
+                    for b in list {
+                        set_target_depth(comp, &b.target, b.range.apply(c), out, depth + 1);
+                    }
+                }
+                return;
+            }
             let value = if !y && w.kind == phosphor_engine::WidgetKind::Toggle { toggled(w.value > 0.5, v) as u8 as f32 } else { v.clamp(0.0, 1.0) };
             let bindings = if y {
                 w.value_y = value;
@@ -218,7 +234,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
             continue;
         }
         out.push((ControlTarget::Surface(w.id), format!("Surface · {}", w.label)));
-        if w.kind == phosphor_engine::WidgetKind::XyPad {
+        if matches!(w.kind, phosphor_engine::WidgetKind::XyPad | phosphor_engine::WidgetKind::Color) {
             out.push((ControlTarget::SurfaceY(w.id), format!("Surface · {} (Y)", w.label)));
         }
     }
