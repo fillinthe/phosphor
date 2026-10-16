@@ -32,6 +32,8 @@ pub struct Peer {
     pub since: std::time::Instant,
     /// Remote unlocked (or no password set).
     pub controlling: bool,
+    /// Guests: the id their browser remembers, so a reconnect is the same person.
+    pub token: String,
 }
 
 /// Everyone connected, plus disconnect requests and blocked addresses.
@@ -56,12 +58,18 @@ impl Seat {
         let mut r = reg.lock().unwrap();
         r.next += 1;
         let id = r.next;
-        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false });
+        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false, token: String::new() });
         Self { reg: reg.clone(), id }
     }
 
     fn kicked(&self) -> bool {
         self.reg.lock().unwrap().kicked.contains(&self.id)
+    }
+
+    fn set_token(&self, token: &str) {
+        if let Some(p) = self.reg.lock().unwrap().peers.iter_mut().find(|p| p.id == self.id) {
+            p.token = token.chars().filter(|c| c.is_ascii_alphanumeric()).take(40).collect();
+        }
     }
 
     fn set_controlling(&self, on: bool) {
@@ -555,6 +563,10 @@ mod native {
                 Ok(tungstenite::Message::Text(t)) => {
                     let Ok(mut v) = serde_json::from_str::<serde_json::Value>(t.as_str()) else { continue };
                     if guest {
+                        if v.get("t").and_then(|t| t.as_str()) == Some("hello") {
+                            seat.set_token(v.get("token").and_then(|t| t.as_str()).unwrap_or(""));
+                            continue;
+                        }
                         if let Some(o) = v.as_object_mut() {
                             o.insert("_from".into(), serde_json::json!(seat.id));
                             cmds.lock().unwrap().push(v);

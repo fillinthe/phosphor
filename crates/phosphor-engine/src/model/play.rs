@@ -17,10 +17,49 @@ pub struct AudiencePlay {
     pub surprise: bool,
     /// Heading on the guest page.
     pub title: String,
+    /// How the code looks on the output layer.
+    pub qr_style: QrStyle,
+    /// Title and address under the code.
+    pub qr_caption: bool,
+}
+
+/// The code's colours on the output: a card, or just the modules over the visuals.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QrStyle {
+    #[default]
+    BlackOnWhite,
+    WhiteOnBlack,
+    /// Black modules, no background.
+    Black,
+    /// White modules, no background.
+    White,
+}
+
+impl QrStyle {
+    pub const ALL: [QrStyle; 4] = [QrStyle::BlackOnWhite, QrStyle::WhiteOnBlack, QrStyle::Black, QrStyle::White];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            QrStyle::BlackOnWhite => "Black on white",
+            QrStyle::WhiteOnBlack => "White on black",
+            QrStyle::Black => "Black, no background",
+            QrStyle::White => "White, no background",
+        }
+    }
+
+    /// (modules, background); background None = transparent.
+    pub fn colors(self) -> ([u8; 4], Option<[u8; 4]>) {
+        match self {
+            QrStyle::BlackOnWhite => ([0, 0, 0, 255], Some([255, 255, 255, 255])),
+            QrStyle::WhiteOnBlack => ([255, 255, 255, 255], Some([0, 0, 0, 255])),
+            QrStyle::Black => ([0, 0, 0, 255], None),
+            QrStyle::White => ([255, 255, 255, 255], None),
+        }
+    }
 }
 
 impl Default for AudiencePlay {
     fn default() -> Self {
-        Self { enabled: false, turn_secs: 60, surface_page: None, columns: true, surprise: true, title: "Take the controls".into() }
+        Self { enabled: false, turn_secs: 60, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), qr_style: QrStyle::default(), qr_caption: true }
     }
 }

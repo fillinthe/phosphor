@@ -381,7 +381,11 @@ $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwgo').cl
 
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (guest ? '/guest' : '/control'));
-  ws.onopen = () => { $('#dot').classList.add('on'); $('#status').textContent = viewOnly ? 'watching' : 'connected'; };
+  ws.onopen = () => {
+    $('#dot').classList.add('on'); $('#status').textContent = viewOnly ? 'watching' : 'connected';
+    // Guests: the same token after a reload or a dropped Wi-Fi keeps their place in line.
+    if (guest) { let tok = localStorage.getItem('phosphor-seat'); if (!tok) { tok = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('phosphor-seat', tok); } send({ t: 'hello', token: tok }); }
+  };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.you !== undefined) { me = m.you; if (state) render(); return; }
