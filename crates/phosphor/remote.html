@@ -98,6 +98,7 @@
   #playcols { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   #playcols button, #playsurprise { flex:1; min-width:64px; padding:16px 0; font-size:16px; font-weight:600; }
   #playsurprise { width:100%; background:#2b1d3a; border-color:#b78cff; color:#d9c3ff; }
+  #namerow { margin-top:10px; } #playname { flex:1; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; }
 </style>
 </head>
 <body>
@@ -114,7 +115,8 @@
   <button id="pwgo" class="big">Unlock</button>
 </div>
 <div id="prevwrap"><img id="prev" alt=""></div>
-<div id="play"><div class="section"><div id="playtitle"></div><div id="playstat"></div><div id="playclock"></div></div></div>
+<div id="play"><div class="section"><div id="playtitle"></div><div id="playstat"></div><div id="playclock"></div>
+  <div class="row" id="namerow"><span class="label">Your name</span><input id="playname" maxlength="24" placeholder="shown on the screen" autocomplete="nickname"></div></div></div>
 <div class="section" id="mastersec">
   <div class="row"><span class="label">MASTER</span><div id="master"></div><span class="val" id="masterv"></span></div>
 </div>
@@ -384,12 +386,22 @@ function setViewOnly(on) {
 $('#pwgo').onclick = () => { const p = $('#pw').value; localStorage.setItem('phosphor-pw', p); send({ t: 'auth', password: p }); };
 $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pwgo').click(); });
 
+// Guests: who this phone is (a remembered id) and what to call them.
+function hello() {
+  let tok = localStorage.getItem('phosphor-seat');
+  if (!tok) { tok = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('phosphor-seat', tok); }
+  send({ t: 'hello', token: tok, name: localStorage.getItem('phosphor-name') || '' });
+}
+if (guest) {
+  const n = $('#playname'); n.value = localStorage.getItem('phosphor-name') || '';
+  n.addEventListener('change', () => { localStorage.setItem('phosphor-name', n.value.trim()); hello(); });
+}
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + (guest ? '/guest' : '/control'));
   ws.onopen = () => {
     $('#dot').classList.add('on'); $('#status').textContent = viewOnly ? 'watching' : 'connected';
     // Guests: the same token after a reload or a dropped Wi-Fi keeps their place in line.
-    if (guest) { let tok = localStorage.getItem('phosphor-seat'); if (!tok) { tok = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('phosphor-seat', tok); } send({ t: 'hello', token: tok }); }
+    if (guest) hello();
   };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);

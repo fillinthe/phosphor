@@ -19,6 +19,8 @@ pub struct AudiencePlay {
     pub surprise: bool,
     /// Heading on the guest page.
     pub title: String,
+    /// Keep a "Now playing: …" text layer on the output with the players' names.
+    pub show_names: bool,
     /// How the code looks on the output layer.
     pub qr_style: QrStyle,
     /// Title and address under the code.
@@ -62,6 +64,6 @@ impl QrStyle {
 
 impl Default for AudiencePlay {
     fn default() -> Self {
-        Self { enabled: false, turn_secs: 60, players: 1, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), qr_style: QrStyle::default(), qr_caption: true }
+        Self { enabled: false, turn_secs: 60, players: 1, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), show_names: false, qr_style: QrStyle::default(), qr_caption: true }
     }
 }
