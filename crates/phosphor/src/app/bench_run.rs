@@ -84,6 +84,7 @@ impl PhosphorApp {
         }
         let an = self.state.audio.analysis();
         println!("BEAT bpm {:.1} confidence {:.2} clock {:.1}", an.bpm, an.confidence, self.state.clock.bpm);
+        println!("CONTROL {}", self.state.control.osc_status);
         #[cfg(target_os = "macos")]
         if run.cfg.ndi {
             println!("NDI_SOURCES {:?}", crate::ndi::sources());

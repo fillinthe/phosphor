@@ -15,6 +15,7 @@ pub enum Purpose {
     SaveSnapshot,
     StreamFile,
     ExportShow,
+    TouchOsc,
 }
 
 pub struct Dialogs {

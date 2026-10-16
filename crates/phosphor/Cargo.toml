@@ -30,6 +30,7 @@ rustfft = "6.4.1"
 midir = "0.11"
 rosc = "0.11"
 mdns-sd = "0.21"
+flate2 = "1"
 tungstenite = "0.26"
 qrcode = { version = "0.14.1", default-features = false }
 pollster = "0.4"

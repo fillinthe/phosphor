@@ -2664,6 +2664,7 @@ dependencies = [
  "env_logger",
  "epaint_default_fonts",
  "ffmpeg-next",
+ "flate2",
  "image",
  "js-sys",
  "libc",

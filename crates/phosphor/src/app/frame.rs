@@ -58,6 +58,7 @@ impl PhosphorApp {
             control.poll_clock(now);
             control.apply(comp, now as f32);
             control.feedback(comp, now);
+            control.publish_query(comp, now);
         }
         for d in std::mem::take(&mut self.state.control.triggers) {
             self.state.run_deferred(d, now);

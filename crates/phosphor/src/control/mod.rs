@@ -124,6 +124,10 @@ pub struct ControlHub {
     next_feedback: f64,
     #[cfg(not(target_arch = "wasm32"))]
     backend: native::Backend,
+    /// OSC Query server (browse every address), with when it last got the project's controls.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub oscquery: Option<oscquery::Server>,
+    next_query: f64,
 }
 
 /// Controller settings kept between launches.
@@ -193,7 +197,23 @@ impl ControlHub {
             next_feedback: 0.0,
             #[cfg(not(target_arch = "wasm32"))]
             backend: native::Backend::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            oscquery: None,
+            next_query: 0.0,
         }
+    }
+
+    /// Hands the OSC Query server the project's controls (about once a second).
+    pub fn publish_query(&mut self, comp: &Composition, now: f64) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(q) = &self.oscquery
+            && now >= self.next_query
+        {
+            self.next_query = now + 1.0;
+            q.publish(&oscquery::entries(comp));
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (comp, now);
     }
 
     /// (Re)opens every MIDI input and the OSC listener.
@@ -212,6 +232,12 @@ impl ControlHub {
                 ),
                 Err(e) => format!("OSC failed: {e}"),
             };
+            self.oscquery = None;
+            self.oscquery = oscquery::Server::start(self.osc_port, self.local_ip.as_deref()).ok();
+            self.next_query = 0.0;
+            if let Some(q) = &self.oscquery {
+                self.osc_status.push_str(&format!(" · OSC Query on http://{}:{}", self.local_ip.clone().unwrap_or_else(|| "localhost".into()), q.port));
+            }
         }
     }
 
@@ -368,5 +394,7 @@ mod targets;
 pub use targets::*;
 #[cfg(not(target_arch = "wasm32"))]
 mod native;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod oscquery;
 #[cfg(test)]
 mod tests;
