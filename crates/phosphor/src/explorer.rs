@@ -589,6 +589,7 @@ pub enum Command {
     ToggleMapping,
     ToggleSession,
     AddMonitor,
+    Quick(crate::app::Quick),
 }
 
 fn commands(st: &State) -> Vec<(String, Command)> {
@@ -603,6 +604,9 @@ fn commands(st: &State) -> Vec<(String, Command)> {
         (format!("{} New effect shader", icon::CODE), Command::NewShader(false)),
         (format!("{} New generator shader", icon::CODE), Command::NewShader(true)),
     ];
+    for q in crate::app::Quick::ALL {
+        out.push((format!("{} {}", q.icon(), q.label()), Command::Quick(q)));
+    }
     for tab in Tab::ALL {
         out.push((format!("{} Show panel: {}", icon::APP_WINDOW, tab.title()), Command::OpenTab(tab)));
     }

@@ -115,6 +115,7 @@ impl LayerState {
                     name: self.name.clone(),
                     source: self.source.clone(),
                     generator_values: self.generator_values.clone(),
+                    mods: self.generator_mods.clone(),
                     trigger: TriggerMode::Normal,
                     // Speed, loop and effects come back too when the flash ends.
                     own: Some(self.clip_settings()),
@@ -140,7 +141,7 @@ impl LayerState {
                     }
                     self.source = back.source;
                     self.generator_values = back.generator_values;
-                    self.generator_mods.clear();
+                    self.generator_mods = back.mods;
                     self.name = back.name;
                     self.active_clip = (back.id != 0).then_some(back.id);
                     self.playing = true;

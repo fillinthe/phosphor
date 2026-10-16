@@ -9,6 +9,7 @@ use egui_dock::{DockArea, DockState, NodeIndex};
 use egui_phosphor::regular as icon;
 use phosphor_engine::{Composition, Engine, Mapping, ModInputs, wgpu};
 
+pub use quick::{Quick, quick_menu, quick_row};
 use crate::audio::AudioInput;
 use crate::bench::BenchConfig;
 use crate::clock::Clock;
@@ -36,6 +37,7 @@ mod init;
 mod layout;
 mod menus;
 mod outputs;
+mod quick;
 mod recovery;
 mod render;
 mod settings;
@@ -378,6 +380,8 @@ impl State {
             A::AudioGain => self.audio.gain = unit_to(v, 0.1, 10.0, true),
             A::KickThreshold => self.audio.beats.sensitivity = unit_to(v, 1.1, 3.0, false),
             A::CueGo if press => self.cue_next(now),
+            A::Surprise if press => self.quick(Quick::Surprise, now),
+            A::Shuffle if press => self.quick(Quick::Shuffle, now),
             A::CueBack if press => self.cue_back(now),
             #[cfg(not(target_arch = "wasm32"))]
             A::Link => {

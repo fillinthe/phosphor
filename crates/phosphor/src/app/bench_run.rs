@@ -119,4 +119,25 @@ impl PhosphorApp {
         self.bench = None;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
+
+    /// Bench `--quick a,b`: Quick actions on the project the bench runs.
+    pub(crate) fn bench_quick(&mut self, names: &str, now: f64) {
+        use super::Quick as Q;
+        for name in names.split(',').filter(|n| !n.is_empty()) {
+            let q = match name {
+                "surprise" => Q::Surprise,
+                "layer" => Q::SurpriseLayer,
+                "shuffle" => Q::Shuffle,
+                "react" => Q::React,
+                "fill" => Q::Fill,
+                "instant" => Q::InstantSet,
+                other => {
+                    eprintln!("--quick: unknown action {other}");
+                    continue;
+                }
+            };
+            self.state.quick(q, now);
+            println!("QUICK {name}: {}", self.state.comp.layers.iter().map(|l| format!("{} [{}]", l.name, l.effects.iter().map(|f| f.effect.as_str()).collect::<Vec<_>>().join("+"))).collect::<Vec<_>>().join(", "));
+        }
+    }
 }

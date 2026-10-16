@@ -116,6 +116,7 @@ impl PhosphorApp {
                 st.add_layer();
             }
             Command::TapTempo => st.clock.tap(now),
+            Command::Quick(q) => st.quick(q, now),
             Command::NewShader(generator) => {
                 crate::explorer::new_shader(st, phosphor_engine::custom::template(generator));
                 self.show_tab(Tab::ShaderEditor);

@@ -30,6 +30,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let position = st.media.position(sel);
         let has_sound = st.media.has_sound(sel);
         let mut seek_to: Option<f64> = None;
+        let mut quick = None;
         let layer = st.comp.layer_mut(sel).unwrap();
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
@@ -39,6 +40,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong());
                 ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
             });
+            quick = crate::app::quick_row(ui);
             ui.separator();
             let media = LayerMedia { info: info.as_deref(), position, has_sound };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
@@ -47,6 +49,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         });
         if let Some(t) = seek_to {
             st.media.seek(sel, t);
+        }
+        if let Some(q) = quick {
+            st.quick_on(q, Some(sel), ui.ctx().input(|i| i.time));
         }
     }
     if let Some(action) = fx_action {

@@ -314,7 +314,7 @@ impl LayerState {
         }
         self.source = clip.source;
         self.generator_values = clip.generator_values;
-        self.generator_mods.clear();
+        self.generator_mods = clip.mods;
         if !clip.name.is_empty() {
             self.name = clip.name;
         }

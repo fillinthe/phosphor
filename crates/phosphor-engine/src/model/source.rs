@@ -79,6 +79,8 @@ pub struct Clip {
     pub name: String,
     pub source: SourceSpec,
     pub generator_values: Vec<f32>,
+    /// Modulation on the generator's parameters, put on the layer with the clip.
+    pub mods: Vec<crate::ParamMod>,
     /// Normal / toggle / flash / piano.
     pub trigger: TriggerMode,
     /// The clip's own playback settings and effects (Resolume-style); None = it uses the layer's.
