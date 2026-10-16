@@ -76,7 +76,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::OpenFromAccount, "Open from Account…", None),
             S,
             I(A::Import, "Import Media…", Some((false, Key::I))),
-            I(A::ImportResolume, "Import Resolume Composition…", None),
+            I(A::ImportResolume, "Import Resolume / VDMX Project…", None),
             I(A::FindMissing, "Find Missing Media…", None),
             I(A::WatchFolder, "Watch Folder…", None),
             S,

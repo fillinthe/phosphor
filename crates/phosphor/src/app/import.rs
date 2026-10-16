@@ -10,18 +10,22 @@ use crate::import::resolume::{AvcFile, read, to_composition};
 pub struct AvcImport {
     pub file: AvcFile,
     pub chosen: Vec<bool>,
+    /// From VDMX (pages) rather than Resolume (decks).
+    pub vdmx: bool,
 }
 
 /// Paths found by a relink search: (old path, new path), and how many were looked for.
 pub type Relinked = (Vec<(String, String)>, usize);
 
 impl State {
-    /// Reads a .avc file and opens the deck chooser.
+    /// Reads a Resolume composition (.avc) or VDMX project (.vdmx5) and opens the deck / page chooser.
     pub fn begin_resolume_import(&mut self, path: &str) {
-        match read(path) {
+        let vdmx = path.to_lowercase().ends_with(".vdmx5");
+        let result = if vdmx { crate::import::vdmx::read(path) } else { read(path) };
+        match result {
             Ok(file) => {
                 let chosen = file.decks.iter().map(|d| d.files() > 0).collect();
-                self.avc_import = Some(AvcImport { file, chosen });
+                self.avc_import = Some(AvcImport { file, chosen, vdmx });
             }
             Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
         }
@@ -89,11 +93,12 @@ impl PhosphorApp {
         let Some(imp) = &mut self.state.avc_import else { return };
         let mut open = true;
         let mut go = false;
-        egui::Window::new(format!("{} Import from Resolume", icon::DOWNLOAD_SIMPLE)).open(&mut open).collapsible(false).resizable(true).default_width(460.0).show(ctx, |ui| {
+        let app = if imp.vdmx { "VDMX" } else { "Resolume" };
+        egui::Window::new(format!("{} Import from {app}", icon::DOWNLOAD_SIMPLE)).open(&mut open).collapsible(false).resizable(true).default_width(460.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(&imp.file.name).strong());
             crate::ui::hint(ui, format!("{} × {} · {} layers{}", imp.file.width, imp.file.height, imp.file.layers.len(), imp.file.bpm.map_or(String::new(), |b| format!(" · {b:.1} BPM"))));
             ui.add_space(4.0);
-            ui.label("Decks to bring in (they go side by side in the clip columns):");
+            ui.label(format!("{} to bring in (they go side by side in the clip columns; each becomes a media collection):", if imp.vdmx { "Pages" } else { "Decks" }));
             egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
                 for (i, d) in imp.file.decks.iter().enumerate() {
                     let text = format!("{} — {} clips with media, {} columns", d.name, d.files(), d.columns);
@@ -108,7 +113,14 @@ impl PhosphorApp {
                     imp.chosen.iter_mut().for_each(|c| *c = false);
                 }
             });
-            crate::ui::hint(ui, "Layers, clips (video and image files), clip names, tempo and canvas size come across. Resolume's generators, effects and mapping don't.");
+            crate::ui::hint(
+                ui,
+                if imp.vdmx {
+                    "The media bin's pages and clips come across onto a Clips layer. VDMX layer setups, effects and data sources don't."
+                } else {
+                    "Layers, clips (video and image files), clip names, tempo and canvas size come across. Resolume's generators, effects and mapping don't."
+                },
+            );
             ui.add_space(6.0);
             go = ui.add_enabled(imp.chosen.iter().any(|c| *c), egui::Button::new(crate::ui::label(icon::CHECK, "Open as a new project"))).clicked();
         });
@@ -120,7 +132,7 @@ impl PhosphorApp {
             self.state.project_path = None;
             self.state.clip_page = 0;
             let missing = self.state.missing_media().len();
-            let mut msg = format!("Imported {} from Resolume.", imp.file.name);
+            let mut msg = format!("Imported {} from {}.", imp.file.name, if imp.vdmx { "VDMX" } else { "Resolume" });
             if skipped > 0 {
                 msg.push_str(&format!(" {skipped} clips without a media file (generators, audio, Resolume sources) were left out."));
             }
