@@ -110,8 +110,29 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                     let target = ControlTarget::LayerDirection(layer.id);
                     choice_buttons(ui, &mut layer.direction, |ui, r| map_menu(ui, r, target.clone()));
                 });
-                let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
-                map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
+                ui.horizontal(|ui| {
+                    ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
+                        let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
+                        map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
+                    });
+                });
+                ui.horizontal(|ui| {
+                    let mut sync = layer.sync_beats > 0.0;
+                    if ui.toggle_value(&mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
+                        layer.sync_beats = if sync { 16.0 } else { 0.0 };
+                    }
+                    if sync {
+                        guarded!(ui, layer.sync_beats, egui::DragValue::new(&mut layer.sync_beats).range(1.0..=256.0).speed(0.1).suffix(" beats"));
+                        for b in [4.0, 8.0, 16.0, 32.0] {
+                            if ui.selectable_label(layer.sync_beats == b, format!("{b:.0}")).clicked() {
+                                layer.sync_beats = b;
+                            }
+                        }
+                        if layer.loop_beats > 0.0 {
+                            hint(ui, "off while a beat loop is set");
+                        }
+                    }
+                });
                 if has_sound {
                     sound_row(ui, layer);
                 }
