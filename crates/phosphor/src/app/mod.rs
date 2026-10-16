@@ -147,6 +147,8 @@ pub struct State {
     pub preset_name: String,
     /// A message worth showing the user (save failed, bad preset, …).
     pub notice: Option<String>,
+    /// Opening the default audio input failed once (don't retry on every Quick action).
+    pub audio_declined: bool,
     /// Clip cells drawn last frame (screen rect, layer, slot): where files dropped from the Finder land.
     pub clip_cells: Vec<(egui::Rect, u64, usize)>,
     pub audio: AudioInput,

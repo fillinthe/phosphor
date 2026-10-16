@@ -81,6 +81,17 @@ impl State {
     pub(crate) fn quick_on(&mut self, q: Quick, layer: Option<u64>, now: f64) {
         let mut d = dice();
         let now32 = now as f32;
+        // Every Quick action adds motion that listens to the music (except Shuffle): make sure something is listening.
+        if q != Quick::Shuffle && !self.audio.is_open() && !self.audio_declined {
+            match self.audio.open(None) {
+                Ok(()) => self.notice = Some("Listening to the default audio input (Audio panel to change it)".into()),
+                // No input or no permission: the motion still runs from the LFOs; say so once.
+                Err(e) => {
+                    self.audio_declined = true;
+                    self.notice = Some(format!("No audio input ({e}); music-following motion is off, beat-synced motion still runs"));
+                }
+            }
+        }
         match q {
             Quick::Surprise => self.comp.surprise(now32, &mut d),
             Quick::InstantSet => {
