@@ -126,6 +126,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         let mut toggle = false;
         let mut send: Option<crate::screens::Display> = None;
         let displays = st.displays.clone();
+        let others: Vec<(u64, String)> = st.comp.outputs.iter().filter(|o| o.id != id).map(|o| (o.id, o.name.clone())).collect();
         let (layers, groups) = (&mut st.comp.layers, &mut st.comp.groups);
         let o = &mut st.comp.outputs[i];
         card_frame(ui, false).show(ui, |ui| {
@@ -199,7 +200,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                             ui.toggle_value(&mut s.enabled, RichText::new("ON").small());
                             ui.label(&s.name);
                         });
-                        super::mapping::surface_source(ui, s, layers, groups);
+                        super::mapping::surface_source(ui, s, layers, groups, &others);
                     }
                 });
             }
