@@ -275,6 +275,9 @@ impl LayerState {
             return true;
         }
         self.start_transition(now, secs);
+        if let Some(own) = &clip.own {
+            self.apply_clip_settings(own);
+        }
         self.source = clip.source;
         self.generator_values = clip.generator_values;
         self.generator_mods.clear();
