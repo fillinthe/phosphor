@@ -167,6 +167,8 @@ pub struct LayerState {
     pub loop_out: f32,
     /// Beat loop: when > 0 the loop is this many beats long from `loop_in` (overrides `loop_out`).
     pub loop_beats: f32,
+    /// BPM sync: when > 0 the movie (or its loop) is stretched to last this many beats; speed follows the tempo.
+    pub sync_beats: f32,
     /// Clip slots, by column.
     pub clips: Vec<Clip>,
     pub transition_secs: f32,
@@ -212,6 +214,7 @@ impl Default for LayerState {
             loop_in: 0.0,
             loop_out: 1.0,
             loop_beats: 0.0,
+            sync_beats: 0.0,
             clips: Vec::new(),
             transition_secs: 0.5,
             transition_kind: TransitionKind::Crossfade,
@@ -225,6 +228,15 @@ impl Default for LayerState {
 }
 
 impl LayerState {
+    /// Playback speed: the speed slider, or with BPM sync the speed that makes the movie (or its loop) last
+    /// `sync_beats` beats at `bpm`.
+    pub fn play_rate(&self, duration: Option<f64>, bpm: f32) -> f32 {
+        let (Some(d), true) = (duration, self.sync_beats > 0.0 && self.loop_beats <= 0.0) else { return self.rate };
+        let (lo, hi) = self.loop_range(d, bpm).unwrap_or((0.0, d));
+        let beats_secs = self.sync_beats as f64 * 60.0 / bpm.max(1.0) as f64;
+        (((hi - lo) / beats_secs) as f32).clamp(0.1, 4.0)
+    }
+
     /// The loop region in seconds for a movie of `duration` at `bpm`, or None for the whole movie.
     pub fn loop_range(&self, duration: f64, bpm: f32) -> Option<(f64, f64)> {
         let lo = (self.loop_in.clamp(0.0, 1.0) as f64) * duration;

@@ -192,3 +192,19 @@ mod tests {
         assert_eq!(l.source, SourceSpec::None, "piano stops on release");
     }
 }
+
+#[cfg(test)]
+mod sync_tests {
+    use super::*;
+
+    #[test]
+    fn bpm_sync_fits_the_clip_to_beats() {
+        let mut l = LayerState { sync_beats: 8.0, ..Default::default() };
+        // A 4 s clip over 8 beats at 120 BPM (4 s) plays at normal speed; at 240 BPM twice as fast.
+        assert!((l.play_rate(Some(4.0), 120.0) - 1.0).abs() < 1e-4);
+        assert!((l.play_rate(Some(4.0), 240.0) - 2.0).abs() < 1e-4);
+        l.sync_beats = 0.0;
+        l.rate = 0.5;
+        assert_eq!(l.play_rate(Some(4.0), 240.0), 0.5);
+    }
+}
