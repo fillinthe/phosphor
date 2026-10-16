@@ -72,10 +72,29 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.separator();
         ui.label(RichText::new("Bank").small());
-        for (i, name) in ["A", "B", "C", "D"].iter().enumerate() {
-            if ui.selectable_label(st.clip_page == i, *name).clicked() {
-                st.clip_page = i;
+        // At least A–D; more when the columns need them (imported projects can have hundreds).
+        let banks = st.comp.clip_columns.div_ceil(CLIP_PAGE_SIZE).max(4);
+        st.clip_page = st.clip_page.min(banks - 1);
+        if banks <= 8 {
+            for i in 0..banks {
+                if ui.selectable_label(st.clip_page == i, bank_name(i)).clicked() {
+                    st.clip_page = i;
+                }
             }
+        } else {
+            if ui.small_button(icon::CARET_LEFT).clicked() {
+                st.clip_page = st.clip_page.saturating_sub(1);
+            }
+            ComboBox::from_id_salt("clip_bank").width(60.0).selected_text(bank_name(st.clip_page)).height(400.0).show_ui(ui, |ui| {
+                for i in 0..banks {
+                    let first = i * CLIP_PAGE_SIZE + 1;
+                    ui.selectable_value(&mut st.clip_page, i, format!("{}  ({first}–{})", bank_name(i), first + CLIP_PAGE_SIZE - 1));
+                }
+            });
+            if ui.small_button(icon::CARET_RIGHT).clicked() {
+                st.clip_page = (st.clip_page + 1).min(banks - 1);
+            }
+            hint(ui, format!("of {banks}"));
         }
         ui.separator();
         if ui.button(label(icon::PLUS, "Column")).clicked() {
@@ -84,7 +103,8 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         hint(ui, "Keys 1–9 trigger this bank's columns · drop media onto a cell · right-click a cell");
     });
     ui.add_space(4.0);
-    let cols = st.comp.clip_columns.max(1);
+    // A bank shows up to nine columns (keys 1–9); big projects page through banks.
+    let cols = st.comp.clip_columns.clamp(1, CLIP_PAGE_SIZE);
     let page_offset = st.clip_page * CLIP_PAGE_SIZE;
     let cell = egui::vec2(96.0, 96.0 / aspect + 16.0);
     let mut triggers: Vec<Trigger> = Vec::new();
@@ -137,7 +157,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                     Some(t) => paint_texture(p, t, thumb_rect),
                                     None => {
                                         p.rect_filled(thumb_rect, 4.0, Color32::from_gray(30));
-                                        p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, k.source.label(), egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
+                                        // Long names (imported clips) stay inside their own cell.
+                                        let label: String = k.source.label().chars().take(16).collect();
+                                        p.with_clip_rect(thumb_rect).text(thumb_rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
                                     }
                                 }
                                 let mut name = if k.name.is_empty() { k.source.label() } else { k.name.clone() };
@@ -311,4 +333,10 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: 
             ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(ACCENT));
         }
     });
+}
+
+/// Bank letters: A–Z, then AA, AB…
+fn bank_name(i: usize) -> String {
+    let letter = |n: usize| char::from(b'A' + (n % 26) as u8);
+    if i < 26 { letter(i).to_string() } else { format!("{}{}", letter(i / 26 - 1), letter(i % 26)) }
 }

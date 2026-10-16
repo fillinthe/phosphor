@@ -32,6 +32,8 @@ mod stream;
 mod show;
 #[cfg(not(target_arch = "wasm32"))]
 mod export;
+#[cfg(not(target_arch = "wasm32"))]
+mod import;
 mod history;
 mod menu;
 #[cfg(target_os = "macos")]

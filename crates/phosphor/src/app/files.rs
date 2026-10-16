@@ -83,6 +83,16 @@ impl PhosphorApp {
                         });
                     }
                 }
+                Purpose::ImportResolume => {
+                    if let Some(p) = paths.first() {
+                        st.begin_resolume_import(&p.to_string_lossy());
+                    }
+                }
+                Purpose::RelinkFolder => {
+                    if let Some(p) = paths.first() {
+                        st.start_relink(p.clone());
+                    }
+                }
                 Purpose::TouchOsc => {
                     if let Some(p) = paths.first() {
                         let p = p.with_extension("tosc");

@@ -170,6 +170,10 @@ impl PhosphorApp {
                 autopilot: HashMap::new(),
                 cue_run: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
+                avc_import: None,
+                #[cfg(not(target_arch = "wasm32"))]
+                relink: None,
+                #[cfg(not(target_arch = "wasm32"))]
                 dmx: Default::default(),
                 clip_page: 0,
                 mod_inputs: ModInputs::default(),
