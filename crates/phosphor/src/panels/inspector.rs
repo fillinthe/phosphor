@@ -31,6 +31,11 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let has_sound = st.media.has_sound(sel);
         let mut seek_to: Option<f64> = None;
         let mut quick = None;
+        let mut match_beat: Option<u64> = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        let beat_pending = st.comp.layers.iter().find(|l| l.id == sel).and_then(|l| crate::app::beat_match::movie_path(&l.source)).is_some_and(|p| st.rhythm.is_pending(&p));
+        #[cfg(target_arch = "wasm32")]
+        let beat_pending = false;
         let layer = st.comp.layer_mut(sel).unwrap();
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
@@ -42,11 +47,20 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             });
             quick = crate::app::quick_row(ui);
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, match_beat: Default::default() };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
             fx_action = fx;
             seek_to = seek;
+            if media.match_beat.get() {
+                match_beat = Some(layer.id);
+            }
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(id) = match_beat {
+            st.match_beat(crate::media::rhythm::MatchTarget::Layer(id));
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = match_beat;
         if let Some(t) = seek_to {
             st.media.seek(sel, t);
         }
@@ -64,6 +78,10 @@ pub(crate) struct LayerMedia<'a> {
     pub info: Option<&'a str>,
     pub position: Option<(f64, f64)>,
     pub has_sound: bool,
+    /// Match the beat: a scan of this movie is running.
+    pub beat_pending: bool,
+    /// Set by the editor when the Match the beat button is pressed (the caller starts the scan).
+    pub match_beat: std::cell::Cell<bool>,
 }
 
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
@@ -152,6 +170,15 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 let mut sync = layer.sync_beats > 0.0;
                 if ui.toggle_value(&mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
                     layer.sync_beats = if sync { 16.0 } else { 0.0 };
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(path) = crate::app::beat_match::movie_path(&layer.source) {
+                    let _ = path;
+                    let pending = media.beat_pending;
+                    let text = if pending { format!("{} Listening to the picture…", icon::HOURGLASS) } else { format!("{} Match the beat", icon::MAGIC_WAND) };
+                    if ui.add_enabled(!pending, egui::Button::new(text)).on_hover_text("Scans the movie's motion for its own rhythm, then starts the loop on its first hit and stretches it so every hit lands on a beat").clicked() {
+                        media.match_beat.set(true);
+                    }
                 }
                 if sync {
                     guarded!(ui, layer.sync_beats, egui::DragValue::new(&mut layer.sync_beats).range(1.0..=256.0).speed(0.1).suffix(" beats"));

@@ -32,6 +32,8 @@ use crate::theme;
 
 
 mod autopilot;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod beat_match;
 mod bench_run;
 mod cues;
 pub(crate) use cues::format_tc;
@@ -174,6 +176,9 @@ pub struct State {
     /// Audience play: whose turn it is.
     pub jam: play::Jam,
     pub bug: crate::support::BugReport,
+    /// Visual beat scans (Match the beat).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub rhythm: crate::media::rhythm::Analyzer,
     pub updater: crate::update::Updater,
     /// Password phones need to control (viewing never needs it). Empty = no password.
     pub remote_password: String,

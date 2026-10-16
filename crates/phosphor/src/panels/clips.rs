@@ -137,6 +137,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut set_cell: Option<(usize, usize, usize)> = None; // (layer idx, slot, media idx)
     let mut use_current: Option<(usize, usize)> = None;
     let mut clear: Option<(usize, usize)> = None;
+    let mut beat: Option<(u64, usize)> = None;
     let mut fill_row: Option<u64> = None;
     {
         let drag_at = crate::app::file_drag_point(ui.ctx());
@@ -255,6 +256,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                         }
                         mapped_badge(ui, &resp, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
                         let filled = clip.is_some_and(|k| !k.is_empty());
+                        let is_movie = clip.is_some_and(|k| matches!(k.source, SourceSpec::Movie { path: Some(_), .. }));
                         resp.right_menu(|ui| {
                             if filled {
                                 if ui.button(label(icon::PLAY, "Trigger")).clicked() {
@@ -262,6 +264,12 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                     ui.close();
                                 }
                                 learn_items(ui, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
+                                if is_movie
+                                    && ui.button(label(icon::MAGIC_WAND, "Match the beat")).on_hover_text("Scan this movie's motion for its rhythm; the clip then starts on its first hit and is stretched so every hit lands on a beat").clicked()
+                                {
+                                    beat = Some((layer.id, c));
+                                    ui.close();
+                                }
                                 ui.separator();
                                 ui.label(RichText::new("When pressed").small().strong());
                                 let current = layer.clip_settings();
@@ -311,6 +319,12 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             slot.id = id * 1000 + c as u64 + 1;
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some((layer, c)) = beat {
+        st.match_beat(crate::media::rhythm::MatchTarget::Clip(layer, c));
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = beat;
     if let Some((idx, c)) = use_current
         && let Some(layer) = st.comp.layers.get_mut(idx)
     {

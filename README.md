@@ -27,7 +27,8 @@ scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
 
 - **Play:** layers with blend modes, groups and a crossfader; a clip grid (as many columns as you like, banks for the
   keys 1–9), cut/fade/blend transitions, launch now / on the beat / on the bar, tap tempo, MIDI clock, Ableton Link,
-  autopilot and trigger modes, clips that keep their own settings, movie sound, cue list with timecode (MTC, LTC).
+  autopilot and trigger modes, clips that keep their own settings, movie sound, cue list with timecode (MTC, LTC),
+  **Match the beat** (a movie's own visual rhythm is detected and locked to the tempo).
 - **Quick visuals:** Surprise (a random look on every layer), Shuffle, React to the music, Fill clips with variations,
   Instant Set — from the top bar, ⌘K, or a mapped pad.
 - **Effects and generators:** dozens built in (incl. a native Rutt-Etra), master effects, text layers, ISF shaders

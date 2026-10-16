@@ -91,6 +91,8 @@ impl PhosphorApp {
             st.comp.expire_transitions(now as f32);
             st.run_autopilot(now);
             st.run_cues(now);
+            #[cfg(not(target_arch = "wasm32"))]
+            st.poll_rhythm();
             st.run_play(now);
             st.update_now_playing(now);
         }
