@@ -100,6 +100,12 @@ impl Default for StreamSettings {
 }
 
 impl StreamSettings {
+    /// Where a recording to a file ends up (Hap always goes in a .mov).
+    pub fn recorded_path(&self) -> String {
+        let p = self.file_path.trim();
+        if self.file_format == FileFormat::Auto { p.to_string() } else { std::path::Path::new(p).with_extension("mov").to_string_lossy().to_string() }
+    }
+
     fn target(&self) -> (Vec<String>, String) {
         match self.destination {
             Destination::YouTube => (vec!["-f".into(), "flv".into()], format!("rtmp://a.rtmp.youtube.com/live2/{}", self.stream_key)),
@@ -272,7 +278,7 @@ impl Streamer {
         if s.file_path.trim().is_empty() {
             return Err("Choose a file first".into());
         }
-        let path = std::path::Path::new(s.file_path.trim()).with_extension("mov").to_string_lossy().to_string();
+        let path = s.recorded_path();
         let alpha = s.file_format == FileFormat::HapAlpha;
         let fps = s.fps.clamp(1, 120);
         let mut writer = crate::media::video::hap_encode::HapWriter::create(&path, width, height, fps, alpha)?;

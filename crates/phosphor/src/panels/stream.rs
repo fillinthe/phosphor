@@ -7,6 +7,8 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let (cw, ch) = (st.comp.width, st.comp.height);
     let mut choose_file = false;
+    // A finished recording goes into the media bin, ready to play.
+    let mut recorded: Option<String> = None;
     let State { stream, notice, stream_audio_devices, .. } = st;
     let running = stream.running();
     ui.add_enabled_ui(!running, |ui| {
@@ -101,6 +103,9 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         if running {
             if ui.button(label(icon::STOP, "Stop")).clicked() {
                 stream.stop();
+                if stream.settings.destination == crate::stream::Destination::File {
+                    recorded = Some(stream.settings.recorded_path());
+                }
             }
             ui.colored_label(ACCENT, format!("● LIVE {:02}:{:02}", (stream.elapsed(now) / 60.0) as u32, stream.elapsed(now) as u32 % 60));
         } else if ui.button(label(icon::BROADCAST, "Start")).clicked() {
@@ -131,4 +136,9 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = choose_file;
+    if let Some(path) = recorded {
+        let name = std::path::Path::new(&path).file_name().map_or(path.clone(), |n| n.to_string_lossy().to_string());
+        st.comp.add_media(&name, &path);
+        st.notice = Some(format!("Recording saved: {path} (in the media bin)"));
+    }
 }
