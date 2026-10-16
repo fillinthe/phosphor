@@ -354,6 +354,15 @@ pub(crate) fn layout_performance() -> DockState<Tab> {
     dock
 }
 
+/// Locked (player) mode: the preview with the mixer beside it, the clip grid underneath, nothing to edit with.
+pub(crate) fn layout_locked() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Preview]);
+    let surface = dock.main_surface_mut();
+    let [top, _] = surface.split_below(NodeIndex::root(), 0.62, vec![Tab::Clips]);
+    surface.split_right(top, 0.72, vec![Tab::Mixer]);
+    dock
+}
+
 /// The Mapping Studio across the window, outputs / layers / preview underneath.
 pub(crate) fn layout_mapping() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Studio, Tab::Mapping]);
