@@ -110,63 +110,11 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     if let Some((from, onto)) = drop {
         comp.drop_layer(from, onto);
     }
-    match action {
-        Some((i, LayerAction::Up)) => {
-            let id = comp.layers[i].id;
-            comp.move_layer(id, true);
-        }
-        Some((i, LayerAction::Down)) => {
-            let id = comp.layers[i].id;
-            comp.move_layer(id, false);
-        }
-        Some((i, LayerAction::GroupWithBelow)) => {
-            let id = comp.layers[i].id;
-            group_with_below(comp, selected, id);
-        }
-        Some((i, LayerAction::LeaveGroup)) => {
-            comp.layers[i].parent = None;
-            comp.normalize_groups();
-        }
-        Some((i, LayerAction::Duplicate)) => {
-            let id = comp.layers[i].id;
-            duplicate_layer(st, id);
-        }
-        Some((i, LayerAction::Remove)) => {
-            let id = comp.layers[i].id;
-            remove_layer(st, id);
-        }
-        Some((i, LayerAction::BrowseSources)) => {
-            let id = comp.layers[i].id;
-            st.fx_browser = Some(crate::explorer::FxBrowser::new(id, true, None));
-        }
-        Some((i, LayerAction::OpenFile)) => {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let id = comp.layers[i].id;
-                let exts = crate::media::dialog_extensions();
-                st.dialogs.pick_file(crate::dialogs::Purpose::LayerSource(id), Some(("Media", &exts)));
-            }
-            #[cfg(target_arch = "wasm32")]
-            let _ = i;
-        }
-        Some((i, LayerAction::BrowseEffects)) => {
-            let id = comp.layers[i].id;
-            st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None));
-        }
-        Some((i, LayerAction::Monitor)) => {
-            let id = comp.layers[i].id;
-            st.new_monitor = Some(MonitorSource::Layer(id));
-        }
-        Some((i, LayerAction::ClearSource)) => {
-            comp.layers[i].source = SourceSpec::None;
-        }
-        Some((i, LayerAction::Launch(source))) => {
-            let id = comp.layers[i].id;
-            let name = source.label();
-            let now = ui.ctx().input(|i| i.time);
-            st.launch_source(id, source, Vec::new(), name, now);
-        }
-        _ => {}
+    if let Some((i, a)) = action
+        && let Some(id) = comp.layers.get(i).map(|l| l.id)
+    {
+        let now = ui.ctx().input(|i| i.time);
+        apply_layer_action(st, id, a, now);
     }
     if let Some((gid, a)) = group_action {
         apply_group_action(st, gid, a);
@@ -328,18 +276,7 @@ pub(crate) fn layer_card(
                 if let Some(a) = source_picker(ui, layer, feeds) {
                     action = Some(a);
                 }
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
-                    let r = guarded!(ui, layer.opacity, Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
-                    mod_marker(ui, &r, layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref());
-                    mapped_badge(ui, &r, &ControlTarget::LayerOpacity(layer.id));
-                    if control_menu(&r, Some(&ControlTarget::LayerOpacity(layer.id)), Some(&mut layer.opacity_mod)) {
-                        layer.opacity = 1.0;
-                    }
-                    value_bubble(ui, &r, format!("{:.0}%", layer.opacity * 100.0));
-                    percent_field(ui, &mut layer.opacity);
-                    mod_button(ui, &mut layer.opacity_mod);
-                });
+                opacity_row(ui, layer);
                 ui.horizontal(|ui| {
                     choice_combo(ui, ("blend", layer.id), &mut layer.blend, 104.0, false);
                     choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
@@ -558,4 +495,56 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
     });
     r.response.on_hover_text("Live input: camera, capture card or network stream (RTSP, SRT, HLS, RTMP)");
     picked
+}
+
+/// Carries out a layer card's action (Layers panel and Layer Windows).
+pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, now: f64) {
+    match action {
+        LayerAction::Up => st.comp.move_layer(id, true),
+        LayerAction::Down => st.comp.move_layer(id, false),
+        LayerAction::GroupWithBelow => group_with_below(&mut st.comp, &mut st.selected, id),
+        LayerAction::LeaveGroup => {
+            if let Some(l) = st.comp.layer_mut(id) {
+                l.parent = None;
+            }
+            st.comp.normalize_groups();
+        }
+        LayerAction::Duplicate => duplicate_layer(st, id),
+        LayerAction::Remove => remove_layer(st, id),
+        LayerAction::BrowseSources => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, true, None)),
+        LayerAction::OpenFile => {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let exts = crate::media::dialog_extensions();
+                st.dialogs.pick_file(crate::dialogs::Purpose::LayerSource(id), Some(("Media", &exts)));
+            }
+        }
+        LayerAction::BrowseEffects => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None)),
+        LayerAction::Monitor => st.new_monitor = Some(MonitorSource::Layer(id)),
+        LayerAction::ClearSource => {
+            if let Some(l) = st.comp.layer_mut(id) {
+                l.source = SourceSpec::None;
+            }
+        }
+        LayerAction::Launch(source) => {
+            let name = source.label();
+            st.launch_source(id, source, Vec::new(), name, now);
+        }
+    }
+}
+
+/// A layer's opacity: slider (mappable, modulation marker), % field and the ~ modulation button.
+pub(crate) fn opacity_row(ui: &mut egui::Ui, layer: &mut LayerState) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
+        let r = guarded!(ui, layer.opacity, Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
+        mod_marker(ui, &r, layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref());
+        mapped_badge(ui, &r, &ControlTarget::LayerOpacity(layer.id));
+        if control_menu(&r, Some(&ControlTarget::LayerOpacity(layer.id)), Some(&mut layer.opacity_mod)) {
+            layer.opacity = 1.0;
+        }
+        value_bubble(ui, &r, format!("{:.0}%", layer.opacity * 100.0));
+        percent_field(ui, &mut layer.opacity);
+        mod_button(ui, &mut layer.opacity_mod);
+    });
 }

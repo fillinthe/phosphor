@@ -515,6 +515,9 @@ pub struct ExportUi {
 }
 
 pub struct PhosphorApp {
+    /// The workspace (built-in layout) showing, and how each one was left this session.
+    pub(crate) workspace: Option<usize>,
+    pub(crate) workspace_docks: HashMap<usize, (DockState<Tab>, Vec<Tab>)>,
     state: State,
     #[cfg(target_os = "macos")]
     native_menu: Option<(muda::Menu, Vec<crate::menu::Action>)>,

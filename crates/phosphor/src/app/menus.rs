@@ -193,6 +193,20 @@ impl PhosphorApp {
                 })
                 .response
                 .on_hover_text("How clips and media land: Cut/Fade, fade style, Now/On beat/On bar");
+                ui.separator();
+                // Workspaces: the built-in layouts, one click each (each keeps your changes while you switch).
+                for (i, (name, _)) in super::layout::LAYOUTS.iter().enumerate() {
+                    let (glyph, text, tip) = match *name {
+                        "Default" => (icon::SQUARES_FOUR, "Main", "Everything at once"),
+                        "Performance" => (icon::PLAY_CIRCLE, "Perform", "Big preview for playing a show"),
+                        "Mapping" => (icon::PROJECTOR_SCREEN, "Studio", "Projection mapping studio"),
+                        "VDMX" => (icon::COLUMNS, "VDMX", "Every layer in its own window, media bin underneath"),
+                        other => (icon::LAYOUT, other, ""),
+                    };
+                    if ui.selectable_label(self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {
+                        self.switch_workspace(i);
+                    }
+                }
                 ui.menu_button(icon::CARET_DOWN, |ui| {
                     ui.label(egui::RichText::new("Send output to").strong());
                     crate::ui::screen_menu(ui, &mut self.state);
