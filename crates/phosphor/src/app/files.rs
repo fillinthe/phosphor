@@ -16,8 +16,13 @@ impl PhosphorApp {
     pub(crate) fn handle_dialogs_and_folders(&mut self, now: f64) {
         use crate::dialogs::Purpose;
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
+        let dialogs = self.state.dialogs.poll();
+        if dialogs.is_empty() {
+            return;
+        }
+        // The layout text is only needed by an export; dialogs rarely finish, so build it then, not every frame.
         let current_layout = to_text(&SavedLayout { name: "Show".into(), dock: self.dock.clone(), detached: self.detached.clone() });
-        for (purpose, paths) in self.state.dialogs.poll() {
+        for (purpose, paths) in dialogs {
             let st = &mut self.state;
             match purpose {
                 Purpose::LayerSource(id) => {

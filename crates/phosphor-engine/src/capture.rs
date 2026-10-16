@@ -14,6 +14,8 @@ const READY: u8 = 2;
 const FAILED: u8 = 3;
 
 pub struct CapturedFrame {
+    /// Whatever the caller passed to `enqueue_tagged` (0 for `enqueue`): says which picture this is.
+    pub tag: u64,
     pub width: u32,
     pub height: u32,
     /// Tightly packed RGBA8.
@@ -21,6 +23,7 @@ pub struct CapturedFrame {
 }
 
 struct Slot {
+    tag: u64,
     buffer: wgpu::Buffer,
     state: Arc<AtomicU8>,
     width: u32,
@@ -36,6 +39,11 @@ pub(crate) struct Capture {
 impl Capture {
     /// Enqueues a copy of `out`; returns false (and copies nothing) if every slot is still busy.
     pub fn enqueue(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, out: &Target) -> bool {
+        self.enqueue_tagged(device, queue, out, 0)
+    }
+
+    /// Same, remembering `tag` for the frame that comes back (one ring can carry several pictures).
+    pub fn enqueue_tagged(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, out: &Target, tag: u64) -> bool {
         let padded_row = (out.width * 4).div_ceil(256) * 256;
         let size = (padded_row * out.height) as u64;
         // Drop slots whose size no longer matches (resolution changed).
@@ -45,6 +53,7 @@ impl Capture {
             Some(i) => i,
             None if self.slots.len() < SLOTS => {
                 self.slots.push(Slot {
+                    tag,
                     buffer: device.create_buffer(&wgpu::BufferDescriptor {
                         label: Some("capture"),
                         size,
@@ -60,6 +69,7 @@ impl Capture {
             }
             None => return false,
         };
+        self.slots[idx].tag = tag;
         let slot = &self.slots[idx];
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("capture") });
         encoder.copy_texture_to_buffer(
@@ -95,7 +105,7 @@ impl Capture {
                         for r in data.chunks(slot.padded_row as usize) {
                             rgba.extend_from_slice(&r[..row]);
                         }
-                        frames.push(CapturedFrame { width: slot.width, height: slot.height, rgba });
+                        frames.push(CapturedFrame { tag: slot.tag, width: slot.width, height: slot.height, rgba });
                     }
                     slot.buffer.unmap();
                     slot.state.store(FREE, Ordering::Release);

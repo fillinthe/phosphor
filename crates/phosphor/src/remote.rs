@@ -8,6 +8,7 @@ use crate::app::{State, Trigger};
 /// What the remote page needs: mixer, clip grid, and the selected layer's controls.
 pub fn state_json(st: &State) -> String {
     let comp = &st.comp;
+    let thumbs = st.net.thumb_versions();
     let layers: Vec<Value> = comp
         .layers
         .iter()
@@ -20,7 +21,8 @@ pub fn state_json(st: &State) -> String {
                 .filter(|(_, c)| !c.is_empty())
                 .map(|(slot, c)| json!({"slot": slot, "name": if c.name.is_empty() { c.source.label() } else { c.name.clone() }, "active": l.active_clip == Some(c.id)}))
                 .collect();
-            json!({"id": l.id, "name": l.name, "opacity": round(l.opacity), "enabled": l.enabled, "solo": l.solo, "clips": clips})
+            json!({"id": l.id, "name": l.name, "opacity": round(l.opacity), "enabled": l.enabled, "solo": l.solo, "clips": clips,
+                "thumb": thumbs.get(&l.id).copied().unwrap_or(0)})
         })
         .collect();
     let mut params: Vec<Value> = Vec::new();
@@ -64,6 +66,7 @@ pub fn state_json(st: &State) -> String {
     json!({
         "surface": {"columns": comp.surface.columns, "widgets": surface, "pages": comp.surface.pages},
         "bpm": comp.bpm,
+        "timing": comp.launch.timing,
         "master": round(comp.master_fade),
         "columns": comp.clip_columns,
         "selected": selected,
@@ -121,6 +124,12 @@ pub fn apply(st: &mut State, cmd: &Value, now: f64) {
         "clip" => st.trigger(Trigger::Clip { layer: id("layer"), slot: f("slot") as usize }, now),
         "column" => st.trigger(Trigger::Column(f("col") as usize), now),
         "tap" => st.clock.tap(now),
+        // Launch timing (quantize): "Now" / "Beat" / "Bar".
+        "timing" => {
+            if let Some(t) = cmd.get("v").and_then(|v| serde_json::from_value::<phosphor_engine::LaunchTiming>(v.clone()).ok()) {
+                st.comp.launch.timing = t;
+            }
+        }
         // Any control by target (the Control Surface uses this): same path as the Mac's own UI.
         "set" => {
             if let Some(t) = cmd.get("target").and_then(|t| serde_json::from_value::<phosphor_engine::ControlTarget>(t.clone()).ok()) {

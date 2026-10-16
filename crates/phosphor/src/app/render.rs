@@ -105,6 +105,15 @@ impl PhosphorApp {
             dmx.send(&comp.dmx, &universes);
         }
         let render_secs = t0.elapsed().as_secs_f64();
+        // Layer thumbnails for phones on the remote page: one small readback at a time, only while one is connected.
+        if let Some(i) = net.thumb_due(now, comp.layers.len())
+            && let Some(l) = comp.layers.get(i)
+        {
+            engine.capture_thumbnail(l.id);
+        }
+        for f in engine.poll_thumbnails() {
+            net.push_thumb(f.tag, f.width, f.height, f.rgba);
+        }
         #[cfg(target_os = "macos")]
         {
             let mut frames: Vec<(u64, String, &wgpu::Texture)> = Vec::new();
