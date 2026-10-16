@@ -23,6 +23,27 @@ From source:
 scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
 ```
 
+## What it does
+
+- **Play:** layers with blend modes, groups and a crossfader; a clip grid (as many columns as you like, banks for the
+  keys 1–9), cut/fade/blend transitions, launch now / on the beat / on the bar, tap tempo, MIDI clock, Ableton Link,
+  autopilot and trigger modes, clips that keep their own settings, movie sound, cue list with timecode (MTC, LTC).
+- **Quick visuals:** Surprise (a random look on every layer), Shuffle, React to the music, Fill clips with variations,
+  Instant Set — from the top bar, ⌘K, or a mapped pad.
+- **Effects and generators:** dozens built in (incl. a native Rutt-Etra), master effects, text layers, ISF shaders
+  (318 of the 327 in the ISF collection import: multi-pass, feedback, imported pictures), a shader editor with live preview.
+- **Control:** MIDI, OSC (with OSC Query and feedback), keyboard, Learn on any control; LFO / audio / step / envelope
+  modulation on any value; control surfaces you build (pages, XY pads, colour); TouchOSC layout export; presets.
+- **Phones:** a remote page (scan the QR code: mixer, clips, your surface, layer pictures) and **Audience play** (a
+  second code, also as a layer on the output: guests line up and take timed turns at the controls you allow).
+- **Mapping:** drag corners on the projector, mesh warp, masks with soft edges, edge blending, per-output colour, many
+  outputs each on its own screen, venue presets, Art-Net / sACN LED pixel mapping.
+- **In and out:** hardware-decoded video (H.264/HEVC/ProRes/VP9/AV1, Hap on the GPU), cameras, capture cards, network
+  streams, Syphon and NDI in and out; stream to YouTube/Twitch/RTMP/SRT; record H.264/ProRes/Hap; network viewers.
+- **Shows:** undo, crash recovery, Export Show (a standalone app with the media), Lock Controls (play-only mode with a
+  password), import Resolume compositions (.avc) and VDMX projects, find missing media.
+- **Free and open source** (GPL). Donate, Report a Bug and Check for Updates are in the app.
+
 ## Run from source (macOS)
 
 Needs Homebrew FFmpeg 9 for video playback: `brew install ffmpeg pkg-config`.
