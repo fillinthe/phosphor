@@ -31,6 +31,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
     let output_tex = st.texture;
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
+    let feeds = feed_choices(&st.comp);
     let State { comp, selected, media, layer_textures, .. } = st;
     let count = comp.layers.len();
     let mut action = None;
@@ -81,11 +82,11 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             let out = if parent.is_some() {
                 ui.horizontal(|ui| {
                     ui.add_space(14.0);
-                    ui.vertical(|ui| layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref())).inner
+                    ui.vertical(|ui| layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref(), &feeds)).inner
                 })
                 .inner
             } else {
-                layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref())
+                layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref(), &feeds)
             };
             if out.select {
                 *selected = Some(layer.id);
@@ -259,6 +260,7 @@ pub(crate) fn master_card(
     (select, dropped)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn layer_card(
     ui: &mut egui::Ui,
     layer: &mut LayerState,
@@ -267,6 +269,7 @@ pub(crate) fn layer_card(
     is_selected: bool,
     muted: bool,
     err: Option<&str>,
+    feeds: &[(u64, String)],
 ) -> CardOut {
     let mut select = false;
     let mut action = None;
@@ -322,7 +325,7 @@ pub(crate) fn layer_card(
                         }
                     });
                 });
-                if let Some(a) = source_picker(ui, layer) {
+                if let Some(a) = source_picker(ui, layer, feeds) {
                     action = Some(a);
                 }
                 ui.horizontal(|ui| {
@@ -421,7 +424,15 @@ pub(crate) fn layer_card(
 }
 
 /// Source menu for a layer card; returns a request for the browser or the Open dialog.
-pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option<LayerAction> {
+/// What a layer can take another picture from: the program (feedback), groups and layers.
+pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, String)> {
+    std::iter::once((MASTER_ID, "Program (feedback)".to_string()))
+        .chain(comp.groups.iter().map(|g| (g.id, g.name.clone())))
+        .chain(comp.layers.iter().rev().map(|l| (l.id, l.name.clone())))
+        .collect()
+}
+
+pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String)]) -> Option<LayerAction> {
     let mut action = None;
     ui.horizontal(|ui| {
         if ui.button(icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
@@ -436,6 +447,22 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState) -> Option
             if ui.selectable_label(matches!(layer.source, SourceSpec::Text(_)), label(icon::TEXT_T, "Text")).on_hover_text("Words on the layer: type them in the Inspector").clicked() && !matches!(layer.source, SourceSpec::Text(_)) {
                 layer.source = SourceSpec::Text(crate::text::default_style());
             }
+            ui.menu_button(label(icon::ARROW_BEND_DOWN_RIGHT, "From another layer"), |ui| {
+                hint(ui, "Use another layer's finished picture (with its effects), or the program for video feedback.");
+                for (id, name) in feeds.iter().filter(|(id, _)| *id != layer.id) {
+                    let active = matches!(&layer.source, SourceSpec::Feed { id: cur, .. } if cur == id);
+                    if ui.selectable_label(active, name).clicked() {
+                        layer.source = SourceSpec::Feed { id: *id, name: name.clone() };
+                        ui.close();
+                    }
+                }
+                // A layer feeding on itself = trails / feedback of its own previous frame.
+                let me = matches!(&layer.source, SourceSpec::Feed { id, .. } if *id == layer.id);
+                if ui.selectable_label(me, "Itself (previous frame)").clicked() {
+                    layer.source = SourceSpec::Feed { id: layer.id, name: "itself".into() };
+                    ui.close();
+                }
+            });
             ui.separator();
             for g in shaders::GENERATORS {
                 let active = matches!(&layer.source, SourceSpec::Generator(id) if id == g.id);

@@ -20,6 +20,9 @@ pub enum SourceSpec {
     Live { name: String, format: String, url: String },
     /// Words drawn by the app into the layer's picture (see `TextStyle`).
     Text(TextStyle),
+    /// Another layer's or group's finished picture, or the program (`MASTER_ID`) — the previous frame's
+    /// when it's drawn later (feedback). `name` is for display.
+    Feed { id: u64, name: String },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,6 +61,7 @@ impl SourceSpec {
             SourceSpec::None => "No source".into(),
             SourceSpec::Generator(id) => shaders::generator(id).map_or(id.clone(), |g| g.name.to_string()),
             SourceSpec::Image { name, .. } | SourceSpec::Movie { name, .. } | SourceSpec::Live { name, .. } => name.clone(),
+            SourceSpec::Feed { name, .. } => format!("From: {name}"),
             SourceSpec::Text(t) => {
                 let first = t.text.lines().next().unwrap_or("").trim();
                 let short: String = first.chars().take(24).collect();
