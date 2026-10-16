@@ -12,8 +12,10 @@ one engine for macOS, iPadOS/iOS and the browser. Rust + wgpu (Metal natively, W
 ## Install (macOS)
 
 Download `Phosphor-mac.zip` from the [latest release](https://github.com/fillinthe/phosphor/releases/latest),
-unzip, drag Phosphor to Applications. First time: right-click → Open (it isn't notarized). Phosphor checks for
-new releases by itself (Help › Check for Updates…).
+unzip, drag Phosphor to Applications. **First launch:** macOS says it can't verify Phosphor (the app isn't
+notarized). Click Done, open System Settings → Privacy & Security, scroll down and click **Open Anyway**; that's
+once. (Terminal alternative: `xattr -dr com.apple.quarantine /Applications/Phosphor.app`.) After that Phosphor
+updates itself (Help › Check for Updates…).
 
 From source:
 
