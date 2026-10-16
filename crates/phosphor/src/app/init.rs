@@ -168,6 +168,8 @@ impl PhosphorApp {
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
                 autopilot: HashMap::new(),
+                #[cfg(not(target_arch = "wasm32"))]
+                dmx: Default::default(),
                 clip_page: 0,
                 mod_inputs: ModInputs::default(),
             },

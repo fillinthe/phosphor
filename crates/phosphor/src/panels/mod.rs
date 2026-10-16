@@ -23,6 +23,7 @@ mod effects;
 mod groups;
 mod inspector;
 mod layers;
+mod leds;
 mod mapping;
 mod media;
 mod mixer;
@@ -43,6 +44,7 @@ pub(crate) use effects::*;
 pub(crate) use groups::*;
 pub(crate) use inspector::*;
 pub(crate) use layers::*;
+pub(crate) use leds::*;
 pub(crate) use mapping::*;
 pub(crate) use media::*;
 pub(crate) use mixer::*;
@@ -76,10 +78,11 @@ pub enum Tab {
     Devices,
     Surface,
     Account,
+    Leds,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 18] = [
+    pub const ALL: [Tab; 19] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -98,6 +101,7 @@ impl Tab {
         Tab::Devices,
         Tab::Surface,
         Tab::Account,
+        Tab::Leds,
     ];
 
     pub fn title(self) -> String {
@@ -124,6 +128,7 @@ impl Tab {
             Tab::Devices => "Devices",
             Tab::Surface => "Control Surface",
             Tab::Account => "Account",
+            Tab::Leds => "LED / DMX",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -171,6 +176,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Devices => devices(ui, self.st),
             Tab::Surface => surface(ui, self.st),
             Tab::Account => account(ui, self.st),
+            Tab::Leds => leds(ui, self.st),
         }
     }
 

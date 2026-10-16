@@ -146,6 +146,7 @@ mod media;
 mod mesh;
 mod passes;
 mod previews;
+mod sample;
 
 use fit::{fit_transform, push_fit_copy};
 use mesh::{MeshCache, MeshDraw, hash_points};
@@ -168,6 +169,8 @@ pub struct Engine {
     uniform_capacity: usize,
     bind_cache: encode::BindCache,
     capture: Capture,
+    /// LED / DMX pixel sampling of the program.
+    sampler: sample::PixelSampler,
     frame_index: u64,
     /// One target per configured output, at that output's size.
     output_targets: HashMap<u64, Option<Target>>,
@@ -201,6 +204,7 @@ impl Engine {
             uniform_capacity: 0,
             bind_cache: Default::default(),
             capture: Capture::default(),
+            sampler: Default::default(),
             frame_index: 0,
             output_targets: HashMap::new(),
             meshes: MeshCache::default(),
@@ -446,7 +450,7 @@ impl Engine {
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [w as f32, h as f32];
         u.opacity = fade;
-        passes.push(Pass { entry: "fs_finalize", target: output_view, tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+        passes.push(Pass { entry: "fs_finalize", target: output_view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
 
         // Each output: its own size and mapping surfaces.
         for o in comp.outputs.iter().filter(|o| o.enabled) {
@@ -512,8 +516,10 @@ impl Engine {
         }
         self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
         self.meshes.sweep();
+        self.push_samples(&output_view, &mut passes);
 
         self.encode(&passes);
+        self.read_samples();
         self.frame_index += 1;
         FrameInfo { passes: passes.len(), layers_drawn }
     }

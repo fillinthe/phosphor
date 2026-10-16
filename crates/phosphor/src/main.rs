@@ -9,6 +9,8 @@ mod clock;
 mod control;
 #[cfg(not(target_arch = "wasm32"))]
 mod dialogs;
+#[cfg(not(target_arch = "wasm32"))]
+mod dmx;
 mod explorer;
 #[cfg(not(target_arch = "wasm32"))]
 mod folders;

@@ -4,7 +4,7 @@ use super::*;
 
 /// One draggable point on the mapping canvas. Returns its response; `delta` gets the drag in
 /// output units (0..1).
-fn point_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::Rect, color: Color32, square: bool, delta: &mut [f32; 2]) -> egui::Response {
+pub(crate) fn point_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::Rect, color: Color32, square: bool, delta: &mut [f32; 2]) -> egui::Response {
     let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(18.0, 18.0)), id, Sense::click_and_drag());
     if r.dragged() {
         let d = r.drag_delta();

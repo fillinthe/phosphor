@@ -6,6 +6,7 @@ mod choice;
 mod composition;
 mod control;
 mod clip_play;
+mod dmx;
 mod group;
 mod layer;
 mod options;
@@ -15,6 +16,7 @@ mod surface;
 
 pub use choice::*;
 pub use clip_play::*;
+pub use dmx::*;
 pub use composition::*;
 pub use control::*;
 pub use group::*;
@@ -24,4 +26,4 @@ pub use output::*;
 pub use source::*;
 pub use surface::*;
 
-choice!(BlendMode, FitMode, CrossGroup, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, Autopilot);
+choice!(BlendMode, FitMode, CrossGroup, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape);
