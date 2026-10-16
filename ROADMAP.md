@@ -107,9 +107,10 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Images (drag and drop / Open… dialog), project Save/Open (.phosphor JSON), autosave
 - [ ] **CPU: 25–50 % of one core at 110–120 Hz** (bench, 2026-10-16; the figure swings with how the loop is paced).
       Profile: engine encoding ≈ 3 %, UI layout ≈ 4 %, UI drawing ≈ 4.5 %, Metal's queue threads ≈ 12 % (two
-      submits per frame). Next: a stable bench measure (CPU per frame), then one GPU submission per frame
-      (egui paint callback carrying the engine's command buffer; mind captures/Syphon ordering); the render
-      thread moves work off the UI but doesn't remove it
+      submits per frame). Tried 2026-10-16: one GPU submission per frame (engine command buffer carried by an egui paint callback):
+      no gain in three A/B runs (7.3 vs 7.5 ms CPU per frame), dropped. The bench's CPU figure still swings with
+      display pacing (60 vs 120 Hz, vsync vs sleep); a fixed-rate bench mode would make small wins measurable.
+      The render thread moves work off the UI but doesn't remove it
 
 ### Phase 1: Media
 - [x] Video playback via FFmpeg 9 + VideoToolbox hardware decode (H.264, HEVC, ProRes, VP9, AV1),
