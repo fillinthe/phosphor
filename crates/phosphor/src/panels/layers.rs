@@ -342,7 +342,7 @@ pub(crate) fn layer_card(
             ui.close();
         }
         ui.separator();
-        if ui.button(label(icon::TRASH, "Delete (⌫)")).clicked() {
+        if ui.button(label(icon::TRASH, "Delete (Backspace)")).clicked() {
             action = Some(LayerAction::Remove);
             ui.close();
         }

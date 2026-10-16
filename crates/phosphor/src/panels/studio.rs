@@ -205,7 +205,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
     });
-    hint(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · arrows nudge the selected slice (⇧ = more) · double-click a mask edge to add a point");
+    hint(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · arrows nudge the selected slice (Shift = 10 px) · double-click a mask edge to add a point");
     let area = ui.available_rect_before_wrap();
     let (out_area, in_area) = match vs.view {
         View::Split => {

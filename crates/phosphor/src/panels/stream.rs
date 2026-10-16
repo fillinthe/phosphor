@@ -107,7 +107,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                     recorded = Some(stream.settings.recorded_path());
                 }
             }
-            ui.colored_label(ACCENT, format!("● LIVE {:02}:{:02}", (stream.elapsed(now) / 60.0) as u32, stream.elapsed(now) as u32 % 60));
+            ui.colored_label(ACCENT, format!("{} LIVE {:02}:{:02}", icon::RECORD, (stream.elapsed(now) / 60.0) as u32, stream.elapsed(now) as u32 % 60));
         } else if ui.button(label(icon::BROADCAST, "Start")).clicked() {
             match stream.start(cw, ch, now) {
                 Ok(()) => *notice = None,

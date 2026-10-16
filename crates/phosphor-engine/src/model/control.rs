@@ -133,7 +133,7 @@ impl AppControl {
             AppControl::KickThreshold => "Kick threshold",
             AppControl::Syphon => "Syphon on/off",
             AppControl::Ndi => "NDI on/off",
-            AppControl::Crossfader => "Crossfader (A ↔ B)",
+            AppControl::Crossfader => "Crossfader (A to B)",
             AppControl::SurfacePage => "Control Surface page",
             AppControl::MasterVolume => "Master volume (movie sound)",
             AppControl::Dmx => "LED / DMX on/off",

@@ -61,3 +61,51 @@ pub fn apply(ctx: &egui::Context) {
         s.spacing.menu_margin = egui::Margin::same(6);
     });
 }
+
+/// Every non-ASCII character in the app's string literals must be in the UI fonts (missing ones draw as boxes).
+#[cfg(test)]
+#[test]
+fn ui_text_has_glyphs() {
+    let ctx = egui::Context::default();
+    apply(&ctx);
+    let _ = ctx.run_ui(Default::default(), |_| {});
+    let mut missing = Vec::new();
+    // The app, and the engine (its names and labels show in the UI too). Shaders and tests aren't UI.
+    let mut stack = vec![
+        std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src")),
+        std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../phosphor-engine/src")),
+    ];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                stack.push(p);
+                continue;
+            }
+            if p.extension().is_none_or(|e| e != "rs") || p.ends_with("tests.rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&p).unwrap();
+            for (n, line) in text.lines().enumerate() {
+                let code = line.trim_start();
+                if code.starts_with("//") {
+                    continue;
+                }
+                // Characters between quotes, before any trailing comment.
+                let code = code.split(" // ").next().unwrap_or(code);
+                let mut in_str = false;
+                for c in code.chars() {
+                    if c == '"' {
+                        in_str = !in_str;
+                    } else if in_str && !c.is_ascii() && !('\u{E000}'..='\u{F8FF}').contains(&c) {
+                        let ok = ctx.fonts_mut(|f| f.has_glyph(&egui::FontId::proportional(14.0), c));
+                        if !ok {
+                            missing.push(format!("{c} (U+{:04X}) {}:{}", c as u32, p.display(), n + 1));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "glyphs the UI font can't draw:\n{}", missing.join("\n"));
+}

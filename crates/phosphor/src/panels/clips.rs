@@ -117,7 +117,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         if ui.button(label(icon::PLUS, "Column")).clicked() {
             st.comp.clip_columns += 1;
         }
-        hint(ui, "Keys 1–9 trigger this bank's columns · drop media onto a cell · right-click a cell");
+        hint(ui, "Keys 1–9 trigger this bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
     });
     ui.add_space(4.0);
     // A bank shows up to nine columns (keys 1–9); big projects page through banks.
@@ -139,7 +139,8 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut clear: Option<(usize, usize)> = None;
     let mut fill_row: Option<u64> = None;
     {
-        let State { comp, thumbs, .. } = st;
+        let drag_at = crate::app::file_drag_point(ui.ctx());
+        let State { comp, thumbs, clip_cells, .. } = st;
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Column headers trigger whole columns.
             ui.horizontal(|ui| {
@@ -163,6 +164,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     for c in page_offset..page_offset + cols {
                         let clip = layer.clips.get(c);
                         let (rect, resp) = ui.allocate_exact_size(cell, Sense::click());
+                        if ui.is_rect_visible(rect) {
+                            clip_cells.push((rect, layer.id, c));
+                        }
                         let active = clip.is_some_and(|k| !k.is_empty() && layer.active_clip == Some(k.id));
                         let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(cell.x, cell.x / aspect));
                         let p = ui.painter();
@@ -203,7 +207,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                 p.text(rect.center(), egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(18.0), Color32::from_gray(70));
                             }
                         }
-                        let stroke = if active {
+                        let stroke = if drag_at.is_some_and(|p| rect.contains(p)) {
+                            // Files from the Finder land here (and fill the row to the right).
+                            Stroke::new(2.5, Color32::from_rgb(255, 196, 70))
+                        } else if active {
                             Stroke::new(2.0, ACCENT)
                         } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() {
                             Stroke::new(1.0, ACCENT.gamma_multiply(0.7))

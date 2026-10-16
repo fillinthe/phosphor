@@ -202,8 +202,8 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         ui.horizontal(|ui| {
             guarded!(ui, t.stretch_x, egui::DragValue::new(&mut t.stretch_x).range(0.05..=8.0).speed(0.01).prefix("width ×"));
             guarded!(ui, t.stretch_y, egui::DragValue::new(&mut t.stretch_y).range(0.05..=8.0).speed(0.01).prefix("height ×"));
-            ui.toggle_value(&mut t.flip_x, "Flip ↔");
-            ui.toggle_value(&mut t.flip_y, "Flip ↕");
+            ui.toggle_value(&mut t.flip_x, format!("Flip {}", icon::ARROWS_LEFT_RIGHT));
+            ui.toggle_value(&mut t.flip_y, format!("Flip {}", icon::ARROWS_DOWN_UP));
             if ui.add_enabled(!t.is_identity(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset"))).clicked() {
                 *t = Default::default();
             }

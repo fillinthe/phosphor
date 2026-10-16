@@ -44,6 +44,8 @@ pub(crate) enum MediaAct {
     Rename(usize, String),
     Remove(usize),
     FillFolder(String),
+    /// Everything the bin shows now (search, filter, sort) → a new layer of clips.
+    ShownToLayer(Vec<usize>),
     Unwatch(String),
     NewCollection(String, Option<usize>),
     DeleteCollection(String),
@@ -153,6 +155,13 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
         vec![String::from("\u{0}all")]
     };
     let collections = st.comp.media_collections.clone();
+    let mut acts = acts;
+    ui.horizontal(|ui| {
+        let tip = "A new layer with every file shown here (after search, filter and sort) as its clips, the first one playing";
+        if ui.add_enabled(!shown.is_empty(), egui::Button::new(label(icon::SQUARES_FOUR, &format!("Make a clip layer ({})", shown.len())))).on_hover_text(tip).clicked() {
+            acts.push(MediaAct::ShownToLayer(shown.clone()));
+        }
+    });
 
     let State { comp, thumbs, .. } = st;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
@@ -243,19 +252,18 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             MediaAct::FillFolder(group) => {
-                let Some(sel) = st.selected.filter(|id| *id != MASTER_ID) else { continue };
-                let items: Vec<_> = st.comp.media_bin.iter().filter(|m| m.folder == group).cloned().collect();
-                if let Some(l) = st.comp.layer_mut(sel) {
-                    for (slot, item) in items.iter().enumerate() {
-                        let id = l.id;
-                        let c = l.clip_slot_mut(slot);
-                        c.source = crate::media::spec_for_path(&item.path);
-                        c.name = item.name.clone();
-                        c.generator_values.clear();
-                        c.id = id * 1000 + slot as u64 + 1;
-                    }
-                }
-                st.comp.clip_columns = st.comp.clip_columns.max(items.len().min(64));
+                let Some(sel) = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id)) else { continue };
+                let items = clip_items(st.comp.media_bin.iter().filter(|m| m.folder == group));
+                st.comp.place_clips(sel, 0, items);
+            }
+            MediaAct::ShownToLayer(shown) => {
+                let items = clip_items(shown.iter().filter_map(|i| st.comp.media_bin.get(*i)));
+                let layer = st.add_layer();
+                let n = st.comp.place_clips(layer, 0, items);
+                st.selected = Some(layer);
+                st.clip_page = 0;
+                st.trigger(Trigger::Clip { layer, slot: 0 }, now);
+                st.notice = Some(format!("New layer with {n} clips"));
             }
             MediaAct::Unwatch(folder) => {
                 st.comp.media_bin.retain(|m| m.folder != folder);
@@ -391,4 +399,11 @@ pub(crate) fn media_tile(
             ui.close();
         }
     });
+}
+
+/// Media bin items as clips (name without extension, source by file type).
+fn clip_items<'a>(items: impl Iterator<Item = &'a phosphor_engine::MediaItem>) -> Vec<(String, SourceSpec)> {
+    items
+        .map(|m| (crate::media::clip_name(&m.name), crate::media::spec_for_path(&m.path)))
+        .collect()
 }

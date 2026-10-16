@@ -91,7 +91,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("New").strong().color(ACCENT));
                 source_editor(ui, "new_map_source", src);
-                ui.label("→");
+                ui.label(icon::ARROW_RIGHT);
                 if let Some(t) = target_picker(ui, "new_map_target", &targets, target.as_ref(), 220.0) {
                     *target = Some(t);
                 }
@@ -116,7 +116,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     let mut remove = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.control_maps.is_empty() && map_draft.is_none() {
-            hint(ui, "None yet. Press Listen and move a control, or right-click any slider or button → Listen, or use MAP in the top bar.");
+            hint(ui, format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
         }
         egui::Grid::new("mappings").num_columns(6).striped(true).spacing([6.0, 3.0]).show(ui, |ui| {
             for (i, m) in comp.control_maps.iter_mut().enumerate() {
