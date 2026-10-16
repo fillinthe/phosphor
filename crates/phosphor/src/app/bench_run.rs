@@ -124,6 +124,13 @@ impl PhosphorApp {
     pub(crate) fn bench_quick(&mut self, names: &str, now: f64) {
         use super::Quick as Q;
         for name in names.split(',').filter(|n| !n.is_empty()) {
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "qr" {
+                // Audience play: put the QR code layer on the output.
+                self.state.toggle_play_qr(now);
+                println!("QUICK qr: {}", self.state.comp.layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>().join(", "));
+                continue;
+            }
             let q = match name {
                 "surprise" => Q::Surprise,
                 "layer" => Q::SurpriseLayer,

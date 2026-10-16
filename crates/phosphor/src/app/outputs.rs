@@ -17,7 +17,7 @@ impl PhosphorApp {
             self.remote_published = now;
             let alive: Vec<u64> = self.state.comp.layers.iter().map(|l| l.id).collect();
             self.state.net.retain_thumbs(&alive);
-            let json = crate::remote::state_json(&self.state);
+            let json = crate::remote::state_json(&self.state, now);
             self.state.net.set_remote_state(json);
         }
     }

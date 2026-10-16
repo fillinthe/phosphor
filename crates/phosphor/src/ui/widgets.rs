@@ -87,19 +87,48 @@ pub(crate) fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
 }
 
 /// Draws a QR code for `text` (no image needed: one filled square per dark module).
+/// QR modules for `text`: side length and the dark cells, row by row.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn qr_cells(text: &str) -> Option<(usize, Vec<bool>)> {
+    let code = qrcode::QrCode::new(text.as_bytes()).ok()?;
+    let n = code.width();
+    Some((n, code.to_colors().iter().map(|c| *c == qrcode::Color::Dark).collect()))
+}
+
+/// The same code as a PNG (black on white, a quiet zone around it): for a layer on the output.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn qr_png(text: &str, size: u32) -> Option<Vec<u8>> {
+    let (n, dark) = qr_cells(text)?;
+    let quiet = 4;
+    let cell = (size / (n as u32 + quiet * 2)).max(1);
+    let side = cell * (n as u32 + quiet * 2);
+    let mut img = image::GrayImage::from_pixel(side, side, image::Luma([255u8]));
+    for (i, d) in dark.iter().enumerate() {
+        if *d {
+            let (x, y) = ((i % n) as u32 + quiet, (i / n) as u32 + quiet);
+            for dy in 0..cell {
+                for dx in 0..cell {
+                    img.put_pixel(x * cell + dx, y * cell + dy, image::Luma([0u8]));
+                }
+            }
+        }
+    }
+    let mut out = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut out, image::ImageFormat::Png).ok()?;
+    Some(out.into_inner())
+}
+
 pub(crate) fn qr_code(ui: &mut egui::Ui, text: &str, size: f32) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let Ok(code) = qrcode::QrCode::new(text.as_bytes()) else { return };
-        let n = code.width();
-        let colors = code.to_colors();
+        let Some((n, dark)) = qr_cells(text) else { return };
         let quiet = 2.0;
         let cell = size / (n as f32 + quiet * 2.0);
         let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), Sense::hover());
         let p = ui.painter();
         p.rect_filled(rect, 4.0, Color32::WHITE);
-        for (i, c) in colors.iter().enumerate() {
-            if *c == qrcode::Color::Dark {
+        for (i, c) in dark.iter().enumerate() {
+            if *c {
                 let (x, y) = ((i % n) as f32, (i / n) as f32);
                 let min = rect.min + egui::vec2((x + quiet) * cell, (y + quiet) * cell);
                 p.rect_filled(egui::Rect::from_min_size(min, egui::vec2(cell + 0.5, cell + 0.5)), 0.0, Color32::BLACK);

@@ -37,7 +37,9 @@ app that's much smaller and lighter on the CPU.
    - [x] QR code in the Session panel to open it instantly; works on iPhone, iPad, Android, any browser
    - [x] Optional password to control (Session panel); without it a phone only watches the output
    - [x] Layer thumbnails on the remote (mixer strips + the selected layer on Controls); Now / Beat / Bar button
+   - [x] Audience play: QR code (also as a layer on the output), guests take timed turns at the Control Surface / columns / Surprise
    - [ ] HTTPS so passwords aren't sent in clear text
+   - [ ] Audience play: caption on the code, cool-down per phone, several players at once (one per Surface page), player name on the output
    - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
