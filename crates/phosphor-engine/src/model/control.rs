@@ -84,10 +84,12 @@ pub enum AppControl {
     /// Cue list: next cue / previous cue.
     CueGo,
     CueBack,
+    /// Ableton Link on/off.
+    Link,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 19] = [
+    pub const ALL: [AppControl; 20] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -107,6 +109,7 @@ impl AppControl {
         AppControl::Dmx,
         AppControl::CueGo,
         AppControl::CueBack,
+        AppControl::Link,
     ];
 
     pub fn name(self) -> &'static str {
@@ -130,6 +133,7 @@ impl AppControl {
             AppControl::Dmx => "LED / DMX on/off",
             AppControl::CueGo => "Cue list: GO (next cue)",
             AppControl::CueBack => "Cue list: back",
+            AppControl::Link => "Ableton Link on/off",
         }
     }
 
@@ -155,12 +159,13 @@ impl AppControl {
             AppControl::Dmx => "dmx",
             AppControl::CueGo => "cue/go",
             AppControl::CueBack => "cue/back",
+            AppControl::Link => "link",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link)
     }
 }
 

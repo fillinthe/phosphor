@@ -66,6 +66,10 @@ impl PhosphorApp {
         {
             let st = &mut self.state;
             st.clock.follow_midi_clock(now, &st.control.midi_clock);
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(link) = &mut st.link {
+                link.sync(&mut st.clock, now);
+            }
             st.comp.bpm = st.clock.bpm;
             let beat = st.clock.tick(now);
             let fire_now = match st.comp.launch.timing {

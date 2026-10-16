@@ -82,6 +82,11 @@ impl Clock {
         }
     }
 
+    /// Puts the beat count at `beats` now (Ableton Link: our grid on the session's).
+    pub fn set_beats(&mut self, now: f64, beats: f64) {
+        self.anchor = now - beats * 60.0 / self.bpm.max(1.0) as f64;
+    }
+
     /// Realigns beat zero to now without changing the tempo.
     pub fn resync(&mut self, now: f64) {
         self.anchor = now;

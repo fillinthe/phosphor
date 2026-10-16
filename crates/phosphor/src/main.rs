@@ -18,6 +18,8 @@ mod folders;
 mod isf_lib;
 mod media;
 mod net;
+#[cfg(not(target_arch = "wasm32"))]
+mod link;
 mod ltc;
 mod pacing;
 mod panels;
