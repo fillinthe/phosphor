@@ -111,6 +111,9 @@ pub struct State {
     /// A missing-media search running in the background.
     #[cfg(not(target_arch = "wasm32"))]
     pub relink: Option<std::sync::mpsc::Receiver<import::Relinked>>,
+    /// Ableton Link session (None = Link off).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub link: Option<crate::link::LinkSync>,
     /// The cue list while the show runs.
     pub cue_run: cues::CueRun,
     /// Autopilot's per-layer state (which clip, since when).
@@ -364,12 +367,25 @@ impl State {
         match a {
             A::Tempo => self.clock.bpm = unit_to(v, 40.0, 300.0, false),
             A::TapTempo if press => self.clock.tap(now),
-            A::Resync if press => self.clock.resync(now),
+            A::Resync if press => {
+                self.clock.resync(now);
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(l) = &mut self.link {
+                    l.resync();
+                }
+            }
             A::FollowAudio => self.clock.follow_audio = if v == FLIP { !self.clock.follow_audio } else { press },
             A::AudioGain => self.audio.gain = unit_to(v, 0.1, 10.0, true),
             A::KickThreshold => self.audio.beats.sensitivity = unit_to(v, 1.1, 3.0, false),
             A::CueGo if press => self.cue_next(now),
             A::CueBack if press => self.cue_back(now),
+            #[cfg(not(target_arch = "wasm32"))]
+            A::Link => {
+                let on = if v == FLIP { self.link.is_none() } else { press };
+                if on != self.link.is_some() {
+                    self.link = on.then(|| crate::link::LinkSync::new(self.clock.bpm));
+                }
+            }
             _ => {}
         }
     }

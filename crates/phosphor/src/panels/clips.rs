@@ -45,6 +45,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         map_menu(ui, &resync, ControlTarget::App(phosphor_engine::AppControl::Resync));
         if resync.clicked() {
             st.clock.resync(now);
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(l) = &mut st.link {
+                l.resync();
+            }
         }
         // Beat indicator: four dots, the current one lit.
         let beat = st.clock.beat_in_bar(now);
@@ -59,6 +63,19 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             let bpm = st.control.midi_clock.bpm().map_or("…".to_string(), |b| format!("{b:.1}"));
             ui.toggle_value(&mut st.clock.follow_midi, RichText::new(format!("MIDI {bpm}")).small().strong())
                 .on_hover_text("MIDI clock is coming in: tempo follows it, and after a Start the beat does too. Click to ignore it.");
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut on = st.link.is_some();
+            let text = match &st.link {
+                Some(l) => format!("LINK {}", l.peers()),
+                None => "LINK".into(),
+            };
+            let r = ui.toggle_value(&mut on, RichText::new(text).small().strong()).on_hover_text("Ableton Link: share tempo and beat with Live, Traktor, Resolume and other Link apps on the network (the number = apps connected)");
+            map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::Link));
+            if r.changed() {
+                st.link = on.then(|| crate::link::LinkSync::new(st.clock.bpm));
+            }
         }
         let auto = ui.toggle_value(&mut st.clock.follow_audio, RichText::new("AUTO").small().strong()).on_hover_text("Follow the audio beat detector (tempo and beat)");
         map_menu(ui, &auto, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
