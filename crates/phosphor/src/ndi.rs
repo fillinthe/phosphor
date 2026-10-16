@@ -1,5 +1,6 @@
-//! NDI output: sends the composition over the network so MadMapper, Resolume, OBS, vMix or any
-//! NDI app on another computer can use it as a source. The NDI library (free, from ndi.video) is
+//! NDI output and input. Out: sends the composition over the network so MadMapper, Resolume, OBS, vMix or
+//! any NDI app on another computer can use it as a source. In: lists NDI sources on the network and
+//! receives one as a layer (`NdiReceiver`, newest frame wins). The NDI library (free, from ndi.video) is
 //! loaded at runtime from Phosphor.app, the NDI Tools runtime or the NDI SDK; without it Phosphor
 //! runs as usual and the panel says where to get it.
 
@@ -41,12 +42,50 @@ const FOURCC_RGBX: u32 = fourcc(b'R', b'G', b'B', b'X');
 const FORMAT_PROGRESSIVE: c_int = 1;
 const TIMECODE_SYNTHESIZE: i64 = i64::MAX;
 
+#[repr(C)]
+struct FindCreate {
+    show_local_sources: bool,
+    p_groups: *const c_char,
+    p_extra_ips: *const c_char,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Source {
+    p_ndi_name: *const c_char,
+    p_url_address: *const c_char,
+}
+
+#[repr(C)]
+struct RecvCreateV3 {
+    source_to_connect_to: Source,
+    color_format: c_int,
+    bandwidth: c_int,
+    allow_video_fields: bool,
+    p_ndi_recv_name: *const c_char,
+}
+
+const RECV_COLOR_RGBX_RGBA: c_int = 2;
+const RECV_BANDWIDTH_HIGHEST: c_int = 100;
+const FRAME_TYPE_VIDEO: c_int = 1;
+
+/// The receiving half of the NDI API (older runtimes may lack it).
+struct RecvFns {
+    find_create: unsafe extern "C" fn(*const FindCreate) -> *mut c_void,
+    find_sources: unsafe extern "C" fn(*mut c_void, *mut u32) -> *const Source,
+    recv_create: unsafe extern "C" fn(*const RecvCreateV3) -> *mut c_void,
+    recv_capture: unsafe extern "C" fn(*mut c_void, *mut VideoFrameV2, *mut c_void, *mut c_void, u32) -> c_int,
+    recv_free_video: unsafe extern "C" fn(*mut c_void, *const VideoFrameV2),
+    recv_destroy: unsafe extern "C" fn(*mut c_void),
+}
+
 struct Lib {
     path: PathBuf,
     send_create: unsafe extern "C" fn(*const SendCreate) -> *mut c_void,
     send_destroy: unsafe extern "C" fn(*mut c_void),
     send_video: unsafe extern "C" fn(*mut c_void, *const VideoFrameV2),
     connections: unsafe extern "C" fn(*mut c_void, u32) -> c_int,
+    recv: Option<RecvFns>,
 }
 
 // SAFETY: plain C function pointers into a library that stays loaded for the process lifetime.
@@ -107,12 +146,31 @@ fn lib() -> Option<&'static Lib> {
                 if !init() {
                     continue;
                 }
+                let recv = match (
+                    sym(c"NDIlib_find_create_v2"),
+                    sym(c"NDIlib_find_get_current_sources"),
+                    sym(c"NDIlib_recv_create_v3"),
+                    sym(c"NDIlib_recv_capture_v2"),
+                    sym(c"NDIlib_recv_free_video_v2"),
+                    sym(c"NDIlib_recv_destroy"),
+                ) {
+                    (Some(fc), Some(fs), Some(rc), Some(cap), Some(free), Some(rd)) => Some(RecvFns {
+                        find_create: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*const FindCreate) -> *mut c_void>(fc),
+                        find_sources: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut u32) -> *const Source>(fs),
+                        recv_create: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*const RecvCreateV3) -> *mut c_void>(rc),
+                        recv_capture: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut VideoFrameV2, *mut c_void, *mut c_void, u32) -> c_int>(cap),
+                        recv_free_video: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *const VideoFrameV2)>(free),
+                        recv_destroy: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(rd),
+                    }),
+                    _ => None,
+                };
                 return Some(Lib {
                     path,
                     send_create: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*const SendCreate) -> *mut c_void>(create),
                     send_destroy: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(destroy),
                     send_video: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *const VideoFrameV2)>(video),
                     connections: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, u32) -> c_int>(conns),
+                    recv,
                 });
             }
         }
@@ -249,6 +307,126 @@ impl Ndi {
         if let Err(TrySendError::Disconnected(_)) = r.tx.try_send(Frame { width, height, rgba, fps }) {
             self.running = None;
             self.error = Some("NDI sender stopped".into());
+        }
+    }
+}
+
+/// NDI sources on the network right now (names like "STUDIO-MAC (OBS)"). The first call starts a
+/// background finder that keeps the list fresh; returns an empty list without NDI.
+pub fn sources() -> Vec<String> {
+    static LIST: OnceLock<Arc<std::sync::Mutex<Vec<String>>>> = OnceLock::new();
+    let list = LIST.get_or_init(|| {
+        let list = Arc::new(std::sync::Mutex::new(Vec::new()));
+        if let Some(r) = lib().and_then(|l| l.recv.as_ref()) {
+            let out = list.clone();
+            let _ = std::thread::Builder::new().name("phosphor-ndi-find".into()).spawn(move || {
+                let create = FindCreate { show_local_sources: true, p_groups: std::ptr::null(), p_extra_ips: std::ptr::null() };
+                // SAFETY: NDI C API; the finder lives for the rest of the process on this thread.
+                let finder = unsafe { (r.find_create)(&create) };
+                if finder.is_null() {
+                    return;
+                }
+                loop {
+                    let mut n = 0u32;
+                    // SAFETY: the returned array stays valid until the next call on this thread.
+                    let names: Vec<String> = unsafe {
+                        let p = (r.find_sources)(finder, &mut n);
+                        (0..n as usize)
+                            .filter_map(|i| {
+                                let s = *p.add(i);
+                                (!s.p_ndi_name.is_null()).then(|| std::ffi::CStr::from_ptr(s.p_ndi_name).to_string_lossy().into_owned())
+                            })
+                            .collect()
+                    };
+                    if let Ok(mut l) = out.lock() {
+                        *l = names;
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            });
+        }
+        list
+    });
+    list.lock().map(|l| l.clone()).unwrap_or_default()
+}
+
+/// A picture from an NDI receiver: (width, height, RGBA rows tightly packed).
+pub type NdiFrame = (u32, u32, Vec<u8>);
+
+/// Receives one NDI source on its own thread; `take` hands out the newest frame.
+pub struct NdiReceiver {
+    latest: Arc<std::sync::Mutex<Option<NdiFrame>>>,
+    stop: Arc<AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl NdiReceiver {
+    pub fn connect(source: &str) -> Result<Self, String> {
+        let r = lib().ok_or("NDI isn't installed on this Mac (free NDI Tools from ndi.video)")?.recv.as_ref().ok_or("this NDI runtime can't receive")?;
+        let latest = Arc::new(std::sync::Mutex::new(None));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (latest2, stop2, name) = (latest.clone(), stop.clone(), CString::new(source).map_err(|_| "bad source name")?);
+        let thread = std::thread::Builder::new()
+            .name(format!("ndi in: {source}"))
+            .spawn(move || {
+                let recv_name = c"Phosphor";
+                let create = RecvCreateV3 {
+                    source_to_connect_to: Source { p_ndi_name: name.as_ptr(), p_url_address: std::ptr::null() },
+                    color_format: RECV_COLOR_RGBX_RGBA,
+                    bandwidth: RECV_BANDWIDTH_HIGHEST,
+                    allow_video_fields: false,
+                    p_ndi_recv_name: recv_name.as_ptr(),
+                };
+                // SAFETY: NDI C API; the receiver is used and destroyed on this thread only.
+                let recv = unsafe { (r.recv_create)(&create) };
+                if recv.is_null() {
+                    return;
+                }
+                while !stop2.load(Ordering::Relaxed) {
+                    // SAFETY: plain C struct the receiver fills in.
+                    let mut f: VideoFrameV2 = unsafe { std::mem::zeroed() };
+                    let kind = unsafe { (r.recv_capture)(recv, &mut f, std::ptr::null_mut(), std::ptr::null_mut(), 100) };
+                    if kind != FRAME_TYPE_VIDEO {
+                        continue;
+                    }
+                    let (w, h) = (f.xres.max(0) as usize, f.yres.max(0) as usize);
+                    let stride = (f.line_stride_in_bytes.max(0) as usize).max(w * 4);
+                    if w > 0 && h > 0 && !f.p_data.is_null() {
+                        // SAFETY: `h` rows of `stride` bytes, valid until the frame is freed below.
+                        let data = unsafe { std::slice::from_raw_parts(f.p_data, stride * h) };
+                        let mut rgba = Vec::with_capacity(w * h * 4);
+                        for row in data.chunks(stride) {
+                            rgba.extend_from_slice(&row[..w * 4]);
+                        }
+                        // RGBX: make the unused byte opaque.
+                        if f.four_cc == FOURCC_RGBX {
+                            rgba.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+                        }
+                        if let Ok(mut l) = latest2.lock() {
+                            *l = Some((w as u32, h as u32, rgba));
+                        }
+                    }
+                    // SAFETY: the frame came from this receiver's capture.
+                    unsafe { (r.recv_free_video)(recv, &f) };
+                }
+                // SAFETY: valid receiver, destroyed once.
+                unsafe { (r.recv_destroy)(recv) };
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(Self { latest, stop, thread: Some(thread) })
+    }
+
+    /// The newest frame since the last call.
+    pub fn take(&self) -> Option<NdiFrame> {
+        self.latest.lock().ok()?.take()
+    }
+}
+
+impl Drop for NdiReceiver {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
         }
     }
 }

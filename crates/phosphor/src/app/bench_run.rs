@@ -84,6 +84,10 @@ impl PhosphorApp {
         }
         let an = self.state.audio.analysis();
         println!("BEAT bpm {:.1} confidence {:.2} clock {:.1}", an.bpm, an.confidence, self.state.clock.bpm);
+        #[cfg(target_os = "macos")]
+        if run.cfg.ndi {
+            println!("NDI_SOURCES {:?}", crate::ndi::sources());
+        }
         #[cfg(not(target_arch = "wasm32"))]
         {
             let (rate, played) = crate::media::video::sound::stats();

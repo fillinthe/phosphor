@@ -227,6 +227,8 @@ impl PhosphorApp {
             app.state.require_password = true;
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.ndi) {
+            #[cfg(target_os = "macos")]
+            crate::ndi::sources();
             app.state.comp.ndi.enabled = true;
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.net) {
