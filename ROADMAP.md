@@ -211,7 +211,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Text / title source (any installed font, size, colour, alignment, outline)
 - [x] Syphon in/out, NDI out
 - [ ] NDI in
-- [ ] Recording to ProRes / Hap
+- [x] Recording to ProRes / Hap (own Hap encoder: DXT1/DXT5 + Snappy, muxed in-process)
 - [ ] Spout (Windows, if we ship there)
 
 ### Phase 5b: Streaming & recording (no OBS required)

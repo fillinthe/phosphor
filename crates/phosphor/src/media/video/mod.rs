@@ -534,6 +534,7 @@ fn err(e: ff::Error) -> String {
 mod convert;
 mod decoder;
 mod hap;
+pub mod hap_encode;
 pub mod sound;
 #[cfg(target_os = "macos")]
 pub mod surface;
