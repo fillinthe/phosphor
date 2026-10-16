@@ -315,7 +315,7 @@ pub fn all_effect_entries() -> Vec<&'static str> {
 static CUSTOM: std::sync::RwLock<Vec<&'static ShaderDesc>> = std::sync::RwLock::new(Vec::new());
 
 /// How many buffer textures a multi-pass shader can use (bindings 6..).
-pub const MAX_BUFFERS: usize = 8;
+pub const MAX_BUFFERS: usize = 12;
 
 /// A shader that runs several times per frame (ISF `PASSES`): each pass renders into one of the
 /// shader's buffers or, without a target, into its output; every pass can read every buffer
@@ -327,6 +327,8 @@ pub struct PassPlan {
     pub buffers: usize,
     /// Parameter names usable in size expressions → their index in the parameter list.
     pub vars: Vec<(String, usize)>,
+    /// Buffer slots that are pictures the app provides (`Engine::set_plan_image`), not render targets.
+    pub images: Vec<usize>,
 }
 
 #[derive(Clone, Debug, Default)]

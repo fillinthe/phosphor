@@ -172,6 +172,8 @@ pub struct Engine {
     uniform_capacity: usize,
     bind_cache: encode::BindCache,
     capture: Capture,
+    /// Pictures bound into multi-pass shaders' buffer slots (ISF `IMPORTED`): (entry, slot) → texture.
+    plan_images: HashMap<(&'static str, usize), Target>,
     /// Readback ring for layer thumbnails (remote page); idle unless asked.
     thumb_capture: Capture,
     /// LED / DMX pixel sampling of the program.
@@ -209,6 +211,7 @@ impl Engine {
             uniform_capacity: 0,
             bind_cache: Default::default(),
             capture: Capture::default(),
+            plan_images: HashMap::new(),
             thumb_capture: Capture::default(),
             sampler: Default::default(),
             frame_index: 0,

@@ -22,7 +22,7 @@ pub const UNIFORM_VEC4S: usize = 12;
 /// Must equal `phosphor_engine::shaders::MAX_PARAMS`: all but the last (reserved) vec4.
 pub const MAX_PARAMS: usize = (UNIFORM_VEC4S - 1) * 4;
 /// Multi-pass buffers an ISF shader may use (texture bindings `BUFFER_BINDING..`).
-pub const MAX_BUFFERS: usize = 8;
+pub const MAX_BUFFERS: usize = 12;
 /// Binding of the first pass buffer (after the engine's tex0–tex2 at 3–5).
 pub const BUFFER_BINDING: usize = 6;
 
@@ -114,6 +114,9 @@ pub struct IsfShader {
     /// Buffers the passes render into, in order of first use: buffer `i` is bound at
     /// `BUFFER_BINDING + i` and sampled by name in the shader.
     pub buffers: Vec<String>,
+    /// `IMPORTED` pictures: (buffer index among `buffers`, file path relative to the shader). The app loads
+    /// each file and binds it at that buffer slot; the shader samples it by name like any buffer.
+    pub images: Vec<(usize, String)>,
     /// WGSL fragment entry + helpers; empty when `unsupported` is set.
     pub wgsl: String,
     /// Name of the fragment entry function.
@@ -243,6 +246,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         passes: header.passes.max(1),
         pass_plan: header.pass_specs.clone(),
         buffers: buffer_names(&header.pass_specs),
+        images: Vec::new(),
         wgsl: String::new(),
         entry: entry.clone(),
         unsupported: None,
@@ -253,11 +257,15 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         unsupported.get_or_insert(reason);
     }
     shader.inputs = inputs;
+    // Imported pictures take buffer slots after the pass buffers (same bindings, same IMG_* macros).
+    for (name, path) in &header.imported {
+        if !shader.buffers.contains(name) {
+            shader.images.push((shader.buffers.len(), path.clone()));
+            shader.buffers.push(name.clone());
+        }
+    }
     if shader.buffers.len() > MAX_BUFFERS {
         unsupported.get_or_insert(format!("{} buffers (max {MAX_BUFFERS})", shader.buffers.len()));
-    }
-    if header.imported {
-        unsupported.get_or_insert("imported images".into());
     }
     for file in &includes {
         if file != "MadCommon.glsl" {
@@ -331,6 +339,7 @@ fn glsl_to_wgsl(src: &str) -> Result<String, IsfError> {
 
 /// Phosphor's common prelude declarations, for validating imported shaders in isolation.
 pub fn test_prelude() -> String {
+    let bufs: String = (0..MAX_BUFFERS).map(|i| format!("@group(0) @binding({}) var buf{i}: texture_2d<f32>;\n", BUFFER_BINDING + i)).collect();
     format!(
         r#"
 struct U {{
@@ -354,14 +363,7 @@ struct U {{
 @group(0) @binding(3) var tex0: texture_2d<f32>;
 @group(0) @binding(4) var tex1: texture_2d<f32>;
 @group(0) @binding(5) var tex2: texture_2d<f32>;
-@group(0) @binding(6) var buf0: texture_2d<f32>;
-@group(0) @binding(7) var buf1: texture_2d<f32>;
-@group(0) @binding(8) var buf2: texture_2d<f32>;
-@group(0) @binding(9) var buf3: texture_2d<f32>;
-@group(0) @binding(10) var buf4: texture_2d<f32>;
-@group(0) @binding(11) var buf5: texture_2d<f32>;
-@group(0) @binding(12) var buf6: texture_2d<f32>;
-@group(0) @binding(13) var buf7: texture_2d<f32>;
+{bufs}
 struct VOut {{ @builtin(position) pos: vec4f, @location(0) uv: vec2f }};
 "#
     )
