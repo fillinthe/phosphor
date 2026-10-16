@@ -41,7 +41,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     clock.reset(now);
                 }
             }
-            TimecodeSource::Midi => {}
+            TimecodeSource::Midi | TimecodeSource::Ltc => {}
         }
         match st.timecode(now) {
             Some(t) => {
@@ -49,6 +49,9 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             }
             None if st.comp.cues.timecode == TimecodeSource::Midi => {
                 hint(ui, "waiting for MIDI timecode…");
+            }
+            None if st.comp.cues.timecode == TimecodeSource::Ltc => {
+                hint(ui, "waiting for LTC on the audio input (pick the interface in the Audio panel)…");
             }
             None => {}
         }

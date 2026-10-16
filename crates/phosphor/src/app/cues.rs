@@ -78,11 +78,13 @@ impl State {
             TimecodeSource::Off => None,
             TimecodeSource::ShowClock => Some(self.cue_run.clock.time(now)),
             TimecodeSource::Midi => self.control.mtc.time(now),
+            TimecodeSource::Ltc => self.audio.ltc_time(),
         }
     }
 
     /// Fades, follow-on cues and timecode. Call once per frame.
     pub(crate) fn run_cues(&mut self, now: f64) {
+        self.audio.set_ltc(self.comp.cues.timecode == TimecodeSource::Ltc);
         if let Some(fade) = self.cue_run.fade.take() {
             self.comp.step_cue(&fade, now as f32);
             if fade.done(now as f32) {

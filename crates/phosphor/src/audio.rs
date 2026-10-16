@@ -167,6 +167,20 @@ mod native {
         /// Analyse samples pushed from the network session instead of a device.
         network: bool,
         pub beats: BeatTracker,
+        /// LTC (audio timecode) on the first two channels, decoded only while `ltc_on`.
+        ltc: Arc<Mutex<Ltc>>,
+        ltc_on: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    struct Ltc {
+        decoders: [crate::ltc::LtcDecoder; 2],
+        clock: crate::ltc::LtcClock,
+    }
+
+    impl Ltc {
+        fn new(sample_rate: u32) -> Self {
+            Self { decoders: [crate::ltc::LtcDecoder::new(sample_rate), crate::ltc::LtcDecoder::new(sample_rate)], clock: Default::default() }
+        }
     }
 
     impl AudioInput {
@@ -189,6 +203,8 @@ mod native {
                 last_update: None,
                 network: false,
                 beats: BeatTracker::default(),
+                ltc: Arc::new(Mutex::new(Ltc::new(48_000))),
+                ltc_on: Default::default(),
             };
             input.refresh_devices();
             input
@@ -196,6 +212,16 @@ mod native {
 
         pub fn devices(&self) -> &[String] {
             &self.devices
+        }
+
+        /// Decode LTC from the input (only while a cue list follows it).
+        pub fn set_ltc(&self, on: bool) {
+            self.ltc_on.store(on, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        /// The audio timecode now (seconds), if LTC is coming in.
+        pub fn ltc_time(&self) -> Option<f64> {
+            self.ltc.lock().ok()?.clock.time()
         }
 
         pub fn current(&self) -> Option<&str> {
@@ -263,8 +289,19 @@ mod native {
             self.sample_rate = supported.sample_rate();
             let config: cpal::StreamConfig = supported.config();
             let ring = self.ring.clone();
+            *self.ltc.lock().unwrap() = Ltc::new(self.sample_rate);
+            let (ltc, ltc_on) = (self.ltc.clone(), self.ltc_on.clone());
             // Mixes all channels to mono and keeps only the newest samples.
             let push = move |data: &[f32]| {
+                if ltc_on.load(std::sync::atomic::Ordering::Relaxed)
+                    && let Ok(mut l) = ltc.lock()
+                {
+                    let l = &mut *l;
+                    for (ch, d) in l.decoders.iter_mut().enumerate().take(channels) {
+                        d.push(data.iter().skip(ch).step_by(channels).copied());
+                        l.clock.update(d);
+                    }
+                }
                 let mut q = ring.lock().unwrap();
                 for frame in data.chunks(channels) {
                     q.push_back(frame.iter().sum::<f32>() / frame.len() as f32);
@@ -405,6 +442,10 @@ mod stub {
             false
         }
         pub fn use_network(&mut self) {}
+        pub fn set_ltc(&self, _on: bool) {}
+        pub fn ltc_time(&self) -> Option<f64> {
+            None
+        }
         pub fn push_external(&mut self, _samples: &[f32]) {}
         pub fn update(&mut self) -> AudioAnalysis {
             AudioAnalysis::default()
