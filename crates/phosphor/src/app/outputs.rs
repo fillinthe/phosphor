@@ -15,6 +15,8 @@ impl PhosphorApp {
         }
         if now - self.remote_published > 0.05 {
             self.remote_published = now;
+            let alive: Vec<u64> = self.state.comp.layers.iter().map(|l| l.id).collect();
+            self.state.net.retain_thumbs(&alive);
             let json = crate::remote::state_json(&self.state);
             self.state.net.set_remote_state(json);
         }

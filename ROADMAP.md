@@ -36,13 +36,14 @@ app that's much smaller and lighter on the CPU.
    - [x] Changes go back over a WebSocket and the page stays in sync both ways (moves when the Mac moves)
    - [x] QR code in the Session panel to open it instantly; works on iPhone, iPad, Android, any browser
    - [x] Optional password to control (Session panel); without it a phone only watches the output
-   - [ ] Selected-layer thumbnails on the remote; quantize toggle; HTTPS so passwords aren't sent in clear text
+   - [x] Layer thumbnails on the remote (mixer strips + the selected layer on Controls); Now / Beat / Bar button
+   - [ ] HTTPS so passwords aren't sent in clear text
    - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
    mappable themselves; Mappings editor with Listen + ranges. on the phone/iPad remote ✔. Next: TouchOSC `.tosc` export, multiple surface pages
 4. ~~**Mapping upgrades**~~ mesh warp ✔ (Catmull-Rom grid up to 8×8), masks ✔ (polygons, invert). Per-output colour ✔,
-   blend curve ✔. Next: mask feather, bezier edges
+   blend curve ✔, mask feather ✔, circle/triangle masks ✔. Next: bezier edges
 5. **OBS / pro I/O**: Syphon out ✔, NDI out ✔, cameras/capture ✔, network streams in ✔, Syphon in ✔. Next: NDI in,
    virtual camera out, audio from capture cards
 6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
@@ -102,8 +103,11 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Output window: borderless (no title/menu bar), drag by its surface to the projector, F or double-click = fullscreen, cursor hidden
 - [x] Stats (fps, engine ms, process CPU, memory) + `--bench` mode with PNG snapshot
 - [x] Images (drag and drop / Open… dialog), project Save/Open (.phosphor JSON), autosave
-- [ ] **CPU: ~45–55% of one core at 120 Hz, nearly all UI redraw (engine is ~0.7 ms/frame).**
-      Fix: engine on its own render thread + swapchain per output; UI repaints only on change
+- [ ] **CPU: 25–50 % of one core at 110–120 Hz** (bench, 2026-10-16; the figure swings with how the loop is paced).
+      Profile: engine encoding ≈ 3 %, UI layout ≈ 4 %, UI drawing ≈ 4.5 %, Metal's queue threads ≈ 12 % (two
+      submits per frame). Next: a stable bench measure (CPU per frame), then one GPU submission per frame
+      (egui paint callback carrying the engine's command buffer; mind captures/Syphon ordering); the render
+      thread moves work off the UI but doesn't remove it
 
 ### Phase 1: Media
 - [x] Video playback via FFmpeg 9 + VideoToolbox hardware decode (H.264, HEVC, ProRes, VP9, AV1),

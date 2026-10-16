@@ -14,6 +14,8 @@ pub struct History {
     /// The project as of the last undo step.
     committed: Option<Composition>,
     changed_at: Option<f64>,
+    /// When the project was last compared with `committed`.
+    checked_at: f64,
 }
 
 /// Fields that change on their own (tempo following, transitions in flight) aren't edits.
@@ -33,6 +35,11 @@ impl History {
             self.committed = Some(comp.clone());
             return;
         };
+        // Comparing two whole projects every frame adds up; ten times a second is plenty (SETTLE is longer).
+        if now - self.checked_at < 0.1 {
+            return;
+        }
+        self.checked_at = now;
         settle_volatile(comp, committed);
         if committed == comp {
             self.changed_at = None;

@@ -157,6 +157,20 @@ impl Engine {
         self.capture.poll(&self.gpu.device)
     }
 
+    /// Queues a copy of one layer's (or group's) thumbnail; it comes back from `poll_thumbnails`
+    /// tagged with the id. False if the layer has no picture yet or the ring is full.
+    pub fn capture_thumbnail(&mut self, layer: u64) -> bool {
+        match self.layers.get(&layer).and_then(|l| l.thumbnail.as_ref()) {
+            Some(t) => self.thumb_capture.enqueue_tagged(&self.gpu.device, &self.gpu.queue, t, layer),
+            None => false,
+        }
+    }
+
+    /// Thumbnails whose readback finished (`tag` = layer id). Never blocks; nothing to do when none were asked.
+    pub fn poll_thumbnails(&mut self) -> Vec<CapturedFrame> {
+        self.thumb_capture.poll(&self.gpu.device)
+    }
+
     /// Copies the output texture back to the CPU as tightly packed RGBA8 (for snapshots/tests).
     /// Blocks until the GPU is done, so never call this during a live show.
     pub fn read_output(&self) -> Option<(u32, u32, Vec<u8>)> {

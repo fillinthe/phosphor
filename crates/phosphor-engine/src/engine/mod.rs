@@ -172,6 +172,8 @@ pub struct Engine {
     uniform_capacity: usize,
     bind_cache: encode::BindCache,
     capture: Capture,
+    /// Readback ring for layer thumbnails (remote page); idle unless asked.
+    thumb_capture: Capture,
     /// LED / DMX pixel sampling of the program.
     sampler: sample::PixelSampler,
     frame_index: u64,
@@ -207,6 +209,7 @@ impl Engine {
             uniform_capacity: 0,
             bind_cache: Default::default(),
             capture: Capture::default(),
+            thumb_capture: Capture::default(),
             sampler: Default::default(),
             frame_index: 0,
             output_targets: HashMap::new(),

@@ -120,6 +120,8 @@ pub type RemotePassword = Arc<Mutex<Option<String>>>;
 /// What the control socket needs: state, command queue, connected count, password.
 pub type RemoteHub = (RemoteState, RemoteCmds, Arc<AtomicUsize>, RemotePassword);
 type Shared = Arc<(Mutex<Option<Frame>>, Condvar)>;
+/// Layer thumbnails for the remote page: layer id → (version, JPEG).
+pub type Thumbs = Arc<Mutex<std::collections::HashMap<u64, (u64, Frame)>>>;
 
 pub struct NetSession {
     pub port: u16,
@@ -137,6 +139,11 @@ pub struct NetSession {
     registry: Reg,
     encoder: Option<SyncSender<(u32, u32, Vec<u8>)>>,
     pacer: crate::pacing::FramePacer,
+    /// Layer thumbnails shown on remotes, and the round-robin that refreshes them.
+    thumbs: Thumbs,
+    thumb_encoder: Option<SyncSender<(u64, u32, u32, Vec<u8>)>>,
+    thumb_pacer: crate::pacing::FramePacer,
+    thumb_next: usize,
     pub status: String,
 }
 
@@ -157,6 +164,10 @@ impl NetSession {
             registry: Arc::new(Mutex::new(Registry::default())),
             encoder: None,
             pacer: Default::default(),
+            thumbs: Default::default(),
+            thumb_encoder: None,
+            thumb_pacer: Default::default(),
+            thumb_next: 0,
             status: String::new(),
         }
     }
@@ -231,15 +242,16 @@ impl NetSession {
         let ring = self.audio_ring.clone();
         let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone(), self.password.clone());
         let registry = self.registry.clone();
+        let thumbs = self.thumbs.clone();
         std::thread::Builder::new()
             .name("phosphor-net".into())
             .spawn(move || {
                 while running.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let (running, latest, viewers, peers, ring, remote, registry) =
-                                (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone());
-                            std::thread::spawn(move || native::serve(stream, running, latest, viewers, peers, ring, remote, registry));
+                            let (running, latest, viewers, peers, ring, remote, registry, thumbs) =
+                                (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone());
+                            std::thread::spawn(move || native::serve(stream, running, latest, viewers, peers, ring, remote, registry, thumbs));
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(std::time::Duration::from_millis(30)),
                         Err(_) => break,
@@ -264,6 +276,23 @@ impl NetSession {
             })
             .map_err(|e| e.to_string())?;
         self.encoder = Some(tx);
+        // Layer thumbnails: tiny pictures, a few a second at most, on their own thread so a slow one never delays the stream.
+        let (tx, rx) = std::sync::mpsc::sync_channel::<(u64, u32, u32, Vec<u8>)>(8);
+        let thumbs = self.thumbs.clone();
+        std::thread::Builder::new()
+            .name("phosphor-thumb-jpeg".into())
+            .spawn(move || {
+                for (id, w, h, rgba) in rx {
+                    if let Some(jpeg) = native::encode(w, h, rgba) {
+                        let mut map = thumbs.lock().unwrap();
+                        let e = map.entry(id).or_insert((0, Arc::new(Vec::new())));
+                        e.0 += 1;
+                        e.1 = Arc::new(jpeg);
+                    }
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        self.thumb_encoder = Some(tx);
         self.status = format!("Serving {}", self.url());
         Ok(())
     }
@@ -276,6 +305,8 @@ impl NetSession {
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
         self.encoder = None;
+        self.thumb_encoder = None;
+        self.thumbs.lock().unwrap().clear();
         self.viewers.store(0, Ordering::Relaxed);
         self.audio_peers.store(0, Ordering::Relaxed);
         self.status.clear();
@@ -291,6 +322,41 @@ impl NetSession {
             && let Err(TrySendError::Disconnected(_)) = tx.try_send((w, h, rgba))
         {
             self.encoder = None;
+        }
+    }
+
+    /// Which of `n` layers to copy a thumbnail of now, cycling so each refreshes about once a
+    /// second (at most 8 a second). None while no remote is connected: nothing is read back then.
+    pub fn thumb_due(&mut self, now: f64, n: usize) -> Option<usize> {
+        if n == 0 || !self.running() || self.remotes.load(Ordering::Relaxed) == 0 {
+            return None;
+        }
+        if !self.thumb_pacer.due(now, n.min(8) as u32) {
+            return None;
+        }
+        self.thumb_next = (self.thumb_next + 1) % n;
+        Some(self.thumb_next)
+    }
+
+    /// Hands a layer's thumbnail to its encoder; dropped if the queue is full (it comes round again).
+    pub fn push_thumb(&mut self, layer: u64, w: u32, h: u32, rgba: Vec<u8>) {
+        if let Some(tx) = &self.thumb_encoder
+            && let Err(TrySendError::Disconnected(_)) = tx.try_send((layer, w, h, rgba))
+        {
+            self.thumb_encoder = None;
+        }
+    }
+
+    /// Current version of every layer thumbnail (the remote page reloads a picture when its number changes).
+    pub fn thumb_versions(&self) -> std::collections::HashMap<u64, u64> {
+        self.thumbs.lock().unwrap().iter().map(|(k, v)| (*k, v.0)).collect()
+    }
+
+    /// Forgets thumbnails of layers that no longer exist.
+    pub fn retain_thumbs(&self, alive: &[u64]) {
+        let mut map = self.thumbs.lock().unwrap();
+        if map.len() > alive.len() {
+            map.retain(|k, _| alive.contains(k));
         }
     }
 
@@ -310,7 +376,7 @@ mod native {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use super::{Frame, MAX_WIDTH, Shared};
+    use super::{Frame, MAX_WIDTH, Shared, Thumbs};
 
     pub const PLAYER_HTML: &str = include_str!("../player.html");
     pub const REMOTE_HTML: &str = include_str!("../remote.html");
@@ -338,6 +404,7 @@ mod native {
         ring: Arc<Mutex<VecDeque<f32>>>,
         remote: super::RemoteHub,
         registry: super::Reg,
+        thumbs: Thumbs,
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
@@ -403,6 +470,20 @@ mod native {
                     }
                     None => {
                         let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    }
+                }
+            }
+            // /thumb/<layer id>.jpg?v=<version>: one layer's current picture.
+            p if p.starts_with("/thumb/") => {
+                let id = p["/thumb/".len()..].split(['.', '?']).next().and_then(|s| s.parse::<u64>().ok());
+                let jpeg = id.and_then(|id| thumbs.lock().unwrap().get(&id).map(|(_, f)| f.clone()));
+                match jpeg {
+                    Some(f) => {
+                        let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", f.len()).as_bytes());
+                        let _ = stream.write_all(&f);
+                    }
+                    None => {
+                        let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                     }
                 }
             }
