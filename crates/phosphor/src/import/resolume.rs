@@ -154,10 +154,22 @@ pub fn to_composition(file: &AvcFile, decks: &[usize]) -> (Composition, usize) {
             *layer.clip_slot_mut(offset + c.column) = Clip { id, name: name.clone(), source: crate::media::spec_for_path(path), ..Default::default() };
             let file_name = std::path::Path::new(path).file_name().map_or(name, |f| f.to_string_lossy().to_string());
             comp.add_media(&file_name, path);
+            // Each deck / page is a media collection too.
+            if !deck.name.is_empty()
+                && let Some(m) = comp.media_bin.iter_mut().find(|m| m.path == *path)
+                && !m.collections.contains(&deck.name)
+            {
+                m.collections.push(deck.name.clone());
+            }
         }
         offset += deck.columns;
     }
     comp.clip_columns = offset.max(1);
+    for d in decks.iter().filter_map(|d| file.decks.get(*d)) {
+        if !d.name.is_empty() && !comp.media_collections.contains(&d.name) {
+            comp.media_collections.push(d.name.clone());
+        }
+    }
     (comp, skipped)
 }
 
