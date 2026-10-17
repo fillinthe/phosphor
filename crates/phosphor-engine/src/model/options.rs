@@ -249,6 +249,38 @@ impl LaunchTiming {
     }
 }
 
+/// How often the engine draws a frame (an app preference, not part of the project). Projectors and most
+/// screens are 60 Hz; a 120 Hz laptop display would otherwise make the engine draw twice as many frames.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RenderRate {
+    /// Every display refresh (120 fps on a ProMotion Mac).
+    Display,
+    #[default]
+    Fps60,
+    Fps30,
+}
+
+impl RenderRate {
+    pub const ALL: [RenderRate; 3] = [RenderRate::Display, RenderRate::Fps60, RenderRate::Fps30];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            RenderRate::Display => "Display rate",
+            RenderRate::Fps60 => "60 fps",
+            RenderRate::Fps30 => "30 fps",
+        }
+    }
+
+    /// Frames per second to pace to; None = every display refresh.
+    pub fn fps(self) -> Option<u32> {
+        match self {
+            RenderRate::Display => None,
+            RenderRate::Fps60 => Some(60),
+            RenderRate::Fps30 => Some(30),
+        }
+    }
+}
+
 /// How clicking/triggering media puts it on a layer: cut or fade, now or on the beat/bar.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

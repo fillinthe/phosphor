@@ -102,7 +102,9 @@ impl PhosphorApp {
                 self.state.preview_wants.push((format!("bench:{i}"), phosphor_engine::PreviewItem::Effect(fx), true));
             }
         }
-        self.render(now);
+        if self.state.render_due(now) {
+            self.render(now);
+        }
         if self.lock.active {
             self.locked_top_bar(ui);
         } else {
@@ -181,7 +183,11 @@ impl PhosphorApp {
         }
         self.output_windows(&ctx);
         self.finish_bench(&ctx, now);
-        // A VJ app renders continuously; the GPU frame rate follows the display's vsync.
-        ctx.request_repaint();
+        // A VJ app renders continuously. At "Display rate" every vsync; with a cap, ask for the repaint
+        // just past the half-way point so a 120 Hz display lands on every other refresh (60 Hz: every one).
+        match self.state.render_rate.fps() {
+            None => ctx.request_repaint(),
+            Some(fps) => ctx.request_repaint_after(std::time::Duration::from_secs_f64(1.0 / fps as f64 - 1.0 / 120.0 + 0.0005)),
+        }
     }
 }

@@ -53,6 +53,13 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         guarded!(ui, st.comp.master_fade, Slider::new(&mut st.comp.master_fade, 0.0..=1.0).text("fade"));
         ui.end_row();
 
+        ui.label("Render at");
+        ui.horizontal(|ui| {
+            crate::ui::choice_combo(ui, "render_rate", &mut st.render_rate, 110.0, false);
+            crate::ui::hint(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
+        });
+        ui.end_row();
+
         ui.label("All output windows");
         let text = if st.output_open() { "Close" } else { "Open" };
         if ui.button(text).clicked() {

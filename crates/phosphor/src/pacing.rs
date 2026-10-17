@@ -9,10 +9,11 @@ pub struct FramePacer {
 impl FramePacer {
     /// True once per 1/fps seconds. After a stall it skips ahead rather than bursting frames.
     pub fn due(&mut self, now: f64, fps: u32) -> bool {
-        if now < self.next {
+        let step = 1.0 / fps.max(1) as f64;
+        // A frame that arrives a little early (display jitter at the same rate) still counts as this one.
+        if now < self.next - 0.25 * step {
             return false;
         }
-        let step = 1.0 / fps.max(1) as f64;
         // On time: keep the steady cadence. Late by more than a frame: restart from now.
         self.next = if self.next + step < now { now + step } else { self.next + step };
         true
