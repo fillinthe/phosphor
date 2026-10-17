@@ -28,6 +28,9 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
     }
     ui.separator();
     choice_buttons(ui, &mut comp.launch.timing, |ui, r| map_menu(ui, r, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming)));
+    #[cfg(not(target_arch = "wasm32"))]
+    ui.toggle_value(&mut comp.launch.auto_beat_match, label(icon::MAGIC_WAND, "Auto-match"))
+        .on_hover_text("Every movie that lands in the grid is scanned for its visual beat and locked to the tempo (Match the beat)");
 }
 
 pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
@@ -138,6 +141,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut use_current: Option<(usize, usize)> = None;
     let mut clear: Option<(usize, usize)> = None;
     let mut beat: Option<(u64, usize)> = None;
+    let mut beat_row: Option<u64> = None;
     let mut fill_row: Option<u64> = None;
     {
         let drag_at = crate::app::file_drag_point(ui.ctx());
@@ -165,8 +169,12 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             for idx in (0..n).rev() {
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
-                    if row_header(ui, layer, egui::vec2(110.0, cell.y)) {
+                    let (fill, beat_all) = row_header(ui, layer, egui::vec2(110.0, cell.y));
+                    if fill {
                         fill_row = Some(layer.id);
+                    }
+                    if beat_all {
+                        beat_row = Some(layer.id);
                     }
                     for c in 0..cols {
                         let clip = layer.clips.get(c);
@@ -320,11 +328,16 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some((layer, c)) = beat {
-        st.match_beat(crate::media::rhythm::MatchTarget::Clip(layer, c));
+    {
+        if let Some((layer, c)) = beat {
+            st.match_beat(crate::media::rhythm::MatchTarget::Clip(layer, c));
+        }
+        if let Some(layer) = beat_row {
+            st.match_beat_all(layer);
+        }
     }
     #[cfg(target_arch = "wasm32")]
-    let _ = beat;
+    let _ = (beat, beat_row);
     if let Some((idx, c)) = use_current
         && let Some(layer) = st.comp.layers.get_mut(idx)
     {
@@ -358,9 +371,11 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
 
 /// The layer's name at the start of its clip row; click for autopilot (plays the next / a random clip by itself).
 /// The layer name at the start of a clip row: click for autopilot and "fill with variations" (returns true for that).
-fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: egui::Vec2) -> bool {
+/// The layer's name at the start of its clip row, with its menu. Returns (fill the row, match every clip's beat).
+fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: egui::Vec2) -> (bool, bool) {
     use phosphor_engine::Autopilot;
     let mut fill = false;
+    let mut beat_all = false;
     ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
         ui.set_min_size(size);
         ui.add_space((size.y - 40.0).max(0.0) / 2.0);
@@ -370,6 +385,12 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: 
             let q = crate::app::Quick::Fill;
             if ui.button(format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
                 fill = true;
+                ui.close();
+            }
+            if layer.clips.iter().any(|c| matches!(c.source, SourceSpec::Movie { path: Some(_), .. }))
+                && ui.button(label(icon::MAGIC_WAND, "Match the beat of every movie here")).on_hover_text("Scans each movie clip in this row for its rhythm and locks it to the tempo").clicked()
+            {
+                beat_all = true;
                 ui.close();
             }
             ui.separator();
@@ -406,7 +427,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: 
             ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(ACCENT));
         }
     });
-    fill
+    (fill, beat_all)
 }
 
 /// Bank letters: A–Z, then AA, AB…

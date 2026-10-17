@@ -27,6 +27,44 @@ impl State {
         }
     }
 
+    /// Every movie clip on a layer, one after the other.
+    pub fn match_beat_all(&mut self, layer: u64) {
+        let slots: Vec<usize> = self
+            .comp
+            .layers
+            .iter()
+            .find(|l| l.id == layer)
+            .map(|l| l.clips.iter().enumerate().filter(|(_, c)| movie_path(&c.source).is_some()).map(|(i, _)| i).collect())
+            .unwrap_or_default();
+        for slot in slots {
+            self.match_beat(MatchTarget::Clip(layer, slot));
+        }
+    }
+
+    /// Movies that just landed in a row (`place_clips`): scanned when the launch setting asks for it.
+    pub fn auto_match_new(&mut self, layer: u64, first_slot: usize, count: usize) {
+        if !self.comp.launch.auto_beat_match {
+            return;
+        }
+        for slot in first_slot..first_slot + count {
+            self.match_beat(MatchTarget::Clip(layer, slot));
+        }
+    }
+
+    /// A movie about to become a layer's source: scanned now (the source itself may land later, on the beat).
+    pub fn auto_match_source(&mut self, layer: u64, source: &SourceSpec) {
+        if !self.comp.launch.auto_beat_match {
+            return;
+        }
+        if let Some(path) = movie_path(source) {
+            if let Some(Ok(r)) = self.rhythm.results.get(&path).cloned() {
+                self.apply_rhythm(MatchTarget::Layer(layer), &r);
+            } else if !self.rhythm.is_pending(&path) {
+                self.rhythm.request(&path, MatchTarget::Layer(layer));
+            }
+        }
+    }
+
     /// Call every frame: finished scans set their clip or layer.
     pub(crate) fn poll_rhythm(&mut self) {
         for (_, target, r) in self.rhythm.poll() {

@@ -258,11 +258,13 @@ pub struct LaunchSettings {
     pub timing: LaunchTiming,
     /// Fade style new layers start with; set from the launch bar it goes to every layer (`Composition::set_launch_style`).
     pub style: TransitionKind,
+    /// Scan every movie that lands in the grid for its visual beat and lock it to the tempo (app: Match the beat).
+    pub auto_beat_match: bool,
 }
 
 impl Default for LaunchSettings {
     fn default() -> Self {
-        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade }
+        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: false }
     }
 }
 

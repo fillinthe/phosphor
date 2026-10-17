@@ -153,6 +153,8 @@ impl PhosphorApp {
         let cell = drop_point(ctx).and_then(|p| st.clip_cells.iter().find(|(r, ..)| r.contains(p)).map(|(_, l, s)| (*l, *s)));
         if let Some((layer, slot)) = cell {
             let n = st.comp.place_clips(layer, slot, items);
+            #[cfg(not(target_arch = "wasm32"))]
+            st.auto_match_new(layer, slot, n);
             st.selected = Some(layer);
             st.notice = Some(format!("{n} clip{} added to the row", if n == 1 { "" } else { "s" }));
         } else if files.len() == 1 {
@@ -161,10 +163,15 @@ impl PhosphorApp {
                 _ => st.add_layer(),
             };
             let (name, path) = files[0].clone();
-            st.launch_source(target, media::spec_for(&name, path), Vec::new(), name, now);
+            let spec = media::spec_for(&name, path);
+            #[cfg(not(target_arch = "wasm32"))]
+            st.auto_match_source(target, &spec);
+            st.launch_source(target, spec, Vec::new(), name, now);
         } else {
             let layer = st.add_layer();
             let n = st.comp.place_clips(layer, 0, items);
+            #[cfg(not(target_arch = "wasm32"))]
+            st.auto_match_new(layer, 0, n);
             st.selected = Some(layer);
             st.clip_page = 0;
             st.trigger(Trigger::Clip { layer, slot: 0 }, now);
