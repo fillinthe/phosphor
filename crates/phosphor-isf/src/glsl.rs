@@ -59,7 +59,9 @@ pub(crate) fn resolve_directives(src: &str) -> String {
             let arg = arg.trim();
             match word {
                 "if" | "ifdef" | "ifndef" => {
+                    // MadMapper's `name_IS_choice` macros are defined by the prelude: leave those to naga.
                     let cond = match word {
+                        _ if arg.contains("_IS_") => None,
                         "ifdef" => Some(arg == "__VERSION__"),
                         "ifndef" => Some(arg != "__VERSION__"),
                         _ => eval_version_cond(arg),
@@ -302,6 +304,12 @@ fn param_expr(offset: usize, n: usize) -> String {
 /// Each helper is emitted only if the shader does not define it itself.
 pub(crate) fn mad_common_shim(body: &str) -> String {
     let mut s = String::new();
+    if crate::mad_shim::called_not_defined(body, "luma") {
+        s.push_str("float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }\nfloat luma(vec4 c) { return dot(c.rgb, vec3(0.299, 0.587, 0.114)); }\n");
+    }
+    if crate::mad_shim::called_not_defined(body, "saturate") {
+        s.push_str("float saturate(float v) { return clamp(v, 0.0, 1.0); }\nvec2 saturate(vec2 v) { return clamp(v, 0.0, 1.0); }\nvec3 saturate(vec3 v) { return clamp(v, 0.0, 1.0); }\nvec4 saturate(vec4 v) { return clamp(v, 0.0, 1.0); }\n");
+    }
     if !uses_ident(body, "PI") || !body.contains("define PI") && !body.contains("float PI") {
         s.push_str("#define PI 3.14159265358979\n");
     }
@@ -400,6 +408,23 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
         s.push_str(&format!("{ty} {};\n", input.name));
         init.push_str(&format!("    {} = {expr};\n", input.name));
     }
+    // MadMapper's `#if defined(name_IS_choice)`: the chosen branch is fixed at import from the default.
+    for input in inputs {
+        match &input.kind {
+            IsfInputKind::Long { values, labels, default } => {
+                if let Some(i) = values.iter().position(|v| v == default)
+                    && let Some(label) = labels.get(i)
+                {
+                    let label: String = label.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+                    s.push_str(&format!("#define {}_IS_{label} 1\n", input.name));
+                }
+            }
+            IsfInputKind::Bool { default } => {
+                s.push_str(&format!("#define {}_IS_{} 1\n", input.name, if *default { "true" } else { "false" }));
+            }
+            _ => {}
+        }
+    }
     for (name, speed) in &header.time_bases {
         s.push_str(&format!("float {name};\n"));
         init.push_str(&format!("    {name} = phosphor_u.time * ({speed});\n"));
@@ -415,9 +440,11 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
 }
 
 /// Final `main` that runs the (inlined) vertex stage, then the fragment stage.
-pub(crate) fn epilogue(dialect: Dialect, has_vs: bool) -> String {
+pub(crate) fn epilogue(dialect: Dialect, has_vs: bool, mad_vs: bool) -> String {
     let mut s = String::from("void main() {\n    phosphor_init();\n    phosphor_init_inputs();\n");
-    if has_vs {
+    if mad_vs {
+        s.push_str("    materialVsFunc(isf_FragNormCoord);\n");
+    } else if has_vs {
         s.push_str("    phosphor_vs_main();\n");
     }
     match dialect {

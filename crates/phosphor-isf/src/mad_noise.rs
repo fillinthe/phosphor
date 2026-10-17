@@ -2,34 +2,6 @@
 //! with the signatures those calls use. Only functions the shader calls and doesn't define itself are
 //! emitted (naga drops anything unused). Looks are in the same family as the originals, not identical.
 
-/// `name(` appears in `body` as a call that the body doesn't also define.
-fn called_not_defined(body: &str, name: &str) -> bool {
-    let mut called = false;
-    let mut i = 0;
-    while let Some(pos) = body[i..].find(name) {
-        let s = i + pos;
-        let e = s + name.len();
-        i = e;
-        let before_ok = s == 0 || !is_ident(body.as_bytes()[s - 1]);
-        let after = body[e..].trim_start();
-        if !before_ok || !after.starts_with('(') {
-            continue;
-        }
-        // A definition: a type name right before, e.g. `float noise(`.
-        let head = body[..s].trim_end();
-        let ty = head.rsplit(|c: char| !c.is_ascii_alphanumeric() && c != '_').next().unwrap_or("");
-        if matches!(ty, "float" | "vec2" | "vec3" | "vec4" | "int" | "void" | "mat2" | "mat3") {
-            return false;
-        }
-        called = true;
-    }
-    called
-}
-
-fn is_ident(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
-}
-
 const HELPERS: &str = r#"
 vec2 mn_g2(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return -1.0 + 2.0 * fract(sin(p) * 43758.5453123); }
 vec3 mn_g3(vec3 p) { p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6))); return -1.0 + 2.0 * fract(sin(p) * 43758.5453123); }
@@ -86,15 +58,7 @@ const FUNCTIONS: &[(&str, &str)] = &[
 
 /// The shim for one shader body: helpers plus every function it calls but doesn't define.
 pub(crate) fn shim(body: &str) -> String {
-    let needed: Vec<&str> = FUNCTIONS.iter().filter(|(n, _)| called_not_defined(body, n)).map(|(_, g)| *g).collect();
-    if needed.is_empty() {
-        return String::new();
-    }
-    let mut s = String::from(HELPERS);
-    for g in needed {
-        s.push_str(g);
-    }
-    s
+    crate::mad_shim::shim(body, HELPERS, FUNCTIONS)
 }
 
 #[cfg(test)]

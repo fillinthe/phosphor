@@ -11,6 +11,8 @@
 
 mod glsl;
 mod mad_noise;
+mod mad_sdf;
+mod mad_shim;
 mod header;
 mod wgsl;
 
@@ -227,8 +229,10 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     let entry = format!("isf_{}", sanitize_slug(name_slug));
 
     let stripped = glsl::strip_comments(body);
+    // Includes named by the fragment shader and (MadMapper materials) its vertex shader.
     let includes: Vec<String> = stripped
         .lines()
+        .chain(vs_source.unwrap_or("").lines())
         .filter(|l| l.trim_start().starts_with("#include"))
         .map(|l| l.split('"').nth(1).unwrap_or("").to_string())
         .collect();
@@ -269,7 +273,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         unsupported.get_or_insert(format!("{} buffers (max {MAX_BUFFERS})", shader.buffers.len()));
     }
     for file in &includes {
-        if file != "MadCommon.glsl" && file != "MadNoise.glsl" {
+        if !matches!(file.as_str(), "MadCommon.glsl" | "MadNoise.glsl" | "MadSDF.glsl") {
             unsupported.get_or_insert(format!("MadMapper include {file}"));
         }
     }
@@ -280,6 +284,17 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     // Vertex shader: inline unless it transforms geometry (MadMapper .vs files are boilerplate).
     let mut vs_part = String::new();
     let mut vs_names = Vec::new();
+    // MadMapper material vertex function: runs per pixel instead (its `flat out` values become globals).
+    let mut mad_vs = false;
+    if let Some(vs) = vs_source.filter(|_| dialect == Dialect::MadMaterial) {
+        let vs = glsl::resolve_directives(&glsl::strip_comments(vs));
+        if glsl::uses_ident(&vs, "materialVsFunc") {
+            let (rewritten, names) = glsl::rewrite_io_decls(&vs, &[]);
+            vs_names = names;
+            vs_part = rewritten;
+            mad_vs = true;
+        }
+    }
     if let Some(vs) = vs_source.filter(|_| dialect == Dialect::Isf) {
         let vs = glsl::resolve_directives(&glsl::strip_comments(vs));
         if glsl::uses_ident(&vs, "gl_Position") {
@@ -307,17 +322,26 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     };
 
     let mut full = glsl::prelude(&header, &shader.inputs, dialect);
+    let whole = format!("{vs_part}\n{fs_part}");
+    // Plain `texture(img, uv)` on an input: every picture here is a `texture2D` + the shared sampler
+    // (shaders that define their own `texture` function keep it).
+    if mad_shim::called_not_defined(&whole, "texture") {
+        full.push_str("#define texture(img, nuv) textureLod(sampler2D(img, phosphor_samp), phosphor_flip(nuv), 0.0)\n");
+    }
     if includes.iter().any(|f| f == "MadCommon.glsl") {
-        full.push_str(&glsl::mad_common_shim(&fs_part));
+        full.push_str(&glsl::mad_common_shim(&whole));
     }
     if includes.iter().any(|f| f == "MadNoise.glsl") {
-        full.push_str(&mad_noise::shim(&fs_part));
+        full.push_str(&mad_noise::shim(&whole));
+    }
+    if includes.iter().any(|f| f == "MadSDF.glsl") {
+        full.push_str(&mad_sdf::shim(&whole));
     }
     full.push_str(&vs_part);
     full.push('\n');
     full.push_str(&fs_part);
     full.push('\n');
-    full.push_str(&glsl::epilogue(dialect, !vs_part.is_empty()));
+    full.push_str(&glsl::epilogue(dialect, !vs_part.is_empty(), mad_vs));
 
     let naga_out = glsl_to_wgsl(&full)?;
     shader.wgsl = wgsl::finalize(&naga_out, &entry)?;
