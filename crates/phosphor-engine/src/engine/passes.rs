@@ -79,8 +79,8 @@ impl Engine {
                         h: luma.height,
                         full_range: *full_range,
                     }),
-                    Media::Compressed { target: t, format } => Some(if *format == CompressedFormat::Bc3YCoCg {
-                        Frame::YCoCg { view: t.view.clone(), w: t.width, h: t.height }
+                    Media::Compressed { target: t, alpha, format } => Some(if *format == CompressedFormat::Bc3YCoCg {
+                        Frame::YCoCg { view: t.view.clone(), alpha: alpha.as_ref().map(|a| a.view.clone()), w: t.width, h: t.height }
                     } else {
                         Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height }
                     }),

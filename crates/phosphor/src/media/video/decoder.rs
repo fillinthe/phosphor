@@ -8,6 +8,8 @@ pub(super) struct Decoder {
     /// Hap played on the GPU: the current frame's blocks (None = FFmpeg decodes pixels).
     hap: Option<Vec<u8>>,
     hap_format: phosphor_engine::CompressedFormat,
+    /// Hap Q Alpha: the current frame's alpha blocks (empty for the other flavours).
+    hap_alpha: Vec<u8>,
     path: String,
     input: ff::format::context::Input,
     stream: usize,
@@ -115,6 +117,7 @@ impl Decoder {
         Ok(Self {
             hap,
             hap_format: phosphor_engine::CompressedFormat::Bc1,
+            hap_alpha: Vec::new(),
             path: path.to_string(),
             input,
             stream,
@@ -432,8 +435,8 @@ impl Decoder {
                 Ok(()) if pkt.stream() == self.stream => {
                     let Some(buf) = self.hap.as_mut() else { return Ok(false) };
                     let Some(data) = pkt.data() else { continue };
-                    match super::hap::decode(data, buf) {
-                        Ok(format) => self.hap_format = format,
+                    match super::hap::decode(data, buf, &mut self.hap_alpha) {
+                        Ok((format, _)) => self.hap_format = format,
                         Err(e) => {
                             log::info!("{}: {e}; decoding on the CPU instead", self.path);
                             self.hap = None;
@@ -461,7 +464,8 @@ impl Decoder {
     fn picture(&mut self, sh: &Shared) -> Result<VideoFrame, String> {
         if let Some(buf) = &self.hap {
             let (width, height) = (self.dec.width(), self.dec.height());
-            return Ok(VideoFrame::Compressed { width, height, format: self.hap_format, data: buf.clone() });
+            let alpha = (!self.hap_alpha.is_empty()).then(|| self.hap_alpha.clone());
+            return Ok(VideoFrame::Compressed { width, height, format: self.hap_format, data: buf.clone(), alpha });
         }
         #[cfg(target_os = "macos")]
         if zero_copy() {

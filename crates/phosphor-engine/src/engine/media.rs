@@ -90,14 +90,15 @@ impl Engine {
 
     /// Uploads a block-compressed frame (Hap: DXT1/DXT5 blocks, rows of 4×4 blocks) for a layer, reusing
     /// the texture while size and format stay the same. `width`/`height` must be multiples of 4.
-    pub fn upload_compressed(&mut self, layer: u64, outgoing: bool, width: u32, height: u32, format: CompressedFormat, blocks: &[u8]) {
+    pub fn upload_compressed(&mut self, layer: u64, outgoing: bool, width: u32, height: u32, format: CompressedFormat, blocks: &[u8], alpha_blocks: Option<&[u8]>) {
         let (bw, bh) = (width.div_ceil(4), height.div_ceil(4));
         if blocks.len() < (bw * bh * format.block_bytes()) as usize || !self.compressed_supported() {
             return;
         }
+        let alpha_blocks = alpha_blocks.filter(|a| a.len() >= (bw * bh * CompressedFormat::Bc4.block_bytes()) as usize);
         let res = self.layers.entry(layer).or_default();
         let slot = if outgoing { &mut res.media_out } else { &mut res.media };
-        let reuse = matches!(slot, Some(Media::Compressed { target, format: f }) if target.width == bw * 4 && target.height == bh * 4 && *f == format);
+        let reuse = matches!(slot, Some(Media::Compressed { target, alpha, format: f }) if target.width == bw * 4 && target.height == bh * 4 && *f == format && alpha.is_some() == alpha_blocks.is_some());
         if !reuse {
             let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("hap"),
@@ -110,9 +111,31 @@ impl Engine {
                 view_formats: &[],
             });
             let view = texture.create_view(&Default::default());
-            *slot = Some(Media::Compressed { target: Target { texture, view, width: bw * 4, height: bh * 4 }, format });
+            let alpha = alpha_blocks.map(|_| {
+                let t = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("hap alpha"),
+                    size: wgpu::Extent3d { width: bw * 4, height: bh * 4, depth_or_array_layers: 1 },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: CompressedFormat::Bc4.texture_format(),
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                let view = t.create_view(&Default::default());
+                Target { texture: t, view, width: bw * 4, height: bh * 4 }
+            });
+            *slot = Some(Media::Compressed { target: Target { texture, view, width: bw * 4, height: bh * 4 }, alpha, format });
         }
-        let Some(Media::Compressed { target, .. }) = slot else { return };
+        let Some(Media::Compressed { target, alpha, .. }) = slot else { return };
+        if let (Some(a), Some(blocks)) = (alpha.as_ref(), alpha_blocks) {
+            self.gpu.queue.write_texture(
+                a.texture.as_image_copy(),
+                blocks,
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bw * CompressedFormat::Bc4.block_bytes()), rows_per_image: Some(bh) },
+                a.texture.size(),
+            );
+        }
         self.gpu.queue.write_texture(
             target.texture.as_image_copy(),
             blocks,

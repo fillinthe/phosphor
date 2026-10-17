@@ -25,23 +25,54 @@ fn texture(ty: u8) -> Result<CompressedFormat, String> {
         0x0E => Ok(CompressedFormat::Bc3),
         0x0F => Ok(CompressedFormat::Bc3YCoCg),
         0x0C => Ok(CompressedFormat::Bc7),
-        other => Err(format!("Hap texture type {other:#x} (Hap Q Alpha) isn't GPU-decoded yet")),
+        // RGTC1: the alpha plane of Hap Q Alpha.
+        0x01 => Ok(CompressedFormat::Bc4),
+        other => Err(format!("Hap texture type {other:#x} isn't GPU-decoded")),
     }
 }
 
-/// Decodes one Hap packet into DXT blocks in `out` (reused between frames). Returns the block format.
-pub fn decode(packet: &[u8], out: &mut Vec<u8>) -> Result<CompressedFormat, String> {
+/// "Multiple images" top-level section: Hap Q Alpha (a YCoCg DXT5 image plus an RGTC1 alpha image).
+const MULTIPLE_IMAGES: u8 = 0x0D;
+
+/// Decodes one Hap packet into DXT blocks in `out` (reused between frames); a Hap Q Alpha frame also fills
+/// `alpha` with its RGTC1 (BC4) blocks (empty otherwise). Returns the colour block format and whether there is alpha.
+pub fn decode(packet: &[u8], out: &mut Vec<u8>, alpha: &mut Vec<u8>) -> Result<(CompressedFormat, bool), String> {
     let (head, size, ty) = section(packet)?;
     let body = packet.get(head..head + size).ok_or("truncated Hap frame")?;
-    let format = texture(ty)?;
     out.clear();
+    alpha.clear();
+    if ty & 0x0F == MULTIPLE_IMAGES {
+        let mut format = None;
+        let mut at = 0;
+        while at < body.len() {
+            let (h, n, t) = section(&body[at..])?;
+            let image = body.get(at + h..at + h + n).ok_or("truncated Hap image")?;
+            match texture(t)? {
+                CompressedFormat::Bc4 => unpack(t, image, alpha)?,
+                f => {
+                    unpack(t, image, out)?;
+                    format = Some(f);
+                }
+            }
+            at += h + n;
+        }
+        let format = format.ok_or("Hap frame with no colour image")?;
+        return Ok((format, !alpha.is_empty()));
+    }
+    let format = texture(ty)?;
+    unpack(ty, body, out)?;
+    Ok((format, false))
+}
+
+/// One image's payload into `out` by its section type's compressor nibble.
+fn unpack(ty: u8, body: &[u8], out: &mut Vec<u8>) -> Result<(), String> {
     match ty >> 4 {
         0x0A => out.extend_from_slice(body),
         0x0B => snappy(body, out)?,
         0x0C => chunked(body, out)?,
         other => return Err(format!("Hap compressor {other:#x} isn't supported")),
     }
-    Ok(format)
+    Ok(())
 }
 
 fn snappy(src: &[u8], out: &mut Vec<u8>) -> Result<(), String> {
@@ -107,16 +138,17 @@ mod tests {
     fn uncompressed_snappy_and_chunked_frames_give_the_same_blocks() {
         let raw = blocks();
         let mut out = Vec::new();
+        let mut alpha = Vec::new();
         // Uncompressed DXT1.
         let mut p = header(raw.len(), 0xAB);
         p.extend(&raw);
-        assert_eq!(decode(&p, &mut out).unwrap(), CompressedFormat::Bc1);
+        assert_eq!(decode(&p, &mut out, &mut alpha).unwrap(), (CompressedFormat::Bc1, false));
         assert_eq!(out, raw);
         // Snappy, Hap Q.
         let z = snap::raw::Encoder::new().compress_vec(&raw).unwrap();
         let mut p = header(z.len(), 0xBF);
         p.extend(&z);
-        assert_eq!(decode(&p, &mut out).unwrap(), CompressedFormat::Bc3YCoCg);
+        assert_eq!(decode(&p, &mut out, &mut alpha).unwrap(), (CompressedFormat::Bc3YCoCg, false));
         assert_eq!(out, raw);
         // Complex: two chunks, one snappy, one stored, DXT5.
         let (a, b) = raw.split_at(raw.len() / 2);
@@ -132,15 +164,23 @@ mod tests {
         body.extend(b);
         let mut p = header(body.len(), 0xCE);
         p.extend(&body);
-        assert_eq!(decode(&p, &mut out).unwrap(), CompressedFormat::Bc3);
+        assert_eq!(decode(&p, &mut out, &mut alpha).unwrap(), (CompressedFormat::Bc3, false));
         assert_eq!(out, raw);
         // Hap R is BC7.
         let mut p = header(raw.len(), 0xAC);
         p.extend(&raw);
-        assert_eq!(decode(&p, &mut out).unwrap(), CompressedFormat::Bc7);
-        // Hap Q Alpha (several images) isn't GPU-decoded (caller falls back to FFmpeg).
-        let mut p = header(4, 0xAD);
-        p.extend([0, 0, 0, 0]);
-        assert!(decode(&p, &mut out).is_err());
+        assert_eq!(decode(&p, &mut out, &mut alpha).unwrap(), (CompressedFormat::Bc7, false));
+        // Hap Q Alpha: a multiple-images section holding a snappy YCoCg image and a stored RGTC1 alpha image.
+        let a_blocks: Vec<u8> = raw[..raw.len() / 2].to_vec();
+        let z = snap::raw::Encoder::new().compress_vec(&raw).unwrap();
+        let mut inner = header(z.len(), 0xBF);
+        inner.extend(&z);
+        inner.extend(header(a_blocks.len(), 0xA1));
+        inner.extend(&a_blocks);
+        let mut p = header(inner.len(), 0xAD);
+        p.extend(&inner);
+        assert_eq!(decode(&p, &mut out, &mut alpha).unwrap(), (CompressedFormat::Bc3YCoCg, true));
+        assert_eq!(out, raw);
+        assert_eq!(alpha, a_blocks);
     }
 }
