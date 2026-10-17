@@ -295,7 +295,7 @@ impl PhosphorApp {
             map.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id));
         }
 
-        if let Some(snapshot) = stats.record(now, render_secs, info.passes, mod_inputs.audio_level as f64)
+        if let Some(snapshot) = stats.record(now, render_secs, info.passes, mod_inputs.audio_level as f64, engine.gpu_ms().unwrap_or(0.0) as f64)
             && let Some(run) = &mut self.bench
         {
             println!("{}", snapshot.to_json());

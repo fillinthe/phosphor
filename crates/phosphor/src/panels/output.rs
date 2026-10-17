@@ -79,6 +79,9 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         };
         row(ui, "Frame rate", format!("{:.1} fps ({:.2} ms)", s.fps, s.frame_ms));
         row(ui, "Engine CPU / frame", format!("{:.3} ms", s.render_ms));
+        if s.gpu_ms > 0.0 {
+            row(ui, "Engine GPU / frame", format!("{:.2} ms", s.gpu_ms));
+        }
         row(ui, "Process CPU", format!("{:.1}% of one core", s.cpu_percent));
         row(ui, "Memory", format!("{:.0} MB", s.memory_mb));
         row(ui, "GPU passes / frame", s.passes.to_string());
