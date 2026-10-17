@@ -9,6 +9,9 @@ pub struct AudiencePlay {
     pub enabled: bool,
     /// How long one person has the controls.
     pub turn_secs: u32,
+    /// After a turn, how long that phone sits out before it can play again (0 = no rest: with nobody
+    /// waiting, a player keeps the controls).
+    pub rest_secs: u32,
     /// How many people play at once (each gets a Surface page when no page is chosen).
     pub players: u32,
     /// Control Surface page guests get (None = every page).
@@ -64,6 +67,6 @@ impl QrStyle {
 
 impl Default for AudiencePlay {
     fn default() -> Self {
-        Self { enabled: false, turn_secs: 60, players: 1, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), show_names: false, qr_style: QrStyle::default(), qr_caption: true }
+        Self { enabled: false, turn_secs: 60, rest_secs: 0, players: 1, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), show_names: false, qr_style: QrStyle::default(), qr_caption: true }
     }
 }

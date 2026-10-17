@@ -203,13 +203,22 @@ fn parse_input(v: &Value) -> Result<IsfInput, String> {
             IsfInputKind::Int { min, max, default }
         }
         "color" => IsfInputKind::Color { default: f32_array(v.get("DEFAULT"), [1.0, 1.0, 1.0, 1.0]) },
-        "point2D" => {
-            let min = f32_array(v.get("MIN"), [0.0, 0.0]);
-            let max = f32_array(v.get("MAX"), [1.0, 1.0]);
+        // MadMapper's `floatRange` (a low/high pair with one shared MIN/MAX) is a point2D to the shader.
+        "point2D" | "floatRange" => {
+            let scalar = |k: &str, d: f32| f32_of(v.get(k)).map(|f| [f, f]).unwrap_or([d, d]);
+            let min = if ty == "floatRange" { scalar("MIN", 0.0) } else { f32_array(v.get("MIN"), [0.0, 0.0]) };
+            let max = if ty == "floatRange" { scalar("MAX", 1.0) } else { f32_array(v.get("MAX"), [1.0, 1.0]) };
             let default = f32_array(v.get("DEFAULT"), [0.5 * (min[0] + max[0]), 0.5 * (min[1] + max[1])]);
             IsfInputKind::Point2D { default, min, max }
         }
         "image" => IsfInputKind::Image,
+        "curve" => {
+            let points = match v.get("DEFAULT") {
+                Some(Value::Array(a)) => a.iter().filter_map(|x| f32_of(Some(x))).collect(),
+                _ => vec![0.0, 0.0, 1.0, 1.0],
+            };
+            IsfInputKind::Curve { points }
+        }
         "audio" | "audioFFT" => IsfInputKind::Audio,
         other => return Err(format!("input type '{other}'")),
     };
