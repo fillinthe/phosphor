@@ -157,6 +157,8 @@ pub struct NetSession {
     thumb_encoder: Option<SyncSender<(u64, u32, u32, Vec<u8>)>>,
     thumb_pacer: crate::pacing::FramePacer,
     thumb_next: usize,
+    /// The secure listener (port + 1) is up.
+    pub https: bool,
     pub status: String,
 }
 
@@ -181,6 +183,7 @@ impl NetSession {
             thumb_encoder: None,
             thumb_pacer: Default::default(),
             thumb_next: 0,
+            https: false,
             status: String::new(),
         }
     }
@@ -247,11 +250,26 @@ impl NetSession {
         format!("http://{ip}:{}/", self.port)
     }
 
+    /// The secure link (phones share their mic only on https; they warn once about the certificate).
+    pub fn https_url(&self) -> String {
+        let ip = crate::control::local_ip().unwrap_or_else(|| "localhost".into());
+        format!("https://{ip}:{}/", self.port + 1)
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn start(&mut self) -> Result<(), String> {
         self.stop();
         let listener = std::net::TcpListener::bind(("0.0.0.0", self.port)).map_err(|e| format!("Port {}: {e}", self.port))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+        // HTTPS on the next port (phones only share their mic on a secure page); a self-signed certificate.
+        let tls = match crate::net_tls::server_config() {
+            Ok(cfg) => std::net::TcpListener::bind(("0.0.0.0", self.port + 1)).ok().and_then(|l| l.set_nonblocking(true).ok().map(|_| (l, cfg))),
+            Err(e) => {
+                eprintln!("session: no HTTPS ({e})");
+                None
+            }
+        };
+        self.https = tls.is_some();
         self.running.store(true, Ordering::Relaxed);
         let running = self.running.clone();
         let latest = self.latest.clone();
@@ -265,14 +283,32 @@ impl NetSession {
             .name("phosphor-net".into())
             .spawn(move || {
                 while running.load(Ordering::Relaxed) {
+                    let mut idle = true;
+                    let take = |stream: std::net::TcpStream, cfg: Option<Arc<rustls::ServerConfig>>| {
+                        let (running, latest, viewers, peers, ring, remote, registry, thumbs) =
+                            (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone());
+                        std::thread::spawn(move || native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs));
+                    };
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let (running, latest, viewers, peers, ring, remote, registry, thumbs) =
-                                (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone());
-                            std::thread::spawn(move || native::serve(stream, running, latest, viewers, peers, ring, remote, registry, thumbs));
+                            idle = false;
+                            take(stream, None);
                         }
-                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(std::time::Duration::from_millis(30)),
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                         Err(_) => break,
+                    }
+                    if let Some((l, cfg)) = &tls {
+                        match l.accept() {
+                            Ok((stream, _)) => {
+                                idle = false;
+                                take(stream, Some(cfg.clone()));
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                            Err(_) => break,
+                        }
+                    }
+                    if idle {
+                        std::thread::sleep(std::time::Duration::from_millis(30));
                     }
                 }
             })
@@ -414,7 +450,8 @@ mod native {
     }
 
     pub fn serve(
-        mut stream: TcpStream,
+        stream: TcpStream,
+        tls: Option<Arc<rustls::ServerConfig>>,
         running: Arc<AtomicBool>,
         latest: Shared,
         viewers: Arc<AtomicUsize>,
@@ -427,11 +464,24 @@ mod native {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
         let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-        let mut head = [0u8; 2048];
-        let Ok(n) = stream.peek(&mut head) else { return };
-        let request = String::from_utf8_lossy(&head[..n]).to_string();
+        let Ok(tcp) = stream.try_clone() else { return };
+        let Ok(mut conn) = crate::net_tls::Conn::new(stream, tls.as_ref()) else { return };
+        // The request head (up to the blank line), read once; WebSocket paths get it replayed.
+        let mut head: Vec<u8> = Vec::with_capacity(2048);
+        let mut chunk = [0u8; 512];
+        while head.len() < 8192 && !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            match conn.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => head.extend_from_slice(&chunk[..n]),
+            }
+        }
+        if head.is_empty() {
+            return;
+        }
+        let request = String::from_utf8_lossy(&head).to_string();
         let path = request.split_whitespace().nth(1).unwrap_or("/").to_string();
-        let ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+        let ip = tcp.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+        let mut stream = crate::net_tls::Replay::new(head, conn);
         if registry.lock().unwrap().blocked.contains(&ip) {
             let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             return;
@@ -439,24 +489,21 @@ mod native {
         let device = super::device_label(&request);
         if path.starts_with("/control") {
             let seat = super::Seat::join(&registry, super::PeerKind::Remote, &ip, &device);
-            control_socket(stream, running, remote, seat, false);
+            control_socket(stream, tcp, running, remote, seat, false);
             return;
         }
         if path.starts_with("/guest") {
             let seat = super::Seat::join(&registry, super::PeerKind::Guest, &ip, &device);
-            control_socket(stream, running, remote, seat, true);
+            control_socket(stream, tcp, running, remote, seat, true);
             return;
         }
         if path.starts_with("/audio") {
-            let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+            let _ = tcp.set_read_timeout(Some(Duration::from_secs(30)));
             let seat = super::Seat::join(&registry, super::PeerKind::Audio, &ip, &device);
-            audio_socket(stream, running, peers, ring, seat);
+            audio_socket(stream, tcp, running, peers, ring, seat);
             return;
         }
-        // Consume the request head, then answer.
-        let mut buf = vec![0u8; n];
-        let _ = stream.read_exact(&mut buf);
-        let _ = stream.set_nodelay(true);
+        let _ = tcp.set_nodelay(true);
         match path.as_str() {
             "/stream.mjpeg" => {
                 let seat = super::Seat::join(&registry, super::PeerKind::Viewer, &ip, &device);
@@ -528,11 +575,11 @@ mod native {
     /// page sends back (JSON objects like {"t":"opacity","layer":3,"v":0.5}).
     /// A guest (audience play) needs no password: it learns its seat number, every command it sends
     /// carries it as `_from`, and the Mac decides whose turn it is.
-    fn control_socket(stream: TcpStream, running: Arc<AtomicBool>, remote: super::RemoteHub, seat: super::Seat, guest: bool) {
+    fn control_socket(stream: crate::net_tls::Replay, tcp: TcpStream, running: Arc<AtomicBool>, remote: super::RemoteHub, seat: super::Seat, guest: bool) {
         let (state, cmds, count, password) = remote;
-        let _ = stream.set_nodelay(true);
+        let _ = tcp.set_nodelay(true);
         let Ok(mut ws) = tungstenite::accept(stream) else { return };
-        let _ = ws.get_mut().set_read_timeout(Some(Duration::from_millis(30)));
+        let _ = tcp.set_read_timeout(Some(Duration::from_millis(30)));
         // Guests aren't "remotes": they don't unlock layer thumbnails or count in the Session panel.
         if !guest {
             count.fetch_add(1, Ordering::Relaxed);
@@ -605,7 +652,8 @@ mod native {
 
     /// Viewer microphone: first a text message `rate:<hz>`, then binary little-endian f32 mono
     /// chunks. Resampled to 48 kHz and queued for the audio analyser.
-    fn audio_socket(stream: TcpStream, running: Arc<AtomicBool>, peers: Arc<AtomicUsize>, ring: Arc<Mutex<VecDeque<f32>>>, seat: super::Seat) {
+    fn audio_socket(stream: crate::net_tls::Replay, tcp: TcpStream, running: Arc<AtomicBool>, peers: Arc<AtomicUsize>, ring: Arc<Mutex<VecDeque<f32>>>, seat: super::Seat) {
+        let _ = &tcp;
         let Ok(mut ws) = tungstenite::accept(stream) else { return };
         peers.fetch_add(1, Ordering::Relaxed);
         let mut rate = 48_000.0f32;

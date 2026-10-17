@@ -36,7 +36,8 @@ function stopMic() {
 }
 async function startMic() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    st.textContent = 'Mic needs HTTPS or localhost. In Chrome: chrome://flags/#unsafely-treat-insecure-origin-as-secure → add ' + location.origin;
+    const secure = 'https://' + location.hostname + ':' + (parseInt(location.port || '80', 10) + 1) + location.pathname;
+    st.innerHTML = 'The mic needs the secure link: <a href="' + secure + '">' + secure + '</a> (the phone warns about the certificate once: Show details, then visit the site).';
     return;
   }
   try {
