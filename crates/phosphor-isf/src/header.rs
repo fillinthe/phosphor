@@ -219,7 +219,8 @@ fn parse_input(v: &Value) -> Result<IsfInput, String> {
             };
             IsfInputKind::Curve { points }
         }
-        "audio" | "audioFFT" => IsfInputKind::Audio,
+        "audio" => IsfInputKind::Audio { fft: false },
+        "audioFFT" => IsfInputKind::Audio { fft: true },
         other => return Err(format!("input type '{other}'")),
     };
     Ok(IsfInput { name, label, kind, offset: None, texture: None })

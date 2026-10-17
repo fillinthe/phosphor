@@ -18,6 +18,8 @@ pub struct Loaded {
     plan: Option<shaders::PassPlan>,
     /// `IMPORTED` pictures, decoded on the scanner thread: (buffer slot, width, height, RGBA).
     images: Vec<(usize, u32, u32, Vec<u8>)>,
+    /// `audio` / `audioFFT` inputs: (texture slot, spectrum?).
+    audio_slots: Vec<(usize, bool)>,
 }
 
 /// Decodes the pictures an ISF shader imports (paths relative to the shader file; missing ones are skipped)
@@ -101,7 +103,7 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
                 put(o, format!("{name} X"), min[0], max[0], default[0]);
                 put(o + 1, format!("{name} Y"), min[1], max[1], default[1]);
             }
-            K::Image | K::Audio | K::Curve { .. } => {}
+            K::Image | K::Audio { .. } | K::Curve { .. } => {}
         }
     }
     slots.into_iter().enumerate().map(|(i, p)| p.unwrap_or(Param { name: leak(format!("p{i}")), min: 0.0, max: 1.0, default: 0.0 })).collect()
@@ -184,7 +186,7 @@ impl IsfLibrary {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
                                 let images = load_images(&path, &sh.images, &sh.curves);
-                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, wgsl: sh.wgsl })
+                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), wgsl: sh.wgsl })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
                             Err(e) => Err(format!("{e:?}")),
@@ -218,6 +220,7 @@ impl IsfLibrary {
                     for (slot, w, h, rgba) in l.images {
                         engine.set_plan_image(desc.entry, slot, w, h, &rgba);
                     }
+                    shaders::set_audio_slots(desc.entry, l.audio_slots.into_iter().map(|(s, fft)| (s, if fft { shaders::AudioTexture::Fft } else { shaders::AudioTexture::Wave })).collect());
                     engine.register_lazy(desc, l.wgsl);
                     self.loaded += 1;
                 }

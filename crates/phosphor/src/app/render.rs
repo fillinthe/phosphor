@@ -71,6 +71,9 @@ impl PhosphorApp {
             }
         }
         let an = audio.update();
+        if phosphor_engine::shaders::any_audio_slots() && audio.is_open_or_clips() {
+            engine.set_audio(&audio.waveform(), audio.bins());
+        }
         if an.beat {
             clock.on_audio_beat(now, an.bpm, an.confidence);
         }
