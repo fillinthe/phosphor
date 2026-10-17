@@ -176,6 +176,11 @@ impl PhosphorApp {
                 self.state.bug.text = "Example: dragging a movie onto the Clips grid shows a black cell.".into();
                 continue;
             }
+            #[cfg(target_os = "macos")]
+            if name == "login" {
+                println!("QUICK login: {:?}", crate::login_item::set(true));
+                continue;
+            }
             if name == "welcome" {
                 self.welcome_open = true;
                 continue;
