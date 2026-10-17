@@ -61,6 +61,15 @@ impl PhosphorApp {
         if !net_audio.is_empty() {
             audio.push_external(net_audio);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use crate::media::video::sound;
+            sound::set_tap(audio.is_clips());
+            if audio.is_clips() {
+                let mix = sound::take_tap();
+                audio.push_clips(&mix, sound::stats().0);
+            }
+        }
         let an = audio.update();
         if an.beat {
             clock.on_audio_beat(now, an.bpm, an.confidence);

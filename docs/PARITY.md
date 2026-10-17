@@ -21,6 +21,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Ableton Link | Resolume, VDMX | ✅ |
 | Cue list (fades, follow-on, GO/back mappable) + timecode (show clock, MIDI timecode, LTC audio) | Resolume Arena, MadMapper | ✅ |
 | Audio playback of an audio-only file as a layer (sound + visualiser) | Resolume | ⬜ |
+| Visuals react to the clips' own sound (no mic, cable or loopback) | Resolume (audio FFT from clips) | ✅ Audio panel → "Clip sound" |
 
 ## Speed (getting visuals up fast)
 | Feature | Who has it | Phosphor |

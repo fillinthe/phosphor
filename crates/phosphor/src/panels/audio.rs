@@ -25,6 +25,9 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
             if ui.selectable_label(audio.is_network(), "Session viewers (network)").on_hover_text("Audio sent back by people watching your session link").clicked() {
                 audio.use_network();
             }
+            if ui.selectable_label(audio.is_clips(), "Clip sound (what Phosphor plays)").on_hover_text("The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic").clicked() {
+                audio.use_clips();
+            }
             for d in devices {
                 if ui.selectable_label(audio.current() == Some(d.as_str()), &d).clicked()
                     && let Err(e) = audio.open(Some(&d))
