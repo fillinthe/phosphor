@@ -216,8 +216,7 @@ Legend: [x] done · [~] in progress · [ ] not started
       (233/327 of /Library/Graphics/ISF); converted in the background, compiled lazily (2 per frame)
 - [x] ISF multi-pass / persistent buffers, up to 44 params (341/406 convert)
 - [x] ISF imported images ✔, MadMapper includes ✔ (MadNoise, MadSDF, MadCommon), curve/audio inputs ✔, FLOAT buffers (16-bit) ✔
-- [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
-      lit (normals) Rutt-Etra rendering. Motion Flow (normal optical flow: displace / show / moving-only) ✔ 2026-10-17. Rutt-Etra can now displace from another layer's picture
+- [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); lit Rutt-Etra ✔ (shading from the height gradient, `shade` in ruttetra.wgsl). Motion Flow (normal optical flow: displace / show / moving-only) ✔ 2026-10-17. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)
 - [x] Text / title source (any installed font, size, colour, alignment, outline)
 - [x] Syphon in/out, NDI out

@@ -44,7 +44,7 @@ scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
   live `audio` / `audioFFT` inputs), a shader editor with live preview.
 - **Control:** MIDI, OSC (with OSC Query and feedback), keyboard, Learn on any control; LFO / audio / step / envelope
   modulation on any value; control surfaces you build (pages, XY pads, colour); TouchOSC layout export; presets.
-- **Phones:** a remote page (scan the QR code: mixer, clips, your surface, layer pictures) and **Audience play** (a
+- **Phones:** a remote page (scan the QR code or type phosphor.local: mixer, clips, your surface, layer pictures, Auto show) and **Audience play** (a
   second code, also as a layer on the output: guests line up and take timed turns at the controls you allow).
 - **Mapping:** drag corners on the projector, mesh warp, line slices, masks with soft edges, edge blending, per-output colour, many
   outputs each on its own screen, venue presets, Art-Net / sACN LED pixel mapping; render at 60 fps (default), 30, or the display's rate.
