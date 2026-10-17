@@ -24,6 +24,24 @@ static OUTPUT_RUNNING: AtomicBool = AtomicBool::new(false);
 static CLIPS: Mutex<Vec<Weak<Clip>>> = Mutex::new(Vec::new());
 /// Sample frames the output has taken from clips (diagnostics: bench prints it).
 static PLAYED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// The mix, mono at the output rate, kept for the audio analyser while "Clip sound" is its source.
+static TAP_ON: AtomicBool = AtomicBool::new(false);
+static TAP: Mutex<VecDeque<f32>> = Mutex::new(VecDeque::new());
+const TAP_MAX: usize = 48_000;
+
+/// Keep (or stop keeping) the mix for the analyser.
+pub fn set_tap(on: bool) {
+    if TAP_ON.swap(on, Ordering::Relaxed) && !on
+        && let Ok(mut t) = TAP.lock()
+    {
+        t.clear();
+    }
+}
+
+/// Everything mixed since the last call (mono, at `stats().0` Hz).
+pub fn take_tap() -> Vec<f32> {
+    TAP.lock().map(|mut t| t.drain(..).collect()).unwrap_or_default()
+}
 
 /// (output sample rate, 0 = closed; sample frames played from clips so far).
 pub fn stats() -> (u32, u64) {
@@ -362,6 +380,14 @@ fn run_output() -> Result<(), String> {
         scratch.clear();
         scratch.resize(frames * 2, 0.0);
         mix_clips(&mut scratch);
+        if TAP_ON.load(Ordering::Relaxed)
+            && let Ok(mut t) = TAP.try_lock()
+        {
+            t.extend(scratch.chunks_exact(2).map(|lr| 0.5 * (lr[0] + lr[1])));
+            while t.len() > TAP_MAX {
+                t.pop_front();
+            }
+        }
         for (i, frame) in out.chunks_mut(channels).enumerate() {
             let (l, r) = (scratch[i * 2], scratch[i * 2 + 1]);
             match frame.len() {

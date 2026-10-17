@@ -58,6 +58,7 @@ impl PhosphorApp {
         };
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
+        println!("AUDIO {}", self.state.audio.debug_line());
         let causes: Vec<String> = ctx.repaint_causes().iter().map(|c| c.to_string()).collect();
         println!("UI_FPS {:.1} repaint causes: {}", self.ui_frames as f64 / run.cfg.seconds.max(1.0), causes.join(" | "));
         println!("LAYERS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.enabled, l.opacity, l.source.label())).collect::<Vec<_>>());
@@ -159,6 +160,11 @@ impl PhosphorApp {
                 self.state.bug.open = true;
                 self.state.bug.detached = name == "bugout";
                 self.state.bug.text = "Example: dragging a movie onto the Clips grid shows a black cell.".into();
+                continue;
+            }
+            if name == "clipsound" {
+                self.state.audio.use_clips();
+                println!("QUICK clipsound: analysing the clip mix");
                 continue;
             }
             if name == "transfx" {

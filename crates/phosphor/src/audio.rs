@@ -166,6 +166,8 @@ mod native {
         last_update: Option<web_time::Instant>,
         /// Analyse samples pushed from the network session instead of a device.
         network: bool,
+        /// Analysing the sound Phosphor plays (movie clips) instead of an input device.
+        clips: bool,
         pub beats: BeatTracker,
         /// LTC (audio timecode) on the first two channels, decoded only while `ltc_on`.
         ltc: Arc<Mutex<Ltc>>,
@@ -202,6 +204,7 @@ mod native {
                 spectrum: vec![0.0; SPECTRUM_BARS],
                 last_update: None,
                 network: false,
+                clips: false,
                 beats: BeatTracker::default(),
                 ltc: Arc::new(Mutex::new(Ltc::new(48_000))),
                 ltc_on: Default::default(),
@@ -236,11 +239,48 @@ mod native {
             self.network
         }
 
+        pub fn is_open_or_clips(&self) -> bool {
+            self.is_open() || self.clips
+        }
+
+        /// One line for the bench: where samples come from and how many are queued.
+        pub fn debug_line(&self) -> String {
+            let n = self.ring.lock().map(|q| q.len()).unwrap_or(0);
+            format!("source={} ring={n} rate={} level={:.3}", self.current.as_deref().unwrap_or("default input"), self.sample_rate, self.analysis.level)
+        }
+
         /// Switches analysis to audio arriving from session viewers.
         pub fn use_network(&mut self) {
             self.close();
             self.network = true;
             self.current = Some("Session viewers".into());
+        }
+
+        /// Switches analysis to the sound Phosphor itself plays (movie clips).
+        pub fn use_clips(&mut self) {
+            self.close();
+            self.clips = true;
+            self.current = Some("Clip sound".into());
+        }
+
+        pub fn is_clips(&self) -> bool {
+            self.clips
+        }
+
+        /// Feeds the clip mix (mono at `rate` Hz) into the analyser.
+        pub fn push_clips(&mut self, samples: &[f32], rate: u32) {
+            if !self.clips || samples.is_empty() {
+                return;
+            }
+            if rate > 0 && rate != self.sample_rate {
+                self.sample_rate = rate;
+                self.beats = BeatTracker::default();
+            }
+            let mut q = self.ring.lock().unwrap();
+            q.extend(samples.iter().copied());
+            while q.len() > FFT_SIZE * 2 {
+                q.pop_front();
+            }
         }
 
         /// Feeds viewer audio (mono, 48 kHz) into the analyser.
@@ -337,6 +377,7 @@ mod native {
         pub fn close(&mut self) {
             self.stream = None;
             self.network = false;
+            self.clips = false;
             self.ring.lock().unwrap().clear();
             self.analysis = AudioAnalysis::default();
             self.spectrum.iter_mut().for_each(|v| *v = 0.0);
@@ -345,7 +386,7 @@ mod native {
 
         /// Analyses the newest samples; call once per frame.
         pub fn update(&mut self) -> AudioAnalysis {
-            if self.stream.is_none() && !self.network {
+            if self.stream.is_none() && !self.network && !self.clips {
                 return AudioAnalysis::default();
             }
             let now = web_time::Instant::now();
@@ -438,6 +479,14 @@ mod stub {
             Err("Audio input in the browser is coming with network sessions".into())
         }
         pub fn close(&mut self) {}
+        pub fn is_clips(&self) -> bool {
+            false
+        }
+        pub fn debug_line(&self) -> String {
+            String::new()
+        }
+        pub fn use_clips(&mut self) {}
+        pub fn push_clips(&mut self, _samples: &[f32], _rate: u32) {}
         pub fn is_network(&self) -> bool {
             false
         }
