@@ -106,9 +106,12 @@ impl BeatTracker {
             .collect();
         periods.sort_by(|a, b| a.total_cmp(b));
         let median = periods[periods.len() / 2];
-        let agree = periods.iter().filter(|p| ((**p - median) / median).abs() < 0.06).count();
-        self.confidence = agree as f32 / periods.len() as f32;
-        self.bpm = 60.0 / median;
+        let agreeing: Vec<f32> = periods.iter().copied().filter(|p| ((p - median) / median).abs() < 0.06).collect();
+        self.confidence = agreeing.len() as f32 / periods.len() as f32;
+        // The mean of the agreeing gaps, not the median: beat times are quantised to frames (16.7 ms at 60 fps),
+        // so the median lands on a whole number of frames (128 BPM reads as 128.6); the mean averages that out.
+        let mean = agreeing.iter().sum::<f32>() / agreeing.len().max(1) as f32;
+        self.bpm = 60.0 / mean.max(0.1);
     }
 
     pub fn reset(&mut self) {
