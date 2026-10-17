@@ -161,6 +161,18 @@ impl PhosphorApp {
                 self.state.bug.text = "Example: dragging a movie onto the Clips grid shows a black cell.".into();
                 continue;
             }
+            if name == "transfx" {
+                // A 4 s "Through an effect" (pixelate) fade from the first layer's source to a tunnel.
+                let t = now as f32;
+                if let Some(l) = self.state.comp.layers.first_mut() {
+                    l.transition_kind = phosphor_engine::TransitionKind::Effect;
+                    l.transition_effect = "pixelate".into();
+                    l.start_transition(t, 4.0);
+                    l.set_generator("tunnel");
+                }
+                println!("QUICK transfx: pixelate fade started");
+                continue;
+            }
             if name == "play" {
                 // Audience play on with short turns and a rest, for checking the play page in a browser.
                 self.state.comp.play.enabled = true;

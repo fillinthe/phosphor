@@ -22,6 +22,12 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
         if style != comp.launch.style {
             comp.set_launch_style(style);
         }
+        if comp.launch.style == phosphor_engine::TransitionKind::Effect {
+            let mut effect = comp.launch.transition_effect.clone();
+            if super::inspector::transition_effect_combo(ui, "launch_fx", &mut effect) {
+                comp.set_transition_effect(&effect);
+            }
+        }
         if comp.layers.iter().any(|l| l.transition_kind != comp.launch.style) {
             hint(ui, "mixed").on_hover_text("Some layers use their own fade style (Inspector)");
         }

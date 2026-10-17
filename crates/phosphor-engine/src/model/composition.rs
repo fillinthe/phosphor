@@ -184,6 +184,14 @@ impl Composition {
         }
     }
 
+    /// The effect every layer's "Through an effect" fade uses.
+    pub fn set_transition_effect(&mut self, effect: &str) {
+        self.launch.transition_effect = effect.to_string();
+        for l in &mut self.layers {
+            l.transition_effect = effect.to_string();
+        }
+    }
+
     pub fn layer_mut(&mut self, id: u64) -> Option<&mut LayerState> {
         self.layers.iter_mut().find(|l| l.id == id)
     }
