@@ -420,6 +420,16 @@ impl MediaManager {
     }
 
     /// The layer's movie has a sound track.
+    /// Any movie playing with an audio track (the analyser can listen to the clips).
+    pub fn any_sound(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            return self.players.values().any(|p| p.has_sound());
+        }
+        #[cfg(target_arch = "wasm32")]
+        false
+    }
+
     pub fn has_sound(&self, layer: u64) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
         {
