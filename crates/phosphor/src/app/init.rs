@@ -290,6 +290,9 @@ impl PhosphorApp {
             if app.bench.as_ref().is_some_and(|b| b.cfg.hap) {
                 app.state.stream.settings.file_format = crate::stream::FileFormat::Hap;
             }
+            if app.bench.as_ref().is_some_and(|b| b.cfg.hevc) {
+                app.state.stream.settings.file_format = crate::stream::FileFormat::Hevc;
+            }
             let (w, h) = (app.state.comp.width, app.state.comp.height);
             if let Err(e) = app.state.stream.start(w, h, now) {
                 eprintln!("record: {e}");

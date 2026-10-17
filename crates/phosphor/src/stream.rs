@@ -44,16 +44,19 @@ pub enum FileFormat {
     Hap,
     /// Hap Alpha (DXT5): keeps transparency.
     HapAlpha,
+    /// HEVC (H.265) through the Mac's encoder: about half the size of H.264 at the same quality.
+    Hevc,
 }
 
 impl FileFormat {
-    pub const ALL: [FileFormat; 3] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha];
+    pub const ALL: [FileFormat; 4] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha, FileFormat::Hevc];
 
     pub fn name(self) -> &'static str {
         match self {
             FileFormat::Auto => "H.264 (.mp4) / ProRes (.mov)",
             FileFormat::Hap => "Hap (.mov)",
             FileFormat::HapAlpha => "Hap Alpha (.mov)",
+            FileFormat::Hevc => "HEVC (.mp4, smaller files)",
         }
     }
 }
@@ -103,7 +106,11 @@ impl StreamSettings {
     /// Where a recording to a file ends up (Hap always goes in a .mov).
     pub fn recorded_path(&self) -> String {
         let p = self.file_path.trim();
-        if self.file_format == FileFormat::Auto { p.to_string() } else { std::path::Path::new(p).with_extension("mov").to_string_lossy().to_string() }
+        match self.file_format {
+            FileFormat::Auto => p.to_string(),
+            FileFormat::Hevc => std::path::Path::new(p).with_extension("mp4").to_string_lossy().to_string(),
+            _ => std::path::Path::new(p).with_extension("mov").to_string_lossy().to_string(),
+        }
     }
 
     fn target(&self) -> (Vec<String>, String) {
@@ -324,7 +331,7 @@ impl Streamer {
     #[cfg(not(target_arch = "wasm32"))]
     fn start_native(&mut self, width: u32, height: u32, now: f64) -> Result<(), String> {
         self.close();
-        if self.settings.destination == Destination::File && self.settings.file_format != FileFormat::Auto {
+        if self.settings.destination == Destination::File && matches!(self.settings.file_format, FileFormat::Hap | FileFormat::HapAlpha) {
             return self.start_hap(width, height, now);
         }
         let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found. Install it with: brew install ffmpeg")?;
@@ -355,7 +362,14 @@ impl Streamer {
             args.extend(["-vf".into(), format!("scale=-2:{}", s.height)]);
         }
         let file_mov = s.destination == Destination::File && target.to_lowercase().ends_with(".mov");
-        if file_mov {
+        if s.destination == Destination::File && s.file_format == FileFormat::Hevc {
+            // HEVC holds the same quality at about 60 % of H.264's bitrate: that's where the smaller file comes from.
+            let kbps = (s.kbps as f32 * 0.6) as u32;
+            args.extend(
+                ["-c:v", "hevc_videotoolbox", "-b:v", &format!("{kbps}k"), "-maxrate", &format!("{kbps}k"), "-tag:v", "hvc1", "-g", &(fps * 2).to_string(), "-pix_fmt", "yuv420p"]
+                    .map(String::from),
+            );
+        } else if file_mov {
             args.extend(["-c:v", "prores_videotoolbox", "-profile:v", "2", "-pix_fmt", "yuv422p10le"].map(String::from));
         } else {
             args.extend(
