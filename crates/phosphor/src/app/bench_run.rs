@@ -159,6 +159,14 @@ impl PhosphorApp {
                 self.state.bug.text = "Example: dragging a movie onto the Clips grid shows a black cell.".into();
                 continue;
             }
+            if name == "play" {
+                // Audience play on with short turns and a rest, for checking the play page in a browser.
+                self.state.comp.play.enabled = true;
+                self.state.comp.play.turn_secs = 10;
+                self.state.comp.play.rest_secs = 15;
+                println!("QUICK play: on, 10 s turns, 15 s rest");
+                continue;
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if name == "qr" {
                 // Audience play: put the QR code layer on the output.

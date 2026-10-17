@@ -109,6 +109,8 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         ui.label("Each turn");
         guarded!(ui, play.turn_secs, egui::DragValue::new(&mut play.turn_secs).range(10..=900).suffix(" s"));
+        ui.label("Rest after");
+        guarded!(ui, play.rest_secs, egui::DragValue::new(&mut play.rest_secs).range(0..=600).suffix(" s")).on_hover_text("How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.");
         ui.label("Players at once");
         guarded!(ui, play.players, egui::DragValue::new(&mut play.players).range(1..=8)).on_hover_text("More than one: each player gets their own Surface page (page 1, 2, …) unless you pick one page for all");
         ui.checkbox(&mut play.columns, "Clip columns");
@@ -174,7 +176,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             if let Some(who) = skip {
-                st.skip_turn(Some(&who));
+                st.skip_turn(Some(&who), now);
             }
             ui.monospace(format!("{waiting} waiting"));
             let _ = on_output;

@@ -20,6 +20,8 @@ pub struct Jam {
     served: Vec<String>,
     /// When each identity first showed up: the line is in arrival order even across reconnects.
     seen: std::collections::HashMap<String, f64>,
+    /// When each identity's last turn ended (they sit out `AudiencePlay::rest_secs` from then).
+    rested: std::collections::HashMap<String, f64>,
 }
 
 /// One person at the controls.
@@ -95,8 +97,13 @@ impl State {
         }
         let guests = self.guests(now);
         let turn = self.comp.play.turn_secs.max(5) as f64;
+        let rest = self.comp.play.rest_secs as f64;
         let slots = self.player_slots();
+        self.jam.rested.retain(|_, t| now - *t < rest);
         let playing: Vec<String> = self.jam.current.iter().map(|p| p.who.clone()).collect();
+        // People who could take the controls now: not playing, not resting after their last turn.
+        let rested = &self.jam.rested;
+        let guests: Vec<Guest> = guests.into_iter().filter(|g| !rested.contains_key(&g.who) || playing.contains(&g.who)).collect();
         let waiting = guests.iter().filter(|g| !playing.contains(&g.who)).count();
         // Turns end when the clock runs out (only while someone waits) or the phone has been gone a while.
         let mut ended: Vec<String> = Vec::new();
@@ -113,17 +120,23 @@ impl State {
                 }
                 (false, Some(t)) => now - t > GRACE,
             };
-            if waiting == 0 {
+            // With no rest and nobody waiting, the clock doesn't run.
+            if waiting == 0 && rest <= 0.0 {
                 p.started = now;
             }
-            if gone || (now - p.started >= turn && waiting > 0) {
+            if gone || (now - p.started >= turn && (waiting > 0 || rest > 0.0)) {
                 ended.push(p.who.clone());
             }
         }
         for who in &ended {
             self.jam.current.retain(|p| p.who != *who);
             self.jam.served.push(who.clone());
+            if rest > 0.0 {
+                self.jam.rested.insert(who.clone(), now);
+            }
         }
+        // Someone whose turn just ended rests before they can be picked again (even this same frame).
+        let guests: Vec<Guest> = guests.into_iter().filter(|g| rest <= 0.0 || !ended.contains(&g.who)).collect();
         // Fewer places than before (setting lowered): the newest players step back into the line.
         while self.jam.current.len() > slots {
             if let Some(p) = self.jam.current.pop() {
@@ -193,18 +206,31 @@ impl State {
     }
 
     /// Host: end one player's turn now (or everyone's with `None`); the next people get the controls.
-    pub fn skip_turn(&mut self, who: Option<&str>) {
+    pub fn skip_turn(&mut self, who: Option<&str>, now: f64) {
         let ended: Vec<String> = self.jam.current.iter().filter(|p| who.is_none_or(|w| p.who == w)).map(|p| p.who.clone()).collect();
         for w in ended {
             self.jam.current.retain(|p| p.who != w);
+            if self.comp.play.rest_secs > 0 {
+                self.jam.rested.insert(w.clone(), now);
+            }
             self.jam.served.push(w);
         }
+    }
+
+    /// Seats sitting out after a turn, with the seconds until they may play again.
+    pub fn resting(&mut self, now: f64) -> Vec<(u64, f64)> {
+        let rest = self.comp.play.rest_secs as f64;
+        let guests = self.guests(now);
+        let rested = &self.jam.rested;
+        guests.iter().filter_map(|g| rested.get(&g.who).map(|t| (g.seat, (rest - (now - t)).max(0.0)))).filter(|(_, left)| *left > 0.0).collect()
     }
 
     /// Guests not at the controls, in the order they'll get them (seat ids).
     pub fn play_queue(&mut self, now: f64) -> Vec<u64> {
         let guests = self.guests(now);
         let playing: Vec<String> = self.jam.current.iter().map(|p| p.who.clone()).collect();
+        let resting: Vec<u64> = self.resting(now).into_iter().map(|(seat, _)| seat).collect();
+        let guests: Vec<Guest> = guests.into_iter().filter(|g| !resting.contains(&g.seat)).collect();
         let later = |served: bool| {
             guests.iter().filter(|g| !playing.contains(&g.who) && self.jam.served.contains(&g.who) == served).map(|g| g.seat).collect::<Vec<_>>()
         };
@@ -217,7 +243,9 @@ impl State {
     pub fn players(&mut self, now: f64) -> Vec<PlayerStatus> {
         let guests = self.guests(now);
         let playing: Vec<String> = self.jam.current.iter().map(|p| p.who.clone()).collect();
-        let waiting = guests.iter().filter(|g| !playing.contains(&g.who)).count();
+        let resting: Vec<u64> = self.resting(now).into_iter().map(|(seat, _)| seat).collect();
+        let waiting = guests.iter().filter(|g| !playing.contains(&g.who) && !resting.contains(&g.seat)).count();
+        let clock_runs = waiting > 0 || self.comp.play.rest_secs > 0;
         let turn = self.comp.play.turn_secs.max(5) as f64;
         let peers = self.net.peers();
         let mut out = Vec::new();
@@ -228,7 +256,7 @@ impl State {
                 .find(|x| x.id == g.seat)
                 .map(|x| if x.name.is_empty() { x.device.clone() } else { x.name.clone() })
                 .unwrap_or_else(|| format!("#{}", g.seat));
-            let left = (waiting > 0).then(|| (turn - (now - p.started)).max(0.0));
+            let left = clock_runs.then(|| (turn - (now - p.started)).max(0.0));
             out.push(PlayerStatus { who: p.who.clone(), seat: g.seat, label, page: self.slot_page(p.slot), left });
         }
         out
@@ -238,6 +266,7 @@ impl State {
     pub fn play_json(&mut self, now: f64) -> Value {
         let players = self.players(now);
         let queue = self.play_queue(now);
+        let resting: Vec<Value> = self.resting(now).into_iter().map(|(seat, left)| json!([seat, left])).collect();
         let soonest = players.iter().filter_map(|p| p.left).fold(None, |m: Option<f64>, l| Some(m.map_or(l, |m| m.min(l))));
         let p = &self.comp.play;
         let list: Vec<Value> = players.iter().map(|x| json!({"seat": x.seat, "page": x.page, "left": x.left})).collect();
@@ -249,6 +278,8 @@ impl State {
             "current": players.first().map(|x| x.seat),
             "left": soonest,
             "queue": queue,
+            "resting": resting,
+            "rest": p.rest_secs,
             "page": p.surface_page,
             "columns": if p.columns { self.comp.clip_columns } else { 0 },
             "surprise": p.surprise,

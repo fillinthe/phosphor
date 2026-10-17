@@ -178,3 +178,15 @@ void main() { gl_FragColor = IMG_NORM_PIXEL(inputImage, off); }\n";
     assert!(s.unsupported.as_deref().unwrap_or("").contains("geometry"));
 }
 
+
+#[test]
+fn curve_lut_is_identity_for_a_straight_default() {
+    let lut = curve_lut(&[0.0, 0.0, 0.5, 0.5, 1.0, 1.0], 256);
+    assert_eq!(lut.len(), 256 * 4);
+    assert_eq!(lut[0], 0);
+    assert_eq!(lut[255 * 4], 255);
+    assert!((lut[128 * 4] as i32 - 128).abs() <= 1);
+    // A bent curve passes through its control point.
+    let bent = curve_lut(&[0.0, 0.0, 0.5, 0.9, 1.0, 1.0], 256);
+    assert!((bent[128 * 4] as i32 - 230).abs() <= 2);
+}

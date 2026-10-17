@@ -20,8 +20,9 @@ pub struct Loaded {
     images: Vec<(usize, u32, u32, Vec<u8>)>,
 }
 
-/// Decodes the pictures an ISF shader imports (paths relative to the shader file); missing ones are skipped.
-fn load_images(shader_path: &std::path::Path, images: &[(usize, String)]) -> Vec<(usize, u32, u32, Vec<u8>)> {
+/// Decodes the pictures an ISF shader imports (paths relative to the shader file; missing ones are skipped)
+/// and bakes its `curve` inputs into 256×1 lookup pictures.
+fn load_images(shader_path: &std::path::Path, images: &[(usize, String)], curves: &[(usize, Vec<f32>)]) -> Vec<(usize, u32, u32, Vec<u8>)> {
     let dir = shader_path.parent().unwrap_or(std::path::Path::new("."));
     images
         .iter()
@@ -29,6 +30,7 @@ fn load_images(shader_path: &std::path::Path, images: &[(usize, String)]) -> Vec
             let img = image::open(dir.join(rel)).ok()?.to_rgba8();
             Some((*slot, img.width(), img.height(), img.into_raw()))
         })
+        .chain(curves.iter().map(|(slot, points)| (*slot, 256, 1, phosphor_isf::curve_lut(points, 256))))
         .collect()
 }
 
@@ -97,7 +99,7 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
                 put(o, format!("{name} X"), min[0], max[0], default[0]);
                 put(o + 1, format!("{name} Y"), min[1], max[1], default[1]);
             }
-            K::Image | K::Audio => {}
+            K::Image | K::Audio | K::Curve { .. } => {}
         }
     }
     slots.into_iter().enumerate().map(|(i, p)| p.unwrap_or(Param { name: leak(format!("p{i}")), min: 0.0, max: 1.0, default: 0.0 })).collect()
@@ -115,7 +117,7 @@ fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
             passes: vec![shaders::PlanPass::default()],
             buffers: sh.buffers.len(),
             vars: Vec::new(),
-            images: sh.images.iter().map(|(slot, _)| *slot).collect(),
+            images: sh.images.iter().map(|(slot, _)| *slot).chain(sh.curves.iter().map(|(slot, _)| *slot)).collect(),
         });
     }
     let index = |t: &Option<String>| t.as_ref().and_then(|t| sh.buffers.iter().position(|b| b == t));
@@ -127,7 +129,7 @@ fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
             .collect(),
         buffers: sh.buffers.len(),
         vars: sh.inputs.iter().filter_map(|i| Some((i.name.clone(), i.offset?))).collect(),
-        images: sh.images.iter().map(|(slot, _)| *slot).collect(),
+        images: sh.images.iter().map(|(slot, _)| *slot).chain(sh.curves.iter().map(|(slot, _)| *slot)).collect(),
     })
 }
 
@@ -179,7 +181,7 @@ impl IsfLibrary {
                                 if !sh.credit.is_empty() {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
-                                let images = load_images(&path, &sh.images);
+                                let images = load_images(&path, &sh.images, &sh.curves);
                                 Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, wgsl: sh.wgsl })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),

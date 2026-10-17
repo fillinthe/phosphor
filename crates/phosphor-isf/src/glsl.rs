@@ -380,7 +380,8 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
     // Multi-pass buffers: textures named like their TARGET, so IMG_PIXEL(name, …) samples them.
     let mut seen: Vec<&str> = Vec::new();
     let imported = header.imported.iter().map(|(n, _)| n.as_str());
-    for t in header.pass_specs.iter().filter_map(|p| p.target.as_deref()).chain(imported) {
+    let curves = inputs.iter().filter(|i| matches!(i.kind, IsfInputKind::Curve { .. })).map(|i| i.name.as_str());
+    for t in header.pass_specs.iter().filter_map(|p| p.target.as_deref()).chain(imported).chain(curves) {
         if !seen.contains(&t) && seen.len() < crate::MAX_BUFFERS {
             s.push_str(&format!("layout(binding={}) uniform texture2D {t};\n", crate::BUFFER_BINDING + seen.len()));
             s.push_str(&format!("#define _{t}_imgRect vec4(0.0, 0.0, vec2(textureSize({t}, 0)))\n"));

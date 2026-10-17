@@ -251,8 +251,9 @@ function renderPlay() {
   if (!p.on) st.textContent = 'Audience play is off right now. Keep watching the screen!';
   else if (mine) st.innerHTML = '<b>Your turn!</b> Everything below changes the visuals' + (endsAt == null ? '.' : ' until the clock runs out.');
   else {
+    const rest = (p.resting || []).find(r => r[0] === me);
     const i = (p.queue || []).indexOf(me);
-    const who = i < 0 ? 'Joining the line…' : i === 0 ? "<b>You're next.</b>" : `You're <b>${i + 1}</b> in line.`;
+    const who = rest ? `<b>Take a breather.</b> You can play again in <b>${Math.ceil(rest[1])} s</b>.` : i < 0 ? 'Joining the line…' : i === 0 ? "<b>You're next.</b>" : `You're <b>${i + 1}</b> in line.`;
     st.innerHTML = who + ((p.players || []).length ? (p.players.length > 1 ? ` ${p.players.length} people are playing now.` : ' Someone is playing now.') : '');
   }
   // The moment a turn ends: say thanks for a few seconds.

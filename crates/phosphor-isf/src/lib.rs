@@ -60,6 +60,9 @@ pub enum IsfInputKind {
     Audio,
     /// Momentary trigger: 1.0 on the frame it fires, else 0.0.
     Event,
+    /// MadMapper `curve`: control points as x, y pairs (0..1). Bound as a 1-D lookup picture the shader samples
+    /// with `IMG_NORM_PIXEL(name, vec2(x, 0.5)).r`; see `curve_lut`.
+    Curve { points: Vec<f32> },
 }
 
 /// One entry of the header's `INPUTS`.
@@ -80,7 +83,7 @@ impl IsfInput {
         match self.kind {
             IsfInputKind::Color { .. } => 4,
             IsfInputKind::Point2D { .. } => 2,
-            IsfInputKind::Image | IsfInputKind::Audio => 0,
+            IsfInputKind::Image | IsfInputKind::Audio | IsfInputKind::Curve { .. } => 0,
             _ => 1,
         }
     }
@@ -95,7 +98,7 @@ impl IsfInput {
             IsfInputKind::Color { default } => default.to_vec(),
             IsfInputKind::Point2D { default, .. } => default.to_vec(),
             IsfInputKind::Event => vec![0.0],
-            IsfInputKind::Image | IsfInputKind::Audio => Vec::new(),
+            IsfInputKind::Image | IsfInputKind::Audio | IsfInputKind::Curve { .. } => Vec::new(),
         }
     }
 }
@@ -120,6 +123,9 @@ pub struct IsfShader {
     /// `IMPORTED` pictures: (buffer index among `buffers`, file path relative to the shader). The app loads
     /// each file and binds it at that buffer slot; the shader samples it by name like any buffer.
     pub images: Vec<(usize, String)>,
+    /// `curve` inputs: (buffer index among `buffers`, control points). The app bakes each with `curve_lut`
+    /// and binds it at that buffer slot.
+    pub curves: Vec<(usize, Vec<f32>)>,
     /// WGSL fragment entry + helpers; empty when `unsupported` is set.
     pub wgsl: String,
     /// Name of the fragment entry function.
@@ -252,6 +258,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         pass_plan: header.pass_specs.clone(),
         buffers: buffer_names(&header.pass_specs),
         images: Vec::new(),
+        curves: Vec::new(),
         wgsl: String::new(),
         entry: entry.clone(),
         unsupported: None,
@@ -267,6 +274,15 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         if !shader.buffers.contains(name) {
             shader.images.push((shader.buffers.len(), path.clone()));
             shader.buffers.push(name.clone());
+        }
+    }
+    // Curves are pictures too: a 1-D lookup baked by the app.
+    for input in &shader.inputs {
+        if let IsfInputKind::Curve { points } = &input.kind
+            && !shader.buffers.contains(&input.name)
+        {
+            shader.curves.push((shader.buffers.len(), points.clone()));
+            shader.buffers.push(input.name.clone());
         }
     }
     if shader.buffers.len() > MAX_BUFFERS {
@@ -405,6 +421,35 @@ pub fn validate_wgsl(wgsl: &str) -> Result<(), String> {
         .validate(&module)
         .map(|_| ())
         .map_err(|e| e.emit_to_string(&src))
+}
+
+/// Bakes a `curve` input into `n` RGBA8 pixels (one row): a Catmull-Rom spline through the control points
+/// (x, y pairs, sorted by x), clamped to 0..1, value in every channel.
+pub fn curve_lut(points: &[f32], n: usize) -> Vec<u8> {
+    let mut pts: Vec<(f32, f32)> = points.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+    if pts.is_empty() {
+        pts = vec![(0.0, 0.0), (1.0, 1.0)];
+    }
+    pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let m = pts.len();
+    let at = |i: isize| pts[i.clamp(0, m as isize - 1) as usize];
+    let mut out = Vec::with_capacity(n * 4);
+    for k in 0..n {
+        let x = k as f32 / (n.max(2) - 1) as f32;
+        let y = if m == 1 {
+            pts[0].1
+        } else {
+            let i = pts.iter().rposition(|p| p.0 <= x).unwrap_or(0).min(m - 2) as isize;
+            let (p0, p1, p2, p3) = (at(i - 1), at(i), at(i + 1), at(i + 2));
+            let span = (p2.0 - p1.0).max(1e-6);
+            let t = ((x - p1.0) / span).clamp(0.0, 1.0);
+            let (t2, t3) = (t * t, t * t * t);
+            0.5 * ((2.0 * p1.1) + (-p0.1 + p2.1) * t + (2.0 * p0.1 - 5.0 * p1.1 + 4.0 * p2.1 - p3.1) * t2 + (-p0.1 + 3.0 * p1.1 - 3.0 * p2.1 + p3.1) * t3)
+        };
+        let v = (y.clamp(0.0, 1.0) * 255.0).round() as u8;
+        out.extend_from_slice(&[v, v, v, v]);
+    }
+    out
 }
 
 #[cfg(test)]
