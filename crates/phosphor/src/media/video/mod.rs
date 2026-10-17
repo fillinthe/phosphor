@@ -142,6 +142,18 @@ pub struct VideoPlayer {
     audio_only: bool,
 }
 
+/// Logs how long opening took when it drops (info level: `RUST_LOG=phosphor=info`).
+struct TimingLog {
+    name: String,
+    started: std::time::Instant,
+}
+
+impl Drop for TimingLog {
+    fn drop(&mut self) {
+        log::info!("{}: opened in {:.0} ms", self.name, self.started.elapsed().as_secs_f64() * 1000.0);
+    }
+}
+
 enum Msg {
     /// (seek generation, presentation time, media time, frame)
     Frame(u64, f64, f64, VideoFrame),
@@ -191,7 +203,9 @@ impl VideoPlayer {
     /// Opens the file and starts decoding in the background. Errors are human-readable (shown in the UI).
     pub fn open(path: &str) -> Result<Self, String> {
         init();
+        let started = std::time::Instant::now();
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
+        let _timing = TimingLog { name: name.clone(), started };
         let dec = match Decoder::open(path) {
             Ok(dec) => dec,
             Err(e) if e.contains("no video stream") => return Self::open_audio_only(path, &name),
