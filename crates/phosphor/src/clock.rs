@@ -294,15 +294,16 @@ impl Downbeat {
         for a in &mut self.accent {
             *a *= 0.93;
         }
-        self.accent[pos] += bass.max(0.0);
+        // Energy, not level: the meters are square-rooted, which would hide a clear accent.
+        self.accent[pos] += bass.max(0.0) * bass.max(0.0);
         self.seen += 1;
         self.since_shift += 1;
-        if self.seen < 8 || self.since_shift < 8 {
+        if self.seen < 16 || self.since_shift < 16 {
             return None;
         }
         let (best, strongest) = self.accent.iter().copied().enumerate().fold((0, 0.0f32), |m, (i, v)| if v > m.1 { (i, v) } else { m });
         let runner_up = self.accent.iter().copied().enumerate().filter(|(i, _)| *i != best).map(|(_, v)| v).fold(0.0f32, f32::max);
-        if best == 0 || strongest < runner_up * 1.3 + 1e-6 {
+        if best == 0 || strongest < runner_up * 1.4 + 1e-6 {
             return None;
         }
         // Beat `best` should become beat 0: moving the anchor forward by `best` beats renumbers it so.
@@ -322,7 +323,7 @@ mod downbeat_tests {
     fn accent_on_beat_three_moves_the_bar() {
         let mut d = Downbeat::default();
         let mut shift = None;
-        for i in 0..16 {
+        for i in 0..32 {
             let bass = if i % 4 == 2 { 1.0 } else { 0.3 };
             if let Some(s) = d.observe(i, bass) {
                 shift = Some(s);
@@ -332,7 +333,7 @@ mod downbeat_tests {
         assert_eq!(shift, Some(2));
         // With the bar moved, the clock now counts that accent as beat one: no further shifts.
         let mut again = None;
-        for i in 0..16 {
+        for i in 0..40 {
             let bass = if i % 4 == 0 { 1.0 } else { 0.3 };
             again = again.or(d.observe(i, bass));
         }
