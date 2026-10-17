@@ -398,7 +398,7 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
             (IsfInputKind::Long { .. } | IsfInputKind::Int { .. }, Some(o), _) => ("int", format!("int({})", param_expr(o, 1))),
             (IsfInputKind::Color { .. }, Some(o), _) => ("vec4", param_expr(o, 4)),
             (IsfInputKind::Point2D { .. }, Some(o), _) => ("vec2", param_expr(o, 2)),
-            (IsfInputKind::Image | IsfInputKind::Audio, _, Some(t)) => {
+            (IsfInputKind::Image | IsfInputKind::Audio { .. }, _, Some(t)) => {
                 s.push_str(&format!("#define {} phosphor_tex{t}\n", input.name));
                 // ISF's `_<name>_imgRect` (x, y, width, height of the picture in its texture): ours fill the texture.
                 s.push_str(&format!("#define _{}_imgRect vec4(0.0, 0.0, vec2(textureSize(phosphor_tex{t}, 0)))\n", input.name));

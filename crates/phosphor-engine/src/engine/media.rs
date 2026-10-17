@@ -42,6 +42,34 @@ impl Engine {
         self.plan_images.insert((entry, slot), target);
     }
 
+    /// This frame's audio for ISF `audio` / `audioFFT` inputs: `wave` samples (-1..1) and `fft` magnitudes
+    /// (0..1), each one row of pixels. Cheap: two tiny uploads.
+    pub fn set_audio(&mut self, wave: &[f32], fft: &[f32]) {
+        let device = &self.gpu.device;
+        let queue = &self.gpu.queue;
+        let mut upload = |slot: &mut Option<Target>, label: &'static str, data: &[f32], centred: bool| {
+            if data.is_empty() {
+                return;
+            }
+            let w = data.len() as u32;
+            if slot.as_ref().is_none_or(|t| t.width != w) {
+                *slot = Some(Target::new(device, label, w, 1));
+            }
+            let rgba: Vec<u8> = data
+                .iter()
+                .flat_map(|v| {
+                    let x = if centred { v * 0.5 + 0.5 } else { *v };
+                    let b = (x.clamp(0.0, 1.0) * 255.0) as u8;
+                    [b, b, b, 255]
+                })
+                .collect();
+            let t = slot.as_ref().unwrap();
+            queue.write_texture(t.texture.as_image_copy(), &rgba, wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 4), rows_per_image: None }, t.texture.size());
+        };
+        upload(&mut self.audio_wave, "audio wave", wave, true);
+        upload(&mut self.audio_fft, "audio fft", fft, false);
+    }
+
     /// A video frame's luma (R8) and chroma (RG8) planes as textures someone else made (zero-copy hardware
     /// video: the decoder's own memory). The caller keeps the memory alive while frames are in flight.
     pub fn set_layer_nv12_textures(&mut self, layer: u64, outgoing: bool, luma: wgpu::Texture, chroma: wgpu::Texture, full_range: bool) {

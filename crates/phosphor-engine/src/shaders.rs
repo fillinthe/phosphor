@@ -350,6 +350,36 @@ pub fn set_pass_plan(entry: &'static str, plan: PassPlan) {
     }
 }
 
+/// What an audio picture slot carries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AudioTexture {
+    /// One row of samples, 0.5 = silence (ISF `audio`).
+    Wave,
+    /// One row of magnitudes 0..1, low to high (ISF `audioFFT`).
+    Fft,
+}
+
+static AUDIO_SLOTS: std::sync::RwLock<Vec<(&'static str, std::sync::Arc<Vec<(usize, AudioTexture)>>)>> = std::sync::RwLock::new(Vec::new());
+
+/// Which of a shader's texture slots (1 or 2) take the live audio pictures.
+pub fn set_audio_slots(entry: &'static str, slots: Vec<(usize, AudioTexture)>) {
+    if let Ok(mut a) = AUDIO_SLOTS.write() {
+        a.retain(|(e, _)| *e != entry);
+        if !slots.is_empty() {
+            a.push((entry, std::sync::Arc::new(slots)));
+        }
+    }
+}
+
+pub fn audio_slots(entry: &str) -> Option<std::sync::Arc<Vec<(usize, AudioTexture)>>> {
+    AUDIO_SLOTS.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, s)| s.clone())
+}
+
+/// Any shader at all wants audio pictures (the app refreshes them each frame only then).
+pub fn any_audio_slots() -> bool {
+    AUDIO_SLOTS.read().is_ok_and(|a| !a.is_empty())
+}
+
 pub fn pass_plan(entry: &str) -> Option<std::sync::Arc<PassPlan>> {
     PLANS.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, p)| p.clone())
 }

@@ -26,6 +26,7 @@ impl Engine {
                 if !self.ensure_module(desc.entry) {
                     return None;
                 }
+                let (tex0, tex1, tex2) = self.audio_extra(desc.entry);
                 let device = &self.gpu.device;
                 let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
@@ -35,7 +36,7 @@ impl Engine {
                     let out = target.view.clone();
                     let params = resolve_params(desc, values, value_mods, mods);
                     let key = if outgoing { GENERATOR_OUT_KEY } else { GENERATOR_KEY };
-                    let blank = self.gpu.blank.clone();
+                    let blank = tex0.unwrap_or_else(|| self.gpu.blank.clone());
                     let view = self.run_plan(layer_id, key, desc.entry, &plan, &params, blank, out, (w, h), time, passes);
                     return Some(Frame::Rgb { view, w, h });
                 }
@@ -45,9 +46,9 @@ impl Engine {
                 passes.push(Pass {
                     entry: desc.entry,
                     target: target.view.clone(),
-                    tex0: self.gpu.blank.clone(),
-                    tex1: None,
-                    tex2: None,
+                    tex0: tex0.unwrap_or_else(|| self.gpu.blank.clone()),
+                    tex1,
+                    tex2,
                     uniforms: u, mesh: None, bufs: Vec::new() });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
@@ -86,6 +87,22 @@ impl Engine {
                 }
             }
         }
+    }
+
+    /// The audio pictures an ISF shader's texture slots 0, 1 and 2 want (None = nothing special there).
+    /// Generators without an input picture get their first audio input at slot 0.
+    fn audio_extra(&self, entry: &str) -> (Option<wgpu::TextureView>, Option<wgpu::TextureView>, Option<wgpu::TextureView>) {
+        let Some(slots) = shaders::audio_slots(entry) else { return (None, None, None) };
+        let pick = |slot: usize| {
+            slots.iter().find(|(s, _)| *s == slot).map(|(_, kind)| {
+                let t = match kind {
+                    shaders::AudioTexture::Wave => self.audio_wave.as_ref(),
+                    shaders::AudioTexture::Fft => self.audio_fft.as_ref(),
+                };
+                t.map_or_else(|| self.gpu.blank.clone(), |t| t.view.clone())
+            })
+        };
+        (pick(0), pick(1), pick(2))
     }
 
     /// Blends the outgoing source into the incoming one at the canvas size.
@@ -159,6 +176,7 @@ impl Engine {
     ) -> wgpu::TextureView {
         let device = self.gpu.device.clone();
         let blank = self.gpu.blank.clone();
+        let extra = self.audio_extra(entry);
         let frame = self.frame_index as f32;
         let n = plan.buffers.min(shaders::MAX_BUFFERS);
         let bufs = self.layers.entry(res_id).or_default().multipass.entry(key).or_default();
@@ -201,7 +219,8 @@ impl Engine {
             // PASSINDEX, FRAMEINDEX, TIMEDELTA (the reserved last vec4).
             u.p[15] = [k as f32, frame, 1.0 / 60.0, 0.0];
             result = target.clone();
-            passes.push(Pass { entry, target, tex0: input.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: views });
+            let (_, tex1, tex2) = extra.clone();
+            passes.push(Pass { entry, target, tex0: input.clone(), tex1, tex2, uniforms: u, mesh: None, bufs: views });
         }
         result
     }
@@ -308,6 +327,9 @@ impl Engine {
                     if k == last_index && entry == "fx_glow_add" {
                         tex1 = Some(dry.clone());
                     }
+                    let (_, a1, a2) = self.audio_extra(entry);
+                    tex1 = tex1.or(a1);
+                    tex2 = tex2.or(a2);
                     passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
                     input = target;
                     input_idx = next_idx;

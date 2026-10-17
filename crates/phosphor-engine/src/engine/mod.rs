@@ -178,6 +178,9 @@ pub struct Engine {
     capture: Capture,
     /// Pictures bound into multi-pass shaders' buffer slots (ISF `IMPORTED`): (entry, slot) → texture.
     plan_images: HashMap<(&'static str, usize), Target>,
+    /// Live audio pictures for ISF `audio` / `audioFFT` inputs (one row each), refreshed by the app.
+    audio_wave: Option<Target>,
+    audio_fft: Option<Target>,
     /// Readback ring for layer thumbnails (remote page); idle unless asked.
     thumb_capture: Capture,
     /// LED / DMX pixel sampling of the program.
@@ -216,6 +219,8 @@ impl Engine {
             bind_cache: Default::default(),
             capture: Capture::default(),
             plan_images: HashMap::new(),
+            audio_wave: None,
+            audio_fft: None,
             thumb_capture: Capture::default(),
             sampler: Default::default(),
             frame_index: 0,

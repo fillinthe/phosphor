@@ -264,7 +264,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] **Browser build runs** (WebGPU, Chrome): `cd crates/phosphor && trunk build --release --dist ../../dist`,
       then serve `dist/`. Same engine + UI; 9 MB wasm. No video/audio/MIDI in the browser yet
 - [ ] iPadOS / iOS (same engine + UI; touch-sized controls)
-- [ ] **Mac: File / Edit / View… only in the macOS menu bar** (owner, 2026-10-17): hide the in-window menu buttons on macOS, keep them for the browser build
+- [x] **Mac: File / Edit / View… only in the macOS menu bar** ✔ 2026-10-17 (in-window menus stay for the browser build)
 - [ ] Older macOS (11–13): test wgpu Metal backend; likely only small changes needed
 
 ### Engineering

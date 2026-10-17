@@ -185,10 +185,17 @@ impl PhosphorApp {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(theme::ACCENT));
                 let now = ui.ctx().input(|i| i.time);
-                let clicked = self.menu_bar(ui);
-                let ctx = ui.ctx().clone();
-                for a in clicked {
-                    self.run_action(&ctx, a, now);
+                // On the Mac the menus live in the macOS menu bar; the in-window copy is for the browser build.
+                #[cfg(target_os = "macos")]
+                let in_window = self.native_menu.is_none();
+                #[cfg(not(target_os = "macos"))]
+                let in_window = true;
+                if in_window {
+                    let clicked = self.menu_bar(ui);
+                    let ctx = ui.ctx().clone();
+                    for a in clicked {
+                        self.run_action(&ctx, a, now);
+                    }
                 }
                 ui.separator();
                 if ui.button(format!("{} Layer", icon::PLUS)).clicked() {

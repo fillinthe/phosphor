@@ -56,8 +56,9 @@ pub enum IsfInputKind {
     Color { default: [f32; 4] },
     Point2D { default: [f32; 2], min: [f32; 2], max: [f32; 2] },
     Image,
-    /// `audio` / `audioFFT`: bound as an image (waveform / spectrum texture).
-    Audio,
+    /// `audio` (waveform, one row of samples centred on 0.5) / `audioFFT` (spectrum, one row of magnitudes):
+    /// bound as a picture the app refreshes every frame from its audio analyser.
+    Audio { fft: bool },
     /// Momentary trigger: 1.0 on the frame it fires, else 0.0.
     Event,
     /// MadMapper `curve`: control points as x, y pairs (0..1). Bound as a 1-D lookup picture the shader samples
@@ -83,7 +84,7 @@ impl IsfInput {
         match self.kind {
             IsfInputKind::Color { .. } => 4,
             IsfInputKind::Point2D { .. } => 2,
-            IsfInputKind::Image | IsfInputKind::Audio | IsfInputKind::Curve { .. } => 0,
+            IsfInputKind::Image | IsfInputKind::Audio { .. } | IsfInputKind::Curve { .. } => 0,
             _ => 1,
         }
     }
@@ -98,7 +99,7 @@ impl IsfInput {
             IsfInputKind::Color { default } => default.to_vec(),
             IsfInputKind::Point2D { default, .. } => default.to_vec(),
             IsfInputKind::Event => vec![0.0],
-            IsfInputKind::Image | IsfInputKind::Audio | IsfInputKind::Curve { .. } => Vec::new(),
+            IsfInputKind::Image | IsfInputKind::Audio { .. } | IsfInputKind::Curve { .. } => Vec::new(),
         }
     }
 }
@@ -126,6 +127,8 @@ pub struct IsfShader {
     /// `curve` inputs: (buffer index among `buffers`, control points). The app bakes each with `curve_lut`
     /// and binds it at that buffer slot.
     pub curves: Vec<(usize, Vec<f32>)>,
+    /// `audio` / `audioFFT` inputs: (texture slot 1 or 2, spectrum?). The app binds its live audio pictures there.
+    pub audio_slots: Vec<(usize, bool)>,
     /// WGSL fragment entry + helpers; empty when `unsupported` is set.
     pub wgsl: String,
     /// Name of the fragment entry function.
@@ -200,7 +203,7 @@ fn layout_inputs(inputs: &mut [IsfInput], is_fx: bool) -> Option<String> {
     }
     for input in inputs.iter_mut() {
         match input.kind {
-            IsfInputKind::Image | IsfInputKind::Audio => {
+            IsfInputKind::Image | IsfInputKind::Audio { .. } => {
                 let slot = if input.name == "inputImage" {
                     0
                 } else {
@@ -259,6 +262,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         buffers: buffer_names(&header.pass_specs),
         images: Vec::new(),
         curves: Vec::new(),
+        audio_slots: Vec::new(),
         wgsl: String::new(),
         entry: entry.clone(),
         unsupported: None,
@@ -269,6 +273,14 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         unsupported.get_or_insert(reason);
     }
     shader.inputs = inputs;
+    shader.audio_slots = shader
+        .inputs
+        .iter()
+        .filter_map(|i| match (&i.kind, i.texture) {
+            (IsfInputKind::Audio { fft }, Some(t)) => Some((t, *fft)),
+            _ => None,
+        })
+        .collect();
     // Imported pictures take buffer slots after the pass buffers (same bindings, same IMG_* macros).
     for (name, path) in &header.imported {
         if !shader.buffers.contains(name) {

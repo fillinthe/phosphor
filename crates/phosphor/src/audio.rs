@@ -125,6 +125,10 @@ impl BeatTracker {
 
 pub const FFT_SIZE: usize = 2048;
 pub const SPECTRUM_BARS: usize = 32;
+/// Spectrum bins handed to shaders (ISF `audioFFT`).
+pub const FFT_BINS: usize = 256;
+/// Waveform samples handed to shaders (ISF `audio`).
+pub const WAVE_SAMPLES: usize = 512;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::AudioInput;
@@ -140,7 +144,7 @@ mod native {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use rustfft::{Fft, FftPlanner, num_complex::Complex};
 
-    use super::{AudioAnalysis, BeatTracker, FFT_SIZE, SPECTRUM_BARS};
+    use super::{AudioAnalysis, BeatTracker, FFT_SIZE, SPECTRUM_BARS, FFT_BINS, WAVE_SAMPLES};
 
     type Ring = Arc<Mutex<VecDeque<f32>>>;
 
@@ -163,6 +167,8 @@ mod native {
         scratch: Vec<Complex<f32>>,
         analysis: AudioAnalysis,
         spectrum: Vec<f32>,
+        /// Fine spectrum for shaders (ISF `audioFFT`): log-spaced bins 30 Hz–16 kHz, 0..1.
+        bins: Vec<f32>,
         last_update: Option<web_time::Instant>,
         /// Analyse samples pushed from the network session instead of a device.
         network: bool,
@@ -202,6 +208,7 @@ mod native {
                 scratch: vec![Complex::default(); FFT_SIZE],
                 analysis: AudioAnalysis::default(),
                 spectrum: vec![0.0; SPECTRUM_BARS],
+                bins: vec![0.0; FFT_BINS],
                 last_update: None,
                 network: false,
                 clips: false,
@@ -297,6 +304,18 @@ mod native {
 
         pub fn spectrum(&self) -> &[f32] {
             &self.spectrum
+        }
+
+        /// Fine spectrum for shaders (`FFT_BINS` values, 0..1).
+        pub fn bins(&self) -> &[f32] {
+            &self.bins
+        }
+
+        /// The latest samples for shaders (`WAVE_SAMPLES` values, -1..1, gain applied).
+        pub fn waveform(&self) -> Vec<f32> {
+            let step = (FFT_SIZE / WAVE_SAMPLES).max(1);
+            let g = self.gain;
+            self.raw.iter().step_by(step).take(WAVE_SAMPLES).map(|v| (v * g).clamp(-1.0, 1.0)).collect()
         }
 
         pub fn analysis(&self) -> AudioAnalysis {
@@ -426,6 +445,10 @@ mod native {
                 })
                 .collect();
 
+            for i in 0..FFT_BINS {
+                let f = |k: usize| 30.0 * (16_000.0f32 / 30.0).powf(k as f32 / FFT_BINS as f32);
+                self.bins[i] = shape(band(f(i), f(i + 1)));
+            }
             let env = self.envelope;
             let follow = |s: &mut f32, v: f32| env.follow(s, v, dt);
             follow(&mut self.analysis.level, targets[0]);
@@ -470,6 +493,12 @@ mod stub {
         }
         pub fn spectrum(&self) -> &[f32] {
             &[]
+        }
+        pub fn bins(&self) -> &[f32] {
+            &[]
+        }
+        pub fn waveform(&self) -> Vec<f32> {
+            Vec::new()
         }
         pub fn analysis(&self) -> AudioAnalysis {
             AudioAnalysis::default()
