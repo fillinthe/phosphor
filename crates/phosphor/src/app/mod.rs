@@ -32,6 +32,7 @@ use crate::theme;
 
 
 mod auto_show;
+mod welcome;
 mod autopilot;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod beat_match;
@@ -591,6 +592,8 @@ pub struct PhosphorApp {
     hidden_pacer: crate::pacing::FramePacer,
     /// UI passes so far (the bench reports UI fps next to engine fps).
     ui_frames: u64,
+    /// The first-launch card is showing.
+    welcome_open: bool,
     #[cfg(not(target_arch = "wasm32"))]
     heartbeat: crate::recovery::Heartbeat,
 }

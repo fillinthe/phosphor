@@ -9,6 +9,8 @@ one engine for macOS, iPadOS/iOS and the browser. Rust + wgpu (Metal natively, W
 - `crates/phosphor`: the app (dockable UI, output window, benchmark mode)
 - `docs/VDMX-REVIEW.md`: teardown of VDMX6 Plus · `ROADMAP.md`: evaluation + TODO list
 
+![Phosphor: layers, clips, effects and outputs in one window](docs/images/phosphor-main.jpg)
+
 Website: [phosphorfx.com](https://phosphorfx.com/) · [free VJ software for Mac](https://phosphorfx.com/free-vj-software-mac/) ·
 coming from [Resolume](https://phosphorfx.com/resolume-alternative/), [VDMX](https://phosphorfx.com/vdmx-alternative/) or
 [MadMapper](https://phosphorfx.com/madmapper-alternative/) · [feature comparison](https://phosphorfx.com/compare/)
