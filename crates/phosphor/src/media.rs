@@ -440,6 +440,9 @@ impl MediaManager {
             let s = p.stats();
             let (w, h) = p.size();
             let dur = p.duration().map(|d| format!(" · {d:.1}s")).unwrap_or_default();
+            if (w, h) == (0, 0) {
+                return Some(format!("sound only{dur}{}", if p.has_sound() { "" } else { " · no sound output" }));
+            }
             let decode = if s.hardware { "hardware decode" } else { "software decode" };
             let skipped = if s.frames_skipped > 0 { format!(" · {} skipped", s.frames_skipped) } else { String::new() };
             Some(format!("{} · {w}×{h}{dur} · {decode} · {} frames{skipped}", s.codec, s.frames_decoded))
