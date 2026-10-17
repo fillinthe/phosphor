@@ -76,6 +76,10 @@ struct PassBuffers {
     front: Vec<usize>,
 }
 
+/// Resource keys for the effect a "Through an effect" transition runs on the incoming / outgoing picture.
+const TRANSITION_IN: u64 = 1 << 62;
+const TRANSITION_OUT: u64 = 1 << 61;
+
 /// `multipass` keys for a layer's generator source (and its outgoing copy in transitions).
 const GENERATOR_KEY: u64 = u64::MAX;
 const GENERATOR_OUT_KEY: u64 = u64::MAX - 1;
@@ -388,7 +392,16 @@ impl Engine {
             };
             match &layer.transition {
                 Some(t) if t.progress(time) < 1.0 => {
-                    if let Some(out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, &mut passes) {
+                    if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, &mut passes) {
+                        // "Through an effect": both pictures run through the effect, strongest half-way.
+                        if t.kind == crate::model::TransitionKind::Effect
+                            && let Some(d) = crate::shaders::effect(&t.effect)
+                        {
+                            let p = t.progress(time);
+                            let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new() };
+                            frame = self.apply_effects(layer.id ^ TRANSITION_IN, std::slice::from_ref(&fx), frame, time, mods, &comp.layers, &mut passes);
+                            out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, &mut passes);
+                        }
                         frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), &mut passes);
                     }
                 }

@@ -157,10 +157,12 @@ pub enum TransitionKind {
     Darken,
     Difference,
     Overlay,
+    /// Both pictures pass through an effect (the layer's `transition_effect`) that peaks half-way, under a crossfade.
+    Effect,
 }
 
 impl TransitionKind {
-    pub const ALL: [TransitionKind; 11] = [
+    pub const ALL: [TransitionKind; 12] = [
         TransitionKind::Crossfade,
         TransitionKind::DipToBlack,
         TransitionKind::Wipe,
@@ -172,6 +174,7 @@ impl TransitionKind {
         TransitionKind::Darken,
         TransitionKind::Difference,
         TransitionKind::Overlay,
+        TransitionKind::Effect,
     ];
 
     pub fn name(self) -> &'static str {
@@ -187,6 +190,7 @@ impl TransitionKind {
             TransitionKind::Darken => "Darken",
             TransitionKind::Difference => "Difference",
             TransitionKind::Overlay => "Overlay",
+            TransitionKind::Effect => "Through an effect",
         }
     }
 
@@ -207,7 +211,7 @@ impl TransitionKind {
 
     /// `fs_crossfade` mode: 0 crossfade, 1 dip, 2 wipe, 3 blend (mode in p[1].x).
     pub(crate) fn shader_index(self) -> u32 {
-        if self.blend().is_some() { 3 } else { self.index() as u32 }
+        if self.blend().is_some() || self == TransitionKind::Effect { if self == TransitionKind::Effect { 0 } else { 3 } } else { self.index() as u32 }
     }
 }
 
@@ -220,6 +224,8 @@ pub struct Transition {
     pub start: f32,
     pub duration: f32,
     pub kind: TransitionKind,
+    /// Effect id for `TransitionKind::Effect` (empty = plain crossfade).
+    pub effect: String,
 }
 
 impl Transition {
@@ -282,7 +288,7 @@ impl RenderRate {
 }
 
 /// How clicking/triggering media puts it on a layer: cut or fade, now or on the beat/bar.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LaunchSettings {
     pub fade: bool,
@@ -292,11 +298,13 @@ pub struct LaunchSettings {
     pub style: TransitionKind,
     /// Scan every movie that lands in the grid for its visual beat and lock it to the tempo (app: Match the beat).
     pub auto_beat_match: bool,
+    /// Effect the "Through an effect" fade style uses (effect id); set from the launch bar it goes to every layer.
+    pub transition_effect: String,
 }
 
 impl Default for LaunchSettings {
     fn default() -> Self {
-        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: false }
+        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: false, transition_effect: "zoom_blur".into() }
     }
 }
 

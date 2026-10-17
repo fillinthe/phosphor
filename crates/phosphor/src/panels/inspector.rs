@@ -115,6 +115,9 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         ui.horizontal(|ui| {
             ui.label(RichText::new("Fade style").strong());
             choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
+            if layer.transition_kind == phosphor_engine::TransitionKind::Effect {
+                transition_effect_combo(ui, ("trans_fx", layer.id), &mut layer.transition_effect);
+            }
             hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
         });
         ui.separator();
@@ -305,4 +308,19 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     value_bubble(ui, &outline, if style.outline > 0.0 { format!("{:.0}%", style.outline * 100.0) } else { "off".into() });
     guarded!(ui, style.line_spacing, Slider::new(&mut style.line_spacing, 0.6..=2.0).text("Line spacing").fixed_decimals(2));
     hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
+}
+
+/// Picks the effect a "Through an effect" fade runs both pictures through. Returns true when it changed.
+pub(crate) fn transition_effect_combo(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, effect: &mut String) -> bool {
+    let current = phosphor_engine::shaders::effect(effect).map(|d| d.name).unwrap_or("Pick an effect");
+    let mut changed = false;
+    egui::ComboBox::from_id_salt(id).selected_text(current).width(130.0).show_ui(ui, |ui| {
+        for d in phosphor_engine::shaders::all_effects() {
+            if ui.selectable_label(d.id == effect.as_str(), d.name).clicked() {
+                *effect = d.id.to_string();
+                changed = true;
+            }
+        }
+    });
+    changed
 }

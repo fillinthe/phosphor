@@ -18,6 +18,10 @@ pub struct EffectState {
     pub mods: Vec<ParamMod>,
 }
 
+fn default_transition_effect() -> String {
+    "zoom_blur".into()
+}
+
 fn full_mix() -> f32 {
     1.0
 }
@@ -175,6 +179,9 @@ pub struct LayerState {
     pub clips: Vec<Clip>,
     pub transition_secs: f32,
     pub transition_kind: TransitionKind,
+    /// Effect for the "Through an effect" fade style (effect id).
+    #[serde(default = "default_transition_effect")]
+    pub transition_effect: String,
     /// Plays the next / previous / a random clip by itself.
     pub autopilot: Autopilot,
     /// Autopilot moves on after this many beats (0 = when the clip ends).
@@ -252,6 +259,7 @@ impl Default for LayerState {
             clips: Vec::new(),
             transition_secs: 0.5,
             transition_kind: TransitionKind::Crossfade,
+            transition_effect: default_transition_effect(),
             autopilot: Autopilot::Off,
             autopilot_beats: 0.0,
             flash_return: None,
@@ -296,6 +304,7 @@ impl LayerState {
                 start: now,
                 duration: secs,
                 kind: self.transition_kind,
+                effect: self.transition_effect.clone(),
             });
         } else {
             self.transition = None;
