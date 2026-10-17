@@ -30,6 +30,84 @@ pub struct Surface {
     pub color: crate::ColorGrade,
     /// Cut to an ellipse or triangle inside the quad (follows perspective and mesh warp).
     pub shape: SliceShape,
+    /// A line slice: the picture stretched along a polyline with a width (MadMapper's Line), for outlines,
+    /// edges and LED-like strips on architecture. When set, the corners are not used.
+    #[serde(default)]
+    pub line: Option<Line>,
+}
+
+/// A polyline with a width: the picture's horizontal axis runs along it, the vertical across it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Line {
+    /// Output space 0..1.
+    pub points: Vec<[f32; 2]>,
+    /// Width as a fraction of the output height.
+    pub width: f32,
+}
+
+impl Line {
+    /// Triangles (x, y, s, t) for `fs_mesh`: a strip of quads along the polyline, joined with the bisector at
+    /// each inner point so the strip doesn't gap or overlap at corners. `aspect` = output width / height.
+    pub fn triangles(&self, aspect: f32) -> Vec<[f32; 4]> {
+        let pts = &self.points;
+        if pts.len() < 2 {
+            return Vec::new();
+        }
+        let ax = aspect.max(0.1);
+        // Work in "square" space (x scaled by aspect) so the width is the same in both directions.
+        let sq: Vec<[f32; 2]> = pts.iter().map(|p| [p[0] * ax, p[1]]).collect();
+        let mut len = vec![0.0f32];
+        for w in sq.windows(2) {
+            let d = ((w[1][0] - w[0][0]).powi(2) + (w[1][1] - w[0][1]).powi(2)).sqrt();
+            len.push(len.last().unwrap() + d);
+        }
+        let total = (*len.last().unwrap()).max(1e-6);
+        let half = self.width.max(0.001) * 0.5;
+        // Offset direction at each point: the normal of the segment (ends) or the bisector (inner points).
+        let normal = |a: [f32; 2], b: [f32; 2]| -> [f32; 2] {
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let l = (dx * dx + dy * dy).sqrt().max(1e-6);
+            [-dy / l, dx / l]
+        };
+        let n = sq.len();
+        let mut edges: Vec<([f32; 2], [f32; 2])> = Vec::with_capacity(n);
+        for i in 0..n {
+            let dir = if i == 0 {
+                normal(sq[0], sq[1])
+            } else if i == n - 1 {
+                normal(sq[n - 2], sq[n - 1])
+            } else {
+                let (n1, n2) = (normal(sq[i - 1], sq[i]), normal(sq[i], sq[i + 1]));
+                let m = [n1[0] + n2[0], n1[1] + n2[1]];
+                let ml = (m[0] * m[0] + m[1] * m[1]).sqrt();
+                if ml < 1e-4 {
+                    n2
+                } else {
+                    // Miter length, capped so sharp corners don't spike.
+                    let cos_half = (m[0] * n1[0] + m[1] * n1[1]) / ml;
+                    let k = (1.0 / cos_half.max(0.35)).min(3.0);
+                    [m[0] / ml * k, m[1] / ml * k]
+                }
+            };
+            let p = sq[i];
+            let left = [(p[0] + dir[0] * half) / ax, p[1] + dir[1] * half];
+            let right = [(p[0] - dir[0] * half) / ax, p[1] - dir[1] * half];
+            edges.push((left, right));
+        }
+        let mut out = Vec::with_capacity((n - 1) * 6);
+        for i in 0..n - 1 {
+            let (s0, s1) = (len[i] / total, len[i + 1] / total);
+            let (l0, r0) = edges[i];
+            let (l1, r1) = edges[i + 1];
+            out.push([l0[0], l0[1], s0, 0.0]);
+            out.push([r0[0], r0[1], s0, 1.0]);
+            out.push([l1[0], l1[1], s1, 0.0]);
+            out.push([r0[0], r0[1], s0, 1.0]);
+            out.push([r1[0], r1[1], s1, 1.0]);
+            out.push([l1[0], l1[1], s1, 0.0]);
+        }
+        out
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -313,6 +391,7 @@ impl Default for Surface {
             mesh: None,
             color: crate::ColorGrade::default(),
             shape: SliceShape::Rectangle,
+            line: None,
         }
     }
 }
@@ -330,14 +409,34 @@ impl Surface {
     }
 
     pub fn center(&self) -> [f32; 2] {
+        if let Some(l) = &self.line
+            && !l.points.is_empty()
+        {
+            let n = l.points.len() as f32;
+            return l.points.iter().fold([0.0, 0.0], |a, p| [a[0] + p[0] / n, a[1] + p[1] / n]);
+        }
         let c = &self.corners;
         [(c[0][0] + c[1][0] + c[2][0] + c[3][0]) * 0.25, (c[0][1] + c[1][1] + c[2][1] + c[3][1]) * 0.25]
     }
 
     pub fn translate(&mut self, dx: f32, dy: f32) {
-        for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())) {
+        for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())).chain(self.line.iter_mut().flat_map(|l| l.points.iter_mut())) {
             c[0] += dx;
             c[1] += dy;
+        }
+    }
+
+    /// Turns the line slice on (a line along the top edge of the current quad) or off.
+    pub fn set_line(&mut self, on: bool) {
+        if on {
+            if self.line.is_none() {
+                let c = self.corners;
+                let mid = |a: [f32; 2], b: [f32; 2]| [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+                self.line = Some(Line { points: vec![mid(c[0], c[3]), mid(c[1], c[2])], width: 0.06 });
+                self.mesh = None;
+            }
+        } else {
+            self.line = None;
         }
     }
 
@@ -562,5 +661,30 @@ mod feather_tests {
         assert!(t.iter().filter(|v| v[2] == 0.0).all(|v| v[0] < 0.4 || v[0] > 0.6 || v[1] < 0.4 || v[1] > 0.6));
         let inv = Mask { feather: 0.04, invert: true, ..Default::default() };
         assert!(inv.triangles().iter().filter(|v| v[2] == 0.0).all(|v| v[0] > 0.4 && v[0] < 0.6 && v[1] > 0.4 && v[1] < 0.6));
+    }
+}
+
+#[cfg(test)]
+mod line_tests {
+    use super::Line;
+
+    #[test]
+    fn a_line_becomes_a_strip_with_texture_along_it() {
+        let l = Line { points: vec![[0.1, 0.5], [0.5, 0.5], [0.9, 0.5]], width: 0.1 };
+        let t = l.triangles(1.0);
+        assert_eq!(t.len(), 12, "two segments, two triangles each");
+        // s runs 0 → 1 along the line, t is 0 or 1 across it.
+        assert!(t.iter().all(|v| (0.0..=1.0).contains(&v[2]) && (v[3] == 0.0 || v[3] == 1.0)));
+        assert!(t.iter().any(|v| v[2] == 0.0) && t.iter().any(|v| (v[2] - 1.0).abs() < 1e-6));
+        // The strip is the width tall, centred on the line.
+        let ys: Vec<f32> = t.iter().map(|v| v[1]).collect();
+        let (lo, hi) = (ys.iter().cloned().fold(1.0, f32::min), ys.iter().cloned().fold(0.0, f32::max));
+        assert!((lo - 0.45).abs() < 1e-5 && (hi - 0.55).abs() < 1e-5, "{lo} {hi}");
+        // A wider output: the width stays a fraction of the height, so x offsets shrink by the aspect.
+        let v = Line { points: vec![[0.5, 0.2], [0.5, 0.8]], width: 0.1 }.triangles(2.0);
+        let xs: Vec<f32> = v.iter().map(|p| p[0]).collect();
+        let (lo, hi) = (xs.iter().cloned().fold(1.0, f32::min), xs.iter().cloned().fold(0.0, f32::max));
+        assert!((hi - lo - 0.05).abs() < 1e-5, "{lo} {hi}");
+        assert!(Line { points: vec![[0.1, 0.1]], width: 0.1 }.triangles(1.0).is_empty());
     }
 }

@@ -181,6 +181,23 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "line" {
+                // A line slice on the first output (added if there is none), for a look at the mapping canvas.
+                let oid = self.state.comp.outputs.first().map(|o| o.id).unwrap_or_else(|| self.state.comp.add_output());
+                if let Some(o) = self.state.comp.outputs.iter_mut().find(|o| o.id == oid) {
+                    let sid = self.state.comp.next_id;
+                    self.state.comp.next_id += 1;
+                    let s = o.mapping.add_surface(sid);
+                    s.name = "Line".into();
+                    s.set_line(true);
+                    if let Some(l) = &mut s.line {
+                        l.points = vec![[0.1, 0.25], [0.45, 0.7], [0.9, 0.3]];
+                        l.width = 0.08;
+                    }
+                }
+                println!("QUICK line: line slice on output {oid}");
+                continue;
+            }
             if name == "welcome" {
                 self.welcome_open = true;
                 continue;

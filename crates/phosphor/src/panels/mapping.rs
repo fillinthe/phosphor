@@ -64,10 +64,15 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             touched = true;
         }
         r.on_hover_text("Drag to move the whole surface");
-        // Mesh points, or the four corners.
-        let points: Vec<&mut [f32; 2]> = match &mut s.mesh {
-            Some(m) => m.points.iter_mut().collect(),
-            None => s.corners.iter_mut().collect(),
+        // Line points, mesh points, or the four corners.
+        if let Some(l) = &s.line {
+            let pts: Vec<egui::Pos2> = l.points.iter().map(|p| to_screen(*p)).collect();
+            ui.painter().add(egui::Shape::line(pts, line));
+        }
+        let points: Vec<&mut [f32; 2]> = match (&mut s.line, &mut s.mesh) {
+            (Some(l), _) => l.points.iter_mut().collect(),
+            (None, Some(m)) => m.points.iter_mut().collect(),
+            (None, None) => s.corners.iter_mut().collect(),
         };
         for (i, p) in points.into_iter().enumerate() {
             let mut d = [0.0, 0.0];
@@ -353,6 +358,24 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     }
     color_grade_editor(ui, s.id, &mut s.color);
     ui.horizontal(|ui| {
+        let mut on = s.line.is_some();
+        if ui.toggle_value(&mut on, label(icon::LINE_SEGMENTS, "Line")).on_hover_text("The picture runs along a line with a width: outlines, edges, strips. Drag its points on the canvas").changed() {
+            s.set_line(on);
+        }
+        if let Some(l) = &mut s.line {
+            guarded!(ui, l.width, Slider::new(&mut l.width, 0.005..=0.5).text("width").logarithmic(true));
+            if ui.small_button(label(icon::PLUS, "point")).on_hover_text("Adds a point after the last one").clicked() {
+                let n = l.points.len();
+                let last = l.points[n - 1];
+                let prev = l.points[n.saturating_sub(2)];
+                l.points.push([(last[0] * 2.0 - prev[0]).clamp(0.0, 1.0), (last[1] * 2.0 - prev[1]).clamp(0.0, 1.0)]);
+            }
+            if l.points.len() > 2 && ui.small_button(label(icon::MINUS, "point")).clicked() {
+                l.points.pop();
+            }
+        }
+    });
+    ui.add_enabled_ui(s.line.is_none(), |ui| ui.horizontal(|ui| {
         let mut on = s.mesh.is_some();
         let (mut cols, mut rows) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));
         let mut changed = ui.toggle_value(&mut on, label(icon::GRID_NINE, "Mesh warp")).on_hover_text("Bend the surface onto curved or uneven objects with a grid of points").changed();
@@ -366,7 +389,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         if changed {
             s.set_mesh(on, cols, rows);
         }
-    });
+    }));
     ui.collapsing("Input region (part of the picture shown)", |ui| {
         guarded!(ui, s.input[0], Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
         guarded!(ui, s.input[1], Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
