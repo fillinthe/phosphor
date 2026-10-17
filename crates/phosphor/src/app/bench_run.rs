@@ -60,7 +60,8 @@ impl PhosphorApp {
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
         if self.state.comp.auto_show.enabled {
-            println!("AUTOSHOW columns fired: {}", self.state.auto_run.fired);
+            let reacting = self.state.comp.layers.iter().filter(|l| !l.generator_mods.is_empty() || l.effects.iter().any(|f| !f.mods.is_empty())).count();
+            println!("AUTOSHOW columns fired: {} · layers reacting: {reacting}/{}", self.state.auto_run.fired, self.state.comp.layers.len());
         }
         let causes: Vec<String> = ctx.repaint_causes().iter().map(|c| c.to_string()).collect();
         println!("UI_FPS {:.1} repaint causes: {}", self.ui_frames as f64 / run.cfg.seconds.max(1.0), causes.join(" | "));

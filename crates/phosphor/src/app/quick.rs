@@ -59,7 +59,7 @@ impl Quick {
 }
 
 /// A fresh seed every call.
-fn dice() -> Dice {
+pub(crate) fn dice() -> Dice {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let t = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);

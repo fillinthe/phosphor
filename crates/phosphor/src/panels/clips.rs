@@ -44,6 +44,7 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
         ui.label("every");
         guarded!(ui, auto.bars, egui::DragValue::new(&mut auto.bars).range(1..=64).suffix(" bars"));
         ui.toggle_value(&mut auto.surprise_on_drops, "Surprise on drops").on_hover_text("A jump in the music's level fires Surprise (at most every 8 s)");
+        ui.toggle_value(&mut auto.react, "React").on_hover_text("Every layer's generator and effects follow the music (re-applied after each Surprise)");
     }
 }
 
