@@ -38,7 +38,7 @@ app that's much smaller and lighter on the CPU.
    - [x] Optional password to control (Session panel); without it a phone only watches the output
    - [x] Layer thumbnails on the remote (mixer strips + the selected layer on Controls); Now / Beat / Bar button
    - [x] Audience play: QR code (also as a layer on the output), guests take timed turns at the Control Surface / columns / Surprise
-   - [ ] HTTPS so passwords aren't sent in clear text
+   - [x] HTTPS session link (port + 1, self-signed) for phone mics and passwords
    - [x] Audience play: caption on the code, reconnect keeps the place, several players at once (one per Surface page)
    - [x] Audience play: player names (typed on the phone) on the output
    - [ ] Audience play: cool-down per phone

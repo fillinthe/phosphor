@@ -34,6 +34,17 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                 ui.ctx().copy_text(url.clone());
             }
         });
+        if net.https {
+            let secure = net.https_url();
+            ui.horizontal(|ui| {
+                ui.label(format!("{} Secure link", icon::LOCK));
+                ui.monospace(&secure);
+                if ui.button(icon::COPY).on_hover_text("Copy the secure link").clicked() {
+                    ui.ctx().copy_text(secure.clone());
+                }
+            });
+            hint(ui, "Phones only share their microphone on a secure page. The certificate is Phosphor's own: the phone warns once (Show details, then visit the site) and remembers.");
+        }
         ui.separator();
         audience_play(ui, st);
         let State { net, remote_password, require_password, .. } = &mut *st;
