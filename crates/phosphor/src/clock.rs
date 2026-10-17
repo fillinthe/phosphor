@@ -10,11 +10,13 @@ pub struct Clock {
     anchor: f64,
     taps: Vec<f64>,
     last_beat: i64,
+    /// Which beat of the bar carries the accent (audio follow).
+    pub downbeat: Downbeat,
 }
 
 impl Clock {
     pub fn new(bpm: f32) -> Self {
-        Self { bpm, follow_audio: false, follow_midi: true, anchor: 0.0, taps: Vec::new(), last_beat: 0 }
+        Self { bpm, follow_audio: true, follow_midi: true, anchor: 0.0, taps: Vec::new(), last_beat: 0, downbeat: Downbeat::default() }
     }
 
     pub fn beats(&self, now: f64) -> f64 {
@@ -66,6 +68,19 @@ impl Clock {
         // Shift beat zero so `now` lands on the nearest whole beat (halfway each time, no jumps).
         let error_secs = (beats - target) * 60.0 / self.bpm.max(1.0) as f64;
         self.anchor += error_secs * 0.5;
+    }
+
+    /// Called on each detected audio beat with the bass level at that beat: learns which beat of the bar carries
+    /// the accent and, once it's clear, moves the bar so that beat is beat one (whole beats only, so the
+    /// beat grid itself doesn't move). Quantised launches and Auto show then land on real downbeats.
+    pub fn on_audio_downbeat(&mut self, now: f64, bass: f32) {
+        if !self.follow_audio {
+            return;
+        }
+        let index = self.beats(now).round() as i64;
+        if let Some(shift) = self.downbeat.observe(index, bass) {
+            self.anchor += shift as f64 * 60.0 / self.bpm.max(1.0) as f64;
+        }
     }
 
     /// Follows MIDI clock (call once per frame): tempo from the tick rate; after a Start, beat zero sits on the
@@ -255,5 +270,75 @@ mod tests {
         clock.bpm = 100.0;
         clock.follow_midi_clock(now, &midi);
         assert_eq!(clock.bpm, 100.0, "switched off");
+    }
+}
+
+
+/// Learns the downbeat from the bass level on each beat: energies accumulate per beat-of-bar with a slow decay;
+/// when one position clearly leads it becomes beat one.
+#[derive(Clone, Debug, Default)]
+pub struct Downbeat {
+    accent: [f32; 4],
+    seen: u32,
+    /// Beats since the last shift (holds off re-deciding every beat).
+    since_shift: u32,
+}
+
+impl Downbeat {
+    /// Feeds one beat (`index` = the clock's beat count at that beat). Returns how many beats to move the bar
+    /// forward (1–3) when the accent clearly sits elsewhere than beat one.
+    pub fn observe(&mut self, index: i64, bass: f32) -> Option<i64> {
+        let pos = index.rem_euclid(4) as usize;
+        for a in &mut self.accent {
+            *a *= 0.93;
+        }
+        self.accent[pos] += bass.max(0.0);
+        self.seen += 1;
+        self.since_shift += 1;
+        if self.seen < 8 || self.since_shift < 8 {
+            return None;
+        }
+        let (best, strongest) = self.accent.iter().copied().enumerate().fold((0, 0.0f32), |m, (i, v)| if v > m.1 { (i, v) } else { m });
+        let runner_up = self.accent.iter().copied().enumerate().filter(|(i, _)| *i != best).map(|(_, v)| v).fold(0.0f32, f32::max);
+        if best == 0 || strongest < runner_up * 1.3 + 1e-6 {
+            return None;
+        }
+        // Beat `best` should become beat 0: moving the anchor forward by `best` beats renumbers it so.
+        let shift = best as i64;
+        self.accent.rotate_left(best);
+        self.since_shift = 0;
+        Some(shift)
+    }
+}
+
+#[cfg(test)]
+mod downbeat_tests {
+    use super::Downbeat;
+
+    #[test]
+    fn accent_on_beat_three_moves_the_bar() {
+        let mut d = Downbeat::default();
+        let mut shift = None;
+        for i in 0..16 {
+            let bass = if i % 4 == 2 { 1.0 } else { 0.3 };
+            if let Some(s) = d.observe(i, bass) {
+                shift = Some(s);
+                break;
+            }
+        }
+        assert_eq!(shift, Some(2));
+        // With the bar moved, the clock now counts that accent as beat one: no further shifts.
+        let mut again = None;
+        for i in 0..16 {
+            let bass = if i % 4 == 0 { 1.0 } else { 0.3 };
+            again = again.or(d.observe(i, bass));
+        }
+        assert_eq!(again, None);
+    }
+
+    #[test]
+    fn even_beats_leave_the_bar_alone() {
+        let mut d = Downbeat::default();
+        assert!((0..32).all(|i| d.observe(i, 0.5).is_none()));
     }
 }

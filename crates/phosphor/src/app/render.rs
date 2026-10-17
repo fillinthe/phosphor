@@ -83,6 +83,9 @@ impl PhosphorApp {
         }
         if an.beat {
             clock.on_audio_beat(now, an.bpm, an.confidence);
+            if an.confidence >= 0.5 {
+                clock.on_audio_downbeat(now, an.low);
+            }
         }
         let beat_phase = clock.phase(now);
         *mod_inputs = ModInputs {
