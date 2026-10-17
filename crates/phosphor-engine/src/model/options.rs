@@ -349,10 +349,13 @@ pub struct AutoShow {
     pub columns: bool,
     /// Surprise when the level jumps well above its recent average.
     pub surprise_on_drops: bool,
+    /// Every layer reacts to the music (audio-driven modulation on generators and effects), re-applied after
+    /// each Surprise.
+    pub react: bool,
 }
 
 impl Default for AutoShow {
     fn default() -> Self {
-        Self { enabled: false, bars: 8, columns: true, surprise_on_drops: true }
+        Self { enabled: false, bars: 8, columns: true, surprise_on_drops: true, react: true }
     }
 }

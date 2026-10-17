@@ -13,6 +13,8 @@ pub struct AutoShowRun {
     last_now: Option<f64>,
     /// Columns fired so far (the bench prints it).
     pub fired: u32,
+    /// React was applied since the mode came on / the last Surprise.
+    reacted: bool,
 }
 
 /// Seconds between two Surprises from drops, so a loud section doesn't flicker the look.
@@ -28,6 +30,10 @@ impl State {
         }
         let dt = self.auto_run.last_now.map_or(1.0 / 60.0, |t| (now - t).clamp(0.0, 0.25)) as f32;
         self.auto_run.last_now = Some(now);
+        if a.react && !self.auto_run.reacted {
+            self.react_all();
+            self.auto_run.reacted = true;
+        }
         // Columns: on the first beat of every `bars`-th bar, the next column that has a clip.
         if a.columns {
             let bar = (self.clock.beats(now) / 4.0).floor() as i64;
@@ -50,8 +56,18 @@ impl State {
             if level > avg * 1.8 + 0.15 && avg > 0.02 && now - self.auto_run.last_surprise > SURPRISE_GAP {
                 self.auto_run.last_surprise = now;
                 self.quick(Quick::Surprise, now);
+                // The new looks react too.
+                self.auto_run.reacted = false;
             }
             self.auto_run.level_avg = avg + (level - avg) * k;
+        }
+    }
+
+    /// Music-following modulation on every layer's generator and effects (what Quick › React does for one layer).
+    fn react_all(&mut self) {
+        let mut d = super::quick::dice();
+        for l in &mut self.comp.layers {
+            l.react(&mut d);
         }
     }
 
