@@ -19,6 +19,16 @@ pub struct Rhythm {
     pub confidence: f32,
 }
 
+/// Below this steadiness the pulse is noise (hand-held phone footage scores 0.1; cuts on the beat score 0.3+).
+pub const STEADY: f32 = 0.2;
+
+impl Rhythm {
+    /// A rhythm worth locking to; otherwise the clip is left as it is.
+    pub fn steady(&self) -> bool {
+        self.confidence >= STEADY
+    }
+}
+
 /// What to set once the scan is done.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MatchTarget {

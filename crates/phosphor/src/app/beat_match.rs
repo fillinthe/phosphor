@@ -76,6 +76,10 @@ impl State {
     }
 
     fn apply_rhythm(&mut self, target: MatchTarget, r: &crate::media::rhythm::Rhythm) {
+        if !r.steady() {
+            self.notice = Some(format!("No steady visual beat in this clip ({:.0}% steady): left as it was", r.confidence * 100.0));
+            return;
+        }
         match target {
             MatchTarget::Layer(id) => {
                 let bpm = self.comp.bpm;

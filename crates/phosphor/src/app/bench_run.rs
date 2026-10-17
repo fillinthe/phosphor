@@ -137,7 +137,7 @@ impl PhosphorApp {
                 // Visual beat of the first movie layer, scanned right here (prints RHYTHM …).
                 let path = self.state.comp.layers.iter().find_map(|l| crate::app::beat_match::movie_path(&l.source));
                 match path.as_deref().map(|p| (p, crate::media::rhythm::analyze(p, 120.0))) {
-                    Some((p, Ok(r))) => println!("RHYTHM {p}: {:.1} bpm period {:.3}s phase {:.3}s duration {:.2}s confidence {:.2} -> loop_in {:.3} beats {}", r.bpm, r.period, r.phase, r.duration, r.confidence, crate::media::rhythm::settings_for(&r, 1.0, self.state.comp.bpm).0, crate::media::rhythm::settings_for(&r, 1.0, self.state.comp.bpm).1),
+                    Some((p, Ok(r))) => println!("RHYTHM {p}: {:.1} bpm period {:.3}s phase {:.3}s duration {:.2}s confidence {:.2} {} -> loop_in {:.3} beats {}", r.bpm, r.period, r.phase, r.duration, r.confidence, if r.steady() { "STEADY" } else { "NOT STEADY (left as is)" }, crate::media::rhythm::settings_for(&r, 1.0, self.state.comp.bpm).0, crate::media::rhythm::settings_for(&r, 1.0, self.state.comp.bpm).1),
                     Some((p, Err(e))) => println!("RHYTHM {p}: {e}"),
                     None => println!("RHYTHM: no movie layer"),
                 }
