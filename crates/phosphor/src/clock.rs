@@ -77,7 +77,12 @@ impl Clock {
         if !self.follow_audio {
             return;
         }
-        let index = self.beats(now).round() as i64;
+        // Only kicks that sit on a beat count; syncopated hits between beats say nothing about the bar.
+        let beats = self.beats(now);
+        let index = beats.round() as i64;
+        if (beats - beats.round()).abs() > 0.2 {
+            return;
+        }
         if let Some(shift) = self.downbeat.observe(index, bass) {
             self.anchor += shift as f64 * 60.0 / self.bpm.max(1.0) as f64;
         }
