@@ -47,7 +47,7 @@ impl Engine {
     pub fn set_audio(&mut self, wave: &[f32], fft: &[f32]) {
         let device = &self.gpu.device;
         let queue = &self.gpu.queue;
-        let mut upload = |slot: &mut Option<Target>, label: &'static str, data: &[f32], centred: bool| {
+        let upload = |slot: &mut Option<Target>, label: &'static str, data: &[f32], centred: bool| {
             if data.is_empty() {
                 return;
             }
