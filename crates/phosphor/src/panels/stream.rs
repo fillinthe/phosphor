@@ -48,6 +48,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     ui.label("Stream key");
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
+                    ui.checkbox(&mut s.secure, "Secure (RTMPS)").on_hover_text("Encrypted ingest (rtmps://, port 443): what YouTube and Twitch recommend; turn off only if a network blocks it");
                 });
             }
             Destination::CustomRtmp => {

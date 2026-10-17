@@ -91,6 +91,8 @@ pub struct StreamSettings {
     /// While streaming, also write an H.264 copy to this file.
     pub copy_enabled: bool,
     pub copy_path: String,
+    /// YouTube / Twitch over RTMPS (TLS) instead of plain RTMP.
+    pub secure: bool,
 }
 
 impl Default for StreamSettings {
@@ -112,6 +114,7 @@ impl Default for StreamSettings {
             second_url: "rtmp://live.example.com/app".into(),
             copy_enabled: false,
             copy_path: String::new(),
+            secure: true,
         }
     }
 }
@@ -128,9 +131,11 @@ impl StreamSettings {
     }
 
     /// An RTMP address for a live destination with these credentials (None for SRT / file).
-    fn rtmp_target(dest: Destination, url: &str, key: &str) -> Option<String> {
+    fn rtmp_target(dest: Destination, url: &str, key: &str, secure: bool) -> Option<String> {
         Some(match dest {
+            Destination::YouTube if secure => format!("rtmps://a.rtmps.youtube.com:443/live2/{key}"),
             Destination::YouTube => format!("rtmp://a.rtmp.youtube.com/live2/{key}"),
+            Destination::Twitch if secure => format!("rtmps://live.twitch.tv:443/app/{key}"),
             Destination::Twitch => format!("rtmp://live.twitch.tv/app/{key}"),
             Destination::CustomRtmp => {
                 let url = url.trim_end_matches('/');
@@ -143,7 +148,7 @@ impl StreamSettings {
     /// Everything the stream goes to besides the main destination: (container, address).
     fn extra_targets(&self) -> Vec<(&'static str, String)> {
         let mut out = Vec::new();
-        if self.second_enabled && let Some(url) = Self::rtmp_target(self.second_destination, &self.second_url, &self.second_key) {
+        if self.second_enabled && let Some(url) = Self::rtmp_target(self.second_destination, &self.second_url, &self.second_key, self.secure) {
             out.push(("flv", url));
         }
         if self.copy_enabled && self.destination != Destination::File && !self.copy_path.trim().is_empty() {
@@ -155,7 +160,7 @@ impl StreamSettings {
     fn target(&self) -> (Vec<String>, String) {
         match self.destination {
             Destination::YouTube | Destination::Twitch | Destination::CustomRtmp => {
-                (vec!["-f".into(), "flv".into()], Self::rtmp_target(self.destination, &self.rtmp_url, &self.stream_key).unwrap_or_default())
+                (vec!["-f".into(), "flv".into()], Self::rtmp_target(self.destination, &self.rtmp_url, &self.stream_key, self.secure).unwrap_or_default())
             }
             Destination::Srt => (vec!["-f".into(), "mpegts".into()], self.srt_url.clone()),
             Destination::File => (vec!["-movflags".into(), "+faststart".into()], self.file_path.clone()),
@@ -592,5 +597,30 @@ mod tests {
         s.stop();
         s.frame_due(t + 100.0);
         assert!(!s.running(), "Stop means stop");
+    }
+}
+
+#[cfg(test)]
+mod target_tests {
+    use super::*;
+
+    #[test]
+    fn youtube_and_twitch_use_rtmps_when_secure() {
+        assert_eq!(StreamSettings::rtmp_target(Destination::YouTube, "", "KEY", true).unwrap(), "rtmps://a.rtmps.youtube.com:443/live2/KEY");
+        assert_eq!(StreamSettings::rtmp_target(Destination::Twitch, "", "KEY", true).unwrap(), "rtmps://live.twitch.tv:443/app/KEY");
+        assert_eq!(StreamSettings::rtmp_target(Destination::YouTube, "", "KEY", false).unwrap(), "rtmp://a.rtmp.youtube.com/live2/KEY");
+        assert_eq!(StreamSettings::rtmp_target(Destination::CustomRtmp, "rtmp://h/app/", "k", true).unwrap(), "rtmp://h/app/k");
+        assert!(StreamSettings::rtmp_target(Destination::File, "", "", true).is_none());
+    }
+
+    #[test]
+    fn extra_targets_follow_the_switches() {
+        let mut s = StreamSettings { second_enabled: true, second_destination: Destination::Twitch, second_key: "T".into(), copy_enabled: true, copy_path: "/tmp/c.mp4".into(), ..Default::default() };
+        let extra = s.extra_targets();
+        assert_eq!(extra.len(), 2);
+        assert_eq!(extra[0].0, "flv");
+        assert_eq!(extra[1], ("mp4", "/tmp/c.mp4".to_string()));
+        s.destination = Destination::File;
+        assert_eq!(s.extra_targets().len(), 1, "no copy of a file recording");
     }
 }
