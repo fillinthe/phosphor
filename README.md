@@ -46,12 +46,13 @@ scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
   modulation on any value; control surfaces you build (pages, XY pads, colour); TouchOSC layout export; presets.
 - **Phones:** a remote page (scan the QR code: mixer, clips, your surface, layer pictures) and **Audience play** (a
   second code, also as a layer on the output: guests line up and take timed turns at the controls you allow).
-- **Mapping:** drag corners on the projector, mesh warp, masks with soft edges, edge blending, per-output colour, many
+- **Mapping:** drag corners on the projector, mesh warp, line slices, masks with soft edges, edge blending, per-output colour, many
   outputs each on its own screen, venue presets, Art-Net / sACN LED pixel mapping; render at 60 fps (default), 30, or the display's rate.
 - **In and out:** hardware-decoded video (H.264/HEVC/ProRes/VP9/AV1, Hap on the GPU), cameras, capture cards, network
-  streams, Syphon and NDI in and out; stream to YouTube/Twitch/RTMP/SRT; record H.264/ProRes/Hap; network viewers.
+  streams, Syphon and NDI in and out; stream to YouTube/Twitch (RTMPS, two at once, with a recorded copy)/RTMP/SRT;
+  record H.264/HEVC/ProRes/Hap; network viewers.
 - **Shows:** undo, crash recovery, Export Show (a standalone app with the media), Lock Controls (play-only mode with a
-  password), import Resolume compositions (.avc) and VDMX projects, find missing media.
+  password), start at login for installations, import Resolume compositions (.avc) and VDMX projects, find missing media.
 - **Free and open source** (GPL). Donate, Report a Bug and Check for Updates are in the app.
 
 ## Run from source (macOS)
