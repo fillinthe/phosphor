@@ -68,7 +68,8 @@ pub fn apply(ctx: &egui::Context) {
 fn ui_text_has_glyphs() {
     let ctx = egui::Context::default();
     apply(&ctx);
-    let _ = ctx.run_ui(Default::default(), |_| {});
+    // Texture deltas must be taken or cleared (epaint checks on drop): nothing draws here.
+    ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
     let mut missing = Vec::new();
     // The app, and the engine (its names and labels show in the UI too). Shaders and tests aren't UI.
     let mut stack = vec![
@@ -107,5 +108,7 @@ fn ui_text_has_glyphs() {
             }
         }
     }
+    // Glyphs rasterised by `has_glyph` above leave a pending delta: take it so dropping the context is clean.
+    ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
     assert!(missing.is_empty(), "glyphs the UI font can't draw:\n{}", missing.join("\n"));
 }
