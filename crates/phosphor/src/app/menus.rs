@@ -146,6 +146,15 @@ impl PhosphorApp {
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
             A::Donate => ctx.open_url(egui::OpenUrl::new_tab(crate::support::DONATE_URL)),
+            A::ShaderFolder => {
+                // ~/Library/Application Support/Phosphor/isf: scanned at startup like VDMX's ISF folders.
+                if let Some(dir) = crate::show::storage_dir().map(|d| d.join("isf")) {
+                    let _ = std::fs::create_dir_all(&dir);
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(&dir).spawn();
+                    st.notice = Some(format!("ISF shaders you drop into {} appear in the browsers at the next launch", dir.display()));
+                }
+            }
             A::ReportBug => st.bug.open = true,
             A::CheckUpdates => {
                 st.updater.window = true;

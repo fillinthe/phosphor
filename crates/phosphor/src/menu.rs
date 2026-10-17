@@ -53,6 +53,8 @@ pub enum Action {
     CheckUpdates,
     /// Quick menu: one-click visuals.
     Quick(crate::app::Quick),
+    /// Reveals the folder Phosphor scans for your own ISF shaders.
+    ShaderFolder,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -155,6 +157,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Notes, "Notes — What's New", None),
             I(A::Roadmap, "Roadmap", None),
             I(A::Website, "phosphorfx.com", None),
+            I(A::ShaderFolder, "Open ISF Shader Folder", None),
             I(A::Donate, "Donate to Phosphor…", None),
             S,
             I(A::ReportBug, "Report a Bug…", None),
