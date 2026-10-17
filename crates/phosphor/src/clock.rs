@@ -59,7 +59,7 @@ impl Clock {
     /// Called on each detected audio beat when following audio: eases the tempo toward the
     /// detected BPM and pulls the beat grid onto the kick.
     pub fn on_audio_beat(&mut self, now: f64, bpm: f32, confidence: f32) {
-        if !self.follow_audio || confidence < 0.5 || bpm <= 0.0 {
+        if !self.follow_audio || confidence < 0.6 || bpm <= 0.0 {
             return;
         }
         self.bpm += (bpm - self.bpm) * 0.35;
