@@ -399,3 +399,47 @@ fn fx_edges_only(in: VOut) -> @location(0) vec4f {
     let tint = mix(vec3f(1.0), normalize(c.rgb + 0.05), 0.7);
     return vec4f(tint * e, 1.0);
 }
+
+// Motion flow (two passes). fx_flow_keep copies this frame's picture into the history slot; fx_flow then has the
+// picture on tex0 and the previous one on tex1 and estimates where each pixel moved (normal optical flow from the
+// brightness gradient and the change between frames), then pushes the picture along that motion.
+@fragment
+fn fx_flow_keep(in: VOut) -> @location(0) vec4f {
+    return src(in.uv);
+}
+
+fn flow_now(uv: vec2f) -> f32 { return luma(textureSampleLevel(tex0, samp, uv, 0.0).rgb); }
+fn flow_prev(uv: vec2f) -> f32 { return luma(textureSampleLevel(tex1, samp, uv, 0.0).rgb); }
+
+@fragment
+fn fx_flow(in: VOut) -> @location(0) vec4f {
+    let px = vec2f(P(1u)) / u.resolution;
+    let c = in.uv;
+    let dx = vec2f(px.x, 0.0);
+    let dy = vec2f(0.0, px.y);
+    // Gradients from the average of both frames (steadier than one frame's), change over time from the difference.
+    let gx = ((flow_now(c + dx) - flow_now(c - dx)) + (flow_prev(c + dx) - flow_prev(c - dx))) * 0.5;
+    let gy = ((flow_now(c + dy) - flow_now(c - dy)) + (flow_prev(c + dy) - flow_prev(c - dy))) * 0.5;
+    let it = flow_now(c) - flow_prev(c);
+    let g = vec2f(gx, gy);
+    let g2 = dot(g, g);
+    // Normal flow (in units of the gradient step), capped so flat areas don't explode.
+    var flow = -it * g / (g2 + 0.0025);
+    let m = length(flow);
+    if (m > 3.0) { flow = flow * (3.0 / m); }
+    let mode = u32(round(P(2u)));
+    if (mode == 1u) {
+        // The motion itself: hue = direction, brightness = speed.
+        let ang = atan2(flow.y, flow.x) / TAU + 0.5;
+        let col = hsv2rgb(vec3f(ang, 0.9, clamp(length(flow) * P(0u) * 0.7, 0.0, 1.0)));
+        return vec4f(col, 1.0);
+    }
+    if (mode == 2u) {
+        // Only what moves.
+        let a = clamp(length(flow) * P(0u) * 0.7, 0.0, 1.0);
+        return src(in.uv) * a;
+    }
+    // Push the picture along its motion.
+    let d = flow * px * P(0u) * 4.0;
+    return textureSampleLevel(tex0, samp, clamp(c - d, vec2f(0.0), vec2f(1.0)), 0.0);
+}

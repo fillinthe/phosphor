@@ -144,6 +144,12 @@ pub const EFFECTS: &[ShaderDesc] = &[
         params: &[p("Radius (px)", 1.0, 64.0, 16.0), p("Threshold", 0.0, 1.0, 0.6), p("Intensity", 0.0, 3.0, 1.0)],
     },
     ShaderDesc {
+        id: "flow",
+        name: "Motion Flow",
+        entry: "fx_flow",
+        params: &[p("Amount", 0.0, 4.0, 1.0), p("Scale (px)", 1.0, 24.0, 4.0), p("Mode", 0.0, 2.0, 0.0)],
+    },
+    ShaderDesc {
         id: "trails",
         name: "Trails / Feedback",
         entry: "fx_trails",
@@ -306,6 +312,8 @@ pub fn multipass(entry: &str) -> &'static [&'static str] {
         "fx_blur" => &["fx_blur_h", "fx_blur_v"],
         "fx_glow" => &["fx_bright", "fx_blur_h", "fx_blur_v", "fx_glow_add"],
         "fx_edge_glow" => &["fx_edges_only", "fx_blur_h", "fx_blur_v", "fx_glow_add"],
+        // Keep this frame's picture for the next one, then displace by the motion between the two.
+        "fx_flow" => &["fx_flow_keep", "fx_flow"],
         _ => &[],
     }
 }

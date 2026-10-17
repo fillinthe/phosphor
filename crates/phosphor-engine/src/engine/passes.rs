@@ -313,7 +313,7 @@ impl Engine {
                         Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
                         u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
                         res.rutt.as_ref().unwrap().view.clone()
-                    } else if entry == "fx_trails" || entry == "fx_slitscan" {
+                    } else if entry == "fx_trails" || entry == "fx_slitscan" || entry == "fx_flow_keep" {
                         // History effects write one slot while reading the other.
                         let res = self.layers.entry(res_id).or_default();
                         let slots = res.history.entry(fx_id).or_default();
@@ -322,6 +322,17 @@ impl Engine {
                         }
                         tex1 = Some(slots[1 - parity].as_ref().unwrap().view.clone());
                         slots[parity].as_ref().unwrap().view.clone()
+                    } else if entry == "fx_flow" {
+                        // Motion flow: the previous frame's picture (kept by fx_flow_keep) on tex1, output into the chain.
+                        let res = self.layers.entry(res_id).or_default();
+                        let slots = res.history.entry(fx_id).or_default();
+                        for slot in slots.iter_mut() {
+                            Target::ensure(slot, &self.gpu.device, "history", w, h);
+                        }
+                        tex1 = Some(slots[1 - parity].as_ref().unwrap().view.clone());
+                        let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
+                        next_idx = Some(i);
+                        views[i].clone()
                     } else {
                         let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
                         next_idx = Some(i);
