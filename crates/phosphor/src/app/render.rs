@@ -40,6 +40,7 @@ impl PhosphorApp {
             preview_textures,
             preview_refreshed,
             selected,
+            notice,
             monitor_wants,
             monitor_keys,
             monitor_textures,
@@ -64,6 +65,12 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             use crate::media::video::sound;
+            // Nothing chosen to listen to, but a clip with sound is playing: listen to the clips, so the beat
+            // and React work without anyone touching the Audio panel.
+            if audio.current().is_none() && !audio.is_open() && !audio.is_clips() && media.any_sound() {
+                audio.use_clips();
+                *notice = Some("Listening to the clips' sound for the beat (Audio panel to change)".into());
+            }
             sound::set_tap(audio.is_clips());
             if audio.is_clips() {
                 let mix = sound::take_tap();
