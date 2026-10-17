@@ -150,6 +150,11 @@ impl PhosphorApp {
             }
         }
         let items: Vec<(String, phosphor_engine::SourceSpec)> = files.iter().map(|(name, path)| (media::clip_name(name), media::spec_for(name, path.clone()))).collect();
+        // A track dropped in with no audio input open: listen to the clips, so the visuals follow it right away.
+        if files.iter().any(|(name, _)| media::is_sound_file(name)) && !st.audio.is_open() && !st.audio.is_clips() && st.audio.current().is_none() {
+            st.audio.use_clips();
+            st.notice = Some("Audio source set to Clip sound: the visuals follow what you play (Audio panel to change)".into());
+        }
         let cell = drop_point(ctx).and_then(|p| st.clip_cells.iter().find(|(r, ..)| r.contains(p)).map(|(_, l, s)| (*l, *s)));
         if let Some((layer, slot)) = cell {
             let n = st.comp.place_clips(layer, slot, items);
