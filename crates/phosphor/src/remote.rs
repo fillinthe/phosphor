@@ -68,6 +68,7 @@ pub fn state_json(st: &mut State, now: f64) -> String {
         "surface": {"columns": comp.surface.columns, "widgets": surface, "pages": comp.surface.pages},
         "bpm": comp.bpm,
         "timing": comp.launch.timing,
+        "autoshow": comp.auto_show.enabled,
         "master": round(comp.master_fade),
         "columns": comp.clip_columns,
         "selected": selected,
@@ -133,6 +134,7 @@ pub fn apply(st: &mut State, cmd: &Value, now: f64) {
         "column" => st.trigger(Trigger::Column(f("col") as usize), now),
         "tap" => st.clock.tap(now),
         "surprise" => st.quick(crate::app::Quick::Surprise, now),
+        "autoshow" => st.comp.auto_show.enabled = flag("v"),
         // Launch timing (quantize): "Now" / "Beat" / "Bar".
         "timing" => {
             if let Some(t) = cmd.get("v").and_then(|v| serde_json::from_value::<phosphor_engine::LaunchTiming>(v.clone()).ok()) {
