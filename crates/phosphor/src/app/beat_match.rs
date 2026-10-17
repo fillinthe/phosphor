@@ -78,8 +78,9 @@ impl State {
     fn apply_rhythm(&mut self, target: MatchTarget, r: &crate::media::rhythm::Rhythm) {
         match target {
             MatchTarget::Layer(id) => {
+                let bpm = self.comp.bpm;
                 if let Some(l) = self.comp.layer_mut(id) {
-                    let (loop_in, beats) = settings_for(r, l.loop_out);
+                    let (loop_in, beats) = settings_for(r, l.loop_out, bpm);
                     l.loop_in = loop_in;
                     l.sync_beats = beats;
                     l.loop_beats = 0.0;
@@ -87,18 +88,21 @@ impl State {
                 }
             }
             MatchTarget::Clip(id, slot) => {
+                let bpm = self.comp.bpm;
                 if let Some(l) = self.comp.layer_mut(id) {
                     let base = l.clip_settings();
                     let k = l.clip_slot_mut(slot);
                     let own = k.own.get_or_insert(base);
-                    let (loop_in, beats) = settings_for(r, own.loop_out);
+                    let (loop_in, beats) = settings_for(r, own.loop_out, bpm);
                     own.loop_in = loop_in;
                     own.sync_beats = beats;
                     own.loop_beats = 0.0;
                 }
             }
         }
-        self.notice = Some(format!("Visual beat: {:.0} BPM, {} hits · {:.0}% steady", r.bpm, settings_for(r, 1.0).1, r.confidence * 100.0));
+        let per = crate::media::rhythm::beats_per_hit(r, self.comp.bpm);
+        let how = if per == 1.0 { "a hit every beat".to_string() } else if per > 1.0 { format!("a hit every {per:.0} beats") } else { "two hits a beat".to_string() };
+        self.notice = Some(format!("Visual beat: {:.0} BPM · {:.0}% steady · {how} at {:.0} BPM", r.bpm, r.confidence * 100.0, self.comp.bpm));
     }
 }
 

@@ -77,13 +77,24 @@ impl Analyzer {
     }
 }
 
+/// How many beats one visual hit should take at `music_bpm`, so the clip plays near its natural speed:
+/// a clip cut every two beats at 128 BPM reads as 64 BPM and gets 2 beats per hit (never faster than 2× or slower than ½×).
+pub fn beats_per_hit(r: &Rhythm, music_bpm: f32) -> f32 {
+    if !(music_bpm > 0.0) || !(r.bpm > 0.0) {
+        return 1.0;
+    }
+    let ratio = music_bpm / r.bpm;
+    let k = ratio.log2().round().clamp(-1.0, 1.0);
+    2f32.powf(k)
+}
+
 /// The settings that make the hits land on beats: the loop starts at the first hit and the clip (from there)
-/// is stretched to a whole number of beats, one per hit. Returns (loop_in as a fraction, beats).
-pub fn settings_for(r: &Rhythm, loop_out: f32) -> (f32, f32) {
+/// is stretched to a whole number of beats (`beats_per_hit` per hit). Returns (loop_in as a fraction, beats).
+pub fn settings_for(r: &Rhythm, loop_out: f32, music_bpm: f32) -> (f32, f32) {
     let end = loop_out.clamp(0.05, 1.0) * r.duration;
     let phase = if r.phase < end - r.period { r.phase } else { 0.0 };
-    let beats = ((end - phase) / r.period.max(0.01)).round().max(1.0);
-    (phase / r.duration.max(0.01), beats)
+    let hits = ((end - phase) / r.period.max(0.01)).round().max(1.0);
+    (phase / r.duration.max(0.01), (hits * beats_per_hit(r, music_bpm)).round().max(1.0))
 }
 
 /// Decodes the movie small and grey, measuring how much each frame differs from the last.
@@ -232,7 +243,11 @@ pub fn rhythm_of(series: &[f32], fps: f32, duration: f32) -> Option<Rhythm> {
         }
         off += 0.25;
     }
-    let phase = best_off.0 / fps;
+    let mut phase = best_off.0 / fps;
+    // A first hit right at one period in is the same as a hit at the very start.
+    if phase > period - 2.0 / fps {
+        phase = 0.0;
+    }
     Some(Rhythm { bpm: 60.0 / period, period, phase, duration, confidence })
 }
 
@@ -254,9 +269,15 @@ mod tests {
         assert!((r.bpm - 120.0).abs() < 3.0, "{r:?}");
         assert!((r.phase - 0.2).abs() < 0.08, "{r:?}");
         assert!(r.confidence > 0.3, "{r:?}");
-        let (loop_in, beats) = settings_for(&r, 1.0);
+        let (loop_in, beats) = settings_for(&r, 1.0, 120.0);
         assert!((loop_in - 0.2 / 12.0).abs() < 0.01, "{loop_in}");
         assert_eq!(beats, 24.0);
+        // Against 240 BPM music each hit is two beats; against 60 BPM, half a beat.
+        assert_eq!(settings_for(&r, 1.0, 240.0).1, 48.0);
+        assert_eq!(settings_for(&r, 1.0, 60.0).1, 12.0);
+        // Far-off tempos are capped at 2 beats / half a beat per hit.
+        assert_eq!(beats_per_hit(&r, 1000.0), 2.0);
+        assert_eq!(beats_per_hit(&r, 10.0), 0.5);
     }
 
     #[test]
