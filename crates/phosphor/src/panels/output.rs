@@ -116,6 +116,13 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     if st.comp.outputs.iter().any(|o| !o.screen.is_empty()) {
+        #[cfg(target_os = "macos")]
+        {
+            let mut at_login = crate::login_item::is_enabled();
+            if ui.checkbox(&mut at_login, "Start Phosphor when this Mac logs in (installations)").on_hover_text("A LaunchAgent opens Phosphor at login; with the option below, the show comes up on its screens by itself").changed() {
+                st.notice = Some(crate::login_item::set(at_login).unwrap_or_else(|e| format!("Couldn't change the login item: {e}")));
+            }
+        }
         ui.checkbox(&mut st.comp.outputs_on_open, "Open outputs on their screens when this project opens")
             .on_hover_text("For a venue: outputs go fullscreen on the screens they were last sent to, at launch and when you open this project");
     }

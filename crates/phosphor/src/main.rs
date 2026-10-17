@@ -33,6 +33,8 @@ mod remote;
 mod screens;
 mod stats;
 mod support;
+#[cfg(target_os = "macos")]
+mod login_item;
 mod stream;
 #[cfg(not(target_arch = "wasm32"))]
 mod show;
