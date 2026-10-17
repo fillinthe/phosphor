@@ -77,7 +77,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                         egui::ScrollArea::vertical().id_salt(("lw_scroll", id)).auto_shrink(false).show(ui, |ui| {
                             ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(70.0);
                             let (info, position, has_sound) = media.get(&id).cloned().unwrap_or((None, None, false));
-                            let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, match_beat: Default::default() };
+                            let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, beat: None, match_beat: Default::default() };
                             let (fx, seek) = layer_editor(ui, layer, &m, clipboard_len);
                             if m.match_beat.get() {
                                 beat_requests.push(id);

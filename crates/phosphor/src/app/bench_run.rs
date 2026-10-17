@@ -143,6 +143,12 @@ impl PhosphorApp {
                 }
                 continue;
             }
+            if name == "beatmatch" {
+                if let Some(id) = self.state.comp.layers.iter().find(|l| crate::app::beat_match::movie_path(&l.source).is_some()).map(|l| l.id) {
+                    self.state.match_beat(crate::media::rhythm::MatchTarget::Layer(id));
+                }
+                continue;
+            }
             if name == "lock" {
                 self.lock_now(String::new());
                 continue;
