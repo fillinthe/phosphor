@@ -34,6 +34,11 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                 ui.ctx().copy_text(url.clone());
             }
         });
+        ui.horizontal(|ui| {
+            ui.label("Easy to type");
+            ui.monospace(net.local_url());
+            hint(ui, "Bonjour name: works on iPhones, iPads, Macs and most Android phones on the same Wi-Fi");
+        });
         if net.https {
             let secure = net.https_url();
             ui.horizontal(|ui| {
