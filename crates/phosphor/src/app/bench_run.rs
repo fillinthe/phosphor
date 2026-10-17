@@ -92,6 +92,16 @@ impl PhosphorApp {
         }
         let an = self.state.audio.analysis();
         println!("BEAT bpm {:.1} confidence {:.2} clock {:.1} follow {} downbeat shifts {}", an.bpm, an.confidence, self.state.clock.bpm, self.state.clock.follow_audio, self.state.clock.downbeat.shifts);
+        // Bar phase check for a clip cut at a known tempo (PHOSPHOR_BENCH_BPM): the clip's own bar phase vs the clock's.
+        if let Ok(bpm) = std::env::var("PHOSPHOR_BENCH_BPM").map(|v| v.parse::<f64>().unwrap_or(0.0))
+            && bpm > 0.0
+            && let Some(l) = self.state.comp.layers.iter().find(|l| crate::app::beat_match::movie_path(&l.source).is_some())
+            && let Some((pos, _)) = self.state.media.position(l.id)
+        {
+            let clip_phase = (pos * bpm / 60.0).rem_euclid(4.0);
+            let clock_phase = self.state.clock.beats(now).rem_euclid(4.0);
+            println!("BARPHASE clip {clip_phase:.2} clock {clock_phase:.2} diff {:.2} beats", (clock_phase - clip_phase).rem_euclid(4.0));
+        }
         println!("CONTROL {}", self.state.control.osc_status);
         #[cfg(target_os = "macos")]
         if run.cfg.ndi {
@@ -163,6 +173,13 @@ impl PhosphorApp {
                 self.state.bug.open = true;
                 self.state.bug.detached = name == "bugout";
                 self.state.bug.text = "Example: dragging a movie onto the Clips grid shows a black cell.".into();
+                continue;
+            }
+            if name == "baroff" {
+                // Knock the bar two beats off, so the downbeat tracker has something to fix.
+                let b = self.state.clock.beats(now);
+                self.state.clock.set_beats(now, b + 2.0);
+                println!("QUICK baroff: bar moved two beats");
                 continue;
             }
             if name == "autoshow" {
