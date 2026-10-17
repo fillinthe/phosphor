@@ -74,7 +74,9 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
     let mut slots: Vec<Option<Param>> = vec![None; shader.param_count().min(shaders::MAX_PARAMS)];
     let mut put = |i: usize, name: String, min: f32, max: f32, default: f32| {
         if let Some(s) = slots.get_mut(i) {
-            *s = Some(Param { name: leak(name), min, max, default });
+            // Some shaders declare MIN above MAX (Radial Spectrogram: 1 → 0.05); a range must run low to high.
+            let (lo, hi) = if min <= max { (min, max) } else { (max, min) };
+            *s = Some(Param { name: leak(name), min: lo, max: hi, default: default.clamp(lo, hi) });
         }
     };
     for input in &shader.inputs {

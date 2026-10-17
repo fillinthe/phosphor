@@ -71,7 +71,8 @@ pub fn parse_header(source: &str) -> Result<Header, CompileError> {
                     return Err(err("at most 16 parameters"));
                 }
                 let name = parts[..parts.len() - 3].join(" ");
-                header.params.push(Param { name: leak(name), min: nums[0], max: nums[1], default: nums[2] });
+                let (lo, hi) = (nums[0].min(nums[1]), nums[0].max(nums[1]));
+                header.params.push(Param { name: leak(name), min: lo, max: hi, default: nums[2].clamp(lo, hi) });
             }
             _ => {}
         }
