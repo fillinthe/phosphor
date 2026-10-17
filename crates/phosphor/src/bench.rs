@@ -194,7 +194,21 @@ impl BenchConfig {
             sources.push(Box::new(move |l| l.source = phosphor_engine::SourceSpec::Text(phosphor_engine::TextStyle { text: t.clone(), ..crate::text::default_style() })));
         }
         for (i, set_source) in sources.iter().enumerate() {
-            let effects: Vec<_> = self.effects.iter().filter_map(|e| comp.new_effect(e)).collect();
+            // `--fx id` or `--fx id=v0,v1,…` (values in order; missing ones keep their defaults).
+            let effects: Vec<_> = self
+                .effects
+                .iter()
+                .filter_map(|e| {
+                    let (id, vals) = e.split_once('=').map_or((e.as_str(), ""), |(i, v)| (i, v));
+                    let mut fx = comp.new_effect(id)?;
+                    for (k, v) in vals.split(',').filter(|v| !v.is_empty()).enumerate() {
+                        if let (Some(slot), Ok(v)) = (fx.values.get_mut(k), v.trim().parse::<f32>()) {
+                            *slot = v;
+                        }
+                    }
+                    Some(fx)
+                })
+                .collect();
             let layer = comp.add_layer();
             set_source(layer);
             layer.effects = effects;
