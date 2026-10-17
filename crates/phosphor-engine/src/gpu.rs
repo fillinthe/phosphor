@@ -42,7 +42,8 @@ pub(crate) struct Gpu {
     module: wgpu::ShaderModule,
     pub layout: wgpu::BindGroupLayout,
     pipeline_layout: wgpu::PipelineLayout,
-    pipelines: HashMap<&'static str, wgpu::RenderPipeline>,
+    /// Keyed by entry and the format of the target it draws into (float ISF buffers need their own).
+    pipelines: HashMap<(&'static str, wgpu::TextureFormat), wgpu::RenderPipeline>,
     /// Modules for user shaders, keyed by their (unique) entry point.
     pub custom_modules: HashMap<&'static str, wgpu::ShaderModule>,
     pub sampler: wgpu::Sampler,
@@ -167,9 +168,14 @@ impl Gpu {
     }
 
     pub fn pipeline(&mut self, entry: &'static str) -> &wgpu::RenderPipeline {
+        self.pipeline_for(entry, FORMAT)
+    }
+
+    /// The pipeline drawing `entry` into a target of `format` (built on first use for formats other than the default).
+    pub fn pipeline_for(&mut self, entry: &'static str, format: wgpu::TextureFormat) -> &wgpu::RenderPipeline {
         let Self { device, module, pipeline_layout, pipelines, custom_modules, .. } = self;
         let module = custom_modules.get(entry).unwrap_or(module);
-        pipelines.entry(entry).or_insert_with(|| build_pipeline(device, pipeline_layout, module, entry))
+        pipelines.entry((entry, format)).or_insert_with(|| build_pipeline(device, pipeline_layout, module, entry, format))
     }
 
     /// What a background compile needs: the device and the shared pipeline layout (both are handles).
@@ -180,13 +186,13 @@ impl Gpu {
     /// Installs a module + pipeline built elsewhere (background shader compilation).
     pub fn install_custom(&mut self, entry: &'static str, module: wgpu::ShaderModule, pipeline: wgpu::RenderPipeline) {
         self.custom_modules.insert(entry, module);
-        self.pipelines.insert(entry, pipeline);
+        self.pipelines.insert((entry, FORMAT), pipeline);
     }
 }
 
 /// The render pipeline for one fragment entry: which vertex stage, topology and blending it needs.
 /// Free function so a worker thread can build it (every wgpu object here is a thread-safe handle).
-pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &'static str) -> wgpu::RenderPipeline {
+pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &'static str, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
     // Mapping surfaces are real quads blended onto the output; everything else is a
     // fullscreen triangle that overwrites its target.
     let surface = entry == "fs_surface";
@@ -232,7 +238,7 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
             entry_point: Some(entry),
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
-                format: FORMAT,
+                format,
                 blend: if surface || entry == "fs_mesh" || entry == "fs_mask" {
                     Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                 } else if rutt {
@@ -300,8 +306,13 @@ impl Target {
 
     /// Reallocates only when the size changes.
     pub(crate) fn ensure(slot: &mut Option<Target>, device: &wgpu::Device, label: &'static str, w: u32, h: u32) {
-        if !matches!(slot, Some(t) if t.width == w.max(1) && t.height == h.max(1)) {
-            *slot = Some(Target::new(device, label, w, h));
+        Self::ensure_format(slot, device, label, w, h, FORMAT);
+    }
+
+    /// Reallocates only when the size or format changes.
+    pub(crate) fn ensure_format(slot: &mut Option<Target>, device: &wgpu::Device, label: &'static str, w: u32, h: u32, format: wgpu::TextureFormat) {
+        if !matches!(slot, Some(t) if t.width == w.max(1) && t.height == h.max(1) && t.texture.format() == format) {
+            *slot = Some(Target::with_format(device, label, w, h, format));
         }
     }
 }

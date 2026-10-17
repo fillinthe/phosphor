@@ -203,8 +203,11 @@ impl Engine {
             let (target, tw, th) = match pp.target {
                 Some(b) if b < n => {
                     let (bw, bh) = (size(&pp.width, w), size(&pp.height, h));
+                    // A buffer any pass asks to be float is float for all of them (16-bit, filterable).
+                    let float = plan.passes.iter().any(|p| p.target == Some(b) && p.float);
+                    let format = if float { wgpu::TextureFormat::Rgba16Float } else { crate::gpu::FORMAT };
                     for slot in bufs.slots[b].iter_mut() {
-                        Target::ensure(slot, &device, "pass buffer", bw, bh);
+                        Target::ensure_format(slot, &device, "pass buffer", bw, bh, format);
                     }
                     let write = 1 - bufs.front[b];
                     bufs.front[b] = write;

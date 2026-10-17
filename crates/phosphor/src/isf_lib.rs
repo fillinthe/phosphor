@@ -129,7 +129,7 @@ fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
         passes: sh
             .pass_plan
             .iter()
-            .map(|p| shaders::PlanPass { target: index(&p.target), width: p.width.clone(), height: p.height.clone() })
+            .map(|p| shaders::PlanPass { target: index(&p.target), float: p.float, width: p.width.clone(), height: p.height.clone() })
             .collect(),
         buffers: sh.buffers.len(),
         vars: sh.inputs.iter().filter_map(|i| Some((i.name.clone(), i.offset?))).collect(),
