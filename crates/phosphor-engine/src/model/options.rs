@@ -304,7 +304,7 @@ pub struct LaunchSettings {
 
 impl Default for LaunchSettings {
     fn default() -> Self {
-        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: false, transition_effect: "zoom_blur".into() }
+        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: true, transition_effect: "zoom_blur".into() }
     }
 }
 
