@@ -187,7 +187,11 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                         media.match_beat.set(true);
                     }
                     if let Some((bpm, steady)) = media.beat {
-                        hint(ui, format!("visual beat {bpm:.0} BPM · {:.0}% steady", steady * 100.0));
+                        if steady >= crate::media::rhythm::STEADY {
+                            hint(ui, format!("visual beat {bpm:.0} BPM · {:.0}% steady", steady * 100.0));
+                        } else {
+                            hint(ui, format!("no steady visual beat ({:.0}%): not locked", steady * 100.0));
+                        }
                         if sync {
                             if ui.small_button("÷2").on_hover_text("Hits every second beat (half as many beats)").clicked() {
                                 layer.sync_beats = (layer.sync_beats / 2.0).round().max(1.0);
