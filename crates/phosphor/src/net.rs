@@ -36,6 +36,8 @@ pub struct Peer {
     pub token: String,
     /// Guests: the name they typed (shown in the panel and, if on, on the output).
     pub name: String,
+    /// Audio senders: the level of what they're sending (0..1, smoothed), for the Devices panel meter.
+    pub level: f32,
 }
 
 /// Everyone connected, plus disconnect requests and blocked addresses.
@@ -56,11 +58,21 @@ struct Seat {
 }
 
 impl Seat {
+    /// Audio senders: remember how loud the latest chunk was (peaks snap up, then ease down).
+    fn set_level(&self, rms: f32) {
+        if let Ok(mut r) = self.reg.lock()
+            && let Some(p) = r.peers.iter_mut().find(|p| p.id == self.id)
+        {
+            let v = (rms * 4.0).min(1.0);
+            p.level = if v > p.level { v } else { p.level * 0.8 + v * 0.2 };
+        }
+    }
+
     fn join(reg: &Reg, kind: PeerKind, ip: &str, device: &str) -> Self {
         let mut r = reg.lock().unwrap();
         r.next += 1;
         let id = r.next;
-        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false, token: String::new(), name: String::new() });
+        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false, token: String::new(), name: String::new(), level: 0.0 });
         Self { reg: reg.clone(), id }
     }
 
@@ -670,6 +682,9 @@ mod native {
                 }
                 tungstenite::Message::Binary(b) => {
                     let samples: Vec<f32> = b.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                    if !samples.is_empty() {
+                        seat.set_level((samples.iter().map(|v| v * v).sum::<f32>() / samples.len() as f32).sqrt());
+                    }
                     let ratio = rate / 48_000.0;
                     let out_len = (samples.len() as f32 / ratio) as usize;
                     let mut q = ring.lock().unwrap();

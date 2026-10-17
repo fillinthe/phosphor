@@ -30,7 +30,14 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                     };
                     ui.label(format!("{glyph} {}", p.device));
                     ui.monospace(&p.ip);
-                    ui.label(RichText::new(what).small());
+                    if p.kind == crate::net::PeerKind::Audio {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(what).small());
+                            ui.add(egui::ProgressBar::new(p.level).desired_width(60.0).desired_height(8.0)).on_hover_text("Level of the audio this phone is sending");
+                        });
+                    } else {
+                        ui.label(RichText::new(what).small());
+                    }
                     hint(ui, ago(p.since));
                     ui.horizontal(|ui| {
                         if ui.small_button("Disconnect").on_hover_text("Drops it now; it can reconnect").clicked() {
