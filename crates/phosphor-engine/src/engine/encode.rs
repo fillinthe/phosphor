@@ -117,7 +117,7 @@ impl Engine {
                 "fs_rutt_points" => (pass.uniforms.p[0][0] as u32).max(2) * (pass.uniforms.p[0][1] as u32).max(2),
                 _ => 3,
             };
-            let pipeline = self.gpu.pipeline(pass.entry).clone();
+            let pipeline = self.gpu.pipeline_for(pass.entry, pass.target.texture().format()).clone();
             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(pass.entry),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {

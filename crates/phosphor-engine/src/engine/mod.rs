@@ -288,7 +288,7 @@ impl Engine {
             let prelude_lines = crate::shaders::common_source().lines().count() as u32 + 1;
             let result = crate::custom::validate(&full, prelude_lines).map_err(|e| e.to_string()).map(|()| {
                 let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(entry), source: wgpu::ShaderSource::Wgsl(full.into()) });
-                let pipeline = crate::gpu::build_pipeline(&device, &layout, &module, entry);
+                let pipeline = crate::gpu::build_pipeline(&device, &layout, &module, entry, crate::gpu::FORMAT);
                 (module, pipeline)
             });
             let _ = tx.send((entry, result));

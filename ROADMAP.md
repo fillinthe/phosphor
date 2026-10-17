@@ -215,7 +215,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] ISF import (`crates/phosphor-isf`): GLSL → WGSL via naga; 264 of 406 shaders on this Mac convert
       (233/327 of /Library/Graphics/ISF); converted in the background, compiled lazily (2 per frame)
 - [x] ISF multi-pass / persistent buffers, up to 44 params (341/406 convert)
-- [x] ISF imported images ✔, MadMapper includes ✔ (MadNoise, MadSDF, MadCommon), curve/audio inputs ✔; FLOAT buffers still 8-bit
+- [x] ISF imported images ✔, MadMapper includes ✔ (MadNoise, MadSDF, MadCommon), curve/audio inputs ✔, FLOAT buffers (16-bit) ✔
 - [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
       Optical Flow and lit (normals) Rutt-Etra rendering. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)

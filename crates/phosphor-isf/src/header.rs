@@ -12,7 +12,7 @@ pub struct PassSpec {
     pub target: Option<String>,
     /// Keeps its contents between frames (feedback).
     pub persistent: bool,
-    /// Asked for a float buffer (rendered 8-bit for now).
+    /// Asked for a float buffer (rendered as 16-bit float).
     pub float: bool,
     /// Size expressions, e.g. "$WIDTH/4.0" or "floor($HEIGHT*scale)".
     pub width: Option<String>,

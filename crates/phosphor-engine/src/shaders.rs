@@ -335,6 +335,8 @@ pub struct PassPlan {
 pub struct PlanPass {
     /// Buffer index this pass writes, or `None` for the output.
     pub target: Option<usize>,
+    /// The buffer it writes is 16-bit float (ISF `FLOAT: true`): feedback and accumulation keep their precision.
+    pub float: bool,
     /// Size expressions (`$WIDTH`, `$HEIGHT`, parameter names); `None` = full size.
     pub width: Option<String>,
     pub height: Option<String>,
