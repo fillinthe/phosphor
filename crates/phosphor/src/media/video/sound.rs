@@ -273,7 +273,8 @@ impl Track {
                     }
                     Ok(()) => {}
                     Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
-                    Err(_) => {
+                    Err(e) => {
+                        log::debug!("{}: packet read ended: {e}", self.path);
                         let _ = self.dec.send_eof();
                         // Drain what's left; then the next receive says Eof.
                         return match self.dec.receive_frame(&mut self.frame) {
@@ -298,26 +299,21 @@ impl Track {
     }
 }
 
-/// Any decoded sound → stereo f32 at the output rate.
+/// Any decoded sound → stereo f32 at the output rate: samples are read in whatever format the decoder gives
+/// (8/16/32-bit ints, floats, packed or planar), mixed to stereo and resampled by linear interpolation. Our own,
+/// because FFmpeg's resampler rejects PCM frames that come without a channel layout (wav, aiff).
 struct Resampler {
-    ctx: ff::software::resampling::Context,
     src: (ff::format::Sample, u32, i32),
     dst_rate: u32,
+    /// Position in the source (in frames) of the next output sample.
+    pos: f64,
+    /// The last source frame, for interpolating across frame boundaries.
+    carry: Option<[f32; 2]>,
 }
 
 impl Resampler {
     fn new(f: &ff::frame::Audio, dst_rate: u32) -> Option<Self> {
-        let layout = if f.channel_layout().channels() > 0 { f.channel_layout() } else { ff::ChannelLayout::default(f.channels() as i32) };
-        let ctx = ff::software::resampling::Context::get(
-            f.format(),
-            layout,
-            f.rate(),
-            ff::format::Sample::F32(ff::format::sample::Type::Packed),
-            ff::ChannelLayout::STEREO,
-            dst_rate,
-        )
-        .ok()?;
-        Some(Self { ctx, src: (f.format(), f.rate(), f.channels() as i32), dst_rate })
+        Some(Self { src: (f.format(), f.rate(), f.channels() as i32), dst_rate, pos: 0.0, carry: None })
     }
 
     fn matches(&self, f: &ff::frame::Audio) -> bool {
@@ -326,13 +322,95 @@ impl Resampler {
 
     /// Converted samples (stereo interleaved).
     fn run(&mut self, f: &ff::frame::Audio) -> Option<Vec<f32>> {
-        let cap = (f.samples() as u64 * self.dst_rate as u64 / self.src.1.max(1) as u64) as usize + 256;
-        let mut out = ff::frame::Audio::new(ff::format::Sample::F32(ff::format::sample::Type::Packed), cap, ff::ChannelLayout::STEREO);
-        self.ctx.run(f, &mut out).ok()?;
-        let n = out.samples() * 2;
-        let bytes = out.data(0);
-        Some(bytes[..(n * 4).min(bytes.len())].chunks_exact(4).map(|b| f32::from_ne_bytes([b[0], b[1], b[2], b[3]])).collect())
+        let stereo = to_stereo(f)?;
+        let n = stereo.len() / 2;
+        let src_rate = self.src.1.max(1) as f64;
+        let step = src_rate / self.dst_rate.max(1) as f64;
+        if (step - 1.0).abs() < 1e-6 {
+            return Some(stereo);
+        }
+        // Source frames available: carry (index -1) then this frame's 0..n.
+        let at = |i: i64| -> [f32; 2] {
+            if i < 0 {
+                self.carry.unwrap_or([stereo[0], stereo[1]])
+            } else {
+                let k = (i as usize).min(n - 1) * 2;
+                [stereo[k], stereo[k + 1]]
+            }
+        };
+        let mut out = Vec::with_capacity((n as f64 / step) as usize + 2);
+        let mut pos = self.pos - 1.0; // relative to the carry frame at -1
+        while pos < (n - 1) as f64 {
+            let i = pos.floor();
+            let t = (pos - i) as f32;
+            let (a, b) = (at(i as i64), at(i as i64 + 1));
+            out.push(a[0] + (b[0] - a[0]) * t);
+            out.push(a[1] + (b[1] - a[1]) * t);
+            pos += step;
+        }
+        self.pos = pos - (n - 1) as f64;
+        self.carry = Some(at(n as i64 - 1));
+        Some(out)
     }
+}
+
+/// A decoded frame as stereo interleaved f32 (mono doubled, more channels averaged in pairs).
+fn to_stereo(f: &ff::frame::Audio) -> Option<Vec<f32>> {
+    use ff::format::Sample as S;
+    use ff::format::sample::Type as T;
+    let ch = f.channels().max(1) as usize;
+    let n = f.samples();
+    let planar = matches!(f.format(), S::U8(T::Planar) | S::I16(T::Planar) | S::I32(T::Planar) | S::I64(T::Planar) | S::F32(T::Planar) | S::F64(T::Planar));
+    let bytes_per = match f.format() {
+        S::U8(_) => 1,
+        S::I16(_) => 2,
+        S::I32(_) | S::F32(_) => 4,
+        S::I64(_) | S::F64(_) => 8,
+        S::None => return None,
+    };
+    let sample = |plane: usize, idx: usize| -> f32 {
+        // Packed: everything in plane 0, interleaved; planar: one plane per channel.
+        let (data, off) = if planar { (f.data(plane), idx * bytes_per) } else { (f.data(0), (idx * ch + plane) * bytes_per) };
+        if off + bytes_per > data.len() {
+            return 0.0;
+        }
+        let b = &data[off..off + bytes_per];
+        match f.format() {
+            S::U8(_) => (b[0] as f32 - 128.0) / 128.0,
+            S::I16(_) => i16::from_ne_bytes([b[0], b[1]]) as f32 / 32768.0,
+            S::I32(_) => i32::from_ne_bytes([b[0], b[1], b[2], b[3]]) as f32 / 2_147_483_648.0,
+            S::I64(_) => i64::from_ne_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]) as f32 / 9.223_372e18,
+            S::F32(_) => f32::from_ne_bytes([b[0], b[1], b[2], b[3]]),
+            S::F64(_) => f64::from_ne_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]) as f32,
+            S::None => 0.0,
+        }
+    };
+    let mut out = Vec::with_capacity(n * 2);
+    for i in 0..n {
+        let (l, r) = match ch {
+            1 => {
+                let v = sample(0, i);
+                (v, v)
+            }
+            2 => (sample(0, i), sample(1, i)),
+            _ => {
+                let (mut l, mut r, mut nl, mut nr) = (0.0, 0.0, 0, 0);
+                for c in 0..ch {
+                    if c % 2 == 0 {
+                        l += sample(c, i);
+                        nl += 1;
+                    } else {
+                        r += sample(c, i);
+                        nr += 1;
+                    }
+                }
+                (l / nl.max(1) as f32, r / nr.max(1) as f32)
+            }
+        };
+        out.push(l);
+        out.push(r);
+    }
+    Some(out)
 }
 
 impl Clip {
@@ -497,5 +575,45 @@ mod tests {
         let first_loud = samples.chunks(2).position(|f| f[0].abs() > 0.1).expect("beep heard");
         let at = first_loud as f64 / 48_000.0;
         assert!((at - 0.1).abs() < 0.02, "beep at {at:.3} s after the jump, expected 0.100");
+    }
+}
+
+#[cfg(test)]
+mod resample_tests {
+    use super::*;
+
+    fn i16_frame(samples: usize, rate: u32) -> ff::frame::Audio {
+        let mut f = ff::frame::Audio::new(ff::format::Sample::I16(ff::format::sample::Type::Packed), samples, ff::ChannelLayout::STEREO);
+        f.set_rate(rate);
+        let data = f.data_mut(0);
+        for i in 0..samples {
+            // Left: a ramp; right: its negative.
+            let v = ((i as f32 / samples as f32) * 32767.0) as i16;
+            data[i * 4..i * 4 + 2].copy_from_slice(&v.to_ne_bytes());
+            data[i * 4 + 2..i * 4 + 4].copy_from_slice(&(-v).to_ne_bytes());
+        }
+        f
+    }
+
+    #[test]
+    fn packed_i16_becomes_stereo_f32() {
+        let f = i16_frame(100, 48_000);
+        let s = to_stereo(&f).unwrap();
+        assert_eq!(s.len(), 200);
+        assert!((s[2 * 50] - 0.5).abs() < 0.01 && (s[2 * 50 + 1] + 0.5).abs() < 0.01, "{:?}", &s[100..102]);
+    }
+
+    #[test]
+    fn half_speed_doubles_the_samples_and_keeps_the_ramp() {
+        let f = i16_frame(1000, 48_000);
+        let mut r = Resampler::new(&f, 96_000).unwrap();
+        let out = r.run(&f).unwrap();
+        let n = out.len() / 2;
+        assert!((1990..=2002).contains(&n), "{n}");
+        // Still a ramp: monotonic on the left channel.
+        assert!(out.chunks_exact(2).map(|c| c[0]).zip(out.chunks_exact(2).map(|c| c[0]).skip(1)).all(|(a, b)| b >= a - 1e-4));
+        // Same rate: samples pass straight through.
+        let mut same = Resampler::new(&f, 48_000).unwrap();
+        assert_eq!(same.run(&f).unwrap().len(), 2000);
     }
 }
