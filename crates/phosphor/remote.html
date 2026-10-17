@@ -107,6 +107,8 @@
   <span class="sp"></span>
   <span class="val" id="bpm">120</span>
   <button id="timing" title="When clips land: now, on the beat or on the bar">Now</button>
+  <button id="autoshow" title="Auto show: the next column every few bars, Surprise on drops">Auto</button>
+  <button id="surprise" title="A new look on every layer">Surprise</button>
   <button id="tap" class="big">TAP</button>
 </header>
 <div id="lock">
@@ -169,6 +171,7 @@ function render() {
   if (guest) renderPlay();
   $('#bpm').textContent = state.bpm.toFixed(1) + ' bpm';
   const tb = $('#timing'); tb.textContent = { Now: 'Now', Beat: 'Beat', Bar: 'Bar' }[state.timing] || 'Now'; tb.classList.toggle('on', state.timing && state.timing !== 'Now');
+  $('#autoshow').classList.toggle('on', !!state.autoshow);
   setIfIdle($('#master'), state.master); $('#masterv').textContent = Math.round(state.master * 100) + '%';
   // Mixer strips (rebuilt only when the layer set changes).
   const sig = state.layers.map(l => l.id + l.name).join('|') + '|' + state.selected;
@@ -363,6 +366,8 @@ document.addEventListener('click', e => {
 });
 $('#tap').onclick = () => send({ t: 'tap' });
 $('#playsurprise').onclick = () => send({ t: 'surprise' });
+$('#autoshow').onclick = () => send({ t: 'autoshow', v: !(state && state.autoshow) });
+$('#surprise').onclick = () => send({ t: 'surprise' });
 $('#timing').onclick = () => { const order = ['Now', 'Beat', 'Bar']; const cur = state ? state.timing : 'Now'; send({ t: 'timing', v: order[(order.indexOf(cur) + 1) % 3] }); };
 const master = slider('master', 0, 1, 1, v => queue('master', { t: 'master', v }));
 master.id = 'master'; $('#master').replaceWith(master);
