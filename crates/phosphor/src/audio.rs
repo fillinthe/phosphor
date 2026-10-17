@@ -85,31 +85,21 @@ impl BeatTracker {
         beat
     }
 
-    /// Folds the gaps into one octave (80–160 BPM), takes the median, and scores how many agree.
+    /// The beat period is the typical gap between kicks; a missed kick shows as a double (or triple) gap, so gaps
+    /// are divided by the whole number of typical gaps they span. Confidence = the share of gaps that agree.
     fn estimate(&mut self) {
         if self.intervals.len() < 4 {
             return;
         }
-        let mut periods: Vec<f32> = self
-            .intervals
-            .iter()
-            .map(|&iv| {
-                let mut p = iv;
-                while p < 0.375 {
-                    p *= 2.0;
-                }
-                while p > 0.75 {
-                    p /= 2.0;
-                }
-                p
-            })
-            .collect();
-        periods.sort_by(|a, b| a.total_cmp(b));
-        let median = periods[periods.len() / 2];
-        let agreeing: Vec<f32> = periods.iter().copied().filter(|p| ((p - median) / median).abs() < 0.06).collect();
-        self.confidence = agreeing.len() as f32 / periods.len() as f32;
+        let mut sorted: Vec<f32> = self.intervals.iter().copied().collect();
+        sorted.sort_by(|a, b| a.total_cmp(b));
+        // The typical gap: the median of the shorter half (long gaps are usually missed kicks).
+        let base = sorted[sorted.len() / 3];
+        let folded: Vec<f32> = sorted.iter().map(|iv| iv / (iv / base).round().max(1.0)).collect();
+        let agreeing: Vec<f32> = folded.iter().copied().filter(|p| ((p - base) / base).abs() < 0.06).collect();
+        self.confidence = agreeing.len() as f32 / folded.len() as f32;
         // The mean of the agreeing gaps, not the median: beat times are quantised to frames (16.7 ms at 60 fps),
-        // so the median lands on a whole number of frames (128 BPM reads as 128.6); the mean averages that out.
+        // so a median lands on a whole number of frames (128 BPM reads as 128.6); the mean averages that out.
         let mean = agreeing.iter().sum::<f32>() / agreeing.len().max(1) as f32;
         self.bpm = 60.0 / mean.max(0.1);
     }
