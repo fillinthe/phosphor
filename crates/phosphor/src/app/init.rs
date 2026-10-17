@@ -126,6 +126,8 @@ impl PhosphorApp {
                 rhythm: Default::default(),
                 updater: crate::update::Updater::with_skipped(stored(KEY_UPDATE_SKIP).unwrap_or_default()),
                 remote_password: stored(KEY_REMOTE_PASSWORD).unwrap_or_default(),
+                render_rate: stored(KEY_RENDER_RATE).and_then(|t| layout::from_text(&t)).unwrap_or_default(),
+                render_pacer: Default::default(),
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
                 #[cfg(not(target_arch = "wasm32"))]
                 dialogs: Default::default(),
@@ -201,6 +203,7 @@ impl PhosphorApp {
             layout_draft: None,
             last_ui: (web_time::Instant::now(), 0.0),
             hidden_pacer: Default::default(),
+            ui_frames: 0,
             #[cfg(not(target_arch = "wasm32"))]
             heartbeat: Default::default(),
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false }),
@@ -221,6 +224,13 @@ impl PhosphorApp {
         app.install_native_menu();
         if let Some(i) = app.bench.as_ref().and_then(|b| b.cfg.layout.as_deref()).and_then(|n| super::layout::LAYOUTS.iter().position(|(l, _)| *l == n)) {
             app.switch_workspace(i);
+        }
+        if let Some(rate) = app.bench.as_ref().and_then(|b| b.cfg.rate.clone()) {
+            app.state.render_rate = match rate.as_str() {
+                "display" => phosphor_engine::RenderRate::Display,
+                "30" => phosphor_engine::RenderRate::Fps30,
+                _ => phosphor_engine::RenderRate::Fps60,
+            };
         }
         if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.tab.clone())
             && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)

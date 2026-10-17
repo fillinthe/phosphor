@@ -17,6 +17,8 @@ pub struct BenchConfig {
     pub effects: Vec<String>,
     pub size: Option<(u32, u32)>,
     pub snapshot: Option<String>,
+    /// `--rate display|60|30`: the engine's render rate for this run (default: the 60 fps preference).
+    pub rate: Option<String>,
     /// Export the bench project as a standalone show into this folder (tests Export Show).
     pub export: Option<String>,
     /// Bring this panel to the front (its title, e.g. "Control Surface"), for screenshots.
@@ -81,6 +83,7 @@ impl BenchConfig {
                 ("--movie", Some(v)) => cfg.movies.push(v),
                 ("--fx", Some(v)) => cfg.effects.push(v),
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
+                ("--rate", Some(v)) => cfg.rate = Some(v),
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
                 ("--select", Some(v)) => cfg.select = v.parse().ok(),

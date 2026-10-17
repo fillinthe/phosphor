@@ -2,6 +2,16 @@
 
 use super::*;
 
+impl State {
+    /// Is an engine frame due now, at the chosen render rate?
+    pub(crate) fn render_due(&mut self, now: f64) -> bool {
+        match self.render_rate.fps() {
+            None => true,
+            Some(fps) => self.render_pacer.due(now, fps),
+        }
+    }
+}
+
 impl PhosphorApp {
     /// Advances media, renders the frame, and keeps the preview + thumbnail textures registered.
     pub(crate) fn render(&mut self, now: f64) {

@@ -71,6 +71,7 @@ const KEY_RECENT: &str = "recent_effects";
 const KEY_REMOTE_PASSWORD: &str = "remote_password";
 const KEY_UPDATE_SKIP: &str = "update_skip";
 const KEY_LOCK: &str = "lock";
+const KEY_RENDER_RATE: &str = "render_rate";
 const KEY_RECENT_PROJECTS: &str = "recent_projects";
 /// In-window menu clicks, queued for `menu_actions`.
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
@@ -182,6 +183,9 @@ pub struct State {
     pub updater: crate::update::Updater,
     /// Password phones need to control (viewing never needs it). Empty = no password.
     pub remote_password: String,
+    /// How often the engine draws (Output panel); the UI repaints at the same pace.
+    pub render_rate: phosphor_engine::RenderRate,
+    pub render_pacer: crate::pacing::FramePacer,
     pub require_password: bool,
     #[cfg(not(target_arch = "wasm32"))]
     pub dialogs: crate::dialogs::Dialogs,
@@ -582,6 +586,8 @@ pub struct PhosphorApp {
     last_ui: (web_time::Instant, f64),
     /// Paces rendering while the window is hidden (60 fps).
     hidden_pacer: crate::pacing::FramePacer,
+    /// UI passes so far (the bench reports UI fps next to engine fps).
+    ui_frames: u64,
     #[cfg(not(target_arch = "wasm32"))]
     heartbeat: crate::recovery::Heartbeat,
 }
@@ -595,7 +601,7 @@ impl eframe::App for PhosphorApp {
         let idle = at.elapsed().as_secs_f64();
         if idle > 0.05 {
             let now = time + idle;
-            if self.hidden_pacer.due(now, 60) {
+            if self.hidden_pacer.due(now, self.state.render_rate.fps().unwrap_or(60).min(60)) {
                 self.render(now);
             }
             ctx.request_repaint();
@@ -604,15 +610,19 @@ impl eframe::App for PhosphorApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         // When the window is covered, macOS stops pacing redraws to the display, and the loop
-        // would spin at thousands of fps. Faster than any display (< 4 ms apart): hold ~120 fps.
+        // would spin at thousands of fps: hold the render rate (120 at most) with a sleep.
+        // With a render-rate cap, a pass that comes early (a 120 Hz display) waits for its slot instead:
+        // UI and engine then both run at the cap, and the core idles in between.
         #[cfg(not(target_arch = "wasm32"))]
         {
             let since = self.last_ui.0.elapsed().as_secs_f64();
-            if since < 0.004 {
-                std::thread::sleep(std::time::Duration::from_secs_f64(1.0 / 120.0 - since));
+            let slot = self.state.render_rate.fps().map_or(1.0 / 120.0, |f| 1.0 / f as f64);
+            if since < slot - 0.0015 {
+                std::thread::sleep(std::time::Duration::from_secs_f64(slot - since - 0.001));
             }
         }
         self.last_ui = (web_time::Instant::now(), ui.ctx().input(|i| i.time));
+        self.ui_frames += 1;
         // A bug in one frame should not take the show down: skip that frame and carry on.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.ui_frame(ui, frame)));
         if result.is_err() {

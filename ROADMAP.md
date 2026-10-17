@@ -113,7 +113,8 @@ Legend: [x] done · [~] in progress · [ ] not started
       submits per frame). Tried 2026-10-16: one GPU submission per frame (engine command buffer carried by an egui paint callback):
       no gain in three A/B runs (7.3 vs 7.5 ms CPU per frame), dropped. The bench's CPU figure still swings with
       display pacing (60 vs 120 Hz, vsync vs sleep); a fixed-rate bench mode would make small wins measurable.
-      The render thread moves work off the UI but doesn't remove it
+      The render thread moves work off the UI but doesn't remove it. 2026-10-17: "Render at" 60 fps default (Output panel):
+      41 → 31 % of a core on the 120 Hz display (30 fps: 17 %); the UI pass waits for its slot at a cap.
 
 ### Phase 1: Media
 - [x] Video playback via FFmpeg 9 + VideoToolbox hardware decode (H.264, HEVC, ProRes, VP9, AV1),
