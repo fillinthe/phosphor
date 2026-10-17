@@ -169,68 +169,83 @@ impl Gpu {
     pub fn pipeline(&mut self, entry: &'static str) -> &wgpu::RenderPipeline {
         let Self { device, module, pipeline_layout, pipelines, custom_modules, .. } = self;
         let module = custom_modules.get(entry).unwrap_or(module);
-        // Mapping surfaces are real quads blended onto the output; everything else is a
-        // fullscreen triangle that overwrites its target.
-        let surface = entry == "fs_surface";
-        // Mesh-warped surfaces and masks draw triangles from a vertex buffer (x, y, s, t).
-        let mesh = entry == "fs_mesh" || entry == "fs_mask";
-        // Rutt-Etra draws additive line lists generated in the vertex shader.
-        let rutt = entry == "fs_rutt" || entry == "fs_rutt_points";
-        let points = entry == "fs_rutt_points";
-        let additive = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add };
-        pipelines.entry(entry).or_insert_with(|| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(entry),
-                layout: Some(pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module,
-                    entry_point: Some(if surface {
-                        "vs_surface"
-                    } else if mesh {
-                        "vs_mesh"
-                    } else if points {
-                        "vs_rutt_points"
-                    } else if rutt {
-                        "vs_rutt"
-                    } else {
-                        "vs_fullscreen"
-                    }),
-                    compilation_options: Default::default(),
-                    buffers: if mesh { MESH_VERTEX } else { &[] },
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology: if points {
-                        wgpu::PrimitiveTopology::PointList
-                    } else if rutt {
-                        wgpu::PrimitiveTopology::LineList
-                    } else {
-                        wgpu::PrimitiveTopology::TriangleList
-                    },
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module,
-                    entry_point: Some(entry),
-                    compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: FORMAT,
-                        blend: if surface || entry == "fs_mesh" || entry == "fs_mask" {
-                            Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
-                        } else if rutt {
-                            Some(wgpu::BlendState { color: additive, alpha: additive })
-                        } else {
-                            None
-                        },
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
-        })
+        pipelines.entry(entry).or_insert_with(|| build_pipeline(device, pipeline_layout, module, entry))
     }
+
+    /// What a background compile needs: the device and the shared pipeline layout (both are handles).
+    pub fn compile_parts(&self) -> (wgpu::Device, wgpu::PipelineLayout) {
+        (self.device.clone(), self.pipeline_layout.clone())
+    }
+
+    /// Installs a module + pipeline built elsewhere (background shader compilation).
+    pub fn install_custom(&mut self, entry: &'static str, module: wgpu::ShaderModule, pipeline: wgpu::RenderPipeline) {
+        self.custom_modules.insert(entry, module);
+        self.pipelines.insert(entry, pipeline);
+    }
+}
+
+/// The render pipeline for one fragment entry: which vertex stage, topology and blending it needs.
+/// Free function so a worker thread can build it (every wgpu object here is a thread-safe handle).
+pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &'static str) -> wgpu::RenderPipeline {
+    // Mapping surfaces are real quads blended onto the output; everything else is a
+    // fullscreen triangle that overwrites its target.
+    let surface = entry == "fs_surface";
+    // Mesh-warped surfaces and masks draw triangles from a vertex buffer (x, y, s, t).
+    let mesh = entry == "fs_mesh" || entry == "fs_mask";
+    // Rutt-Etra draws additive line lists generated in the vertex shader.
+    let rutt = entry == "fs_rutt" || entry == "fs_rutt_points";
+    let points = entry == "fs_rutt_points";
+    let additive = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add };
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(entry),
+        layout: Some(pipeline_layout),
+        vertex: wgpu::VertexState {
+            module,
+            entry_point: Some(if surface {
+                "vs_surface"
+            } else if mesh {
+                "vs_mesh"
+            } else if points {
+                "vs_rutt_points"
+            } else if rutt {
+                "vs_rutt"
+            } else {
+                "vs_fullscreen"
+            }),
+            compilation_options: Default::default(),
+            buffers: if mesh { MESH_VERTEX } else { &[] },
+        },
+        primitive: wgpu::PrimitiveState {
+            topology: if points {
+                wgpu::PrimitiveTopology::PointList
+            } else if rutt {
+                wgpu::PrimitiveTopology::LineList
+            } else {
+                wgpu::PrimitiveTopology::TriangleList
+            },
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module,
+            entry_point: Some(entry),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: FORMAT,
+                blend: if surface || entry == "fs_mesh" || entry == "fs_mask" {
+                    Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
+                } else if rutt {
+                    Some(wgpu::BlendState { color: additive, alpha: additive })
+                } else {
+                    None
+                },
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    })
 }
 
 const MESH_ATTRIBUTES: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];

@@ -201,13 +201,20 @@ pub struct Engine {
     pending_modules: HashMap<&'static str, String>,
     /// Shaders that failed to build, by entry, with the error.
     pub failed_modules: HashMap<&'static str, String>,
-    compile_budget: u32,
+    /// Shaders being compiled on a worker thread right now (drawn blank until they arrive).
+    compiling: HashSet<&'static str>,
+    compiled_tx: std::sync::mpsc::Sender<Compiled>,
+    compiled_rx: std::sync::mpsc::Receiver<Compiled>,
 }
+
+/// A background shader build: entry → module + pipeline, or the error.
+type Compiled = (&'static str, Result<(wgpu::ShaderModule, wgpu::RenderPipeline), String>);
 
 impl Engine {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
         let mut gpu = Gpu::new(device, queue);
         gpu.prewarm();
+        let compiled = std::sync::mpsc::channel();
         Self {
             gpu,
             layers: HashMap::new(),
@@ -235,7 +242,9 @@ impl Engine {
             custom_generation: 0,
             pending_modules: HashMap::new(),
             failed_modules: HashMap::new(),
-            compile_budget: 0,
+            compiling: HashSet::new(),
+            compiled_tx: compiled.0,
+            compiled_rx: compiled.1,
         }
     }
 
@@ -248,27 +257,45 @@ impl Engine {
 
     /// True if `entry` is ready to draw. Compiles pending shaders within a small per-frame budget
     /// so browsing a big library never stalls the show.
+    /// Is this shader ready to draw? An imported shader used for the first time is validated and built on a
+    /// worker thread (naga + the Metal compiler can take a good fraction of a second), so the show never
+    /// hitches: the layer draws blank until it arrives.
     fn ensure_module(&mut self, entry: &'static str) -> bool {
-        if self.failed_modules.contains_key(entry) {
+        if self.failed_modules.contains_key(entry) || self.compiling.contains(entry) {
             return false;
         }
-        let Some(src) = self.pending_modules.get(entry) else { return true };
-        if self.compile_budget == 0 {
-            return false;
+        let Some(src) = self.pending_modules.remove(entry) else { return true };
+        self.compiling.insert(entry);
+        let (device, layout) = self.gpu.compile_parts();
+        let tx = self.compiled_tx.clone();
+        let spawned = std::thread::Builder::new().name(format!("shader: {entry}")).spawn(move || {
+            let full = format!("{}\n{src}", crate::shaders::common_source());
+            let prelude_lines = crate::shaders::common_source().lines().count() as u32 + 1;
+            let result = crate::custom::validate(&full, prelude_lines).map_err(|e| e.to_string()).map(|()| {
+                let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(entry), source: wgpu::ShaderSource::Wgsl(full.into()) });
+                let pipeline = crate::gpu::build_pipeline(&device, &layout, &module, entry);
+                (module, pipeline)
+            });
+            let _ = tx.send((entry, result));
+        });
+        if spawned.is_err() {
+            self.compiling.remove(entry);
+            self.failed_modules.insert(entry, "couldn't start the shader compiler thread".into());
         }
-        self.compile_budget -= 1;
-        let src = src.clone();
-        self.pending_modules.remove(entry);
-        let full = format!("{}\n{src}", crate::shaders::common_source());
-        let prelude_lines = crate::shaders::common_source().lines().count() as u32 + 1;
-        if let Err(e) = crate::custom::validate(&full, prelude_lines) {
-            self.failed_modules.insert(entry, e.to_string());
-            return false;
+        false
+    }
+
+    /// Installs shaders the worker threads finished since the last frame.
+    fn collect_compiled(&mut self) {
+        while let Ok((entry, result)) = self.compiled_rx.try_recv() {
+            self.compiling.remove(entry);
+            match result {
+                Ok((module, pipeline)) => self.gpu.install_custom(entry, module, pipeline),
+                Err(e) => {
+                    self.failed_modules.insert(entry, e);
+                }
+            }
         }
-        let module = self.gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(entry), source: wgpu::ShaderSource::Wgsl(full.into()) });
-        self.gpu.custom_modules.insert(entry, module);
-        self.gpu.pipeline(entry);
-        true
     }
 
     /// Compiles a user shader (see `custom`). On success it is registered under `id` and can be
@@ -338,7 +365,7 @@ impl Engine {
     pub fn render(&mut self, comp: &Composition, time: f32, mods: &ModInputs) -> FrameInfo {
         let (w, h) = (comp.width.max(16), comp.height.max(16));
         let device = self.gpu.device.clone();
-        self.compile_budget = 2;
+        self.collect_compiled();
 
         // Drop GPU resources for layers that no longer exist.
         let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).collect();
