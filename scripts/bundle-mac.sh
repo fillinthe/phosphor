@@ -21,6 +21,13 @@ mkdir -p "$APP/Contents/Frameworks"
 cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
 cp vendor/Syphon-LICENSE.txt "$APP/Contents/Resources/"
 
+# The ffmpeg command (streaming, ProRes / H.264 recording) rides along; its libraries are relinked below.
+FFMPEG_BIN="$(command -v ffmpeg || true)"
+if [[ -n "$FFMPEG_BIN" ]]; then
+  cp "$(readlink -f "$FFMPEG_BIN")" "$APP/Contents/MacOS/ffmpeg"
+  chmod 755 "$APP/Contents/MacOS/ffmpeg"
+fi
+
 # FFmpeg and its libraries, so the app (and exported shows) run on Macs without Homebrew.
 python3 -I scripts/bundle-dylibs.py "$APP"
 
@@ -73,6 +80,7 @@ else
 fi
 for lib in "$APP"/Contents/Frameworks/*.dylib; do codesign "${SIGN_ARGS[@]}" "$lib" >/dev/null; done
 codesign "${SIGN_ARGS[@]}" "$APP/Contents/Frameworks/Syphon.framework" >/dev/null
+[[ -f "$APP/Contents/MacOS/ffmpeg" ]] && codesign "${SIGN_ARGS[@]}" "$APP/Contents/MacOS/ffmpeg" >/dev/null
 codesign "${SIGN_ARGS[@]}" --entitlements scripts/Phosphor.entitlements "$APP" >/dev/null
 codesign --verify --deep --strict "$APP"
 echo "built $APP ($(du -sh "$APP" | cut -f1))"
