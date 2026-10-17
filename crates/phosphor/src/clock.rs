@@ -282,6 +282,8 @@ pub struct Downbeat {
     seen: u32,
     /// Beats since the last shift (holds off re-deciding every beat).
     since_shift: u32,
+    /// How many times the bar was moved (diagnostics).
+    pub shifts: u32,
 }
 
 impl Downbeat {
@@ -307,6 +309,7 @@ impl Downbeat {
         let shift = best as i64;
         self.accent.rotate_left(best);
         self.since_shift = 0;
+        self.shifts += 1;
         Some(shift)
     }
 }

@@ -91,7 +91,7 @@ impl PhosphorApp {
             println!("EXPORT app={:?} zip={:?} media={} bytes={} error={:?}", p.output, p.zip, p.media_files, p.bytes, p.error);
         }
         let an = self.state.audio.analysis();
-        println!("BEAT bpm {:.1} confidence {:.2} clock {:.1}", an.bpm, an.confidence, self.state.clock.bpm);
+        println!("BEAT bpm {:.1} confidence {:.2} clock {:.1} follow {} downbeat shifts {}", an.bpm, an.confidence, self.state.clock.bpm, self.state.clock.follow_audio, self.state.clock.downbeat.shifts);
         println!("CONTROL {}", self.state.control.osc_status);
         #[cfg(target_os = "macos")]
         if run.cfg.ndi {
