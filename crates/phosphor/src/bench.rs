@@ -39,6 +39,8 @@ pub struct BenchConfig {
     pub show_clock: bool,
     /// `--record` writes Hap instead of H.264 / ProRes.
     pub hap: bool,
+    /// `--record x.mp4 --hevc`: HEVC through the Mac encoder.
+    pub hevc: bool,
     /// Open the import chooser for this Resolume / VDMX file.
     pub import: Option<String>,
     /// Start in this built-in workspace ("VDMX", "Mapping"…).
@@ -102,6 +104,11 @@ impl BenchConfig {
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
                 ("--hap", _) => {
                     cfg.hap = true;
+                    i += 1;
+                    continue;
+                }
+                ("--hevc", _) => {
+                    cfg.hevc = true;
                     i += 1;
                     continue;
                 }
