@@ -538,6 +538,23 @@ impl Engine {
                     }
                     _ => master.clone(),
                 };
+                // Line slice: a strip along a polyline, drawn like a mesh.
+                if let Some(l) = &s.line {
+                    let hash = hash_points(&l.points, &[l.width.to_bits(), ow, oh]);
+                    let aspect = ow as f32 / oh.max(1) as f32;
+                    let Some(draw) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id), hash, || l.triangles(aspect)) else { continue };
+                    let mut u = Uniforms::with_params(&[]);
+                    u.resolution = [ow as f32, oh as f32];
+                    u.opacity = s.opacity * fade;
+                    u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
+                    u.mode = o.mapping.test_pattern as u32;
+                    u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
+                    u.p[5] = g0;
+                    u.p[6] = g1;
+                    [u.p[7], u.p[8]] = s.color.uniforms();
+                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    continue;
+                }
                 // Mesh warp: one pass drawing the cached, finely subdivided mesh.
                 if let Some(m) = &s.mesh {
                     let hash = hash_points(&m.points, &[m.cols, m.rows]);
