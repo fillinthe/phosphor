@@ -269,7 +269,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 
 ### Engineering
 - [ ] Render on its own thread / own swapchain per output, decoupled from UI repaint
-- [ ] GPU timestamp queries for real GPU frame time
+- [x] GPU timestamp queries for real GPU frame time ✔ 2026-10-17 (Output & Stats, bench gpu_ms)
 - [x] Cache bind groups (`BindCache`): 40 previews ~95% → ~88% app CPU; render time unchanged (~2.1 ms)
 - [x] Import VDMX projects (.vdmx5 XML plist: media-bin pages → banks + collections)
 - [x] Import Resolume Arena compositions (.avc is XML) — layers, clips, decks, tempo, size; + Find Missing Media: layers, clips (file paths) into clip columns, decks → pages,

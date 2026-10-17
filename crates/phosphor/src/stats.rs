@@ -13,6 +13,8 @@ pub struct Snapshot {
     pub memory_mb: f64,
     pub passes: usize,
     pub audio_level: f64,
+    /// GPU time per frame (0 when the adapter has no timestamps).
+    pub gpu_ms: f64,
 }
 
 impl Snapshot {
@@ -21,6 +23,7 @@ impl Snapshot {
             "fps": round(self.fps),
             "frame_ms": round(self.frame_ms),
             "render_ms": round(self.render_ms),
+            "gpu_ms": round(self.gpu_ms),
             "cpu_percent": round(self.cpu_percent),
             "memory_mb": round(self.memory_mb),
             "passes": self.passes,
@@ -48,7 +51,7 @@ impl Stats {
     }
 
     /// Records one frame; returns a fresh snapshot once per second.
-    pub fn record(&mut self, now: f64, render_secs: f64, passes: usize, audio_level: f64) -> Option<Snapshot> {
+    pub fn record(&mut self, now: f64, render_secs: f64, passes: usize, audio_level: f64, gpu_ms: f64) -> Option<Snapshot> {
         self.frames += 1;
         self.render_total += render_secs;
         let elapsed = now - self.window_start;
@@ -69,6 +72,7 @@ impl Stats {
             memory_mb: memory_mb().unwrap_or(0.0),
             passes,
             audio_level,
+            gpu_ms,
         };
         self.window_start = now;
         self.frames = 0;

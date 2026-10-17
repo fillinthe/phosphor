@@ -154,6 +154,7 @@ mod mesh;
 mod passes;
 mod previews;
 mod sample;
+mod timing;
 
 use fit::{fit_transform, push_fit_copy};
 use mesh::{MeshCache, MeshDraw, hash_points};
@@ -176,6 +177,8 @@ pub struct Engine {
     uniform_capacity: usize,
     bind_cache: encode::BindCache,
     capture: Capture,
+    /// GPU time per frame (None when the adapter has no timestamps).
+    gpu_timer: Option<timing::GpuTimer>,
     /// Pictures bound into multi-pass shaders' buffer slots (ISF `IMPORTED`): (entry, slot) → texture.
     plan_images: HashMap<(&'static str, usize), Target>,
     /// Live audio pictures for ISF `audio` / `audioFFT` inputs (one row each), refreshed by the app.
@@ -215,6 +218,7 @@ impl Engine {
         let mut gpu = Gpu::new(device, queue);
         gpu.prewarm();
         let compiled = std::sync::mpsc::channel();
+        let gpu_timer = timing::GpuTimer::new(&gpu.device, &gpu.queue);
         Self {
             gpu,
             layers: HashMap::new(),
@@ -225,6 +229,7 @@ impl Engine {
             uniform_capacity: 0,
             bind_cache: Default::default(),
             capture: Capture::default(),
+            gpu_timer,
             plan_images: HashMap::new(),
             audio_wave: None,
             audio_fft: None,
@@ -246,6 +251,16 @@ impl Engine {
             compiled_tx: compiled.0,
             compiled_rx: compiled.1,
         }
+    }
+
+    /// GPU time of the last measured frame, in milliseconds (None without timestamp support).
+    pub fn gpu_ms(&self) -> Option<f32> {
+        self.gpu_timer.as_ref().and_then(|t| t.last_ms)
+    }
+
+    /// Diagnostics for the bench: is GPU timing on and what has it read.
+    pub fn gpu_timing_status(&self) -> String {
+        self.gpu_timer.as_ref().map_or_else(|| "off (no timestamp queries on this device)".into(), |t| t.status())
     }
 
     /// Registers an already-converted shader (e.g. ISF) that is compiled the first time it is
@@ -366,6 +381,9 @@ impl Engine {
         let (w, h) = (comp.width.max(16), comp.height.max(16));
         let device = self.gpu.device.clone();
         self.collect_compiled();
+        if let Some(t) = &mut self.gpu_timer {
+            t.poll();
+        }
 
         // Drop GPU resources for layers that no longer exist.
         let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).collect();

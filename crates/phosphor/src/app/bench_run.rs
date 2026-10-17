@@ -55,10 +55,14 @@ impl PhosphorApp {
             memory_mb: avg(|s| s.memory_mb),
             passes: steady.last().map_or(0, |s| s.passes),
             audio_level: avg(|s| s.audio_level),
+            gpu_ms: avg(|s| s.gpu_ms),
         };
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
+        if let Some(e) = &self.state.engine {
+            println!("GPU timing: {}", e.gpu_timing_status());
+        }
         if self.state.comp.auto_show.enabled {
             let reacting = self.state.comp.layers.iter().filter(|l| !l.generator_mods.is_empty() || l.effects.iter().any(|f| !f.mods.is_empty())).count();
             println!("AUTOSHOW columns fired: {} · layers reacting: {reacting}/{}", self.state.auto_run.fired, self.state.comp.layers.len());

@@ -130,7 +130,7 @@ impl Engine {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                timestamp_writes: self.gpu_timer.as_ref().and_then(|t| t.writes(i, passes.len())),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
@@ -141,7 +141,15 @@ impl Engine {
             }
             rp.draw(0..vertices, 0..1);
         }
+        if let Some(t) = &mut self.gpu_timer
+            && !passes.is_empty()
+        {
+            t.finish(&mut encoder);
+        }
         self.gpu.queue.submit([encoder.finish()]);
+        if let Some(t) = &mut self.gpu_timer {
+            t.after_submit();
+        }
     }
 
     /// Queues a non-blocking copy of the current output for streaming/recording.
