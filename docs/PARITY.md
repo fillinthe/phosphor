@@ -20,7 +20,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | **Match the beat**: the movie's own visual rhythm detected and locked to the tempo (loop in + beats set) | — | ✅ (beyond the others) |
 | Ableton Link | Resolume, VDMX | ✅ |
 | Cue list (fades, follow-on, GO/back mappable) + timecode (show clock, MIDI timecode, LTC audio) | Resolume Arena, MadMapper | ✅ |
-| Audio playback of an audio-only file as a layer (sound + visualiser) | Resolume | ⬜ |
+| Audio playback of an audio-only file as a layer (sound + visualiser) | Resolume | ✅ sound files are clips; visualiser = any reactive generator with Audio → Clip sound |
 | Visuals react to the clips' own sound (no mic, cable or loopback) | Resolume (audio FFT from clips) | ✅ Audio panel → "Clip sound" |
 
 ## Speed (getting visuals up fast)

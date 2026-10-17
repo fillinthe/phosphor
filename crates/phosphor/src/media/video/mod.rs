@@ -138,6 +138,8 @@ pub struct VideoPlayer {
     passes: u64,
     /// The movie's sound (None = no audio track, or sound off).
     sound: Option<sound::ClipAudio>,
+    /// A sound file with no picture: the clock runs, the sound follows it, no frames ever come.
+    audio_only: bool,
 }
 
 enum Msg {
@@ -190,7 +192,11 @@ impl VideoPlayer {
     pub fn open(path: &str) -> Result<Self, String> {
         init();
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
-        let dec = Decoder::open(path).map_err(|e| format!("{name}: {e}"))?;
+        let dec = match Decoder::open(path) {
+            Ok(dec) => dec,
+            Err(e) if e.contains("no video stream") => return Self::open_audio_only(path, &name),
+            Err(e) => return Err(format!("{name}: {e}")),
+        };
         let mut p = Self::start(name, dec, false)?;
         p.sound = sound::ClipAudio::open(path);
         Ok(p)
@@ -262,6 +268,57 @@ impl VideoPlayer {
             shown_pts: 0.0,
             passes: 0,
             sound: None,
+            audio_only: false,
+        })
+    }
+
+    /// A file with sound but no picture (mp3, wav, …): plays as a clip (loop, in/out, speed, beat sync, the
+    /// scrub bar) whose picture is empty; its sound drives the "Clip sound" analyser like any movie's.
+    fn open_audio_only(path: &str, name: &str) -> Result<Self, String> {
+        let input = ff::format::input(&path).map_err(|e| format!("{name}: can't open ({e})"))?;
+        let st = input.streams().best(ff::media::Type::Audio).ok_or_else(|| format!("{name}: no video or audio stream"))?;
+        let tb = f64::from(st.time_base());
+        let duration = if input.duration() > 0 {
+            Some(input.duration() as f64 / f64::from(ff::ffi::AV_TIME_BASE))
+        } else if st.duration() > 0 && tb > 0.0 {
+            Some(st.duration() as f64 * tb)
+        } else {
+            None
+        };
+        drop(input);
+        let sound = sound::ClipAudio::open(path);
+        let shared = Arc::new(Shared {
+            ctl: Mutex::new(Ctl { looping: true, mode: PlayMode::default(), quit: false, seek: None }),
+            cv: Condvar::new(),
+            clock: AtomicU64::new(0f64.to_bits()),
+            hardware: AtomicBool::new(false),
+            decoded: AtomicU64::new(0),
+            skipped: AtomicU64::new(0),
+            pool: Mutex::new(Vec::new()),
+            codec: Mutex::new("audio".into()),
+        });
+        Ok(Self {
+            rx: None,
+            shared,
+            thread: None,
+            playing: true,
+            rate: 1.0,
+            looping: true,
+            clock: 0.0,
+            last_now: None,
+            pending: None,
+            end: None,
+            error: None,
+            duration,
+            size: (0, 0),
+            live: false,
+            generation: 0,
+            mode: PlayMode::default(),
+            shown: 0.0,
+            shown_pts: 0.0,
+            passes: 0,
+            sound,
+            audio_only: true,
         })
     }
 
@@ -318,6 +375,10 @@ impl VideoPlayer {
         }
         if let (Some(end), false) = (self.end, self.looping) {
             self.clock = self.clock.min(end);
+        }
+        if self.audio_only {
+            self.tick_audio_only();
+            return None;
         }
         let rx = self.rx.as_ref()?;
         let mut out: Option<VideoFrame> = None;
@@ -377,6 +438,29 @@ impl VideoPlayer {
             .store(self.clock.to_bits(), Ordering::Relaxed);
         self.update_sound();
         out
+    }
+
+    /// Sound-only clip: the clock is the position; loop (or stop) at the out point / end, count passes.
+    fn tick_audio_only(&mut self) {
+        let (lo, hi) = match (self.mode.range, self.duration) {
+            (Some((lo, hi)), _) => (lo, hi),
+            (None, Some(d)) => (0.0, d),
+            (None, None) => (0.0, f64::MAX),
+        };
+        if self.clock >= hi {
+            if self.looping {
+                self.clock = lo + (self.clock - hi).rem_euclid((hi - lo).max(0.01));
+                self.passes += 1;
+            } else if self.end.is_none() {
+                self.clock = hi;
+                self.end = Some(hi);
+                self.passes += 1;
+            }
+        }
+        self.shown = self.clock;
+        self.shown_pts = self.clock;
+        self.shared.clock.store(self.clock.to_bits(), Ordering::Relaxed);
+        self.update_sound();
     }
 
     /// Tells the sound thread where the picture is (between frames too).
