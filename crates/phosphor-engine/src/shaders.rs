@@ -231,6 +231,18 @@ pub const GENERATORS: &[ShaderDesc] = &[
         params: &[p("Count", 1.0, 40.0, 10.0), p("Speed", -4.0, 4.0, 1.0), p("Width", 0.02, 0.98, 0.5)],
     },
     ShaderDesc {
+        id: "spectrum",
+        name: "Spectrum Bars",
+        entry: "gen_spectrum",
+        params: &[p("Bars", 4.0, 256.0, 48.0), p("Height", 0.1, 3.0, 1.2), p("Hue", 0.0, 1.0, 0.6), p("Mirror", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc {
+        id: "waveform",
+        name: "Waveform",
+        entry: "gen_waveform",
+        params: &[p("Thickness", 0.002, 0.1, 0.015), p("Gain", 0.1, 4.0, 1.0), p("Hue", 0.0, 1.0, 0.3), p("Glow", 0.0, 1.0, 0.6)],
+    },
+    ShaderDesc {
         id: "gradient",
         name: "Gradient Sweep",
         entry: "gen_gradient",
