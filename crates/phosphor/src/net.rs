@@ -162,6 +162,9 @@ pub struct NetSession {
     pub remotes: Arc<AtomicUsize>,
     password: RemotePassword,
     registry: Reg,
+    /// Bonjour: "phosphor.local" + a "Phosphor Session" HTTP service while the session runs.
+    #[cfg(not(target_arch = "wasm32"))]
+    mdns: Option<mdns_sd::ServiceDaemon>,
     encoder: Option<SyncSender<(u32, u32, Vec<u8>)>>,
     pacer: crate::pacing::FramePacer,
     /// Layer thumbnails shown on remotes, and the round-robin that refreshes them.
@@ -189,6 +192,8 @@ impl NetSession {
             remotes: Arc::new(AtomicUsize::new(0)),
             password: Arc::new(Mutex::new(None)),
             registry: Arc::new(Mutex::new(Registry::default())),
+            #[cfg(not(target_arch = "wasm32"))]
+            mdns: None,
             encoder: None,
             pacer: Default::default(),
             thumbs: Default::default(),
@@ -262,6 +267,11 @@ impl NetSession {
         format!("http://{ip}:{}/", self.port)
     }
 
+    /// The same page by Bonjour name (Apple devices and most phones resolve it; easier to type than an address).
+    pub fn local_url(&self) -> String {
+        format!("http://phosphor.local:{}/", self.port)
+    }
+
     /// The secure link (phones share their mic only on https; they warn once about the certificate).
     pub fn https_url(&self) -> String {
         let ip = crate::control::local_ip().unwrap_or_else(|| "localhost".into());
@@ -282,6 +292,13 @@ impl NetSession {
             }
         };
         self.https = tls.is_some();
+        // Bonjour: phones on the Wi-Fi can type phosphor.local instead of the address.
+        self.mdns = crate::control::local_ip().and_then(|ip| {
+            let daemon = mdns_sd::ServiceDaemon::new().ok()?;
+            let info = mdns_sd::ServiceInfo::new("_http._tcp.local.", "Phosphor Session", "phosphor.local.", ip.as_str(), self.port, std::collections::HashMap::<String, String>::new()).ok()?;
+            daemon.register(info).ok()?;
+            Some(daemon)
+        });
         self.running.store(true, Ordering::Relaxed);
         let running = self.running.clone();
         let latest = self.latest.clone();
@@ -369,6 +386,9 @@ impl NetSession {
     }
 
     pub fn stop(&mut self) {
+        if let Some(d) = self.mdns.take() {
+            let _ = d.shutdown();
+        }
         self.running.store(false, Ordering::Relaxed);
         self.encoder = None;
         self.thumb_encoder = None;

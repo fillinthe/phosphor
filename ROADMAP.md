@@ -247,7 +247,7 @@ Legend: [x] done · [~] in progress · [ ] not started
       stream or renders the project itself from a synced clock (tiny bandwidth, perfect sync)
 - [x] Session page: QR code, viewer list (Devices panel)
 - [ ] Per-viewer audio level meters
-- [ ] Local network discovery (Zeroconf) for players; NDI/Syphon remain for pro setups
+- [x] Bonjour: phosphor.local + "Phosphor Session" service while a session runs ✔ 2026-10-17 · [ ] discovery of other players
 - [ ] Multiple players in sync (shared timecode), each with its own output mapping (Phase 4)
 
 ### Phase 6: Accounts & sync
