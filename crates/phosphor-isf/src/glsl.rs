@@ -442,7 +442,7 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
 
 /// Final `main` that runs the (inlined) vertex stage, then the fragment stage.
 pub(crate) fn epilogue(dialect: Dialect, has_vs: bool, mad_vs: bool) -> String {
-    let mut s = String::from("void main() {\n    phosphor_init();\n    phosphor_init_inputs();\n");
+    let mut s = String::from("void main() {\n    phosphor_init();\n    phosphor_init_inputs();\n    phosphor_init_globals();\n");
     if mad_vs {
         s.push_str("    materialVsFunc(isf_FragNormCoord);\n");
     } else if has_vs {
@@ -589,5 +589,83 @@ mod return_tests {
         assert!(out.contains("return 0.0;\n}"), "{out}");
         assert_eq!(out.matches("return vec2(0.0)").count(), 0, "{out}");
         assert!(!out.contains("main() { float y = a(2.0); \n    return"), "{out}");
+    }
+}
+
+/// GLSL lets a global be initialised from uniforms (`float d = min(progress, 1.0);` at file scope); naga wants
+/// constants there. Turns such declarations into plain globals and returns the assignments, in order, for an
+/// init function that runs at the start of `main`. `const` declarations and anything inside braces are left alone.
+pub(crate) fn hoist_global_inits(src: &str) -> (String, Vec<String>) {
+    let mut out = String::with_capacity(src.len());
+    let mut inits = Vec::new();
+    let mut depth = 0i32;
+    // Statements at depth 0 end at ';' (function bodies are skipped by the brace depth).
+    let mut stmt = String::new();
+    for c in src.chars() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 && c == ';' {
+            stmt.push(c);
+            let t = stmt.trim_start_matches(|c: char| c.is_whitespace()).to_string();
+            if let Some((decl, init)) = global_init(&t) {
+                out.push_str(&stmt[..stmt.len() - t.len()]);
+                out.push_str(&decl);
+                inits.push(init);
+            } else {
+                out.push_str(&stmt);
+            }
+            stmt.clear();
+            continue;
+        }
+        if depth == 0 {
+            stmt.push(c);
+        } else {
+            // Inside a function or a parameter list: copy straight through (with whatever was pending).
+            out.push_str(&stmt);
+            stmt.clear();
+            out.push(c);
+        }
+    }
+    out.push_str(&stmt);
+    (out, inits)
+}
+
+/// `type name = expr;` (no `const`, no `#`, no array) → (`type name;`, `name = expr;`).
+fn global_init(stmt: &str) -> Option<(String, String)> {
+    let body = stmt.strip_suffix(';')?.trim();
+    if body.starts_with('#') || body.starts_with("const ") || body.starts_with("uniform ") || body.starts_with("layout") || body.contains('[') || body.contains('{') {
+        return None;
+    }
+    let (head, expr) = body.split_once('=')?;
+    if head.ends_with(|c: char| matches!(c, '<' | '>' | '!')) || expr.starts_with('=') {
+        return None;
+    }
+    let mut words = head.split_whitespace();
+    let ty = words.next()?;
+    let name = words.next()?;
+    if words.next().is_some() || !["float", "int", "uint", "bool", "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4", "mat2", "mat3", "mat4"].contains(&ty) {
+        return None;
+    }
+    // Plain numbers are fine where they are.
+    let e = expr.trim();
+    if e.parse::<f64>().is_ok() {
+        return None;
+    }
+    Some((format!("{ty} {name};"), format!("{name} = {e};")))
+}
+
+#[cfg(test)]
+mod hoist_tests {
+    #[test]
+    fn uniform_dependent_globals_move_into_init() {
+        let src = "float d = min(progress, 1.0 - progress);\nconst float PI = 3.14;\nfloat k = 2.0;\nvec4 f(vec2 uv) { float q = d * 2.0; return vec4(q); }\nvoid main() { gl_FragColor = f(uv); }\n";
+        let (out, inits) = super::hoist_global_inits(src);
+        assert!(out.contains("float d;"), "{out}");
+        assert!(out.contains("const float PI = 3.14;") && out.contains("float k = 2.0;"), "{out}");
+        assert!(out.contains("float q = d * 2.0;"), "{out}");
+        assert_eq!(inits, vec!["d = min(progress, 1.0 - progress);".to_string()]);
     }
 }

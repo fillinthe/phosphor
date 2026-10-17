@@ -215,8 +215,12 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                     Some(t) => paint_texture(p, t, thumb_rect),
                                     None => {
                                         p.rect_filled(thumb_rect, 4.0, Color32::from_gray(30));
-                                        // Long names (imported clips) stay inside their own cell.
-                                        let label: String = k.source.label().chars().take(16).collect();
+                                        // Long names (imported clips) stay inside their own cell; sound files get a note.
+                                        let label: String = if crate::media::is_sound_file(&k.source.label()) {
+                                            format!("{} {}", icon::MUSIC_NOTES, k.source.label().chars().take(13).collect::<String>())
+                                        } else {
+                                            k.source.label().chars().take(16).collect()
+                                        };
                                         p.with_clip_rect(thumb_rect).text(thumb_rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
                                     }
                                 }

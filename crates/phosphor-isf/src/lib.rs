@@ -342,6 +342,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         return Ok(shader);
     }
 
+    let (body, global_inits) = glsl::hoist_global_inits(&body);
     let (fs_part, _) = glsl::rewrite_io_decls(&body, &vs_names);
     let fs_part = match dialect {
         Dialect::Isf => glsl::rename_main(&fs_part, "phosphor_fs_main")
@@ -369,6 +370,14 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     full.push('\n');
     full.push_str(&fs_part);
     full.push('\n');
+    // Globals initialised from inputs: assigned once main starts (after the inputs are read).
+    full.push_str("void phosphor_init_globals() {\n");
+    for init in &global_inits {
+        full.push_str("    ");
+        full.push_str(init);
+        full.push('\n');
+    }
+    full.push_str("}\n");
     full.push_str(&glsl::epilogue(dialect, !vs_part.is_empty(), mad_vs));
 
     let naga_out = glsl_to_wgsl(&full)?;
