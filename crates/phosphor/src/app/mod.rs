@@ -31,6 +31,7 @@ use crate::thumbs::Thumbs;
 use crate::theme;
 
 
+mod auto_show;
 mod autopilot;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod beat_match;
@@ -176,6 +177,8 @@ pub struct State {
     net_audio: Vec<f32>,
     /// Audience play: whose turn it is.
     pub jam: play::Jam,
+    /// Auto show runtime (bar counter, level average).
+    pub auto_run: auto_show::AutoShowRun,
     pub bug: crate::support::BugReport,
     /// Visual beat scans (Match the beat).
     #[cfg(not(target_arch = "wasm32"))]

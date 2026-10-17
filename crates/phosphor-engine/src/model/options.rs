@@ -336,3 +336,23 @@ mod transition_tests {
         assert_eq!(TransitionKind::Subtract.blend(), Some(BlendMode::Subtract));
     }
 }
+
+/// Auto show: the show runs itself. Every few bars the next column with clips fires (on the launch quantise),
+/// and a jump in the music's level (a drop) fires Surprise. Saved with the project.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AutoShow {
+    pub enabled: bool,
+    /// Bars between column changes.
+    pub bars: u32,
+    /// Step through the columns that have clips.
+    pub columns: bool,
+    /// Surprise when the level jumps well above its recent average.
+    pub surprise_on_drops: bool,
+}
+
+impl Default for AutoShow {
+    fn default() -> Self {
+        Self { enabled: false, bars: 8, columns: true, surprise_on_drops: true }
+    }
+}

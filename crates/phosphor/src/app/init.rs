@@ -121,6 +121,7 @@ impl PhosphorApp {
                 net: NetSession::new(),
                 net_audio: Vec::new(),
                 jam: Default::default(),
+                auto_run: Default::default(),
                 bug: crate::support::BugReport::new(),
                 #[cfg(not(target_arch = "wasm32"))]
                 rhythm: Default::default(),

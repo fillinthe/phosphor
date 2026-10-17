@@ -37,6 +37,14 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
     #[cfg(not(target_arch = "wasm32"))]
     ui.toggle_value(&mut comp.launch.auto_beat_match, label(icon::MAGIC_WAND, "Auto-match"))
         .on_hover_text("Every movie that lands in the grid is scanned for its visual beat and locked to the tempo (Match the beat)");
+    let auto = &mut comp.auto_show;
+    ui.toggle_value(&mut auto.enabled, label(icon::PLAY_CIRCLE, "Auto show"))
+        .on_hover_text("The show runs itself: the next column with clips every few bars (on the launch quantise), and Surprise when the music drops");
+    if auto.enabled {
+        ui.label("every");
+        guarded!(ui, auto.bars, egui::DragValue::new(&mut auto.bars).range(1..=64).suffix(" bars"));
+        ui.toggle_value(&mut auto.surprise_on_drops, "Surprise on drops").on_hover_text("A jump in the music's level fires Surprise (at most every 8 s)");
+    }
 }
 
 pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
