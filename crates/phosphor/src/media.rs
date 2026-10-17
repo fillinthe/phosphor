@@ -123,7 +123,7 @@ fn show_frame(engine: &mut Engine, held: &mut Held, player: &video::VideoPlayer,
                 engine.upload_rgba(id, *width, *height, data);
             }
         }
-        video::VideoFrame::Compressed { width, height, format, data } => engine.upload_compressed(id, outgoing, *width, *height, *format, data),
+        video::VideoFrame::Compressed { width, height, format, data, alpha } => engine.upload_compressed(id, outgoing, *width, *height, *format, data, alpha.as_deref()),
         #[cfg(target_os = "macos")]
         video::VideoFrame::Surface(_) => {}
     }

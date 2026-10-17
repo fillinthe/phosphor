@@ -16,7 +16,7 @@ enum Media {
     /// Bi-planar video frame: luma (R8/R16) + interleaved chroma (RG8/RG16); TV range unless `full_range`.
     Nv12 { luma: Target, chroma: Target, full_range: bool },
     /// Block-compressed frame straight from a Hap movie (BC1/BC3); `ycocg` = Hap Q colour.
-    Compressed { target: Target, format: CompressedFormat },
+    Compressed { target: Target, alpha: Option<Target>, format: CompressedFormat },
 }
 
 /// GPU block-compressed picture formats (Hap): the GPU samples them directly, no CPU decoding.
@@ -30,6 +30,8 @@ pub enum CompressedFormat {
     Bc3YCoCg,
     /// BPTC: Hap R.
     Bc7,
+    /// RGTC1: the alpha plane of Hap Q Alpha.
+    Bc4,
 }
 
 impl CompressedFormat {
@@ -38,12 +40,13 @@ impl CompressedFormat {
             CompressedFormat::Bc1 => wgpu::TextureFormat::Bc1RgbaUnorm,
             CompressedFormat::Bc3 | CompressedFormat::Bc3YCoCg => wgpu::TextureFormat::Bc3RgbaUnorm,
             CompressedFormat::Bc7 => wgpu::TextureFormat::Bc7RgbaUnorm,
+            CompressedFormat::Bc4 => wgpu::TextureFormat::Bc4RUnorm,
         }
     }
 
     /// Bytes per 4×4 block.
     pub fn block_bytes(self) -> u32 {
-        if self == CompressedFormat::Bc1 { 8 } else { 16 }
+        if matches!(self, CompressedFormat::Bc1 | CompressedFormat::Bc4) { 8 } else { 16 }
     }
 }
 
@@ -111,8 +114,8 @@ pub enum PreviewItem {
 enum Frame {
     Rgb { view: wgpu::TextureView, w: u32, h: u32 },
     Yuv { luma: wgpu::TextureView, chroma: wgpu::TextureView, w: u32, h: u32, full_range: bool },
-    /// Hap Q: scaled YCoCg in a BC3 texture.
-    YCoCg { view: wgpu::TextureView, w: u32, h: u32 },
+    /// Hap Q: scaled YCoCg in a BC3 texture; Hap Q Alpha adds a BC4 alpha texture.
+    YCoCg { view: wgpu::TextureView, alpha: Option<wgpu::TextureView>, w: u32, h: u32 },
 }
 
 impl Frame {
@@ -129,7 +132,10 @@ impl Frame {
         match self {
             Frame::Rgb { view, .. } => (view, None, 0),
             Frame::Yuv { luma, chroma, full_range, .. } => (luma, Some(chroma), if full_range { 3 } else { 1 }),
-            Frame::YCoCg { view, .. } => (view, None, 2),
+            Frame::YCoCg { view, alpha, .. } => {
+                let mode = if alpha.is_some() { 4 } else { 2 };
+                (view, alpha, mode)
+            }
         }
     }
 }

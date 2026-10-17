@@ -60,6 +60,8 @@ pub enum VideoFrame {
         height: u32,
         format: phosphor_engine::CompressedFormat,
         data: Vec<u8>,
+        /// Hap Q Alpha: RGTC1 (BC4) blocks of the alpha plane.
+        alpha: Option<Vec<u8>>,
     },
 }
 

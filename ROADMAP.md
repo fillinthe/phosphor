@@ -123,7 +123,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Animated GIF, Hap / Hap Alpha / Hap Q (CPU DXT decode for now)
 - [x] Hap on the GPU: DXT blocks uploaded as BC1/BC3 textures, Hap Q converted in the shader (720p Hap 25% → 1.2% CPU, Hap Q 39% → 2.8%)
 - [x] Hap R (BC7) on the GPU
-- [ ] Hap Q Alpha on the GPU (still decodes on the CPU)
+- [x] Hap Q Alpha on the GPU ✔ 2026-10-17 (YCoCg DXT5 + BC4 alpha; parser unit-tested, no sample file to play)
 - [x] Zero-copy video: VideoToolbox IOSurface → Metal textures → wgpu (8-bit 4:2:0; 4K H.264 38% → 16% CPU)
 - [x] Zero-copy for 10-bit (P010) and full-range video
 - [x] FFmpeg libraries ship inside the .app (Homebrew's GPL build, relinked; checked 2026-10-17: no Homebrew paths left). LGPL build: not needed (GPL app)
