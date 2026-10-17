@@ -53,6 +53,17 @@ pub fn folders() -> Vec<std::path::PathBuf> {
         dirs.push(d.join("isf"));
     }
     dirs.extend(crate::show::shader_dir("isf"));
+    // MadMapper's own materials and FX, when it's installed (they're ISF with MadMapper's extras).
+    if let Ok(apps) = std::fs::read_dir("/Applications") {
+        for app in apps.flatten().map(|e| e.path()).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("MadMapper") && n.ends_with(".app"))) {
+            for sub in ["Materials", "FactorySurface2DFX", "FactoryGenerators"] {
+                let d = app.join("Contents/Resources").join(sub);
+                if d.is_dir() {
+                    dirs.push(d);
+                }
+            }
+        }
+    }
     dirs
 }
 
@@ -129,8 +140,19 @@ impl IsfLibrary {
             .spawn(move || {
                 let mut seen = std::collections::HashSet::new();
                 for dir in folders() {
-                    let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-                    let mut files: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "fs")).collect();
+                    // Two levels deep: MadMapper keeps each material in its own folder.
+                    let mut files: Vec<std::path::PathBuf> = Vec::new();
+                    let mut stack = vec![(dir, 0u8)];
+                    while let Some((d, depth)) = stack.pop() {
+                        let Ok(entries) = std::fs::read_dir(&d) else { continue };
+                        for p in entries.flatten().map(|e| e.path()) {
+                            if p.is_dir() && depth < 2 {
+                                stack.push((p, depth + 1));
+                            } else if p.extension().is_some_and(|e| e == "fs") {
+                                files.push(p);
+                            }
+                        }
+                    }
                     files.sort();
                     for path in files {
                         let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };

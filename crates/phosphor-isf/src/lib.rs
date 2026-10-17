@@ -10,6 +10,7 @@
 //! share one module.
 
 mod glsl;
+mod mad_noise;
 mod header;
 mod wgsl;
 
@@ -268,7 +269,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         unsupported.get_or_insert(format!("{} buffers (max {MAX_BUFFERS})", shader.buffers.len()));
     }
     for file in &includes {
-        if file != "MadCommon.glsl" {
+        if file != "MadCommon.glsl" && file != "MadNoise.glsl" {
             unsupported.get_or_insert(format!("MadMapper include {file}"));
         }
     }
@@ -308,6 +309,9 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     let mut full = glsl::prelude(&header, &shader.inputs, dialect);
     if includes.iter().any(|f| f == "MadCommon.glsl") {
         full.push_str(&glsl::mad_common_shim(&fs_part));
+    }
+    if includes.iter().any(|f| f == "MadNoise.glsl") {
+        full.push_str(&mad_noise::shim(&fs_part));
     }
     full.push_str(&vs_part);
     full.push('\n');
