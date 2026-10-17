@@ -145,3 +145,34 @@ fn gen_lines(in: VOut) -> @location(0) vec4f {
     }
     return vec4f(clamp(col, vec3f(0.0), vec3f(1.0)), 1.0);
 }
+
+// Audio visualisers: tex1 is the live spectrum (one row of magnitudes 0..1, low to high) for the bars and the
+// live waveform (one row, 0.5 = silence) for the oscilloscope; the app refreshes them every frame.
+@fragment
+fn gen_spectrum(in: VOut) -> @location(0) vec4f {
+    let bars = max(P(0u), 1.0);
+    let mirror = P(3u) > 0.5;
+    let x = select(in.uv.x, abs(in.uv.x - 0.5) * 2.0, mirror);
+    let i = floor(x * bars);
+    let level = textureSampleLevel(tex1, samp, vec2f((i + 0.5) / bars, 0.5), 0.0).r;
+    let h = clamp(level * P(1u), 0.0, 1.0);
+    let y = 1.0 - in.uv.y;
+    // A gap between bars, and a soft top.
+    let gap = smoothstep(0.0, 0.08, fract(x * bars)) * (1.0 - smoothstep(0.92, 1.0, fract(x * bars)));
+    let top = 1.0 - smoothstep(h - 0.01, h + 0.005, y);
+    let v = gap * top;
+    let col = hsv2rgb(vec3f(fract(P(2u) + x * 0.4), 0.85, 1.0)) * (0.35 + 0.65 * y / max(h, 0.001));
+    return vec4f(col * v, v);
+}
+
+@fragment
+fn gen_waveform(in: VOut) -> @location(0) vec4f {
+    let s = textureSampleLevel(tex1, samp, vec2f(in.uv.x, 0.5), 0.0).r * 2.0 - 1.0;
+    let y = 0.5 - s * P(1u) * 0.4;
+    let d = abs(in.uv.y - y);
+    let line = 1.0 - smoothstep(0.0, P(0u), d);
+    let glow = P(3u) * exp(-d / (P(0u) * 4.0 + 0.001)) * 0.5;
+    let v = clamp(line + glow, 0.0, 1.0);
+    let col = hsv2rgb(vec3f(fract(P(2u) + in.uv.x * 0.2), 0.7, 1.0));
+    return vec4f(col * v, v);
+}

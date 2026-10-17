@@ -217,6 +217,9 @@ impl Engine {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
         let mut gpu = Gpu::new(device, queue);
         gpu.prewarm();
+        // Built-in audio visualisers read the live audio pictures at texture slot 1.
+        crate::shaders::set_audio_slots("gen_spectrum", vec![(1, crate::shaders::AudioTexture::Fft)]);
+        crate::shaders::set_audio_slots("gen_waveform", vec![(1, crate::shaders::AudioTexture::Wave)]);
         let compiled = std::sync::mpsc::channel();
         let gpu_timer = timing::GpuTimer::new(&gpu.device, &gpu.queue);
         Self {
