@@ -41,15 +41,15 @@ app that's much smaller and lighter on the CPU.
    - [x] HTTPS session link (port + 1, self-signed) for phone mics and passwords
    - [x] Audience play: caption on the code, reconnect keeps the place, several players at once (one per Surface page)
    - [x] Audience play: player names (typed on the phone) on the output
-   - [ ] Audience play: cool-down per phone
+   - [x] Audience play: rest between turns per phone ✔ (Session panel "Rest after", 2026-10-17)
    - [ ] Later: the full Phosphor UI (browser/wasm build) in "remote mode" mirroring the Mac's state
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
    mappable themselves; Mappings editor with Listen + ranges. on the phone/iPad remote ✔. Next: TouchOSC `.tosc` export, multiple surface pages
 4. ~~**Mapping upgrades**~~ mesh warp ✔ (Catmull-Rom grid up to 8×8), masks ✔ (polygons, invert). Per-output colour ✔,
-   blend curve ✔, mask feather ✔, circle/triangle masks ✔. Next: bezier edges
-5. **OBS / pro I/O**: Syphon out ✔, NDI out ✔, cameras/capture ✔, network streams in ✔, Syphon in ✔. Next: NDI in,
-   virtual camera out, audio from capture cards
+   blend curve ✔, mask feather ✔, circle/triangle masks ✔, smooth (Catmull-Rom) mask outlines ✔. Next: per-point bezier handles
+5. **OBS / pro I/O**: Syphon out ✔, NDI out ✔, cameras/capture ✔, network streams in ✔, Syphon in ✔, NDI in ✔. Next:
+   virtual camera out (needs a Developer ID); capture-card audio shows up as an input device already (Audio panel)
 6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
 6b. ~~**Crash recovery**~~ ✔ rolling snapshot every 2 s; watchdog reopens Phosphor after a crash (stops after
     3 crashes in 2 min); restores project, layout, output windows on their screens, session, audio; offers
