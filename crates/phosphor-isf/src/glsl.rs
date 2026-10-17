@@ -433,7 +433,7 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
     init.push_str("}\n");
     s.push_str(&init);
     if dialect == Dialect::MadFx {
-        s.push_str("#define inputImage phosphor_tex0\n");
+        s.push_str("#define inputImage phosphor_tex0\n#define fx_restrict false\n#define fx_fake false\n");
     }
     // Inlined vertex shaders call this; the fragment prelude already did the work.
     s.push_str("void isf_vertShaderInit() {}\n");
@@ -455,4 +455,139 @@ pub(crate) fn epilogue(dialect: Dialect, has_vs: bool, mad_vs: bool) -> String {
     }
     s.push_str("}\n");
     s
+}
+
+/// GLSL lets a `float f()` say `return 0;` or fall off its end; naga's front end doesn't. Rewrites integer
+/// literals returned from float functions to floats and adds a zero return where a non-void function's body
+/// ends without one. Works on top-level function definitions only.
+pub(crate) fn fix_returns(src: &str) -> String {
+    let bytes = src.as_bytes();
+    let mut out = String::with_capacity(src.len() + 64);
+    let mut i = 0;
+    let mut last = 0;
+    while i < bytes.len() {
+        // A definition: `<type> <name>(` at brace depth 0 followed (after the parameter list) by `{`.
+        let Some((ty, body_start)) = function_at(src, i) else {
+            i += 1;
+            continue;
+        };
+        let Some(body_end) = matching_brace(src, body_start) else { break };
+        let body = &src[body_start + 1..body_end];
+        let zero = match ty {
+            "float" => "0.0",
+            "int" => "0",
+            "vec2" => "vec2(0.0)",
+            "vec3" => "vec3(0.0)",
+            "vec4" => "vec4(0.0)",
+            _ => "",
+        };
+        out.push_str(&src[last..body_start + 1]);
+        let mut fixed = body.to_string();
+        if ty == "float" {
+            fixed = fix_int_returns(&fixed);
+        }
+        let trimmed = fixed.trim_end();
+        let ends_with_return = trimmed.ends_with(';') && trimmed.rsplit(';').nth(1).is_some_and(|s| s.trim_start().starts_with("return"));
+        if !zero.is_empty() && !ends_with_return {
+            fixed.push_str(&format!("\n    return {zero};\n"));
+        }
+        out.push_str(&fixed);
+        last = body_end;
+        i = body_end;
+    }
+    out.push_str(&src[last..]);
+    out
+}
+
+/// `return 12;` → `return 12.0;` (integer literal only, not expressions).
+fn fix_int_returns(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut rest = body;
+    while let Some(pos) = rest.find("return ") {
+        let (head, tail) = rest.split_at(pos + 7);
+        out.push_str(head);
+        let lit_end = tail.find(|c: char| !c.is_ascii_digit()).unwrap_or(tail.len());
+        if lit_end > 0 && tail[lit_end..].trim_start().starts_with(';') {
+            out.push_str(&tail[..lit_end]);
+            out.push_str(".0");
+            rest = &tail[lit_end..];
+        } else {
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// If a top-level function definition starts at `i`: its return type and the index of its `{`.
+fn function_at(src: &str, i: usize) -> Option<(&str, usize)> {
+    let b = src.as_bytes();
+    if i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_') {
+        return None;
+    }
+    let rest = &src[i..];
+    let ty = ["float", "int", "vec2", "vec3", "vec4", "void", "mat2", "mat3", "mat4", "bool"].into_iter().find(|t| rest.starts_with(t) && rest[t.len()..].starts_with(|c: char| c.is_whitespace()))?;
+    let after = rest[ty.len()..].trim_start();
+    let name_len = after.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))?;
+    if name_len == 0 || !after[name_len..].trim_start().starts_with('(') {
+        return None;
+    }
+    let paren = i + (rest.len() - after.len()) + name_len + after[name_len..].find('(')?;
+    let close = matching_paren(src, paren)?;
+    let after_params = src[close + 1..].trim_start();
+    if !after_params.starts_with('{') {
+        return None;
+    }
+    // Only definitions at the top level (not nested blocks, which GLSL doesn't allow anyway).
+    if src[..i].bytes().filter(|&c| c == b'{').count() != src[..i].bytes().filter(|&c| c == b'}').count() {
+        return None;
+    }
+    Some((ty, close + 1 + (src.len() - close - 1 - after_params.len())))
+}
+
+fn matching_paren(src: &str, open: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    for (k, c) in src[open..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open + k);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn matching_brace(src: &str, open: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    for (k, c) in src[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open + k);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod return_tests {
+    #[test]
+    fn float_functions_get_float_returns_and_an_ending() {
+        let src = "float a(float x) {\n    if (x > 0.0) return 1;\n}\nvec2 b() { return vec2(1.0); }\nvoid main() { float y = a(2.0); }\n";
+        let out = super::fix_returns(src);
+        assert!(out.contains("return 1.0;"), "{out}");
+        assert!(out.contains("return 0.0;\n}"), "{out}");
+        assert_eq!(out.matches("return vec2(0.0)").count(), 0, "{out}");
+        assert!(!out.contains("main() { float y = a(2.0); \n    return"), "{out}");
+    }
 }

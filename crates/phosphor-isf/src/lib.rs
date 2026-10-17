@@ -242,7 +242,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         .filter(|l| l.trim_start().starts_with("#include"))
         .map(|l| l.split('"').nth(1).unwrap_or("").to_string())
         .collect();
-    let body = glsl::resolve_directives(&stripped);
+    let body = glsl::fix_returns(&glsl::resolve_directives(&stripped));
     let dialect = glsl::detect_dialect(&body);
     let mut inputs = header.inputs.clone();
     let is_filter = dialect == Dialect::MadFx || inputs.iter().any(|i| i.name == "inputImage");
