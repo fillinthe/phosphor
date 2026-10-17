@@ -150,6 +150,7 @@ impl PhosphorApp {
         self.save_layout_window(&ctx);
         self.account_windows(&ctx);
         crate::support::bug_window(&ctx, &mut self.state);
+        self.welcome_window(&ctx);
         crate::update::update_window(&ctx, &mut self.state.updater);
         #[cfg(not(target_arch = "wasm32"))]
         {

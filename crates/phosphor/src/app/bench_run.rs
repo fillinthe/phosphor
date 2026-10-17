@@ -176,6 +176,10 @@ impl PhosphorApp {
                 self.state.bug.text = "Example: dragging a movie onto the Clips grid shows a black cell.".into();
                 continue;
             }
+            if name == "welcome" {
+                self.welcome_open = true;
+                continue;
+            }
             if name == "baroff" {
                 // Knock the bar two beats off, so the downbeat tracker has something to fix.
                 let b = self.state.clock.beats(now);

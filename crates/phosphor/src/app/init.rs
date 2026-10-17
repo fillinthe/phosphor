@@ -85,6 +85,7 @@ impl PhosphorApp {
         let now = cc.egui_ctx.input(|i| i.time);
 
         let open_audio = bench.as_ref().is_some_and(|b| b.audio);
+        let fresh_install = bench.is_none() && stored(KEY_COMPOSITION).is_none();
         let mut app = Self {
             state: State {
                 selected: comp.layers.last().map(|l| l.id),
@@ -205,6 +206,7 @@ impl PhosphorApp {
             last_ui: (web_time::Instant::now(), 0.0),
             hidden_pacer: Default::default(),
             ui_frames: 0,
+            welcome_open: false,
             #[cfg(not(target_arch = "wasm32"))]
             heartbeat: Default::default(),
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false }),
@@ -223,6 +225,8 @@ impl PhosphorApp {
             app.restore(s);
         }
         app.install_native_menu();
+        // A fresh install (nothing saved yet): say hello once.
+        app.welcome_open = fresh_install;
         if let Some(i) = app.bench.as_ref().and_then(|b| b.cfg.layout.as_deref()).and_then(|n| super::layout::LAYOUTS.iter().position(|(l, _)| *l == n)) {
             app.switch_workspace(i);
         }
