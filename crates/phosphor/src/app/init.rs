@@ -283,6 +283,28 @@ impl PhosphorApp {
             }
             app.state.audio.use_network();
         }
+        if let Some(url) = app.bench.as_ref().and_then(|b| b.cfg.stream.clone()) {
+            let s = &mut app.state.stream.settings;
+            s.destination = crate::stream::Destination::CustomRtmp;
+            s.rtmp_url = url;
+            s.stream_key = String::new();
+            s.height = 0;
+            s.fps = 30;
+            if let Some(u2) = app.bench.as_ref().and_then(|b| b.cfg.stream2.clone()) {
+                s.second_enabled = true;
+                s.second_destination = crate::stream::Destination::CustomRtmp;
+                s.second_url = u2;
+                s.second_key = String::new();
+            }
+            if let Some(c) = app.bench.as_ref().and_then(|b| b.cfg.stream_copy.clone()) {
+                s.copy_enabled = true;
+                s.copy_path = c;
+            }
+            let (w, h) = (app.state.comp.width, app.state.comp.height);
+            if let Err(e) = app.state.stream.start(w, h, now) {
+                eprintln!("stream: {e}");
+            }
+        }
         if let Some(path) = app.bench.as_ref().and_then(|b| b.cfg.record.clone()) {
             app.state.stream.settings.destination = crate::stream::Destination::File;
             app.state.stream.settings.file_path = path;

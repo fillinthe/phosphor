@@ -83,6 +83,14 @@ pub struct StreamSettings {
     pub kbps: u32,
     /// AVFoundation audio device index to include (-1 = no audio).
     pub audio_device: i32,
+    /// A second live destination at the same time (one encode, FFmpeg's tee): YouTube, Twitch or custom RTMP.
+    pub second_enabled: bool,
+    pub second_destination: Destination,
+    pub second_key: String,
+    pub second_url: String,
+    /// While streaming, also write an H.264 copy to this file.
+    pub copy_enabled: bool,
+    pub copy_path: String,
 }
 
 impl Default for StreamSettings {
@@ -98,6 +106,12 @@ impl Default for StreamSettings {
             fps: 30,
             kbps: 6000,
             audio_device: -1,
+            second_enabled: false,
+            second_destination: Destination::Twitch,
+            second_key: String::new(),
+            second_url: "rtmp://live.example.com/app".into(),
+            copy_enabled: false,
+            copy_path: String::new(),
         }
     }
 }
@@ -113,14 +127,35 @@ impl StreamSettings {
         }
     }
 
+    /// An RTMP address for a live destination with these credentials (None for SRT / file).
+    fn rtmp_target(dest: Destination, url: &str, key: &str) -> Option<String> {
+        Some(match dest {
+            Destination::YouTube => format!("rtmp://a.rtmp.youtube.com/live2/{key}"),
+            Destination::Twitch => format!("rtmp://live.twitch.tv/app/{key}"),
+            Destination::CustomRtmp => {
+                let url = url.trim_end_matches('/');
+                if key.is_empty() { url.to_string() } else { format!("{url}/{key}") }
+            }
+            _ => return None,
+        })
+    }
+
+    /// Everything the stream goes to besides the main destination: (container, address).
+    fn extra_targets(&self) -> Vec<(&'static str, String)> {
+        let mut out = Vec::new();
+        if self.second_enabled && let Some(url) = Self::rtmp_target(self.second_destination, &self.second_url, &self.second_key) {
+            out.push(("flv", url));
+        }
+        if self.copy_enabled && self.destination != Destination::File && !self.copy_path.trim().is_empty() {
+            out.push(("mp4", self.copy_path.trim().to_string()));
+        }
+        out
+    }
+
     fn target(&self) -> (Vec<String>, String) {
         match self.destination {
-            Destination::YouTube => (vec!["-f".into(), "flv".into()], format!("rtmp://a.rtmp.youtube.com/live2/{}", self.stream_key)),
-            Destination::Twitch => (vec!["-f".into(), "flv".into()], format!("rtmp://live.twitch.tv/app/{}", self.stream_key)),
-            Destination::CustomRtmp => {
-                let url = self.rtmp_url.trim_end_matches('/');
-                let full = if self.stream_key.is_empty() { url.to_string() } else { format!("{url}/{}", self.stream_key) };
-                (vec!["-f".into(), "flv".into()], full)
+            Destination::YouTube | Destination::Twitch | Destination::CustomRtmp => {
+                (vec!["-f".into(), "flv".into()], Self::rtmp_target(self.destination, &self.rtmp_url, &self.stream_key).unwrap_or_default())
             }
             Destination::Srt => (vec!["-f".into(), "mpegts".into()], self.srt_url.clone()),
             Destination::File => (vec!["-movflags".into(), "+faststart".into()], self.file_path.clone()),
@@ -380,9 +415,26 @@ impl Streamer {
                 .map(String::from),
             );
         }
-        args.extend(fmt);
-        args.push(target.clone());
+        let extra = s.extra_targets();
+        if extra.is_empty() {
+            args.extend(fmt);
+            args.push(target.clone());
+        } else {
+            // One encode, several outputs: FFmpeg's tee. A destination that drops out doesn't stop the others.
+            let main_fmt = fmt.get(1).cloned().unwrap_or_else(|| "flv".into());
+            let mut slaves = vec![format!("[f={main_fmt}:onfail=ignore]{target}")];
+            for (f, url) in &extra {
+                slaves.push(format!("[f={f}:onfail=ignore]{url}"));
+            }
+            // tee picks no streams by itself: name them (audio was mapped above when a device is on).
+            if s.audio_device < 0 {
+                args.extend(["-map", "0:v"].map(String::from));
+            }
+            args.extend(["-f", "tee", "-flags", "+global_header"].map(String::from));
+            args.push(slaves.join("|"));
+        }
 
+        log::debug!("ffmpeg {}", args.join(" "));
         let mut child = Command::new(ffmpeg)
             .args(&args)
             .stdin(Stdio::piped())

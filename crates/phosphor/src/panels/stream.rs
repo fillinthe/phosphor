@@ -21,6 +21,28 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
         });
+        if s.destination != Destination::File {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut s.second_enabled, "Also send to").on_hover_text("A second live destination from the same encode (YouTube + Twitch at once)");
+                if s.second_enabled {
+                    ComboBox::from_id_salt("stream_second").width(130.0).selected_text(s.second_destination.name()).show_ui(ui, |ui| {
+                        for d in [Destination::YouTube, Destination::Twitch, Destination::CustomRtmp] {
+                            ui.selectable_value(&mut s.second_destination, d, d.name());
+                        }
+                    });
+                    if s.second_destination == Destination::CustomRtmp {
+                        ui.add(egui::TextEdit::singleline(&mut s.second_url).hint_text("rtmp://…").desired_width(160.0));
+                    }
+                    ui.add(egui::TextEdit::singleline(&mut s.second_key).password(true).hint_text("stream key").desired_width(160.0));
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut s.copy_enabled, "Also record a copy").on_hover_text("An H.264 .mp4 of the stream, written while it goes out");
+                if s.copy_enabled {
+                    ui.add(egui::TextEdit::singleline(&mut s.copy_path).hint_text("…/stream-copy.mp4").desired_width(240.0));
+                }
+            });
+        }
         match s.destination {
             Destination::YouTube | Destination::Twitch => {
                 ui.horizontal(|ui| {
