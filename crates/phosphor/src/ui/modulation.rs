@@ -7,7 +7,8 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
         values.resize(i + 1, p.default);
     }
     ui.horizontal(|ui| {
-        let r = guarded!(ui, values[i], Slider::new(&mut values[i], p.min..=p.max).text(p.name)).on_hover_text("Double-click to reset · right-click for Learn / Modulate");
+        // A range must run low to high (egui's slider clamps with it and panics otherwise).
+        let r = guarded!(ui, values[i], Slider::new(&mut values[i], p.min.min(p.max)..=p.max.max(p.min)).text(p.name)).on_hover_text("Double-click to reset · right-click for Learn / Modulate");
         let slot = mods.iter().position(|m| m.index == i);
         mod_marker(ui, &r, values[i], p.min, p.max, slot.map(|k| &mods[k].m));
         if let Some(t) = &target {
