@@ -126,7 +126,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Hap Q Alpha on the GPU (still decodes on the CPU)
 - [x] Zero-copy video: VideoToolbox IOSurface → Metal textures → wgpu (8-bit 4:2:0; 4K H.264 38% → 16% CPU)
 - [x] Zero-copy for 10-bit (P010) and full-range video
-- [ ] Ship FFmpeg inside the .app (LGPL build, decoders only) instead of relying on Homebrew
+- [x] FFmpeg libraries ship inside the .app (Homebrew's GPL build, relinked; checked 2026-10-17: no Homebrew paths left). LGPL build: not needed (GPL app)
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
 - [x] Live camera / capture card input, network streams (RTSP/SRT/HLS), Syphon In
 - [x] Media bin with thumbnails (background FFmpeg frame grabs), import files, click or drag onto layers
@@ -215,13 +215,13 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] ISF import (`crates/phosphor-isf`): GLSL → WGSL via naga; 264 of 406 shaders on this Mac convert
       (233/327 of /Library/Graphics/ISF); converted in the background, compiled lazily (2 per frame)
 - [x] ISF multi-pass / persistent buffers, up to 44 params (341/406 convert)
-- [ ] ISF imported images, FLOAT buffers, MadMapper includes
+- [x] ISF imported images ✔, MadMapper includes ✔ (MadNoise, MadSDF, MadCommon), curve/audio inputs ✔; FLOAT buffers still 8-bit
 - [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); still to do:
       Optical Flow and lit (normals) Rutt-Etra rendering. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)
 - [x] Text / title source (any installed font, size, colour, alignment, outline)
 - [x] Syphon in/out, NDI out
-- [ ] NDI in
+- [x] NDI in
 - [x] Recording to ProRes / Hap (own Hap encoder: DXT1/DXT5 + Snappy, muxed in-process)
 - [ ] Spout (Windows, if we ship there)
 
