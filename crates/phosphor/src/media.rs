@@ -12,8 +12,11 @@ pub mod rhythm;
 pub mod video;
 
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
-const MOVIE_EXTS: &[&str] =
-    &["mov", "mp4", "m4v", "webm", "mkv", "avi", "gif", "mpg", "mpeg", "wmv", "flv", "3gp", "mxf", "ts", "m2ts"];
+const MOVIE_EXTS: &[&str] = &[
+    "mov", "mp4", "m4v", "webm", "mkv", "avi", "gif", "mpg", "mpeg", "wmv", "flv", "3gp", "mxf", "ts", "m2ts",
+    // Sound files play as clips with an empty picture (their sound can drive the visuals: Audio panel → Clip sound).
+    "mp3", "wav", "aac", "m4a", "flac", "ogg", "aiff", "aif", "opus",
+];
 
 /// Extensions offered in the Open… dialog.
 pub fn dialog_extensions() -> Vec<&'static str> {
