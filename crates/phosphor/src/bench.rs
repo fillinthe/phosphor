@@ -41,6 +41,10 @@ pub struct BenchConfig {
     pub hap: bool,
     /// `--record x.mp4 --hevc`: HEVC through the Mac encoder.
     pub hevc: bool,
+    /// `--stream rtmp://…` (custom RTMP, no key) and `--stream2 rtmp://…` (second destination) and `--stream-copy file.mp4`.
+    pub stream: Option<String>,
+    pub stream2: Option<String>,
+    pub stream_copy: Option<String>,
     /// Open the import chooser for this Resolume / VDMX file.
     pub import: Option<String>,
     /// Start in this built-in workspace ("VDMX", "Mapping"…).
@@ -86,6 +90,9 @@ impl BenchConfig {
                 ("--fx", Some(v)) => cfg.effects.push(v),
                 ("--snapshot", Some(v)) => cfg.snapshot = Some(v),
                 ("--rate", Some(v)) => cfg.rate = Some(v),
+                ("--stream", Some(v)) => cfg.stream = Some(v),
+                ("--stream2", Some(v)) => cfg.stream2 = Some(v),
+                ("--stream-copy", Some(v)) => cfg.stream_copy = Some(v),
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
                 ("--select", Some(v)) => cfg.select = v.parse().ok(),
