@@ -50,7 +50,7 @@ jobs:
         run: cargo build -p phosphor --release
 
       - name: App tests
-        run: cargo test -p phosphor --release
+        run: cargo test -p phosphor --release --bins
 
       - name: Package (exe + FFmpeg DLLs)
         shell: pwsh
