@@ -586,11 +586,13 @@ pub struct Mask {
     pub feather: f32,
     /// The outline is a smooth curve through the points (Catmull-Rom) instead of straight lines.
     pub smooth: bool,
+    /// Per point: a sharp corner in a smooth outline (the curve heads straight at its neighbours). Missing = smooth.
+    pub corners: Vec<bool>,
 }
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new() }
     }
 }
 
@@ -672,6 +674,32 @@ pub fn offset_polygon(points: &[[f32; 2]], d: f32) -> Vec<[f32; 2]> {
 }
 
 impl Mask {
+    pub fn is_corner(&self, i: usize) -> bool {
+        self.corners.get(i).copied().unwrap_or(false)
+    }
+
+    pub fn set_corner(&mut self, i: usize, on: bool) {
+        if self.corners.len() <= i {
+            self.corners.resize(i + 1, false);
+        }
+        self.corners[i] = on;
+    }
+
+    /// Adds a point before index `i` (corner flags stay with their points).
+    pub fn insert_point(&mut self, i: usize, p: [f32; 2]) {
+        if self.corners.len() >= i {
+            self.corners.insert(i, false);
+        }
+        self.points.insert(i, p);
+    }
+
+    pub fn remove_point(&mut self, i: usize) {
+        if i < self.corners.len() {
+            self.corners.remove(i);
+        }
+        self.points.remove(i);
+    }
+
     /// The outline as drawn: the points, or a smooth closed curve through them (12 steps per side).
     pub fn outline(&self) -> Vec<[f32; 2]> {
         let n = self.points.len();
@@ -680,9 +708,18 @@ impl Mask {
         }
         const STEPS: usize = 12;
         let p = |i: usize| self.points[i % n];
+        // A corner's phantom neighbour is its real neighbour mirrored through it, so the curve leaves it heading
+        // straight at the next point (two corners in a row = a straight side).
+        let mirror = |a: [f32; 2], b: [f32; 2]| [2.0 * a[0] - b[0], 2.0 * a[1] - b[1]];
         let mut out = Vec::with_capacity(n * STEPS);
         for i in 0..n {
-            let (p0, p1, p2, p3) = (p(i + n - 1), p(i), p(i + 1), p(i + 2));
+            let (mut p0, p1, p2, mut p3) = (p(i + n - 1), p(i), p(i + 1), p(i + 2));
+            if self.is_corner(i) {
+                p0 = mirror(p1, p2);
+            }
+            if self.is_corner((i + 1) % n) {
+                p3 = mirror(p2, p1);
+            }
             for k in 0..STEPS {
                 let t = k as f32 / STEPS as f32;
                 out.push([catmull(p0[0], p1[0], p2[0], p3[0], t), catmull(p0[1], p1[1], p2[1], p3[1], t)]);
@@ -714,6 +751,28 @@ impl Mask {
             out.extend_from_slice(&[a, b, c, a, c, d]);
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod mask_corner_tests {
+    use super::*;
+
+    #[test]
+    fn two_corners_in_a_row_make_a_straight_side() {
+        let mut m = Mask { smooth: true, ..Default::default() };
+        let curved = m.outline();
+        m.set_corner(0, true);
+        m.set_corner(1, true);
+        let o = m.outline();
+        // Side 0 -> 1 runs along y = 0.4: every sample of it stays on that line once both ends are corners.
+        assert!(o[..12].iter().all(|p| (p[1] - 0.4).abs() < 1e-5), "{:?}", &o[..12]);
+        assert!(curved[..12].iter().any(|p| (p[1] - 0.4).abs() > 1e-3));
+        // Corner flags follow their points.
+        m.insert_point(1, [0.5, 0.3]);
+        assert!(m.is_corner(0) && !m.is_corner(1) && m.is_corner(2));
+        m.remove_point(0);
+        assert!(!m.is_corner(0) && m.is_corner(1));
     }
 }
 

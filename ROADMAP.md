@@ -205,7 +205,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Outputs remember their screen (by name, numbered for identical projectors); "All to their screens"
 - [x] Mapping: slice "input from another output"
 - [x] Open outputs on their saved screens automatically when a project opens (per-project setting, off by default)
-- [ ] Bezier mask edges
+- [x] Curved mask edges: Smooth outline + per-point sharp corners (right-click a point) ✔ 2026-10-18
 - [x] Per-output identify / colour correction, surface blend curve
 - [x] Per-surface color correction / brightness
 - [x] Save mapping with the project
