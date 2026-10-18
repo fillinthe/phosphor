@@ -545,6 +545,7 @@ mod tests {
     use super::*;
 
     /// Sound follows the picture: after a jump to 0.9 s the test beep (1.0–1.1 s) arrives ~0.1 s into the buffer.
+    /// The movie isn't in git; make it with the FFmpeg line in .github/workflows/windows.yml (App tests).
     #[test]
     fn sound_starts_where_the_picture_is() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../media/test/av.mp4");
