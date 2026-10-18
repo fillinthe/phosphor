@@ -249,6 +249,8 @@ pub struct State {
     pub clip_page: usize,
     /// This frame's audio/LFO signals, also shown in the Audio panel.
     pub mod_inputs: ModInputs,
+    /// Shared modulators' running phases (speed changes never jump).
+    pub mod_phases: phosphor_engine::ModPhases,
 }
 
 impl State {
