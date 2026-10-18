@@ -100,7 +100,8 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     let mut chips = |ui: &mut egui::Ui, title: &str, filter: fn(ModSource) -> bool| {
         ui.label(RichText::new(title).small().color(Color32::GRAY));
         ui.horizontal_wrapped(|ui| {
-            for src in ModSource::ALL.into_iter().filter(|s| filter(*s)) {
+            // "Hand / MIDI knob" only makes sense on a shared modulator (its value is the knob).
+            for src in ModSource::ALL.into_iter().filter(|s| filter(*s) && (signal_only || *s != ModSource::Hand)) {
                 if ui.selectable_label(current == Some(src), src.name()).clicked() {
                     *m = Some(Modulation { source: src, ..m.unwrap_or_default() });
                 }
