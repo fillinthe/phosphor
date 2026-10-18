@@ -76,6 +76,9 @@ pub struct IsfInput {
     pub offset: Option<usize>,
     /// Texture slot (`tex<n>`) for image/audio inputs.
     pub texture: Option<usize>,
+    /// A point2D with no MIN/MAX that the shader uses as pixels (divides by RENDERSIZE) while its defaults are
+    /// 0..1: the host scales it by the render size, as VDMX does (Vertex Manipulator).
+    pub pixels: bool,
 }
 
 impl IsfInput {
@@ -129,8 +132,10 @@ pub struct IsfShader {
     pub curves: Vec<(usize, Vec<f32>)>,
     /// `audio` / `audioFFT` inputs: (texture slot 1 or 2, spectrum?). The app binds its live audio pictures there.
     pub audio_slots: Vec<(usize, bool)>,
-    /// WGSL fragment entry + helpers; empty when `unsupported` is set.
+    /// WGSL fragment entry + helpers (and the vertex entry, when the shader has one); empty when `unsupported` is set.
     pub wgsl: String,
+    /// A real vertex stage (ISF vertex shaders that move the quad): the engine draws six vertices through it.
+    pub vertex_entry: Option<String>,
     /// Name of the fragment entry function.
     pub entry: String,
     /// Reason the shader cannot run in Phosphor yet (inputs are still reported).
@@ -248,6 +253,16 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     let body = glsl::fix_returns(&glsl::resolve_directives(&stripped));
     let dialect = glsl::detect_dialect(&body);
     let mut inputs = header.inputs.clone();
+    // Unranged points count as pixels only where the shader divides them by the render size.
+    let all_src = format!("{body}\n{}", vs_source.unwrap_or(""));
+    for i in inputs.iter_mut().filter(|i| i.pixels) {
+        let divided = all_src.match_indices(i.name.as_str()).any(|(k, _)| {
+            let before_ok = k == 0 || !all_src.as_bytes()[k - 1].is_ascii_alphanumeric() && all_src.as_bytes()[k - 1] != b'_';
+            before_ok && all_src[k + i.name.len()..].trim_start().strip_prefix('/').is_some_and(|r| r.trim_start().starts_with("RENDERSIZE"))
+        });
+        let defaults_unit = matches!(&i.kind, IsfInputKind::Point2D { default, .. } if default.iter().all(|v| (0.0..=1.0).contains(v)));
+        i.pixels = divided && defaults_unit;
+    }
     let is_filter = dialect == Dialect::MadFx || inputs.iter().any(|i| i.name == "inputImage");
 
     let mut shader = IsfShader {
@@ -263,6 +278,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         images: Vec::new(),
         curves: Vec::new(),
         audio_slots: Vec::new(),
+        vertex_entry: None,
         wgsl: String::new(),
         entry: entry.clone(),
         unsupported: None,
@@ -323,17 +339,30 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
             mad_vs = true;
         }
     }
+    // A real vertex stage, when the shader moves the quad (3d Rotate, Vertex Manipulator): the vertex source is
+    // converted on its own and the fragment stage reads the varying it writes.
+    let mut vertex_glsl: Option<String> = None;
     if let Some(vs) = vs_source.filter(|_| dialect == Dialect::Isf) {
         let vs = glsl::resolve_directives(&glsl::strip_comments(vs));
-        if glsl::uses_ident(&vs, "gl_Position") {
-            unsupported.get_or_insert("vertex shader transforms geometry".into());
-        }
         let (rewritten, names) = glsl::rewrite_io_decls(&vs, &[]);
-        vs_names = names;
-        match glsl::rename_main(&rewritten, "phosphor_vs_main") {
-            Some(s) => vs_part = s,
-            None => {
-                unsupported.get_or_insert("vertex shader without main".into());
+        if glsl::uses_ident(&vs, "gl_Position") {
+            if !names.is_empty() {
+                unsupported.get_or_insert("vertex shader with its own varyings or attributes".into());
+            } else {
+                match glsl::rename_main(&vs, "phosphor_vs_user") {
+                    Some(user) => vertex_glsl = Some(user),
+                    None => {
+                        unsupported.get_or_insert("vertex shader without main".into());
+                    }
+                }
+            }
+        } else {
+            vs_names = names;
+            match glsl::rename_main(&rewritten, "phosphor_vs_main") {
+                Some(s) => vs_part = s,
+                None => {
+                    unsupported.get_or_insert("vertex shader without main".into());
+                }
             }
         }
     }
@@ -380,15 +409,26 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     full.push_str("}\n");
     full.push_str(&glsl::epilogue(dialect, !vs_part.is_empty(), mad_vs));
 
-    let naga_out = glsl_to_wgsl(&full)?;
+    let naga_out = glsl_to_wgsl(&full, naga::ShaderStage::Fragment)?;
     shader.wgsl = wgsl::finalize(&naga_out, &entry)?;
+    if let Some(user) = vertex_glsl {
+        let vs_entry = format!("phosphor_vs_{entry}");
+        let mut vfull = glsl::vertex_prelude(&header, &shader.inputs);
+        vfull.push_str(&user);
+        vfull.push('\n');
+        vfull.push_str(glsl::vertex_epilogue());
+        let vnaga = glsl_to_wgsl(&vfull, naga::ShaderStage::Vertex)?;
+        shader.wgsl.push('\n');
+        shader.wgsl.push_str(&wgsl::finalize_vertex(&vnaga, &vs_entry)?);
+        shader.vertex_entry = Some(vs_entry);
+    }
     Ok(shader)
 }
 
 /// Runs naga: GLSL 450 fragment → validated module → WGSL text.
-fn glsl_to_wgsl(src: &str) -> Result<String, IsfError> {
+fn glsl_to_wgsl(src: &str, stage: naga::ShaderStage) -> Result<String, IsfError> {
     let mut frontend = naga::front::glsl::Frontend::default();
-    let mut options = naga::front::glsl::Options::from(naga::ShaderStage::Fragment);
+    let mut options = naga::front::glsl::Options::from(stage);
     options.defines.insert("__VERSION__".into(), "450".into());
     let mut module = frontend
         .parse(&options, src)

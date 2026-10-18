@@ -397,6 +397,21 @@ pub fn audio_slots(entry: &str) -> Option<std::sync::Arc<Vec<(usize, AudioTextur
     AUDIO_SLOTS.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, s)| s.clone())
 }
 
+static VERTEX_ENTRIES: std::sync::RwLock<Vec<(&'static str, &'static str)>> = std::sync::RwLock::new(Vec::new());
+
+/// A shader with its own vertex stage (an ISF vertex shader that moves the quad): drawn as six vertices through
+/// `vs_entry` instead of the fullscreen triangle.
+pub fn set_vertex_entry(entry: &'static str, vs_entry: &'static str) {
+    if let Ok(mut v) = VERTEX_ENTRIES.write() {
+        v.retain(|(e, _)| *e != entry);
+        v.push((entry, vs_entry));
+    }
+}
+
+pub fn vertex_entry(entry: &str) -> Option<&'static str> {
+    VERTEX_ENTRIES.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, v)| *v)
+}
+
 /// Any shader at all wants audio pictures (the app refreshes them each frame only then).
 pub fn any_audio_slots() -> bool {
     AUDIO_SLOTS.read().is_ok_and(|a| !a.is_empty())

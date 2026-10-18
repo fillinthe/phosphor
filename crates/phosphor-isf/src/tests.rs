@@ -173,9 +173,16 @@ void main() { gl_FragColor = IMG_NORM_PIXEL(inputImage, off); }\n";
     validate_wgsl(&s.wgsl).unwrap();
     assert!(s.wgsl.contains("fn isf_vs_phosphor_vs_main("));
 
-    let geometry = "void main() { isf_vertShaderInit(); gl_Position = gl_Position * 2.0; }";
+    // A vertex shader that moves the quad gets its own vertex stage.
+    let geometry = "void main() { isf_vertShaderInit(); gl_Position = gl_Position * 0.5; }";
     let s = import("vs2", fs, Some(geometry)).unwrap();
-    assert!(s.unsupported.as_deref().unwrap_or("").contains("geometry"));
+    assert!(s.unsupported.is_none(), "{:?}", s.unsupported);
+    validate_wgsl(&s.wgsl).unwrap();
+    let v = s.vertex_entry.as_deref().expect("vertex entry");
+    assert!(s.wgsl.contains(&format!("@vertex\nfn {v}(@builtin(vertex_index) vi: u32) -> VOut")), "{}", s.wgsl);
+    // With its own varyings it isn't supported yet.
+    let own = "varying vec2 off;\nvoid main() { isf_vertShaderInit(); off = isf_FragNormCoord; gl_Position = gl_Position * 0.5; }";
+    assert!(import("vs3", fs, Some(own)).unwrap().unsupported.is_some());
 }
 
 

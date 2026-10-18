@@ -332,3 +332,107 @@ pub(crate) fn finalize(naga_wgsl: &str, entry: &str) -> Result<String, IsfError>
     out.push_str(&format!("    return {};\n}}\n", rename_tokens(&ret_expr, &map, false)));
     Ok(out)
 }
+
+/// Rewrites naga's vertex-stage output into `@vertex fn <vs_entry>(@builtin(vertex_index) vi: u32) -> VOut`,
+/// with the same binding renames as `finalize` and every other name prefixed by `vs_entry`.
+pub(crate) fn finalize_vertex(naga_wgsl: &str, vs_entry: &str) -> Result<String, IsfError> {
+    let items = scan_items(naga_wgsl);
+    let mut map: HashMap<String, String> = HashMap::new();
+    let mut drop_structs: Vec<String> = Vec::new();
+    let mut entry_item: Option<&Item> = None;
+    for it in &items {
+        if it.entry {
+            entry_item = Some(it);
+            continue;
+        }
+        match (it.kind, it.binding) {
+            (Kind::Var, Some(0)) => {
+                map.insert(it.name.clone(), "u".to_string());
+                if let Some(ty) = it.text.rsplit(':').next() {
+                    drop_structs.push(ty.trim().trim_end_matches(';').trim().to_string());
+                }
+            }
+            (Kind::Var, Some(bind)) => return Err(IsfError::Wgsl(format!("vertex shader binds {bind}; only the uniforms are allowed there"))),
+            (Kind::Other, _) => {}
+            _ => {
+                if !it.name.is_empty() {
+                    map.insert(it.name.clone(), format!("{vs_entry}_{}", it.name));
+                }
+            }
+        }
+    }
+    let entry_item = entry_item.ok_or_else(|| IsfError::Wgsl("naga output has no vertex entry point".into()))?;
+    let sig = entry_item.text;
+    // The output struct: which constructor argument is the position and which the uv.
+    let ret_name = sig.find("->").map(|a| sig[a + 2..].split('{').next().unwrap_or("").trim().to_string()).unwrap_or_default();
+    drop_structs.push(ret_name.clone());
+    let ret_struct = items.iter().find(|it| it.kind == Kind::Struct && it.name == ret_name).ok_or_else(|| IsfError::Wgsl("vertex output struct not found".into()))?;
+    let fields: Vec<&str> = ret_struct.text[ret_struct.text.find('{').map_or(0, |k| k + 1)..].trim_end_matches('}').split(',').map(str::trim).filter(|f| !f.is_empty()).collect();
+    let pos_index = fields.iter().position(|f| f.contains("@builtin(position)")).ok_or_else(|| IsfError::Wgsl("vertex output has no position".into()))?;
+    let uv_index = fields.iter().position(|f| f.contains("@location(0)")).ok_or_else(|| IsfError::Wgsl("vertex output has no location 0 (phosphor_uv)".into()))?;
+    // Parameters: the vertex index.
+    let mut param_src: HashMap<String, String> = HashMap::new();
+    for p in fn_params(sig).split(',') {
+        let p = p.trim();
+        if p.is_empty() {
+            continue;
+        }
+        let Some((decl, _ty)) = p.rsplit_once(':') else { continue };
+        let name = decl.split_whitespace().last().unwrap_or("").to_string();
+        if decl.contains("@builtin(vertex_index)") {
+            param_src.insert(name, "vi".to_string());
+        } else {
+            return Err(IsfError::Wgsl(format!("unsupported vertex entry parameter `{p}`")));
+        }
+    }
+    let body_start = sig.find('{').map(|k| k + 1).unwrap_or(0);
+    let body = &sig[body_start..sig.len().saturating_sub(1)];
+    let mut assigns: Vec<(String, String)> = Vec::new();
+    let mut calls: Vec<String> = Vec::new();
+    let mut lets: HashMap<String, String> = HashMap::new();
+    let mut ret_args: Vec<String> = Vec::new();
+    for stmt in body.split(';') {
+        let s = stmt.trim();
+        if s.is_empty() {
+            continue;
+        }
+        if let Some(rest) = s.strip_prefix("let ") {
+            if let Some((l, r)) = rest.split_once('=') {
+                lets.insert(l.trim().to_string(), r.trim().to_string());
+            }
+        } else if let Some(rest) = s.strip_prefix("return") {
+            let inner = rest.trim();
+            let args = inner.split_once('(').map(|(_, a)| a.trim_end_matches(')').to_string()).unwrap_or_default();
+            ret_args = args.split(',').map(|a| a.trim()).filter(|a| !a.is_empty()).map(|a| lets.get(a).cloned().unwrap_or_else(|| a.to_string())).collect();
+        } else if s.ends_with(')') && !s.contains('=') {
+            calls.push(s.to_string());
+        } else if let Some((l, r)) = s.split_once('=') {
+            assigns.push((l.trim().to_string(), r.trim().to_string()));
+        }
+    }
+    let (pos_expr, uv_expr) = match (ret_args.get(pos_index), ret_args.get(uv_index)) {
+        (Some(p), Some(u)) => (p.clone(), u.clone()),
+        _ => return Err(IsfError::Wgsl("vertex wrapper return doesn't match its struct".into())),
+    };
+    let mut out = String::new();
+    for it in &items {
+        if it.entry || (it.kind == Kind::Var && it.binding.is_some()) {
+            continue;
+        }
+        if it.kind == Kind::Struct && drop_structs.contains(&it.name) {
+            continue;
+        }
+        out.push_str(&rename_tokens(it.text, &map, it.kind == Kind::Struct));
+        out.push_str("\n\n");
+    }
+    out.push_str(&format!("@vertex\nfn {vs_entry}(@builtin(vertex_index) vi: u32) -> VOut {{\n"));
+    for (l, r) in &assigns {
+        let src = param_src.get(r).cloned().ok_or_else(|| IsfError::Wgsl(format!("unexpected vertex wrapper assignment `{l} = {r}`")))?;
+        out.push_str(&format!("    {} = {src};\n", map.get(l).unwrap_or(l)));
+    }
+    for c in &calls {
+        out.push_str(&format!("    {};\n", rename_tokens(c, &map, false)));
+    }
+    out.push_str(&format!("    return VOut({}, {});\n}}\n", rename_tokens(&pos_expr, &map, false), rename_tokens(&uv_expr, &map, false)));
+    Ok(out)
+}
