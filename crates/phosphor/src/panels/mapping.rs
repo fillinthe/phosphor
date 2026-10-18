@@ -50,6 +50,18 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             }
             // A line slice draws its own polyline below; its corners aren't used.
             None if s.line.is_some() => {}
+            // A 3D model: a light wireframe of what it covers on the output.
+            None if s.model.is_some() => {
+                if let Some(m) = &s.model {
+                    let aspect = frame.width() / frame.height().max(1.0);
+                    let tris = m.wireframe(aspect);
+                    let step = (tris.len() / 3 / 600).max(1);
+                    for t in tris.chunks_exact(3).step_by(step) {
+                        let pts: Vec<egui::Pos2> = t.iter().map(|v| to_screen([v[0], v[1]])).collect();
+                        ui.painter().add(egui::Shape::closed_line(pts, Stroke::new(1.0, base.gamma_multiply(0.35))));
+                    }
+                }
+            }
             None => {
                 let pts: Vec<egui::Pos2> = s.corners.iter().map(|c| to_screen(*c)).collect();
                 ui.painter().add(egui::Shape::closed_line(pts, line));
@@ -72,6 +84,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             ui.painter().add(egui::Shape::line(pts, line));
         }
         let points: Vec<&mut [f32; 2]> = match (&mut s.line, &mut s.mesh) {
+            _ if s.model.is_some() => Vec::new(),
             (Some(l), _) => l.points.iter_mut().collect(),
             (None, Some(m)) => m.points.iter_mut().collect(),
             (None, None) => s.corners.iter_mut().collect(),
@@ -89,7 +102,8 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         }
         s.sync_corners();
         if labels {
-            ui.painter().text(to_screen(s.corners[0]) + egui::vec2(10.0, 8.0), egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(12.0), Color32::WHITE);
+            let at = if s.model.is_some() || s.line.is_some() { to_screen(s.center()) + egui::vec2(10.0, -18.0) } else { to_screen(s.corners[0]) + egui::vec2(10.0, 8.0) };
+            ui.painter().text(at, egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(12.0), Color32::WHITE);
         }
     }
     // Masks: drag points, + between points adds one, right-click a point to delete it.
@@ -346,6 +360,9 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
 
 /// A slice's settings: what it shows, shape, opacity, soft edge, colour, mesh warp, input region
 /// (Mapping panel cards and the Mapping Studio).
+/// Temp-data key: a surface asked for its 3D model file (the app opens the dialog).
+pub(crate) const PICK_MODEL: &str = "phosphor_pick_model";
+
 pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], others: &[(u64, String)]) {
     surface_source(ui, s, layers, groups, others);
     ui.horizontal(|ui| {
@@ -359,6 +376,42 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             .on_hover_text("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.");
     }
     color_grade_editor(ui, s.id, &mut s.color);
+    ui.horizontal(|ui| {
+        let mut on3d = s.model.is_some();
+        if ui.toggle_value(&mut on3d, label(icon::CUBE, "3D model")).on_hover_text("Map onto a real object from its 3D model (OBJ with UVs): line the virtual camera up with the projector").changed() {
+            if on3d {
+                s.model = Some(phosphor_engine::mapping::Model3d::default());
+                s.line = None;
+                s.mesh = None;
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(PICK_MODEL), s.id));
+            } else {
+                s.model = None;
+            }
+        }
+        if let Some(m) = &mut s.model {
+            let name = std::path::Path::new(&m.path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "no model yet".into());
+            ui.label(egui::RichText::new(name).small());
+            if ui.small_button("Choose…").clicked() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(PICK_MODEL), s.id));
+            }
+        }
+    });
+    if let Some(m) = &mut s.model {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().slider_width = 110.0;
+            guarded!(ui, m.yaw, Slider::new(&mut m.yaw, -0.5..=0.5).text("turn"));
+            guarded!(ui, m.pitch, Slider::new(&mut m.pitch, -0.25..=0.25).text("tilt"));
+            guarded!(ui, m.roll, Slider::new(&mut m.roll, -0.25..=0.25).text("roll"));
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().slider_width = 110.0;
+            guarded!(ui, m.distance, Slider::new(&mut m.distance, 0.8..=12.0).logarithmic(true).text("distance"));
+            guarded!(ui, m.fov, Slider::new(&mut m.fov, 10.0..=90.0).text("lens °")).on_hover_text("The projector's vertical throw angle; a long-throw lens is narrow");
+            guarded!(ui, m.scale, Slider::new(&mut m.scale, 0.1..=4.0).logarithmic(true).text("size"));
+            ui.checkbox(&mut m.cull, "Hide back faces");
+        });
+        hint(ui, "Drag the dot on the canvas to move it. Turn, tilt and lens until the wireframe sits on the real object. The picture follows the model's UVs.");
+    }
     ui.horizontal(|ui| {
         let mut on = s.line.is_some();
         if ui.toggle_value(&mut on, label(icon::LINE_SEGMENTS, "Line")).on_hover_text("The picture runs along a line with a width: outlines, edges, strips. Drag its points on the canvas").changed() {

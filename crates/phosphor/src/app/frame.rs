@@ -54,6 +54,11 @@ impl PhosphorApp {
         self.update_title(&ctx);
         #[cfg(not(target_arch = "wasm32"))]
         self.start_show(now);
+        // A mapping surface asked for its 3D model file.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(sid) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(crate::panels::PICK_MODEL))) {
+            self.state.dialogs.pick_file(crate::dialogs::Purpose::Model3d(sid), Some(("3D model (OBJ)", &["obj"])));
+        }
         #[cfg(not(target_arch = "wasm32"))]
         self.handle_dialogs_and_folders(now);
         self.remote_sync(now);

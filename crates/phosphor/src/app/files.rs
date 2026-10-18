@@ -94,6 +94,22 @@ impl PhosphorApp {
                         st.begin_resolume_import(&p.to_string_lossy());
                     }
                 }
+                Purpose::Model3d(sid) => {
+                    if let Some(p) = paths.first() {
+                        let path = p.to_string_lossy().to_string();
+                        phosphor_engine::mapping::forget_obj(&path);
+                        let loaded = phosphor_engine::mapping::obj_mesh(&path);
+                        for o in &mut st.comp.outputs {
+                            if let Some(m) = o.mapping.surfaces.iter_mut().find(|s| s.id == sid).and_then(|s| s.model.as_mut()) {
+                                m.path = path.clone();
+                            }
+                        }
+                        st.notice = Some(match loaded.as_ref() {
+                            Ok(mesh) => format!("{}: {} triangles", name_of(p), mesh.tris.len()),
+                            Err(e) => format!("Couldn't read {}: {e}", name_of(p)),
+                        });
+                    }
+                }
                 Purpose::RelinkFolder => {
                     if let Some(p) = paths.first() {
                         st.start_relink(p.clone());
