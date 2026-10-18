@@ -82,7 +82,21 @@ impl Stats {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(windows)]
+fn process_cpu_seconds() -> Option<f64> {
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+    let z = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+    let (mut create, mut exit, mut kernel, mut user) = (z, z, z, z);
+    // SAFETY: our own process handle, FILETIMEs we own.
+    if unsafe { GetProcessTimes(GetCurrentProcess(), &mut create, &mut exit, &mut kernel, &mut user) } == 0 {
+        return None;
+    }
+    let secs = |t: FILETIME| ((t.dwHighDateTime as u64) << 32 | t.dwLowDateTime as u64) as f64 / 1e7;
+    Some(secs(kernel) + secs(user))
+}
+
+#[cfg(all(unix, not(target_arch = "wasm32")))]
 fn process_cpu_seconds() -> Option<f64> {
     let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
     if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) } != 0 {
@@ -115,7 +129,19 @@ fn memory_mb() -> Option<f64> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+fn memory_mb() -> Option<f64> {
+    use windows_sys::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    // SAFETY: our own process handle and a counters struct we own, with its size.
+    unsafe {
+        let mut pmc: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+        pmc.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+        (GetProcessMemoryInfo(GetCurrentProcess(), &mut pmc, pmc.cb) != 0).then(|| pmc.WorkingSetSize as f64 / 1_048_576.0)
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 fn memory_mb() -> Option<f64> {
     None
 }

@@ -158,8 +158,7 @@ pub fn run_watchdog(pid: u32) {
         // Only count time we were awake ourselves: after the Mac sleeps, a stale heartbeat isn't a freeze.
         let dt = tick.elapsed().as_secs_f64();
         tick = std::time::Instant::now();
-        // SAFETY: signal 0 only checks whether the process exists.
-        let alive = unsafe { libc::kill(pid as i32, 0) } == 0;
+        let alive = process_alive(pid);
         if alive {
             let beat = heartbeat_path().and_then(|p| std::fs::read_to_string(p).ok());
             if beat.is_some() && beat != last_beat {
@@ -179,8 +178,7 @@ pub fn run_watchdog(pid: u32) {
                     .open(log)
                     .and_then(|mut f| std::io::Write::write_all(&mut f, format!("[{}] froze (no heartbeat for {FROZEN_AFTER} s); restarted by the watchdog\n", unix_now()).as_bytes()));
             }
-            // SAFETY: killing the frozen Phosphor process we're watching.
-            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+            kill_process(pid);
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
         let Some(lock) = lock_path() else { return };
@@ -201,6 +199,51 @@ pub fn run_watchdog(pid: u32) {
         }
         relaunch();
         return;
+    }
+}
+
+/// Is the watched process still running?
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    // SAFETY: signal 0 only checks whether the process exists.
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    // SAFETY: a query-only handle to the process we watch, closed again.
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return false;
+        }
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(h, &mut code) != 0;
+        CloseHandle(h);
+        ok && code == STILL_ACTIVE as u32
+    }
+}
+
+/// Ends the frozen process we watch.
+#[cfg(unix)]
+fn kill_process(pid: u32) {
+    // SAFETY: killing the frozen Phosphor process we're watching.
+    unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+}
+
+#[cfg(windows)]
+fn kill_process(pid: u32) {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess};
+    // SAFETY: a terminate handle to the frozen process we watch, closed again.
+    unsafe {
+        let h = OpenProcess(PROCESS_TERMINATE, 0, pid);
+        if !h.is_null() {
+            TerminateProcess(h, 1);
+            CloseHandle(h);
+        }
     }
 }
 
