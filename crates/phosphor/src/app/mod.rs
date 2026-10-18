@@ -599,6 +599,22 @@ pub struct PhosphorApp {
 }
 
 impl eframe::App for PhosphorApp {
+    /// Bench `--right-click-studio`: a real right-click (press + release) in the middle of the Studio canvas, a
+    /// moment after it has been drawn, so a UI shot can show the menu.
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        let Some(run) = self.bench.as_mut() else { return };
+        if !run.cfg.right_click_studio {
+            return;
+        }
+        let Some(rect) = ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("studio_canvas_rect"))) else { return };
+        let p = rect.center() + egui::vec2(rect.width() * 0.08, 0.0);
+        raw.events.push(egui::Event::PointerMoved(p));
+        for pressed in [true, false] {
+            raw.events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() });
+        }
+        run.cfg.right_click_studio = false;
+    }
+
     /// Runs every frame, and on its own while the control window is minimized or covered
     /// (eframe then skips `ui`). The outputs, Syphon, NDI and streams must keep going then, so
     /// render here when the UI hasn't drawn recently.

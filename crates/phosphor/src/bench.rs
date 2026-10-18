@@ -43,6 +43,8 @@ pub struct BenchConfig {
     pub hevc: bool,
     /// `--stream rtmp://…` (custom RTMP, no key) and `--stream2 rtmp://…` (second destination) and `--stream-copy file.mp4`.
     pub stream: Option<String>,
+    /// `--right-click-studio`: right-clicks the middle of the Mapping Studio's output canvas (shows its menu).
+    pub right_click_studio: bool,
     pub stream2: Option<String>,
     pub stream_copy: Option<String>,
     /// Open the import chooser for this Resolume / VDMX file.
@@ -111,6 +113,11 @@ impl BenchConfig {
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
                 ("--hap", _) => {
                     cfg.hap = true;
+                    i += 1;
+                    continue;
+                }
+                ("--right-click-studio", _) => {
+                    cfg.right_click_studio = true;
                     i += 1;
                     continue;
                 }
