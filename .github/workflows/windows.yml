@@ -1,0 +1,57 @@
+# Windows build of Phosphor (work in progress: run by hand from the Actions tab or `gh workflow run windows.yml`).
+# FFmpeg comes from BtbN's prebuilt shared Windows build (n9.0, matching ffmpeg-next 9); its DLLs ship next to the exe.
+name: Windows build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: FFmpeg (BtbN n9.0 shared)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip"
+          Invoke-WebRequest $url -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath $env:RUNNER_TEMP
+          $dir = Get-ChildItem $env:RUNNER_TEMP -Directory | Where-Object Name -like "ffmpeg-n9.0*" | Select-Object -First 1
+          "FFMPEG_DIR=$($dir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$($dir.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          # bindgen needs libclang
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: win-${{ hashFiles('Cargo.lock') }}
+
+      - name: Engine and ISF crates
+        run: cargo test -p phosphor-engine -p phosphor-isf --release
+
+      - name: App
+        run: cargo build -p phosphor --release
+
+      - name: Package (exe + FFmpeg DLLs)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\Phosphor | Out-Null
+          Copy-Item target\release\phosphor.exe dist\Phosphor\Phosphor.exe
+          Copy-Item "$env:FFMPEG_DIR\bin\*.dll" dist\Phosphor\
+          Copy-Item "$env:FFMPEG_DIR\bin\ffmpeg.exe" dist\Phosphor\
+          Compress-Archive -Path dist\Phosphor -DestinationPath dist\Phosphor-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phosphor-windows
+          path: dist/Phosphor-windows.zip
