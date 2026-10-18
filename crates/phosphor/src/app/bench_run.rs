@@ -202,6 +202,24 @@ impl PhosphorApp {
                 println!("QUICK mods: Gate into Swell (multiply), layer 1 param 0 follows Swell");
                 continue;
             }
+            if name == "calibrate" {
+                // Pins from a "real" projector placement, solved from the model surface's current settings.
+                let aspect = self.state.comp.width as f32 / self.state.comp.height.max(1) as f32;
+                for o in &mut self.state.comp.outputs {
+                    for s in &mut o.mapping.surfaces {
+                        let Some(m) = &mut s.model else { continue };
+                        let truth = phosphor_engine::mapping::Model3d { yaw: -0.07, pitch: 0.1, roll: 0.02, distance: 4.0, fov: 28.0, center: [0.42, 0.55], ..m.clone() };
+                        let mesh = phosphor_engine::mapping::obj_mesh(&m.path);
+                        if let Ok(mesh) = mesh.as_ref() {
+                            m.pins = mesh.verts.iter().take(8).filter_map(|v| truth.project_point(*v, aspect).map(|(xy, _)| phosphor_engine::mapping::Pin { model: *v, at: xy })).collect();
+                        }
+                        m.calibrating = true;
+                        let err = m.solve(aspect);
+                        println!("QUICK calibrate: {} pins, rms {:?}; solved yaw {:.3} pitch {:.3} roll {:.3} dist {:.2} fov {:.1} centre {:.3},{:.3} (truth -0.070 0.100 0.020 4.00 28.0 0.420,0.550)", m.pins.len(), err, m.yaw, m.pitch, m.roll, m.distance, m.fov, m.center[0], m.center[1]);
+                    }
+                }
+                continue;
+            }
             if name == "model" {
                 // A 3D model surface (/tmp/house.obj) on the first output, turned so three sides show.
                 let oid = self.state.comp.outputs.first().map(|o| o.id).unwrap_or_else(|| self.state.comp.add_output());

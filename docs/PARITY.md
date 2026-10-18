@@ -71,7 +71,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Curved mask edges (smooth curve through the points) | MadMapper, Resolume | ✅ |
 | Ellipse / triangle / line slices (follow perspective and mesh) | MadMapper | ✅ |
 | Slice input from another output | Resolume | ✅ |
-| 3D projection mapping onto models | MadMapper | ✅ OBJ + virtual projector (point calibration ⬜) |
+| 3D projection mapping onto models | MadMapper | ✅ OBJ + virtual projector, point calibration |
 | Lasers | MadMapper | ➖ |
 
 ## I/O

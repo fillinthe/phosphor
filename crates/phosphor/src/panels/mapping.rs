@@ -100,6 +100,56 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             p[1] += d[1];
             touched |= d != [0.0, 0.0];
         }
+        // 3D model calibration: click a model point to pin it, drag pins to where those points really are.
+        if is_selected
+            && let Some(m) = &mut s.model
+            && m.calibrating
+        {
+            let aspect = frame.width() / frame.height().max(1.0);
+            let mesh = phosphor_engine::mapping::obj_mesh(&m.path);
+            let mut changed = false;
+            if let Ok(mesh) = mesh.as_ref() {
+                for (k, v) in mesh.verts.iter().enumerate().take(2000) {
+                    if m.pins.iter().any(|p| p.model == *v) {
+                        continue;
+                    }
+                    let Some((xy, _)) = m.project_point(*v, aspect) else { continue };
+                    let at = to_screen(xy);
+                    let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(12.0, 12.0)), id.with(("vert", k)), Sense::click());
+                    ui.painter().circle_filled(at, if r.hovered() { 5.0 } else { 3.0 }, if r.hovered() { Color32::WHITE } else { Color32::from_rgb(120, 200, 255) });
+                    if r.on_hover_text("Pin this point, then drag the pin to where it really is").clicked() {
+                        m.pins.push(phosphor_engine::mapping::Pin { model: *v, at: xy });
+                        touched = true;
+                    }
+                }
+            }
+            let mut remove = None;
+            let now: Vec<Option<[f32; 2]>> = m.pins.iter().map(|p| m.project_point(p.model, aspect).map(|x| x.0)).collect();
+            for (k, pin) in m.pins.iter_mut().enumerate() {
+                let mut d = [0.0, 0.0];
+                let r = point_handle(ui, id.with(("pin", k)), to_screen(pin.at), frame, MASK_COLOR, true, &mut d);
+                if d != [0.0, 0.0] {
+                    pin.at = [pin.at[0] + d[0], pin.at[1] + d[1]];
+                    changed = true;
+                }
+                // Where the model point is now, joined to its pin.
+                if let Some(Some(now)) = now.get(k) {
+                    ui.painter().line_segment([to_screen(*now), to_screen(pin.at)], Stroke::new(1.0, MASK_COLOR.gamma_multiply(0.6)));
+                }
+                if r.secondary_clicked() {
+                    remove = Some(k);
+                }
+                r.on_hover_text("Drag to where this point is on the real object · right-click to remove");
+            }
+            if let Some(k) = remove {
+                m.pins.remove(k);
+                changed = true;
+            }
+            if changed {
+                m.solve(aspect);
+                touched = true;
+            }
+        }
         s.sync_corners();
         if labels {
             let at = if s.model.is_some() || s.line.is_some() { to_screen(s.center()) + egui::vec2(10.0, -18.0) } else { to_screen(s.corners[0]) + egui::vec2(10.0, 8.0) };
@@ -410,7 +460,17 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             guarded!(ui, m.scale, Slider::new(&mut m.scale, 0.1..=4.0).logarithmic(true).text("size"));
             ui.checkbox(&mut m.cull, "Hide back faces");
         });
-        hint(ui, "Drag the dot on the canvas to move it. Turn, tilt and lens until the wireframe sits on the real object. The picture follows the model's UVs.");
+        ui.horizontal(|ui| {
+            ui.toggle_value(&mut m.calibrating, label(icon::CROSSHAIR, "Calibrate")).on_hover_text("Pin model points and drag them onto the real object: from 4 pins the projector is solved for you (6+ also solves the lens)");
+            if m.calibrating {
+                let n = m.pins.len();
+                hint(ui, if n < 4 { format!("{n} pinned, {} more to solve", 4 - n) } else if n < 6 { format!("{n} pinned: solving position (6 also solve the lens)") } else { format!("{n} pinned: solving position and lens") });
+                if n > 0 && ui.small_button("Clear pins").clicked() {
+                    m.pins.clear();
+                }
+            }
+        });
+        hint(ui, "Drag the dot on the canvas to move it, or Calibrate: click points on the model (blue), drag their pins (orange) to the real corners. The picture follows the model's UVs.");
     }
     ui.horizontal(|ui| {
         let mut on = s.line.is_some();
