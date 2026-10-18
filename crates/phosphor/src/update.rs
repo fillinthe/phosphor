@@ -14,7 +14,8 @@ pub const RELEASES_PAGE: &str = "https://github.com/fillinthe/phosphor/releases"
 pub const LATEST_PAGE: &str = "https://github.com/fillinthe/phosphor/releases/latest";
 /// The Mac download of a given version (the name `scripts/release-github.sh` uploads).
 pub fn zip_url(version: &str) -> String {
-    format!("https://github.com/fillinthe/phosphor/releases/download/v{version}/Phosphor-mac.zip")
+    let file = if cfg!(windows) { "Phosphor-windows.zip" } else { "Phosphor-mac.zip" };
+    format!("https://github.com/fillinthe/phosphor/releases/download/v{version}/{file}")
 }
 
 /// "…/releases/tag/v0.2.42" → "0.2.42".
@@ -98,7 +99,9 @@ fn parse_release(text: &str) -> Result<Option<Release>, String> {
         .and_then(|a| a.as_array())
         .and_then(|a| {
             let zips: Vec<&serde_json::Value> = a.iter().filter(|x| x.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.ends_with(".zip"))).collect();
-            zips.iter().find(|x| x.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.to_lowercase().contains("mac"))).or(zips.first()).copied()
+            // This platform's download: "…-mac.zip" on the Mac, "…-windows.zip" on Windows.
+            let want = if cfg!(windows) { "windows" } else { "mac" };
+            zips.iter().find(|x| x.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.to_lowercase().contains(want))).or(zips.first()).copied()
         })
         .and_then(|x| x.get("browser_download_url").and_then(|u| u.as_str()).map(str::to_string));
     Ok(Some(Release {
@@ -286,6 +289,11 @@ fn current_bundle() -> Option<PathBuf> {
 /// curl → unzip → swap the bundle. Returns (path, installed?).
 #[cfg(not(target_arch = "wasm32"))]
 fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<(PathBuf, bool), String> {
+    // Swapping the running app in place is Mac-only for now: elsewhere the window offers the download instead.
+    if !cfg!(target_os = "macos") {
+        let _ = (zip_url, progress);
+        return Err("Installing by itself works on the Mac only for now.".into());
+    }
     use std::process::Command;
     let work = std::env::temp_dir().join(format!("phosphor-update-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
@@ -476,7 +484,8 @@ mod tests {
     fn version_from_the_latest_redirect() {
         assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases/tag/v0.2.42").as_deref(), Some("0.2.42"));
         assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases"), None);
-        assert_eq!(zip_url("0.2.42"), "https://github.com/fillinthe/phosphor/releases/download/v0.2.42/Phosphor-mac.zip");
+        let file = if cfg!(windows) { "Phosphor-windows.zip" } else { "Phosphor-mac.zip" };
+        assert_eq!(zip_url("0.2.42"), format!("https://github.com/fillinthe/phosphor/releases/download/v0.2.42/{file}"));
     }
 
     #[test]

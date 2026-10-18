@@ -84,6 +84,9 @@ fn sh(cmd: &mut Command) -> Result<(), String> {
 }
 
 fn run(req: Request, p: &Shared) -> Result<(), String> {
+    if !cfg!(target_os = "macos") {
+        return Err("Export Show makes a Mac app; it isn't available on this platform yet.".into());
+    }
     let src = own_bundle()?;
     let name = if req.name.trim().is_empty() { "Show".to_string() } else { req.name.trim().to_string() };
     let app = req.dest.join(format!("{name}.app"));
