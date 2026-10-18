@@ -1,0 +1,9 @@
+# Keep LF line endings on every platform (shader sources are searched by line, Windows would check out CRLF).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.icns binary
+*.zip binary

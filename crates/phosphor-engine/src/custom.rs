@@ -142,7 +142,8 @@ pub fn builtin_as_custom(id: &str) -> Option<String> {
     if !shaders::multipass(desc.entry).is_empty() || desc.entry.starts_with("fs_") {
         return None;
     }
-    let all = shaders::wgsl_source();
+    // CRLF-safe (a Windows checkout without .gitattributes would otherwise never find "\n}\n").
+    let all = shaders::wgsl_source().replace("\r\n", "\n");
     let start = all.find(&format!("fn {}(", desc.entry))?;
     let end = start + all[start..].find("\n}\n")? + 3;
     let body = all[start..end].replacen(&format!("fn {}(", desc.entry), "fn main(", 1);

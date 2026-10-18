@@ -136,7 +136,51 @@ pub fn displays() -> Vec<Display> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Windows: every monitor (EnumDisplayMonitors), in points (each monitor's own DPI scale), primary first-class.
+#[cfg(windows)]
+pub fn displays() -> Vec<Display> {
+    use windows_sys::Win32::Foundation::{LPARAM, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOF_PRIMARY};
+    use windows_sys::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
+    unsafe extern "system" fn each(monitor: HMONITOR, _dc: HDC, _rect: *mut RECT, data: LPARAM) -> i32 {
+        // SAFETY: `data` is the Vec we passed below; the monitor handle comes from the enumeration.
+        unsafe {
+            let out = &mut *(data as *mut Vec<(HMONITOR, MONITORINFO, f32)>);
+            let mut info: MONITORINFO = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+            if GetMonitorInfoW(monitor, &mut info) != 0 {
+                let (mut dx, mut dy) = (96u32, 96u32);
+                let scale = if GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dx, &mut dy) == 0 { dx as f32 / 96.0 } else { 1.0 };
+                out.push((monitor, info, scale.max(0.5)));
+            }
+        }
+        1
+    }
+    let mut found: Vec<(HMONITOR, MONITORINFO, f32)> = Vec::new();
+    // SAFETY: the callback only writes into `found`, which outlives the call.
+    unsafe { EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), Some(each), &mut found as *mut _ as LPARAM) };
+    found
+        .iter()
+        .enumerate()
+        .map(|(i, (_, info, scale))| {
+            let r = info.rcMonitor;
+            let (pw, ph) = ((r.right - r.left) as u32, (r.bottom - r.top) as u32);
+            let main = info.dwFlags & MONITORINFOF_PRIMARY != 0;
+            Display {
+                id: i as u32 + 1,
+                name: if main { format!("Display {} (main)", i + 1) } else { format!("Display {}", i + 1) },
+                x: r.left as f32 / scale,
+                y: r.top as f32 / scale,
+                w: pw as f32 / scale,
+                h: ph as f32 / scale,
+                pixels: (pw, ph),
+                main,
+            }
+        })
+        .collect()
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn displays() -> Vec<Display> {
     Vec::new()
 }
@@ -204,14 +248,24 @@ pub fn mouse_location() -> Option<(f32, f32)> {
     Some((p.x as f32, (main_h - p.y) as f32))
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+pub fn mouse_location() -> Option<(f32, f32)> {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    let mut p = POINT { x: 0, y: 0 };
+    // SAFETY: a POINT we own.
+    (unsafe { GetCursorPos(&mut p) } != 0).then(|| (p.x as f32, p.y as f32))
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn mouse_location() -> Option<(f32, f32)> {
     None
 }
 
+/// Off the Mac the output window is already borderless and sized to the display by the caller; nothing more to do.
 #[cfg(not(target_os = "macos"))]
 pub fn cover_window(_title: &str, _cover: Option<&Display>) -> bool {
-    false
+    true
 }
 
 #[cfg(all(test, target_os = "macos"))]
