@@ -28,6 +28,8 @@ struct ViewState {
 
 enum TreeAction {
     AddSlice(u64),
+    /// A slice centred where the canvas was right-clicked (output space 0..1).
+    AddSliceAt(u64, [f32; 2]),
     AddMask(u64, MaskShape),
     Duplicate(u64, u64),
     Delete(u64, u64),
@@ -133,12 +135,27 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             ui.add_space(6.0);
         }
     });
+    apply_action(st, action);
+}
+
+/// Adds, duplicates and deletes slices and masks (tree and canvas menus).
+fn apply_action(st: &mut State, action: Option<TreeAction>) {
     let canvas = (st.comp.width, st.comp.height);
     match action {
         Some(TreeAction::AddSlice(oid)) => {
             let id = st.comp.new_id();
             if let Some(o) = st.comp.output_mut(oid) {
                 o.mapping.add_surface(id);
+                o.mapping.enabled = true;
+            }
+            st.selected_surface = Some(id);
+        }
+        Some(TreeAction::AddSliceAt(oid, at)) => {
+            let id = st.comp.new_id();
+            if let Some(o) = st.comp.output_mut(oid) {
+                let s = o.mapping.add_surface(id);
+                let c = s.center();
+                s.translate(at[0] - c[0], at[1] - c[1]);
                 o.mapping.enabled = true;
             }
             st.selected_surface = Some(id);
@@ -187,6 +204,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
     let program = st.texture;
     let canvas = (st.comp.width, st.comp.height);
     let mut edit_on_output = st.output.lock().unwrap().get(&oid).is_some_and(|o| o.edit_mapping);
+    let mut action: Option<TreeAction> = None;
     let State { comp, selected_surface, layer_textures, output, .. } = st;
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
     ui.horizontal_wrapped(|ui| {
@@ -263,6 +281,26 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if touched && vs.snap {
             snap_selected(&mut o.mapping, *selected_surface);
         }
+        // Right-click: what can be done here. The slice under the pointer becomes the selected one.
+        let menu_key = key.with("menu_at");
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("studio_canvas_rect"), frame));
+        if bg.secondary_clicked()
+            && let Some(p) = bg.interact_pointer_pos()
+        {
+            let at = [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
+            let near = |s: &phosphor_engine::mapping::Surface| {
+                let c = s.center();
+                ((c[0] - at[0]) * aspect).hypot(c[1] - at[1]) < 0.12
+            };
+            if let Some(id) = o.mapping.surfaces.iter().rev().find(|s| if s.model.is_some() || s.line.is_some() { near(s) } else { s.contains(at) }).map(|s| s.id) {
+                *selected_surface = Some(id);
+            }
+            ui.ctx().data_mut(|d| d.insert_temp(menu_key, at));
+        }
+        bg.context_menu(|ui| {
+            let at: [f32; 2] = ui.ctx().data(|d| d.get_temp(menu_key)).unwrap_or([0.5, 0.5]);
+            canvas_menu(ui, o, *selected_surface, at, &mut action, &mut vs);
+        });
         // Arrow keys nudge the selected slice by one output pixel (ten with Shift).
         if bg.hovered() && !ui.ctx().egui_wants_keyboard_input() {
             let (dx, dy) = ui.ctx().input(|i| {
@@ -281,6 +319,106 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         input_view(ui, area, o, *selected_surface, program, layer_textures, canvas);
     }
     ui.ctx().data_mut(|d| d.insert_temp(key, vs));
+    apply_action(st, action);
+}
+
+/// The Studio canvas's right-click menu: the slice under the pointer (warp, shape, line, 3D model, fill, duplicate,
+/// delete), then adding slices and masks and the view options.
+fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selected: Option<u64>, at: [f32; 2], action: &mut Option<TreeAction>, vs: &mut ViewState) {
+    use phosphor_engine::mapping::{Mesh, SliceShape};
+    let oid = o.id;
+    if let Some(s) = selected.and_then(|id| o.mapping.surfaces.iter_mut().find(|s| s.id == id)) {
+        ui.label(RichText::new(&s.name).strong());
+        let flat = s.model.is_none() && s.line.is_none();
+        ui.add_enabled_ui(flat, |ui| {
+            ui.menu_button(label(icon::GRID_NINE, "Mesh warp"), |ui| {
+                if ui.selectable_label(s.mesh.is_none(), "Off: four corners").clicked() {
+                    s.set_mesh(false, 3, 3);
+                    ui.close();
+                }
+                for n in [2u32, 3, 4, 6, 8] {
+                    let on = s.mesh.as_ref().is_some_and(|m| m.cols == n && m.rows == n);
+                    if ui.selectable_label(on, format!("{n} × {n} grid")).clicked() {
+                        s.set_mesh(true, n, n);
+                        ui.close();
+                    }
+                }
+                if let Some(m) = &s.mesh {
+                    let (c, r) = (m.cols, m.rows);
+                    ui.separator();
+                    if ui.button("Flatten: straighten the grid").clicked() {
+                        s.mesh = Some(Mesh::from_corners(&s.corners, c, r));
+                        ui.close();
+                    }
+                }
+            });
+            ui.menu_button(label(icon::SHAPES, "Shape"), |ui| {
+                for shape in SliceShape::ALL {
+                    if ui.selectable_label(s.shape == shape, shape.name()).clicked() {
+                        s.shape = shape;
+                        ui.close();
+                    }
+                }
+            });
+            if ui.button(label(icon::CORNERS_OUT, "Fill the output")).on_hover_text("Corners back to the edges of the output").clicked() {
+                s.mesh = None;
+                s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+                ui.close();
+            }
+        });
+        let mut line = s.line.is_some();
+        if ui.checkbox(&mut line, "Line slice").on_hover_text("The picture runs along a line with a width").changed() {
+            s.set_line(line);
+            if line {
+                s.model = None;
+            }
+            ui.close();
+        }
+        let mut model = s.model.is_some();
+        if ui.checkbox(&mut model, "3D model…").on_hover_text("Map onto a real object from its OBJ model").changed() {
+            if model {
+                s.model = Some(phosphor_engine::mapping::Model3d::default());
+                s.line = None;
+                s.mesh = None;
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(crate::panels::PICK_MODEL), s.id));
+            } else {
+                s.model = None;
+            }
+            ui.close();
+        }
+        let id = s.id;
+        ui.separator();
+        if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+            *action = Some(TreeAction::Duplicate(oid, id));
+            ui.close();
+        }
+        if ui.button(label(icon::TRASH, "Delete")).clicked() {
+            *action = Some(TreeAction::Delete(oid, id));
+            ui.close();
+        }
+        ui.separator();
+    }
+    if ui.button(label(icon::PLUS, "Add a slice here")).clicked() {
+        *action = Some(TreeAction::AddSliceAt(oid, at));
+        ui.close();
+    }
+    ui.menu_button(label(icon::PLUS, "Add a mask"), |ui| {
+        for &shape in <MaskShape as phosphor_engine::Choice>::OPTIONS {
+            if ui.button(shape.name()).clicked() {
+                *action = Some(TreeAction::AddMask(oid, shape));
+                ui.close();
+            }
+        }
+    });
+    ui.separator();
+    ui.checkbox(&mut o.mapping.enabled, "Mapping on");
+    ui.checkbox(&mut o.mapping.test_pattern, "Alignment grid");
+    ui.checkbox(&mut vs.snap, "Snap to grid");
+    if ui.button(label(icon::CORNERS_OUT, "Fit the view")).clicked() {
+        vs.zoom = 1.0;
+        vs.pan = egui::Vec2::ZERO;
+        ui.close();
+    }
 }
 
 /// Rounds the selected slice's corners / mesh points (or mask points) to a 1/64 grid.
