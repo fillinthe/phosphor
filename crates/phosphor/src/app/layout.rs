@@ -212,7 +212,7 @@ pub(crate) fn default_layout() -> DockState<Tab> {
     surface.split_below(
         bottom,
         0.42,
-        vec![Tab::Mixer, Tab::Surface, Tab::Library, Tab::Audio, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output],
+        vec![Tab::Mixer, Tab::Surface, Tab::Library, Tab::Audio, Tab::Modulators, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output],
     );
     dock
 }
@@ -326,23 +326,8 @@ pub(crate) struct AccountLayouts {
 }
 
 pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] =
-    &[("Default", default_layout), ("Performance", layout_performance), ("Mapping", layout_mapping), ("VDMX", layout_vdmx)];
+    &[("Default", default_layout), ("Performance", layout_performance), ("Mapping", layout_mapping)];
 
-/// VDMX-style: every layer in its own window across the top, the output and your controls on the right, media
-/// bin and clips along the bottom.
-pub(crate) fn layout_vdmx() -> DockState<Tab> {
-    let mut dock = DockState::new(vec![Tab::LayerWindows]);
-    let surface = dock.main_surface_mut();
-    let [top, bottom] = surface.split_below(NodeIndex::root(), 0.64, vec![Tab::Media, Tab::Clips, Tab::Library]);
-    let [_, right] = surface.split_right(top, 0.70, vec![Tab::Preview]);
-    surface.split_below(right, 0.48, vec![Tab::Surface, Tab::Audio, Tab::Mixer, Tab::Control, Tab::Inspector, Tab::Layers]);
-    surface.split_right(
-        bottom,
-        0.64,
-        vec![Tab::Cues, Tab::Output, Tab::Mapping, Tab::Stream, Tab::Leds, Tab::Presets, Tab::Devices, Tab::Network, Tab::ShaderEditor],
-    );
-    dock
-}
 
 /// Big preview, layers on the right, audio + control underneath: for playing a show.
 pub(crate) fn layout_performance() -> DockState<Tab> {

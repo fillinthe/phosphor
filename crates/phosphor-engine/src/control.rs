@@ -17,9 +17,19 @@ pub struct ModInputs {
     pub beats: f32,
     /// 1 on each detected audio beat, decaying quickly.
     pub audio_beat: f32,
+    /// Shared modulators' values this frame: (id, 0..1), see `model::modulators`.
+    pub shared: [(u64, f32); MAX_SHARED],
 }
 
+/// How many shared modulators a project can have.
+pub const MAX_SHARED: usize = 16;
+
 pub fn source_value(m: &Modulation, inputs: &ModInputs) -> f32 {
+    // Following a shared modulator: its value, then this control's own invert.
+    if m.link != 0 {
+        let v = inputs.shared.iter().find(|(id, _)| *id == m.link).map_or(0.0, |x| x.1);
+        return if m.invert { 1.0 - v } else { v };
+    }
     let cycles = if m.sync { inputs.beats / m.rate.max(1.0 / 16.0) } else { inputs.time * m.rate };
     let phase = cycles.rem_euclid(1.0);
     let v = match m.source {

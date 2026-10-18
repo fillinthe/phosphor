@@ -49,7 +49,7 @@ pub struct BenchConfig {
     pub stream_copy: Option<String>,
     /// Open the import chooser for this Resolume / VDMX file.
     pub import: Option<String>,
-    /// Start in this built-in workspace ("VDMX", "Mapping"…).
+    /// Start in this built-in workspace ("Mapping", "Performance"…).
     pub layout: Option<String>,
     /// Run Quick actions at launch, comma-separated: surprise, layer, shuffle, react, fill, instant.
     pub quick: Option<String>,

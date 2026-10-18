@@ -97,7 +97,10 @@ impl PhosphorApp {
             audio_low: an.low,
             audio_mid: an.mid,
             audio_high: an.high,
+            shared: Default::default(),
         };
+        // Shared modulators (and their chains), once per frame, before anything reads them.
+        mod_inputs.shared = phosphor_engine::evaluate(&comp.modulators, mod_inputs);
         let wants = std::mem::take(preview_wants);
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
         let keys: Vec<String> = wants.iter().map(|(k, _, _)| k.clone()).collect();

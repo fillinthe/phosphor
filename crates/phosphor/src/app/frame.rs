@@ -42,6 +42,8 @@ impl PhosphorApp {
         }
         ctx.data_mut(|d| {
             d.insert_temp(egui::Id::new("phosphor_mod_inputs"), self.state.mod_inputs);
+            let names: Vec<(u64, String)> = self.state.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();
+            d.insert_temp(egui::Id::new(crate::ui::MODULATORS), names);
             d.insert_temp(egui::Id::new(panels::MAP_MODE), self.state.map_mode);
             d.insert_temp(egui::Id::new(panels::LEARNING), self.state.control.learning.clone());
         });
