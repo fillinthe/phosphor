@@ -18,6 +18,8 @@ pub enum Purpose {
     TouchOsc,
     ImportResolume,
     RelinkFolder,
+    /// A 3D model (OBJ) for this mapping surface.
+    Model3d(u64),
 }
 
 pub struct Dialogs {

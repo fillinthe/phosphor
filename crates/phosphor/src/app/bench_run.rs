@@ -185,6 +185,21 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "model" {
+                // A 3D model surface (/tmp/house.obj) on the first output, turned so three sides show.
+                let oid = self.state.comp.outputs.first().map(|o| o.id).unwrap_or_else(|| self.state.comp.add_output());
+                let sid = self.state.comp.next_id;
+                self.state.comp.next_id += 1;
+                if let Some(o) = self.state.comp.outputs.iter_mut().find(|o| o.id == oid) {
+                    o.mapping.enabled = true;
+                    let s = o.mapping.add_surface(sid);
+                    s.name = "House".into();
+                    s.model = Some(phosphor_engine::mapping::Model3d { path: "/tmp/house.obj".into(), yaw: 0.1, pitch: 0.06, distance: 3.2, ..Default::default() });
+                }
+                self.state.selected_surface = Some(sid);
+                println!("QUICK model: /tmp/house.obj on output {oid}");
+                continue;
+            }
             if name == "head" {
                 // A moving head circling every 2 beats, colour from the centre of the picture, Art-Net to this Mac.
                 let d = &mut self.state.comp.dmx;

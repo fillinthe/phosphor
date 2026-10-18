@@ -34,6 +34,225 @@ pub struct Surface {
     /// edges and LED-like strips on architecture. When set, the corners are not used.
     #[serde(default)]
     pub line: Option<Line>,
+    /// 3D-model mapping: a model (OBJ) seen through a virtual camera placed like the projector, textured with
+    /// the picture through the model's own UVs. When set, the corners are not used.
+    #[serde(default)]
+    pub model: Option<Model3d>,
+}
+
+/// A 3D model on a surface and the virtual camera that lines it up with the real object.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Model3d {
+    /// The .obj file.
+    pub path: String,
+    /// Model rotation in turns (0..1 = a full turn) around the vertical, the horizontal and the view axis.
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
+    /// Camera distance in model sizes (the model is scaled to fit a unit cube).
+    pub distance: f32,
+    /// Vertical field of view of the projector lens, degrees.
+    pub fov: f32,
+    /// Where the model's centre lands on the output (0..1), and its size.
+    pub center: [f32; 2],
+    pub scale: f32,
+    /// Hide triangles facing away from the projector.
+    pub cull: bool,
+}
+
+impl Default for Model3d {
+    fn default() -> Self {
+        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true }
+    }
+}
+
+/// A loaded model: triangles of (position, uv), centred and scaled into a unit cube.
+pub struct ObjMesh {
+    pub tris: Vec<[([f32; 3], [f32; 2]); 3]>,
+}
+
+static OBJ_CACHE: std::sync::Mutex<Vec<(String, std::sync::Arc<Result<ObjMesh, String>>)>> = std::sync::Mutex::new(Vec::new());
+
+/// A model from disk, read once (failures are remembered too, so a missing file isn't re-read every frame).
+pub fn obj_mesh(path: &str) -> std::sync::Arc<Result<ObjMesh, String>> {
+    let mut cache = OBJ_CACHE.lock().unwrap();
+    if let Some((_, m)) = cache.iter().find(|(p, _)| p == path) {
+        return m.clone();
+    }
+    let m = std::sync::Arc::new(std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| parse_obj(&t)));
+    cache.push((path.to_string(), m.clone()));
+    m
+}
+
+/// Forget a cached model (after the file changed).
+pub fn forget_obj(path: &str) {
+    OBJ_CACHE.lock().unwrap().retain(|(p, _)| p != path);
+}
+
+/// Wavefront OBJ: `v`, `vt` and `f` (triangles and polygons, fanned; `v`, `v/vt`, `v/vt/vn`, `v//vn`, negative
+/// indices). Without texture coordinates the picture is laid on from the front.
+pub fn parse_obj(text: &str) -> Result<ObjMesh, String> {
+    let mut v: Vec<[f32; 3]> = Vec::new();
+    let mut vt: Vec<[f32; 2]> = Vec::new();
+    let mut faces: Vec<Vec<(usize, Option<usize>)>> = Vec::new();
+    for line in text.lines() {
+        let mut it = line.split_whitespace();
+        match it.next() {
+            Some("v") => {
+                let n: Vec<f32> = it.take(3).filter_map(|x| x.parse().ok()).collect();
+                if n.len() == 3 {
+                    v.push([n[0], n[1], n[2]]);
+                }
+            }
+            Some("vt") => {
+                let n: Vec<f32> = it.take(2).filter_map(|x| x.parse().ok()).collect();
+                if n.len() == 2 {
+                    vt.push([n[0], n[1]]);
+                }
+            }
+            Some("f") => {
+                let idx = |s: &str, len: usize| -> Option<usize> {
+                    let i: i64 = s.parse().ok()?;
+                    let k = if i < 0 { len as i64 + i } else { i - 1 };
+                    (k >= 0 && (k as usize) < len).then_some(k as usize)
+                };
+                let face: Vec<(usize, Option<usize>)> = it
+                    .filter_map(|c| {
+                        let mut p = c.split('/');
+                        let vi = idx(p.next()?, v.len())?;
+                        let ti = p.next().filter(|s| !s.is_empty()).and_then(|s| idx(s, vt.len()));
+                        Some((vi, ti))
+                    })
+                    .collect();
+                if face.len() >= 3 {
+                    faces.push(face);
+                }
+            }
+            _ => {}
+        }
+    }
+    if faces.is_empty() {
+        return Err("no faces in the model".into());
+    }
+    // Centre and fit into a unit cube.
+    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+    for p in &v {
+        for k in 0..3 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    let size = (0..3).map(|k| hi[k] - lo[k]).fold(0.0f32, f32::max).max(1e-6);
+    let c = [(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5];
+    let norm = |p: [f32; 3]| [(p[0] - c[0]) / size, (p[1] - c[1]) / size, (p[2] - c[2]) / size];
+    let front = |p: [f32; 3]| [(p[0] - lo[0]) / (hi[0] - lo[0]).max(1e-6), (p[1] - lo[1]) / (hi[1] - lo[1]).max(1e-6)];
+    let mut tris = Vec::new();
+    for f in &faces {
+        let vert = |(vi, ti): (usize, Option<usize>)| (norm(v[vi]), ti.map(|t| vt[t]).unwrap_or_else(|| front(v[vi])));
+        for k in 1..f.len() - 1 {
+            tris.push([vert(f[0]), vert(f[k]), vert(f[k + 1])]);
+        }
+    }
+    Ok(ObjMesh { tris })
+}
+
+impl Model3d {
+    /// The model's triangles projected onto the output: (x, y, s, t) for `fs_mesh`, back faces culled and the
+    /// rest sorted far to near (no depth buffer needed for most objects). `aspect` = output width / height.
+    pub fn triangles(&self, aspect: f32) -> Vec<[f32; 4]> {
+        self.project(aspect, true)
+    }
+
+    /// The model's own triangles projected (not split): for a wireframe on the mapping canvas.
+    pub fn wireframe(&self, aspect: f32) -> Vec<[f32; 4]> {
+        self.project(aspect, false)
+    }
+
+    fn project(&self, aspect: f32, split: bool) -> Vec<[f32; 4]> {
+        let mesh = obj_mesh(&self.path);
+        let Ok(mesh) = mesh.as_ref() else { return Vec::new() };
+        let tau = std::f32::consts::TAU;
+        let (sy, cy) = (self.yaw * tau).sin_cos();
+        let (sp, cp) = (self.pitch * tau).sin_cos();
+        let (sr, cr) = (self.roll * tau).sin_cos();
+        let f = 1.0 / (self.fov.clamp(5.0, 150.0).to_radians() * 0.5).tan();
+        let dist = self.distance.max(0.6);
+        let project = |p: [f32; 3]| -> Option<([f32; 2], f32)> {
+            let (x, y, z) = (p[0] * self.scale, p[1] * self.scale, p[2] * self.scale);
+            // yaw (around y), pitch (around x), roll (around the view axis)
+            let (x, z) = (x * cy + z * sy, -x * sy + z * cy);
+            let (y, z) = (y * cp - z * sp, y * sp + z * cp);
+            let (x, y) = (x * cr - y * sr, x * sr + y * cr);
+            let depth = dist - z;
+            if depth < 0.05 {
+                return None;
+            }
+            let (px, py) = (x * f / depth / aspect.max(0.1), y * f / depth);
+            Some(([self.center[0] + px * 0.5, self.center[1] - py * 0.5], depth))
+        };
+        // Big triangles are split (in 3D, so the split follows perspective) until each covers a small part of the
+        // output: the texture is interpolated flat across a triangle, which bends on large perspective faces.
+        let mut work: Vec<[([f32; 3], [f32; 2]); 3]> = Vec::with_capacity(mesh.tris.len());
+        let mut stack: Vec<([([f32; 3], [f32; 2]); 3], u8)> = mesh.tris.iter().map(|t| (*t, 0u8)).collect();
+        while let Some((tri, depth)) = stack.pop() {
+            let span = {
+                let pts: Vec<[f32; 2]> = tri.iter().filter_map(|(p, _)| project(*p).map(|(xy, _)| xy)).collect();
+                if pts.len() < 3 {
+                    0.0
+                } else {
+                    let d = |a: [f32; 2], b: [f32; 2]| ((a[0] - b[0]) * aspect).hypot(a[1] - b[1]);
+                    d(pts[0], pts[1]).max(d(pts[1], pts[2])).max(d(pts[2], pts[0]))
+                }
+            };
+            if !split || span < 0.08 || depth >= 5 || work.len() + stack.len() > 200_000 {
+                work.push(tri);
+                continue;
+            }
+            let mid = |a: ([f32; 3], [f32; 2]), b: ([f32; 3], [f32; 2])| {
+                ([(a.0[0] + b.0[0]) * 0.5, (a.0[1] + b.0[1]) * 0.5, (a.0[2] + b.0[2]) * 0.5], [(a.1[0] + b.1[0]) * 0.5, (a.1[1] + b.1[1]) * 0.5])
+            };
+            let (a, b, c) = (tri[0], tri[1], tri[2]);
+            let (ab, bc, ca) = (mid(a, b), mid(b, c), mid(c, a));
+            for t in [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]] {
+                stack.push((t, depth + 1));
+            }
+        }
+        let mut faces: Vec<(f32, [[f32; 4]; 3])> = Vec::with_capacity(work.len());
+        for tri in &work {
+            let mut out = [[0.0f32; 4]; 3];
+            let mut depth = 0.0;
+            let mut ok = true;
+            for (k, (p, uv)) in tri.iter().enumerate() {
+                match project(*p) {
+                    Some((xy, d)) => {
+                        out[k] = [xy[0], xy[1], uv[0], 1.0 - uv[1]];
+                        depth += d;
+                    }
+                    None => ok = false,
+                }
+            }
+            if !ok {
+                continue;
+            }
+            if self.cull {
+                // Output y points down: a front face (counter-clockwise in the model) turns clockwise here.
+                let (a, b, c) = (out[0], out[1], out[2]);
+                let cross = (b[0] - a[0]) * (c[1] - a[1]) * aspect - (b[1] - a[1]) * (c[0] - a[0]) * aspect;
+                if cross > 0.0 {
+                    continue;
+                }
+            }
+            faces.push((depth, out));
+        }
+        faces.sort_by(|a, b| b.0.total_cmp(&a.0));
+        faces.into_iter().flat_map(|(_, t)| t).collect()
+    }
+
+    /// For the hash that decides when to rebuild the triangles.
+    pub fn key(&self) -> Vec<[f32; 2]> {
+        vec![[self.yaw, self.pitch], [self.roll, self.distance], [self.fov, self.scale], self.center, [self.cull as u8 as f32, self.path.len() as f32]]
+    }
 }
 
 /// A polyline with a width: the picture's horizontal axis runs along it, the vertical across it.
@@ -392,6 +611,7 @@ impl Default for Surface {
             color: crate::ColorGrade::default(),
             shape: SliceShape::Rectangle,
             line: None,
+            model: None,
         }
     }
 }
@@ -409,6 +629,9 @@ impl Surface {
     }
 
     pub fn center(&self) -> [f32; 2] {
+        if let Some(m) = &self.model {
+            return m.center;
+        }
         if let Some(l) = &self.line
             && !l.points.is_empty()
         {
@@ -420,6 +643,10 @@ impl Surface {
     }
 
     pub fn translate(&mut self, dx: f32, dy: f32) {
+        if let Some(m) = &mut self.model {
+            m.center[0] += dx;
+            m.center[1] += dy;
+        }
         for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())).chain(self.line.iter_mut().flat_map(|l| l.points.iter_mut())) {
             c[0] += dx;
             c[1] += dy;
@@ -686,5 +913,43 @@ mod line_tests {
         let (lo, hi) = (xs.iter().cloned().fold(1.0, f32::min), xs.iter().cloned().fold(0.0, f32::max));
         assert!((hi - lo - 0.05).abs() < 1e-5, "{lo} {hi}");
         assert!(Line { points: vec![[0.1, 0.1]], width: 0.1 }.triangles(1.0).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod model_tests {
+    use super::*;
+
+    const CUBE: &str = "v -1 -1 1\nv 1 -1 1\nv 1 1 1\nv -1 1 1\nv -1 -1 -1\nv 1 -1 -1\nv 1 1 -1\nv -1 1 -1\n\
+vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n\
+f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/1 3/2 7/3 8/4\nf 5/1 6/2 2/3 1/4\n";
+
+    #[test]
+    fn a_cube_parses_and_projects_its_front_faces() {
+        let mesh = parse_obj(CUBE).unwrap();
+        assert_eq!(mesh.tris.len(), 12, "six quads make twelve triangles");
+        // Unit cube, centred.
+        assert!(mesh.tris.iter().flatten().all(|(p, _)| p.iter().all(|c| c.abs() <= 0.5 + 1e-6)));
+        let path = std::env::temp_dir().join("phosphor-test-cube.obj");
+        std::fs::write(&path, CUBE).unwrap();
+        let p = path.to_string_lossy().to_string();
+        forget_obj(&p);
+        // Straight on: only the front face shows, centred on the output (split into small triangles).
+        let m = Model3d { path: p.clone(), yaw: 0.0, pitch: 0.0, ..Default::default() };
+        let t = m.triangles(16.0 / 9.0);
+        assert!(!t.is_empty() && t.len() % 3 == 0);
+        let n = t.len() as f32;
+        let cx = t.iter().map(|v| v[0]).sum::<f32>() / n;
+        assert!((cx - 0.5).abs() < 0.05, "{cx}");
+        // Every vertex of the front face: texture spans the whole 0..1 square.
+        assert!(t.iter().any(|v| v[2] < 0.01) && t.iter().any(|v| v[2] > 0.99));
+        // Turned a bit: more triangles show (three faces), still textured 0..1.
+        let turned = Model3d { path: p.clone(), yaw: 0.1, pitch: 0.08, ..Default::default() };
+        let t3 = turned.triangles(16.0 / 9.0);
+        assert!(t3.len() > t.len());
+        assert!(t3.iter().all(|v| (0.0..=1.0).contains(&v[2]) && (0.0..=1.0).contains(&v[3])));
+        // Without culling more is drawn (far faces first).
+        assert!(Model3d { cull: false, ..turned }.triangles(16.0 / 9.0).len() > t3.len());
+        assert!(Model3d { path: "/nope.obj".into(), ..Default::default() }.triangles(1.0).is_empty());
     }
 }
