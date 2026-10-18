@@ -10,6 +10,19 @@ use egui_phosphor::regular as icon;
 
 pub const RELEASES_API: &str = "https://api.github.com/repos/fillinthe/phosphor/releases/latest";
 pub const RELEASES_PAGE: &str = "https://github.com/fillinthe/phosphor/releases";
+/// Redirects to the newest release's page; no API rate limit (the fallback check reads the tag from where it lands).
+pub const LATEST_PAGE: &str = "https://github.com/fillinthe/phosphor/releases/latest";
+/// The Mac download of a given version (the name `scripts/release-github.sh` uploads).
+pub fn zip_url(version: &str) -> String {
+    format!("https://github.com/fillinthe/phosphor/releases/download/v{version}/Phosphor-mac.zip")
+}
+
+/// "…/releases/tag/v0.2.42" → "0.2.42".
+fn version_from_url(url: &str) -> Option<String> {
+    let tag = url.split("/releases/tag/").nth(1)?.split(['?', '#', '/']).next()?;
+    let v = tag.trim_start_matches(['v', 'V']);
+    (!parse_version(v).is_empty()).then(|| v.to_string())
+}
 const CHECK_EVERY: f64 = 24.0 * 3600.0;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -32,7 +45,10 @@ pub enum Status {
     Ready(PathBuf),
     /// Downloaded but not installed (not running from an .app): where it landed.
     Downloaded(PathBuf),
+    /// The check failed (network, GitHub busy): tried again at the next daily check.
     Failed(String),
+    /// A newer version exists but installing it here failed: the window sends the user to download it themselves.
+    InstallFailed(Release, String),
 }
 
 pub struct Updater {
@@ -100,12 +116,18 @@ impl Updater {
             return;
         }
         self.status = Status::Checking;
-        let url = std::env::var("PHOSPHOR_UPDATE_URL").unwrap_or_else(|_| RELEASES_API.into());
+        // PHOSPHOR_UPDATE_TEST_FALLBACK: the API "fails" (unreachable), so the release-page fallback runs (tests).
+        let url = if std::env::var("PHOSPHOR_UPDATE_TEST_FALLBACK").is_ok() {
+            "https://127.0.0.1:1/".to_string()
+        } else {
+            std::env::var("PHOSPHOR_UPDATE_URL").unwrap_or_else(|_| RELEASES_API.into())
+        };
         let (tx, rx) = channel();
         self.check_rx = Some(rx);
         let ctx = ctx.clone();
         let mut req = ehttp::Request::get(url);
         req.headers = ehttp::Headers::new(&[("User-Agent", "Phosphor"), ("Accept", "application/vnd.github+json")]);
+        let custom = std::env::var("PHOSPHOR_UPDATE_URL").is_ok();
         ehttp::fetch(req, move |res| {
             let out = match res {
                 Ok(r) if r.ok => parse_release(r.text().unwrap_or("")),
@@ -113,6 +135,26 @@ impl Updater {
                 Ok(r) => Err(format!("Couldn't check for updates (HTTP {}). Try again later.", r.status)),
                 Err(_) => Err("Couldn't reach the update server. Check the internet connection and try again.".into()),
             };
+            // GitHub's API limits how often one address may ask; the release page itself doesn't. On a failed API
+            // check, follow /releases/latest and read the version from where it lands.
+            if out.is_err() && !custom {
+                let mut req = ehttp::Request::get(LATEST_PAGE);
+                req.headers = ehttp::Headers::new(&[("User-Agent", "Phosphor")]);
+                let tx2 = tx.clone();
+                let ctx2 = ctx.clone();
+                ehttp::fetch(req, move |res| {
+                    let fallback = match res {
+                        Ok(r) if r.ok => match version_from_url(&r.url) {
+                            Some(v) => Ok(Some(Release { zip: Some(zip_url(&v)), page: r.url.clone(), notes: String::new(), version: v })),
+                            None => out,
+                        },
+                        _ => out,
+                    };
+                    let _ = tx2.send(fallback);
+                    ctx2.request_repaint();
+                });
+                return;
+            }
             let _ = tx.send(out);
             ctx.request_repaint();
         });
@@ -130,6 +172,13 @@ impl Updater {
             && let Ok(res) = rx.try_recv()
         {
             self.check_rx = None;
+            if self.test {
+                match &res {
+                    Ok(Some(r)) => println!("UPDATE_CHECK latest {} (this is {}) zip {:?}", r.version, env!("CARGO_PKG_VERSION"), r.zip),
+                    Ok(None) => println!("UPDATE_CHECK no releases"),
+                    Err(e) => println!("UPDATE_CHECK failed: {e}"),
+                }
+            }
             self.status = match res {
                 Ok(Some(r)) if is_newer(&r.version, env!("CARGO_PKG_VERSION")) => Status::Available(r),
                 Ok(_) => Status::UpToDate,
@@ -143,15 +192,25 @@ impl Updater {
             && let Ok(res) = rx.try_recv()
         {
             self.install_rx = None;
-            self.status = match res {
-                Ok((path, true)) => Status::Ready(path),
-                Ok((path, false)) => Status::Downloaded(path),
-                Err(e) => Status::Failed(e),
+            let release = match &self.status {
+                Status::Downloading(r) => Some(r.clone()),
+                _ => None,
+            };
+            self.status = match (res, release) {
+                (Ok((path, true)), _) => Status::Ready(path),
+                (Ok((path, false)), _) => Status::Downloaded(path),
+                // Keep the release: the top bar still offers it and the window links its download.
+                (Err(e), Some(r)) => {
+                    self.window = true;
+                    Status::InstallFailed(r, e)
+                }
+                (Err(e), None) => Status::Failed(e),
             };
             if self.test {
                 match &self.status {
                     Status::Ready(p) | Status::Downloaded(p) => println!("UPDATE_READY {}", p.display()),
                     Status::Failed(e) => println!("UPDATE_FAILED {e}"),
+                    Status::InstallFailed(r, e) => println!("UPDATE_INSTALL_FAILED {} ({e}); download offered: {}", r.version, r.zip.clone().unwrap_or_else(|| r.page.clone())),
                     _ => {}
                 }
             }
@@ -162,7 +221,7 @@ impl Updater {
     /// The update is worth a button in the top bar (not skipped, not dismissed as up to date).
     pub fn pending(&self) -> Option<&Release> {
         match &self.status {
-            Status::Available(r) | Status::Downloading(r) if r.version != self.skipped => Some(r),
+            Status::Available(r) | Status::Downloading(r) | Status::InstallFailed(r, _) if r.version != self.skipped => Some(r),
             _ => None,
         }
     }
@@ -201,8 +260,15 @@ impl Updater {
             Status::Ready(_) => Some(format!("{} Relaunch to update", icon::ARROW_CLOCKWISE)),
             _ => self.pending().map(|r| format!("{} Update {}", icon::ARROW_CIRCLE_UP, r.version)),
         };
+        let text = match &self.status {
+            Status::InstallFailed(r, _) if r.version != self.skipped => Some(format!("{} Download {}", icon::DOWNLOAD_SIMPLE, r.version)),
+            _ => text,
+        };
         if let Some(text) = text
-            && ui.button(egui::RichText::new(text).color(crate::theme::ACCENT)).on_hover_text("A new Phosphor is out").clicked()
+            && ui
+                .add(egui::Button::new(egui::RichText::new(text).strong().color(egui::Color32::BLACK)).fill(crate::theme::ACCENT))
+                .on_hover_text("A new Phosphor is out: click to see what's new and install it")
+                .clicked()
         {
             self.window = true;
         }
@@ -352,6 +418,30 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 #[cfg(target_arch = "wasm32")]
                 let _ = path;
             }
+            Status::InstallFailed(r, e) => {
+                ui.colored_label(crate::theme::ACCENT, format!("Phosphor {} is out, but it couldn't install itself here.", r.version));
+                crate::ui::hint(ui, e);
+                ui.add_space(4.0);
+                ui.label("Download it and install it by hand, it takes a minute:");
+                ui.label("1. Download Phosphor (button below) and open the zip in Downloads.");
+                ui.label("2. Quit this Phosphor, drag the new Phosphor into Applications and choose Replace.");
+                ui.label("3. Open it. If macOS warns, go to System Settings > Privacy & Security and click Open Anyway.");
+                ui.horizontal(|ui| {
+                    let url = r.zip.clone().unwrap_or_else(|| r.page.clone());
+                    if ui.button(egui::RichText::new(format!("{} Download Phosphor {}", icon::DOWNLOAD_SIMPLE, r.version)).color(crate::theme::ACCENT)).clicked() {
+                        ctx.open_url(egui::OpenUrl::new_tab(url));
+                    }
+                    if ui.button("Release page").clicked() {
+                        ctx.open_url(egui::OpenUrl::new_tab(r.page.clone()));
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button("Try again").clicked() {
+                        up.status = Status::Available(r.clone());
+                        up.install();
+                    }
+                });
+                crate::ui::hint(ui, "Your projects, layouts and settings stay as they are.");
+            }
             Status::Failed(e) => {
                 ui.colored_label(crate::theme::WARN, e);
                 ui.horizontal(|ui| {
@@ -380,6 +470,13 @@ mod tests {
         assert!(!is_newer("0.1.0", "0.1.0"));
         assert!(!is_newer("v0.0.9", "0.1.0"));
         assert!(!is_newer("garbage", "0.1.0"));
+    }
+
+    #[test]
+    fn version_from_the_latest_redirect() {
+        assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases/tag/v0.2.42").as_deref(), Some("0.2.42"));
+        assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases"), None);
+        assert_eq!(zip_url("0.2.42"), "https://github.com/fillinthe/phosphor/releases/download/v0.2.42/Phosphor-mac.zip");
     }
 
     #[test]

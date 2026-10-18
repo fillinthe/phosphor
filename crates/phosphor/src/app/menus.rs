@@ -267,10 +267,11 @@ impl PhosphorApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     account_button(ui, &mut self.state);
                     crate::support::donate_button(ui);
+                    // Only while a new version is waiting: right next to Donate, filled so it stands out.
+                    self.state.updater.top_bar_button(ui);
                     if ui.button(icon::BUG).on_hover_text("Report a bug").clicked() {
                         self.state.bug.open = true;
                     }
-                    self.state.updater.top_bar_button(ui);
                     let s = self.state.stats.latest;
                     let wide = ui.available_width() > 460.0;
                     if wide {

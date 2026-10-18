@@ -48,6 +48,8 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
                     ui.painter().add(egui::Shape::line(pts, if i == 0 || i == m.cols { line } else { Stroke::new(1.0, base.gamma_multiply(0.35)) }));
                 }
             }
+            // A line slice draws its own polyline below; its corners aren't used.
+            None if s.line.is_some() => {}
             None => {
                 let pts: Vec<egui::Pos2> = s.corners.iter().map(|c| to_screen(*c)).collect();
                 ui.painter().add(egui::Shape::closed_line(pts, line));
