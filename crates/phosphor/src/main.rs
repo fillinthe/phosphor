@@ -23,6 +23,8 @@ mod net_tls;
 #[cfg(not(target_arch = "wasm32"))]
 mod link;
 mod ltc;
+#[cfg(not(target_arch = "wasm32"))]
+mod os;
 mod pacing;
 mod panels;
 mod ui;

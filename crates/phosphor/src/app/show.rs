@@ -63,7 +63,7 @@ impl PhosphorApp {
                             crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
                             ui.horizontal(|ui| {
                                 if ui.button(label_text(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
-                                    let _ = std::process::Command::new("open").arg("-R").arg(app).spawn();
+                                    crate::os::reveal(app);
                                 }
                                 if ui.button("Export again").clicked() {
                                     st.export.progress = None;

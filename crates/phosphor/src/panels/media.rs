@@ -202,7 +202,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                     }
                     #[cfg(target_os = "macos")]
                     if ui.button(label(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
-                        let _ = std::process::Command::new("open").arg(&group).spawn();
+                        crate::os::open(&group);
                         ui.close();
                     }
                 }
@@ -391,7 +391,7 @@ pub(crate) fn media_tile(
         }
         #[cfg(target_os = "macos")]
         if ui.button(label(icon::FOLDER_OPEN, "Reveal in Finder")).clicked() {
-            let _ = std::process::Command::new("open").arg("-R").arg(&item.path).spawn();
+            crate::os::reveal(&item.path);
             ui.close();
         }
         if ui.button(label(icon::TRASH, "Remove from bin")).clicked() {

@@ -253,7 +253,7 @@ fn relaunch() {
     match path.find(".app/Contents/MacOS/") {
         // Inside an app bundle: let macOS open it so it gets its Dock icon and permissions.
         Some(i) => {
-            let _ = std::process::Command::new("open").arg(&path[..i + 4]).spawn();
+            crate::os::open(&path[..i + 4]);
         }
         None => {
             let _ = std::process::Command::new(exe).spawn();

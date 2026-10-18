@@ -421,7 +421,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 ui.label("Downloaded. Phosphor isn't running from an app bundle, so drag the new app to Applications yourself.");
                 #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Show in Finder").clicked() {
-                    let _ = std::process::Command::new("open").arg("-R").arg(&path).spawn();
+                    crate::os::reveal(&path);
                 }
                 #[cfg(target_arch = "wasm32")]
                 let _ = path;
