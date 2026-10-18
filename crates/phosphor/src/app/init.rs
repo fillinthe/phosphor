@@ -190,6 +190,7 @@ impl PhosphorApp {
                 dmx: Default::default(),
                 clip_page: 0,
                 mod_inputs: ModInputs::default(),
+                mod_phases: Default::default(),
             },
             dock,
             workspace: None,
