@@ -1,9 +1,15 @@
-# Windows build of Phosphor (work in progress: run by hand from the Actions tab or `gh workflow run windows.yml`).
+# Windows build of Phosphor: on every push to main (code changes) and by hand. scripts/release-github.sh attaches
+# this run's zip to a release when it built the same commit.
 # FFmpeg comes from BtbN's prebuilt shared Windows build (n9.0, matching ffmpeg-next 9); its DLLs ship next to the exe.
 name: Windows build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
 
 jobs:
   build:
