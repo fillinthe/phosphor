@@ -141,7 +141,7 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
                 && p.exists()
                 && ui.button(format!("{} crash.log", icon::FILE_TEXT)).on_hover_text("Show the log file in the Finder").clicked()
             {
-                let _ = std::process::Command::new("open").arg("-R").arg(&p).spawn();
+                crate::os::reveal(&p);
             }
         });
         crate::ui::hint(ui, "Everything stays on your Mac until you file or paste it.");

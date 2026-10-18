@@ -151,7 +151,7 @@ impl PhosphorApp {
                 if let Some(dir) = crate::show::storage_dir().map(|d| d.join("isf")) {
                     let _ = std::fs::create_dir_all(&dir);
                     #[cfg(target_os = "macos")]
-                    let _ = std::process::Command::new("open").arg(&dir).spawn();
+                    crate::os::open(&dir);
                     st.notice = Some(format!("ISF shaders you drop into {} appear in the browsers at the next launch", dir.display()));
                 }
             }
@@ -424,7 +424,7 @@ pub(crate) fn open_doc(name: &str) {
     {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs").join(name);
         let target = if path.is_file() { path.to_string_lossy().into_owned() } else { "https://phosphorfx.com".into() };
-        let _ = std::process::Command::new("open").arg(target).spawn();
+        crate::os::open(target);
     }
     #[cfg(target_arch = "wasm32")]
     let _ = name;

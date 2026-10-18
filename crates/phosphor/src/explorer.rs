@@ -426,7 +426,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             ui.separator();
             if ui.small_button(label(icon::FOLDER_OPEN, "Show folder")).clicked() {
                 let _ = std::fs::create_dir_all(&dir);
-                let _ = std::process::Command::new("open").arg(&dir).spawn();
+                crate::os::open(&dir);
             }
         }
     });
