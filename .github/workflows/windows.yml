@@ -10,6 +10,7 @@ on:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
+      - "ROADMAP.md"
 
 jobs:
   build:
@@ -62,7 +63,8 @@ jobs:
           name: Phosphor-windows
           path: dist/Phosphor-windows.zip
 
-      # Smoke test: open the packaged app on the runner's software GPU (WARP), run a few seconds, save a picture.
+      # Smoke test: open the packaged app on the runner's software GPU (WARP) with a small mapped project (two
+# generators, two slices, a soft mask), run a few seconds, save a picture.
       # Reported, not blocking: a runner without a usable GPU says nothing about real PCs.
       - name: Launch test
         continue-on-error: true
@@ -71,10 +73,10 @@ jobs:
         env:
           WGPU_BACKEND: dx12
         run: |
-          $p = Start-Process dist\Phosphor\Phosphor.exe -ArgumentList "--bench","4","--snapshot","$PWD\dist\win-snapshot.png" -PassThru -NoNewWindow -RedirectStandardOutput dist\launch.txt -RedirectStandardError dist\launch-err.txt
+          $p = Start-Process dist\Phosphor\Phosphor.exe -ArgumentList "--bench","4","--project","scripts\\ci\\smoke.phosphor","--snapshot","$PWD\dist\win-snapshot.png" -PassThru -NoNewWindow -RedirectStandardOutput dist\launch.txt -RedirectStandardError dist\launch-err.txt
           if (-not $p.WaitForExit(150000)) { $p.Kill(); "TIMEOUT" | Out-File -Append dist\launch.txt }
           "exit code: $($p.ExitCode)" | Out-File -Append dist\launch.txt
-          Get-Content dist\launch.txt | Select-String "SUMMARY|LAYER_ERROR|GPU|panicked|exit code|TIMEOUT"
+          Get-Content dist\launch.txt | Select-String "SUMMARY|LAYERS|LAYER_ERROR|GPU|panicked|exit code|TIMEOUT"
           Get-Content dist\launch-err.txt -Tail 30
           if (-not (Test-Path dist\win-snapshot.png)) { exit 1 }
 
