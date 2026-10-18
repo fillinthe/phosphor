@@ -49,6 +49,9 @@ jobs:
       - name: App
         run: cargo build -p phosphor --release
 
+      - name: App tests
+        run: cargo test -p phosphor --release
+
       - name: Package (exe + FFmpeg DLLs)
         shell: pwsh
         run: |
