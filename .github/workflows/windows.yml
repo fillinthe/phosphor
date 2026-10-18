@@ -88,7 +88,7 @@ jobs:
         with:
           name: launch-test
           path: |
-            dist/win-snapshot.png
+            dist/win-snapshot*.png
             dist/launch.txt
             dist/launch-err.txt
           if-no-files-found: ignore
