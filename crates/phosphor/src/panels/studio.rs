@@ -374,6 +374,19 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             }
             ui.close();
         }
+        if let Some(m) = &mut s.model {
+            if ui.checkbox(&mut m.calibrating, "Calibrate (pin points)").on_hover_text("Click model points, drag their pins onto the real object; 4+ pins solve the projector").changed() {
+                ui.close();
+            }
+            if !m.pins.is_empty() && ui.button("Clear calibration pins").clicked() {
+                m.pins.clear();
+                ui.close();
+            }
+            if ui.button("Choose another model…").clicked() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(crate::panels::PICK_MODEL), s.id));
+                ui.close();
+            }
+        }
         let mut model = s.model.is_some();
         if ui.checkbox(&mut model, "3D model…").on_hover_text("Map onto a real object from its OBJ model").changed() {
             if model {
