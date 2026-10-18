@@ -45,10 +45,12 @@ pub enum ModSource {
     Steps,
     /// A pulse on every beat the audio beat detector hears.
     AudioBeat,
+    /// A value set by hand, a MIDI knob, OSC or the remote (shared modulators: their `value`).
+    Hand,
 }
 
 impl ModSource {
-    pub const ALL: [ModSource; 12] = [
+    pub const ALL: [ModSource; 13] = [
         ModSource::AudioLevel,
         ModSource::AudioLow,
         ModSource::AudioMid,
@@ -61,6 +63,7 @@ impl ModSource {
         ModSource::Beat,
         ModSource::Random,
         ModSource::Steps,
+        ModSource::Hand,
     ];
 
     pub fn name(self) -> &'static str {
@@ -77,6 +80,7 @@ impl ModSource {
             ModSource::Random => "Random",
             ModSource::Steps => "Step sequencer",
             ModSource::AudioBeat => "Audio beat (kick)",
+            ModSource::Hand => "Hand / MIDI knob",
         }
     }
 

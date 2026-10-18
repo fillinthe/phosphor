@@ -47,6 +47,8 @@ pub enum ControlTarget {
     Surface(u64),
     /// An XY pad's vertical value.
     SurfaceY(u64),
+    /// A shared modulator's hand-set value (its "Hand / MIDI" source): one knob feeding a chain.
+    Modulator(u64),
     /// App-wide controls (tempo, launch settings, audio…).
     App(AppControl),
     /// A movie layer's sound volume (0..1 = silent..2×).

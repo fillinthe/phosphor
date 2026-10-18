@@ -62,6 +62,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::EffectEnabled(id) => on(effect(id)?.enabled),
         ControlTarget::Surface(id) => comp.surface.widgets.iter().find(|w| w.id == *id)?.value,
         ControlTarget::SurfaceY(id) => comp.surface.widgets.iter().find(|w| w.id == *id)?.value_y,
+        ControlTarget::Modulator(id) => comp.modulators.iter().find(|m| m.id == *id)?.value,
         ControlTarget::App(a) => match a {
             AppControl::LaunchFade => on(comp.launch.fade),
             AppControl::FadeTime => to_unit(comp.launch.fade_secs, 0.05, 10.0, true),
@@ -104,6 +105,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::TriggerColumn(col) => {
             if v > 0.5 {
                 out.push(Deferred::Column(*col));
+            }
+        }
+        ControlTarget::Modulator(id) => {
+            if let Some(m) = comp.modulators.iter_mut().find(|m| m.id == *id) {
+                m.value = v.clamp(0.0, 1.0);
             }
         }
         ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => {
@@ -254,6 +260,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
             out.push((ControlTarget::SurfaceY(w.id), format!("Surface · {} (Y)", w.label)));
         }
     }
+    for m in comp.modulators.iter().filter(|m| m.signal.source == phosphor_engine::ModSource::Hand) {
+        out.push((ControlTarget::Modulator(m.id), format!("Modulator · {}", m.name)));
+    }
     for col in 0..comp.clip_columns {
         out.push((ControlTarget::TriggerColumn(col), format!("Column {} (trigger)", col + 1)));
     }
@@ -332,6 +341,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerRotation(id) => format!("/phosphor/layer/{id}/rotation"),
         ControlTarget::Surface(id) => format!("/phosphor/surface/{id}"),
         ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
+        ControlTarget::Modulator(id) => format!("/phosphor/modulator/{id}"),
         ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),
     }
 }

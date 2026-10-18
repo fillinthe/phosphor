@@ -230,3 +230,14 @@ fn colour_widget_sends_red_green_blue() {
     set_target(&mut comp, &ControlTarget::Surface(id), 1.0 / 3.0, &mut out);
     assert!(comp.layer_mut(a).unwrap().opacity < 0.01 && comp.layer_mut(b).unwrap().opacity > 0.99);
 }
+
+#[test]
+fn a_knob_sets_a_hand_modulator_and_osc_has_an_address() {
+    let mut comp = Composition::default();
+    comp.modulators.push(phosphor_engine::Modulator { id: 7, name: "Knob".into(), signal: phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() }, chain: None, value: 0.0 });
+    let mut out = Vec::new();
+    set_target(&mut comp, &ControlTarget::Modulator(7), 0.8, &mut out);
+    assert_eq!(get_target(&comp, &ControlTarget::Modulator(7)), Some(0.8));
+    assert!(all_targets(&comp).iter().any(|(t, name)| *t == ControlTarget::Modulator(7) && name.contains("Knob")));
+    assert_eq!(default_osc_address(&ControlTarget::Modulator(7)), "/phosphor/modulator/7");
+}

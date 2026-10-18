@@ -48,6 +48,8 @@ pub fn source_value(m: &Modulation, inputs: &ModInputs) -> f32 {
         }
         ModSource::Steps => m.steps[((phase * 8.0) as usize).min(7)],
         ModSource::AudioBeat => inputs.audio_beat,
+        // A control's own "hand" source has no value of its own: it follows a shared modulator instead.
+        ModSource::Hand => 0.0,
     };
     if m.invert { 1.0 - v } else { v }
 }

@@ -36,6 +36,14 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         remove = Some(i);
                     }
                 });
+                // Hand / MIDI knob: a fader that any knob, OSC message or the remote can move (right-click it: Learn).
+                if m.signal.source == phosphor_engine::ModSource::Hand {
+                    ui.horizontal(|ui| {
+                        let r = guarded!(ui, m.value, egui::Slider::new(&mut m.value, 0.0..=1.0).text("value"));
+                        crate::ui::map_menu(ui, &r, phosphor_engine::ControlTarget::Modulator(m.id));
+                        hint(ui, "right-click: Learn a MIDI knob");
+                    });
+                }
                 // Its signal: the same editor as any control's Modulate menu.
                 let mut sig = Some(m.signal);
                 ui.push_id(("modsig", m.id), |ui| modulation_editor_signal(ui, &mut sig));

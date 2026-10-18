@@ -62,11 +62,13 @@ pub struct Modulator {
     /// Its signal (source, rate, sync, steps, invert); amount / range don't apply here, the controls set those.
     pub signal: Modulation,
     pub chain: Option<ModChain>,
+    /// The "Hand / MIDI knob" source's value (0..1): set by its fader, a mapped knob, OSC or the remote.
+    pub value: f32,
 }
 
 impl Default for Modulator {
     fn default() -> Self {
-        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None }
+        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None, value: 0.5 }
     }
 }
 
@@ -112,7 +114,12 @@ pub fn evaluate(mods: &[Modulator], inputs: &ModInputs, phases: &mut ModPhases) 
         };
         // The signal at that phase: a free-running one-cycle-per-second view of the same source.
         let at_phase = super::Modulation { sync: false, rate: 1.0, ..*s };
-        let mut v = source_value(&at_phase, &ModInputs { time: phase.rem_euclid(1_000_000.0) as f32, ..inp });
+        let mut v = if s.source == super::ModSource::Hand {
+            let v = m.value.clamp(0.0, 1.0);
+            if s.invert { 1.0 - v } else { v }
+        } else {
+            source_value(&at_phase, &ModInputs { time: phase.rem_euclid(1_000_000.0) as f32, ..inp })
+        };
         if let Some((c, w)) = other {
             let a = c.amount.clamp(0.0, 1.0);
             v = match c.mode {
@@ -137,8 +144,8 @@ mod tests {
 
     #[test]
     fn modulators_chain_in_order_and_controls_follow_them() {
-        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None };
-        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }) };
+        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None, value: 0.0 };
+        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0 };
         // t = 0.25 s: the square is on (1), the saw at 0.25: 0.25 × 1.
         let on = evaluate(&[square.clone(), saw.clone()], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
         assert_eq!(on[0], (1, 1.0));
@@ -155,8 +162,8 @@ mod tests {
 
     #[test]
     fn speed_chaining_changes_the_rate_without_jumps() {
-        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None };
-        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }) };
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None, value: 0.0 };
+        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }), value: 0.0 };
         let mods = [knob, saw];
         let mut ph = ModPhases::default();
         let mut prev = evaluate(&mods, &ModInputs { time: 0.0, ..Default::default() }, &mut ph)[1].1;
@@ -166,5 +173,14 @@ mod tests {
             assert!((v - prev - 0.04).abs() < 1e-3, "step {k}: {prev} -> {v}");
             prev = v;
         }
+    }
+
+    #[test]
+    fn a_hand_modulator_feeds_the_chain() {
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Hand, ..Default::default() }, chain: None, value: 0.3 };
+        let lfo = Modulator { id: 2, name: "lfo".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0 };
+        let out = evaluate(&[knob, lfo], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
+        assert_eq!(out[0], (1, 0.3));
+        assert!((out[1].1 - 0.3).abs() < 1e-6, "{:?}", out[1]);
     }
 }
