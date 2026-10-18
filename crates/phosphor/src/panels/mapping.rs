@@ -156,7 +156,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             ui.painter().text(at, egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(12.0), Color32::WHITE);
         }
     }
-    // Masks: drag points, + between points adds one, right-click a point to delete it.
+    // Masks: drag points, + between points adds one, right-click a point to delete it or make it a sharp corner.
     for m in &mut mapping.masks {
         let id = ui.id().with(("mask", m.id));
         let color = if m.enabled { MASK_COLOR } else { Color32::GRAY };
@@ -194,13 +194,26 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             m.points[i][0] += d[0];
             m.points[i][1] += d[1];
             touched |= d != [0.0, 0.0];
-            if count > 3 {
-                r.right_menu(|ui| {
-                    if ui.button(label(icon::TRASH, "Delete point")).clicked() {
-                        delete = Some(i);
-                        ui.close();
-                    }
-                });
+            if m.smooth && m.is_corner(i) {
+                ui.painter().rect_stroke(egui::Rect::from_center_size(pts[i], egui::vec2(11.0, 11.0)), 0.0, Stroke::new(1.0, color), egui::StrokeKind::Middle);
+            }
+            let smooth = m.smooth;
+            let mut corner = m.is_corner(i);
+            r.right_menu(|ui| {
+                if smooth && ui.checkbox(&mut corner, "Sharp corner").on_hover_text("The smooth outline makes a point here instead of curving through it").changed() {
+                    ui.close();
+                }
+                if !smooth {
+                    hint(ui, "Turn on Smooth to curve the outline; points can then be sharp corners.");
+                }
+                if count > 3 && ui.button(label(icon::TRASH, "Delete point")).clicked() {
+                    delete = Some(i);
+                    ui.close();
+                }
+            });
+            if corner != m.is_corner(i) {
+                m.set_corner(i, corner);
+                touched = true;
             }
             // A small + halfway to the next point adds a point there.
             let next = pts[(i + 1) % count];
@@ -214,12 +227,12 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             }
         }
         if let Some(i) = delete {
-            m.points.remove(i);
+            m.remove_point(i);
             touched = true;
         }
         if let Some(i) = insert {
             let (a, b) = (m.points[i - 1], m.points[i % m.points.len()]);
-            m.points.insert(i, [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5]);
+            m.insert_point(i, [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5]);
             *selected = Some(m.id);
             touched = true;
         }
@@ -517,7 +530,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
 pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping::Mask) {
     ui.horizontal(|ui| {
         ui.toggle_value(&mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
-        ui.toggle_value(&mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (add points by double-clicking an edge)");
+        ui.toggle_value(&mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point to make it a sharp corner)");
     });
     ui.horizontal(|ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 90.0).max(60.0);
