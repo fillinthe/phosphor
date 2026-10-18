@@ -29,8 +29,9 @@ fi
 git tag -f "$TAG"
 git push -f origin "$TAG"
 ASSETS="dist/Phosphor-mac.zip"
-# The Windows build of this very commit, if the Windows workflow has built it (Actions > Windows build).
-WIN_RUN=$(gh run list -R fillinthe/phosphor --workflow windows.yml --commit "$(git rev-parse HEAD)" --status success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+# The Windows build of the newest code commit (docs-only commits don't build; see paths-ignore in windows.yml).
+CODE_SHA=$(git log -1 --format=%H -- . ':(exclude)docs' ':(exclude)*.md')
+WIN_RUN=$(gh run list -R fillinthe/phosphor --workflow windows.yml --commit "$CODE_SHA" --status success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
 if [ -n "$WIN_RUN" ]; then
   rm -rf dist/win && mkdir -p dist/win
   if gh run download "$WIN_RUN" -R fillinthe/phosphor -n Phosphor-windows -D dist/win; then
