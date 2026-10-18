@@ -397,6 +397,7 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
             (IsfInputKind::Bool { .. } | IsfInputKind::Event, Some(o), _) => ("bool", format!("({} != 0.0)", param_expr(o, 1))),
             (IsfInputKind::Long { .. } | IsfInputKind::Int { .. }, Some(o), _) => ("int", format!("int({})", param_expr(o, 1))),
             (IsfInputKind::Color { .. }, Some(o), _) => ("vec4", param_expr(o, 4)),
+            (IsfInputKind::Point2D { .. }, Some(o), _) if input.pixels => ("vec2", format!("({} * phosphor_u.resolution)", param_expr(o, 2))),
             (IsfInputKind::Point2D { .. }, Some(o), _) => ("vec2", param_expr(o, 2)),
             (IsfInputKind::Image | IsfInputKind::Audio { .. }, _, Some(t)) => {
                 s.push_str(&format!("#define {} phosphor_tex{t}\n", input.name));
@@ -668,4 +669,60 @@ mod hoist_tests {
         assert!(out.contains("float q = d * 2.0;"), "{out}");
         assert_eq!(inits, vec!["d = min(progress, 1.0 - progress);".to_string()]);
     }
+}
+
+/// Prelude for a real vertex stage (ISF vertex shaders that move the quad): the same uniforms and inputs as the
+/// fragment prelude, `phosphor_uv` as the varying the fragment stage reads, and `isf_vertShaderInit()` placing
+/// the six vertices of a full-screen quad by `gl_VertexIndex`.
+pub(crate) fn vertex_prelude(header: &Header, inputs: &[IsfInput]) -> String {
+    let mut s = String::new();
+    s.push_str(&format!(
+        "#version 450\nlayout(std140, binding=0) uniform phosphor_U {{ vec4 p[{}]; vec2 resolution; float time; float opacity; vec4 uv_xform; uint mode; uint yuv; uint _pad0; uint _pad1; uint _pad2; uint _pad3; uint _pad4; uint _pad5; }} phosphor_u;\n",
+        crate::UNIFORM_VEC4S
+    ));
+    s.push_str(
+        "layout(location=0) out vec2 phosphor_uv;\n\
+vec2 isf_FragNormCoord;\n\
+vec2 vv_FragNormCoord;\n\
+#define TIME (phosphor_u.time)\n\
+#define RENDERSIZE (phosphor_u.resolution)\n\
+#define TIMEDELTA (phosphor_u.p[15].z)\n\
+#define FRAMEINDEX (int(phosphor_u.p[15].y))\n\
+#define PASSINDEX (int(phosphor_u.p[15].x))\n\
+#define DATE vec4(2026.0, 1.0, 1.0, phosphor_u.time)\n\
+void isf_vertShaderInit() {\n\
+    vec2 corners[6] = vec2[6](vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0));\n\
+    vec2 c = corners[gl_VertexIndex];\n\
+    gl_Position = vec4(c, 0.0, 1.0);\n\
+    isf_FragNormCoord = c * 0.5 + 0.5;\n\
+    vv_FragNormCoord = isf_FragNormCoord;\n\
+}\n",
+    );
+    let mut init = String::from("void phosphor_init_inputs() {\n");
+    for input in inputs {
+        let (ty, expr) = match (&input.kind, input.offset) {
+            (IsfInputKind::Float { .. }, Some(o)) => ("float", param_expr(o, 1)),
+            (IsfInputKind::Bool { .. } | IsfInputKind::Event, Some(o)) => ("bool", format!("({} != 0.0)", param_expr(o, 1))),
+            (IsfInputKind::Long { .. } | IsfInputKind::Int { .. }, Some(o)) => ("int", format!("int({})", param_expr(o, 1))),
+            (IsfInputKind::Color { .. }, Some(o)) => ("vec4", param_expr(o, 4)),
+            (IsfInputKind::Point2D { .. }, Some(o)) if input.pixels => ("vec2", format!("({} * phosphor_u.resolution)", param_expr(o, 2))),
+            (IsfInputKind::Point2D { .. }, Some(o)) => ("vec2", param_expr(o, 2)),
+            _ => continue,
+        };
+        s.push_str(&format!("{ty} {};\n", input.name));
+        init.push_str(&format!("    {} = {expr};\n", input.name));
+    }
+    for (name, speed) in &header.time_bases {
+        s.push_str(&format!("float {name};\n"));
+        init.push_str(&format!("    {name} = phosphor_u.time * ({speed});\n"));
+    }
+    init.push_str("}\n");
+    s.push_str(&init);
+    s
+}
+
+/// `main` for the vertex stage: inputs, the shader's own main (which calls `isf_vertShaderInit`), then the
+/// varying the fragment stage expects (flipped: Phosphor's uv has y down).
+pub(crate) fn vertex_epilogue() -> &'static str {
+    "void main() {\n    phosphor_init_inputs();\n    phosphor_vs_user();\n    phosphor_uv = vec2(isf_FragNormCoord.x, 1.0 - isf_FragNormCoord.y);\n}\n"
 }

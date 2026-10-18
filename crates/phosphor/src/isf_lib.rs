@@ -20,6 +20,8 @@ pub struct Loaded {
     images: Vec<(usize, u32, u32, Vec<u8>)>,
     /// `audio` / `audioFFT` inputs: (texture slot, spectrum?).
     audio_slots: Vec<(usize, bool)>,
+    /// A real vertex stage (ISF vertex shaders that move the quad).
+    vertex_entry: Option<String>,
 }
 
 /// Decodes the pictures an ISF shader imports (paths relative to the shader file; missing ones are skipped)
@@ -186,7 +188,7 @@ impl IsfLibrary {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
                                 let images = load_images(&path, &sh.images, &sh.curves);
-                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), wgsl: sh.wgsl })
+                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), wgsl: sh.wgsl })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
                             Err(e) => Err(format!("{e:?}")),
@@ -221,6 +223,9 @@ impl IsfLibrary {
                         engine.set_plan_image(desc.entry, slot, w, h, &rgba);
                     }
                     shaders::set_audio_slots(desc.entry, l.audio_slots.into_iter().map(|(s, fft)| (s, if fft { shaders::AudioTexture::Fft } else { shaders::AudioTexture::Wave })).collect());
+                    if let Some(v) = l.vertex_entry {
+                        shaders::set_vertex_entry(desc.entry, leak(v));
+                    }
                     engine.register_lazy(desc, l.wgsl);
                     self.loaded += 1;
                 }

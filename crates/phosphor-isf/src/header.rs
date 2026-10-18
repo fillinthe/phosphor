@@ -223,7 +223,8 @@ fn parse_input(v: &Value) -> Result<IsfInput, String> {
         "audioFFT" => IsfInputKind::Audio { fft: true },
         other => return Err(format!("input type '{other}'")),
     };
-    Ok(IsfInput { name, label, kind, offset: None, texture: None })
+    let pixels = ty == "point2D" && v.get("MIN").is_none() && v.get("MAX").is_none();
+    Ok(IsfInput { name, label, kind, offset: None, texture: None, pixels })
 }
 
 /// Extracts a speed expression for a MadMapper `time_base` generator: an input

@@ -207,7 +207,9 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
         layout: Some(pipeline_layout),
         vertex: wgpu::VertexState {
             module,
-            entry_point: Some(if surface {
+            entry_point: Some(if let Some(v) = shaders::vertex_entry(entry) {
+                v
+            } else if surface {
                 "vs_surface"
             } else if mesh {
                 "vs_mesh"

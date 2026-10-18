@@ -115,6 +115,8 @@ impl Engine {
                     (horizontal + vertical + diagonal) * 2
                 }
                 "fs_rutt_points" => (pass.uniforms.p[0][0] as u32).max(2) * (pass.uniforms.p[0][1] as u32).max(2),
+                // An ISF vertex shader moves a quad: six vertices.
+                e if crate::shaders::vertex_entry(e).is_some() => 6,
                 _ => 3,
             };
             let pipeline = self.gpu.pipeline_for(pass.entry, pass.target.texture().format()).clone();

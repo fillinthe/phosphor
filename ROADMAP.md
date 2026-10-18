@@ -61,7 +61,7 @@ app that's much smaller and lighter on the CPU.
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
 9. **ISF gaps**: ~~multi-pass / feedback / >16 params / imported images / 12 buffers / _imgRect / MadNoise / MadSDF~~ ✔
    (391/406 on this Mac: 324/327 ISF, 39/42 MadMapper Materials, 19/23 Surface FX, 9/14 generators; the MadMapper includes
-   are clean-room). Next: a curve editor (curve inputs load with their default), vertex shaders that move geometry (6), Pixelize (naga internal error)
+   are clean-room). Next: a curve editor (curve inputs load with their default); MadMapper 3D particle generators. ISF collection 327/327 ✔ (vertex stages 2026-10-17)
 9b. ~~Export show~~ done (File → Export Show). ~~Locked "player only" mode~~ ✔ (View › Lock Controls, password,
     exports can open locked). Next: Windows/Linux players, notarized exports
 9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with
@@ -263,6 +263,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] **Browser build runs** (WebGPU, Chrome): `cd crates/phosphor && trunk build --release --dist ../../dist`,
       then serve `dist/`. Same engine + UI; 9 MB wasm. No video/audio/MIDI in the browser yet
 - [ ] iPadOS / iOS (same engine + UI; touch-sized controls)
+- [ ] Windows build (owner, 2026-10-17: "do win at some point"): wgpu DX12/Vulkan, Spout instead of Syphon, NDI runtime path, installer
 - [x] **Mac: File / Edit / View… only in the macOS menu bar** ✔ 2026-10-17 (in-window menus stay for the browser build)
 - [ ] Older macOS (11–13): test wgpu Metal backend; likely only small changes needed
 
