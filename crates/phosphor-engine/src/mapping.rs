@@ -59,17 +59,30 @@ pub struct Model3d {
     pub scale: f32,
     /// Hide triangles facing away from the projector.
     pub cull: bool,
+    /// Calibration: model points pinned to where they really are on the output (4+ solve the projector).
+    pub pins: Vec<Pin>,
+    /// Calibrate mode is on (the canvas shows the model's points to pin).
+    pub calibrating: bool,
+}
+
+/// A point of the model (in the model's unit-cube space) and where it must land on the output (0..1).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Pin {
+    pub model: [f32; 3],
+    pub at: [f32; 2],
 }
 
 impl Default for Model3d {
     fn default() -> Self {
-        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true }
+        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true, pins: Vec::new(), calibrating: false }
     }
 }
 
 /// A loaded model: triangles of (position, uv), centred and scaled into a unit cube.
 pub struct ObjMesh {
     pub tris: Vec<[([f32; 3], [f32; 2]); 3]>,
+    /// Every distinct vertex position (unit-cube space): the points calibration can pin.
+    pub verts: Vec<[f32; 3]>,
 }
 
 static OBJ_CACHE: std::sync::Mutex<Vec<(String, std::sync::Arc<Result<ObjMesh, String>>)>> = std::sync::Mutex::new(Vec::new());
@@ -154,7 +167,9 @@ pub fn parse_obj(text: &str) -> Result<ObjMesh, String> {
             tris.push([vert(f[0]), vert(f[k]), vert(f[k + 1])]);
         }
     }
-    Ok(ObjMesh { tris })
+    let mut verts: Vec<[f32; 3]> = v.iter().map(|p| norm(*p)).collect();
+    verts.dedup_by(|a, b| a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() < 1e-6));
+    Ok(ObjMesh { tris, verts })
 }
 
 impl Model3d {
@@ -169,28 +184,135 @@ impl Model3d {
         self.project(aspect, false)
     }
 
-    fn project(&self, aspect: f32, split: bool) -> Vec<[f32; 4]> {
-        let mesh = obj_mesh(&self.path);
-        let Ok(mesh) = mesh.as_ref() else { return Vec::new() };
+    /// Where a model point (unit-cube space) lands on the output (0..1), and its depth; None behind the projector.
+    pub fn project_point(&self, p: [f32; 3], aspect: f32) -> Option<([f32; 2], f32)> {
         let tau = std::f32::consts::TAU;
         let (sy, cy) = (self.yaw * tau).sin_cos();
         let (sp, cp) = (self.pitch * tau).sin_cos();
         let (sr, cr) = (self.roll * tau).sin_cos();
         let f = 1.0 / (self.fov.clamp(5.0, 150.0).to_radians() * 0.5).tan();
         let dist = self.distance.max(0.6);
-        let project = |p: [f32; 3]| -> Option<([f32; 2], f32)> {
-            let (x, y, z) = (p[0] * self.scale, p[1] * self.scale, p[2] * self.scale);
-            // yaw (around y), pitch (around x), roll (around the view axis)
-            let (x, z) = (x * cy + z * sy, -x * sy + z * cy);
-            let (y, z) = (y * cp - z * sp, y * sp + z * cp);
-            let (x, y) = (x * cr - y * sr, x * sr + y * cr);
-            let depth = dist - z;
-            if depth < 0.05 {
-                return None;
+        let (x, y, z) = (p[0] * self.scale, p[1] * self.scale, p[2] * self.scale);
+        let (x, z) = (x * cy + z * sy, -x * sy + z * cy);
+        let (y, z) = (y * cp - z * sp, y * sp + z * cp);
+        let (x, y) = (x * cr - y * sr, x * sr + y * cr);
+        let depth = dist - z;
+        if depth < 0.05 {
+            return None;
+        }
+        let (px, py) = (x * f / depth / aspect.max(0.1), y * f / depth);
+        Some(([self.center[0] + px * 0.5, self.center[1] - py * 0.5], depth))
+    }
+
+    /// Solves the virtual projector (turn, tilt, roll, distance, centre, and the lens from 6 pins up) so every pin's
+    /// model point lands where it was pinned: damped least squares (Levenberg–Marquardt) from the current
+    /// settings. Needs 4 pins; returns the remaining error in output fractions (RMS), or None if not solvable.
+    pub fn solve(&mut self, aspect: f32) -> Option<f32> {
+        if self.pins.len() < 4 {
+            return None;
+        }
+        let with_fov = self.pins.len() >= 6;
+        let get = |m: &Model3d| -> Vec<f64> {
+            let mut x = vec![m.yaw as f64, m.pitch as f64, m.roll as f64, (m.distance as f64).ln(), m.center[0] as f64, m.center[1] as f64];
+            if with_fov {
+                x.push(m.fov as f64 / 60.0);
             }
-            let (px, py) = (x * f / depth / aspect.max(0.1), y * f / depth);
-            Some(([self.center[0] + px * 0.5, self.center[1] - py * 0.5], depth))
+            x
         };
+        let set = |m: &mut Model3d, x: &[f64]| {
+            m.yaw = x[0] as f32;
+            m.pitch = x[1] as f32;
+            m.roll = x[2] as f32;
+            m.distance = (x[3].exp() as f32).clamp(0.6, 200.0);
+            m.center = [x[4] as f32, x[5] as f32];
+            if with_fov {
+                m.fov = ((x[6] * 60.0) as f32).clamp(5.0, 150.0);
+            }
+        };
+        let residuals = |m: &Model3d| -> Vec<f64> {
+            let mut r = Vec::with_capacity(m.pins.len() * 2);
+            for pin in &m.pins {
+                match m.project_point(pin.model, aspect) {
+                    Some((xy, _)) => {
+                        r.push(((xy[0] - pin.at[0]) * aspect) as f64);
+                        r.push((xy[1] - pin.at[1]) as f64);
+                    }
+                    None => {
+                        r.push(10.0);
+                        r.push(10.0);
+                    }
+                }
+            }
+            r
+        };
+        let cost = |r: &[f64]| r.iter().map(|v| v * v).sum::<f64>();
+        let mut x = get(self);
+        let mut trial = self.clone();
+        let mut r = residuals(self);
+        let mut c = cost(&r);
+        let mut lambda = 1e-3;
+        let n = x.len();
+        for _ in 0..200 {
+            // Numeric Jacobian.
+            let mut jac = vec![vec![0.0f64; n]; r.len()];
+            for k in 0..n {
+                let h = 1e-5 * x[k].abs().max(1e-2);
+                let mut xp = x.clone();
+                xp[k] += h;
+                set(&mut trial, &xp);
+                let rp = residuals(&trial);
+                for (i, row) in jac.iter_mut().enumerate() {
+                    row[k] = (rp[i] - r[i]) / h;
+                }
+            }
+            // (JᵀJ + λ diag) δ = −Jᵀr
+            let mut a = vec![vec![0.0f64; n]; n];
+            let mut g = vec![0.0f64; n];
+            for (i, row) in jac.iter().enumerate() {
+                for p in 0..n {
+                    g[p] -= row[p] * r[i];
+                    for q in 0..n {
+                        a[p][q] += row[p] * row[q];
+                    }
+                }
+            }
+            let mut improved = false;
+            for _ in 0..10 {
+                let mut m = a.clone();
+                for (p, row) in m.iter_mut().enumerate() {
+                    row[p] += lambda * (a[p][p] + 1e-9);
+                }
+                let Some(delta) = solve_linear(m, g.clone()) else { break };
+                let xn: Vec<f64> = x.iter().zip(&delta).map(|(a, d)| a + d).collect();
+                set(&mut trial, &xn);
+                let rn = residuals(&trial);
+                let cn = cost(&rn);
+                if cn < c {
+                    x = xn;
+                    r = rn;
+                    let done = (c - cn) < 1e-14;
+                    c = cn;
+                    lambda = (lambda * 0.3).max(1e-9);
+                    improved = true;
+                    if done {
+                        break;
+                    }
+                    break;
+                }
+                lambda *= 10.0;
+            }
+            if !improved || c < 1e-12 {
+                break;
+            }
+        }
+        set(self, &x);
+        Some((c / self.pins.len() as f64).sqrt() as f32)
+    }
+
+    fn project(&self, aspect: f32, split: bool) -> Vec<[f32; 4]> {
+        let mesh = obj_mesh(&self.path);
+        let Ok(mesh) = mesh.as_ref() else { return Vec::new() };
+        let project = |p: [f32; 3]| self.project_point(p, aspect);
         // Big triangles are split (in 3D, so the split follows perspective) until each covers a small part of the
         // output: the texture is interpolated flat across a triangle, which bends on large perspective faces.
         let mut work: Vec<[([f32; 3], [f32; 2]); 3]> = Vec::with_capacity(mesh.tris.len());
@@ -951,5 +1073,55 @@ f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/
         // Without culling more is drawn (far faces first).
         assert!(Model3d { cull: false, ..turned }.triangles(16.0 / 9.0).len() > t3.len());
         assert!(Model3d { path: "/nope.obj".into(), ..Default::default() }.triangles(1.0).is_empty());
+    }
+}
+
+/// Gaussian elimination with partial pivoting (small systems: the calibration solver).
+fn solve_linear(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
+    let n = b.len();
+    for col in 0..n {
+        let piv = (col..n).max_by(|&i, &j| a[i][col].abs().total_cmp(&a[j][col].abs()))?;
+        if a[piv][col].abs() < 1e-15 {
+            return None;
+        }
+        a.swap(col, piv);
+        b.swap(col, piv);
+        for row in col + 1..n {
+            let f = a[row][col] / a[col][col];
+            for k in col..n {
+                a[row][k] -= f * a[col][k];
+            }
+            b[row] -= f * b[col];
+        }
+    }
+    let mut x = vec![0.0; n];
+    for i in (0..n).rev() {
+        let s: f64 = (i + 1..n).map(|k| a[i][k] * x[k]).sum();
+        x[i] = (b[i] - s) / a[i][i];
+    }
+    Some(x)
+}
+
+#[cfg(test)]
+mod calibration_tests {
+    use super::*;
+
+    #[test]
+    fn pins_recover_the_projector() {
+        let aspect = 16.0 / 9.0;
+        let truth = Model3d { yaw: 0.11, pitch: 0.07, roll: 0.01, distance: 3.4, fov: 34.0, center: [0.47, 0.53], ..Default::default() };
+        let corners: Vec<[f32; 3]> = vec![[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [-0.5, 0.5, -0.5]];
+        let pins: Vec<Pin> = corners.iter().map(|&p| Pin { model: p, at: truth.project_point(p, aspect).unwrap().0 }).collect();
+        // Start from the defaults (a different view), with all seven pins: the lens is solved too.
+        let mut m = Model3d { pins: pins.clone(), ..Default::default() };
+        let err = m.solve(aspect).unwrap();
+        assert!(err < 1e-4, "rms {err}");
+        for pin in &pins {
+            let (xy, _) = m.project_point(pin.model, aspect).unwrap();
+            assert!((xy[0] - pin.at[0]).abs() < 1e-3 && (xy[1] - pin.at[1]).abs() < 1e-3);
+        }
+        assert!((m.fov - truth.fov).abs() < 1.0, "fov {}", m.fov);
+        // Fewer than four pins: nothing to solve.
+        assert!(Model3d { pins: pins[..3].to_vec(), ..Default::default() }.solve(aspect).is_none());
     }
 }
