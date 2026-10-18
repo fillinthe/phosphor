@@ -140,7 +140,8 @@ pub fn displays() -> Vec<Display> {
 #[cfg(windows)]
 pub fn displays() -> Vec<Display> {
     use windows_sys::Win32::Foundation::{LPARAM, RECT};
-    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOF_PRIMARY};
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO};
+    use windows_sys::Win32::UI::WindowsAndMessaging::MONITORINFOF_PRIMARY;
     use windows_sys::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
     unsafe extern "system" fn each(monitor: HMONITOR, _dc: HDC, _rect: *mut RECT, data: LPARAM) -> i32 {
         // SAFETY: `data` is the Vec we passed below; the monitor handle comes from the enumeration.
