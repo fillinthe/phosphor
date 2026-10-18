@@ -61,8 +61,8 @@ pub enum IsfInputKind {
     Audio { fft: bool },
     /// Momentary trigger: 1.0 on the frame it fires, else 0.0.
     Event,
-    /// MadMapper `curve`: control points as x, y pairs (0..1). Bound as a 1-D lookup picture the shader samples
-    /// with `IMG_NORM_PIXEL(name, vec2(x, 0.5)).r`; see `curve_lut`.
+    /// MadMapper `curve`: control points as x, y pairs (0..1). Becomes `CURVE_POINTS` editable heights (at x = 0,
+    /// ¼, ½, ¾, 1) and a smooth function the shader calls where it sampled the curve picture.
     Curve { points: Vec<f32> },
 }
 
@@ -87,7 +87,8 @@ impl IsfInput {
         match self.kind {
             IsfInputKind::Color { .. } => 4,
             IsfInputKind::Point2D { .. } => 2,
-            IsfInputKind::Image | IsfInputKind::Audio { .. } | IsfInputKind::Curve { .. } => 0,
+            IsfInputKind::Curve { .. } => CURVE_POINTS,
+            IsfInputKind::Image | IsfInputKind::Audio { .. } => 0,
             _ => 1,
         }
     }
@@ -102,7 +103,9 @@ impl IsfInput {
             IsfInputKind::Color { default } => default.to_vec(),
             IsfInputKind::Point2D { default, .. } => default.to_vec(),
             IsfInputKind::Event => vec![0.0],
-            IsfInputKind::Image | IsfInputKind::Audio { .. } | IsfInputKind::Curve { .. } => Vec::new(),
+            // The default curve's height at each editable point.
+            IsfInputKind::Curve { points } => (0..CURVE_POINTS).map(|k| curve_value(points, k as f32 / (CURVE_POINTS - 1) as f32)).collect(),
+            IsfInputKind::Image | IsfInputKind::Audio { .. } => Vec::new(),
         }
     }
 }
@@ -127,9 +130,6 @@ pub struct IsfShader {
     /// `IMPORTED` pictures: (buffer index among `buffers`, file path relative to the shader). The app loads
     /// each file and binds it at that buffer slot; the shader samples it by name like any buffer.
     pub images: Vec<(usize, String)>,
-    /// `curve` inputs: (buffer index among `buffers`, control points). The app bakes each with `curve_lut`
-    /// and binds it at that buffer slot.
-    pub curves: Vec<(usize, Vec<f32>)>,
     /// `audio` / `audioFFT` inputs: (texture slot 1 or 2, spectrum?). The app binds its live audio pictures there.
     pub audio_slots: Vec<(usize, bool)>,
     /// WGSL fragment entry + helpers (and the vertex entry, when the shader has one); empty when `unsupported` is set.
@@ -276,7 +276,6 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         pass_plan: header.pass_specs.clone(),
         buffers: buffer_names(&header.pass_specs),
         images: Vec::new(),
-        curves: Vec::new(),
         audio_slots: Vec::new(),
         vertex_entry: None,
         wgsl: String::new(),
@@ -302,15 +301,6 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         if !shader.buffers.contains(name) {
             shader.images.push((shader.buffers.len(), path.clone()));
             shader.buffers.push(name.clone());
-        }
-    }
-    // Curves are pictures too: a 1-D lookup baked by the app.
-    for input in &shader.inputs {
-        if let IsfInputKind::Curve { points } = &input.kind
-            && !shader.buffers.contains(&input.name)
-        {
-            shader.curves.push((shader.buffers.len(), points.clone()));
-            shader.buffers.push(input.name.clone());
         }
     }
     if shader.buffers.len() > MAX_BUFFERS {
@@ -372,6 +362,11 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     }
 
     let (body, global_inits) = glsl::hoist_global_inits(&body);
+    // Curves are functions now: `IMG_NORM_PIXEL(curve, uv)` → `phosphor_curve_<curve>(uv)`.
+    let mut body = body;
+    for input in shader.inputs.iter().filter(|i| matches!(i.kind, IsfInputKind::Curve { .. })) {
+        body = glsl::call_curve(&body, &input.name);
+    }
     let (fs_part, _) = glsl::rewrite_io_decls(&body, &vs_names);
     let fs_part = match dialect {
         Dialect::Isf => glsl::rename_main(&fs_part, "phosphor_fs_main")
@@ -484,33 +479,39 @@ pub fn validate_wgsl(wgsl: &str) -> Result<(), String> {
         .map_err(|e| e.emit_to_string(&src))
 }
 
-/// Bakes a `curve` input into `n` RGBA8 pixels (one row): a Catmull-Rom spline through the control points
-/// (x, y pairs, sorted by x), clamped to 0..1, value in every channel.
-pub fn curve_lut(points: &[f32], n: usize) -> Vec<u8> {
+/// Editable heights per `curve` input (at x = 0, ¼, ½, ¾, 1).
+pub const CURVE_POINTS: usize = 5;
+
+/// The height of a `curve` input's default at `x` (0..1): a Catmull-Rom spline through the control points
+/// (x, y pairs, sorted by x), ends extended in a straight line (so a straight curve stays straight), clamped to 0..1.
+pub fn curve_value(points: &[f32], x: f32) -> f32 {
     let mut pts: Vec<(f32, f32)> = points.chunks_exact(2).map(|c| (c[0], c[1])).collect();
     if pts.is_empty() {
         pts = vec![(0.0, 0.0), (1.0, 1.0)];
     }
     pts.sort_by(|a, b| a.0.total_cmp(&b.0));
     let m = pts.len();
-    let at = |i: isize| pts[i.clamp(0, m as isize - 1) as usize];
-    let mut out = Vec::with_capacity(n * 4);
-    for k in 0..n {
-        let x = k as f32 / (n.max(2) - 1) as f32;
-        let y = if m == 1 {
-            pts[0].1
-        } else {
-            let i = pts.iter().rposition(|p| p.0 <= x).unwrap_or(0).min(m - 2) as isize;
-            let (p0, p1, p2, p3) = (at(i - 1), at(i), at(i + 1), at(i + 2));
-            let span = (p2.0 - p1.0).max(1e-6);
-            let t = ((x - p1.0) / span).clamp(0.0, 1.0);
-            let (t2, t3) = (t * t, t * t * t);
-            0.5 * ((2.0 * p1.1) + (-p0.1 + p2.1) * t + (2.0 * p0.1 - 5.0 * p1.1 + 4.0 * p2.1 - p3.1) * t2 + (-p0.1 + 3.0 * p1.1 - 3.0 * p2.1 + p3.1) * t3)
-        };
-        let v = (y.clamp(0.0, 1.0) * 255.0).round() as u8;
-        out.extend_from_slice(&[v, v, v, v]);
+    if m == 1 {
+        return pts[0].1.clamp(0.0, 1.0);
     }
-    out
+    let i = pts.iter().rposition(|p| p.0 <= x).unwrap_or(0).min(m - 2);
+    let (p1, p2) = (pts[i], pts[i + 1]);
+    let p0 = if i == 0 { (2.0 * p1.0 - p2.0, 2.0 * p1.1 - p2.1) } else { pts[i - 1] };
+    let p3 = if i + 2 >= m { (2.0 * p2.0 - p1.0, 2.0 * p2.1 - p1.1) } else { pts[i + 2] };
+    let t = ((x - p1.0) / (p2.0 - p1.0).max(1e-6)).clamp(0.0, 1.0);
+    let (t2, t3) = (t * t, t * t * t);
+    let y = 0.5 * ((2.0 * p1.1) + (-p0.1 + p2.1) * t + (2.0 * p0.1 - 5.0 * p1.1 + 4.0 * p2.1 - p3.1) * t2 + (-p0.1 + 3.0 * p1.1 - 3.0 * p2.1 + p3.1) * t3);
+    y.clamp(0.0, 1.0)
+}
+
+/// `curve_value` sampled into `n` RGBA8 pixels (one row), value in every channel.
+pub fn curve_lut(points: &[f32], n: usize) -> Vec<u8> {
+    (0..n)
+        .flat_map(|k| {
+            let v = (curve_value(points, k as f32 / (n.max(2) - 1) as f32) * 255.0).round() as u8;
+            [v, v, v, v]
+        })
+        .collect()
 }
 
 #[cfg(test)]
