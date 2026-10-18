@@ -289,34 +289,49 @@ fn current_bundle() -> Option<PathBuf> {
 /// curl → unzip → swap the bundle. Returns (path, installed?).
 #[cfg(not(target_arch = "wasm32"))]
 fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<(PathBuf, bool), String> {
-    // Swapping the running app in place is Mac-only for now: elsewhere the window offers the download instead.
-    if !cfg!(target_os = "macos") {
-        let _ = (zip_url, progress);
-        return Err("Installing by itself works on the Mac only for now.".into());
-    }
     use std::process::Command;
     let work = std::env::temp_dir().join(format!("phosphor-update-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let zip = work.join("Phosphor.zip");
+    // curl ships with macOS and with Windows 10 and later.
     let out = Command::new("curl").args(["-L", "-f", "-s", "-S", "-o"]).arg(&zip).arg(zip_url).output().map_err(|e| format!("curl: {e}"))?;
     if !out.status.success() {
         return Err(format!("Download failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
     *progress.lock().unwrap() = "Unpacking…".into();
     let unpacked = work.join("unpacked");
-    let out = Command::new("ditto").args(["-x", "-k"]).arg(&zip).arg(&unpacked).output().map_err(|e| format!("ditto: {e}"))?;
+    std::fs::create_dir_all(&unpacked).map_err(|e| e.to_string())?;
+    // ditto on the Mac (keeps the bundle's attributes); Windows' tar reads zips.
+    let out = if cfg!(target_os = "macos") {
+        Command::new("ditto").args(["-x", "-k"]).arg(&zip).arg(&unpacked).output()
+    } else {
+        Command::new("tar").arg("-xf").arg(&zip).arg("-C").arg(&unpacked).output()
+    }
+    .map_err(|e| format!("unpack: {e}"))?;
     if !out.status.success() {
         return Err(format!("Unpack failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
-    let new_app = find_app(&unpacked).ok_or("The download has no Phosphor.app in it")?;
+    *progress.lock().unwrap() = "Installing…".into();
+    let installed = if cfg!(target_os = "macos") {
+        install_mac(&unpacked)?
+    } else {
+        install_folder(&unpacked, &std::env::current_exe().map_err(|e| e.to_string())?)?
+    };
+    let _ = std::fs::remove_dir_all(&work);
+    Ok(installed)
+}
+
+/// Mac: swap the .app bundle we run from (or hand back the unpacked app when we don't run from one).
+fn install_mac(unpacked: &std::path::Path) -> Result<(PathBuf, bool), String> {
+    use std::process::Command;
+    let new_app = find_app(unpacked).ok_or("The download has no Phosphor.app in it")?;
     if !new_app.join("Contents/MacOS/phosphor").exists() {
         return Err("The downloaded app is incomplete".into());
     }
     let Some(dest) = current_bundle() else {
         return Ok((new_app, false));
     };
-    *progress.lock().unwrap() = "Installing…".into();
     let old = dest.with_extension("old.app");
     let _ = std::fs::remove_dir_all(&old);
     std::fs::rename(&dest, &old).map_err(|e| format!("Couldn't replace {}: {e}", dest.display()))?;
@@ -328,8 +343,62 @@ fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<
     }
     let _ = Command::new("xattr").args(["-dr", "com.apple.quarantine"]).arg(&dest).output();
     let _ = std::fs::remove_dir_all(&old);
-    let _ = std::fs::remove_dir_all(&work);
     Ok((dest, true))
+}
+
+/// Windows (and other folder installs): copy the new files over the folder Phosphor.exe runs from. Files in use
+/// (the exe, FFmpeg's DLLs) can't be overwritten but can be renamed, so each goes to "<name>.old" first; the next
+/// update clears those.
+fn install_folder(unpacked: &std::path::Path, exe: &std::path::Path) -> Result<(PathBuf, bool), String> {
+    let exe_name = if cfg!(windows) { "Phosphor.exe" } else { "phosphor" };
+    let src = find_file(unpacked, exe_name).and_then(|p| p.parent().map(|d| d.to_path_buf())).ok_or("The download has no Phosphor.exe in it")?;
+    let exe = exe.to_path_buf();
+    let dest = exe.parent().ok_or("Can't tell where Phosphor is installed")?.to_path_buf();
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let undo = |moved: &[(PathBuf, PathBuf)]| {
+        for (target, old) in moved.iter().rev() {
+            let _ = std::fs::remove_file(target);
+            let _ = std::fs::rename(old, target);
+        }
+    };
+    for entry in std::fs::read_dir(&src).map_err(|e| e.to_string())?.flatten() {
+        let from = entry.path();
+        if !from.is_file() {
+            continue;
+        }
+        let name = entry.file_name();
+        let target = if name.to_string_lossy().eq_ignore_ascii_case(exe_name) { exe.clone() } else { dest.join(&name) };
+        if target.exists() {
+            let old = PathBuf::from(format!("{}.old", target.display()));
+            let _ = std::fs::remove_file(&old);
+            if let Err(e) = std::fs::rename(&target, &old) {
+                undo(&moved);
+                return Err(format!("Couldn't replace {}: {e}", target.display()));
+            }
+            moved.push((target.clone(), old));
+        }
+        if let Err(e) = std::fs::copy(&from, &target) {
+            undo(&moved);
+            return Err(format!("Install failed at {}: {e}", target.display()));
+        }
+    }
+    Ok((exe, true))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn find_file(dir: &std::path::Path, name: &str) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let p = entry.path();
+        if p.is_file() && p.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name)) {
+            return Some(p);
+        }
+        if p.is_dir()
+            && let Some(found) = find_file(&p, name)
+        {
+            return Some(found);
+        }
+    }
+    None
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -352,7 +421,12 @@ fn find_app(dir: &std::path::Path) -> Option<PathBuf> {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn relaunch(ctx: &egui::Context, app: &std::path::Path) {
     let path = app.to_string_lossy().to_string();
-    let _ = std::process::Command::new("sh").arg("-c").arg(format!("sleep 1.5; open \"{path}\"")).spawn();
+    if cfg!(windows) {
+        // ping is cmd's portable "wait a moment".
+        let _ = std::process::Command::new("cmd").args(["/C", &format!("ping -n 3 127.0.0.1 >nul & start \"\" \"{path}\"")]).spawn();
+    } else {
+        let _ = std::process::Command::new("sh").arg("-c").arg(format!("sleep 1.5; open \"{path}\"")).spawn();
+    }
     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
 }
 
@@ -478,6 +552,30 @@ mod tests {
         assert!(!is_newer("0.1.0", "0.1.0"));
         assert!(!is_newer("v0.0.9", "0.1.0"));
         assert!(!is_newer("garbage", "0.1.0"));
+    }
+
+    #[test]
+    fn folder_install_keeps_the_old_files_aside() {
+        let root = std::env::temp_dir().join(format!("phosphor-install-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (unpacked, dest) = (root.join("unpacked/Phosphor"), root.join("installed"));
+        std::fs::create_dir_all(&unpacked).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+        let exe_name = if cfg!(windows) { "Phosphor.exe" } else { "phosphor" };
+        std::fs::write(unpacked.join(exe_name), "new exe").unwrap();
+        std::fs::write(unpacked.join("avcodec.dll"), "new dll").unwrap();
+        // Installed under a lower-case name (cargo's), the way a dev build runs.
+        let exe = dest.join(exe_name.to_lowercase());
+        std::fs::write(&exe, "old exe").unwrap();
+        std::fs::write(dest.join("avcodec.dll"), "old dll").unwrap();
+        let (path, swapped) = super::install_folder(&root.join("unpacked"), &exe).unwrap();
+        assert!(swapped && path == exe);
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "new exe");
+        assert_eq!(std::fs::read_to_string(dest.join("avcodec.dll")).unwrap(), "new dll");
+        assert_eq!(std::fs::read_to_string(format!("{}.old", exe.display())).unwrap(), "old exe");
+        // A second update replaces the leftovers of the first.
+        assert!(super::install_folder(&root.join("unpacked"), &exe).is_ok());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
