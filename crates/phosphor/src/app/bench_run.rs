@@ -185,6 +185,30 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "head" {
+                // A moving head circling every 2 beats, colour from the centre of the picture, Art-Net to this Mac.
+                let d = &mut self.state.comp.dmx;
+                d.enabled = true;
+                d.protocol = phosphor_engine::DmxProtocol::ArtNet;
+                d.target = "127.0.0.1".into();
+                d.fps = 30.0;
+                let id = self.state.comp.next_id;
+                self.state.comp.next_id += 1;
+                self.state.comp.dmx.fixtures.push(phosphor_engine::Fixture {
+                    id,
+                    name: "Head".into(),
+                    shape: phosphor_engine::FixtureShape::MovingHead,
+                    points: [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]],
+                    motion: phosphor_engine::HeadMotion::Circle,
+                    motion_size: 0.5,
+                    motion_beats: 2.0,
+                    universe: 0,
+                    channel: 1,
+                    ..Default::default()
+                });
+                println!("QUICK head: moving head on universe 0 ch 1, Art-Net to 127.0.0.1");
+                continue;
+            }
             if name == "line" {
                 // A line slice on the first output (added if there is none), for a look at the mapping canvas.
                 let oid = self.state.comp.outputs.first().map(|o| o.id).unwrap_or_else(|| self.state.comp.add_output());

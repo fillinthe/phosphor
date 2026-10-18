@@ -32,4 +32,4 @@ pub use quick::*;
 pub use source::*;
 pub use surface::*;
 
-choice!(BlendMode, FitMode, CrossGroup, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape, TimecodeSource, QrStyle, RenderRate);
+choice!(BlendMode, FitMode, CrossGroup, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape, HeadLayout, HeadMotion, TimecodeSource, QrStyle, RenderRate);
