@@ -133,7 +133,7 @@ impl PhosphorApp {
         if let Some(colors) = engine.take_samples()
             && comp.dmx.enabled
         {
-            let universes = comp.dmx.universes(&colors);
+            let universes = comp.dmx.universes(&colors, mod_inputs.beats as f64);
             dmx.send(&comp.dmx, &universes);
         }
         let render_secs = t0.elapsed().as_secs_f64();

@@ -55,6 +55,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         let is_sel = selected == Some(f.id);
         let color = if !f.enabled { Color32::GRAY } else if is_sel { ACCENT } else { ACCENT.gamma_multiply(0.6) };
         let corners = match f.shape {
+            FixtureShape::MovingHead => 1,
             FixtureShape::Strip => 2,
             FixtureShape::Grid => 4,
         };
@@ -153,9 +154,31 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                             guarded!(ui, f.rows, egui::DragValue::new(&mut f.rows).range(1..=512).suffix(" high"));
                             ui.checkbox(&mut f.zigzag, "Zig-zag").on_hover_text("Every other row is wired backwards (most LED matrices)");
                         }
+                        FixtureShape::MovingHead => {
+                            choice_combo(ui, ("head_layout", f.id), &mut f.head, 230.0, false).on_hover_text("Set the head to the DMX mode with these channels");
+                        }
                     }
-                    choice_combo(ui, ("led_order", f.id), &mut f.order, 90.0, false);
+                    if f.shape != FixtureShape::MovingHead {
+                        choice_combo(ui, ("led_order", f.id), &mut f.order, 90.0, false);
+                    }
                 });
+                if f.shape == FixtureShape::MovingHead {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().slider_width = 90.0;
+                        guarded!(ui, f.pan, Slider::new(&mut f.pan, 0.0..=1.0).text("pan"));
+                        guarded!(ui, f.tilt, Slider::new(&mut f.tilt, 0.0..=1.0).text("tilt"));
+                        guarded!(ui, f.dimmer, Slider::new(&mut f.dimmer, 0.0..=1.0).text("dimmer"));
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        choice_buttons(ui, &mut f.motion, |_, _| {});
+                        if f.motion != phosphor_engine::HeadMotion::Still {
+                            ui.spacing_mut().slider_width = 80.0;
+                            guarded!(ui, f.motion_size, Slider::new(&mut f.motion_size, 0.0..=1.0).text("size"));
+                            guarded!(ui, f.motion_beats, egui::DragValue::new(&mut f.motion_beats).range(0.25..=64.0).speed(0.25).suffix(" beats"));
+                        }
+                    });
+                    hint(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
+                }
                 ui.horizontal_wrapped(|ui| {
                     guarded!(ui, f.universe, egui::DragValue::new(&mut f.universe).range(0..=32767).prefix("universe "));
                     guarded!(ui, f.channel, egui::DragValue::new(&mut f.channel).range(1..=512).prefix("channel "));

@@ -80,15 +80,85 @@ pub enum FixtureShape {
     Strip,
     /// `cols × rows` pixels over the quad `points` (TL, TR, BR, BL), wired row by row.
     Grid,
+    /// A moving head: colour from the picture at `points[0]`, pan / tilt from its own position and movement.
+    MovingHead,
 }
 
 impl FixtureShape {
-    pub const ALL: [FixtureShape; 2] = [FixtureShape::Strip, FixtureShape::Grid];
+    pub const ALL: [FixtureShape; 3] = [FixtureShape::Strip, FixtureShape::Grid, FixtureShape::MovingHead];
 
     pub fn name(self) -> &'static str {
         match self {
             FixtureShape::Strip => "Strip",
             FixtureShape::Grid => "Grid / matrix",
+            FixtureShape::MovingHead => "Moving head",
+        }
+    }
+}
+
+/// A moving head's channels, in order (the common layouts; set the head to the matching mode).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HeadLayout {
+    /// Pan, pan fine, tilt, tilt fine, dimmer, red, green, blue.
+    #[default]
+    Rgb8,
+    /// Pan, pan fine, tilt, tilt fine, dimmer, red, green, blue, white.
+    Rgbw9,
+    /// Pan, pan fine, tilt, tilt fine, shutter (open), dimmer, red, green, blue, white.
+    ShutterRgbw10,
+}
+
+impl HeadLayout {
+    pub const ALL: [HeadLayout; 3] = [HeadLayout::Rgb8, HeadLayout::Rgbw9, HeadLayout::ShutterRgbw10];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            HeadLayout::Rgb8 => "8 ch: pan/tilt 16-bit, dim, RGB",
+            HeadLayout::Rgbw9 => "9 ch: pan/tilt 16-bit, dim, RGBW",
+            HeadLayout::ShutterRgbw10 => "10 ch: pan/tilt 16-bit, shutter, dim, RGBW",
+        }
+    }
+
+    pub fn channels(self) -> usize {
+        match self {
+            HeadLayout::Rgb8 => 8,
+            HeadLayout::Rgbw9 => 9,
+            HeadLayout::ShutterRgbw10 => 10,
+        }
+    }
+}
+
+/// How a moving head moves on its own, around its pan / tilt, timed in beats.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HeadMotion {
+    #[default]
+    Still,
+    Circle,
+    FigureEight,
+    /// Pan back and forth.
+    Sweep,
+}
+
+impl HeadMotion {
+    pub const ALL: [HeadMotion; 4] = [HeadMotion::Still, HeadMotion::Circle, HeadMotion::FigureEight, HeadMotion::Sweep];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            HeadMotion::Still => "Still",
+            HeadMotion::Circle => "Circle",
+            HeadMotion::FigureEight => "Figure 8",
+            HeadMotion::Sweep => "Sweep",
+        }
+    }
+
+    /// Offset from the centre (−1..1 on each axis) at phase `t` (0..1 = one cycle).
+    fn offset(self, t: f64) -> (f64, f64) {
+        let a = t * std::f64::consts::TAU;
+        match self {
+            HeadMotion::Still => (0.0, 0.0),
+            HeadMotion::Circle => (a.cos(), a.sin()),
+            HeadMotion::FigureEight => (a.sin(), (2.0 * a).sin() * 0.5),
+            HeadMotion::Sweep => (a.sin(), 0.0),
         }
     }
 }
@@ -116,6 +186,15 @@ pub struct Fixture {
     pub brightness: f32,
     /// LED gamma (2.2 makes fades look even on most strips; 1 = linear).
     pub gamma: f32,
+    /// Moving heads: channel layout, where it points (0..1 of its pan / tilt range), its movement, how far it
+    /// moves (0..1) and how many beats one cycle takes, and its dimmer.
+    pub head: HeadLayout,
+    pub pan: f32,
+    pub tilt: f32,
+    pub motion: HeadMotion,
+    pub motion_size: f32,
+    pub motion_beats: f32,
+    pub dimmer: f32,
 }
 
 impl Default for Fixture {
@@ -134,6 +213,13 @@ impl Default for Fixture {
             channel: 1,
             brightness: 1.0,
             gamma: 1.0,
+            head: HeadLayout::Rgb8,
+            pan: 0.5,
+            tilt: 0.5,
+            motion: HeadMotion::Still,
+            motion_size: 0.2,
+            motion_beats: 8.0,
+            dimmer: 1.0,
         }
     }
 }
@@ -143,7 +229,21 @@ impl Fixture {
         match self.shape {
             FixtureShape::Strip => self.cols.clamp(1, 4096) as usize,
             FixtureShape::Grid => (self.cols.clamp(1, 512) * self.rows.clamp(1, 512)) as usize,
+            FixtureShape::MovingHead => 1,
         }
+    }
+
+    /// DMX channels one "pixel" takes (a moving head is one pixel with all its channels).
+    fn channels_per_pixel(&self) -> usize {
+        if self.shape == FixtureShape::MovingHead { self.head.channels() } else { self.order.channels() }
+    }
+
+    /// A moving head's pan and tilt (0..1) at `beats`: its centre plus its movement.
+    pub fn head_position(&self, beats: f64) -> (f32, f32) {
+        let t = if self.motion_beats > 0.0 { (beats / self.motion_beats as f64).rem_euclid(1.0) } else { 0.0 };
+        let (dx, dy) = self.motion.offset(t);
+        let s = self.motion_size.clamp(0.0, 1.0) as f64 * 0.5;
+        ((self.pan as f64 + dx * s).clamp(0.0, 1.0) as f32, (self.tilt as f64 + dy * s).clamp(0.0, 1.0) as f32)
     }
 
     /// Where each pixel samples the composition, in wiring order.
@@ -153,6 +253,7 @@ impl Fixture {
         // Pixel centres: n pixels split the line into n equal cells.
         let centre = |i: u32, n: u32| if n <= 1 { 0.5 } else { (i as f32 + 0.5) / n as f32 };
         match self.shape {
+            FixtureShape::MovingHead => vec![p[0]],
             FixtureShape::Strip => {
                 let n = self.cols.clamp(1, 4096);
                 (0..n).map(|i| lerp(p[0], p[1], centre(i, n))).collect()
@@ -173,10 +274,34 @@ impl Fixture {
         }
     }
 
-    /// Writes this fixture's pixels (`colors`, one per sample point) into DMX universes.
-    pub fn write(&self, colors: &[[u8; 4]], universes: &mut BTreeMap<u16, [u8; 512]>) {
-        let per = self.order.channels();
+    /// Writes this fixture's pixels (`colors`, one per sample point) into DMX universes. `beats` times a moving
+    /// head's movement.
+    pub fn write(&self, colors: &[[u8; 4]], universes: &mut BTreeMap<u16, [u8; 512]>, beats: f64) {
+        let per = self.channels_per_pixel();
         let lut = gamma_table(self.brightness, self.gamma);
+        if self.shape == FixtureShape::MovingHead {
+            let Some(c) = colors.first() else { return };
+            let mut ch = (self.channel.clamp(1, 512) - 1) as usize;
+            let mut uni = self.universe;
+            if ch + per > 512 {
+                uni = uni.saturating_add(1);
+                ch = 0;
+            }
+            let (pan, tilt) = self.head_position(beats);
+            let (pan, tilt) = ((pan * 65535.0).round() as u16, (tilt * 65535.0).round() as u16);
+            let [r, g, b] = [lut[c[0] as usize], lut[c[1] as usize], lut[c[2] as usize]];
+            let w = r.min(g).min(b);
+            let dim = (self.dimmer.clamp(0.0, 1.0) * 255.0).round() as u8;
+            let mut v: Vec<u8> = vec![(pan >> 8) as u8, pan as u8, (tilt >> 8) as u8, tilt as u8];
+            match self.head {
+                HeadLayout::Rgb8 => v.extend([dim, r, g, b]),
+                HeadLayout::Rgbw9 => v.extend([dim, r - w, g - w, b - w, w]),
+                HeadLayout::ShutterRgbw10 => v.extend([255, dim, r - w, g - w, b - w, w]),
+            }
+            let data = universes.entry(uni).or_insert([0; 512]);
+            data[ch..ch + per].copy_from_slice(&v);
+            return;
+        }
         let mut uni = self.universe;
         let mut ch = (self.channel.clamp(1, 512) - 1) as usize;
         for c in colors.iter().take(self.pixel_count()) {
@@ -199,7 +324,7 @@ impl Fixture {
 
     /// (universe, channels used in it) of the last pixel, walking pixels exactly like `write`.
     fn end(&self) -> (u16, usize) {
-        let per = self.order.channels();
+        let per = self.channels_per_pixel();
         let mut uni = self.universe;
         let mut ch = (self.channel.clamp(1, 512) - 1) as usize;
         for _ in 0..self.pixel_count() {
@@ -253,14 +378,15 @@ impl DmxSettings {
         self.fixtures.iter().filter(|f| f.enabled).flat_map(|f| f.sample_points()).collect()
     }
 
-    /// Turns sampled colours (in `sample_points` order) into DMX universes.
-    pub fn universes(&self, colors: &[[u8; 4]]) -> BTreeMap<u16, [u8; 512]> {
+    /// Turns sampled colours (in `sample_points` order) into DMX universes; `beats` (the show clock) times the
+    /// moving heads' movements.
+    pub fn universes(&self, colors: &[[u8; 4]], beats: f64) -> BTreeMap<u16, [u8; 512]> {
         let mut out = BTreeMap::new();
         let mut at = 0;
         for f in self.fixtures.iter().filter(|f| f.enabled) {
             let n = f.pixel_count();
             if let Some(c) = colors.get(at..(at + n).min(colors.len())) {
-                f.write(c, &mut out);
+                f.write(c, &mut out, beats);
             }
             at += n;
         }
@@ -277,7 +403,7 @@ mod tests {
         let f = Fixture { cols: 200, order: PixelOrder::Rgb, universe: 3, channel: 1, ..Default::default() };
         let colors = vec![[255, 128, 0, 255]; 200];
         let mut u = BTreeMap::new();
-        f.write(&colors, &mut u);
+        f.write(&colors, &mut u, 0.0);
         // 170 RGB pixels fit in 510 channels; the 171st starts universe 4.
         assert_eq!(&u[&3][0..3], &[255, 128, 0]);
         assert_eq!(&u[&3][510..512], &[0, 0]);
@@ -294,5 +420,24 @@ mod tests {
         let mut px = [0u8; 4];
         PixelOrder::Grbw.write([200, 100, 50], &mut px);
         assert_eq!(px, [50, 150, 0, 50]);
+    }
+
+    #[test]
+    fn moving_head_writes_pan_tilt_dimmer_and_colour() {
+        let f = Fixture { shape: FixtureShape::MovingHead, head: HeadLayout::ShutterRgbw10, universe: 1, channel: 11, pan: 0.5, tilt: 0.25, dimmer: 0.5, ..Default::default() };
+        assert_eq!(f.pixel_count(), 1);
+        assert_eq!(f.sample_points().len(), 1);
+        let mut u = BTreeMap::new();
+        f.write(&[[200, 100, 50, 255]], &mut u, 0.0);
+        let d = &u[&1][10..20];
+        // pan 0.5 → 32768 (0x8000), tilt 0.25 → 16384 (0x4000), shutter open, dimmer 128, RGBW.
+        assert_eq!(d, &[0x80, 0x00, 0x40, 0x00, 255, 128, 150, 50, 0, 50]);
+        assert_eq!(f.next_free(), (1, 21));
+        // A circle moves the head around its centre over `motion_beats`.
+        let c = Fixture { motion: HeadMotion::Circle, motion_size: 0.4, motion_beats: 4.0, ..f.clone() };
+        let (p0, _) = c.head_position(0.0);
+        let (_, t1) = c.head_position(1.0);
+        let (p2, _) = c.head_position(2.0);
+        assert!((p0 - 0.7).abs() < 1e-5 && (t1 - 0.45).abs() < 1e-5 && (p2 - 0.3).abs() < 1e-5, "{p0} {t1} {p2}");
     }
 }

@@ -67,7 +67,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Soft-edge blending, blend curve, per-output and per-slice colour | all | ✅ |
 | Edit on the projector output, alignment grid, identify | all | ✅ |
 | Venue presets | — | ✅ |
-| DMX / Art-Net / sACN pixel mapping (LED strips and matrices) | MadMapper, Resolume Arena | ✅ (fixture profiles for moving heads ⬜) |
+| DMX / Art-Net / sACN pixel mapping (LED strips and matrices) | MadMapper, Resolume Arena | ✅ + moving heads (8/9/10 ch, beat motions) |
 | Curved mask edges (smooth curve through the points) | MadMapper, Resolume | ✅ |
 | Ellipse / triangle / line slices (follow perspective and mesh) | MadMapper | ✅ |
 | Slice input from another output | Resolume | ✅ |
