@@ -61,7 +61,7 @@ app that's much smaller and lighter on the CPU.
 8. **Accounts & sync**: projects, layouts, presets, shaders, control surfaces to your account
 9. **ISF gaps**: ~~multi-pass / feedback / >16 params / imported images / 12 buffers / _imgRect / MadNoise / MadSDF~~ ✔
    (391/406 on this Mac: 324/327 ISF, 39/42 MadMapper Materials, 19/23 Surface FX, 9/14 generators; the MadMapper includes
-   are clean-room). Next: a curve editor (curve inputs load with their default); MadMapper 3D particle generators. ISF collection 327/327 ✔ (vertex stages 2026-10-17)
+   are clean-room). Curve inputs: five editable heights ✔. Next: MadMapper 3D particle generators. ISF collection 327/327 ✔ (vertex stages 2026-10-17)
 9b. ~~Export show~~ done (File → Export Show). ~~Locked "player only" mode~~ ✔ (View › Lock Controls, password,
     exports can open locked). Next: Windows/Linux players, notarized exports
 9c. **Devices panel**: every connected phone/remote, viewer, audio sender, MIDI device and OSC sender, with

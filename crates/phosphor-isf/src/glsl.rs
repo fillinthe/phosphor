@@ -380,8 +380,7 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
     // Multi-pass buffers: textures named like their TARGET, so IMG_PIXEL(name, …) samples them.
     let mut seen: Vec<&str> = Vec::new();
     let imported = header.imported.iter().map(|(n, _)| n.as_str());
-    let curves = inputs.iter().filter(|i| matches!(i.kind, IsfInputKind::Curve { .. })).map(|i| i.name.as_str());
-    for t in header.pass_specs.iter().filter_map(|p| p.target.as_deref()).chain(imported).chain(curves) {
+    for t in header.pass_specs.iter().filter_map(|p| p.target.as_deref()).chain(imported) {
         if !seen.contains(&t) && seen.len() < crate::MAX_BUFFERS {
             s.push_str(&format!("layout(binding={}) uniform texture2D {t};\n", crate::BUFFER_BINDING + seen.len()));
             s.push_str(&format!("#define _{t}_imgRect vec4(0.0, 0.0, vec2(textureSize({t}, 0)))\n"));
@@ -397,6 +396,22 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
             (IsfInputKind::Bool { .. } | IsfInputKind::Event, Some(o), _) => ("bool", format!("({} != 0.0)", param_expr(o, 1))),
             (IsfInputKind::Long { .. } | IsfInputKind::Int { .. }, Some(o), _) => ("int", format!("int({})", param_expr(o, 1))),
             (IsfInputKind::Color { .. }, Some(o), _) => ("vec4", param_expr(o, 4)),
+            (IsfInputKind::Curve { .. }, Some(o), _) => {
+                // A smooth (Catmull-Rom) curve through the editable heights, read like the curve picture was.
+                let ys: Vec<String> = (0..crate::CURVE_POINTS).map(|k| param_expr(o + k, 1)).collect();
+                s.push_str(&format!(
+                    "vec4 phosphor_curve_{name}(vec2 uv) {{ float ys[{n}] = float[{n}]({ys}); float x = clamp(uv.x, 0.0, 1.0) * {last}.0; int i = int(min(floor(x), {last1}.0)); float t = x - float(i); \
+float p1 = ys[i]; float p2 = ys[i + 1]; float p0 = (i > 0) ? ys[max(i - 1, 0)] : 2.0 * p1 - p2; float p3 = (i + 2 <= {last}) ? ys[min(i + 2, {last})] : 2.0 * p2 - p1; \
+float y = 0.5 * (2.0 * p1 + (p2 - p0) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t * t * t); \
+y = clamp(y, 0.0, 1.0); return vec4(y, y, y, 1.0); }}\n",
+                    name = input.name,
+                    n = crate::CURVE_POINTS,
+                    last = crate::CURVE_POINTS - 1,
+                    last1 = crate::CURVE_POINTS - 2,
+                    ys = ys.join(", ")
+                ));
+                continue;
+            }
             (IsfInputKind::Point2D { .. }, Some(o), _) if input.pixels => ("vec2", format!("({} * phosphor_u.resolution)", param_expr(o, 2))),
             (IsfInputKind::Point2D { .. }, Some(o), _) => ("vec2", param_expr(o, 2)),
             (IsfInputKind::Image | IsfInputKind::Audio { .. }, _, Some(t)) => {
@@ -725,4 +740,55 @@ void isf_vertShaderInit() {\n\
 /// varying the fragment stage expects (flipped: Phosphor's uv has y down).
 pub(crate) fn vertex_epilogue() -> &'static str {
     "void main() {\n    phosphor_init_inputs();\n    phosphor_vs_user();\n    phosphor_uv = vec2(isf_FragNormCoord.x, 1.0 - isf_FragNormCoord.y);\n}\n"
+}
+
+/// `IMG_NORM_PIXEL(name, uv)` (also `texture2D(name, uv)` / `texture(name, uv)`) → `phosphor_curve_name(uv)`.
+pub(crate) fn call_curve(body: &str, name: &str) -> String {
+    let b = body.as_bytes();
+    let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+    let skip_ws = |mut k: usize| {
+        while k < b.len() && (b[k] as char).is_whitespace() {
+            k += 1;
+        }
+        k
+    };
+    let mut out = String::with_capacity(body.len());
+    let mut i = 0;
+    'scan: while i < b.len() {
+        for mac in ["IMG_NORM_PIXEL", "texture2D", "texture"] {
+            if !body[i..].starts_with(mac) || (i > 0 && ident(b[i - 1])) {
+                continue;
+            }
+            // mac ( ws name ws ,
+            let mut k = skip_ws(i + mac.len());
+            if b.get(k) != Some(&b'(') {
+                continue;
+            }
+            k = skip_ws(k + 1);
+            if !body[k..].starts_with(name) || b.get(k + name.len()).is_some_and(|c| ident(*c)) {
+                continue;
+            }
+            k = skip_ws(k + name.len());
+            if b.get(k) != Some(&b',') {
+                continue;
+            }
+            out.push_str(&format!("phosphor_curve_{name}("));
+            i = k + 1;
+            continue 'scan;
+        }
+        let ch = body[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
+#[cfg(test)]
+mod curve_call_tests {
+    #[test]
+    fn curve_sampling_becomes_a_call() {
+        let b = "col.r = IMG_NORM_PIXEL(mat_curve1,vec2(col.r,0.5)).r; x = IMG_NORM_PIXEL( mat_curve12 , uv); y = texture2D(mat_curve1, p);";
+        let out = super::call_curve(b, "mat_curve1");
+        assert_eq!(out, "col.r = phosphor_curve_mat_curve1(vec2(col.r,0.5)).r; x = IMG_NORM_PIXEL( mat_curve12 , uv); y = phosphor_curve_mat_curve1( p);");
+    }
 }
