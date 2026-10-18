@@ -109,6 +109,8 @@ pub struct Modulation {
     pub max: f32,
     pub invert: bool,
     pub steps: [f32; 8],
+    /// Follows a shared modulator (its id; 0 = its own signal above).
+    pub link: u64,
 }
 
 impl Default for Modulation {
@@ -123,6 +125,7 @@ impl Default for Modulation {
             max: 1.0,
             invert: false,
             steps: [1.0, 0.0, 0.5, 0.0, 1.0, 0.25, 0.75, 0.0],
+            link: 0,
         }
     }
 }

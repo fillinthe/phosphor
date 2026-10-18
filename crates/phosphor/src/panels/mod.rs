@@ -25,6 +25,7 @@ mod groups;
 mod inspector;
 mod layer_windows;
 mod layers;
+mod modulators;
 mod leds;
 mod mapping;
 mod media;
@@ -72,6 +73,7 @@ pub enum Tab {
     Library,
     Presets,
     Audio,
+    Modulators,
     Control,
     Mapping,
     Stream,
@@ -91,7 +93,7 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: [Tab; 22] = [
+    pub const ALL: [Tab; 23] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -100,6 +102,7 @@ impl Tab {
         Tab::Library,
         Tab::Presets,
         Tab::Audio,
+        Tab::Modulators,
         Tab::Control,
         Tab::Mapping,
         Tab::Stream,
@@ -130,6 +133,7 @@ impl Tab {
             Tab::Library => "Effects",
             Tab::Presets => "Presets",
             Tab::Audio => "Audio",
+            Tab::Modulators => "Modulators",
             Tab::Control => "MIDI / OSC",
             Tab::Mapping => "Mapping",
             Tab::Stream => "Stream & Record",
@@ -180,6 +184,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::Library => crate::explorer::explorer(ui, self.st),
             Tab::Presets => presets(ui, self.st),
             Tab::Audio => audio(ui, self.st),
+            Tab::Modulators => modulators::modulators(ui, self.st),
             Tab::Control => control(ui, self.st),
             Tab::Mapping => mapping(ui, self.st),
             Tab::Stream => stream(ui, self.st),

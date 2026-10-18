@@ -237,7 +237,6 @@ impl PhosphorApp {
                         "Default" => (icon::SQUARES_FOUR, "Main", "Everything at once"),
                         "Performance" => (icon::PLAY_CIRCLE, "Perform", "Big preview for playing a show"),
                         "Mapping" => (icon::PROJECTOR_SCREEN, "Studio", "Projection mapping studio"),
-                        "VDMX" => (icon::COLUMNS, "VDMX", "Every layer in its own window, media bin underneath"),
                         other => (icon::LAYOUT, other, ""),
                     };
                     if ui.selectable_label(self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {
