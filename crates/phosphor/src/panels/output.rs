@@ -119,7 +119,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     if st.comp.outputs.iter().any(|o| !o.screen.is_empty()) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         {
             let mut at_login = crate::login_item::is_enabled();
             if ui.checkbox(&mut at_login, "Start Phosphor when this Mac logs in (installations)").on_hover_text("A LaunchAgent opens Phosphor at login; with the option below, the show comes up on its screens by itself").changed() {

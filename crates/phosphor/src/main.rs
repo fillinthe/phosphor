@@ -35,7 +35,7 @@ mod remote;
 mod screens;
 mod stats;
 mod support;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", windows))]
 mod login_item;
 mod stream;
 #[cfg(not(target_arch = "wasm32"))]
