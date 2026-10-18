@@ -8,7 +8,12 @@ TAG="v$VER"
 if gh release view "$TAG" -R fillinthe/phosphor >/dev/null 2>&1; then
   echo "Release $TAG already exists. Bump the version in crates/phosphor/Cargo.toml first."; exit 1
 fi
-scripts/bundle-mac.sh
+# Don't swap /Applications/Phosphor.app under a Phosphor that's running from it.
+if pgrep -f "/Applications/Phosphor.app/Contents/MacOS" >/dev/null 2>&1; then
+  scripts/bundle-mac.sh --no-install
+else
+  scripts/bundle-mac.sh
+fi
 rm -f dist/Phosphor-mac.zip
 (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
 NOTES=${1:-}
@@ -23,5 +28,15 @@ if [ -z "$NOTES" ]; then
 fi
 git tag -f "$TAG"
 git push -f origin "$TAG"
-gh release create "$TAG" dist/Phosphor-mac.zip -R fillinthe/phosphor --title "Phosphor $VER" --notes-file "$NOTES"
+ASSETS="dist/Phosphor-mac.zip"
+# The Windows build of this very commit, if the Windows workflow has built it (Actions > Windows build).
+WIN_RUN=$(gh run list -R fillinthe/phosphor --workflow windows.yml --commit "$(git rev-parse HEAD)" --status success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+if [ -n "$WIN_RUN" ]; then
+  rm -rf dist/win && mkdir -p dist/win
+  if gh run download "$WIN_RUN" -R fillinthe/phosphor -n Phosphor-windows -D dist/win; then
+    ASSETS="$ASSETS dist/win/Phosphor-windows.zip"
+    echo "Adding the Windows build from run $WIN_RUN"
+  fi
+fi
+gh release create "$TAG" $ASSETS -R fillinthe/phosphor --title "Phosphor $VER" --notes-file "$NOTES"
 echo "Published $TAG. Running apps see it within a day (Help › Check for Updates… right away)."
