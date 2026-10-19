@@ -15,13 +15,22 @@ Website: [phosphorfx.com](https://phosphorfx.com/) · [free VJ software for Mac]
 coming from [Resolume](https://phosphorfx.com/resolume-alternative/), [VDMX](https://phosphorfx.com/vdmx-alternative/) or
 [MadMapper](https://phosphorfx.com/madmapper-alternative/) · [feature comparison](https://phosphorfx.com/compare/)
 
-## Install (macOS)
+## Install
+
+### macOS (Apple silicon)
 
 Download `Phosphor-mac.zip` from the [latest release](https://github.com/fillinthe/phosphor/releases/latest),
 unzip, drag Phosphor to Applications. **First launch:** macOS says it can't verify Phosphor (the app isn't
 notarized). Click Done, open System Settings → Privacy & Security, scroll down and click **Open Anyway**; that's
 once. (Terminal alternative: `xattr -dr com.apple.quarantine /Applications/Phosphor.app`.) After that Phosphor
 updates itself (Help › Check for Updates…).
+
+### Windows 10/11 (preview)
+
+Download `Phosphor-windows.zip` from the same release, unzip anywhere and run Phosphor.exe. Windows warns once
+because the app isn't signed: **More info**, **Run anyway**. Not on Windows yet: Spout, NDI, Export Show.
+
+What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 From source:
 

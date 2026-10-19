@@ -8,6 +8,7 @@ TAG="v$VER"
 if gh release view "$TAG" -R fillinthe/phosphor >/dev/null 2>&1; then
   echo "Release $TAG already exists. Bump the version in crates/phosphor/Cargo.toml first."; exit 1
 fi
+scripts/release-notes.sh "$VER" >/dev/null || { echo "Add a '## $VER (date)' section to CHANGELOG.md first."; exit 1; }
 # Don't swap /Applications/Phosphor.app under a Phosphor that's running from it.
 if pgrep -f "/Applications/Phosphor.app/Contents/MacOS" >/dev/null 2>&1; then
   scripts/bundle-mac.sh --no-install
@@ -18,13 +19,9 @@ rm -f dist/Phosphor-mac.zip
 (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
 NOTES=${1:-}
 if [ -z "$NOTES" ]; then
-  # The newest section of docs/NOTES.md.
+  # This version's CHANGELOG.md section plus install steps (add the section before releasing).
   NOTES=$(mktemp)
-  {
-    echo "**Install:** unzip, drag Phosphor to Applications. First launch: macOS says it can't verify Phosphor (not notarized yet): click Done, then System Settings → Privacy & Security → scroll down → **Open Anyway**, once. Terminal alternative: \`xattr -dr com.apple.quarantine /Applications/Phosphor.app\`. Phosphor updates itself after that (Help › Check for Updates…)."
-    echo
-    awk '/^## /{n++} n==1' docs/NOTES.md
-  } > "$NOTES"
+  scripts/release-notes.sh "$VER" > "$NOTES"
 fi
 git tag -f "$TAG"
 git push -f origin "$TAG"
