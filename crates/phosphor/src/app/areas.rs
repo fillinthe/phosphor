@@ -9,14 +9,14 @@ use super::PhosphorApp;
 use crate::panels::{self, Tab};
 
 /// Which tabs each area's stage shows under its main view (the first is the default).
-const SHOW_BOTTOM: &[Tab] = &[Tab::Clips, Tab::Mixer, Tab::Cues, Tab::ShaderEditor];
+const SHOW_BOTTOM: &[Tab] = &[Tab::Clips, Tab::Layers, Tab::Mixer, Tab::Cues, Tab::ShaderEditor];
 const OUTPUTS_BOTTOM: &[Tab] = &[Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices];
 const LIBRARY: &[Tab] = &[Tab::Media, Tab::Library, Tab::Presets];
 
 /// Where a panel lives in the areas: (area, sub-tab group it belongs to).
 pub(crate) fn area_of(tab: Tab) -> Option<usize> {
     match tab {
-        Tab::Preview | Tab::Layers | Tab::Inspector => Some(0),
+        Tab::Preview | Tab::Inspector => Some(0),
         t if SHOW_BOTTOM.contains(&t) => Some(0),
         Tab::Studio | Tab::Mapping => Some(1),
         t if OUTPUTS_BOTTOM.contains(&t) => Some(1),
@@ -38,7 +38,8 @@ pub(crate) struct AreaTabs {
 
 impl Default for AreaTabs {
     fn default() -> Self {
-        Self { library: Tab::Media, show_bottom: Tab::Clips, outputs_bottom: Tab::Output, show_library: true, show_inspector: true }
+        // The Library is a drawer (closed until you open it); the Inspector shows while something is selected.
+        Self { library: Tab::Media, show_bottom: Tab::Clips, outputs_bottom: Tab::Output, show_library: false, show_inspector: true }
     }
 }
 
@@ -66,45 +67,75 @@ fn heading(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text.to_uppercase()).size(11.0).strong().color(Color32::from_gray(140)));
 }
 
+/// What the stage asked for this frame.
+#[derive(Default)]
+struct StageAsk {
+    /// Back to Show (the Done button of Outputs / Control).
+    done: bool,
+}
+
+/// A mode's title bar: "Done" back to Show, and what this mode is for.
+fn mode_bar(ui: &mut egui::Ui, title: &str, about: &str, ask: &mut StageAsk) {
+    ui.horizontal(|ui| {
+        if ui.button(RichText::new(format!("{} Done", egui_phosphor::regular::ARROW_LEFT)).strong()).on_hover_text("Back to the show (⌘1)").clicked() {
+            ask.done = true;
+        }
+        ui.label(RichText::new(title).strong().size(14.0));
+        crate::ui::hint(ui, about);
+    });
+    ui.add_space(4.0);
+}
+
 /// The middle of an area.
-fn stage(ui: &mut egui::Ui, area: usize, both: &mut (&mut crate::app::State, &mut AreaTabs)) {
+fn stage(ui: &mut egui::Ui, area: usize, both: &mut (&mut crate::app::State, &mut AreaTabs), ask: &mut StageAsk) {
     match area {
-        0 => crate::ui::split_vertical(
-            ui,
-            "show_bottom",
-            0.4,
-            140.0,
-            both,
-            |ui, (st, _)| {
-                crate::ui::split_horizontal(ui, "show_layers", 0.3, 310.0, *st, |ui, st| panels::draw_tab(ui, st, Tab::Preview), |ui, st| {
-                    heading(ui, "Layers");
-                    panels::draw_tab(ui, st, Tab::Layers);
-                })
-            },
-            |ui, (st, tabs)| {
-                sub_tabs(ui, &mut tabs.show_bottom, SHOW_BOTTOM);
-                panels::draw_tab(ui, st, tabs.show_bottom);
-            },
-        ),
-        1 => crate::ui::split_vertical(ui, "outputs_bottom", 0.32, 120.0, both, |ui, (st, _)| panels::studio_stage(ui, st), |ui, (st, tabs)| {
-            sub_tabs(ui, &mut tabs.outputs_bottom, OUTPUTS_BOTTOM);
-            scrolled(ui, "outputs_bottom", |ui| panels::draw_tab(ui, st, tabs.outputs_bottom));
-        }),
-        _ => crate::ui::split_horizontal(
-            ui,
-            "control",
-            0.58,
-            320.0,
-            &mut *both.0,
-            |ui, st| {
-                heading(ui, "MIDI / OSC / TouchOSC");
-                panels::draw_tab(ui, st, Tab::Control);
-            },
-            |ui, st| {
-                heading(ui, "Control Surface");
-                panels::draw_tab(ui, st, Tab::Surface);
-            },
-        ),
+        0 => {
+            // Show: one screen. A slim toolbar, the preview, then the clip grid whose rows are the layers.
+            ui.horizontal(|ui| {
+                let tabs = &mut *both.1;
+                ui.toggle_value(&mut tabs.show_library, format!("{} Library", egui_phosphor::regular::BOOKS)).on_hover_text("Media, effects and presets: drag them onto layers and clips");
+                if ui.button(format!("{} Layer", egui_phosphor::regular::PLUS)).on_hover_text("Add a layer (a new clip row)").clicked() {
+                    both.0.add_layer();
+                }
+            });
+            crate::ui::split_vertical(
+                ui,
+                "show_bottom",
+                0.5,
+                160.0,
+                both,
+                |ui, (st, _)| panels::draw_tab(ui, st, Tab::Preview),
+                |ui, (st, tabs)| {
+                    sub_tabs(ui, &mut tabs.show_bottom, SHOW_BOTTOM);
+                    panels::draw_tab(ui, st, tabs.show_bottom);
+                },
+            )
+        }
+        1 => {
+            mode_bar(ui, "Outputs", "every projector, screen and feed; mapping; streaming; inputs", ask);
+            crate::ui::split_vertical(ui, "outputs_bottom", 0.32, 120.0, both, |ui, (st, _)| panels::studio_stage(ui, st), |ui, (st, tabs)| {
+                sub_tabs(ui, &mut tabs.outputs_bottom, OUTPUTS_BOTTOM);
+                scrolled(ui, "outputs_bottom", |ui| panels::draw_tab(ui, st, tabs.outputs_bottom));
+            })
+        }
+        _ => {
+            mode_bar(ui, "Control", "MIDI, OSC, TouchOSC, keys, your Control Surface", ask);
+            crate::ui::split_horizontal(
+                ui,
+                "control",
+                0.58,
+                320.0,
+                &mut *both.0,
+                |ui, st| {
+                    heading(ui, "MIDI / OSC / TouchOSC");
+                    panels::draw_tab(ui, st, Tab::Control);
+                },
+                |ui, st| {
+                    heading(ui, "Control Surface");
+                    panels::draw_tab(ui, st, Tab::Surface);
+                },
+            )
+        }
     }
 }
 
@@ -115,10 +146,13 @@ impl PhosphorApp {
         let tabs = &mut self.area_tabs;
         let st = &mut self.state;
         // Side columns: their width changes only when you drag their edge, capped at about a quarter of the window
-        // each, so the stage keeps its room; their content can't push them wider.
+        // each, so the stage keeps its room; their content can't push them wider. The Library is a drawer in Show;
+        // the Inspector shows in Show while something is selected (× closes it).
         let w = ui.available_width();
-        let left = tabs.show_library.then_some((250.0f32.min(w * 0.22), 170.0, (w * 0.22).max(180.0)));
-        let right = tabs.show_inspector.then_some((330.0f32.min(w * 0.26), 220.0, (w * 0.26).max(220.0)));
+        let selected = st.selected.is_some();
+        let left = (area == 0 && tabs.show_library).then_some((250.0f32.min(w * 0.22), 170.0, (w * 0.22).max(180.0)));
+        let right = (tabs.show_inspector && (area != 0 || selected)).then_some((330.0f32.min(w * 0.26), 220.0, (w * 0.26).max(220.0)));
+        let mut ask = StageAsk::default();
         let mut both = (st, tabs);
         crate::ui::columns(
             ui,
@@ -127,16 +161,32 @@ impl PhosphorApp {
             right,
             &mut both,
             |ui, (st, tabs)| {
-                heading(ui, "Library");
+                ui.horizontal(|ui| {
+                    heading(ui, "Library");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button(egui_phosphor::regular::X).on_hover_text("Close the Library").clicked() {
+                            tabs.show_library = false;
+                        }
+                    });
+                });
                 sub_tabs(ui, &mut tabs.library, LIBRARY);
                 panels::draw_tab(ui, st, tabs.library);
             },
-            |ui, both| stage(ui, area, both),
+            |ui, both| stage(ui, area, both, &mut ask),
             |ui, (st, _)| {
-                heading(ui, match area {
-                    1 => "Output",
-                    2 => "Modulators",
-                    _ => "Inspector",
+                ui.horizontal(|ui| {
+                    heading(ui, match area {
+                        1 => "Output",
+                        2 => "Modulators",
+                        _ => "Inspector",
+                    });
+                    if area == 0 {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button(egui_phosphor::regular::X).on_hover_text("Close (click a layer to edit it again)").clicked() {
+                                st.selected = None;
+                            }
+                        });
+                    }
                 });
                 match area {
                     1 => scrolled(ui, "area_inspector_out", |ui| panels::studio_properties(ui, st)),
@@ -145,6 +195,9 @@ impl PhosphorApp {
                 }
             },
         );
+        if ask.done {
+            self.switch_workspace(0);
+        }
     }
 
     /// Something asked for a panel: in the areas, go to the area that has it (choosing its sub-tab), or open it
@@ -159,7 +212,12 @@ impl PhosphorApp {
                     self.area_tabs.outputs_bottom = tab;
                 }
             }
-            None if LIBRARY.contains(&tab) => self.area_tabs.library = tab,
+            None if LIBRARY.contains(&tab) => {
+                // The Library is a drawer in Show: open it there.
+                self.workspace = Some(0);
+                self.area_tabs.library = tab;
+                self.area_tabs.show_library = true;
+            }
             None => self.detach(tab),
         }
     }

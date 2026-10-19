@@ -160,13 +160,13 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut fill_row: Option<u64> = None;
     {
         let drag_at = crate::app::file_drag_point(ui.ctx());
-        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, .. } = st;
+        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, .. } = st;
         let ctx = ui.ctx().clone();
         let thumb_h = (crate::thumbs::THUMB_W as f32 / aspect).max(1.0) as u32;
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Column headers trigger whole columns.
             ui.horizontal(|ui| {
-                ui.allocate_exact_size(egui::vec2(110.0, 22.0), Sense::hover());
+                ui.allocate_exact_size(egui::vec2(ROW_HEADER_W, 22.0), Sense::hover());
                 for c in 0..cols {
                     let keyed = c / CLIP_PAGE_SIZE == bank;
                     let text = RichText::new(format!("{} {}", icon::PLAY, c + 1));
@@ -184,7 +184,8 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             for idx in (0..n).rev() {
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
-                    let (fill, beat_all) = row_header(ui, layer, egui::vec2(110.0, cell.y));
+                    let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
+                    let (fill, beat_all) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, cell.y));
                     if fill {
                         fill_row = Some(layer.id);
                     }
@@ -392,14 +393,42 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
 /// The layer's name at the start of its clip row; click for autopilot (plays the next / a random clip by itself).
 /// The layer name at the start of a clip row: click for autopilot and "fill with variations" (returns true for that).
 /// The layer's name at the start of its clip row, with its menu. Returns (fill the row, match every clip's beat).
-fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: egui::Vec2) -> (bool, bool) {
+/// Width of the layer strip at the start of each clip row.
+const ROW_HEADER_W: f32 = 176.0;
+
+/// The start of a clip row is the layer itself: its live picture (click = select it, the Inspector opens), its name
+/// (menu: autopilot, fill, match the beat), ON and opacity. Returns (fill the row, match every clip's beat).
+fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool) {
     use phosphor_engine::Autopilot;
     let mut fill = false;
     let mut beat_all = false;
+    let is_selected = *selected == Some(layer.id);
     ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
         ui.set_min_size(size);
-        ui.add_space((size.y - 40.0).max(0.0) / 2.0);
-        let name: String = layer.name.chars().take(14).collect();
+        ui.set_max_width(size.x);
+        // Live picture: click to select (and edit in the Inspector).
+        let pic_h = (size.y - 34.0).clamp(24.0, 60.0);
+        let (pic, r) = ui.allocate_exact_size(egui::vec2(size.x - 6.0, pic_h), Sense::click());
+        let p = ui.painter();
+        p.rect_filled(pic, 4.0, Color32::BLACK);
+        if let Some(t) = thumb.filter(|_| layer.enabled) {
+            paint_texture(p, t, fit_rect(pic, 16.0 / 9.0));
+        }
+        let border = if is_selected { accent() } else if r.hovered() { ui.visuals().widgets.hovered.bg_stroke.color } else { ui.visuals().widgets.noninteractive.bg_stroke.color };
+        p.rect_stroke(pic, 4.0, Stroke::new(if is_selected { 2.0 } else { 1.0 }, border), StrokeKind::Inside);
+        if r.on_hover_text("Click to edit this layer (Inspector)").clicked() {
+            *selected = Some(layer.id);
+        }
+        // ON + opacity under the picture.
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.toggle_value(&mut layer.enabled, RichText::new("ON").small()).on_hover_text("Layer on / off");
+            ui.spacing_mut().slider_width = (size.x - 52.0).max(40.0);
+            let o = guarded!(ui, layer.opacity, egui::Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
+            mapped_badge(ui, &o, &ControlTarget::LayerOpacity(layer.id));
+            value_bubble(ui, &o, format!("{:.0}%", layer.opacity * 100.0));
+        });
+        let name: String = layer.name.chars().take(20).collect();
         ui.menu_button(RichText::new(name).color(ui.visuals().text_color()), |ui| {
             ui.set_min_width(220.0);
             let q = crate::app::Quick::Fill;

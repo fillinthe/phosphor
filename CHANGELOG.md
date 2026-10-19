@@ -4,6 +4,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.57 (2026-10-19)
+- **Simpler Show screen:** a big preview with the clip grid under it, and each clip row starts with its layer:
+  live picture, ON and opacity. Click a layer's picture to edit it in the Inspector, which only shows while
+  something is selected (× closes it). The Layers list is still one click away, next to Clips.
+- **The Library is a drawer:** open it with the Library button when you need media, effects or presets.
+- **Outputs and Control are full-screen modes** with a *Done* button back to the show.
+- The Library's sort, group-by-folder and tile size are in one *View* menu (nothing cropped).
+- **Custom** still lets you arrange every panel yourself.
+
 ## 0.2.56 (2026-10-19)
 - **Interface brightness:** the sun button in the top bar sets how dark or light Phosphor looks, from *Darkest*
   (for dark rooms and shows) through *Dark* (the usual) and *Dim* to *Soft light* and *Light* (daylight), or

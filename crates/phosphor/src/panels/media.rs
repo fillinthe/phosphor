@@ -72,19 +72,22 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 ui.spinner();
             }
         }
-        ui.toggle_value(&mut st.media_view.by_folder, icon::FOLDERS).on_hover_text("Group by folder");
-        let sort_name = match st.media_view.sort {
-            MediaSort::Name => "Name",
-            MediaSort::Newest => "Newest",
-            MediaSort::Type => "Type",
-        };
-        ComboBox::from_id_salt("media_sort").width(70.0).selected_text(sort_name).show_ui(ui, |ui| {
-            ui.selectable_value(&mut st.media_view.sort, MediaSort::Name, "Name");
-            ui.selectable_value(&mut st.media_view.sort, MediaSort::Newest, "Newest");
-            ui.selectable_value(&mut st.media_view.sort, MediaSort::Type, "Type");
-        });
-        ui.spacing_mut().slider_width = 70.0;
-        guarded!(ui, st.media_view.tile, Slider::new(&mut st.media_view.tile, 72.0..=240.0).show_value(false)).on_hover_text("Thumbnail size");
+        // Sorting, grouping and tile size in one menu, so this row fits any column.
+        ui.menu_button(label(icon::SLIDERS_HORIZONTAL, "View"), |ui| {
+            ui.set_min_width(200.0);
+            ui.label(RichText::new("Sort by").strong());
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut st.media_view.sort, MediaSort::Name, "Name");
+                ui.selectable_value(&mut st.media_view.sort, MediaSort::Newest, "Newest");
+                ui.selectable_value(&mut st.media_view.sort, MediaSort::Type, "Type");
+            });
+            ui.checkbox(&mut st.media_view.by_folder, "Group by folder");
+            ui.label(RichText::new("Tile size").strong());
+            ui.spacing_mut().slider_width = 160.0;
+            guarded!(ui, st.media_view.tile, Slider::new(&mut st.media_view.tile, 72.0..=240.0).show_value(false));
+        })
+        .response
+        .on_hover_text("Sort, group by folder, tile size");
     });
     // Row 3: filters and collections.
     let mut acts: Vec<MediaAct> = Vec::new();
