@@ -80,7 +80,7 @@ pub struct MediaManager {
     #[cfg(not(target_arch = "wasm32"))]
     pub pending_seek: HashMap<u64, f64>,
     /// NDI In receivers per layer.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     ndi: HashMap<u64, crate::ndi::NdiReceiver>,
     /// Syphon layers whose source isn't there yet (the other app may start later): next retry time.
     #[cfg(target_os = "macos")]
@@ -176,7 +176,7 @@ impl MediaManager {
                 self.syphon.remove(&layer.id);
                 #[cfg(target_os = "macos")]
                 self.syphon_waiting.remove(&layer.id);
-                #[cfg(target_os = "macos")]
+                #[cfg(any(target_os = "macos", windows))]
                 self.ndi.remove(&layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.players.remove(&layer.id);
@@ -236,7 +236,7 @@ impl MediaManager {
                         }
                     }
                 }
-                #[cfg(target_os = "macos")]
+                #[cfg(any(target_os = "macos", windows))]
                 SourceSpec::Live { format, url, .. } if format == "ndi" => match crate::ndi::NdiReceiver::connect(url) {
                     Ok(r) => {
                         self.ndi.insert(layer.id, r);
@@ -271,7 +271,7 @@ impl MediaManager {
         self.held.retain(|(id, _), _| live.contains(id));
         #[cfg(target_os = "macos")]
         self.syphon.retain(|id, _| live.contains(id));
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         self.ndi.retain(|id, _| live.contains(id));
         #[cfg(target_os = "macos")]
         self.syphon_waiting.retain(|id, _| live.contains(id));
@@ -344,7 +344,7 @@ impl MediaManager {
                 engine.set_layer_texture(*id, tex);
             }
         }
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         for (id, r) in &self.ndi {
             if let Some((w, h, rgba)) = r.take()
                 && comp.layers.iter().any(|l| l.id == *id && l.enabled)

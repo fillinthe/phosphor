@@ -174,7 +174,7 @@ impl PhosphorApp {
                 export: Default::default(),
                 #[cfg(target_os = "macos")]
                 syphon: Default::default(),
-                #[cfg(target_os = "macos")]
+                #[cfg(any(target_os = "macos", windows))]
                 ndi: Default::default(),
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
@@ -274,7 +274,7 @@ impl PhosphorApp {
             app.state.require_password = true;
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.ndi) {
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", windows))]
             crate::ndi::sources();
             app.state.comp.ndi.enabled = true;
         }

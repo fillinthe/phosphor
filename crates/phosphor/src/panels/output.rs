@@ -131,7 +131,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     }
     #[cfg(target_os = "macos")]
     syphon_row(ui, st);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     ndi_row(ui, st);
     let canvas = (st.comp.width, st.comp.height);
     let mut remove = None;
@@ -257,12 +257,12 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// Composition → NDI toggle, name, frame rate and status.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", windows))]
 pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         let Some(lib) = crate::ndi::Ndi::library() else {
             ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
-            hint(ui, "needs NDI Tools for Mac (then restart Phosphor, not the Mac)");
+            hint(ui, if cfg!(windows) { "needs NDI Tools or the NDI Runtime (then restart Phosphor)" } else { "needs NDI Tools for Mac (then restart Phosphor, not the Mac)" });
             if ui.small_button("Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab("https://ndi.video/tools/"));
             }
