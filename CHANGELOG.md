@@ -9,7 +9,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   macOS 26, so on older Macs Phosphor wouldn't start. They're now built for macOS 14 and later, and the
   download is smaller (52 MB instead of 66).
 - **Spout on Windows:** turn on Spout in Output & Stats and pick "Phosphor" in Resolume, TouchDesigner, OBS
-  (Spout2 plugin), MadMapper or any Spout app. It's the same switch as Syphon on the Mac, so projects carry over.
+  (Spout2 plugin), MadMapper or any Spout app. Off until you turn it on (it copies every frame while on).
+- Projects record their file format; opening one saved by a newer Phosphor warns before you save over it.
 - **Export Show on Windows:** packs the project, its media, shaders and mappings into a folder with its own .exe
   that runs on another PC without installing Phosphor.
 

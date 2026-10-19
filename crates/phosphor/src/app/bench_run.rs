@@ -113,7 +113,7 @@ impl PhosphorApp {
         }
         println!("CONTROL {}", self.state.control.osc_status);
         #[cfg(windows)]
-        println!("SPOUT on={} running={} name={:?} error={:?}", self.state.comp.syphon, self.state.spout.running(), self.state.spout.name(), self.state.spout.error);
+        println!("SPOUT on={} running={} name={:?} error={:?}", self.state.comp.spout, self.state.spout.running(), self.state.spout.name(), self.state.spout.error);
         #[cfg(any(target_os = "macos", windows))]
         if run.cfg.ndi {
             println!("NDI_SOURCES {:?}", crate::ndi::sources());

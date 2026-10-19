@@ -328,8 +328,12 @@ impl State {
     pub fn open_project_file(&mut self, path: &str) {
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
             Ok(comp) => {
+                let newer = comp.made_by_newer();
                 self.load_composition(comp);
                 self.set_project_path(path);
+                if newer {
+                    self.notice = Some("This project was saved by a newer Phosphor: some of its settings may be missing here. Update Phosphor (Help > Check for Updates) before saving over it.".into());
+                }
             }
             Err(e) => {
                 self.notice = Some(format!("Open failed: {e}"));

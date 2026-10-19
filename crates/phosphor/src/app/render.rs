@@ -180,7 +180,7 @@ impl PhosphorApp {
         // Spout (Windows): the composition through the same capture, at the render rate while it's on.
         #[cfg(windows)]
         let spout_due = {
-            spout.sync(comp.syphon, "Phosphor");
+            spout.sync(comp.spout, "Phosphor");
             spout.frame_due(now, 60)
         };
         #[cfg(not(windows))]
