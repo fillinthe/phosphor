@@ -1,6 +1,6 @@
-//! Exported shows: a copy of Phosphor.app that carries a project, its media, shaders and
-//! mappings in `Contents/Resources/Show`. When that folder is present, Phosphor opens straight
-//! into the show and keeps its settings separate from the main app.
+//! Exported shows: a copy of Phosphor that carries a project, its media, shaders and
+//! mappings in `Contents/Resources/Show` (Mac) or a `Show` folder beside the exe (Windows). When that folder
+//! is present, Phosphor opens straight into the show and keeps its settings separate from the main app.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -39,9 +39,12 @@ pub fn bundled() -> Option<&'static Bundled> {
     static B: OnceLock<Option<Bundled>> = OnceLock::new();
     B.get_or_init(|| {
         let exe = std::env::current_exe().ok()?;
-        let dir = exe.parent()?.join("../Resources/Show");
+        // Mac: inside the .app; Windows: a "Show" folder beside the exe.
+        let dir = if cfg!(target_os = "macos") { exe.parent()?.join("../Resources/Show") } else { exe.parent()?.join("Show") };
         let manifest: Manifest = serde_json::from_str(&std::fs::read_to_string(dir.join(MANIFEST)).ok()?).ok()?;
-        dir.join(PROJECT).is_file().then(|| Bundled { dir: dir.canonicalize().unwrap_or(dir), manifest })
+        // (Not on Windows: canonical paths there start with \\?\, which FFmpeg and others don't all take.)
+        let dir = if cfg!(windows) { dir } else { dir.canonicalize().unwrap_or(dir) };
+        dir.join(PROJECT).is_file().then(|| Bundled { dir, manifest })
     })
     .as_ref()
 }

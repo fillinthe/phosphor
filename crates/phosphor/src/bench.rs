@@ -173,6 +173,18 @@ impl BenchConfig {
         {
             return comp;
         }
+        // An exported show benches its own project when nothing else is asked for (checks a packed show runs).
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.project.is_none()
+            && self.live.is_none()
+            && self.generators.is_empty()
+            && self.images.is_empty()
+            && self.movies.is_empty()
+            && self.texts.is_empty()
+            && let Some(comp) = crate::show::bundled().and_then(|b| crate::show::load(b).ok())
+        {
+            return comp;
+        }
         let mut comp = Composition::default();
         if let Some((w, h)) = self.size {
             comp.width = w;
