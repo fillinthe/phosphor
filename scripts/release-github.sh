@@ -8,6 +8,10 @@ TAG="v$VER"
 if gh release view "$TAG" -R fillinthe/phosphor >/dev/null 2>&1; then
   echo "Release $TAG already exists. Bump the version in crates/phosphor/Cargo.toml first."; exit 1
 fi
+# The downloads must be exactly the tagged source: no uncommitted code (the Mac app is built from this folder).
+if ! git diff --quiet HEAD -- crates scripts Cargo.toml Cargo.lock assets || [ -n "$(git ls-files --others --exclude-standard crates scripts)" ]; then
+  echo "Uncommitted code changes: commit them (and let the Windows build run) before releasing."; exit 1
+fi
 scripts/release-notes.sh "$VER" >/dev/null || { echo "Add a '## $VER (date)' section to CHANGELOG.md first."; exit 1; }
 # Don't swap /Applications/Phosphor.app under a Phosphor that's running from it.
 if pgrep -f "/Applications/Phosphor.app/Contents/MacOS" >/dev/null 2>&1; then

@@ -396,5 +396,7 @@ pub use targets::*;
 mod native;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod oscquery;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod discovery;
 #[cfg(test)]
 mod tests;

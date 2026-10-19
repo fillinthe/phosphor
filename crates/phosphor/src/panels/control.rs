@@ -51,7 +51,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
 /// the target, set the range, switch on/off, delete. A live meter shows each input as it moves.
 fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     use crate::app::ListenFor;
-    let State { control, comp, listen_for, map_draft, map_search, .. } = st;
+    let State { control, comp, listen_for, map_draft, map_search, mapping_presets, mapping_preset_name, notice, .. } = st;
     // A heard input lands where the Listen was for.
     if let Some(src) = control.heard.take() {
         match listen_for.take() {
@@ -67,6 +67,15 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         ui.label(RichText::new("Mappings").strong());
         hint(ui, format!("{}", comp.control_maps.len()));
+        let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Sets of mappings by name, e.g. one per controller (Load replaces this project's mappings; Undo brings them back).", mapping_presets, mapping_preset_name, "mapping set", || if comp.control_maps.is_empty() { String::new() } else { serde_json::to_string(&comp.control_maps).unwrap_or_default() });
+        match picked {
+            Some(crate::ui::SaveAction::Load(json)) => match serde_json::from_str::<Vec<phosphor_engine::ControlMap>>(&json) {
+                Ok(maps) => comp.control_maps = maps,
+                Err(e) => *notice = Some(format!("Couldn't load those mappings: {e}")),
+            },
+            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(e),
+            None => {}
+        }
         if listening {
             ui.label(RichText::new(format!("{} Listening… touch a knob, pad or key, or send OSC", icon::EAR)).color(Color32::from_rgb(255, 205, 90)));
             ui.ctx().request_repaint();

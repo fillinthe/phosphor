@@ -105,6 +105,10 @@ impl PhosphorApp {
                 venues: PresetStore::venues(),
                 layer_presets: PresetStore::layers(),
                 chain_presets: PresetStore::chains(),
+                surface_presets: PresetStore::surfaces(),
+                mapping_presets: PresetStore::mappings(),
+                surface_preset_name: String::new(),
+                mapping_preset_name: String::new(),
                 layer_preset_name: String::new(),
                 chain_preset_name: String::new(),
                 venue_name: String::new(),
@@ -275,6 +279,9 @@ impl PhosphorApp {
             app.state.remote_password = pw;
             app.state.require_password = true;
         }
+        // Listen for other Phosphors from the start, so the Devices panel has them when opened.
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::control::discovery::players();
         if app.bench.as_ref().is_some_and(|b| b.cfg.ndi) {
             #[cfg(any(target_os = "macos", windows))]
             crate::ndi::sources();
@@ -288,7 +295,13 @@ impl PhosphorApp {
         }
         if let Some(url) = app.bench.as_ref().and_then(|b| b.cfg.stream.clone()) {
             let s = &mut app.state.stream.settings;
-            s.destination = crate::stream::Destination::CustomRtmp;
+            // http(s) addresses are WebRTC (WHIP) endpoints; anything else RTMP (or a file path).
+            if url.starts_with("http") {
+                s.destination = crate::stream::Destination::Whip;
+                s.whip_url = url.clone();
+            } else {
+                s.destination = crate::stream::Destination::CustomRtmp;
+            }
             s.rtmp_url = url;
             s.stream_key = String::new();
             s.height = 0;

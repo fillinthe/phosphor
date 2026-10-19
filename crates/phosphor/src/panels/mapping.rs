@@ -576,15 +576,8 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
 }
 
 pub(crate) fn venue_menu(ui: &mut egui::Ui, st: &mut State) {
-    let action = ui
-        .menu_button(label(icon::MAP_PIN, "Venues"), |ui| {
-            ui.set_min_width(300.0);
-            hint(ui, "Your whole projection setup: every output, its surfaces, warps, masks and colour.");
-            let State { venues, venue_name, comp, .. } = &mut *st;
-            named_saves(ui, venues, venue_name, "venue", || comp.venue_json())
-        })
-        .inner
-        .flatten();
+    let State { venues, venue_name, comp, .. } = &mut *st;
+    let action = saves_menu(ui, &label(icon::MAP_PIN, "Venues"), "Your whole projection setup: every output, its surfaces, warps, masks and colour.", venues, venue_name, "venue", || comp.venue_json());
     match action {
         Some(SaveAction::Load(json)) => match st.comp.apply_venue(&json) {
             Ok(()) => {

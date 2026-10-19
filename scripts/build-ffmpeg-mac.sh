@@ -3,7 +3,7 @@
 # shared libraries and the ffmpeg command, for macOS 14 and later (Homebrew's are built for the macOS they were
 # compiled on, so a bundle made from them won't open on older Macs).
 # Only what Phosphor uses: FFmpeg's own decoders, VideoToolbox / AudioToolbox, AVFoundation capture, dav1d (AV1),
-# libvpx decoders (WebM with alpha), Secure Transport (RTMPS). Output: vendor/ffmpeg (ignored by git); scripts/bundle-mac.sh uses it when present.
+# libvpx decoders (WebM with alpha), OpenSSL (RTMPS, and WHIP / WebRTC). Output: vendor/ffmpeg (ignored by git); scripts/bundle-mac.sh uses it when present.
 #   scripts/build-ffmpeg-mac.sh        (about 5 minutes)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -12,6 +12,7 @@ MIN_MACOS=14.0
 FFMPEG_VER=9.0.2
 DAV1D_VER=1.5.1
 VPX_VER=1.15.2
+OPENSSL_VER=3.5.4
 PREFIX=$ROOT/vendor/ffmpeg
 WORK=$ROOT/target/ffmpeg-build
 export MACOSX_DEPLOYMENT_TARGET=$MIN_MACOS
@@ -51,14 +52,28 @@ rm -rf libvpx-$VPX_VER && tar xf libvpx-$VPX_VER.tar.gz
 vpx=$(basename "$(readlink -f "$PREFIX/lib/libvpx.dylib")")
 install_name_tool -id "@rpath/$vpx" "$PREFIX/lib/$vpx"
 
+# OpenSSL, static (it ends up inside libavformat, nothing more to bundle): TLS for RTMPS and DTLS for WHIP
+# (WebRTC), which macOS's own TLS can't do.
+SSL=$WORK/openssl
+[[ -f openssl-$OPENSSL_VER.tar.gz ]] || curl -sSLO "https://github.com/openssl/openssl/releases/download/openssl-$OPENSSL_VER/openssl-$OPENSSL_VER.tar.gz"
+if [[ ! -f "$SSL/lib/libssl.a" ]]; then
+  rm -rf openssl-$OPENSSL_VER && tar xf openssl-$OPENSSL_VER.tar.gz
+  (
+    cd openssl-$OPENSSL_VER
+    ./Configure darwin64-arm64-cc no-shared no-tests no-docs no-apps --prefix="$SSL" --libdir=lib -mmacosx-version-min=$MIN_MACOS >/dev/null
+    make -j"$JOBS" >/dev/null
+    make install_sw >/dev/null
+  )
+fi
+
 [[ -f ffmpeg-$FFMPEG_VER.tar.xz ]] || curl -sSLO "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VER.tar.xz"
 rm -rf ffmpeg-$FFMPEG_VER && tar xf ffmpeg-$FFMPEG_VER.tar.xz
 (
   cd ffmpeg-$FFMPEG_VER
-  PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure --prefix="$PREFIX" \
+  PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$SSL/lib/pkgconfig" ./configure --prefix="$PREFIX" \
     --enable-shared --disable-static --enable-gpl --enable-version3 \
     --disable-doc --disable-ffplay --disable-ffprobe --disable-debug \
-    --disable-autodetect --enable-videotoolbox --enable-audiotoolbox --enable-securetransport --enable-avfoundation \
+    --disable-autodetect --enable-videotoolbox --enable-audiotoolbox --enable-openssl --enable-avfoundation \
     --enable-zlib --enable-bzlib --enable-libdav1d --enable-libvpx \
     --extra-cflags="-mmacosx-version-min=$MIN_MACOS" --extra-ldflags="-mmacosx-version-min=$MIN_MACOS -Wl,-rpath,$PREFIX/lib" \
     --install-name-dir='@rpath' >/dev/null

@@ -4,13 +4,25 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.54 (2026-10-19)
+- **WebRTC streaming (WHIP):** a new destination in Stream & Record for under-a-second delay to WebRTC services
+  (Cloudflare Stream, Dolby / Millicast, OBS, MediaMTX…): paste the WHIP address and token.
+- **Save Control Surfaces and MIDI/OSC mappings by name** (the *Saved* menu in each panel), e.g. one mapping set
+  per controller, and reuse them in any project.
+- **Your named saves follow your account:** looks, layers, effect chains, venues, surfaces and mapping sets
+  saved on one computer appear on the others you sign in on (nothing is overwritten or deleted by syncing).
+- **Other Phosphors on the network** are listed in the Devices panel, each by its computer's name, with the
+  address to send it OSC. Several Phosphors on one network no longer share the same name.
+- After an unexpected quit, the recovery banner has a **Report it** button that fills in a bug report for you.
+- Projects saved by a newer Phosphor open with a warning to update before saving over them.
+- (The Mac download of 0.2.53 already had some of these.)
+
 ## 0.2.53 (2026-10-19)
 - **The Mac app opens on macOS 14 and 15 again.** The video libraries inside recent downloads only ran on
   macOS 26, so on older Macs Phosphor wouldn't start. They're now built for macOS 14 and later, and the
   download is smaller (52 MB instead of 66).
 - **Spout on Windows:** turn on Spout in Output & Stats and pick "Phosphor" in Resolume, TouchDesigner, OBS
   (Spout2 plugin), MadMapper or any Spout app. Off until you turn it on (it copies every frame while on).
-- Projects record their file format; opening one saved by a newer Phosphor warns before you save over it.
 - **Export Show on Windows:** packs the project, its media, shaders and mappings into a folder with its own .exe
   that runs on another PC without installing Phosphor.
 

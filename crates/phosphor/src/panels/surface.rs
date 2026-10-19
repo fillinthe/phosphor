@@ -42,6 +42,16 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
         } else if st.comp.surface.on_page().next().is_none() {
             hint(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
+        let State { surface_presets, surface_preset_name, comp, .. } = &mut *st;
+        let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Control Surface pages by name: reuse them in any project (Load replaces this project's surface; Undo brings it back).", surface_presets, surface_preset_name, "surface", || serde_json::to_string(&comp.surface).unwrap_or_default());
+        match picked {
+            Some(crate::ui::SaveAction::Load(json)) => match serde_json::from_str::<phosphor_engine::ControlSurface>(&json) {
+                Ok(sf) => st.comp.surface = sf,
+                Err(e) => st.notice = Some(format!("Couldn't load that surface: {e}")),
+            },
+            Some(crate::ui::SaveAction::Error(e)) => st.notice = Some(e),
+            None => {}
+        }
     });
 
     page_tabs(ui, &mut st.comp.surface, edit);

@@ -156,6 +156,11 @@ pub struct State {
     /// Saved layers and effect chains (Presets panel), with the names being typed.
     pub layer_presets: PresetStore,
     pub chain_presets: PresetStore,
+    pub surface_presets: PresetStore,
+    pub mapping_presets: PresetStore,
+    /// Name typed for the next Control Surface / mappings save.
+    pub surface_preset_name: String,
+    pub mapping_preset_name: String,
     pub layer_preset_name: String,
     pub chain_preset_name: String,
     pub venue_name: String,
@@ -723,6 +728,15 @@ impl PhosphorApp {
                     st.cloud_project = Some((id, name));
                 }
                 crate::account::Event::Layouts(text) => cloud_layouts = Some(text),
+                crate::account::Event::Saves(text) => {
+                    let added = crate::presets::merge_from_account(&text);
+                    if added > 0 {
+                        for store in [&mut st.presets, &mut st.layer_presets, &mut st.chain_presets, &mut st.venues, &mut st.surface_presets, &mut st.mapping_presets] {
+                            store.refresh();
+                        }
+                        st.notice = Some(format!("{added} saved look(s), venue(s), surface(s) or mapping set(s) came from your account"));
+                    }
+                }
             }
         }
         if let Some(text) = cloud_layouts {
@@ -751,7 +765,8 @@ impl PhosphorApp {
         self.install_native_menu();
     }
 
-    /// Uploads your layouts when signed in and they changed (checked every 30 s; the account skips unchanged text).
+    /// Uploads your layouts and named saves when signed in and they changed (checked every 30 s; the account skips
+    /// unchanged text).
     fn sync_layouts(&mut self, ctx: &egui::Context) {
         let now = ctx.input(|i| i.time);
         if now < self.cloud_layouts_check || !self.state.account.signed_in() {
@@ -762,5 +777,8 @@ impl PhosphorApp {
         if let Some(text) = layout::to_text(&layout::AccountLayouts { layouts: self.layouts.clone(), current: Some(current) }) {
             self.state.account.push_layouts(ctx, &text);
         }
+        // Named saves ride along (the account skips unchanged text).
+        #[cfg(not(target_arch = "wasm32"))]
+        self.state.account.push_doc(ctx, crate::account::DocKind::Saves, &crate::presets::export_all());
     }
 }
