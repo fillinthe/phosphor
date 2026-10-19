@@ -11,6 +11,11 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Nothing hidden in narrow columns:** the Library's search box no longer sits under its buttons, the Effects
   list's controls wrap instead of running off the edge, layer cards always have room, and the side columns
   shrink with the window.
+- **The Library no longer creeps wider by itself:** the side columns keep their width until you drag their edge.
+- **Donate is GCarve orange** (same button as GCarve and the website).
+- **A calmer top bar:** the areas come first; frame rate and CPU moved to the status line (they turn orange below
+  50 fps); + Layer, the launch settings and the screen chooser are in the areas (Layers, the Clips toolbar, the
+  Outputs strip), so they're not repeated up top.
 - **Hide the side columns:** *Library* and *Inspector* toggles at the bottom right give the stage the whole
   width (handy on a laptop).
 - **Session log:** Phosphor now keeps a plain log of each session (what was clicked, messages, warnings,

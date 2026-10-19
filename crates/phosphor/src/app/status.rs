@@ -62,14 +62,20 @@ impl PhosphorApp {
                 for (on, name) in [(midi, "MIDI"), (osc, "OSC")] {
                     ui.label(small(format!("{} {name}", icon::CIRCLE), if on { theme::accent() } else { Color32::from_gray(70) }));
                 }
-                // Show / hide the side columns of the areas (small screens).
-                if self.use_areas {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Right: the side-column toggles (areas), then frame rate and load.
+                let s = self.state.stats.latest;
+                let perf = format!("{:.0} fps · engine {:.1} ms · CPU {:.0}% · {:.0} MB", s.fps, s.render_ms, s.cpu_percent, s.memory_mb);
+                let slow = s.fps > 0.0 && s.fps < 50.0;
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if self.use_areas {
                         let t = &mut self.area_tabs;
                         ui.toggle_value(&mut t.show_inspector, RichText::new(format!("{} Inspector", icon::SIDEBAR_SIMPLE)).small()).on_hover_text("Show or hide the Inspector on the right");
                         ui.toggle_value(&mut t.show_library, RichText::new(format!("{} Library", icon::SIDEBAR_SIMPLE)).small()).on_hover_text("Show or hide the Library on the left");
-                    });
-                }
+                        ui.separator();
+                    }
+                    ui.label(RichText::new(perf).small().monospace().color(if slow { theme::WARN } else { Color32::GRAY }))
+                        .on_hover_text("Frame rate, the engine's time per frame, Phosphor's CPU (of one core) and memory");
+                });
             });
         });
         if open_outputs {
