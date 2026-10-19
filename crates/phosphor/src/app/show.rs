@@ -41,7 +41,7 @@ impl PhosphorApp {
         let mut open = true;
         egui::Window::new(format!("{} Export Show", icon::PACKAGE)).open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
             #[cfg(target_arch = "wasm32")]
-            ui.label("Export Show is available in the Mac app.");
+            ui.label("Export Show is available in the desktop app.");
             #[cfg(not(target_arch = "wasm32"))]
             {
                 let progress = st.export.progress.as_ref().map(|p| p.lock().unwrap().clone());
@@ -60,9 +60,13 @@ impl PhosphorApp {
                             if let Some(z) = &p.zip {
                                 ui.label(format!("Zip: {}", z.display()));
                             }
-                            crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
+                            if cfg!(windows) {
+                                crate::ui::hint(ui, format!("Copy the folder (or the zip) to the other PC and run the .exe inside. First time Windows warns: More info {} Run anyway.", icon::ARROW_RIGHT));
+                            } else {
+                                crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
+                            }
                             ui.horizontal(|ui| {
-                                if ui.button(label_text(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
+                                if ui.button(label_text(icon::FOLDER_OPEN, if cfg!(windows) { "Show in Explorer" } else { "Show in Finder" })).clicked() {
                                     crate::os::reveal(app);
                                 }
                                 if ui.button("Export again").clicked() {
@@ -79,7 +83,11 @@ impl PhosphorApp {
                         }
                     }
                     None => {
-                        ui.label("Packs this project, every media file, the shaders it uses, and all MIDI/OSC/key mappings and outputs into one app that runs on another Mac — no Phosphor install needed.");
+                        ui.label(if cfg!(windows) {
+                            "Packs this project, every media file, the shaders it uses, and all MIDI/OSC/key mappings and outputs into one folder that runs on another PC: no Phosphor install needed."
+                        } else {
+                            "Packs this project, every media file, the shaders it uses, and all MIDI/OSC/key mappings and outputs into one app that runs on another Mac: no Phosphor install needed."
+                        });
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             ui.label("Show name");
@@ -88,7 +96,7 @@ impl PhosphorApp {
                         ui.checkbox(&mut st.export.autostart, "Open the outputs full screen when the show starts");
                         ui.checkbox(&mut st.export.zip, "Also make a .zip (easier to send)");
                         ui.horizontal(|ui| {
-                            ui.checkbox(&mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other Mac: just the preview, clips, keys, controllers and outputs");
+                            ui.checkbox(&mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other computer: just the preview, clips, keys, controllers and outputs");
                             ui.add_enabled(st.export.lock, egui::TextEdit::singleline(&mut st.export.lock_password).password(true).hint_text("unlock password (optional)").desired_width(170.0));
                         });
                         let (files, bytes, missing) = *st.export.summary.get_or_insert_with(|| crate::export::summary(&st.comp));

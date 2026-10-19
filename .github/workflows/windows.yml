@@ -96,6 +96,22 @@ jobs:
           Get-Content dist\launch-err.txt -Tail 30
           if (-not (Test-Path dist\win-snapshot.png)) { exit 1 }
 
+      # Export Show: pack the test project into a show folder, then run the exported exe on its own.
+      - name: Export Show test
+        continue-on-error: true
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          New-Item -ItemType Directory -Force dist\export | Out-Null
+          $p = Start-Process dist\Phosphor\Phosphor.exe -ArgumentList "--bench","2","--project","$PWD\scripts\ci\smoke.phosphor","--export","$PWD\dist\export" -PassThru -NoNewWindow -RedirectStandardOutput dist\export.txt
+          if (-not $p.WaitForExit(120000)) { $p.Kill() }
+          Get-Content dist\export.txt | Select-String "EXPORT"
+          Get-ChildItem "dist\export\Bench Show" | Select-Object -First 8 -ExpandProperty Name
+          $q = Start-Process "dist\export\Bench Show\Bench Show.exe" -ArgumentList "--bench","3" -PassThru -NoNewWindow -RedirectStandardOutput dist\export-run.txt
+          if (-not $q.WaitForExit(120000)) { $q.Kill() }
+          Get-Content dist\export-run.txt | Select-String "LAYERS|SUMMARY|LAYER_ERROR"
+          if (-not (Select-String -Path dist\export-run.txt -Pattern "Plasma" -Quiet)) { exit 1 }
+
       # Spout: does a receiver built from the official Spout SDK get Phosphor's picture?
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Spout test
@@ -125,4 +141,5 @@ jobs:
             dist/launch.txt
             dist/launch-err.txt
             dist/spout*.txt
+            dist/export*.txt
           if-no-files-found: ignore
