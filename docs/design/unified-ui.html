@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phosphor: unified UI mockup</title>
+<style>
+  :root {
+    --bg: #15171a; --panel: #1c1f23; --panel2: #23272c; --line: #2d3238; --text: #e6e8ea; --dim: #8b929a;
+    --accent: #78ffaa; --live: #eb5046; --mask: #ff9a3c; --sel: rgba(120,255,170,.14);
+    font: 13px/1.35 -apple-system, "Inter", system-ui, sans-serif; color: var(--text);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0d0e10; display: grid; place-items: center; min-height: 100vh; }
+  .app { width: 1440px; height: 900px; background: var(--bg); display: grid; grid-template-rows: 44px 1fr 26px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  /* Top bar: brand · areas · transport · status */
+  .top { display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .brand { color: var(--accent); font-weight: 700; letter-spacing: .08em; }
+  .areas { display: flex; gap: 4px; background: var(--bg); padding: 3px; border-radius: 8px; }
+  .areas button { all: unset; cursor: pointer; padding: 6px 14px; border-radius: 6px; color: var(--dim); font-weight: 600; }
+  .areas button.on { background: var(--accent); color: #0b0c0d; }
+  .areas kbd { font: 10px monospace; opacity: .6; margin-left: 6px; }
+  .transport { display: flex; gap: 8px; align-items: center; margin-left: 8px; }
+  .chip { padding: 4px 9px; border-radius: 6px; background: var(--panel2); color: var(--text); }
+  .chip.accent { color: var(--accent); }
+  .chip.live { background: var(--live); color: #fff; font-weight: 700; }
+  .spacer { flex: 1; }
+  .meta { color: var(--dim); font: 11px monospace; }
+  /* Frame: library · stage · inspector */
+  .frame { display: grid; grid-template-columns: 240px 1fr 320px; min-height: 0; }
+  .col { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .library { background: var(--panel); border-right: 1px solid var(--line); }
+  .inspector { background: var(--panel); border-left: 1px solid var(--line); }
+  .head { padding: 10px 12px 6px; font-size: 11px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; display: flex; align-items: center; gap: 8px; }
+  .search { margin: 0 10px 8px; padding: 7px 10px; border-radius: 6px; background: var(--bg); color: var(--dim); }
+  .tabs { display: flex; gap: 2px; padding: 0 10px 8px; flex-wrap: wrap; }
+  .tabs span { padding: 3px 8px; border-radius: 5px; color: var(--dim); font-size: 12px; }
+  .tabs span.on { background: var(--panel2); color: var(--text); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 10px; overflow: hidden; }
+  .tile { aspect-ratio: 16/10; border-radius: 6px; position: relative; overflow: hidden; }
+  .tile b { position: absolute; left: 6px; bottom: 4px; font-size: 11px; font-weight: 600; text-shadow: 0 1px 2px #000; }
+  .stage { padding: 12px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .pic { border-radius: 6px; background: #000; position: relative; overflow: hidden; }
+  .g1 { background: radial-gradient(circle at 50% 50%, #ff3d8b 0 8%, #ffd23d 8% 16%, #3dffb4 16% 24%, #3d8bff 24% 32%, #c43dff 32% 40%, #ff3d8b 40% 48%, #ffd23d 48% 56%, #3dffb4 56% 64%, #3d8bff 64% 72%, #c43dff 72%); }
+  .g2 { background: linear-gradient(120deg, #ff4fd8, #6b5bff 40%, #2de2ff 70%, #b8ff3d); }
+  .g3 { background: repeating-linear-gradient(90deg, #111 0 6px, #2b2b2b 6px 12px); }
+  .g4 { background: conic-gradient(from 30deg, #ff5f3d, #ffd23d, #3dff8b, #3d9bff, #c43dff, #ff5f3d); }
+  .g5 { background: linear-gradient(180deg, #08131f, #0e4d6b 60%, #46e0ff); }
+  .g6 { background: radial-gradient(ellipse at 30% 40%, #ffef7a, #ff4f6b 45%, #2a0b3d 80%); }
+  .sel { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .label { font-size: 12px; margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #5a6068; }
+  .dot.on { background: var(--accent); } .dot.live { background: var(--live); }
+  .sub { color: var(--dim); font-size: 11px; }
+  /* Inspector */
+  .ins-title { padding: 4px 12px 10px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--line); }
+  .ins-title .pic { width: 64px; height: 40px; }
+  .ins-title h3 { margin: 0; font-size: 15px; }
+  .section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .section h4 { margin: 0 0 8px; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+  .row { display: grid; grid-template-columns: 82px 1fr 44px; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; }
+  .slider { height: 6px; border-radius: 3px; background: var(--panel2); position: relative; }
+  .slider i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); opacity: .8; }
+  .val { text-align: right; font: 11px monospace; color: var(--dim); }
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .seg span { padding: 3px 8px; border-radius: 5px; background: var(--panel2); font-size: 11px; color: var(--dim); }
+  .seg span.on { background: var(--sel); color: var(--accent); }
+  .fx { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 4px 0; border-radius: 6px; background: var(--panel2); font-size: 12px; }
+  .fx .grip { color: var(--dim); }
+  /* Status line */
+  .status { display: flex; gap: 16px; align-items: center; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); }
+  .status span { display: flex; gap: 5px; align-items: center; }
+  /* Show area */
+  .show { display: grid; grid-template-rows: 1fr 210px; gap: 12px; height: 100%; min-height: 0; }
+  .preview-row { display: grid; grid-template-columns: 1fr 230px; gap: 12px; min-height: 0; }
+  .preview { width: 100%; height: auto; aspect-ratio: 16/9; align-self: start; }
+  .layers { padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .layer { display: grid; grid-template-columns: 50px 1fr; gap: 8px; align-items: center; padding: 6px; border-radius: 6px; background: var(--panel2); }
+  .layer .pic { height: 32px; }
+  .layer.sel { outline-offset: 0; }
+  .clips { padding: 10px; display: grid; grid-template-columns: 70px repeat(8, 1fr); gap: 6px; align-content: start; }
+  .clips .name { font-size: 11px; color: var(--dim); align-self: center; }
+  .clip { aspect-ratio: 16/10; border-radius: 5px; background-color: var(--panel2); position: relative; overflow: hidden; }
+  .clip.playing::after { content: ""; position: absolute; inset: 0; border: 2px solid var(--accent); border-radius: 5px; }
+  .colhead { text-align: center; font-size: 11px; color: var(--dim); }
+  /* Outputs area */
+  .strip { display: flex; gap: 12px; padding: 10px; overflow: hidden; }
+  .out { width: 200px; }
+  .out .pic { height: 112px; }
+  .add { width: 120px; height: 112px; border: 1px dashed #4a5058; border-radius: 6px; display: grid; place-items: center; color: var(--dim); }
+  .canvas { flex: 1; display: grid; place-items: center; background: #0b0c0e; border-radius: 8px; position: relative; min-height: 0; }
+  .slice { position: absolute; border: 1.5px solid var(--accent); }
+  .handle { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); transform: translate(-50%,-50%); }
+  .sends { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .send { padding: 10px; }
+  .send b { display: block; margin-bottom: 4px; }
+  /* Control area */
+  .ctl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
+  .surface { padding: 12px; display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 64px; gap: 8px; }
+  .w { background: var(--panel2); border-radius: 6px; display: grid; place-items: center; font-size: 11px; color: var(--dim); position: relative; }
+  .w.fader { grid-row: span 3; }
+  .w.fader::after { content: ""; position: absolute; left: 40%; right: 40%; bottom: 10px; height: 55%; background: var(--accent); border-radius: 3px; opacity: .8; }
+  .w.pad.on { background: var(--sel); color: var(--accent); }
+  .maps { padding: 8px 12px; }
+  .map { display: grid; grid-template-columns: 22px 130px 1fr 60px; gap: 8px; align-items: center; padding: 7px 4px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .note { position: fixed; right: 16px; bottom: 16px; width: 330px; background: #fff; color: #111; border-radius: 10px; padding: 14px 16px; font-size: 12.5px; box-shadow: 0 10px 40px #0008; }
+  .note h2 { font-size: 14px; margin: 0 0 6px; }
+  .note ol { margin: 6px 0 0 18px; padding: 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <span class="brand">PHOSPHOR</span>
+    <div class="areas">
+      <button data-area="show" class="on">Show<kbd>⌘1</kbd></button>
+      <button data-area="outputs">Outputs<kbd>⌘2</kbd></button>
+      <button data-area="control">Control<kbd>⌘3</kbd></button>
+    </div>
+    <div class="transport">
+      <span class="chip">Tap</span><span class="chip accent">128.0 BPM</span><span class="chip">AUTO</span>
+      <span class="chip">Fade 0.5 s · On bar</span><span class="chip">Surprise</span>
+    </div>
+    <span class="spacer"></span>
+    <span class="chip live">● LIVE 12:04</span>
+    <span class="meta">60 fps · CPU 31%</span>
+    <span class="chip">Search ⌘K</span>
+  </div>
+
+  <div class="frame">
+    <!-- LEFT: one Library for every area -->
+    <div class="col library">
+      <div class="head">Library</div>
+      <div class="search">Search effects, sources, media…</div>
+      <div class="tabs" id="libtabs"><span class="on">Media</span><span>Generators</span><span>Effects</span><span>Presets</span><span>Inputs</span></div>
+      <div class="grid">
+        <div class="tile g1"><b>Rings</b></div><div class="tile g2"><b>Plasma</b></div>
+        <div class="tile g4"><b>Kaleido</b></div><div class="tile g5"><b>Ocean.mov</b></div>
+        <div class="tile g6"><b>Sunburst</b></div><div class="tile g3"><b>Scanlines</b></div>
+        <div class="tile g2"><b>Neon.mp4</b></div><div class="tile g1"><b>Tunnel</b></div>
+      </div>
+      <div class="sub" style="padding:10px 12px">Drag onto a layer, a clip slot, a slice or an output.</div>
+    </div>
+
+    <!-- CENTRE: the area's stage -->
+    <div class="col stage">
+      <!-- SHOW -->
+      <div class="show" data-stage="show">
+        <div class="preview-row">
+          <div class="pic g1 preview"></div>
+          <div class="card layers">
+            <div class="head" style="padding:4px">Layers</div>
+            <div class="layer sel"><div class="pic g1"></div><div>Rings<div class="sub">Screen · 60%</div></div></div>
+            <div class="layer"><div class="pic g2"></div><div>Plasma<div class="sub">Normal · 100%</div></div></div>
+            <div class="layer"><div class="pic g5"></div><div>Ocean.mov<div class="sub">Add · 40%</div></div></div>
+          </div>
+        </div>
+        <div class="card clips">
+          <span></span><div class="colhead">▷ 1</div><div class="colhead">▷ 2</div><div class="colhead">▷ 3</div><div class="colhead">▷ 4</div><div class="colhead">▷ 5</div><div class="colhead">▷ 6</div><div class="colhead">▷ 7</div><div class="colhead">▷ 8</div>
+          <span class="name">Rings</span><div class="clip g1 playing"></div><div class="clip g4"></div><div class="clip g6"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div>
+          <span class="name">Plasma</span><div class="clip g2"></div><div class="clip g2 playing"></div><div class="clip"></div><div class="clip g3"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div>
+          <span class="name">Ocean</span><div class="clip g5 playing"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div><div class="clip"></div>
+        </div>
+      </div>
+
+      <!-- OUTPUTS -->
+      <div data-stage="outputs" hidden style="display:flex;flex-direction:column;gap:12px;height:100%">
+        <div class="card strip">
+          <div class="out"><div class="pic g1 sel"></div><div class="label"><span class="dot on"></span>Front projector</div><div class="sub">Epson · 1920×1080 · 2 slices</div></div>
+          <div class="out"><div class="pic g4"></div><div class="label"><span class="dot on"></span>Side screen</div><div class="sub">LG TV · 1080×1920</div></div>
+          <div class="out"><div class="pic g2"></div><div class="label"><span class="dot live"></span>Stream</div><div class="sub">YouTube · live 12:04</div></div>
+          <div class="add">+ Output</div>
+        </div>
+        <div class="canvas">
+          <div style="position:relative;width:640px;height:360px;background:#000;border:1px solid #333">
+            <div class="slice g1" style="left:40px;top:30px;width:260px;height:290px;transform:skew(-3deg,2deg)"></div>
+            <div class="slice g1" style="left:340px;top:50px;width:250px;height:240px;transform:skew(2deg,-3deg)"></div>
+            <span class="handle" style="left:40px;top:30px"></span><span class="handle" style="left:300px;top:30px"></span><span class="handle" style="left:40px;top:320px"></span><span class="handle" style="left:300px;top:320px"></span>
+            <div style="position:absolute;left:420px;top:120px;width:90px;height:90px;border:1.5px dashed var(--mask);border-radius:50%"></div>
+          </div>
+          <div class="sub" style="position:absolute;left:12px;top:10px">Front projector · drag corners · right-click for mesh, mask, 3D model…</div>
+        </div>
+        <div class="sends">
+          <div class="card send"><b>Stream</b><span class="sub"><span class="dot live"></span> YouTube · healthy 6.1 Mbit/s</span></div>
+          <div class="card send"><b>Syphon / NDI</b><span class="sub"><span class="dot on"></span> 2 apps receiving</span></div>
+          <div class="card send"><b>Session</b><span class="sub"><span class="dot on"></span> 3 phones · phosphor.local</span></div>
+          <div class="card send"><b>Inputs</b><span class="sub">Camera · NDI · Syphon · Audio in</span></div>
+        </div>
+      </div>
+
+      <!-- CONTROL -->
+      <div class="ctl" data-stage="control" hidden>
+        <div class="card">
+          <div class="head">Control Surface <span class="chip" style="margin-left:auto">Edit</span></div>
+          <div class="surface">
+            <div class="w fader">Master</div><div class="w fader">Rings</div><div class="w fader">Plasma</div>
+            <div class="w pad on">Surprise</div><div class="w pad">Shuffle</div><div class="w pad">Strobe</div>
+            <div class="w pad">Col 1</div><div class="w pad on">Col 2</div><div class="w pad">Col 3</div>
+            <div class="w">XY</div><div class="w">Hue</div><div class="w">BPM</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="head">Mappings · APC40 <span class="chip" style="margin-left:auto">Listen</span><span class="chip">TouchOSC…</span></div>
+          <div class="maps">
+            <div class="map"><span class="dot on"></span><span>MIDI CC 48 · ch 1</span><span>Rings → Opacity</span><span class="sub">0–100%</span></div>
+            <div class="map"><span class="dot"></span><span>MIDI Note 53</span><span>Clip column 1</span><span class="sub">press</span></div>
+            <div class="map"><span class="dot"></span><span>OSC /fader/2</span><span>Plasma → Speed</span><span class="sub">0.2–4</span></div>
+            <div class="map"><span class="dot"></span><span>Key S</span><span>Surprise</span><span class="sub">press</span></div>
+            <div class="map"><span class="dot on"></span><span>Modulator: Bass</span><span>Kaleido → Segments</span><span class="sub">chained ×</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: one Inspector, whatever is selected -->
+    <div class="col inspector">
+      <div class="head">Inspector</div>
+      <div data-ins="show">
+        <div class="ins-title"><div class="pic g1"></div><div><h3>Rings</h3><div class="sub">Layer · generator</div></div></div>
+        <div class="section"><h4>Mix</h4>
+          <div class="row">Opacity<div class="slider"><i style="width:60%"></i></div><span class="val">60%</span></div>
+          <div class="row">Blend<div class="seg"><span>Normal</span><span class="on">Screen</span><span>Add</span><span>Multiply</span></div><span></span></div>
+        </div>
+        <div class="section"><h4>Generator</h4>
+          <div class="row">Count<div class="slider"><i style="width:40%"></i></div><span class="val">10</span></div>
+          <div class="row">Speed<div class="slider"><i style="width:25%"></i></div><span class="val">1.0</span></div>
+          <div class="row">Width<div class="slider"><i style="width:50%"></i></div><span class="val">0.5</span></div>
+        </div>
+        <div class="section"><h4>Effects</h4>
+          <div class="fx"><span class="grip">⋮⋮</span>Kaleidoscope<span class="spacer"></span><span class="dot on"></span></div>
+          <div class="fx"><span class="grip">⋮⋮</span>Feedback<span class="spacer"></span><span class="dot"></span></div>
+          <div class="sub">Drag effects here from the Library.</div>
+        </div>
+      </div>
+      <div data-ins="outputs" hidden>
+        <div class="ins-title"><div class="pic g1"></div><div><h3>Front projector</h3><div class="sub">Output 1 · Epson EB-L200</div></div></div>
+        <div class="section"><h4>Goes to</h4>
+          <div class="seg"><span class="on">Epson (screen 2)</span><span>Window</span><span>Syphon</span><span>NDI</span></div>
+        </div>
+        <div class="section"><h4>Picture</h4>
+          <div class="row">Size<div class="seg"><span class="on">Canvas</span><span>1080p</span><span>4K</span></div><span></span></div>
+          <div class="row">Brightness<div class="slider"><i style="width:80%"></i></div><span class="val">80%</span></div>
+          <div class="row">Blend edge<div class="slider"><i style="width:20%"></i></div><span class="val">0.1</span></div>
+        </div>
+        <div class="section"><h4>Slices &amp; masks</h4>
+          <div class="fx">▱ Left wall<span class="spacer"></span><span class="sub">Mix</span></div>
+          <div class="fx">▱ Right wall<span class="spacer"></span><span class="sub">Layer: Ocean</span></div>
+          <div class="fx" style="color:var(--mask)">◯ Door mask</div>
+        </div>
+      </div>
+      <div data-ins="control" hidden>
+        <div class="ins-title"><div><h3>CC 48 → Rings Opacity</h3><div class="sub">Mapping · APC40</div></div></div>
+        <div class="section"><h4>Range</h4>
+          <div class="row">From<div class="slider"><i style="width:0%"></i></div><span class="val">0%</span></div>
+          <div class="row">To<div class="slider"><i style="width:100%"></i></div><span class="val">100%</span></div>
+          <div class="row">Invert<div class="seg"><span class="on">Off</span><span>On</span></div><span></span></div>
+        </div>
+        <div class="section"><h4>Learn</h4><div class="sub">Press Listen, then move a knob. Or right-click any slider anywhere → Map.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span><span class="dot on"></span>Front projector</span><span><span class="dot on"></span>Side screen</span><span><span class="dot live"></span>Stream LIVE</span>
+    <span>Syphon · 2 receiving</span><span>Session · 3 phones</span><span><span class="dot on"></span>MIDI</span><span><span class="dot"></span>OSC</span>
+    <span class="spacer"></span><span>Saved · Club night.phosphor</span>
+  </div>
+</div>
+
+<div class="note">
+  <h2>One frame, three areas</h2>
+  Every area has the same frame: <b>Library</b> on the left (drag anything from it), the <b>stage</b> in the middle,
+  one <b>Inspector</b> on the right that edits whatever you clicked, and the <b>status line</b> at the bottom.
+  <ol>
+    <li><b>Show</b>: preview, layers, clip grid.</li>
+    <li><b>Outputs</b>: every output live, the selected one's mapping, and where everything goes.</li>
+    <li><b>Control</b>: your surface and your mappings (MIDI, OSC, TouchOSC, keys).</li>
+  </ol>
+  Click the area buttons at the top to switch.
+</div>
+<script>
+  document.querySelectorAll('.areas button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.areas button').forEach(x => x.classList.toggle('on', x === b));
+    const a = b.dataset.area;
+    document.querySelectorAll('[data-stage]').forEach(s => s.hidden = s.dataset.stage !== a);
+    document.querySelectorAll('[data-ins]').forEach(s => s.hidden = s.dataset.ins !== a);
+    const tabs = { show: ['Media','Generators','Effects','Presets','Inputs'], outputs: ['Inputs','Media','Presets','Venues'], control: ['Controls','Modulators','Presets'] }[a];
+    document.getElementById('libtabs').innerHTML = tabs.map((t, i) => `<span class="${i ? '' : 'on'}">${t}</span>`).join('');
+  });
+  // Open an area from the address (#outputs, #control); ?clean hides the note (for pictures).
+  const start = location.hash.slice(1);
+  if (start) document.querySelector(`.areas button[data-area="${start}"]`)?.click();
+  if (location.search.includes('clean')) document.querySelector('.note').hidden = true;
+</script>
+</body>
+</html>
