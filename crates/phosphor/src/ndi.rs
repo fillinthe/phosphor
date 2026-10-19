@@ -1,8 +1,8 @@
 //! NDI output and input. Out: sends the composition over the network so MadMapper, Resolume, OBS, vMix or
 //! any NDI app on another computer can use it as a source. In: lists NDI sources on the network and
 //! receives one as a layer (`NdiReceiver`, newest frame wins). The NDI library (free, from ndi.video) is
-//! loaded at runtime from Phosphor.app, the NDI Tools runtime or the NDI SDK; without it Phosphor
-//! runs as usual and the panel says where to get it.
+//! loaded at runtime from Phosphor.app, the NDI Tools runtime or the NDI SDK (Mac), or the NDI Runtime
+//! (Windows); without it Phosphor runs as usual and the panel says where to get it.
 
 use std::ffi::{CString, c_char, c_int, c_void};
 use std::path::PathBuf;
@@ -92,6 +92,26 @@ struct Lib {
 unsafe impl Send for Lib {}
 unsafe impl Sync for Lib {}
 
+#[cfg(windows)]
+fn candidates() -> Vec<PathBuf> {
+    const DLL: &str = "Processing.NDI.Lib.x64.dll";
+    let mut out = Vec::new();
+    if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.to_path_buf())) {
+        out.push(dir.join(DLL));
+    }
+    // The NDI Runtime / NDI Tools installers set these.
+    for var in ["NDI_RUNTIME_DIR_V6", "NDI_RUNTIME_DIR_V5"] {
+        if let Some(dir) = std::env::var_os(var) {
+            out.push(PathBuf::from(dir).join(DLL));
+        }
+    }
+    let programs = std::env::var_os("ProgramFiles").map(PathBuf::from).unwrap_or_else(|| r"C:\Program Files".into());
+    out.push(programs.join(r"NDI\NDI 6 Runtime\v6").join(DLL));
+    out.push(programs.join(r"NDI\NDI 5 Runtime\v5").join(DLL));
+    out
+}
+
+#[cfg(not(windows))]
 fn candidates() -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("../Frameworks"))) {
@@ -122,17 +142,10 @@ fn lib() -> Option<&'static Lib> {
             if !path.is_file() {
                 continue;
             }
-            let Ok(c) = CString::new(path.to_string_lossy().as_bytes()) else { continue };
-            // SAFETY: loading a shared library and looking up the documented NDI C entry points.
+            let Some(h) = crate::dylib::Library::open(&path) else { continue };
+            let sym = |name: &std::ffi::CStr| h.sym(name);
+            // SAFETY: the documented NDI C entry points, cast to their declared signatures.
             unsafe {
-                let h = libc::dlopen(c.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
-                if h.is_null() {
-                    continue;
-                }
-                let sym = |name: &std::ffi::CStr| {
-                    let p = libc::dlsym(h, name.as_ptr());
-                    (!p.is_null()).then_some(p)
-                };
                 let (Some(init), Some(create), Some(destroy), Some(video), Some(conns)) = (
                     sym(c"NDIlib_initialize"),
                     sym(c"NDIlib_send_create"),

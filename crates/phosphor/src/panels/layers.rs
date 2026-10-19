@@ -465,7 +465,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
                 }
             }
         }
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         {
             ui.separator();
             ui.label(RichText::new("NDI (network)").small().color(Color32::GRAY));

@@ -241,7 +241,7 @@ pub struct State {
     pub export: ExportUi,
     #[cfg(target_os = "macos")]
     pub syphon: crate::syphon::Syphon,
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     pub ndi: crate::ndi::Ndi,
     pub clock: Clock,
     pub pending_triggers: Vec<Trigger>,

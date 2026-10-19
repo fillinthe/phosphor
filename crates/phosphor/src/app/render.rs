@@ -48,7 +48,7 @@ impl PhosphorApp {
             output_textures,
             #[cfg(target_os = "macos")]
             syphon,
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", windows))]
             ndi,
             #[cfg(not(target_arch = "wasm32"))]
             dmx,
@@ -168,18 +168,18 @@ impl PhosphorApp {
 
         let stream_due = stream.frame_due(now);
         let net_due = net.frame_due(now);
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         let ndi_due = {
             ndi.sync(comp.ndi.enabled, &comp.ndi.name);
             ndi.frame_due(now, comp.ndi.fps)
         };
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", windows)))]
         let ndi_due = false;
         if (stream_due || net_due || ndi_due) && !engine.capture_frame() && stream_due {
             stream.repeat_last();
         }
         for f in engine.poll_captures() {
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", windows))]
             if ndi.connections() > 0 {
                 ndi.push(f.width, f.height, f.rgba.clone(), comp.ndi.fps);
             }
