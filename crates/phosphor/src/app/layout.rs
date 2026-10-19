@@ -348,11 +348,11 @@ pub(crate) fn layout_locked() -> DockState<Tab> {
     dock
 }
 
-/// The Mapping Studio across the window, outputs / layers / preview underneath.
+/// The Mapping Studio across the window (its output strip shows every output), layers / preview underneath.
 pub(crate) fn layout_mapping() -> DockState<Tab> {
-    let mut dock = DockState::new(vec![Tab::Studio, Tab::Mapping]);
+    let mut dock = DockState::new(vec![Tab::Studio]);
     let surface = dock.main_surface_mut();
-    let [_, bottom] = surface.split_below(NodeIndex::root(), 0.76, vec![Tab::Output, Tab::Layers, Tab::Leds]);
+    let [_, bottom] = surface.split_below(NodeIndex::root(), 0.74, vec![Tab::Layers, Tab::Output, Tab::Leds]);
     surface.split_right(bottom, 0.6, vec![Tab::Preview, Tab::Inspector, Tab::Presets]);
     dock
 }
