@@ -11,7 +11,7 @@ pub(crate) fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulatio
         let rr = r.rect;
         let pad = rr.width() * 0.5;
         let y = rr.bottom() - pad - live * (height - 2.0 * pad).max(1.0);
-        ui.painter().line_segment([egui::pos2(rr.left() - 2.0, y), egui::pos2(rr.right() + 2.0, y)], Stroke::new(2.0, ACCENT));
+        ui.painter().line_segment([egui::pos2(rr.left() - 2.0, y), egui::pos2(rr.right() + 2.0, y)], Stroke::new(2.0, accent()));
     }
     mapped_badge(ui, &r, &target);
     if control_menu(&r, Some(&target), Some(m)) {
@@ -88,7 +88,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                     && layers.get(i + 1).and_then(|l| l.parent) != Some(gid)
                     && let Some(g) = groups.iter_mut().find(|g| g.id == gid)
                 {
-                    let name = RichText::new(format!("{} {}", icon::STACK, short(&g.name))).small().strong().color(ACCENT);
+                    let name = RichText::new(format!("{} {}", icon::STACK, short(&g.name))).small().strong().color(accent());
                     if strip(ui, g.id, *selected == Some(g.id), tex(g.id), aspect, g.enabled, name, |ui| {
                         fader(ui, &mut g.opacity, &mut g.opacity_mod, ControlTarget::LayerOpacity(g.id), height);
                         percent_field(ui, &mut g.opacity);
@@ -100,7 +100,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             // Master strip.
-            let name = RichText::new("MASTER").small().strong().color(ACCENT);
+            let name = RichText::new("MASTER").small().strong().color(accent());
             if strip(ui, MASTER_ID, *selected == Some(MASTER_ID), *texture, aspect, true, name, |ui| {
                 fader(ui, master_fade, master_fade_mod, ControlTarget::MasterFade, height);
                 percent_field(ui, master_fade);

@@ -88,6 +88,7 @@ const KEY_ACCOUNT_TAB_MOVED: &str = "account_tab_moved";
 const KEY_AREAS: &str = "areas_v1";
 /// "0" = the free dock ("Custom"), else the unified areas.
 const KEY_USE_AREAS: &str = "use_areas";
+const KEY_BRIGHTNESS: &str = "ui_brightness";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -576,6 +577,10 @@ pub struct PhosphorApp {
     pub(crate) workspace: Option<usize>,
     /// The unified frame (Library · stage · Inspector) instead of the free dock ("Custom").
     pub(crate) use_areas: bool,
+    /// Interface brightness, 0 = darkest … 1 = light (`theme::set_brightness`).
+    pub(crate) ui_brightness: f32,
+    /// The last notice written to the session log (each new one is logged once).
+    pub(crate) logged_notice: Option<String>,
     pub(crate) area_tabs: areas::AreaTabs,
     pub(crate) workspace_docks: HashMap<usize, (DockState<Tab>, Vec<Tab>)>,
     state: State,

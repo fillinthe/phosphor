@@ -32,7 +32,7 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
 
 /// The `~` button next to a control: opens the modulation editor; lit when a signal is attached.
 pub(crate) fn mod_button(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
-    let color = if m.is_some() { ACCENT } else { Color32::GRAY };
+    let color = if m.is_some() { accent() } else { ui.visuals().weak_text_color() };
     ui.menu_button(RichText::new(icon::WAVE_SINE).color(color), |ui| modulation_editor(ui, m))
         .response
         .on_hover_text("Drive this with audio or an LFO");
@@ -55,8 +55,8 @@ pub(crate) fn mod_marker(ui: &egui::Ui, slider: &egui::Response, base: f32, min:
     let pad = r.height() * 0.5;
     let x = r.left() + pad + t * (rail - 2.0 * pad).max(1.0);
     let y = r.center().y;
-    ui.painter().line_segment([egui::pos2(x, y - 6.0), egui::pos2(x, y + 6.0)], Stroke::new(2.0, ACCENT));
-    ui.painter().circle_filled(egui::pos2(x, y), 3.0, ACCENT);
+    ui.painter().line_segment([egui::pos2(x, y - 6.0), egui::pos2(x, y + 6.0)], Stroke::new(2.0, accent()));
+    ui.painter().circle_filled(egui::pos2(x, y), 3.0, accent());
 }
 
 pub(crate) const SYNC_CHOICES: &[(f32, &str)] =
@@ -147,12 +147,12 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
             let x0 = rect.left() + i as f32 * w + 2.0;
             let bar = egui::Rect::from_min_max(egui::pos2(x0, rect.bottom() - v * rect.height()), egui::pos2(x0 + w - 4.0, rect.bottom()));
             ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(x0, rect.top()), egui::pos2(x0 + w - 4.0, rect.bottom())), 2.0, Color32::from_gray(26));
-            ui.painter().rect_filled(bar, 2.0, if i == playing { ACCENT } else { ACCENT.gamma_multiply(0.45) });
+            ui.painter().rect_filled(bar, 2.0, if i == playing { accent() } else { accent().gamma_multiply(0.45) });
         }
     }
     if signal_only {
         let v = phosphor_engine::control::source_value(mm, &inputs);
-        ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(ACCENT.gamma_multiply(0.6)));
+        ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
         return;
     }
     ui.horizontal(|ui| {
@@ -167,5 +167,5 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         guarded!(ui, mm.amount, Slider::new(&mut mm.amount, -1.0..=1.0).text("Amount"));
     }
     let v = phosphor_engine::control::source_value(mm, &inputs);
-    ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(ACCENT.gamma_multiply(0.6)));
+    ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
 }

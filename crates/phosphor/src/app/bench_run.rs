@@ -14,6 +14,10 @@ impl PhosphorApp {
             return;
         }
         let started = *run.started.get_or_insert(now);
+        // --window: macOS may restore the window to its last (full) size, so set it explicitly once.
+        if let Some((w, h)) = run.cfg.window.take() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+        }
         if let Some(id) = run.cfg.select.take_if(|_| now - started >= 0.5) {
             self.state.selected = Some(id);
         }

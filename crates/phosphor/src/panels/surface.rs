@@ -105,7 +105,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                         }
                     }
                     draw_widget(&painter, w, rect, true);
-                    let outline = if selected == Some(w.id) { Stroke::new(2.0, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(90)) };
+                    let outline = if selected == Some(w.id) { Stroke::new(2.0, accent()) } else { Stroke::new(1.0, Color32::from_gray(90)) };
                     painter.rect_stroke(rect, 6.0, outline, StrokeKind::Outside);
                     painter.text(handle.center(), egui::Align2::CENTER_CENTER, icon::ARROWS_OUT_SIMPLE, egui::FontId::proportional(11.0), Color32::from_gray(160));
                     if w.bindings.is_empty() && w.bindings_y.is_empty() && w.kind != WidgetKind::Label {
@@ -259,11 +259,11 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             let on = w.value > 0.5;
             p.rect_filled(rect, 6.0, if on { c } else { c.gamma_multiply(0.18) });
             p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.6)), StrokeKind::Inside);
-            let text = if on { Color32::BLACK } else { Color32::WHITE };
+            let text = if on { Color32::BLACK } else { p.ctx().global_style().visuals.text_color() };
             p.text(rect.center(), egui::Align2::CENTER_CENTER, &w.label, font, text);
         }
         WidgetKind::Fader | WidgetKind::Slider => {
-            p.rect_filled(rect, 6.0, Color32::from_gray(28));
+            p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
             let mut fill = rect;
             if w.kind == WidgetKind::Fader {
                 fill.set_top(rect.bottom() - rect.height() * w.value);
@@ -280,7 +280,7 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             }
         }
         WidgetKind::XyPad => {
-            p.rect_filled(rect, 6.0, Color32::from_gray(24));
+            p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
             p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
             let pt = egui::pos2(rect.left() + rect.width() * w.value, rect.bottom() - rect.height() * w.value_y);
             let guide = Stroke::new(1.0, c.gamma_multiply(0.35));
@@ -334,7 +334,7 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
         }
         WidgetKind::Label => {
             if edit {
-                p.rect_filled(rect, 4.0, Color32::from_gray(26));
+                p.rect_filled(rect, 4.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
             }
             p.text(rect.center(), egui::Align2::CENTER_CENTER, &w.label, egui::FontId::proportional(14.0), c);
         }
@@ -347,7 +347,7 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
     let mut duplicate = false;
     let Some(w) = st.comp.surface.widget_mut(id) else { return false };
     ui.horizontal(|ui| {
-        ui.label(RichText::new(w.kind.name()).strong().color(ACCENT));
+        ui.label(RichText::new(w.kind.name()).strong().color(accent()));
         ui.add(egui::TextEdit::singleline(&mut w.label).desired_width(170.0));
     });
     ui.horizontal(|ui| {

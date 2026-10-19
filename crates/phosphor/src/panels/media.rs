@@ -52,8 +52,13 @@ pub(crate) enum MediaAct {
 }
 
 pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
-    // Row 1: import, watch, search, sort, size.
+    // Row 1: search, the full width (it never shares a row, so nothing can cover it).
     ui.horizontal(|ui| {
+        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
+        ui.add(egui::TextEdit::singleline(&mut st.media_view.search).hint_text("Search media").desired_width(ui.available_width()));
+    });
+    // Row 2: import, watch, group, sort, size; wraps when the column is narrow.
+    ui.horizontal_wrapped(|ui| {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if ui.button(label(icon::FOLDER_OPEN, "Import…")).on_hover_text("Add files").clicked() {
@@ -67,25 +72,21 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 ui.spinner();
             }
         }
-        ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
-        ui.add(egui::TextEdit::singleline(&mut st.media_view.search).hint_text("Search media").desired_width(150.0));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().slider_width = 70.0;
-            guarded!(ui, st.media_view.tile, Slider::new(&mut st.media_view.tile, 72.0..=240.0).show_value(false)).on_hover_text("Thumbnail size");
-            let sort_name = match st.media_view.sort {
-                MediaSort::Name => "Name",
-                MediaSort::Newest => "Newest",
-                MediaSort::Type => "Type",
-            };
-            ComboBox::from_id_salt("media_sort").width(70.0).selected_text(sort_name).show_ui(ui, |ui| {
-                ui.selectable_value(&mut st.media_view.sort, MediaSort::Name, "Name");
-                ui.selectable_value(&mut st.media_view.sort, MediaSort::Newest, "Newest");
-                ui.selectable_value(&mut st.media_view.sort, MediaSort::Type, "Type");
-            });
-            ui.toggle_value(&mut st.media_view.by_folder, icon::FOLDERS).on_hover_text("Group by folder");
+        ui.toggle_value(&mut st.media_view.by_folder, icon::FOLDERS).on_hover_text("Group by folder");
+        let sort_name = match st.media_view.sort {
+            MediaSort::Name => "Name",
+            MediaSort::Newest => "Newest",
+            MediaSort::Type => "Type",
+        };
+        ComboBox::from_id_salt("media_sort").width(70.0).selected_text(sort_name).show_ui(ui, |ui| {
+            ui.selectable_value(&mut st.media_view.sort, MediaSort::Name, "Name");
+            ui.selectable_value(&mut st.media_view.sort, MediaSort::Newest, "Newest");
+            ui.selectable_value(&mut st.media_view.sort, MediaSort::Type, "Type");
         });
+        ui.spacing_mut().slider_width = 70.0;
+        guarded!(ui, st.media_view.tile, Slider::new(&mut st.media_view.tile, 72.0..=240.0).show_value(false)).on_hover_text("Thumbnail size");
     });
-    // Row 2: filters and collections.
+    // Row 3: filters and collections.
     let mut acts: Vec<MediaAct> = Vec::new();
     {
         let State { comp, media_view: view, .. } = st;
@@ -321,7 +322,7 @@ pub(crate) fn media_tile(
             p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
         }
     }
-    let stroke = if resp.hovered() { Stroke::new(1.5, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(50)) };
+    let stroke = if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, Color32::from_gray(50)) };
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
     let max_chars = ((w / 6.5) as usize).max(8);
     let mut name = item.name.clone();

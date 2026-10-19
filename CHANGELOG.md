@@ -4,6 +4,19 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.56 (2026-10-19)
+- **Interface brightness:** the sun button in the top bar sets how dark or light Phosphor looks, from *Darkest*
+  (for dark rooms and shows) through *Dark* (the usual) and *Dim* to *Soft light* and *Light* (daylight), or
+  anywhere in between with the slider. Text and the accent colour adjust so everything stays readable.
+- **Nothing hidden in narrow columns:** the Library's search box no longer sits under its buttons, the Effects
+  list's controls wrap instead of running off the edge, layer cards always have room, and the side columns
+  shrink with the window.
+- **Hide the side columns:** *Library* and *Inspector* toggles at the bottom right give the stage the whole
+  width (handy on a laptop).
+- **Session log:** Phosphor now keeps a plain log of each session (what was clicked, messages, warnings,
+  errors) in its settings folder, only on your computer, so problems can be traced afterwards.
+- The Syphon / Spout and NDI menu items work on Windows too.
+
 ## 0.2.55 (2026-10-19)
 - **A new, unified layout.** Three areas instead of a wall of panels, each with the same shape: your
   **Library** on the left (media, effects and generators, presets), the area's stage in the middle, one

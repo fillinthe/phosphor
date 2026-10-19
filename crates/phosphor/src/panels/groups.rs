@@ -118,7 +118,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
     });
     let dropped = frame.response.dnd_release_payload::<u64>().map(|p| *p);
     if frame.response.dnd_hover_payload::<u64>().is_some() {
-        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
     GroupOut { select, action, dropped }
 }
@@ -130,7 +130,7 @@ pub(crate) fn fx_badge(ui: &mut egui::Ui, effects: &[EffectState], bypass: &mut 
         return None;
     }
     let mut active = !*bypass;
-    let color = if active { ACCENT } else { Color32::GRAY };
+    let color = if active { accent() } else { Color32::GRAY };
     let r = ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass these effects · right-click to map");
     if r.changed() {
         *bypass = !active;

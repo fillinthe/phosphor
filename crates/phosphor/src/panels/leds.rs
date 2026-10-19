@@ -31,7 +31,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             };
             output_status(ui, status);
             if d.enabled && st.dmx.universes > 0 && st.dmx.error.is_none() {
-                ui.label(RichText::new(format!("{} {} universes", icon::CHECK_CIRCLE, st.dmx.universes)).small().color(ACCENT));
+                ui.label(RichText::new(format!("{} {} universes", icon::CHECK_CIRCLE, st.dmx.universes)).small().color(accent()));
             }
         }
     });
@@ -53,7 +53,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
     let to_screen = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
     for f in &mut st.comp.dmx.fixtures {
         let is_sel = selected == Some(f.id);
-        let color = if !f.enabled { Color32::GRAY } else if is_sel { ACCENT } else { ACCENT.gamma_multiply(0.6) };
+        let color = if !f.enabled { Color32::GRAY } else if is_sel { accent() } else { accent().gamma_multiply(0.6) };
         let corners = match f.shape {
             FixtureShape::MovingHead => 1,
             FixtureShape::Strip => 2,

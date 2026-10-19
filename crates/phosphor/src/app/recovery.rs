@@ -63,7 +63,7 @@ impl PhosphorApp {
         egui::Area::new(egui::Id::new("recovered_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
             egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(20, 44, 32)).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(format!("{} Recovered after an unexpected quit", icon::LIFEBUOY)).color(theme::ACCENT).strong());
+                    ui.label(egui::RichText::new(format!("{} Recovered after an unexpected quit", icon::LIFEBUOY)).color(theme::accent()).strong());
                     crate::ui::hint(ui, "project, layout, outputs, session and audio were restored");
                     if was_streaming && ui.button(format!("{} Resume stream", icon::BROADCAST)).clicked() {
                         let (w, h) = (self.state.comp.width, self.state.comp.height);

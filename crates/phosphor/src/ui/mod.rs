@@ -9,7 +9,7 @@ use phosphor_engine::{BlendMode, ControlTarget, EffectState, FitMode, LayerState
 use serde::{Deserialize, Serialize};
 
 use crate::app::{State, Trigger};
-use crate::theme::{ACCENT, WARN};
+use crate::theme::{accent, WARN};
 
 mod binding;
 mod learn;

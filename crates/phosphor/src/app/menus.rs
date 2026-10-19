@@ -17,6 +17,7 @@ impl PhosphorApp {
     }
 
     pub(crate) fn run_action(&mut self, ctx: &egui::Context, a: crate::menu::Action, now: f64) {
+        log::info!("menu: {a:?}");
         use crate::menu::Action as A;
         if self.lock.active && !super::lock::allowed_when_locked(&a) {
             return;
@@ -196,7 +197,7 @@ impl PhosphorApp {
         egui::Panel::top("top_bar").show(ui, |ui| {
             ui.add_space(2.0);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(theme::ACCENT));
+                ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(theme::accent()));
                 let now = ui.ctx().input(|i| i.time);
                 // On the Mac the menus live in the macOS menu bar; the in-window copy is for the browser build.
                 #[cfg(target_os = "macos")]
@@ -264,7 +265,7 @@ impl PhosphorApp {
                 let map_text = egui::RichText::new(format!("{} MAP", icon::PLUG)).strong();
                 let map_text = if self.state.map_mode { map_text.color(egui::Color32::BLACK) } else { map_text };
                 if ui
-                    .add(egui::Button::new(map_text).selected(self.state.map_mode).fill(if self.state.map_mode { theme::ACCENT } else { egui::Color32::TRANSPARENT }))
+                    .add(egui::Button::new(map_text).selected(self.state.map_mode).fill(if self.state.map_mode { theme::accent() } else { egui::Color32::TRANSPARENT }))
                     .on_hover_text("Map mode (Shift ⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")
                     .clicked()
                 {
@@ -276,6 +277,25 @@ impl PhosphorApp {
                     crate::support::donate_button(ui);
                     // Only while a new version is waiting: right next to Donate, filled so it stands out.
                     self.state.updater.top_bar_button(ui);
+                    let before = self.ui_brightness;
+                    ui.menu_button(icon::SUN, |ui| {
+                        ui.label(egui::RichText::new("Interface brightness").strong());
+                        ui.spacing_mut().slider_width = 200.0;
+                        ui.add(egui::Slider::new(&mut self.ui_brightness, 0.0..=1.0).show_value(false));
+                        ui.horizontal(|ui| {
+                            for (name, b) in theme::BRIGHTNESS_PRESETS {
+                                if ui.selectable_label((self.ui_brightness - b).abs() < 0.01, *name).clicked() {
+                                    self.ui_brightness = *b;
+                                }
+                            }
+                        });
+                        crate::ui::hint(ui, "Darker for dark rooms and shows, lighter for daylight.");
+                    })
+                    .response
+                    .on_hover_text("Interface brightness: from darkest to light");
+                    if self.ui_brightness != before {
+                        theme::set_brightness(ui.ctx(), self.ui_brightness);
+                    }
                     if ui.button(icon::BUG).on_hover_text("Report a bug").clicked() {
                         self.state.bug.open = true;
                     }
@@ -314,7 +334,7 @@ impl PhosphorApp {
                                 Action::DuplicateLayer | Action::DeleteLayer => has_layer,
                                 Action::Group => has_layer && self.state.selected.and_then(|id| self.state.comp.layers.iter().find(|l| l.id == id)).is_some_and(|l| l.parent.is_none()),
                                 Action::Ungroup => panels::selected_group(&self.state.comp, self.state.selected).is_some(),
-                                Action::Syphon | Action::Ndi => cfg!(target_os = "macos"),
+                                Action::Syphon | Action::Ndi => cfg!(any(target_os = "macos", windows)),
                                 _ => true,
                             };
                             let text = match a {

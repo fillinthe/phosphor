@@ -81,8 +81,8 @@ pub(crate) fn remember_card(ui: &egui::Ui, id: egui::Id, rect: egui::Rect) {
 }
 
 pub(crate) fn card_frame(ui: &egui::Ui, is_selected: bool) -> egui::Frame {
-    let stroke = if is_selected { Stroke::new(1.5, ACCENT) } else { ui.visuals().widgets.noninteractive.bg_stroke };
-    let fill = if is_selected { Color32::from_rgb(24, 34, 30) } else { ui.visuals().faint_bg_color };
+    let stroke = if is_selected { Stroke::new(1.5, accent()) } else { ui.visuals().widgets.noninteractive.bg_stroke };
+    let fill = if is_selected { crate::theme::tint(ui.visuals().faint_bg_color, 0.1) } else { ui.visuals().faint_bg_color };
     egui::Frame::new().fill(fill).stroke(stroke).corner_radius(6).inner_margin(egui::Margin::same(8))
 }
 
@@ -164,7 +164,7 @@ pub(crate) fn short_duration(s: u64) -> String {
 pub(crate) fn activity_dot(ui: &mut egui::Ui, last: Option<std::time::Instant>) {
     let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), Sense::hover());
     let lit = last.map_or(0.0, |t| (1.0 - t.elapsed().as_secs_f32() / 1.5).clamp(0.0, 1.0));
-    let c = if lit > 0.0 { ACCENT.gamma_multiply(0.3 + 0.7 * lit) } else { Color32::from_gray(50) };
+    let c = if lit > 0.0 { accent().gamma_multiply(0.3 + 0.7 * lit) } else { Color32::from_gray(50) };
     ui.painter().circle_filled(r.center(), 4.0, c);
 }
 
@@ -209,7 +209,7 @@ pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
             hint(ui, text);
         }
         OutputStatus::Receiving(n) => {
-            ui.label(RichText::new(format!("{} {n} receiving", icon::CHECK_CIRCLE)).small().color(ACCENT));
+            ui.label(RichText::new(format!("{} {n} receiving", icon::CHECK_CIRCLE)).small().color(accent()));
         }
         OutputStatus::Error(e) => {
             ui.colored_label(Color32::from_rgb(255, 120, 90), e);
@@ -229,7 +229,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, region: Option<(&
     p.rect_filled(rect, 4.0, Color32::from_gray(32));
     let mut done = rect;
     done.set_width(rect.width() * frac);
-    p.rect_filled(done, 4.0, ACCENT.gamma_multiply(0.5));
+    p.rect_filled(done, 4.0, accent().gamma_multiply(0.5));
     if let Some((lo, hi)) = region {
         if *lo > 0.0 || *hi < 1.0 {
             let r = egui::Rect::from_x_y_ranges(x_of(*lo)..=x_of(*hi), rect.y_range());
@@ -284,7 +284,7 @@ pub(crate) fn value_bubble(ui: &egui::Ui, slider: &egui::Response, text: impl In
     let galley = painter.layout_no_wrap(text.into(), egui::FontId::monospace(11.0), Color32::WHITE);
     let rect = egui::Rect::from_center_size(at - egui::vec2(0.0, 18.0), galley.size() + egui::vec2(10.0, 4.0));
     painter.rect_filled(rect, 4.0, Color32::from_rgb(20, 22, 24));
-    painter.rect_stroke(rect, 4.0, Stroke::new(1.0, ACCENT), StrokeKind::Outside);
+    painter.rect_stroke(rect, 4.0, Stroke::new(1.0, accent()), StrokeKind::Outside);
     painter.galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
 }
 
@@ -354,7 +354,7 @@ pub(crate) fn history_graph(ui: &mut egui::Ui, size: egui::Vec2, values: &[f32],
         let pad = 3.0;
         let points: Vec<egui::Pos2> =
             values.iter().enumerate().map(|(i, v)| egui::pos2(x(i), rect.bottom() - pad - (v / peak).clamp(0.0, 1.0) * (rect.height() - 2.0 * pad))).collect();
-        painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, crate::theme::ACCENT)));
+        painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, crate::theme::accent())));
     }
     response
 }

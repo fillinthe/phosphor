@@ -166,7 +166,7 @@ impl PhosphorApp {
                 if ctx.input(|i| i.time) < out.identify_until {
                     let c = rect.center();
                     ui.painter().rect_filled(rect, 0.0, Color32::from_black_alpha(140));
-                    ui.painter().text(c, egui::Align2::CENTER_CENTER, out.number.to_string(), egui::FontId::proportional(rect.height() * 0.45), theme::ACCENT);
+                    ui.painter().text(c, egui::Align2::CENTER_CENTER, out.number.to_string(), egui::FontId::proportional(rect.height() * 0.45), theme::accent());
                     ui.painter().text(c + egui::vec2(0.0, rect.height() * 0.28), egui::Align2::CENTER_CENTER, &out.name, egui::FontId::proportional(28.0), Color32::WHITE);
                 }
                 if out.edit_mapping {

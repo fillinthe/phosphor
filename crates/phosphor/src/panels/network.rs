@@ -91,7 +91,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                 audio.use_network();
             }
         } else {
-            ui.colored_label(ACCENT, "Audio analysis is listening to session viewers");
+            ui.colored_label(accent(), "Audio analysis is listening to session viewers");
         }
         ui.add_space(4.0);
         hint(ui, "Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
@@ -174,7 +174,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                 let left = p.left.map(|s| format!(" · {}:{:02} left", s as u32 / 60, s as u32 % 60)).unwrap_or_default();
                 let page = p.page.and_then(|i| pages.get(i)).map(|n| format!(" · {n}")).unwrap_or_default();
                 ui.horizontal(|ui| {
-                    ui.colored_label(ACCENT, format!("{} Playing: {}{page}{left}", icon::HAND_WAVING, p.label));
+                    ui.colored_label(accent(), format!("{} Playing: {}{page}{left}", icon::HAND_WAVING, p.label));
                     if ui.small_button("Skip").on_hover_text("End this turn now; the next person gets the controls").clicked() {
                         skip = Some(p.who.clone());
                     }

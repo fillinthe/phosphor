@@ -98,7 +98,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     if let Some((src, target)) = map_draft.as_mut() {
         card_frame(ui, true).show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("New").strong().color(ACCENT));
+                ui.label(RichText::new("New").strong().color(accent()));
                 source_editor(ui, "new_map_source", src);
                 ui.label(icon::ARROW_RIGHT);
                 if let Some(t) = target_picker(ui, "new_map_target", &targets, target.as_ref(), 220.0) {
@@ -149,7 +149,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 if let Some(v) = live {
                     let mut fill = r;
                     fill.set_width(r.width() * v.clamp(0.0, 1.0));
-                    ui.painter().rect_filled(fill, 2.0, ACCENT);
+                    ui.painter().rect_filled(fill, 2.0, accent());
                 }
                 if let Some(t) = target_picker(ui, ("map_target", i), &targets, Some(&m.target), 220.0) {
                     m.target = t;

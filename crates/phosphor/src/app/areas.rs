@@ -31,11 +31,14 @@ pub(crate) struct AreaTabs {
     pub library: Tab,
     pub show_bottom: Tab,
     pub outputs_bottom: Tab,
+    /// The side columns can be hidden (status line toggles) to give the stage the room.
+    pub show_library: bool,
+    pub show_inspector: bool,
 }
 
 impl Default for AreaTabs {
     fn default() -> Self {
-        Self { library: Tab::Media, show_bottom: Tab::Clips, outputs_bottom: Tab::Output }
+        Self { library: Tab::Media, show_bottom: Tab::Clips, outputs_bottom: Tab::Output, show_library: true, show_inspector: true }
     }
 }
 
@@ -72,12 +75,19 @@ impl PhosphorApp {
         let line = egui::Stroke::new(1.0, Color32::from_gray(40));
         let side = egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(egui::Margin::symmetric(10, 6)).stroke(line);
 
-        egui::Panel::left("area_library").resizable(true).default_size(250.0).size_range(190.0..=460.0).frame(side).show(ui, |ui| {
-            heading(ui, "Library");
-            sub_tabs(ui, &mut tabs.library, LIBRARY);
-            panels::draw_tab(ui, st, tabs.library);
-        });
-        egui::Panel::right("area_inspector").resizable(true).default_size(330.0).size_range(260.0..=520.0).frame(side).show(ui, |ui| {
+        // Side columns scale with the window (never more than about a quarter each), so the stage keeps its room.
+        let w = ui.available_width();
+        let lib_max = (w * 0.22).max(180.0);
+        let ins_max = (w * 0.26).max(220.0);
+        if tabs.show_library {
+            egui::Panel::left("area_library").resizable(true).default_size(250.0f32.min(lib_max)).size_range(170.0..=lib_max).frame(side).show(ui, |ui| {
+                heading(ui, "Library");
+                sub_tabs(ui, &mut tabs.library, LIBRARY);
+                panels::draw_tab(ui, st, tabs.library);
+            });
+        }
+        if tabs.show_inspector {
+        egui::Panel::right("area_inspector").resizable(true).default_size(330.0f32.min(ins_max)).size_range(220.0..=ins_max).frame(side).show(ui, |ui| {
             heading(ui, match area {
                 1 => "Output",
                 2 => "Modulators",
@@ -89,6 +99,7 @@ impl PhosphorApp {
                 _ => panels::draw_tab(ui, st, Tab::Inspector),
             }
         });
+        }
         let fill = ui.visuals().panel_fill;
         let stage = egui::Frame::new().fill(fill).inner_margin(egui::Margin::same(6));
         let mut both = (st, tabs);
@@ -97,9 +108,10 @@ impl PhosphorApp {
                 ui,
                 "show_bottom",
                 0.4,
+                140.0,
                 &mut both,
                 |ui, (st, _)| {
-                    crate::ui::split_horizontal(ui, "show_layers", 0.3, *st, |ui, st| panels::draw_tab(ui, st, Tab::Preview), |ui, st| {
+                    crate::ui::split_horizontal(ui, "show_layers", 0.3, 310.0, *st, |ui, st| panels::draw_tab(ui, st, Tab::Preview), |ui, st| {
                         heading(ui, "Layers");
                         panels::draw_tab(ui, st, Tab::Layers);
                     })
@@ -109,7 +121,7 @@ impl PhosphorApp {
                     panels::draw_tab(ui, st, tabs.show_bottom);
                 },
             ),
-            1 => crate::ui::split_vertical(ui, "outputs_bottom", 0.32, &mut both, |ui, (st, _)| panels::studio_stage(ui, st), |ui, (st, tabs)| {
+            1 => crate::ui::split_vertical(ui, "outputs_bottom", 0.32, 120.0, &mut both, |ui, (st, _)| panels::studio_stage(ui, st), |ui, (st, tabs)| {
                 sub_tabs(ui, &mut tabs.outputs_bottom, OUTPUTS_BOTTOM);
                 scrolled(ui, "outputs_bottom", |ui| panels::draw_tab(ui, st, tabs.outputs_bottom));
             }),
@@ -117,6 +129,7 @@ impl PhosphorApp {
                 ui,
                 "control",
                 0.58,
+                320.0,
                 both.0,
                 |ui, st| {
                     heading(ui, "MIDI / OSC / TouchOSC");

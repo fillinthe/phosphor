@@ -55,7 +55,7 @@ impl PhosphorApp {
                     }
                     Some(p) => {
                         if let Some(app) = &p.output {
-                            ui.label(egui::RichText::new(format!("{} Exported {}", icon::CHECK_CIRCLE, app.file_name().unwrap_or_default().to_string_lossy())).strong().color(theme::ACCENT));
+                            ui.label(egui::RichText::new(format!("{} Exported {}", icon::CHECK_CIRCLE, app.file_name().unwrap_or_default().to_string_lossy())).strong().color(theme::accent()));
                             ui.label(format!("{} media file(s), {:.1} MB of media", p.media_files, p.bytes as f64 / 1e6));
                             if let Some(z) = &p.zip {
                                 ui.label(format!("Zip: {}", z.display()));

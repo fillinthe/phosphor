@@ -19,7 +19,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
             thumbnail(ui, tex, egui::vec2(w, w / aspect), true);
-            ui.label(RichText::new("MASTER").strong().color(ACCENT));
+            ui.label(RichText::new("MASTER").strong().color(accent()));
             hint(ui, "These effects run over the whole mix, after every layer has been blended.");
             ui.separator();
             fx_action = effects_editor(ui, &mut st.comp.master_effects, clipboard_len);

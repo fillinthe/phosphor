@@ -179,14 +179,14 @@ pub(crate) fn master_card(
                 select = true;
             }
             ui.vertical(|ui| {
-                if ui.selectable_label(is_selected, RichText::new("MASTER").strong().size(12.5).color(ACCENT)).clicked() {
+                if ui.selectable_label(is_selected, RichText::new("MASTER").strong().size(12.5).color(accent())).clicked() {
                     select = true;
                 }
                 hint(ui, "Effects here run over all layers");
                 let fx = effects.iter().filter(|e| e.enabled).count();
                 if fx > 0 {
                     let mut active = !*bypass;
-                    let color = if active { ACCENT } else { Color32::GRAY };
+                    let color = if active { accent() } else { Color32::GRAY };
                     let r = ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass the master effects · right-click to map");
                     map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MasterFxBypass));
                     if r.changed() {
@@ -203,7 +203,7 @@ pub(crate) fn master_card(
     // Only effects make sense on MASTER.
     let dropped = frame.response.dnd_release_payload::<crate::explorer::PaletteDrag>().map(|p| *p).filter(|d| d.effect.is_some());
     if frame.response.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some_and(|d| d.effect.is_some()) {
-        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
     (select, dropped)
 }
@@ -355,7 +355,7 @@ pub(crate) fn layer_card(
         || frame.response.dnd_hover_payload::<MediaDrag>().is_some()
         || frame.response.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some();
     if hovering {
-        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+        ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
     CardOut { select, action, dropped, dropped_media, dropped_palette }
 }

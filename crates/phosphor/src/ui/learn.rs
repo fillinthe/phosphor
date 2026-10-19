@@ -107,9 +107,9 @@ pub(crate) fn map_overlay(ui: &egui::Ui, resp: &egui::Response, target: &Control
     } else if mapped {
         (gold.gamma_multiply(0.12), Stroke::new(1.5, gold))
     } else if r.hovered() {
-        (ACCENT.gamma_multiply(0.25), Stroke::new(1.5, ACCENT))
+        (accent().gamma_multiply(0.25), Stroke::new(1.5, accent()))
     } else {
-        (ACCENT.gamma_multiply(0.08), Stroke::new(1.0, ACCENT.gamma_multiply(0.7)))
+        (accent().gamma_multiply(0.08), Stroke::new(1.0, accent().gamma_multiply(0.7)))
     };
     let p = ui.painter();
     p.rect_filled(rect, 3.0, fill);

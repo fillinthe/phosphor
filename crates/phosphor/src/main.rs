@@ -25,6 +25,8 @@ mod link;
 mod ltc;
 #[cfg(not(target_arch = "wasm32"))]
 mod os;
+#[cfg(not(target_arch = "wasm32"))]
+mod session_log;
 mod pacing;
 mod panels;
 mod ui;
@@ -92,7 +94,6 @@ fn main() -> eframe::Result {
         }
         return Ok(());
     }
-    env_logger::init();
     // Converter crashes on odd third-party shaders are caught and skipped; keep them out of the log.
     // Everything else is also written to crash.log so problems can be diagnosed after the fact.
     let default_hook = std::panic::take_hook();
@@ -111,6 +112,7 @@ fn main() -> eframe::Result {
         default_hook(info);
     }));
     let bench = bench::BenchConfig::from_args(std::env::args().skip(1));
+    session_log::init(bench.is_none());
     // A live show must never be slowed down by App Nap or timer coalescing (e.g. while the
     // control window is minimized or covered and the outputs are on a projector).
     #[cfg(target_os = "macos")]
@@ -121,7 +123,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Phosphor")
-            .with_inner_size([1440.0, 900.0])
+            .with_inner_size(bench.as_ref().and_then(|b| b.window).map_or([1440.0, 900.0], |(w, h)| [w, h]))
             .with_min_inner_size([960.0, 600.0])
             .with_icon(app_icon()),
         // A benchmark must start from a clean slate, not yesterday's project.

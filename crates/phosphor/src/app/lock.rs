@@ -125,8 +125,8 @@ impl PhosphorApp {
         egui::Panel::top("top_bar").show(ui, |ui| {
             ui.add_space(2.0);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(crate::theme::ACCENT));
-                ui.label(egui::RichText::new(format!("{} Locked", icon::LOCK)).color(crate::theme::ACCENT));
+                ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(crate::theme::accent()));
+                ui.label(egui::RichText::new(format!("{} Locked", icon::LOCK)).color(crate::theme::accent()));
                 ui.separator();
                 let output_label = if self.state.output_open() { format!("{} Output", icon::STOP) } else { format!("{} Output", icon::PLAY) };
                 if ui.button(output_label).on_hover_text("Output window. F = fullscreen, Esc = exit").clicked() {
