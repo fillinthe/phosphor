@@ -185,6 +185,16 @@ impl LayerState {
     }
 }
 
+impl LayerState {
+    /// Takes every modulation off the layer's generator and effects: the look stays, nothing moves on its own.
+    pub fn still(&mut self) {
+        self.generator_mods.clear();
+        for fx in &mut self.effects {
+            fx.mods.clear();
+        }
+    }
+}
+
 fn merge_mods(into: &mut Vec<ParamMod>, new: Vec<ParamMod>) {
     for m in new {
         into.retain(|o| o.index != m.index);

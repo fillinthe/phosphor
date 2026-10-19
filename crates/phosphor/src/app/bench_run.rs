@@ -348,6 +348,7 @@ impl PhosphorApp {
                 "react" => Q::React,
                 "fill" => Q::Fill,
                 "instant" => Q::InstantSet,
+                "still" => Q::Still,
                 other => {
                     eprintln!("--quick: unknown action {other}");
                     continue;

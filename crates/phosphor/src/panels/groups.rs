@@ -64,16 +64,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
                     });
                 });
                 ui.horizontal(|ui| {
-                    ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
-                    let r = guarded!(ui, g.opacity, Slider::new(&mut g.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Group opacity");
-                    mapped_badge(ui, &r, &ControlTarget::LayerOpacity(g.id));
-                    mod_marker(ui, &r, g.opacity, 0.0, 1.0, g.opacity_mod.as_ref());
-                    if control_menu(&r, Some(&ControlTarget::LayerOpacity(g.id)), Some(&mut g.opacity_mod)) {
-                        g.opacity = 1.0;
-                    }
-                    value_bubble(ui, &r, format!("{:.0}%", g.opacity * 100.0));
-                    percent_field(ui, &mut g.opacity);
-                    mod_button(ui, &mut g.opacity_mod);
+                    Level::percent(&mut g.opacity, "Group opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
                 });
                 ui.horizontal(|ui| {
                     choice_combo(ui, ("group_blend", g.id), &mut g.blend, 104.0, false);
@@ -190,11 +181,9 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
             ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(f32::INFINITY));
         });
         hint(ui, "A group mixes its layers together first; its opacity, blend and effects then apply to that mix.");
-        let r = guarded!(ui, g.opacity, Slider::new(&mut g.opacity, 0.0..=1.0).text("Opacity"));
-        mapped_badge(ui, &r, &ControlTarget::LayerOpacity(g.id));
-        if control_menu(&r, Some(&ControlTarget::LayerOpacity(g.id)), Some(&mut g.opacity_mod)) {
-            g.opacity = 1.0;
-        }
+        ui.horizontal(|ui| {
+            Level::percent(&mut g.opacity, "Opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
+        });
         ui.horizontal(|ui| {
             ui.label("Blend");
             choice_combo(ui, ("group_blend_insp", g.id), &mut g.blend, 120.0, false);

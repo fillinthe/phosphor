@@ -45,8 +45,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                         ui.set_width(col_w - 14.0);
                         ui.set_min_height(height - 24.0);
                         ui.horizontal(|ui| {
-                            let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong());
-                            map_menu(ui, &on, ControlTarget::LayerEnabled(id));
+                            super::layers::show_button(ui, layer);
                             let solo_color = if layer.solo { WARN } else { Color32::GRAY };
                             ui.toggle_value(&mut layer.solo, RichText::new("S").small().strong().color(solo_color));
                             ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));

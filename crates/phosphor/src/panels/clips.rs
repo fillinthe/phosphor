@@ -415,7 +415,8 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         ui.set_min_size(size);
         ui.set_max_width(size.x);
         // Live picture: click to select (and edit in the Inspector).
-        let pic_h = (size.y - 34.0).clamp(24.0, 60.0);
+        let has_sound = matches!(layer.source, SourceSpec::Movie { .. });
+        let pic_h = (size.y - if has_sound { 56.0 } else { 34.0 }).clamp(36.0, 60.0);
         let (pic, r) = ui.allocate_exact_size(egui::vec2(size.x - 6.0, pic_h), Sense::click());
         let p = ui.painter();
         p.rect_filled(pic, 4.0, Color32::BLACK);
@@ -427,16 +428,19 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         if r.on_hover_text("Click to edit this layer (Inspector)").clicked() {
             *selected = Some(layer.id);
         }
-        // ON + opacity under the picture.
+        // Show/hide + opacity under the picture; mute + volume for layers with sound.
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            ui.toggle_value(&mut layer.enabled, RichText::new("ON").small()).on_hover_text("Layer on / off");
-            super::inspector::mute_button(ui, &mut layer.muted, "this layer");
-            ui.spacing_mut().slider_width = (size.x - 80.0).max(40.0);
-            let o = guarded!(ui, layer.opacity, egui::Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
-            mapped_badge(ui, &o, &ControlTarget::LayerOpacity(layer.id));
-            value_bubble(ui, &o, format!("{:.0}%", layer.opacity * 100.0));
+            super::layers::show_button(ui, layer);
+            Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).width(size.x - 34.0).show(ui);
         });
+        if has_sound {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                super::inspector::mute_button(ui, &mut layer.muted, "this layer");
+                super::inspector::volume_bar(ui, layer, size.x - 34.0);
+            });
+        }
         let name: String = layer.name.chars().take(20).collect();
         ui.menu_button(RichText::new(name).color(ui.visuals().text_color()), |ui| {
             ui.set_min_width(220.0);

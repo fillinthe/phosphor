@@ -99,11 +99,9 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                 for (pi, p) in desc.params.iter().enumerate() {
                     param_slider(ui, &mut fx.values, &mut fx.mods, pi, p, Some(ControlTarget::EffectParam { effect: fx.id, index: pi }));
                 }
-                let mix = guarded!(ui, fx.mix, Slider::new(&mut fx.mix, 0.0..=1.0).text("Mix"));
-                mapped_badge(ui, &mix, &ControlTarget::EffectMix(fx.id));
-                if control_menu(&mix, Some(&ControlTarget::EffectMix(fx.id)), None) {
-                    fx.mix = 1.0;
-                }
+                ui.horizontal(|ui| {
+                    Level::percent(&mut fx.mix, "Mix").target(ControlTarget::EffectMix(fx.id)).tip("How much of this effect: 0% = bypassed").show(ui);
+                });
             });
         });
         if let Some(p) = frame.response.dnd_release_payload::<FxDrag>() {
