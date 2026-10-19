@@ -166,6 +166,8 @@ impl PhosphorApp {
         }
         self.learning_banner(&ctx);
         self.export_window(&ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.convert_window(&ctx);
         self.save_layout_window(&ctx);
         self.account_windows(&ctx);
         crate::support::bug_window(&ctx, &mut self.state);

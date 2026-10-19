@@ -56,6 +56,8 @@ mod recovery;
 mod render;
 mod settings;
 mod areas;
+#[cfg(not(target_arch = "wasm32"))]
+mod convert_window;
 mod status;
 mod show;
 
@@ -178,6 +180,9 @@ pub struct State {
     pub notice: Option<String>,
     /// Next time movies' settings are saved into the media bin (`Composition::remember_media_settings`).
     pub media_memory_at: f64,
+    /// The Convert window (right-click a media file > Convert…).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) convert: convert_window::ConvertUi,
     /// Opening the default audio input failed once (don't retry on every Quick action).
     pub audio_declined: bool,
     /// Clip cells drawn last frame (screen rect, layer, slot): where files dropped from the Finder land.

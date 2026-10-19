@@ -41,6 +41,8 @@ pub(crate) enum MediaAct {
     NewLayer(usize),
     /// Play this item on that layer.
     PlayOn(usize, u64),
+    /// Open the Convert window for this item.
+    Convert(usize),
     Favorite(usize),
     Toggle(usize, String),
     Rename(usize, String),
@@ -248,6 +250,14 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                     _ => st.add_layer(),
                 };
                 st.launch_source(target, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
+            }
+            MediaAct::Convert(i) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(item) = st.comp.media_bin.get(i).cloned() {
+                    st.convert.open_for(&item.path, &item.name);
+                }
+                #[cfg(target_arch = "wasm32")]
+                let _ = i;
             }
             MediaAct::PlayOn(i, layer) => {
                 let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
@@ -466,6 +476,11 @@ pub(crate) fn media_tile(
             });
             ui.ctx().data_mut(|d| d.insert_temp(id, text));
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        if crate::media::is_movie(&item.name) && ui.button(label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show (Hap, ProRes, or H.264 with every frame a keyframe); see the size first").clicked() {
+            acts.push(MediaAct::Convert(i));
+            ui.close();
+        }
         ui.separator();
         if ui.button(label(icon::PLUS, "Put on a new layer")).clicked() {
             acts.push(MediaAct::NewLayer(i));
