@@ -24,7 +24,9 @@ const NOPTS: i64 = i64::MIN;
 /// Reverse play decodes this many frames at a time, then shows them backwards (bounds memory:
 /// ~37 MB at 1080p; intra-frame codecs like ProRes and Hap reverse at no extra cost, long-GOP
 /// H.264/HEVC re-decode from the keyframe for each chunk).
-const REVERSE_CHUNK_FRAMES: f64 = 12.0;
+/// Frames of the next reverse group decoded per frame shown (keeps ahead of keyframe groups up to ~4x the
+/// kept window).
+const REVERSE_DECODE_AHEAD: usize = 4;
 
 pub use phosphor_engine::PlayDirection;
 
@@ -63,6 +65,21 @@ pub enum VideoFrame {
         /// Hap Q Alpha: RGTC1 (BC4) blocks of the alpha plane.
         alpha: Option<Vec<u8>>,
     },
+}
+
+impl VideoFrame {
+    /// A second handle to this frame when that's cheap (a GPU surface or Hap blocks), for keeping the end of a
+    /// forward pass to play backwards from; None for full pictures (they'd cost a copy each).
+    pub(crate) fn cheap_clone(&self) -> Option<VideoFrame> {
+        match self {
+            #[cfg(target_os = "macos")]
+            VideoFrame::Surface(pb) => Some(VideoFrame::Surface(pb.clone())),
+            VideoFrame::Compressed { width, height, format, data, alpha } => {
+                Some(VideoFrame::Compressed { width: *width, height: *height, format: *format, data: data.clone(), alpha: alpha.clone() })
+            }
+            _ => None,
+        }
+    }
 }
 
 /// The GPU can take Hap's blocks directly (set once the GPU is known; off = FFmpeg decodes Hap on the CPU).
@@ -112,6 +129,7 @@ pub struct VideoStats {
     pub frames_decoded: u64,
     /// Frames decoded but dropped before conversion because they were already late.
     pub frames_skipped: u64,
+    pub frames_shown: u64,
 }
 
 pub struct VideoPlayer {
@@ -171,6 +189,8 @@ struct Shared {
     hardware: AtomicBool,
     decoded: AtomicU64,
     skipped: AtomicU64,
+    /// Frames handed on to be shown (decoded counts re-decodes too, e.g. for reverse play).
+    shown: AtomicU64,
     pool: Mutex<Vec<VideoFrame>>,
     codec: Mutex<String>,
 }
@@ -248,6 +268,7 @@ impl VideoPlayer {
             hardware: AtomicBool::new(false),
             decoded: AtomicU64::new(0),
             skipped: AtomicU64::new(0),
+            shown: AtomicU64::new(0),
             pool: Mutex::new(Vec::new()),
             codec: Mutex::new(dec.codec.clone()),
         });
@@ -310,6 +331,7 @@ impl VideoPlayer {
             hardware: AtomicBool::new(false),
             decoded: AtomicU64::new(0),
             skipped: AtomicU64::new(0),
+            shown: AtomicU64::new(0),
             pool: Mutex::new(Vec::new()),
             codec: Mutex::new("audio".into()),
         });
@@ -600,6 +622,7 @@ impl VideoPlayer {
             hardware: self.shared.hardware.load(Ordering::Relaxed),
             frames_decoded: self.shared.decoded.load(Ordering::Relaxed),
             frames_skipped: self.shared.skipped.load(Ordering::Relaxed),
+            frames_shown: self.shared.shown.load(Ordering::Relaxed),
         }
     }
 }

@@ -455,7 +455,7 @@ impl MediaManager {
             }
             let decode = if s.hardware { "hardware decode" } else { "software decode" };
             let skipped = if s.frames_skipped > 0 { format!(" · {} skipped", s.frames_skipped) } else { String::new() };
-            Some(format!("{} · {w}×{h}{dur} · {decode} · {} frames{skipped}", s.codec, s.frames_decoded))
+            Some(format!("{} · {w}×{h}{dur} · {decode} · {} shown, {} decoded{skipped}", s.codec, s.frames_shown, s.frames_decoded))
         }
         #[cfg(target_arch = "wasm32")]
         {
