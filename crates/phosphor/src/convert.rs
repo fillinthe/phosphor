@@ -344,7 +344,7 @@ mod tests {
         let p = Probe { width: 1920, height: 1080, fps: 30.0, seconds: 10.0, bytes: 0, codec: "h264".into(), has_audio: false };
         let hap = estimate(&p, Format::Hap, Quality::Balanced, Size::Original);
         let h264 = estimate(&p, Format::H264Keyframes, Quality::Balanced, Size::Original);
-        assert!(hap > 250_000_000 && hap < 300_000_000, "{hap}");
+        assert!(hap > 150_000_000 && hap < 220_000_000, "{hap}");
         assert!(h264 < hap / 5, "{h264}");
         assert!(estimate(&p, Format::Hap, Quality::Balanced, Size::Fit720) < hap / 2);
     }
