@@ -222,7 +222,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Syphon in/out, NDI out
 - [x] NDI in
 - [x] Recording to ProRes / Hap (own Hap encoder: DXT1/DXT5 + Snappy, muxed in-process)
-- [ ] Spout (Windows: preview build ships from 0.2.50)
+- [x] Spout (Windows) ✔ 2026-10-19, tested against the official Spout SDK receiver in CI
 
 ### Phase 5b: Streaming & recording (no OBS required)
 - [x] Non-blocking GPU readback ring → FFmpeg pipe → VideoToolbox H.264 (never stalls rendering)
@@ -263,7 +263,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] **Browser build runs** (WebGPU, Chrome): `cd crates/phosphor && trunk build --release --dist ../../dist`,
       then serve `dist/`. Same engine + UI; 9 MB wasm. No video/audio/MIDI in the browser yet
 - [ ] iPadOS / iOS (same engine + UI; touch-sized controls)
-- [~] Windows build (owner, 2026-10-17: "do win at some point"): builds and packages on GitHub Actions every push ✔, preview zip on releases from 0.2.50 ✔, displays / stats / watchdog / start at login ✔. NDI ✔ 2026-10-19. Still: Spout instead of Syphon, installing updates by itself, installer, signing, a real-PC test
+- [~] Windows build (owner, 2026-10-17: "do win at some point"): builds and packages on GitHub Actions every push ✔, preview zip on releases from 0.2.50 ✔, displays / stats / watchdog / start at login ✔. NDI ✔, Spout ✔, Export Show ✔ 2026-10-19. Still: installing updates by itself, installer, signing, a real-PC test
 - [x] **Mac: File / Edit / View… only in the macOS menu bar** ✔ 2026-10-17 (in-window menus stay for the browser build)
 - [ ] Older macOS (11–13): test wgpu Metal backend; likely only small changes needed
 

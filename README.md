@@ -28,7 +28,7 @@ updates itself (Help › Check for Updates…).
 ### Windows 10/11 (preview)
 
 Download `Phosphor-windows.zip` from the same release, unzip anywhere and run Phosphor.exe. Windows warns once
-because the app isn't signed: **More info**, **Run anyway**. Not on Windows yet: Spout, NDI, Export Show.
+because the app isn't signed: **More info**, **Run anyway**. Spout, NDI and Export Show work there too.
 
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 

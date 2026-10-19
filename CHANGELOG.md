@@ -4,6 +4,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.53 (2026-10-19)
+- **The Mac app opens on macOS 14 and 15 again.** The video libraries inside recent downloads only ran on
+  macOS 26, so on older Macs Phosphor wouldn't start. They're now built for macOS 14 and later, and the
+  download is smaller (52 MB instead of 66).
+- **Spout on Windows:** turn on Spout in Output & Stats and pick "Phosphor" in Resolume, TouchDesigner, OBS
+  (Spout2 plugin), MadMapper or any Spout app. It's the same switch as Syphon on the Mac, so projects carry over.
+- **Export Show on Windows:** packs the project, its media, shaders and mappings into a folder with its own .exe
+  that runs on another PC without installing Phosphor.
+
 ## 0.2.52 (2026-10-19)
 - **Stream health at a glance:** while you stream, the LIVE row shows a small graph of the last two minutes
   (bitrate, with red where frames were dropped or the stream fell behind) and a verdict: *Healthy · 4.1 Mbit/s*,
