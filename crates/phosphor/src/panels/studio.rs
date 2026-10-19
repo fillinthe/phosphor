@@ -1,4 +1,5 @@
-//! Mapping Studio: a full workspace for projection mapping. Left: every output with its slices and masks. Middle:
+//! Mapping Studio: a full workspace for projection mapping. Top: every output, live (the output strip). Left: the
+//! selected output's slices and masks. Middle:
 //! the output canvas (pinch / ⌘-scroll to zoom, two-finger scroll or middle-drag to pan, snap grid, arrow keys
 //! nudge) and the input view (drag each slice's source rectangle on the picture). Right: the selected item.
 
@@ -40,6 +41,8 @@ pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
     if !st.comp.outputs.iter().any(|o| o.id == st.mapping_output) {
         st.mapping_output = st.primary_output();
     }
+    output_strip(ui, st, 96.0);
+    ui.separator();
     let full = ui.available_rect_before_wrap();
     let left_w = 230.0f32.min(full.width() * 0.22);
     let right_w = 340.0f32.min(full.width() * 0.3);
@@ -56,30 +59,24 @@ pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
     ui.allocate_rect(full, Sense::hover());
 }
 
-/// Outputs, each with its slices and masks.
+/// The selected output's slices and masks (outputs themselves are in the strip above).
 fn tree(ui: &mut egui::Ui, st: &mut State) {
     let mut action = None;
-    ui.horizontal(|ui| {
-        ui.label(RichText::new("Outputs").strong());
-        if ui.small_button(label(icon::PLUS, "Output")).on_hover_text("Another projector or screen").clicked() {
-            st.mapping_output = st.comp.add_output();
-        }
+    ui.horizontal_wrapped(|ui| {
+        venue_menu(ui, st);
+        outputs_actions(ui, st);
     });
-    venue_menu(ui, st);
     ui.separator();
     let State { comp, selected_surface, mapping_output, .. } = st;
     egui::ScrollArea::vertical().id_salt("studio_tree").auto_shrink(false).show(ui, |ui| {
         for o in comp.outputs.iter_mut() {
-            let current = *mapping_output == o.id;
-            ui.horizontal(|ui| {
-                ui.toggle_value(&mut o.mapping.enabled, RichText::new("ON").small()).on_hover_text("Mapping on for this output");
-                if ui.selectable_label(current, RichText::new(format!("{} {}", icon::PROJECTOR_SCREEN, o.name)).strong()).clicked() {
-                    *mapping_output = o.id;
-                }
-            });
-            if !current {
+            if *mapping_output != o.id {
                 continue;
             }
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("{} {}", icon::PROJECTOR_SCREEN, o.name)).strong());
+                ui.toggle_value(&mut o.mapping.enabled, RichText::new("MAPPING").small()).on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
+            });
             for s in &mut o.mapping.surfaces {
                 ui.horizontal(|ui| {
                     ui.add_space(14.0);

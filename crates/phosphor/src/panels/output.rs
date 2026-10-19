@@ -102,21 +102,12 @@ pub(crate) const OUTPUT_SIZES: &[(u32, u32, &str)] = &[
 
 /// Every output with its size, screen, window and Identify controls.
 pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
-    let now = ui.ctx().input(|i| i.time);
     ui.horizontal(|ui| {
         ui.label(RichText::new("Outputs").strong());
         if ui.small_button(label(icon::PLUS, "Add output")).clicked() {
             st.mapping_output = st.comp.add_output();
         }
-        if ui.small_button(label(icon::HASH, "Identify")).on_hover_text("Show each output's number on its window").clicked() {
-            st.identify_outputs(now);
-        }
-        if st.comp.outputs.iter().any(|o| o.enabled && !o.screen.is_empty())
-            && ui.small_button(label(icon::PROJECTOR_SCREEN, "All to their screens")).on_hover_text("Open every output fullscreen on the screen it was last sent to").clicked()
-        {
-            let missing = st.send_outputs_to_screens();
-            st.notice = (!missing.is_empty()).then(|| format!("Not connected right now: {}", missing.join(", ")));
-        }
+        super::mapping::outputs_actions(ui, st);
     });
     if st.comp.outputs.iter().any(|o| !o.screen.is_empty()) {
         #[cfg(any(target_os = "macos", windows))]

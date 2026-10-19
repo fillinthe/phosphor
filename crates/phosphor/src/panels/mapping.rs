@@ -243,22 +243,168 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     touched
 }
 
+/// Actions for all outputs at once: Identify, and All to their screens (when outputs remember screens).
+pub(crate) fn outputs_actions(ui: &mut egui::Ui, st: &mut State) {
+    let now = ui.ctx().input(|i| i.time);
+    if ui.button(label(icon::HASH, "Identify")).on_hover_text("Each output shows its number").clicked() {
+        st.identify_outputs(now);
+    }
+    if st.comp.outputs.iter().any(|o| o.enabled && !o.screen.is_empty())
+        && ui.button(label(icon::PROJECTOR_SCREEN, "All to their screens")).on_hover_text("Open every output fullscreen on the screen it was last sent to").clicked()
+    {
+        let missing = st.send_outputs_to_screens();
+        st.notice = (!missing.is_empty()).then(|| format!("Not connected right now: {}", missing.join(", ")));
+    }
+}
+
+/// Every output side by side, live (what each projector shows), with where it's going: the way to see your outputs
+/// and pick the one to edit. Click = edit it; right-click = window, screen, Identify, mapping, rename, remove;
+/// the last card adds an output. Used by the Mapping Studio and the Mapping panel.
+pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
+    let now = ui.ctx().input(|i| i.time);
+    let canvas = (st.comp.width, st.comp.height);
+    let displays = st.displays.clone();
+    enum Do {
+        Select(u64),
+        Window(u64),
+        Send(u64, crate::screens::Display),
+        Identify,
+        Remove(u64),
+        Add,
+    }
+    let mut todo = Vec::new();
+    let count = st.comp.outputs.len();
+    egui::ScrollArea::horizontal().id_salt(("output_strip", height as i32)).auto_shrink([false, true]).show(ui, |ui| {
+        ui.horizontal_top(|ui| {
+            for i in 0..count {
+                let (id, (ow, oh)) = (st.comp.outputs[i].id, st.comp.outputs[i].size(canvas));
+                let tex = st.output_tex(id);
+                let open = st.output_window_open(id);
+                let selected = st.mapping_output == id;
+                let o = &mut st.comp.outputs[i];
+                // Wide enough for its name and status even when the output is portrait.
+                let pic_w = (height * ow as f32 / oh.max(1) as f32).clamp(height * 0.6, height * 2.4).max(118.0);
+                let (rect, r) = ui.allocate_exact_size(egui::vec2(pic_w, height + 34.0), Sense::click());
+                let pic = egui::Rect::from_min_size(rect.min, egui::vec2(pic_w, height));
+                let p = ui.painter();
+                p.rect_filled(pic, 4.0, Color32::BLACK);
+                match tex.filter(|_| o.enabled) {
+                    Some(t) => paint_texture(p, t, fit_rect(pic.shrink(2.0), ow as f32 / oh.max(1) as f32)),
+                    None => {
+                        p.text(pic.center(), egui::Align2::CENTER_CENTER, "off", egui::FontId::proportional(12.0), Color32::GRAY);
+                    }
+                }
+                let border = if selected { ACCENT } else if r.hovered() { Color32::from_gray(140) } else { Color32::from_gray(50) };
+                p.rect_stroke(pic, 4.0, Stroke::new(if selected { 2.0 } else { 1.0 }, border), egui::StrokeKind::Inside);
+                // Number badge, like Identify shows on the projector.
+                let badge = egui::Rect::from_min_size(pic.min + egui::vec2(4.0, 4.0), egui::vec2(18.0, 16.0));
+                p.rect_filled(badge, 3.0, Color32::from_black_alpha(170));
+                p.text(badge.center(), egui::Align2::CENTER_CENTER, format!("{}", i + 1), egui::FontId::proportional(11.0), ACCENT);
+                if o.mapping.active() {
+                    p.text(pic.right_top() + egui::vec2(-5.0, 4.0), egui::Align2::RIGHT_TOP, icon::POLYGON, egui::FontId::proportional(12.0), ACCENT);
+                }
+                // Name, then where it goes: on a screen, in a window, or nowhere yet.
+                // Fit the card (about 6.5 px a character at these sizes).
+                let fit = |text: &str, w: f32| {
+                    let n = (w / 6.5).max(4.0) as usize;
+                    if text.chars().count() > n { format!("{}…", text.chars().take(n - 1).collect::<String>()) } else { text.to_string() }
+                };
+                let name_at = egui::pos2(pic.left() + 2.0, pic.bottom() + 3.0);
+                p.text(name_at, egui::Align2::LEFT_TOP, fit(&o.name, pic_w - 4.0), egui::FontId::proportional(12.0), if selected { ACCENT } else { Color32::WHITE });
+                let on_screen = !o.screen.is_empty() && crate::screens::find_screen(&displays, &o.screen).is_some();
+                let (dot, place) = match (open, on_screen) {
+                    (true, true) => (ACCENT, format!("{} {}", icon::PROJECTOR_SCREEN, o.screen)),
+                    (true, false) => (ACCENT, format!("{} window", icon::APP_WINDOW)),
+                    (false, _) if !o.screen.is_empty() => (Color32::from_gray(110), format!("closed · {}", o.screen)),
+                    _ => (Color32::from_gray(110), "not shown".to_string()),
+                };
+                let line = egui::pos2(pic.left() + 2.0, pic.bottom() + 19.0);
+                p.circle_filled(line + egui::vec2(4.0, 6.0), 3.5, dot);
+                let place = fit(&place, pic_w - 14.0);
+                p.text(line + egui::vec2(12.0, 0.0), egui::Align2::LEFT_TOP, place, egui::FontId::proportional(11.0), Color32::from_gray(150));
+                if r.clicked() {
+                    todo.push(Do::Select(id));
+                }
+                if r.double_clicked() {
+                    todo.push(Do::Window(id));
+                }
+                r.on_hover_text(format!("{} · {ow}×{oh}\nClick to edit its mapping · double-click to open / close its window · right-click for more", o.name)).right_menu(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(160.0));
+                    if ui.button(label(if open { icon::STOP } else { icon::PLAY }, if open { "Close window" } else { "Open window" })).clicked() {
+                        todo.push(Do::Window(id));
+                        ui.close();
+                    }
+                    ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send to screen"), |ui| {
+                        for d in &displays {
+                            if ui.button(d.label()).clicked() {
+                                todo.push(Do::Send(id, d.clone()));
+                                ui.close();
+                            }
+                        }
+                        if displays.is_empty() {
+                            hint(ui, "No displays found");
+                        }
+                    });
+                    if ui.button(label(icon::HASH, "Identify all")).on_hover_text("Each output shows its number").clicked() {
+                        todo.push(Do::Identify);
+                        ui.close();
+                    }
+                    ui.checkbox(&mut o.enabled, "Output on");
+                    ui.checkbox(&mut o.mapping.enabled, "Mapping on");
+                    if count > 1 && ui.button(label(icon::TRASH, "Remove output")).clicked() {
+                        todo.push(Do::Remove(id));
+                        ui.close();
+                    }
+                });
+                ui.add_space(6.0);
+            }
+            // Add an output (top-aligned with the pictures).
+            let (rect, r) = ui.allocate_exact_size(egui::vec2(height.max(80.0), height + 34.0), Sense::click());
+            let rect = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), height));
+            let c = if r.hovered() { Color32::WHITE } else { Color32::from_gray(110) };
+            ui.painter().rect_stroke(rect.shrink(2.0), 4.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
+            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, label(icon::PLUS, "Output"), egui::FontId::proportional(12.0), c);
+            if r.on_hover_text("Another projector, screen or feed").clicked() {
+                todo.push(Do::Add);
+            }
+        });
+    });
+    for d in todo {
+        match d {
+            Do::Select(id) => {
+                if st.mapping_output != id {
+                    st.mapping_output = id;
+                    st.selected_surface = None;
+                }
+            }
+            Do::Window(id) => st.toggle_output_window(id),
+            Do::Send(id, display) => st.send_output_id_to(id, display),
+            Do::Identify => st.identify_outputs(now),
+            Do::Remove(id) => {
+                st.comp.outputs.retain(|o| o.id != id);
+                st.close_stale_outputs();
+                if st.mapping_output == id {
+                    st.mapping_output = st.primary_output();
+                }
+            }
+            Do::Add => {
+                st.mapping_output = st.comp.add_output();
+                st.selected_surface = None;
+            }
+        }
+    }
+}
+
 pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     st.comp.ensure_outputs();
     if !st.comp.outputs.iter().any(|o| o.id == st.mapping_output) {
         st.mapping_output = st.primary_output();
     }
-    // Which output's surfaces are being edited.
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Output").strong());
-        let outs: Vec<(u64, String)> = st.comp.outputs.iter().map(|o| (o.id, o.name.clone())).collect();
-        for (id, name) in outs {
-            ui.selectable_value(&mut st.mapping_output, id, name);
-        }
-        if ui.small_button(label(icon::PLUS, "Output")).on_hover_text("Add another output (projector / screen)").clicked() {
-            st.mapping_output = st.comp.add_output();
-        }
+    // Every output, live; the selected one is edited below.
+    output_strip(ui, st, 54.0);
+    ui.horizontal(|ui| {
         venue_menu(ui, st);
+        outputs_actions(ui, st);
     });
     let oid = st.mapping_output;
     let tex = st.output_tex(oid);
