@@ -29,6 +29,8 @@ pub struct BenchConfig {
     pub area_tab: Option<String>,
     /// Interface brightness for UI pictures (0 darkest … 1 light).
     pub brightness: Option<f32>,
+    /// Play direction for movie layers ("reverse", "pingpong"): playback checks.
+    pub direction: Option<String>,
     /// Select this layer/group id (after the project loads), for UI shots of the Inspector.
     pub select: Option<u64>,
     /// Save a picture of the whole Phosphor window here at the end (checks UI changes).
@@ -106,6 +108,7 @@ impl BenchConfig {
                 ("--window", Some(v)) => cfg.window = v.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))),
                 ("--area-tab", Some(v)) => cfg.area_tab = Some(v),
                 ("--brightness", Some(v)) => cfg.brightness = v.parse().ok(),
+                ("--direction", Some(v)) => cfg.direction = Some(v),
                 ("--select", Some(v)) => cfg.select = v.parse().ok(),
                 ("--ui-shot", Some(v)) => cfg.ui_shot = Some(v),
                 ("--live", Some(v)) => cfg.live = Some(v),
@@ -176,6 +179,21 @@ impl BenchConfig {
     /// Bottom-to-top: generators, then images, then movies. Upper layers screen-blend at 70%
     /// so every layer contributes to the picture (and to the cost).
     pub fn composition(&self) -> Composition {
+        let mut comp = self.composition_base();
+        if let Some(d) = self.direction.as_deref() {
+            let dir = match d {
+                "reverse" => phosphor_engine::PlayDirection::Reverse,
+                "pingpong" | "ping-pong" => phosphor_engine::PlayDirection::PingPong,
+                _ => phosphor_engine::PlayDirection::Forward,
+            };
+            for l in &mut comp.layers {
+                l.direction = dir;
+            }
+        }
+        comp
+    }
+
+    fn composition_base(&self) -> Composition {
         if let Some(path) = &self.project
             && let Ok(json) = std::fs::read_to_string(path)
             && let Ok(comp) = Composition::from_json(&json)

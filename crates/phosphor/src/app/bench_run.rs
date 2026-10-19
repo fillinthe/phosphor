@@ -129,6 +129,11 @@ impl PhosphorApp {
             let (rate, played) = crate::media::video::sound::stats();
             println!("SOUND output {rate} Hz, {played} sample frames played");
         }
+        for l in &self.state.comp.layers {
+            if let Some(info) = self.state.media.video_info(l.id) {
+                println!("VIDEO {} ({:?}): {info}", l.name, l.direction);
+            }
+        }
         println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
         if self.state.stream.running() {
             let h = self.state.stream.history();

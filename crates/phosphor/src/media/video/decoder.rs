@@ -37,11 +37,18 @@ pub(super) struct Decoder {
     passes: u32,
     /// Media time of the last frame sent.
     last_sent: f64,
-    /// Playing backwards: frames before `rev_end` are decoded a chunk at a time into `rev_buf`
-    /// and sent from the back.
+    /// Playing backwards: frames before `rev_end` are decoded a group at a time into `rev_buf`
+    /// and sent from the back. Each keyframe group is decoded once (as much of it as `rev_cap` frames
+    /// hold), and the group before it is decoded into `rev_next` a few frames at a time while this
+    /// one plays, so backwards costs about what forwards does and never waits on a whole group.
     reversing: bool,
     rev_end: f64,
     rev_buf: Vec<(f64, f64, VideoFrame)>,
+    rev_next: Vec<(f64, f64, VideoFrame)>,
+    rev_job: Option<RevJob>,
+    /// Ping-pong: the last frames of the forward pass (cheap handles), so turning around plays backwards
+    /// straight from them, without decoding.
+    tail: Vec<(f64, f64, VideoFrame)>,
     frames_in_loop: u64,
     skips: u32,
     errors: u32,
@@ -141,6 +148,9 @@ impl Decoder {
             reversing: false,
             rev_end: 0.0,
             rev_buf: Vec::new(),
+            rev_next: Vec::new(),
+            rev_job: None,
+            tail: Vec::new(),
             frames_in_loop: 0,
             skips: 0,
             errors: 0,
@@ -241,7 +251,20 @@ impl Decoder {
                 }
             }
             let out = self.picture(sh)?;
+            // Ping-pong: keep the end of the forward pass for the turn (only frames that are cheap to keep).
+            if mode.direction == PlayDirection::PingPong && hi.is_finite() && rel >= hi - (self.rev_cap(sh) as f64 + 1.0) * dur.max(1e-3) {
+                match out.cheap_clone() {
+                    Some(c) => {
+                        self.tail.push((rel, dur, c));
+                        if self.tail.len() > self.rev_cap(sh) {
+                            self.tail.remove(0);
+                        }
+                    }
+                    None => self.tail.clear(),
+                }
+            }
             self.last_sent = rel;
+            sh.shown.fetch_add(1, Ordering::Relaxed);
             if tx.send(Msg::Frame(self.generation, pts, rel, out)).is_err() {
                 return Ok(());
             }
@@ -308,6 +331,20 @@ impl Decoder {
             (false, PlayDirection::PingPong) => {
                 self.reversing = true;
                 self.rev_end = self.last_sent;
+                // Play backwards from the frames just shown (minus the turning frame), no decoding; the group
+                // before them is decoded while they play.
+                let mut tail = std::mem::take(&mut self.tail);
+                if let Some((_, _, turning)) = tail.pop() {
+                    sh.recycle(turning);
+                }
+                if let Some(first) = tail.first() {
+                    self.rev_end = first.0;
+                    for (_, _, f) in self.rev_buf.drain(..) {
+                        sh.recycle(f);
+                    }
+                    self.rev_buf = tail;
+                    self.start_rev_job(self.rev_end, lo)?;
+                }
             }
             (false, _) => self.jump(lo)?,
             (true, PlayDirection::PingPong) => {
@@ -327,22 +364,80 @@ impl Decoder {
     }
 
     fn drop_reverse(&mut self, sh: &Shared) {
-        for (_, _, f) in self.rev_buf.drain(..) {
+        for (_, _, f) in self.rev_buf.drain(..).chain(self.rev_next.drain(..)).chain(self.tail.drain(..)) {
             sh.recycle(f);
         }
+        self.rev_job = None;
     }
 
-    /// One step of reverse play: send the next buffered frame, or decode the chunk before the
-    /// last one. Returns false when the player is gone.
+    /// How many frames one reverse group may hold: about 512 MB of hardware surfaces (NV12, 1.5 bytes a
+    /// pixel; enough for a 5 s keyframe group at 1080p), or 256 MB of converted RGBA pictures.
+    fn rev_cap(&self, _sh: &Shared) -> usize {
+        let px = (self.dec.width() as usize * self.dec.height() as usize).max(1);
+        let surfaces = self.hw && cfg!(target_os = "macos") && super::zero_copy();
+        let budget = if surfaces { (512 << 20) / (px * 3 / 2) } else { (256 << 20) / (px * 4) };
+        budget.clamp(12, 240)
+    }
+
+    /// Starts decoding the frames just before `end` (from the keyframe before it) into `rev_next`.
+    fn start_rev_job(&mut self, end: f64, lo: f64) -> Result<(), String> {
+        if end <= lo + 1e-6 {
+            self.rev_job = None;
+            return Ok(());
+        }
+        self.seek_to((end - self.default_dur).max(lo))?;
+        self.seek_target = None;
+        self.rev_job = Some(RevJob { end, keep_from: None, done: false });
+        Ok(())
+    }
+
+    /// Decodes up to `budget` frames of the reverse job (frames before the kept window aren't converted).
+    fn advance_rev_job(&mut self, sh: &Shared, lo: f64, budget: usize) -> Result<(), String> {
+        let cap = self.rev_cap(sh);
+        for _ in 0..budget {
+            let Some(job) = self.rev_job else { return Ok(()) };
+            if job.done {
+                return Ok(());
+            }
+            if !self.next_frame()? {
+                self.rev_job = Some(RevJob { done: true, ..job });
+                return Ok(());
+            }
+            sh.decoded.fetch_add(1, Ordering::Relaxed);
+            let (rel, dur) = self.timing();
+            // The first frame after the seek is the keyframe: keep from there, or the last `cap` frames.
+            let keep_from = job.keep_from.unwrap_or_else(|| rel.max(job.end - cap as f64 * dur.max(1e-3)).max(lo));
+            let done = rel >= job.end - 1e-6;
+            self.rev_job = Some(RevJob { keep_from: Some(keep_from), done, ..job });
+            if done {
+                return Ok(());
+            }
+            if rel + 1e-6 < keep_from {
+                continue;
+            }
+            let out = self.picture(sh)?;
+            self.rev_next.push((rel, dur, out));
+        }
+        Ok(())
+    }
+
+    /// One step of reverse play: send the next buffered frame (and decode a little of the group before
+    /// it), or, when this group is used up, switch to the next one. Returns false when the player is gone.
     fn reverse_step(&mut self, sh: &Shared, tx: &SyncSender<Msg>, mode: PlayMode, lo: f64, hi: f64) -> Result<bool, String> {
         if let Some((rel, dur, frame)) = self.rev_buf.pop() {
             let pts = self.next_pts(rel, dur);
             if self.late(sh, pts, dur) {
                 sh.recycle(frame);
-                return Ok(true);
+            } else {
+                self.last_sent = rel;
+                sh.shown.fetch_add(1, Ordering::Relaxed);
+                if tx.send(Msg::Frame(self.generation, pts, rel, frame)).is_err() {
+                    return Ok(false);
+                }
             }
-            self.last_sent = rel;
-            return Ok(tx.send(Msg::Frame(self.generation, pts, rel, frame)).is_ok());
+            // Meanwhile, a few frames of the group before this one (sending waited for the player anyway).
+            self.advance_rev_job(sh, lo, REVERSE_DECODE_AHEAD)?;
+            return Ok(true);
         }
         if !hi.is_finite() {
             // Unknown length: can't start from the end.
@@ -350,29 +445,29 @@ impl Decoder {
             return Ok(true);
         }
         self.rev_end = self.rev_end.min(hi);
-        if self.rev_end <= lo + 1e-6 {
+        if self.rev_job.is_none() {
+            if self.rev_end <= lo + 1e-6 {
+                return self.at_end(sh, tx, mode, lo, hi, false);
+            }
+            self.start_rev_job(self.rev_end, lo)?;
+        }
+        // This group is used up: finish the next one (usually done already) and play it.
+        while self.rev_job.is_some_and(|j| !j.done) {
+            self.advance_rev_job(sh, lo, 64)?;
+        }
+        let keep_from = self.rev_job.and_then(|j| j.keep_from);
+        self.rev_job = None;
+        std::mem::swap(&mut self.rev_buf, &mut self.rev_next);
+        self.rev_end = match self.rev_buf.first() {
+            Some(f) => f.0,
+            // Nothing decodable before `rev_end`: treat as the start.
+            None => keep_from.unwrap_or(lo).min(self.rev_end - self.default_dur).max(lo),
+        };
+        if self.rev_buf.is_empty() && self.rev_end <= lo + 1e-6 {
             return self.at_end(sh, tx, mode, lo, hi, false);
         }
-        // Decode from the keyframe before the chunk; keep (convert) only the chunk's frames.
-        let t0 = (self.rev_end - REVERSE_CHUNK_FRAMES * self.default_dur).max(lo);
-        self.seek_to(t0)?;
-        self.seek_target = None;
-        loop {
-            if !self.next_frame()? {
-                break;
-            }
-            sh.decoded.fetch_add(1, Ordering::Relaxed);
-            let (rel, dur) = self.timing();
-            if rel >= self.rev_end - 1e-6 {
-                break;
-            }
-            if rel + dur <= t0 + 1e-6 {
-                continue;
-            }
-            let out = self.picture(sh)?;
-            self.rev_buf.push((rel, dur, out));
-        }
-        self.rev_end = self.rev_buf.first().map_or(t0, |f| f.0);
+        // Start on the group before this one right away; it fills in while this one plays.
+        self.start_rev_job(self.rev_end, lo)?;
         Ok(true)
     }
 
@@ -691,4 +786,13 @@ unsafe extern "C" fn pick_videotoolbox(ctx: *mut ffi::AVCodecContext, fmts: *con
 
 fn st_is_hap(input: &ff::format::context::Input, stream: usize) -> bool {
     input.stream(stream).is_some_and(|s| s.parameters().id() == ff::codec::Id::HAP)
+}
+
+/// A group of frames being decoded for reverse play: everything before `end`, kept from `keep_from` (known once
+/// the first frame, the keyframe, is out).
+#[derive(Clone, Copy, Debug)]
+struct RevJob {
+    end: f64,
+    keep_from: Option<f64>,
+    done: bool,
 }

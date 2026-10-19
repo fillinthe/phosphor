@@ -46,6 +46,15 @@ impl Drop for PixelBuffer {
     }
 }
 
+/// Another reference to the same frame (a retain, no copy): reverse play keeps the end of a forward pass this way.
+impl Clone for PixelBuffer {
+    fn clone(&self) -> Self {
+        // SAFETY: the buffer is alive while `self` holds its reference; this adds one more.
+        unsafe { CFRetain(self.0) };
+        PixelBuffer(self.0, self.1, self.2)
+    }
+}
+
 impl PixelBuffer {
     /// Keeps the frame's pixel buffer if it can be shown without copying (8-bit 4:2:0 video range on an IOSurface).
     ///
