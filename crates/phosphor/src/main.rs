@@ -52,6 +52,8 @@ mod syphon;
 mod dylib;
 #[cfg(any(target_os = "macos", windows))]
 mod ndi;
+#[cfg(windows)]
+mod spout;
 mod thumbs;
 #[cfg(not(target_arch = "wasm32"))]
 mod tosc;

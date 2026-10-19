@@ -147,7 +147,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             D("Send Output To"),
             I(A::Identify, "Identify Outputs", None),
             S,
-            I(A::Syphon, "Syphon On / Off", None),
+            I(A::Syphon, if cfg!(windows) { "Spout On / Off" } else { "Syphon On / Off" }, None),
             I(A::Ndi, "NDI On / Off", None),
         ],
     ),

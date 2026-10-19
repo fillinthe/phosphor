@@ -50,6 +50,8 @@ impl PhosphorApp {
             syphon,
             #[cfg(any(target_os = "macos", windows))]
             ndi,
+            #[cfg(windows)]
+            spout,
             #[cfg(not(target_arch = "wasm32"))]
             dmx,
             ..
@@ -175,13 +177,25 @@ impl PhosphorApp {
         };
         #[cfg(not(any(target_os = "macos", windows)))]
         let ndi_due = false;
-        if (stream_due || net_due || ndi_due) && !engine.capture_frame() && stream_due {
+        // Spout (Windows): the composition through the same capture, at the render rate while it's on.
+        #[cfg(windows)]
+        let spout_due = {
+            spout.sync(comp.syphon, "Phosphor");
+            spout.frame_due(now, 60)
+        };
+        #[cfg(not(windows))]
+        let spout_due = false;
+        if (stream_due || net_due || ndi_due || spout_due) && !engine.capture_frame() && stream_due {
             stream.repeat_last();
         }
         for f in engine.poll_captures() {
             #[cfg(any(target_os = "macos", windows))]
             if ndi.connections() > 0 {
                 ndi.push(f.width, f.height, f.rgba.clone(), comp.ndi.fps);
+            }
+            #[cfg(windows)]
+            if spout.running() {
+                spout.push(f.width, f.height, f.rgba.clone());
             }
             if net.running() {
                 net.push_frame(f.width, f.height, f.rgba.clone());
