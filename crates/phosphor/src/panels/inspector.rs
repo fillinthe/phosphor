@@ -264,13 +264,20 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     });
 }
 
+/// Speaker toggle: sound on / off for a layer or a clip (keeps the volume). Shared by the Inspector and clip rows.
+pub(crate) fn mute_button(ui: &mut egui::Ui, muted: &mut bool, what: &str) -> egui::Response {
+    let (glyph, color) = if *muted { (icon::SPEAKER_SIMPLE_X, crate::theme::WARN) } else { (icon::SPEAKER_SIMPLE_HIGH, ui.visuals().text_color()) };
+    let r = ui.small_button(RichText::new(glyph).color(color)).on_hover_text(if *muted { format!("Sound off for {what}: click to turn it on") } else { format!("Mute {what}") });
+    if r.clicked() {
+        *muted = !*muted;
+    }
+    r
+}
+
 /// Movie sound: volume (mappable) and whether it fades with the layer's opacity.
 fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
     ui.horizontal(|ui| {
-        let icon = if layer.volume <= 0.001 { icon::SPEAKER_SIMPLE_X } else { icon::SPEAKER_SIMPLE_HIGH };
-        if ui.small_button(icon).on_hover_text("Mute / unmute").clicked() {
-            layer.volume = if layer.volume <= 0.001 { 1.0 } else { 0.0 };
-        }
+        mute_button(ui, &mut layer.muted, "this layer");
         let r = guarded!(ui, layer.volume, Slider::new(&mut layer.volume, 0.0..=2.0).text("Volume").show_value(false));
         value_bubble(ui, &r, format!("{:.0}%", layer.volume * 100.0));
         map_menu(ui, &r, ControlTarget::LayerVolume(layer.id));

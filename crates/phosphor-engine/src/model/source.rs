@@ -85,6 +85,8 @@ pub struct Clip {
     pub trigger: TriggerMode,
     /// The clip's own playback settings and effects (Resolume-style); None = it uses the layer's.
     pub own: Option<ClipSettings>,
+    /// This clip plays without sound (wherever it's triggered).
+    pub muted: bool,
 }
 
 /// What a clip remembers when it keeps its own settings.

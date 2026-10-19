@@ -119,6 +119,7 @@ impl LayerState {
                     trigger: TriggerMode::Normal,
                     // Speed, loop and effects come back too when the flash ends.
                     own: Some(self.clip_settings()),
+                    muted: false,
                 }));
                 self.trigger_clip(slot, now, secs)
             }

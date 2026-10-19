@@ -166,6 +166,8 @@ pub struct LayerState {
     pub volume: f32,
     /// Sound fades with the layer's opacity (and its group's).
     pub volume_follows_opacity: bool,
+    /// Sound off (keeps the volume for when it's back on).
+    pub muted: bool,
     pub effects: Vec<EffectState>,
     pub playing: bool,
     pub rate: f32,
@@ -252,6 +254,7 @@ impl Default for LayerState {
             transform: LayerTransform::default(),
             volume: 1.0,
             volume_follows_opacity: true,
+            muted: false,
             effects: Vec::new(),
             playing: true,
             rate: 1.0,

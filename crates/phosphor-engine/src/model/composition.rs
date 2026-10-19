@@ -171,7 +171,8 @@ impl Composition {
     pub fn sound_gain(&self, layer: &LayerState) -> f32 {
         let group = layer.parent.and_then(|g| self.group(g));
         let soloed_out = !layer.solo && self.layers.iter().any(|l| l.enabled && l.solo);
-        if !layer.enabled || soloed_out || group.is_some_and(|g| !g.enabled) {
+        let clip_muted = layer.active_clip.is_some_and(|id| layer.clips.iter().any(|k| k.id == id && k.muted));
+        if !layer.enabled || soloed_out || group.is_some_and(|g| !g.enabled) || layer.muted || clip_muted {
             return 0.0;
         }
         let mut g = layer.volume * self.volume;
@@ -432,6 +433,31 @@ impl Composition {
         if self.version < 1 {
             self.version = 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod mute_tests {
+    use super::*;
+
+    #[test]
+    fn muting_a_layer_or_its_playing_clip_silences_it() {
+        let mut c = Composition::default();
+        let layer = c.add_layer();
+        layer.clips = vec![Clip { id: 9, ..Default::default() }];
+        layer.active_clip = Some(9);
+        let l = c.layers[0].clone();
+        assert!(c.sound_gain(&l) > 0.0);
+        c.layers[0].muted = true;
+        let l = c.layers[0].clone();
+        assert_eq!(c.sound_gain(&l), 0.0);
+        c.layers[0].muted = false;
+        c.layers[0].clips[0].muted = true;
+        let l = c.layers[0].clone();
+        assert_eq!(c.sound_gain(&l), 0.0, "the playing clip is muted");
+        c.layers[0].active_clip = None;
+        let l = c.layers[0].clone();
+        assert!(c.sound_gain(&l) > 0.0, "another clip plays with sound");
     }
 }
 
