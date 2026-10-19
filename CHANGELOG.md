@@ -12,6 +12,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Media remembers how it played:** speed, direction, loop, effects and mute stick to the file, so the next
   time you drop it into a clip or onto a layer it comes back the same.
 - **Play on ▸** (right-click a media file) picks the layer; hovering a file says where a click plays it.
+- **Convert movies for the show:** right-click a movie › *Convert…* and pick Hap (smoothest on any computer,
+  Mac or Windows), ProRes, or H.264 with every frame a keyframe (small, keeps sound), how much to compress, and
+  an optional smaller size. You see the size it will take and the free disk space first; the converted file
+  goes next to the original and this project switches to it. Converted files play backwards perfectly.
 - **Show folders:** put files in a Collection, pick it in the Media panel, then *Random* plays one of them on
   the selected layer, or *Shuffle on a new layer* makes a layer that plays them in random order by itself.
 
