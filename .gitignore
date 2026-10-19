@@ -11,3 +11,4 @@
 /vendor/*.framework
 /.playwright-mcp
 /backups
+/vendor/ffmpeg/

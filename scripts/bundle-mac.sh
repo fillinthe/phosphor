@@ -8,12 +8,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION=$(grep -m1 '^version' crates/phosphor/Cargo.toml | cut -d'"' -f2)
 
-cargo build --release -p phosphor
+# Oldest macOS the app runs on. Everything bundled must be built for it (checked at the end).
+MIN_MACOS=14.0
+# FFmpeg built for MIN_MACOS (scripts/build-ffmpeg-mac.sh); Homebrew's only runs on the macOS it was built on.
+# The bundle build gets its own target folder so day-to-day builds keep using Homebrew's FFmpeg.
+VENDOR_FFMPEG=$PWD/vendor/ffmpeg
+[[ -x "$VENDOR_FFMPEG/bin/ffmpeg" ]] || scripts/build-ffmpeg-mac.sh
+export FFMPEG_DIR=$VENDOR_FFMPEG PKG_CONFIG_PATH=$VENDOR_FFMPEG/lib/pkgconfig MACOSX_DEPLOYMENT_TARGET=$MIN_MACOS
+CARGO_TARGET_DIR=target/bundle cargo build --release -p phosphor
 
 APP=dist/Phosphor.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp target/release/phosphor "$APP/Contents/MacOS/Phosphor"
+cp target/bundle/release/phosphor "$APP/Contents/MacOS/Phosphor"
 
 # Syphon output (BSD). Built once by scripts/build-syphon.sh; the app runs without it.
 [[ -d vendor/Syphon.framework ]] || scripts/build-syphon.sh
@@ -22,14 +29,13 @@ cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
 cp vendor/Syphon-LICENSE.txt "$APP/Contents/Resources/"
 
 # The ffmpeg command (streaming, ProRes / H.264 recording) rides along; its libraries are relinked below.
-FFMPEG_BIN="$(command -v ffmpeg || true)"
-if [[ -n "$FFMPEG_BIN" ]]; then
-  cp "$(readlink -f "$FFMPEG_BIN")" "$APP/Contents/MacOS/ffmpeg"
-  chmod 755 "$APP/Contents/MacOS/ffmpeg"
-fi
+cp "$VENDOR_FFMPEG/bin/ffmpeg" "$APP/Contents/MacOS/ffmpeg"
+chmod 755 "$APP/Contents/MacOS/ffmpeg"
+# The build-time rpath into vendor/ is no use on other Macs.
+install_name_tool -delete_rpath "$VENDOR_FFMPEG/lib" "$APP/Contents/MacOS/ffmpeg" 2>/dev/null || true
 
 # FFmpeg and its libraries, so the app (and exported shows) run on Macs without Homebrew.
-python3 -I scripts/bundle-dylibs.py "$APP"
+python3 -I scripts/bundle-dylibs.py "$APP" "$VENDOR_FFMPEG/lib"
 
 # Icon: every size macOS asks for, from the 1024 px master.
 ICONSET=$(mktemp -d)/Phosphor.iconset
@@ -53,7 +59,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>$(git rev-list --count HEAD 2>/dev/null || echo 1)</string>
-  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSMinimumSystemVersion</key><string>${MIN_MACOS}</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
@@ -70,6 +76,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# Nothing in the bundle may need a newer macOS than the app says it runs on (a library that does stops the
+# app opening there at all).
+too_new=0
+while IFS= read -r f; do
+  m=$(otool -l "$f" 2>/dev/null | awk '/LC_BUILD_VERSION/{b=1} b && /minos/{print $2; exit}')
+  [[ -z "$m" ]] && continue
+  if [[ "$(printf '%s\n%s\n' "$m" "$MIN_MACOS" | sort -V | tail -1)" != "$MIN_MACOS" ]]; then echo "needs macOS $m: $f"; too_new=1; fi
+done < <(find "$APP/Contents" -type f \( -name "*.dylib" -o -perm -u+x \) ! -name "*.icns" ! -name "*.plist")
+[[ $too_new == 0 ]] || { echo "Some bundled files need a newer macOS than $MIN_MACOS"; exit 1; }
 
 # Sign inside-out (libraries, framework, then the app); --deep is not reliable for this.
 SIGN_ID="${SIGN_ID:--}"
