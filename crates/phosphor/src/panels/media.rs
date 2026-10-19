@@ -47,7 +47,7 @@ pub(crate) enum MediaAct {
     Toggle(usize, String),
     Rename(usize, String),
     Remove(usize),
-    FillFolder(String),
+    FillFolder(Vec<usize>),
     /// Everything the bin shows now (search, filter, sort) → a new layer of clips.
     ShownToLayer(Vec<usize>),
     /// Play one of these at random on the selected layer.
@@ -157,8 +157,9 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     let groups: Vec<String> = if view.by_folder {
         let mut g: Vec<String> = Vec::new();
         for i in &shown {
-            if !g.contains(&bin[*i].folder) {
-                g.push(bin[*i].folder.clone());
+            let key = folder_of(&bin[*i]);
+            if !g.contains(&key) {
+                g.push(key);
             }
         }
         g.sort();
@@ -202,7 +203,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
         }
         for group in groups {
             let all = group == "\u{0}all";
-            let items: Vec<usize> = shown.iter().copied().filter(|i| all || comp.media_bin[*i].folder == group).collect();
+            let items: Vec<usize> = shown.iter().copied().filter(|i| all || folder_of(&comp.media_bin[*i]) == group).collect();
             let mut grid = |ui: &mut egui::Ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
@@ -215,23 +216,37 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 grid(ui);
                 continue;
             }
-            let title = if group.is_empty() { "Files".to_string() } else { group.rsplit('/').next().unwrap_or(&group).to_string() };
+            // A subfolder shows as "Watched/Sub" so show folders inside one watched folder stay apart.
+            let root = items.first().map(|i| comp.media_bin[*i].folder.clone()).unwrap_or_default();
+            let title = if group.is_empty() {
+                "Files".to_string()
+            } else {
+                let base = std::path::Path::new(&root).parent().map_or(String::new(), |p| p.to_string_lossy().into_owned());
+                group.strip_prefix(&base).unwrap_or(&group).trim_start_matches(['/', '\\']).to_string()
+            };
             let header = egui::CollapsingHeader::new(RichText::new(format!("{} {title}  ({})", if group.is_empty() { icon::FILES } else { icon::FOLDER }, items.len())).strong())
                 .id_salt(("media_group", &group))
                 .default_open(true)
                 .show(ui, |ui| grid(ui));
             header.header_response.right_menu(|ui| {
+                if ui.button(label(icon::DICE_FIVE, "Random")).on_hover_text("Play one of this folder's files, at random, on the selected layer").clicked() {
+                    acts.push(MediaAct::RandomOne(items.clone()));
+                    ui.close();
+                }
+                if ui.add_enabled(items.len() > 1, egui::Button::new(label(icon::SHUFFLE, "Shuffle on a new layer"))).on_hover_text("A new layer with this folder's files as clips, playing them in random order by itself").clicked() {
+                    acts.push(MediaAct::ShuffleLayer(items.clone(), title.clone()));
+                    ui.close();
+                }
                 if ui.button(label(icon::SQUARES_FOUR, "Fill clips of the selected layer")).on_hover_text("Puts this folder's media into the selected layer's clip slots, in order").clicked() {
-                    acts.push(MediaAct::FillFolder(group.clone()));
+                    acts.push(MediaAct::FillFolder(items.clone()));
                     ui.close();
                 }
                 if !group.is_empty() {
-                    if ui.button(label(icon::EYE_SLASH, "Stop watching")).clicked() {
-                        acts.push(MediaAct::Unwatch(group.clone()));
+                    if root == group && ui.button(label(icon::EYE_SLASH, "Stop watching")).clicked() {
+                        acts.push(MediaAct::Unwatch(root.clone()));
                         ui.close();
                     }
-                    #[cfg(target_os = "macos")]
-                    if ui.button(label(icon::FOLDER_OPEN, "Show in Finder")).clicked() {
+                    if ui.button(label(icon::FOLDER_OPEN, "Show the folder")).clicked() {
                         crate::os::open(&group);
                         ui.close();
                     }
@@ -296,7 +311,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             }
             MediaAct::FillFolder(group) => {
                 let Some(sel) = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id)) else { continue };
-                let items = clip_items(st.comp.media_bin.iter().filter(|m| m.folder == group));
+                let items = clip_items(group.iter().filter_map(|i| st.comp.media_bin.get(*i)));
                 st.comp.place_clips(sel, 0, items);
             }
             MediaAct::ShownToLayer(shown) => {
@@ -503,4 +518,13 @@ fn clip_items<'a>(items: impl Iterator<Item = &'a phosphor_engine::MediaItem>) -
     items
         .map(|m| (crate::media::clip_name(&m.name), crate::media::spec_for_path(&m.path)))
         .collect()
+}
+
+/// The folder a file shows under: its own folder for files from a watched folder (so subfolders, e.g. one per
+/// show, are groups of their own), "" for files added one by one.
+fn folder_of(m: &phosphor_engine::MediaItem) -> String {
+    if m.folder.is_empty() {
+        return String::new();
+    }
+    std::path::Path::new(&m.path).parent().map_or_else(|| m.folder.clone(), |p| p.to_string_lossy().into_owned())
 }

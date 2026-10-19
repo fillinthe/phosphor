@@ -16,6 +16,16 @@ impl PhosphorApp {
     pub(crate) fn handle_dialogs_and_folders(&mut self, now: f64) {
         use crate::dialogs::Purpose;
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
+        // Watched folders first: this has to run every frame (it rescans every 10 s), not only when a dialog closes.
+        if let Some(found) = self.state.folders.poll(now) {
+            // Files that vanished from a watched folder leave the bin; new ones join it.
+            let folders = self.state.folders.folders.clone();
+            let paths: std::collections::HashSet<&str> = found.iter().map(|(_, p, _)| p.as_str()).collect();
+            self.state.comp.media_bin.retain(|m| m.folder.is_empty() || !folders.contains(&m.folder) || paths.contains(m.path.as_str()));
+            for (name, path, folder) in &found {
+                self.state.comp.add_folder_media(name, path, folder);
+            }
+        }
         let dialogs = self.state.dialogs.poll();
         if dialogs.is_empty() {
             return;
@@ -129,15 +139,6 @@ impl PhosphorApp {
                         st.stream.settings.file_path = p.to_string_lossy().to_string();
                     }
                 }
-            }
-        }
-        if let Some(found) = self.state.folders.poll(now) {
-            // Files that vanished from a watched folder leave the bin; new ones join it.
-            let folders = self.state.folders.folders.clone();
-            let paths: std::collections::HashSet<&str> = found.iter().map(|(_, p, _)| p.as_str()).collect();
-            self.state.comp.media_bin.retain(|m| m.folder.is_empty() || !folders.contains(&m.folder) || paths.contains(m.path.as_str()));
-            for (name, path, folder) in &found {
-                self.state.comp.add_folder_media(name, path, folder);
             }
         }
     }

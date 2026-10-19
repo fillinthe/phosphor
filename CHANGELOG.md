@@ -4,6 +4,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.59 (2026-10-19)
+
+- **Watch Folder works again:** a watched folder now fills the Media panel straight away and picks up new files
+  every few seconds (it only loaded when another file window was used).
+- **Show folders on disk:** each subfolder of a watched folder is its own group in the Media panel (for example
+  one folder per show). Right-click a folder's title for **Random**, **Shuffle on a new layer** or **Fill clips of
+  the selected layer** from just that folder.
+
 ## 0.2.58 (2026-10-19)
 - **Smooth reverse and ping-pong:** movies play backwards at full frame rate and turn around without a hitch
   (before, phone and web videos stuttered backwards: each step re-decoded seconds of video).
