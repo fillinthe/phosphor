@@ -14,6 +14,7 @@ impl PhosphorApp {
     pub(crate) fn status_line(&mut self, ui: &mut egui::Ui) {
         let now = ui.ctx().input(|i| i.time);
         let mut open_outputs = false;
+        let mut unmute = false;
         egui::Panel::bottom("status_line").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
@@ -40,6 +41,11 @@ impl PhosphorApp {
                     let t = st.stream.elapsed(now) as u32;
                     let what = if st.stream.settings.destination == crate::stream::Destination::File { "REC" } else { "LIVE" };
                     ui.label(small(format!("{} {what} {:02}:{:02}", icon::RECORD, t / 60, t % 60), LIVE));
+                }
+                if st.comp.sound_muted
+                    && ui.add(egui::Label::new(small(format!("{} Sound muted", icon::SPEAKER_SIMPLE_X), crate::theme::WARN)).sense(egui::Sense::click())).on_hover_text("All sound is off: click to turn it back on").clicked()
+                {
+                    unmute = true;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 if st.net.running() {
@@ -77,6 +83,9 @@ impl PhosphorApp {
                 });
             });
         });
+        if unmute {
+            self.state.comp.sound_muted = false;
+        }
         if open_outputs {
             self.switch_workspace(1);
         }

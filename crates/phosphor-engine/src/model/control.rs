@@ -92,10 +92,14 @@ pub enum AppControl {
     Surprise,
     /// New values for the selected layer's generator and effects.
     Shuffle,
+    /// Mute every sound Phosphor sends out.
+    MuteSound,
+    /// Even out the movies' loudness.
+    AutoLevel,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 22] = [
+    pub const ALL: [AppControl; 24] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -118,6 +122,8 @@ impl AppControl {
         AppControl::Link,
         AppControl::Surprise,
         AppControl::Shuffle,
+        AppControl::MuteSound,
+        AppControl::AutoLevel,
     ];
 
     pub fn name(self) -> &'static str {
@@ -144,6 +150,8 @@ impl AppControl {
             AppControl::Link => "Ableton Link on/off",
             AppControl::Surprise => "Surprise me (random look, all layers)",
             AppControl::Shuffle => "Shuffle the selected layer",
+            AppControl::MuteSound => "Mute all sound",
+            AppControl::AutoLevel => "Even out volume levels on/off",
         }
     }
 
@@ -172,12 +180,14 @@ impl AppControl {
             AppControl::Link => "link",
             AppControl::Surprise => "surprise",
             AppControl::Shuffle => "shuffle",
+            AppControl::MuteSound => "mute",
+            AppControl::AutoLevel => "autolevel",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel)
     }
 }
 

@@ -18,6 +18,16 @@ const AHEAD: f64 = 0.12;
 const DRIFT: f64 = 0.15;
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
+/// Even out the clips' loudness (the project's "Even out volume levels").
+static AUTO_LEVEL: AtomicBool = AtomicBool::new(false);
+/// The level every clip is brought towards (RMS, about -20 dBFS).
+const LEVEL_TARGET: f32 = 0.1;
+/// Quieter than this (about -50 dBFS) is silence: it doesn't count towards a clip's loudness.
+const LEVEL_GATE: f32 = 0.003;
+/// How far levelling may turn a clip up or down (×4 = 12 dB), so quiet clips don't become noise.
+const LEVEL_MAX: f32 = 4.0;
+/// Seconds the loudness measurement averages over.
+const LEVEL_SECS: f32 = 3.0;
 /// Output sample rate once the device is open (0 = not open).
 static OUT_RATE: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_RUNNING: AtomicBool = AtomicBool::new(false);
@@ -48,6 +58,16 @@ pub fn stats() -> (u32, u64) {
     (OUT_RATE.load(Ordering::Relaxed), PLAYED.load(Ordering::Relaxed))
 }
 
+/// Turns loudness levelling on or off for every clip.
+pub fn set_auto_level(on: bool) {
+    AUTO_LEVEL.store(on, Ordering::Relaxed);
+}
+
+/// The gain that brings a clip measured at `mean_square` to the target level (1 until something was heard).
+fn level_gain(mean_square: f32) -> f32 {
+    if mean_square <= 0.0 { 1.0 } else { (LEVEL_TARGET / mean_square.sqrt()).clamp(1.0 / LEVEL_MAX, LEVEL_MAX) }
+}
+
 /// Off = movies open without sound (bench runs, tests).
 pub fn set_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
@@ -73,8 +93,27 @@ struct Clip {
     gain: AtomicU32,
     /// Gain last applied by the mixer (ramped towards `gain` so changes never click).
     applied: AtomicU32,
+    /// How loud the clip is (mean square, averaged over `LEVEL_SECS`; 0 = nothing heard yet), for levelling.
+    loudness: AtomicU32,
     follow: Mutex<Follow>,
     quit: AtomicBool,
+}
+
+impl Clip {
+    /// Folds a block of decoded sound (stereo, at `rate`) into the clip's loudness; silence doesn't count.
+    fn measure(&self, samples: &[f32], rate: f32) {
+        if samples.is_empty() {
+            return;
+        }
+        let ms = samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32;
+        if ms.sqrt() < LEVEL_GATE {
+            return;
+        }
+        let old = f32::from_bits(self.loudness.load(Ordering::Relaxed));
+        let secs = samples.len() as f32 / 2.0 / rate.max(1.0);
+        let new = if old <= 0.0 { ms } else { old + (ms - old) * (secs / LEVEL_SECS).min(1.0) };
+        self.loudness.store(new.to_bits(), Ordering::Relaxed);
+    }
 }
 
 pub(super) struct ClipAudio {
@@ -93,6 +132,7 @@ impl ClipAudio {
             buf: Mutex::new(VecDeque::new()),
             gain: AtomicU32::new(1f32.to_bits()),
             applied: AtomicU32::new(0f32.to_bits()),
+            loudness: AtomicU32::new(0),
             follow: Mutex::new(Follow { rate: 1.0, looping: true, ..Default::default() }),
             quit: AtomicBool::new(false),
         });
@@ -249,8 +289,10 @@ impl Track {
                 skip = (((target - start).max(0.0)) * dst_rate) as usize * 2;
                 trim_to = None;
             }
+            let kept = &samples[skip.min(samples.len())..];
+            clip.measure(kept, dst_rate as f32);
             if let Ok(mut b) = clip.buf.lock() {
-                b.extend(samples.iter().skip(skip.min(samples.len())));
+                b.extend(kept.iter());
             }
             next_t = Some(start + dur);
         }
@@ -522,8 +564,12 @@ fn mix_clips(out: &mut [f32]) {
         Err(_) => return,
     };
     let frames = out.len() / 2;
+    let level = AUTO_LEVEL.load(Ordering::Relaxed);
     for clip in clips {
-        let target = f32::from_bits(clip.gain.load(Ordering::Relaxed));
+        let mut target = f32::from_bits(clip.gain.load(Ordering::Relaxed));
+        if level {
+            target *= level_gain(f32::from_bits(clip.loudness.load(Ordering::Relaxed)));
+        }
         let from = f32::from_bits(clip.applied.load(Ordering::Relaxed));
         let Ok(mut buf) = clip.buf.lock() else { continue };
         let n = frames.min(buf.len() / 2);
@@ -537,6 +583,27 @@ fn mix_clips(out: &mut [f32]) {
     }
     for s in out.iter_mut() {
         *s = s.clamp(-1.0, 1.0);
+    }
+}
+
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+
+    /// A loud clip is turned down and a quiet one up, to the same level; silence and the limits hold.
+    #[test]
+    fn levelling_meets_in_the_middle() {
+        let loud = level_gain(0.3 * 0.3);
+        let quiet = level_gain(0.04 * 0.04);
+        assert!((0.3 * loud - LEVEL_TARGET).abs() < 1e-4, "{loud}");
+        assert!((0.04 * quiet - LEVEL_TARGET).abs() < 1e-4, "{quiet}");
+        assert_eq!(level_gain(0.0), 1.0);
+        assert_eq!(level_gain(0.0001 * 0.0001), LEVEL_MAX);
+        let clip = Clip { buf: Mutex::new(VecDeque::new()), gain: AtomicU32::new(0), applied: AtomicU32::new(0), loudness: AtomicU32::new(0), follow: Mutex::new(Follow::default()), quit: AtomicBool::new(false) };
+        clip.measure(&[0.0001; 4800], 48_000.0);
+        assert_eq!(f32::from_bits(clip.loudness.load(Ordering::Relaxed)), 0.0, "silence doesn't count");
+        clip.measure(&[0.2; 4800], 48_000.0);
+        assert!((f32::from_bits(clip.loudness.load(Ordering::Relaxed)) - 0.04).abs() < 1e-4);
     }
 }
 
@@ -556,6 +623,7 @@ mod tests {
             buf: Mutex::new(VecDeque::new()),
             gain: AtomicU32::new(1f32.to_bits()),
             applied: AtomicU32::new(0),
+            loudness: AtomicU32::new(0),
             follow: Mutex::new(Follow { pos: 0.9, playing: true, rate: 1.0, looping: true, range: None, generation: 1 }),
             quit: AtomicBool::new(false),
         });

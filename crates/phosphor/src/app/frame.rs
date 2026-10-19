@@ -63,6 +63,11 @@ impl PhosphorApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         self.handle_dialogs_and_folders(now);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            crate::media::video::sound::set_auto_level(self.state.comp.sound_auto_level);
+            self.state.stream.mute_audio = self.state.comp.sound_muted;
+        }
         self.remote_sync(now);
         self.sync_mapping_from_output();
         {
