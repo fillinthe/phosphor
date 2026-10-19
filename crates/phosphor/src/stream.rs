@@ -16,12 +16,14 @@ pub enum Destination {
     Twitch,
     CustomRtmp,
     Srt,
+    /// WebRTC ingest (WHIP): sub-second latency to Cloudflare Stream, Dolby.io / Millicast, OBS, MediaMTX…
+    Whip,
     File,
 }
 
 impl Destination {
-    pub const ALL: [Destination; 5] =
-        [Destination::YouTube, Destination::Twitch, Destination::CustomRtmp, Destination::Srt, Destination::File];
+    pub const ALL: [Destination; 6] =
+        [Destination::YouTube, Destination::Twitch, Destination::CustomRtmp, Destination::Srt, Destination::Whip, Destination::File];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -29,6 +31,7 @@ impl Destination {
             Destination::Twitch => "Twitch",
             Destination::CustomRtmp => "Custom RTMP",
             Destination::Srt => "SRT",
+            Destination::Whip => "WebRTC (WHIP)",
             Destination::File => "Record to file",
         }
     }
@@ -75,6 +78,8 @@ pub struct StreamSettings {
     pub rtmp_url: String,
     pub stream_key: String,
     pub srt_url: String,
+    /// WHIP endpoint (https://…/whip); the bearer token, if the service wants one, is `stream_key`.
+    pub whip_url: String,
     pub file_path: String,
     pub file_format: FileFormat,
     /// 0 = same as canvas.
@@ -102,6 +107,7 @@ impl Default for StreamSettings {
             rtmp_url: "rtmp://live.example.com/app".into(),
             stream_key: String::new(),
             srt_url: "srt://host:9000?mode=caller".into(),
+            whip_url: String::new(),
             file_path: String::new(),
             file_format: FileFormat::Auto,
             height: 1080,
@@ -148,6 +154,9 @@ impl StreamSettings {
     /// Everything the stream goes to besides the main destination: (container, address).
     fn extra_targets(&self) -> Vec<(&'static str, String)> {
         let mut out = Vec::new();
+        if self.destination == Destination::Whip {
+            return out; // WebRTC goes out on its own (FFmpeg's tee can't carry it)
+        }
         if self.second_enabled && let Some(url) = Self::rtmp_target(self.second_destination, &self.second_url, &self.second_key, self.secure) {
             out.push(("flv", url));
         }
@@ -163,6 +172,13 @@ impl StreamSettings {
                 (vec!["-f".into(), "flv".into()], Self::rtmp_target(self.destination, &self.rtmp_url, &self.stream_key, self.secure).unwrap_or_default())
             }
             Destination::Srt => (vec!["-f".into(), "mpegts".into()], self.srt_url.clone()),
+            Destination::Whip => {
+                let mut fmt = vec!["-f".into(), "whip".into()];
+                if !self.stream_key.trim().is_empty() {
+                    fmt.extend(["-authorization".into(), self.stream_key.trim().to_string()]);
+                }
+                (fmt, self.whip_url.trim().to_string())
+            }
             Destination::File => (vec!["-movflags".into(), "+faststart".into()], self.file_path.clone()),
         }
     }
@@ -449,6 +465,9 @@ impl Streamer {
         let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found. Install it with: brew install ffmpeg")?;
         let s = &self.settings;
         let (fmt, target) = s.target();
+        if s.destination == Destination::Whip && !s.whip_url.trim().starts_with("http") {
+            return Err("Enter the WHIP address (https://…) from your WebRTC service".into());
+        }
         if target.trim().is_empty() || (matches!(s.destination, Destination::YouTube | Destination::Twitch) && s.stream_key.is_empty()) {
             return Err("Enter the stream key / destination first".into());
         }
@@ -461,12 +480,14 @@ impl Streamer {
         .into_iter()
         .map(String::from)
         .collect();
+        let whip = s.destination == Destination::Whip;
         if s.audio_device >= 0 {
             // Program audio from a capture device (a mic, or a loopback like BlackHole for the DJ feed).
-            args.extend(
-                ["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{}", s.audio_device), "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"]
-                    .map(String::from),
-            );
+            args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{}", s.audio_device), "-map", "0:v", "-map", "1:a"].map(String::from));
+            // WebRTC carries Opus (FFmpeg's own encoder, marked experimental); everything else AAC.
+            let codec: &[&str] = if whip { &["-c:a", "opus", "-strict", "-2", "-b:a", "128k", "-ac", "2"] } else { &["-c:a", "aac", "-b:a", "160k"] };
+            args.extend(codec.iter().map(|a| a.to_string()));
+            args.extend(["-ar", "48000"].map(String::from));
         } else {
             args.push("-an".into());
         }
@@ -491,6 +512,10 @@ impl Streamer {
                 ]
                 .map(String::from),
             );
+            if whip {
+                // WebRTC players take H.264 Baseline only (no B-frames); a keyframe every second for fast joins.
+                args.extend(["-profile:v", "baseline", "-bf", "0", "-g", &fps.to_string()].map(String::from));
+            }
         }
         let extra = s.extra_targets();
         if extra.is_empty() {
@@ -657,6 +682,15 @@ impl Streamer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn whip_goes_out_alone_with_its_token() {
+        let s = StreamSettings { destination: Destination::Whip, whip_url: " https://ingest.example.com/whip ".into(), stream_key: "tok".into(), second_enabled: true, copy_enabled: true, copy_path: "/tmp/x.mp4".into(), ..Default::default() };
+        let (fmt, target) = s.target();
+        assert_eq!(fmt, vec!["-f", "whip", "-authorization", "tok"]);
+        assert_eq!(target, "https://ingest.example.com/whip");
+        assert!(s.extra_targets().is_empty(), "no tee for WebRTC");
+    }
 
     #[test]
     fn progress_blocks_become_samples() {

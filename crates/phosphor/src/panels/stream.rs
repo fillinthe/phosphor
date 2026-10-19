@@ -21,7 +21,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
         });
-        if s.destination != Destination::File {
+        if !matches!(s.destination, Destination::File | Destination::Whip) {
             ui.horizontal(|ui| {
                 ui.checkbox(&mut s.second_enabled, "Also send to").on_hover_text("A second live destination from the same encode (YouTube + Twitch at once)");
                 if s.second_enabled {
@@ -66,6 +66,17 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                     ui.label("SRT URL");
                     ui.add(egui::TextEdit::singleline(&mut s.srt_url).desired_width(300.0));
                 });
+            }
+            Destination::Whip => {
+                ui.horizontal(|ui| {
+                    ui.label("WHIP URL");
+                    ui.add(egui::TextEdit::singleline(&mut s.whip_url).hint_text("https://…/whip").desired_width(300.0));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Token");
+                    ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).hint_text("bearer token, if the service gives one").desired_width(260.0));
+                });
+                hint(ui, "WebRTC: under a second of delay. H.264 Baseline video, Opus audio. Goes out on its own (no second destination or copy).");
             }
             Destination::File => {
                 ui.horizontal(|ui| {

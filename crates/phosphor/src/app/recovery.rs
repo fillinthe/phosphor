@@ -73,6 +73,16 @@ impl PhosphorApp {
                         }
                         self.recovered = None;
                     }
+                    // Opt-in crash report: the bug window, filled in, with the end of crash.log in its diagnostics.
+                    if ui.button(format!("{} Report it", icon::BUG)).on_hover_text("Opens Report a Bug with what happened filled in; nothing is sent until you send it").clicked() {
+                        let bug = &mut self.state.bug;
+                        bug.open = true;
+                        bug.include_diagnostics = true;
+                        if bug.text.trim().is_empty() {
+                            bug.text = "Phosphor quit unexpectedly. What I was doing just before: ".into();
+                        }
+                        self.recovered = None;
+                    }
                     if ui.small_button("OK").clicked() {
                         self.recovered = None;
                     }

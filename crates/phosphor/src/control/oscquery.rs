@@ -126,7 +126,8 @@ impl Server {
             .map_err(|e| e.to_string())?;
         let mdns = ip.and_then(|ip| {
             let daemon = mdns_sd::ServiceDaemon::new().ok()?;
-            let info = mdns_sd::ServiceInfo::new("_oscjson._tcp.local.", "Phosphor", "phosphor.local.", ip, port, std::collections::HashMap::<String, String>::new()).ok()?;
+            let (name, host) = super::discovery::identity();
+            let info = mdns_sd::ServiceInfo::new("_oscjson._tcp.local.", &name, &host, ip, port, super::discovery::properties()).ok()?;
             daemon.register(info).ok()?;
             Some(daemon)
         });

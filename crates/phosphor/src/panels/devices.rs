@@ -131,6 +131,29 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.separator();
 
+        // Other Phosphors on the network (Bonjour), e.g. the computers of a multi-room show.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("{} Other Phosphors", icon::DESKTOP_TOWER)).strong());
+                hint(ui, format!("this one is \"{}\"", crate::control::discovery::identity().0));
+            });
+            let players = crate::control::discovery::players();
+            if players.is_empty() {
+                hint(ui, "None heard on this network.");
+            }
+            for p in &players {
+                ui.horizontal(|ui| {
+                    ui.label(&p.name);
+                    hint(ui, format!("OSC {}:{}{}", p.address, p.port, if p.version.is_empty() { String::new() } else { format!(" · {}", p.version) }));
+                    if ui.small_button(icon::COPY).on_hover_text("Copy its OSC address (to send it cues or values)").clicked() {
+                        ui.ctx().copy_text(format!("{}:{}", p.address, p.port));
+                    }
+                });
+            }
+            ui.separator();
+        }
+
         // Audio input and outputs, for the full picture.
         ui.label(RichText::new(format!("{} Audio in", icon::MICROPHONE)).strong());
         if st.audio.is_open() {
@@ -142,7 +165,9 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         ui.label(RichText::new(format!("{} Outputs", icon::PROJECTOR_SCREEN)).strong());
         #[cfg(target_os = "macos")]
         syphon_row(ui, st);
-        #[cfg(target_os = "macos")]
+        #[cfg(windows)]
+        spout_row(ui, st);
+        #[cfg(any(target_os = "macos", windows))]
         ndi_row(ui, st);
         let windows: Vec<(u64, bool)> = st.output.lock().unwrap().iter().map(|(id, o)| (*id, o.open)).collect();
         for o in &st.comp.outputs {

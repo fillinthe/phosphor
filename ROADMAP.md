@@ -229,7 +229,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Stream out directly: YouTube Live, Twitch, custom RTMP, SRT — pick size/fps/bitrate, Start
 - [x] Record to disk: .mp4 (H.264) or .mov (ProRes 422 HQ, VideoToolbox)
 - [x] Audio in the stream: pick any AVFoundation input (mic, interface, BlackHole loopback) → AAC 160k
-- [x] HEVC recording ✔ · RTMPS ✔ · [ ] WHIP (WebRTC)
+- [x] HEVC recording ✔ · RTMPS ✔ · WHIP (WebRTC) ✔ 2026-10-19 (offer checked locally; not yet against a live WebRTC service)
 - [x] Auto-reconnect for streams (2/4/8/15 s back-off)
 - [x] Two destinations at once + a recorded copy (tee) ✔ 2026-10-17 · [x] connection health graph ✔ 2026-10-19
 - [x] OBS-friendly: Syphon and NDI outputs
@@ -246,15 +246,15 @@ Legend: [x] done · [~] in progress · [ ] not started
       stream or renders the project itself from a synced clock (tiny bandwidth, perfect sync)
 - [x] Session page: QR code, viewer list (Devices panel)
 - [x] Per-viewer audio level meters (Devices panel, one meter per audio sender) ✔ 0.2.29
-- [x] Bonjour: phosphor.local + "Phosphor Session" service while a session runs ✔ 2026-10-17 · [ ] discovery of other players
+- [x] Bonjour: phosphor.local + "Phosphor Session" service while a session runs ✔ 2026-10-17 · discovery of other players ✔ 2026-10-19 (Devices panel)
 - [ ] Multiple players in sync (shared timecode), each with its own output mapping (Phase 4)
 
 ### Phase 6: Accounts & sync
 - [x] Project format: versioned JSON ✔ 2026-10-19 (`FORMAT`, `migrate` steps, warning when a newer Phosphor saved it)
 - [x] Phosphor account service (phosphorfx.com): sign-in, Pro project storage, in-app Account panel
 - [x] Layouts in the account (sync)
-- [ ] Control surfaces in the account
-- [ ] Sync projects, UI layouts, control surfaces and mappings across devices
+- [x] Control surfaces in the account ✔ 2026-10-19 (named saves of surfaces + mapping sets, synced)
+- [x] Sync projects (Pro), UI layouts, control surfaces and mappings across devices ✔ 2026-10-19 (named saves merge in; deletions stay local)
 - [ ] Media handling: references plus an optional cloud media library
 
 ### Phase 7: Platforms
@@ -280,5 +280,5 @@ Legend: [x] done · [~] in progress · [ ] not started
       CPU/frame (30% → 105% of a core), nearly all pass/bind-group setup; explorer defaults to Hover previews
 - [ ] Benchmark suite vs VDMX (CPU, memory, frame time, same clips)
 - [x] In-app bug report (GitHub issue / clipboard), in-app update from GitHub releases (`scripts/release-github.sh` publishes); Donate in the top bar
-- [ ] Crash reporting that sends on its own (opt-in); a private bug-report endpoint
+- [~] Crash reporting: after a crash, "Report it" fills in the bug report (one click) ✔ 2026-10-19. Sending on its own needs a private endpoint on the account server: owner decision
 - [ ] Code signing + notarization: scripts ready (`SIGN_ID=… scripts/bundle-mac.sh`, `scripts/notarize-mac.sh`); needs the owner's Developer ID certificate + notary login

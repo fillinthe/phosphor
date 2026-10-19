@@ -14,6 +14,17 @@ pub(crate) enum SaveAction {
     Error(String),
 }
 
+/// A menu button holding `named_saves` (Venues, Control Surfaces, Mappings…): returns what was picked.
+pub(crate) fn saves_menu(ui: &mut egui::Ui, title: &str, about: &str, store: &mut PresetStore, name: &mut String, what: &str, current: impl FnOnce() -> String) -> Option<SaveAction> {
+    ui.menu_button(title, |ui| {
+        ui.set_min_width(300.0);
+        hint(ui, about);
+        named_saves(ui, store, name, what, current)
+    })
+    .inner
+    .flatten()
+}
+
 /// Name field + Save, then the built-in and your saved entries with Load and (yours) Delete.
 /// `current` makes the JSON to save; `what` names the kind in messages ("look", "venue").
 pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut String, what: &str, current: impl FnOnce() -> String) -> Option<SaveAction> {

@@ -164,8 +164,9 @@ impl Backend {
         if let Some(ip) = ip
             && let Ok(daemon) = mdns_sd::ServiceDaemon::new()
         {
-            let props = std::collections::HashMap::<String, String>::new();
-            if let Ok(info) = mdns_sd::ServiceInfo::new("_osc._udp.local.", "Phosphor", "phosphor.local.", ip, port, props)
+            // One name per computer ("Phosphor on Studio Mac"), so several Phosphors on a network can be told apart.
+            let (name, host) = super::discovery::identity();
+            if let Ok(info) = mdns_sd::ServiceInfo::new("_osc._udp.local.", &name, &host, ip, port, super::discovery::properties())
                 && daemon.register(info).is_ok()
             {
                 self.mdns = Some(daemon);
