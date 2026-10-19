@@ -175,6 +175,8 @@ pub struct State {
     pub preset_name: String,
     /// A message worth showing the user (save failed, bad preset, …).
     pub notice: Option<String>,
+    /// Next time movies' settings are saved into the media bin (`Composition::remember_media_settings`).
+    pub media_memory_at: f64,
     /// Opening the default audio input failed once (don't retry on every Quick action).
     pub audio_declined: bool,
     /// Clip cells drawn last frame (screen rect, layer, slot): where files dropped from the Finder land.

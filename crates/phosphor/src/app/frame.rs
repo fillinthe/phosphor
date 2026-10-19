@@ -96,6 +96,11 @@ impl PhosphorApp {
                 }
             }
             st.comp.expire_transitions(now as f32);
+            // Movies remember how they last played (twice a second is plenty).
+            if now >= st.media_memory_at {
+                st.media_memory_at = now + 0.5;
+                st.comp.remember_media_settings();
+            }
             st.run_autopilot(now);
             st.run_auto_show(now);
             st.run_cues(now);
