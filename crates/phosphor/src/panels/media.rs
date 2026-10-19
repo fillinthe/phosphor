@@ -48,6 +48,10 @@ pub(crate) enum MediaAct {
     FillFolder(String),
     /// Everything the bin shows now (search, filter, sort) → a new layer of clips.
     ShownToLayer(Vec<usize>),
+    /// Play one of these at random on the selected layer.
+    RandomOne(Vec<usize>),
+    /// These as a new clip layer that plays them in random order by itself (named after the collection).
+    ShuffleLayer(Vec<usize>, String),
     Unwatch(String),
     NewCollection(String, Option<usize>),
     DeleteCollection(String),
@@ -168,6 +172,20 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             acts.push(MediaAct::ShownToLayer(shown.clone()));
         }
     });
+    // Show folders (collections): pick one above, then play from it at random.
+    ui.horizontal_wrapped(|ui| {
+        if ui.add_enabled(!shown.is_empty(), egui::Button::new(label(icon::DICE_FIVE, "Random"))).on_hover_text("Play one of the files shown here, at random, on the selected layer (click again for another)").clicked() {
+            acts.push(MediaAct::RandomOne(shown.clone()));
+        }
+        let name = match &st.media_view.filter {
+            MediaFilter::Collection(c) => c.clone(),
+            MediaFilter::Favorites => "Favourites".to_string(),
+            _ => "Shuffle".to_string(),
+        };
+        if ui.add_enabled(shown.len() > 1, egui::Button::new(label(icon::SHUFFLE, "Shuffle on a new layer"))).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
+            acts.push(MediaAct::ShuffleLayer(shown.clone(), name));
+        }
+    });
 
     // Where a click plays (the selected layer, else a new one) and every layer for "Play on".
     let layers: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
@@ -279,6 +297,30 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 st.clip_page = 0;
                 st.trigger(Trigger::Clip { layer, slot: 0 }, now);
                 st.notice = Some(format!("New layer with {n} clips"));
+            }
+            MediaAct::RandomOne(shown) => {
+                let Some(i) = crate::app::dice().pick(&shown).copied() else { continue };
+                let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
+                let target = match st.selected {
+                    Some(id) if id != MASTER_ID && st.comp.layers.iter().any(|l| l.id == id) => id,
+                    _ => st.add_layer(),
+                };
+                st.selected = Some(target);
+                st.launch_source(target, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
+            }
+            MediaAct::ShuffleLayer(shown, name) => {
+                let items = clip_items(shown.iter().filter_map(|i| st.comp.media_bin.get(*i)));
+                let layer = st.add_layer();
+                let n = st.comp.place_clips(layer, 0, items);
+                if let Some(l) = st.comp.layer_mut(layer) {
+                    l.name = name.clone();
+                    l.autopilot = phosphor_engine::Autopilot::Random;
+                    l.autopilot_beats = 0.0;
+                }
+                st.selected = Some(layer);
+                let first = crate::app::dice().below(n.max(1));
+                st.trigger(Trigger::Clip { layer, slot: first }, now);
+                st.notice = Some(format!("\"{name}\": {n} clips playing in random order (the layer's name menu changes how)"));
             }
             MediaAct::Unwatch(folder) => {
                 st.comp.media_bin.retain(|m| m.folder != folder);
