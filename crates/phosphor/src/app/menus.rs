@@ -166,7 +166,10 @@ impl PhosphorApp {
                 }
             }
             A::Layout(i) => self.apply_layout(i),
-            A::Area(i) => self.switch_workspace(i),
+            A::Area(i) => {
+                self.use_areas = true;
+                self.switch_workspace(i);
+            }
             A::SaveLayout => self.layout_draft = Some((String::new(), self.layouts.startup.is_none() && self.layouts.saved.is_empty())),
         }
     }
@@ -240,9 +243,13 @@ impl PhosphorApp {
                         "Control" => (icon::SLIDERS_HORIZONTAL, "Control", "Controllers: MIDI / OSC, TouchOSC, Control Surface, modulators (⌘3)"),
                         other => (icon::LAYOUT, other, ""),
                     };
-                    if ui.selectable_label(self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {
+                    if ui.selectable_label(self.use_areas && self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {
+                        self.use_areas = true;
                         self.switch_workspace(i);
                     }
+                }
+                if ui.selectable_label(!self.use_areas, format!("{} Custom", icon::LAYOUT)).on_hover_text("Your own arrangement: drag panels anywhere (View > Panels, View > Layouts)").clicked() {
+                    self.use_areas = false;
                 }
                 ui.menu_button(icon::CARET_DOWN, |ui| {
                     ui.label(egui::RichText::new("Send output to").strong());

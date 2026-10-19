@@ -15,6 +15,7 @@ mod binding;
 mod learn;
 mod modulation;
 mod saves;
+mod split;
 mod tool_window;
 mod widgets;
 
@@ -22,5 +23,6 @@ pub(crate) use binding::*;
 pub(crate) use learn::*;
 pub(crate) use modulation::*;
 pub(crate) use saves::*;
+pub(crate) use split::*;
 pub(crate) use tool_window::*;
 pub(crate) use widgets::*;
