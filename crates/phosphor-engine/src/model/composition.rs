@@ -7,7 +7,7 @@ use crate::mapping::Mapping;
 use crate::shaders;
 
 /// A file in the media bin. Paths are stored as given; thumbnails are rebuilt on load.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct MediaItem {
     pub name: String,
     pub path: String,
@@ -19,6 +19,12 @@ pub struct MediaItem {
     /// Your collections this item belongs to.
     #[serde(default)]
     pub collections: Vec<String>,
+    /// How it last played (speed, direction, loop, effects): it comes back with these when you use it again.
+    #[serde(default)]
+    pub settings: Option<crate::ClipSettings>,
+    /// Last played without sound.
+    #[serde(default)]
+    pub muted: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -327,10 +333,13 @@ impl Composition {
     pub fn place_clips(&mut self, layer: u64, start: usize, items: Vec<(String, SourceSpec)>) -> usize {
         let items: Vec<_> = items.into_iter().filter(|(_, s)| *s != SourceSpec::None).collect();
         let ids: Vec<u64> = items.iter().map(|_| self.new_id()).collect();
+        // A file you've used before comes with the settings it last played with.
+        let memory: Vec<_> = items.iter().map(|(_, s)| self.media_memory(s)).collect();
         let Some(l) = self.layer_mut(layer) else { return 0 };
         let n = items.len();
-        for (i, ((name, source), id)) in items.into_iter().zip(ids).enumerate() {
-            *l.clip_slot_mut(start + i) = Clip { id, name, source, ..Default::default() };
+        for (i, (((name, source), id), mem)) in items.into_iter().zip(ids).zip(memory).enumerate() {
+            let (own, muted) = mem.map_or((None, false), |(s, m)| (Some(s), m));
+            *l.clip_slot_mut(start + i) = Clip { id, name, source, own, muted, ..Default::default() };
         }
         self.clip_columns = self.clip_columns.max(start + n);
         n
@@ -339,7 +348,11 @@ impl Composition {
     /// Puts a new source on a layer using the launch fade.
     pub fn set_layer_source(&mut self, layer: u64, source: SourceSpec, values: Vec<f32>, name: String, now: f32) {
         let secs = self.launch_secs();
+        let memory = self.media_memory(&source);
         if let Some(l) = self.layer_mut(layer) {
+            if let Some((settings, _)) = &memory {
+                l.apply_clip_settings(settings);
+            }
             l.start_transition(now, secs);
             l.source = source;
             l.generator_values = values;
@@ -350,6 +363,27 @@ impl Composition {
             }
             l.playing = true;
         }
+    }
+
+    /// Each movie playing on a layer remembers its settings in the media bin (call a few times a second).
+    pub fn remember_media_settings(&mut self) {
+        for l in &self.layers {
+            let SourceSpec::Movie { path: Some(path), .. } = &l.source else { continue };
+            let Some(item) = self.media_bin.iter_mut().find(|m| m.path == *path) else { continue };
+            let settings = l.clip_settings();
+            let muted = l.muted || l.active_clip.is_some_and(|id| l.clips.iter().any(|k| k.id == id && k.muted));
+            if item.settings.as_ref() != Some(&settings) || item.muted != muted {
+                item.settings = Some(settings);
+                item.muted = muted;
+            }
+        }
+    }
+
+    /// What a media file remembers (settings, muted), for a clip or layer that's about to use it.
+    pub fn media_memory(&self, source: &SourceSpec) -> Option<(crate::ClipSettings, bool)> {
+        let SourceSpec::Movie { path: Some(path), .. } = source else { return None };
+        let item = self.media_bin.iter().find(|m| m.path == *path)?;
+        item.settings.clone().map(|s| (s, item.muted))
     }
 
     pub fn expire_transitions(&mut self, now: f32) {
@@ -433,6 +467,34 @@ impl Composition {
         if self.version < 1 {
             self.version = 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod media_memory_tests {
+    use super::*;
+
+    #[test]
+    fn a_movie_comes_back_with_its_settings() {
+        let mut c = Composition::default();
+        let movie = SourceSpec::Movie { name: "a.mp4".into(), path: Some("/x/a.mp4".into()) };
+        c.add_media("a.mp4", "/x/a.mp4");
+        let id = c.add_layer().id;
+        c.set_layer_source(id, movie.clone(), Vec::new(), String::new(), 0.0);
+        c.layers[0].rate = 0.5;
+        c.layers[0].direction = crate::PlayDirection::PingPong;
+        c.layers[0].muted = true;
+        c.remember_media_settings();
+        // Into a clip slot elsewhere: the clip keeps those settings.
+        let other = c.add_layer().id;
+        c.place_clips(other, 0, vec![("a.mp4".into(), movie.clone())]);
+        let clip = &c.layers.iter().find(|l| l.id == other).unwrap().clips[0];
+        assert_eq!(clip.own.as_ref().map(|s| (s.rate, s.direction)), Some((0.5, crate::PlayDirection::PingPong)));
+        assert!(clip.muted);
+        // Straight onto a fresh layer: the layer takes them.
+        let third = c.add_layer().id;
+        c.set_layer_source(third, movie, Vec::new(), String::new(), 0.0);
+        assert_eq!(c.layers.iter().find(|l| l.id == third).unwrap().rate, 0.5);
     }
 }
 
