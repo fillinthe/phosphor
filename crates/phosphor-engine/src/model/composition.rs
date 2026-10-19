@@ -79,6 +79,10 @@ pub struct Composition {
     pub outputs_on_open: bool,
     /// Master volume for movie sound.
     pub volume: f32,
+    /// Every sound Phosphor sends out is silent (movies now; streams and recordings start without audio).
+    pub sound_muted: bool,
+    /// Even out the movies' loudness: each one is brought towards the same level as it plays.
+    pub sound_auto_level: bool,
     /// LED / DMX pixel mapping (Art-Net, sACN).
     pub dmx: DmxSettings,
     /// Show control: cues to step through or fire on timecode.
@@ -91,7 +95,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 
@@ -178,7 +182,7 @@ impl Composition {
         let group = layer.parent.and_then(|g| self.group(g));
         let soloed_out = !layer.solo && self.layers.iter().any(|l| l.enabled && l.solo);
         let clip_muted = layer.active_clip.is_some_and(|id| layer.clips.iter().any(|k| k.id == id && k.muted));
-        if !layer.enabled || soloed_out || group.is_some_and(|g| !g.enabled) || layer.muted || clip_muted {
+        if self.sound_muted || !layer.enabled || soloed_out || group.is_some_and(|g| !g.enabled) || layer.muted || clip_muted {
             return 0.0;
         }
         let mut g = layer.volume * self.volume;
@@ -520,6 +524,8 @@ mod mute_tests {
         c.layers[0].active_clip = None;
         let l = c.layers[0].clone();
         assert!(c.sound_gain(&l) > 0.0, "another clip plays with sound");
+        c.sound_muted = true;
+        assert_eq!(c.sound_gain(&l), 0.0, "mute all silences every layer");
     }
 }
 

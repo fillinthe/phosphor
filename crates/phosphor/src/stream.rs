@@ -274,6 +274,8 @@ pub struct Streamer {
     /// Next reconnect attempt (app seconds) and how many in a row so far.
     retry_at: Option<f64>,
     retries: u32,
+    /// Mute all sound is on: streams and recordings start without the audio device.
+    pub mute_audio: bool,
 }
 
 /// Seconds before reconnect attempt `n` (1, 2, 3…): 2, 4, 8, then every 15.
@@ -332,6 +334,7 @@ impl Streamer {
             wanted: None,
             retry_at: None,
             retries: 0,
+            mute_audio: false,
         }
     }
 
@@ -481,9 +484,10 @@ impl Streamer {
         .map(String::from)
         .collect();
         let whip = s.destination == Destination::Whip;
-        if s.audio_device >= 0 {
+        let audio_device = if self.mute_audio { -1 } else { s.audio_device };
+        if audio_device >= 0 {
             // Program audio from a capture device (a mic, or a loopback like BlackHole for the DJ feed).
-            args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{}", s.audio_device), "-map", "0:v", "-map", "1:a"].map(String::from));
+            args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{audio_device}"), "-map", "0:v", "-map", "1:a"].map(String::from));
             // WebRTC carries Opus (FFmpeg's own encoder, marked experimental); everything else AAC.
             let codec: &[&str] = if whip { &["-c:a", "opus", "-strict", "-2", "-b:a", "128k", "-ac", "2"] } else { &["-c:a", "aac", "-b:a", "160k"] };
             args.extend(codec.iter().map(|a| a.to_string()));
@@ -529,7 +533,7 @@ impl Streamer {
                 slaves.push(format!("[f={f}:onfail=ignore]{url}"));
             }
             // tee picks no streams by itself: name them (audio was mapped above when a device is on).
-            if s.audio_device < 0 {
+            if audio_device < 0 {
                 args.extend(["-map", "0:v"].map(String::from));
             }
             args.extend(["-f", "tee", "-flags", "+global_header"].map(String::from));

@@ -3,13 +3,8 @@
 use super::*;
 
 pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(format!("{} Movie sound", icon::SPEAKER_SIMPLE_HIGH)).strong());
-        let comp = &mut st.comp;
-        let r = guarded!(ui, comp.volume, Slider::new(&mut comp.volume, 0.0..=2.0).show_value(false)).on_hover_text("Master volume for every movie's sound (each layer has its own in the Inspector)");
-        value_bubble(ui, &r, format!("{:.0}%", comp.volume * 100.0));
-        map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MasterVolume));
-    });
+    ui.label(RichText::new(format!("{} Sound out", icon::SPEAKER_SIMPLE_HIGH)).strong());
+    sound_out(ui, &mut st.comp);
     ui.separator();
     let State { audio, notice, mod_inputs, clock, .. } = st;
     let follow_audio = &mut clock.follow_audio;
@@ -54,12 +49,15 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     if let Some(msg) = notice {
         ui.colored_label(WARN, msg.as_str());
     }
-    let gain = guarded!(ui, audio.gain, Slider::new(&mut audio.gain, 0.1..=10.0).text("Gain").logarithmic(true));
-    map_menu(ui, &gain, ControlTarget::App(phosphor_engine::AppControl::AudioGain));
-    guarded!(ui, audio.envelope.attack, Slider::new(&mut audio.envelope.attack, 0.0..=0.5).text("Attack (s)"))
-        .on_hover_text("How fast the levels rise: 0 = instantly (punchy), higher = smoother swells");
-    guarded!(ui, audio.envelope.release, Slider::new(&mut audio.envelope.release, 0.02..=2.0).text("Release (s)"))
-        .on_hover_text("How fast the levels fall after a hit: short = flickery, long = slow fades");
+    ui.horizontal(|ui| {
+        Level::range(&mut audio.gain, 0.1, 10.0, "Input gain").log().default(1.0).target(ControlTarget::App(phosphor_engine::AppControl::AudioGain)).tip("How much the input is boosted before the visuals hear it").show(ui);
+    });
+    ui.horizontal(|ui| {
+        Level::range(&mut audio.envelope.attack, 0.0, 0.5, "Attack (s)").default(0.0).tip("How fast the levels rise: 0 = instantly (punchy), higher = smoother swells").show(ui);
+    });
+    ui.horizontal(|ui| {
+        Level::range(&mut audio.envelope.release, 0.02, 2.0, "Release (s)").default(0.15).tip("How fast the levels fall after a hit: short = flickery, long = slow fades").show(ui);
+    });
     ui.separator();
     for (name, v) in [
         ("Level", mod_inputs.audio_level),
@@ -100,9 +98,9 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, "listening for a beat…");
         }
     });
-    let kick = guarded!(ui, audio.beats.sensitivity, Slider::new(&mut audio.beats.sensitivity, 1.1..=3.0).text("Kick threshold").fixed_decimals(2))
-        .on_hover_text("Lower catches softer kicks; higher ignores everything but strong hits");
-    map_menu(ui, &kick, ControlTarget::App(phosphor_engine::AppControl::KickThreshold));
+    ui.horizontal(|ui| {
+        Level::range(&mut audio.beats.sensitivity, 1.1, 3.0, "Kick threshold").default(1.5).target(ControlTarget::App(phosphor_engine::AppControl::KickThreshold)).tip("Lower catches softer kicks; higher ignores everything but strong hits").show(ui);
+    });
     ui.horizontal(|ui| {
         let r = ui.toggle_value(follow_audio, label(icon::METRONOME, "Follow audio"))
             .on_hover_text("Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick");
@@ -111,4 +109,22 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     });
     ui.add_space(4.0);
     hint(ui, format!("Press {} next to any slider to drive it with these signals or an LFO.", icon::WAVE_SINE));
+}
+
+/// Mute all, master volume and levelling for everything Phosphor plays (Audio panel).
+fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
+    use phosphor_engine::AppControl;
+    ui.horizontal(|ui| {
+        let r = super::inspector::mute_button(ui, &mut comp.sound_muted, "all sound");
+        map_menu(ui, &r, ControlTarget::App(AppControl::MuteSound));
+        Level::percent(&mut comp.volume, "Master volume").max(2.0).target(ControlTarget::App(AppControl::MasterVolume)).tip("Every movie's sound (each layer has its own volume too)").show(ui);
+    });
+    if comp.sound_muted {
+        hint(ui, "All sound is off. Streams and recordings started now have no audio; one already running keeps its audio device until it restarts.");
+    }
+    let r = ui.checkbox(&mut comp.sound_auto_level, "Even out volume levels").on_hover_text("Each movie is brought towards the same loudness as it plays (up to 4× up or down; silence isn't boosted)");
+    map_menu(ui, &r, ControlTarget::App(AppControl::AutoLevel));
+    if comp.sound_auto_level {
+        hint(ui, "Loud and quiet clips now play about equally loud; each layer's volume still works on top.");
+    }
 }

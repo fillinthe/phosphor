@@ -4,6 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.60 (2026-10-19)
+
+- **Mute all sound:** one speaker button on the MASTER bar (and in the Audio panel) silences everything Phosphor
+  plays. Streams and recordings started while it's on have no audio. A red "Sound muted" in the status line
+  reminds you; click it to turn sound back on. It can be mapped to a pad or key.
+- **Even out volume levels:** turn it on in the Audio panel and every movie is brought towards the same
+  loudness as it plays, so a loud clip and a quiet one come out about the same. Silence isn't boosted, and no clip
+  is turned up or down more than 4×. Each layer's own volume still works on top.
+- The Audio panel's input controls use the new simple bars too.
+
 ## 0.2.59 (2026-10-19)
 
 - **Simpler sliders everywhere:** every level and effect control is now a plain bar with its name and value
