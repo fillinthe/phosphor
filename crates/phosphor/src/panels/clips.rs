@@ -267,6 +267,11 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                             ui.visuals().widgets.noninteractive.bg_stroke
                         };
                         p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
+                        // A muted clip says so on its cell.
+                        if clip.is_some_and(|k| k.muted) {
+                            let at = rect.right_top() + egui::vec2(-4.0, 4.0);
+                            p.text(at, egui::Align2::RIGHT_TOP, icon::SPEAKER_SIMPLE_X, egui::FontId::proportional(12.0), crate::theme::WARN);
+                        }
                         if let Some(m) = resp.dnd_release_payload::<MediaDrag>() {
                             set_cell = Some((idx, c, m.0));
                         }
@@ -307,6 +312,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                     ui.radio_value(&mut k.trigger, m, m.name());
                                 }
                                 ui.separator();
+                                if is_movie {
+                                    ui.checkbox(&mut k.muted, "Mute sound").on_hover_text("This clip plays without sound, wherever it's triggered");
+                                }
                                 let mut own = k.own.is_some();
                                 if ui
                                     .checkbox(&mut own, "Keeps its own settings")
@@ -423,7 +431,8 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             ui.toggle_value(&mut layer.enabled, RichText::new("ON").small()).on_hover_text("Layer on / off");
-            ui.spacing_mut().slider_width = (size.x - 52.0).max(40.0);
+            super::inspector::mute_button(ui, &mut layer.muted, "this layer");
+            ui.spacing_mut().slider_width = (size.x - 80.0).max(40.0);
             let o = guarded!(ui, layer.opacity, egui::Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
             mapped_badge(ui, &o, &ControlTarget::LayerOpacity(layer.id));
             value_bubble(ui, &o, format!("{:.0}%", layer.opacity * 100.0));
