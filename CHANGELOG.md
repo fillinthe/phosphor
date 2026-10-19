@@ -4,6 +4,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.55 (2026-10-19)
+- **See all your outputs at once while mapping.** The Mapping Studio and the Mapping panel now open with a strip
+  of every output, live: what each projector or feed shows, its name, and where it's going (which screen, a
+  window, or nowhere yet). Click one to edit it; double-click opens or closes its window; right-click to send it
+  to a screen, identify, rename, switch it off or remove it; the last card adds an output.
+- The Studio's list now shows just the selected output's slices and masks, and the Mapping workspace is the
+  Studio alone (no second mapping tab beside it).
+
 ## 0.2.54 (2026-10-19)
 - **WebRTC streaming (WHIP):** a new destination in Stream & Record for under-a-second delay to WebRTC services
   (Cloudflare Stream, Dolby / Millicast, OBS, MediaMTX…): paste the WHIP address and token.
