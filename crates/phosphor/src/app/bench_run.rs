@@ -123,6 +123,9 @@ impl PhosphorApp {
         }
         println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
         if self.state.stream.running() {
+            let h = self.state.stream.history();
+            let kbps: Vec<String> = h.iter().map(|s| format!("{:.0}", s.kbps)).collect();
+            println!("STREAM_HEALTH {:?} samples={} kbps=[{}] last_speed={:.2}", self.state.stream.health(), h.len(), kbps.join(","), h.back().map_or(0.0, |s| s.speed));
             self.state.stream.stop_and_wait();
             println!("RECORDED {}", self.state.stream.settings.file_path);
         }
