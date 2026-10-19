@@ -9,10 +9,13 @@ use crate::app::State;
 pub const DONATE_URL: &str = "https://phosphorfx.com/donate/";
 pub const ISSUES_URL: &str = "https://github.com/fillinthe/phosphor/issues/new";
 
-/// Heart button that opens the donation page (top bar, menus).
+/// Donate's orange, the same as GCarve's (the one orange in either app).
+pub const DONATE_ORANGE: egui::Color32 = egui::Color32::from_rgb(0xff, 0x9a, 0x2e);
+
+/// Heart button that opens the donation page (top bar, menus): filled orange with dark text, like GCarve's.
 pub fn donate_button(ui: &mut egui::Ui) {
-    let text = egui::RichText::new(format!("{} Donate", icon::HEART)).color(egui::Color32::from_rgb(255, 120, 140));
-    if ui.button(text).on_hover_text("Phosphor is free and open source. A donation keeps it going.").clicked() {
+    let text = egui::RichText::new(format!("{} Donate", icon::HEART)).color(egui::Color32::from_rgb(0x1a, 0x1a, 0x1a)).strong();
+    if ui.add(egui::Button::new(text).fill(DONATE_ORANGE)).on_hover_text("Phosphor is free and open source. A donation keeps it going.").clicked() {
         ui.ctx().open_url(egui::OpenUrl::new_tab(DONATE_URL));
     }
 }

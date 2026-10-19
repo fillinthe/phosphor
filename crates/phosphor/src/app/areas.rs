@@ -66,81 +66,85 @@ fn heading(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text.to_uppercase()).size(11.0).strong().color(Color32::from_gray(140)));
 }
 
+/// The middle of an area.
+fn stage(ui: &mut egui::Ui, area: usize, both: &mut (&mut crate::app::State, &mut AreaTabs)) {
+    match area {
+        0 => crate::ui::split_vertical(
+            ui,
+            "show_bottom",
+            0.4,
+            140.0,
+            both,
+            |ui, (st, _)| {
+                crate::ui::split_horizontal(ui, "show_layers", 0.3, 310.0, *st, |ui, st| panels::draw_tab(ui, st, Tab::Preview), |ui, st| {
+                    heading(ui, "Layers");
+                    panels::draw_tab(ui, st, Tab::Layers);
+                })
+            },
+            |ui, (st, tabs)| {
+                sub_tabs(ui, &mut tabs.show_bottom, SHOW_BOTTOM);
+                panels::draw_tab(ui, st, tabs.show_bottom);
+            },
+        ),
+        1 => crate::ui::split_vertical(ui, "outputs_bottom", 0.32, 120.0, both, |ui, (st, _)| panels::studio_stage(ui, st), |ui, (st, tabs)| {
+            sub_tabs(ui, &mut tabs.outputs_bottom, OUTPUTS_BOTTOM);
+            scrolled(ui, "outputs_bottom", |ui| panels::draw_tab(ui, st, tabs.outputs_bottom));
+        }),
+        _ => crate::ui::split_horizontal(
+            ui,
+            "control",
+            0.58,
+            320.0,
+            &mut *both.0,
+            |ui, st| {
+                heading(ui, "MIDI / OSC / TouchOSC");
+                panels::draw_tab(ui, st, Tab::Control);
+            },
+            |ui, st| {
+                heading(ui, "Control Surface");
+                panels::draw_tab(ui, st, Tab::Surface);
+            },
+        ),
+    }
+}
+
 impl PhosphorApp {
     /// Draws the current area in the unified frame.
     pub(crate) fn areas_frame(&mut self, ui: &mut egui::Ui) {
         let area = self.workspace.unwrap_or(0).min(2);
         let tabs = &mut self.area_tabs;
         let st = &mut self.state;
-        let line = egui::Stroke::new(1.0, Color32::from_gray(40));
-        let side = egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(egui::Margin::symmetric(10, 6)).stroke(line);
-
-        // Side columns scale with the window (never more than about a quarter each), so the stage keeps its room.
+        // Side columns: their width changes only when you drag their edge, capped at about a quarter of the window
+        // each, so the stage keeps its room; their content can't push them wider.
         let w = ui.available_width();
-        let lib_max = (w * 0.22).max(180.0);
-        let ins_max = (w * 0.26).max(220.0);
-        if tabs.show_library {
-            egui::Panel::left("area_library").resizable(true).default_size(250.0f32.min(lib_max)).size_range(170.0..=lib_max).frame(side).show(ui, |ui| {
+        let left = tabs.show_library.then_some((250.0f32.min(w * 0.22), 170.0, (w * 0.22).max(180.0)));
+        let right = tabs.show_inspector.then_some((330.0f32.min(w * 0.26), 220.0, (w * 0.26).max(220.0)));
+        let mut both = (st, tabs);
+        crate::ui::columns(
+            ui,
+            "areas",
+            left,
+            right,
+            &mut both,
+            |ui, (st, tabs)| {
                 heading(ui, "Library");
                 sub_tabs(ui, &mut tabs.library, LIBRARY);
                 panels::draw_tab(ui, st, tabs.library);
-            });
-        }
-        if tabs.show_inspector {
-        egui::Panel::right("area_inspector").resizable(true).default_size(330.0f32.min(ins_max)).size_range(220.0..=ins_max).frame(side).show(ui, |ui| {
-            heading(ui, match area {
-                1 => "Output",
-                2 => "Modulators",
-                _ => "Inspector",
-            });
-            match area {
-                1 => egui::ScrollArea::vertical().id_salt("area_inspector_out").auto_shrink(false).show(ui, |ui| panels::studio_properties(ui, st)).inner,
-                2 => panels::draw_tab(ui, st, Tab::Modulators),
-                _ => panels::draw_tab(ui, st, Tab::Inspector),
-            }
-        });
-        }
-        let fill = ui.visuals().panel_fill;
-        let stage = egui::Frame::new().fill(fill).inner_margin(egui::Margin::same(6));
-        let mut both = (st, tabs);
-        egui::CentralPanel::default().frame(stage).show(ui, |ui| match area {
-            0 => crate::ui::split_vertical(
-                ui,
-                "show_bottom",
-                0.4,
-                140.0,
-                &mut both,
-                |ui, (st, _)| {
-                    crate::ui::split_horizontal(ui, "show_layers", 0.3, 310.0, *st, |ui, st| panels::draw_tab(ui, st, Tab::Preview), |ui, st| {
-                        heading(ui, "Layers");
-                        panels::draw_tab(ui, st, Tab::Layers);
-                    })
-                },
-                |ui, (st, tabs)| {
-                    sub_tabs(ui, &mut tabs.show_bottom, SHOW_BOTTOM);
-                    panels::draw_tab(ui, st, tabs.show_bottom);
-                },
-            ),
-            1 => crate::ui::split_vertical(ui, "outputs_bottom", 0.32, 120.0, &mut both, |ui, (st, _)| panels::studio_stage(ui, st), |ui, (st, tabs)| {
-                sub_tabs(ui, &mut tabs.outputs_bottom, OUTPUTS_BOTTOM);
-                scrolled(ui, "outputs_bottom", |ui| panels::draw_tab(ui, st, tabs.outputs_bottom));
-            }),
-            _ => crate::ui::split_horizontal(
-                ui,
-                "control",
-                0.58,
-                320.0,
-                both.0,
-                |ui, st| {
-                    heading(ui, "MIDI / OSC / TouchOSC");
-                    panels::draw_tab(ui, st, Tab::Control);
-                },
-                |ui, st| {
-                    heading(ui, "Control Surface");
-                    panels::draw_tab(ui, st, Tab::Surface);
-                },
-            ),
-        });
+            },
+            |ui, both| stage(ui, area, both),
+            |ui, (st, _)| {
+                heading(ui, match area {
+                    1 => "Output",
+                    2 => "Modulators",
+                    _ => "Inspector",
+                });
+                match area {
+                    1 => scrolled(ui, "area_inspector_out", |ui| panels::studio_properties(ui, st)),
+                    2 => panels::draw_tab(ui, st, Tab::Modulators),
+                    _ => panels::draw_tab(ui, st, Tab::Inspector),
+                }
+            },
+        );
     }
 
     /// Something asked for a panel: in the areas, go to the area that has it (choosing its sub-tab), or open it

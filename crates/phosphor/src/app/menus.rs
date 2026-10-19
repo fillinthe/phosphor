@@ -212,31 +212,8 @@ impl PhosphorApp {
                     }
                 }
                 ui.separator();
-                if ui.button(format!("{} Layer", icon::PLUS)).clicked() {
-                    self.state.add_layer();
-                }
-                // One-click visuals: the dice = Surprise me; the arrow = every Quick action.
-                let dice = ui.button(format!("{} Surprise", icon::DICE_FIVE)).on_hover_text(format!("{} (⌘R). Right-click to map a pad or key.", super::Quick::Surprise.about()));
-                crate::ui::map_menu(ui, &dice, phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Surprise));
-                if dice.clicked() {
-                    self.state.quick(super::Quick::Surprise, now);
-                }
-                let mut picked = None;
-                ui.menu_button(icon::CARET_DOWN, |ui| picked = super::quick_menu(ui)).response.on_hover_text("Quick visuals: shuffle, react to the music, fill clips, instant set");
-                if let Some(q) = picked {
-                    self.state.quick(q, now);
-                }
-                let output_label = if self.state.output_open() { format!("{} Output", icon::STOP) } else { format!("{} Output", icon::PLAY) };
-                if ui.button(output_label).on_hover_text("Output window. F = fullscreen, Esc = exit").clicked() {
-                    self.state.toggle_output();
-                }
-                ui.menu_button(format!("{} {}", icon::LIGHTNING, launch_summary(&self.state.comp)), |ui| {
-                    ui.horizontal(|ui| panels::launch_controls(ui, &mut self.state.comp));
-                })
-                .response
-                .on_hover_text("How clips and media land: Cut/Fade, fade style, Now/On beat/On bar");
-                ui.separator();
-                // Workspaces: the built-in layouts, one click each (each keeps your changes while you switch).
+                // The areas first: where you are. (Adding layers, launch settings and sending outputs to screens
+                // live in the areas themselves: Layers, the Clips toolbar, the Outputs strip.)
                 for (i, (name, _)) in super::layout::LAYOUTS.iter().enumerate() {
                     let (glyph, text, tip) = match *name {
                         "Show" => (icon::PLAY_CIRCLE, "Show", "Build and play: preview, layers, clips, media, effects, mixer, cues (⌘1)"),
@@ -252,14 +229,27 @@ impl PhosphorApp {
                 if ui.selectable_label(!self.use_areas, format!("{} Custom", icon::LAYOUT)).on_hover_text("Your own arrangement: drag panels anywhere (View > Panels, View > Layouts)").clicked() {
                     self.use_areas = false;
                 }
-                ui.menu_button(icon::CARET_DOWN, |ui| {
-                    ui.label(egui::RichText::new("Send output to").strong());
-                    crate::ui::screen_menu(ui, &mut self.state);
-                })
-                .response
-                .on_hover_text("Choose the screen / projector");
                 ui.separator();
-                if ui.button(format!("{} Search  ⌘K", icon::MAGNIFYING_GLASS)).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
+                // Short on room (narrow window, in-window menus): the next buttons become icons, names on hover.
+                let compact = ui.available_width() < 560.0;
+                let named = |glyph: &str, name: &str| if compact { glyph.to_string() } else { format!("{glyph} {name}") };
+                // One-click visuals: the dice = Surprise me; the arrow = every Quick action.
+                let dice = ui.button(named(icon::DICE_FIVE, "Surprise")).on_hover_text(format!("{} (⌘R). Right-click to map a pad or key.", super::Quick::Surprise.about()));
+                crate::ui::map_menu(ui, &dice, phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Surprise));
+                if dice.clicked() {
+                    self.state.quick(super::Quick::Surprise, now);
+                }
+                let mut picked = None;
+                ui.menu_button(icon::CARET_DOWN, |ui| picked = super::quick_menu(ui)).response.on_hover_text("Quick visuals: shuffle, react to the music, fill clips, instant set");
+                if let Some(q) = picked {
+                    self.state.quick(q, now);
+                }
+                let output_label = named(if self.state.output_open() { icon::STOP } else { icon::PLAY }, "Output");
+                if ui.button(output_label).on_hover_text("Output windows on / off. F = fullscreen, Esc = exit").clicked() {
+                    self.state.toggle_output();
+                }
+                ui.separator();
+                if ui.button(named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
                 }
                 let map_text = egui::RichText::new(format!("{} MAP", icon::PLUG)).strong();
@@ -299,13 +289,7 @@ impl PhosphorApp {
                     if ui.button(icon::BUG).on_hover_text("Report a bug").clicked() {
                         self.state.bug.open = true;
                     }
-                    let s = self.state.stats.latest;
-                    let wide = ui.available_width() > 460.0;
-                    if wide {
-                        ui.monospace(format!("{:5.1} fps  engine {:4.2} ms  CPU {:4.1}%  {:4.0} MB", s.fps, s.render_ms, s.cpu_percent, s.memory_mb));
-                    } else if ui.available_width() > 120.0 {
-                        ui.monospace(format!("{:3.0} fps", s.fps));
-                    }
+                    // Frame rate and CPU live in the status line (bottom right), where there's room.
                 });
             });
             ui.add_space(2.0);
