@@ -37,20 +37,6 @@ enum TreeAction {
 }
 
 pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
-    studio_with(ui, st, true);
-}
-
-/// The Studio for the Outputs area: its properties go to the shared Inspector (`studio_properties`).
-pub(crate) fn studio_stage(ui: &mut egui::Ui, st: &mut State) {
-    studio_with(ui, st, false);
-}
-
-/// The selected output / slice / mask's settings.
-pub(crate) fn studio_properties(ui: &mut egui::Ui, st: &mut State) {
-    properties(ui, st);
-}
-
-fn studio_with(ui: &mut egui::Ui, st: &mut State, with_properties: bool) {
     st.comp.ensure_outputs();
     if !st.comp.outputs.iter().any(|o| o.id == st.mapping_output) {
         st.mapping_output = st.primary_output();
@@ -59,21 +45,17 @@ fn studio_with(ui: &mut egui::Ui, st: &mut State, with_properties: bool) {
     ui.separator();
     let full = ui.available_rect_before_wrap();
     let left_w = 230.0f32.min(full.width() * 0.22);
-    let right_w = if with_properties { 340.0f32.min(full.width() * 0.3) } else { 0.0 };
+    let right_w = 340.0f32.min(full.width() * 0.3);
     let left = egui::Rect::from_min_size(full.min, egui::vec2(left_w, full.height()));
     let right = egui::Rect::from_min_max(egui::pos2(full.right() - right_w, full.top()), full.max);
     let center = egui::Rect::from_min_max(egui::pos2(left.right() + 8.0, full.top()), egui::pos2(right.left() - 8.0, full.bottom()));
     let layout = egui::Layout::top_down(egui::Align::Min);
     tree(&mut ui.new_child(UiBuilder::new().max_rect(left).layout(layout)), st);
     canvases(&mut ui.new_child(UiBuilder::new().max_rect(center).layout(layout)), st);
-    if with_properties {
-        properties(&mut ui.new_child(UiBuilder::new().max_rect(right).layout(layout)), st);
-    }
+    properties(&mut ui.new_child(UiBuilder::new().max_rect(right).layout(layout)), st);
     let p = ui.painter();
     p.vline(left.right() + 4.0, full.y_range(), Stroke::new(1.0, Color32::from_gray(40)));
-    if with_properties {
-        p.vline(right.left() - 4.0, full.y_range(), Stroke::new(1.0, Color32::from_gray(40)));
-    }
+    p.vline(right.left() - 4.0, full.y_range(), Stroke::new(1.0, Color32::from_gray(40)));
     ui.allocate_rect(full, Sense::hover());
 }
 

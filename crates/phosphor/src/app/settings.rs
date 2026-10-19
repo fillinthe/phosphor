@@ -51,7 +51,11 @@ impl PhosphorApp {
         }
         storage.set_string(KEY_ACCOUNT_TAB_MOVED, "1".into());
         storage.set_string(KEY_AREAS, "1".into());
-        storage.set_string(KEY_USE_AREAS, if self.use_areas { "1" } else { "0" }.into());
+        let saved: Vec<(usize, DockState<Tab>, Vec<Tab>)> = self.workspace_docks.iter().map(|(i, (d, t))| (*i, d.clone(), t.clone())).collect();
+        if let Some(text) = to_text(&saved) {
+            storage.set_string(KEY_AREA_DOCKS, text);
+        }
+        storage.set_string(KEY_AREA, self.workspace.unwrap_or(0).to_string());
         storage.set_string(KEY_BRIGHTNESS, self.ui_brightness.to_string());
         if let Ok(json) = serde_json::to_string(&self.state.control.settings()) {
             storage.set_string(KEY_CONTROL, json);

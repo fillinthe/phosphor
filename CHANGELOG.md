@@ -5,13 +5,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 (Help › Check for Updates…).
 
 ## 0.2.57 (2026-10-19)
-- **Simpler Show screen:** a big preview with the clip grid under it, and each clip row starts with its layer:
-  live picture, ON and opacity. Click a layer's picture to edit it in the Inspector, which only shows while
-  something is selected (× closes it). The Layers list is still one click away, next to Clips.
-- **The Library is a drawer:** open it with the Library button when you need media, effects or presets.
-- **Outputs and Control are full-screen modes** with a *Done* button back to the show.
+- **Three areas, each arranged your way:** Show, Outputs and Control. Drag any panel anywhere (split, stack, pop
+  it out into its own window) and each area remembers its arrangement, also after a restart. View › Reset
+  Layout brings the current area back to its default. (No separate "Custom" mode any more.)
+- **Simpler Show:** a big preview, the clip grid under it, and each clip row starts with its layer: live
+  picture, ON and opacity. Click a layer's picture to edit it in the Inspector.
+- **Library button** (bottom right) opens media, effects and presets as a column on the left, and closes it.
+- Asking for a panel (search, a hint) opens the area it belongs to.
+- New installs start tidy (before, every panel landed in the first area).
 - The Library's sort, group-by-folder and tile size are in one *View* menu (nothing cropped).
-- **Custom** still lets you arrange every panel yourself.
 
 ## 0.2.56 (2026-10-19)
 - **Interface brightness:** the sun button in the top bar sets how dark or light Phosphor looks, from *Darkest*

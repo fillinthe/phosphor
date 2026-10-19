@@ -1,6 +1,6 @@
 //! The status line along the bottom: what's going out and coming in, whichever area is open. Outputs (green dot =
 //! window open), streaming / recording, the phone session, Syphon / Spout / NDI, MIDI and OSC activity.
-//! Clicking the outputs opens the Outputs area.
+//! Clicking the outputs opens the Outputs area; Library opens or closes the Library column.
 
 use eframe::egui::{self, Color32, RichText};
 use egui_phosphor::regular as icon;
@@ -67,12 +67,11 @@ impl PhosphorApp {
                 let perf = format!("{:.0} fps · engine {:.1} ms · CPU {:.0}% · {:.0} MB", s.fps, s.render_ms, s.cpu_percent, s.memory_mb);
                 let slow = s.fps > 0.0 && s.fps < 50.0;
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.use_areas {
-                        let t = &mut self.area_tabs;
-                        ui.toggle_value(&mut t.show_inspector, RichText::new(format!("{} Inspector", icon::SIDEBAR_SIMPLE)).small()).on_hover_text("Show or hide the Inspector on the right");
-                        ui.toggle_value(&mut t.show_library, RichText::new(format!("{} Library", icon::SIDEBAR_SIMPLE)).small()).on_hover_text("Show or hide the Library on the left");
-                        ui.separator();
+                    let open = super::areas::library_open(&self.dock);
+                    if ui.selectable_label(open, RichText::new(format!("{} Library", icon::BOOKS)).small()).on_hover_text("Media, effects and presets in a column on the left (drag it anywhere once it's open)").clicked() {
+                        self.toggle_library();
                     }
+                    ui.separator();
                     ui.label(RichText::new(perf).small().monospace().color(if slow { theme::WARN } else { Color32::GRAY }))
                         .on_hover_text("Frame rate, the engine's time per frame, Phosphor's CPU (of one core) and memory");
                 });
