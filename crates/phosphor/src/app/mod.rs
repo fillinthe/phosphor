@@ -243,6 +243,8 @@ pub struct State {
     pub syphon: crate::syphon::Syphon,
     #[cfg(any(target_os = "macos", windows))]
     pub ndi: crate::ndi::Ndi,
+    #[cfg(windows)]
+    pub spout: crate::spout::Spout,
     pub clock: Clock,
     pub pending_triggers: Vec<Trigger>,
     /// Which bank of clip columns the grid and the number keys address.

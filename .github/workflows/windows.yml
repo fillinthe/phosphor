@@ -96,6 +96,26 @@ jobs:
           Get-Content dist\launch-err.txt -Tail 30
           if (-not (Test-Path dist\win-snapshot.png)) { exit 1 }
 
+      # Spout: does a receiver built from the official Spout SDK get Phosphor's picture?
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Spout test
+        continue-on-error: true
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          git clone --depth 1 https://github.com/leadedge/Spout2 $env:RUNNER_TEMP\Spout2
+          $sdk = "$env:RUNNER_TEMP\Spout2\SPOUTSDK"
+          $gl = "$sdk\SpoutGL"
+          cl /nologo /EHsc /std:c++17 /O2 /DNDEBUG /I"$sdk\SpoutDirectX\SpoutDX" /I"$gl" scripts\ci\spout_receiver.cpp "$sdk\SpoutDirectX\SpoutDX\SpoutDX.cpp" "$gl\SpoutDirectX.cpp" "$gl\SpoutSenderNames.cpp" "$gl\SpoutSharedMemory.cpp" "$gl\SpoutFrameCount.cpp" "$gl\SpoutCopy.cpp" "$gl\SpoutUtils.cpp" /Fe:dist\spout_receiver.exe /link d3d11.lib dxgi.lib winmm.lib shlwapi.lib advapi32.lib user32.lib gdi32.lib shell32.lib version.lib psapi.lib
+          if (-not (Test-Path dist\spout_receiver.exe)) { "SPOUT_RX receiver didn't build" | Out-File dist\spout.txt; exit 1 }
+          $p = Start-Process dist\Phosphor\Phosphor.exe -ArgumentList "--bench","40","--project","$PWD\scripts\ci\spout.phosphor" -PassThru -NoNewWindow -RedirectStandardOutput dist\spout-phosphor.txt -RedirectStandardError dist\spout-phosphor-err.txt
+          dist\spout_receiver.exe Phosphor | Tee-Object -FilePath dist\spout.txt
+          $rx = $LASTEXITCODE
+          if (-not $p.WaitForExit(90000)) { $p.Kill() }
+          Get-Content dist\spout-phosphor.txt | Select-String "SPOUT|SUMMARY|panicked"
+          Get-Content dist\spout-phosphor-err.txt -Tail 15
+          exit $rx
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -104,4 +124,5 @@ jobs:
             dist/win-snapshot*.png
             dist/launch.txt
             dist/launch-err.txt
+            dist/spout*.txt
           if-no-files-found: ignore

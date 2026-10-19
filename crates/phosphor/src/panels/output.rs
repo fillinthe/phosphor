@@ -131,6 +131,8 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     }
     #[cfg(target_os = "macos")]
     syphon_row(ui, st);
+    #[cfg(windows)]
+    spout_row(ui, st);
     #[cfg(any(target_os = "macos", windows))]
     ndi_row(ui, st);
     let canvas = (st.comp.width, st.comp.height);
@@ -253,6 +255,26 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
             (_, 0) => OutputStatus::Waiting(&waiting),
             (_, n) => OutputStatus::Receiving(n),
         });
+    });
+}
+
+/// Composition → Spout toggle with status (Windows; the same setting as Syphon on the Mac).
+#[cfg(windows)]
+pub fn spout_row(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        let hover = "Publish the composition as the Spout sender \"Phosphor\": pick it in Resolume, TouchDesigner, OBS (Spout2 plugin), MadMapper…";
+        if output_toggle(ui, &mut st.comp.syphon, icon::SHARE_NETWORK, "Spout", hover, phosphor_engine::AppControl::Syphon).changed() {
+            st.spout.clear_error();
+        }
+        match (&st.spout.error, st.spout.name()) {
+            (Some(e), _) if st.comp.syphon => {
+                ui.colored_label(WARN, e.as_str());
+            }
+            (_, Some(name)) => {
+                hint(ui, format!("sending as \"{name}\" (Spout can't tell how many apps receive)"));
+            }
+            _ => output_status(ui, OutputStatus::Off),
+        };
     });
 }
 

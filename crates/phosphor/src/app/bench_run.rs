@@ -112,6 +112,8 @@ impl PhosphorApp {
             println!("BARPHASE clip {clip_phase:.2} clock {clock_phase:.2} diff {:.2} beats", (clock_phase - clip_phase).rem_euclid(4.0));
         }
         println!("CONTROL {}", self.state.control.osc_status);
+        #[cfg(windows)]
+        println!("SPOUT on={} running={} name={:?} error={:?}", self.state.comp.syphon, self.state.spout.running(), self.state.spout.name(), self.state.spout.error);
         #[cfg(any(target_os = "macos", windows))]
         if run.cfg.ndi {
             println!("NDI_SOURCES {:?}", crate::ndi::sources());
