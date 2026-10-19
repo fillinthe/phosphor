@@ -166,6 +166,7 @@ impl PhosphorApp {
                 }
             }
             A::Layout(i) => self.apply_layout(i),
+            A::Area(i) => self.switch_workspace(i),
             A::SaveLayout => self.layout_draft = Some((String::new(), self.layouts.startup.is_none() && self.layouts.saved.is_empty())),
         }
     }
@@ -234,9 +235,9 @@ impl PhosphorApp {
                 // Workspaces: the built-in layouts, one click each (each keeps your changes while you switch).
                 for (i, (name, _)) in super::layout::LAYOUTS.iter().enumerate() {
                     let (glyph, text, tip) = match *name {
-                        "Default" => (icon::SQUARES_FOUR, "Main", "Everything at once"),
-                        "Performance" => (icon::PLAY_CIRCLE, "Perform", "Big preview for playing a show"),
-                        "Mapping" => (icon::PROJECTOR_SCREEN, "Studio", "Projection mapping studio"),
+                        "Show" => (icon::PLAY_CIRCLE, "Show", "Build and play: preview, layers, clips, media, effects, mixer, cues (⌘1)"),
+                        "Outputs" => (icon::PROJECTOR_SCREEN, "Outputs", "Outputs and inputs: every output, mapping, screens, streaming, session, LEDs, audio in (⌘2)"),
+                        "Control" => (icon::SLIDERS_HORIZONTAL, "Control", "Controllers: MIDI / OSC, TouchOSC, Control Surface, modulators (⌘3)"),
                         other => (icon::LAYOUT, other, ""),
                     };
                     if ui.selectable_label(self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {

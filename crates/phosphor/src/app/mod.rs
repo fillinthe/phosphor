@@ -54,6 +54,7 @@ mod quick;
 mod recovery;
 mod render;
 mod settings;
+mod status;
 mod show;
 
 #[allow(unused_imports)]
@@ -82,6 +83,8 @@ const KEY_WATCHED: &str = "watched_folders";
 const KEY_CONTROL: &str = "control";
 const KEY_ACCOUNT_HELLO: &str = "account_hello_never";
 const KEY_ACCOUNT_TAB_MOVED: &str = "account_tab_moved";
+/// Set once the app has opened with the three areas (2026-10-19): the first time, it starts in Show.
+const KEY_AREAS: &str = "areas_v1";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]

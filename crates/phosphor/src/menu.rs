@@ -45,6 +45,8 @@ pub enum Action {
     Panel(usize),
     /// View ▸ Layouts (index into the layout list).
     Layout(usize),
+    /// One of the three areas (Show, Outputs, Control).
+    Area(usize),
     SaveLayout,
     /// Lock / unlock the controls (player mode).
     Lock,
@@ -126,6 +128,10 @@ pub const MENUS: &[(&str, &[Entry])] = &[
     (
         "View",
         &[
+            I(A::Area(0), "Show", Some((false, Key::Num1))),
+            I(A::Area(1), "Outputs & Inputs", Some((false, Key::Num2))),
+            I(A::Area(2), "Control", Some((false, Key::Num3))),
+            S,
             D("Panels"),
             D("Layouts"),
             I(A::SaveLayout, "Save Current Layout…", None),

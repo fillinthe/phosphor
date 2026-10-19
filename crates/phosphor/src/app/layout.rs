@@ -203,18 +203,7 @@ impl PhosphorApp {
 /// Everything at once: preview + monitor, clips, mixer/effects along the bottom, layers and
 /// inspector down the right.
 pub(crate) fn default_layout() -> DockState<Tab> {
-    let mut dock = DockState::new(vec![Tab::Preview]);
-    let surface = dock.main_surface_mut();
-    let [left, right] = surface.split_right(NodeIndex::root(), 0.72, vec![Tab::Layers]);
-    surface.split_below(right, 0.46, vec![Tab::Inspector, Tab::Presets]);
-    let [top, bottom] = surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Media]);
-    surface.split_right(top, 0.62, vec![Tab::Monitor(1), Tab::Mapping]);
-    surface.split_below(
-        bottom,
-        0.42,
-        vec![Tab::Mixer, Tab::Surface, Tab::Library, Tab::Audio, Tab::Modulators, Tab::Control, Tab::Stream, Tab::Network, Tab::Devices, Tab::ShaderEditor, Tab::Output],
-    );
-    dock
+    layout_show()
 }
 
 /// Panels added in newer builds show up in layouts saved by older ones; panels the user closed
@@ -325,19 +314,39 @@ pub(crate) struct AccountLayouts {
     pub current: Option<SavedLayout>,
 }
 
-pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] =
-    &[("Default", default_layout), ("Performance", layout_performance), ("Mapping", layout_mapping)];
+/// The three areas (top-bar buttons, ⌘1 / ⌘2 / ⌘3): each job in one place, nothing shown twice.
+pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] = &[("Show", layout_show), ("Outputs", layout_outputs), ("Control", layout_control)];
 
-
-/// Big preview, layers on the right, audio + control underneath: for playing a show.
-pub(crate) fn layout_performance() -> DockState<Tab> {
+/// Building and playing the show: preview, layers and their settings, clips, media, effects, mixer, cues.
+pub(crate) fn layout_show() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Preview]);
     let surface = dock.main_surface_mut();
     let [left, right] = surface.split_right(NodeIndex::root(), 0.7, vec![Tab::Layers]);
-    surface.split_below(right, 0.6, vec![Tab::Inspector, Tab::Presets]);
-    surface.split_below(left, 0.78, vec![Tab::Audio, Tab::Control, Tab::Stream]);
+    surface.split_below(right, 0.46, vec![Tab::Inspector, Tab::Presets]);
+    surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Media, Tab::Library, Tab::Mixer, Tab::Cues, Tab::ShaderEditor]);
     dock
 }
+
+/// Where the picture goes and what comes in: every output (strip + mapping), screens, streaming and recording,
+/// the phone session, LEDs, audio in, connected devices.
+pub(crate) fn layout_outputs() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Studio]);
+    let surface = dock.main_surface_mut();
+    let [_, bottom] = surface.split_below(NodeIndex::root(), 0.7, vec![Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices]);
+    surface.split_right(bottom, 0.7, vec![Tab::Preview]);
+    dock
+}
+
+/// Controllers: MIDI / OSC mappings (and TouchOSC), your Control Surface, modulators.
+pub(crate) fn layout_control() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Control]);
+    let surface = dock.main_surface_mut();
+    let [_, right] = surface.split_right(NodeIndex::root(), 0.42, vec![Tab::Surface]);
+    surface.split_below(right, 0.62, vec![Tab::Modulators, Tab::Preview]);
+    dock
+}
+
+
 
 /// Locked (player) mode: the preview with the mixer beside it, the clip grid underneath, nothing to edit with.
 pub(crate) fn layout_locked() -> DockState<Tab> {
@@ -348,14 +357,6 @@ pub(crate) fn layout_locked() -> DockState<Tab> {
     dock
 }
 
-/// The Mapping Studio across the window (its output strip shows every output), layers / preview underneath.
-pub(crate) fn layout_mapping() -> DockState<Tab> {
-    let mut dock = DockState::new(vec![Tab::Studio]);
-    let surface = dock.main_surface_mut();
-    let [_, bottom] = surface.split_below(NodeIndex::root(), 0.74, vec![Tab::Layers, Tab::Output, Tab::Leds]);
-    surface.split_right(bottom, 0.6, vec![Tab::Preview, Tab::Inspector, Tab::Presets]);
-    dock
-}
 
 #[cfg(test)]
 mod tests {
@@ -365,9 +366,9 @@ mod tests {
     fn saved_layouts_round_trip() {
         let mut l = Layouts::default();
         let builtins = LAYOUTS.len();
-        l.save("Gig", &layout_performance(), &[Tab::Mixer]);
+        l.save("Gig", &layout_control(), &[Tab::Mixer]);
         l.save("Gig", &default_layout(), &[]); // same name replaces
-        l.save("Mapping night", &layout_mapping(), &[]);
+        l.save("Mapping night", &layout_outputs(), &[]);
         l.startup = Some("Gig".into());
         assert_eq!(l.names().len(), builtins + 2);
         assert_eq!(l.find("Gig"), Some(builtins));
@@ -380,5 +381,24 @@ mod tests {
         back.remove("Gig");
         assert!(back.startup.is_none());
         assert_eq!(back.names().len(), builtins + 1);
+    }
+}
+
+#[cfg(test)]
+mod area_tests {
+    use super::*;
+
+    /// Each panel the areas use lives in one area only (the preview may repeat: it's the picture you check).
+    #[test]
+    fn areas_dont_repeat_panels() {
+        let mut seen = std::collections::HashSet::new();
+        for (name, make) in LAYOUTS {
+            for (_, tab) in make().iter_all_tabs() {
+                if *tab != Tab::Preview {
+                    assert!(seen.insert(*tab), "{tab:?} is in more than one area ({name})");
+                }
+            }
+        }
+        assert!(!seen.contains(&Tab::Mapping), "the Studio covers mapping");
     }
 }
