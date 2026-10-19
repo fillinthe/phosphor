@@ -39,6 +39,8 @@ impl Default for MediaView {
 pub(crate) enum MediaAct {
     Assign(usize),
     NewLayer(usize),
+    /// Play this item on that layer.
+    PlayOn(usize, u64),
     Favorite(usize),
     Toggle(usize, String),
     Rename(usize, String),
@@ -167,6 +169,10 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
         }
     });
 
+    // Where a click plays (the selected layer, else a new one) and every layer for "Play on".
+    let layers: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
+    let click_target = st.selected.and_then(|id| layers.iter().find(|(l, _)| *l == id)).map(|(_, n)| n.clone());
+    let targets = MediaTargets { layers: &layers, click: click_target.as_deref() };
     let State { comp, thumbs, .. } = st;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
@@ -181,7 +187,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                     for i in &items {
-                        media_tile(ui, &comp.media_bin[*i], *i, tile_w, thumbs, &collections, &mut acts);
+                        media_tile(ui, &comp.media_bin[*i], *i, tile_w, thumbs, &collections, &targets, &mut acts);
                     }
                 });
             };
@@ -224,6 +230,11 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                     _ => st.add_layer(),
                 };
                 st.launch_source(target, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
+            }
+            MediaAct::PlayOn(i, layer) => {
+                let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
+                st.selected = Some(layer);
+                st.launch_source(layer, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
             }
             MediaAct::NewLayer(i) => {
                 let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
@@ -299,6 +310,13 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
 
 /// One media thumbnail: click to launch, star to favourite, drag onto layers or clip slots,
 /// right-click to organise.
+/// The layers a media file can be played on, and the one a click plays it on (None = a new layer).
+pub(crate) struct MediaTargets<'a> {
+    pub layers: &'a [(u64, String)],
+    pub click: Option<&'a str>,
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn media_tile(
     ui: &mut egui::Ui,
     item: &phosphor_engine::MediaItem,
@@ -306,6 +324,7 @@ pub(crate) fn media_tile(
     w: f32,
     thumbs: &mut crate::thumbs::Thumbs,
     collections: &[String],
+    targets: &MediaTargets,
     acts: &mut Vec<MediaAct>,
 ) {
     let h = w * 9.0 / 16.0;
@@ -350,7 +369,24 @@ pub(crate) fn media_tile(
     if resp.clicked() {
         acts.push(MediaAct::Assign(i));
     }
-    resp.on_hover_text(&item.path).right_menu(|ui| {
+    let click = match targets.click {
+        Some(name) => format!("Click: play on \"{name}\" · drag onto any layer or clip slot · right-click: Play on…"),
+        None => "Click: play on a new layer · drag onto any layer or clip slot · right-click: Play on…".to_string(),
+    };
+    resp.on_hover_text(format!("{}\n{click}", item.path)).right_menu(|ui| {
+        ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
+            for (id, name) in targets.layers {
+                if ui.button(name).clicked() {
+                    acts.push(MediaAct::PlayOn(i, *id));
+                    ui.close();
+                }
+            }
+            if ui.button(label(icon::PLUS, "A new layer")).clicked() {
+                acts.push(MediaAct::NewLayer(i));
+                ui.close();
+            }
+        });
+        ui.separator();
         let fav = if item.favorite { "Remove from favourites" } else { "Add to favourites" };
         if ui.button(label(icon::STAR, fav)).clicked() {
             acts.push(MediaAct::Favorite(i));
