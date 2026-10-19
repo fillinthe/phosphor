@@ -4,6 +4,17 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.58 (2026-10-19)
+- **Smooth reverse and ping-pong:** movies play backwards at full frame rate and turn around without a hitch
+  (before, phone and web videos stuttered backwards: each step re-decoded seconds of video).
+- **Mute:** a speaker button on each layer (in its clip row and the Inspector) and *Mute sound* on any clip
+  (right-click); muted clips show it on their cell. The volume is kept for when you unmute.
+- **Media remembers how it played:** speed, direction, loop, effects and mute stick to the file, so the next
+  time you drop it into a clip or onto a layer it comes back the same.
+- **Play on ▸** (right-click a media file) picks the layer; hovering a file says where a click plays it.
+- **Show folders:** put files in a Collection, pick it in the Media panel, then *Random* plays one of them on
+  the selected layer, or *Shuffle on a new layer* makes a layer that plays them in random order by itself.
+
 ## 0.2.57 (2026-10-19)
 - **Three areas, each arranged your way:** Show, Outputs and Control. Drag any panel anywhere (split, stack, pop
   it out into its own window) and each area remembers its arrangement, also after a restart. View › Reset

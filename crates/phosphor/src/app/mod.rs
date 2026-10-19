@@ -51,6 +51,7 @@ mod menus;
 mod outputs;
 pub(crate) mod play;
 mod quick;
+pub(crate) use quick::dice;
 mod recovery;
 mod render;
 mod settings;
