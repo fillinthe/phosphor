@@ -61,6 +61,12 @@ impl PhosphorApp {
                 detached = det;
             }
         }
+        // The three areas arrived (2026-10-19): open in Show once, instead of the old everything-at-once layout.
+        let first_areas = stored(KEY_AREAS).is_none() && !recovering;
+        if first_areas {
+            dock = super::layout::layout_show();
+            detached.clear();
+        }
         let known: Vec<Tab> = stored(KEY_KNOWN_TABS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         ensure_new_tabs(&mut dock, &known);
         // Account moved from the bottom panels to the top bar (2026-10-15): take it out of saved layouts once.
@@ -199,7 +205,7 @@ impl PhosphorApp {
                 mod_phases: Default::default(),
             },
             dock,
-            workspace: None,
+            workspace: first_areas.then_some(0),
             workspace_docks: HashMap::new(),
             #[cfg(target_os = "macos")]
             native_menu: None,

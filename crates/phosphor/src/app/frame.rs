@@ -117,6 +117,7 @@ impl PhosphorApp {
             self.locked_top_bar(ui);
         } else {
             self.top_bar(ui);
+            self.status_line(ui);
         }
         rescue_windows(&mut self.dock, ctx.content_rect(), std::mem::take(&mut self.gather_windows));
 
