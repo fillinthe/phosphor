@@ -263,11 +263,11 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
 pub fn spout_row(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         let hover = "Publish the composition as the Spout sender \"Phosphor\": pick it in Resolume, TouchDesigner, OBS (Spout2 plugin), MadMapper…";
-        if output_toggle(ui, &mut st.comp.syphon, icon::SHARE_NETWORK, "Spout", hover, phosphor_engine::AppControl::Syphon).changed() {
+        if output_toggle(ui, &mut st.comp.spout, icon::SHARE_NETWORK, "Spout", hover, phosphor_engine::AppControl::Syphon).changed() {
             st.spout.clear_error();
         }
         match (&st.spout.error, st.spout.name()) {
-            (Some(e), _) if st.comp.syphon => {
+            (Some(e), _) if st.comp.spout => {
                 ui.colored_label(WARN, e.as_str());
             }
             (_, Some(name)) => {

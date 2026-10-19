@@ -140,7 +140,7 @@ impl PhosphorApp {
             A::ZoomReset => ctx.set_zoom_factor(1.0),
             A::ToggleOutput => st.toggle_output(),
             A::Identify => st.identify_outputs(now),
-            A::Syphon => st.comp.syphon = !st.comp.syphon,
+            A::Syphon => *st.comp.share_out_mut() = !st.comp.share_out(),
             A::Ndi => st.comp.ndi.enabled = !st.comp.ndi.enabled,
             A::Notes => open_doc("NOTES.md"),
             A::Roadmap => open_doc("../ROADMAP.md"),
@@ -310,7 +310,7 @@ impl PhosphorApp {
                                 _ => true,
                             };
                             let text = match a {
-                                Action::Syphon => format!("{label}  ({})", if self.state.comp.syphon { "on" } else { "off" }),
+                                Action::Syphon => format!("{label}  ({})", if self.state.comp.share_out() { "on" } else { "off" }),
                                 Action::Ndi => format!("{label}  ({})", if self.state.comp.ndi.enabled { "on" } else { "off" }),
                                 _ => label.to_string(),
                             };

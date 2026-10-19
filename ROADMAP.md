@@ -216,7 +216,7 @@ Legend: [x] done · [~] in progress · [ ] not started
       (233/327 of /Library/Graphics/ISF); converted in the background, compiled lazily (2 per frame)
 - [x] ISF multi-pass / persistent buffers, up to 44 params (341/406 convert)
 - [x] ISF imported images ✔, MadMapper includes ✔ (MadNoise, MadSDF, MadCommon), curve/audio inputs ✔, FLOAT buffers (16-bit) ✔
-- [~] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); lit Rutt-Etra ✔ (shading from the height gradient, `shade` in ruttetra.wgsl). Motion Flow (normal optical flow: displace / show / moving-only) ✔ 2026-10-17. Rutt-Etra can now displace from another layer's picture
+- [x] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); lit Rutt-Etra ✔ (shading from the height gradient, `shade` in ruttetra.wgsl). Motion Flow (normal optical flow: displace / show / moving-only) ✔ 2026-10-17. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)
 - [x] Text / title source (any installed font, size, colour, alignment, outline)
 - [x] Syphon in/out, NDI out
@@ -245,12 +245,12 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] **Phosphor Player** for Raspberry Pi / small PCs: a headless build that either plays the
       stream or renders the project itself from a synced clock (tiny bandwidth, perfect sync)
 - [x] Session page: QR code, viewer list (Devices panel)
-- [ ] Per-viewer audio level meters
+- [x] Per-viewer audio level meters (Devices panel, one meter per audio sender) ✔ 0.2.29
 - [x] Bonjour: phosphor.local + "Phosphor Session" service while a session runs ✔ 2026-10-17 · [ ] discovery of other players
 - [ ] Multiple players in sync (shared timecode), each with its own output mapping (Phase 4)
 
 ### Phase 6: Accounts & sync
-- [ ] Project format: versioned JSON (layout + composition + mappings), already serde
+- [x] Project format: versioned JSON ✔ 2026-10-19 (`FORMAT`, `migrate` steps, warning when a newer Phosphor saved it)
 - [x] Phosphor account service (phosphorfx.com): sign-in, Pro project storage, in-app Account panel
 - [x] Layouts in the account (sync)
 - [ ] Control surfaces in the account

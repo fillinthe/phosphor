@@ -46,8 +46,11 @@ pub struct Composition {
     pub clip_columns: usize,
     pub master_fade_mod: Option<Modulation>,
     pub launch: LaunchSettings,
-    /// Publish the composition as a Syphon source named "Phosphor" (macOS).
+    /// Publish the composition as a Syphon source named "Phosphor" (macOS; costs nothing while nobody receives).
     pub syphon: bool,
+    /// Publish the composition as the Spout sender "Phosphor" (Windows). Separate from `syphon` and off by
+    /// default: Spout can't tell whether anyone receives, so it copies every frame while on.
+    pub spout: bool,
     /// Send the composition over the network as NDI.
     pub ndi: NdiSettings,
     /// Your own buttons, sliders and pads.
@@ -76,9 +79,13 @@ pub struct Composition {
     pub cues: CueList,
 }
 
+/// The project file format this Phosphor writes. Bump it (with a `migrate` step) when a saved project would
+/// otherwise load wrongly; new fields with defaults don't need a bump.
+pub const FORMAT: u32 = 1;
+
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 
@@ -385,14 +392,70 @@ impl Composition {
         }
     }
 
-    pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).expect("composition serializes")
+    /// "Share the picture with other apps" on this platform: Syphon on the Mac, Spout on Windows.
+    pub fn share_out(&self) -> bool {
+        if cfg!(windows) { self.spout } else { self.syphon }
     }
 
+    pub fn share_out_mut(&mut self) -> &mut bool {
+        if cfg!(windows) { &mut self.spout } else { &mut self.syphon }
+    }
+
+    /// Saves in the current project format (`FORMAT`).
+    pub fn to_json(&self) -> String {
+        let mut c = std::borrow::Cow::Borrowed(self);
+        if c.version != FORMAT {
+            c.to_mut().version = FORMAT;
+        }
+        serde_json::to_string_pretty(&*c).expect("composition serializes")
+    }
+
+    /// Reads a project; older formats are brought up to date (`migrate`). A newer format still opens (unknown
+    /// settings are dropped): check `made_by_newer` to warn.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         let mut comp: Self = serde_json::from_str(json)?;
+        comp.migrate();
         comp.normalize_groups();
         Ok(comp)
+    }
+
+    /// Made by a newer Phosphor than this one (some of its settings may not survive a save here).
+    pub fn made_by_newer(&self) -> bool {
+        self.version > FORMAT
+    }
+
+    /// One step per format change, oldest first. Leaves newer files as they are.
+    fn migrate(&mut self) {
+        // Format 1 (0.1 to 0.2.53) needs nothing yet: every field added since has a default. Add steps like
+        //   if self.version < 2 { …; self.version = 2; }
+        // when a change can't be expressed as a new field with a default.
+        if self.version < 1 {
+            self.version = 1;
+        }
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+
+    #[test]
+    fn projects_carry_their_format() {
+        let json = Composition::default().to_json();
+        assert!(json.contains(&format!("\"version\": {FORMAT}")));
+        let old = json.replace(&format!("\"version\": {FORMAT}"), "\"version\": 0");
+        assert_eq!(Composition::from_json(&old).unwrap().version, FORMAT, "old files are brought up to date");
+        let newer = json.replace(&format!("\"version\": {FORMAT}"), &format!("\"version\": {}", FORMAT + 1));
+        let c = Composition::from_json(&newer).unwrap();
+        assert!(c.made_by_newer());
+        // Saved here, it's written as this format.
+        assert!(c.to_json().contains(&format!("\"version\": {FORMAT}")));
+    }
+
+    #[test]
+    fn share_out_is_off_on_windows_by_default() {
+        let c = Composition::default();
+        assert_eq!(c.share_out(), !cfg!(windows));
     }
 }
 
