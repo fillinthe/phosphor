@@ -175,32 +175,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Tab) {
-        match tab {
-            Tab::Preview => preview(ui, self.st),
-            Tab::Layers => layers(ui, self.st),
-            Tab::Clips => clips(ui, self.st),
-            Tab::Inspector => inspector(ui, self.st),
-            Tab::Media => media(ui, self.st),
-            Tab::Library => crate::explorer::explorer(ui, self.st),
-            Tab::Presets => presets(ui, self.st),
-            Tab::Audio => audio(ui, self.st),
-            Tab::Modulators => modulators::modulators(ui, self.st),
-            Tab::Control => control(ui, self.st),
-            Tab::Mapping => mapping(ui, self.st),
-            Tab::Stream => stream(ui, self.st),
-            Tab::Network => network(ui, self.st),
-            Tab::Output => output(ui, self.st),
-            Tab::ShaderEditor => crate::explorer::shader_editor(ui, self.st),
-            Tab::Monitor(n) => monitor(ui, self.st, *n),
-            Tab::Mixer => mixer(ui, self.st),
-            Tab::Devices => devices(ui, self.st),
-            Tab::Surface => surface(ui, self.st),
-            Tab::Account => account(ui, self.st),
-            Tab::Leds => leds(ui, self.st),
-            Tab::Cues => cues(ui, self.st),
-            Tab::LayerWindows => layer_windows(ui, self.st),
-            Tab::Studio => studio(ui, self.st),
-        }
+        draw_tab(ui, self.st, *tab);
     }
 
     /// Closed panels come back from View ▸ Panels.
@@ -218,5 +193,35 @@ impl egui_dock::TabViewer for Viewer<'_> {
             self.detach = Some(*tab);
             ui.close();
         }
+    }
+}
+
+/// Draws one panel (the dock and the areas both use this).
+pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
+    match tab {
+        Tab::Preview => preview(ui, st),
+        Tab::Layers => layers(ui, st),
+        Tab::Clips => clips(ui, st),
+        Tab::Inspector => inspector(ui, st),
+        Tab::Media => media(ui, st),
+        Tab::Library => crate::explorer::explorer(ui, st),
+        Tab::Presets => presets(ui, st),
+        Tab::Audio => audio(ui, st),
+        Tab::Modulators => modulators::modulators(ui, st),
+        Tab::Control => control(ui, st),
+        Tab::Mapping => mapping(ui, st),
+        Tab::Stream => stream(ui, st),
+        Tab::Network => network(ui, st),
+        Tab::Output => output(ui, st),
+        Tab::ShaderEditor => crate::explorer::shader_editor(ui, st),
+        Tab::Monitor(n) => monitor(ui, st, n),
+        Tab::Mixer => mixer(ui, st),
+        Tab::Devices => devices(ui, st),
+        Tab::Surface => surface(ui, st),
+        Tab::Account => account(ui, st),
+        Tab::Leds => leds(ui, st),
+        Tab::Cues => cues(ui, st),
+        Tab::LayerWindows => layer_windows(ui, st),
+        Tab::Studio => studio(ui, st),
     }
 }

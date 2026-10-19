@@ -5,12 +5,19 @@ What changed in each Phosphor release, newest first. Downloads are on the
 (Help › Check for Updates…).
 
 ## 0.2.55 (2026-10-19)
-- **See all your outputs at once while mapping.** The Mapping Studio and the Mapping panel now open with a strip
-  of every output, live: what each projector or feed shows, its name, and where it's going (which screen, a
-  window, or nowhere yet). Click one to edit it; double-click opens or closes its window; right-click to send it
-  to a screen, identify, rename, switch it off or remove it; the last card adds an output.
-- The Studio's list now shows just the selected output's slices and masks, and the Mapping workspace is the
-  Studio alone (no second mapping tab beside it).
+- **A new, unified layout.** Three areas instead of a wall of panels, each with the same shape: your
+  **Library** on the left (media, effects and generators, presets), the area's stage in the middle, one
+  **Inspector** on the right, and a status line along the bottom.
+  - **Show** (⌘1): preview, layers, clip grid (with Mixer, Cues and the Shader Editor beside the clips).
+  - **Outputs** (⌘2): every output live side by side, the selected one's mapping, and screens, streaming,
+    session, LEDs, audio in and devices underneath.
+  - **Control** (⌘3): MIDI / OSC and TouchOSC, your Control Surface, modulators.
+- **See all your outputs at once while mapping:** a strip of every output, live, with its name and where it's
+  going. Click to edit; double-click opens or closes its window; right-click to send it to a screen, identify,
+  rename, switch it off or remove it.
+- The status line shows, wherever you are, which outputs are on screen, LIVE / REC, the phone session,
+  Syphon / Spout / NDI, and MIDI / OSC activity (click the outputs to jump to the Outputs area).
+- Prefer arranging panels yourself? **Custom** in the top bar brings back the free layout, with your saved layouts.
 
 ## 0.2.54 (2026-10-19)
 - **WebRTC streaming (WHIP):** a new destination in Stream & Record for under-a-second delay to WebRTC services

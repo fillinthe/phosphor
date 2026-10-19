@@ -205,7 +205,10 @@ impl PhosphorApp {
                 mod_phases: Default::default(),
             },
             dock,
-            workspace: first_areas.then_some(0),
+            workspace: Some(0),
+            // Bench pictures of one panel (--tab) use the dock; everything else the unified areas.
+            use_areas: stored(KEY_USE_AREAS).as_deref() != Some("0") && !bench.as_ref().is_some_and(|b| b.tab.is_some()),
+            area_tabs: Default::default(),
             workspace_docks: HashMap::new(),
             #[cfg(target_os = "macos")]
             native_menu: None,

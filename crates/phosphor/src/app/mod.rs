@@ -54,6 +54,7 @@ mod quick;
 mod recovery;
 mod render;
 mod settings;
+mod areas;
 mod status;
 mod show;
 
@@ -85,6 +86,8 @@ const KEY_ACCOUNT_HELLO: &str = "account_hello_never";
 const KEY_ACCOUNT_TAB_MOVED: &str = "account_tab_moved";
 /// Set once the app has opened with the three areas (2026-10-19): the first time, it starts in Show.
 const KEY_AREAS: &str = "areas_v1";
+/// "0" = the free dock ("Custom"), else the unified areas.
+const KEY_USE_AREAS: &str = "use_areas";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]
@@ -571,6 +574,9 @@ pub struct ExportUi {
 pub struct PhosphorApp {
     /// The workspace (built-in layout) showing, and how each one was left this session.
     pub(crate) workspace: Option<usize>,
+    /// The unified frame (Library · stage · Inspector) instead of the free dock ("Custom").
+    pub(crate) use_areas: bool,
+    pub(crate) area_tabs: areas::AreaTabs,
     pub(crate) workspace_docks: HashMap<usize, (DockState<Tab>, Vec<Tab>)>,
     state: State,
     #[cfg(target_os = "macos")]
