@@ -1,6 +1,6 @@
 [package]
 name = "phosphor"
-version = "0.2.51"
+version = "0.2.52"
 license = "GPL-3.0-or-later"
 edition = "2024"
 

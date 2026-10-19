@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.52 (2026-10-19)
+- **Stream health at a glance:** while you stream, the LIVE row shows a small graph of the last two minutes
+  (bitrate, with red where frames were dropped or the stream fell behind) and a verdict: *Healthy · 4.1 Mbit/s*,
+  or a warning to lower the bitrate or size when the connection can't keep up.
+- **NDI on Windows:** send the composition as NDI and receive NDI sources as layers, with the free NDI Tools or
+  NDI Runtime installed.
+
 ## 0.2.51 (2026-10-18)
 - **Windows updates itself**, like the Mac: Phosphor downloads the new version, swaps its files and restarts.
   If anything goes wrong halfway, the old version is put back.

@@ -175,6 +175,69 @@ struct Shared {
     sent: u64,
     dropped: u64,
     log: Vec<String>,
+    /// One sample a second from FFmpeg's progress report, newest last (two minutes kept, across reconnects).
+    history: std::collections::VecDeque<Sample>,
+}
+
+/// One second of a stream's life: what FFmpeg reported plus Phosphor's own dropped-frame count at that moment.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Sample {
+    /// Average bitrate so far (kbit/s).
+    pub kbps: f32,
+    /// Encoding speed against real time (1.0 = keeping up).
+    pub speed: f32,
+    /// Frames Phosphor had to drop so far (FFmpeg / the network couldn't take them).
+    pub dropped: u64,
+}
+
+pub const HISTORY: usize = 120;
+/// Samples at the start of a stream left out of the verdict and the red marks.
+pub const WARM_UP: usize = 3;
+
+/// How the last ten seconds went.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Health {
+    /// Not enough data yet.
+    Starting,
+    Good,
+    /// Frames dropped or falling behind real time: the connection (or the computer) can't keep up.
+    Struggling { dropped: u64, speed: f32 },
+}
+
+impl Health {
+    pub fn of(history: &std::collections::VecDeque<Sample>) -> Health {
+        // FFmpeg's first seconds run below real time while it warms up: they say nothing about the connection.
+        let n = history.len().saturating_sub(WARM_UP).min(10);
+        if n < 3 {
+            return Health::Starting;
+        }
+        let recent: Vec<&Sample> = history.iter().rev().take(n).collect();
+        let dropped = recent[0].dropped.saturating_sub(recent[n - 1].dropped);
+        let speed = recent.iter().map(|s| s.speed).sum::<f32>() / n as f32;
+        if dropped > 0 || speed < 0.95 { Health::Struggling { dropped, speed } } else { Health::Good }
+    }
+}
+
+/// Reads FFmpeg's `-progress` report (key=value lines, a block per second ending in `progress=…`).
+#[derive(Default)]
+struct Progress {
+    kbps: f32,
+    speed: f32,
+}
+
+impl Progress {
+    /// Feeds one line; returns a finished sample (without the drop count) at the end of a block.
+    fn line(&mut self, line: &str) -> Option<(f32, f32)> {
+        let (k, v) = line.trim().split_once('=')?;
+        let v = v.trim();
+        match k {
+            "bitrate" => self.kbps = v.trim_end_matches("kbits/s").trim().parse().unwrap_or(self.kbps),
+            "speed" => self.speed = v.trim_end_matches('x').trim().parse().unwrap_or(self.speed),
+            "progress" => return Some((self.kbps, self.speed)),
+            _ => {}
+        }
+        None
+    }
 }
 
 enum Msg {
@@ -263,6 +326,15 @@ impl Streamer {
     pub fn status(&self) -> (String, bool, u64, u64, Vec<String>) {
         let s = self.shared.lock().unwrap();
         (s.status.clone(), s.error, s.sent, s.dropped, s.log.clone())
+    }
+
+    /// The last two minutes, one sample a second.
+    pub fn history(&self) -> std::collections::VecDeque<Sample> {
+        self.shared.lock().unwrap().history.clone()
+    }
+
+    pub fn health(&self) -> Health {
+        Health::of(&self.shared.lock().unwrap().history)
     }
 
     pub fn elapsed(&self, now: f64) -> f64 {
@@ -382,7 +454,7 @@ impl Streamer {
         }
         let fps = s.fps.clamp(1, 120);
         let mut args: Vec<String> = vec![
-            "-hide_banner", "-loglevel", "error", "-nostats", "-y",
+            "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-stats_period", "1", "-y",
             "-thread_queue_size", "1024",
             "-f", "rawvideo", "-pix_fmt", "rgba", "-s", &format!("{width}x{height}"), "-framerate", &fps.to_string(), "-i", "pipe:0",
         ]
@@ -443,12 +515,13 @@ impl Streamer {
         let mut child = Command::new(ffmpeg)
             .args(&args)
             .stdin(Stdio::piped())
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("Couldn't start FFmpeg: {e}"))?;
         let mut stdin = child.stdin.take().ok_or("FFmpeg stdin unavailable")?;
         let stderr = child.stderr.take();
+        let progress = child.stdout.take();
         *self.child.lock().unwrap() = Some(child);
 
         let shared = self.shared.clone();
@@ -461,6 +534,23 @@ impl Streamer {
                     s.log.push(line);
                     if s.log.len() > 8 {
                         s.log.remove(0);
+                    }
+                }
+            });
+        }
+        if let Some(out) = progress {
+            let shared = shared.clone();
+            std::thread::spawn(move || {
+                use std::io::BufRead;
+                let mut p = Progress::default();
+                for line in std::io::BufReader::new(out).lines().map_while(Result::ok) {
+                    if let Some((kbps, speed)) = p.line(&line) {
+                        let mut s = shared.lock().unwrap();
+                        let dropped = s.dropped;
+                        s.history.push_back(Sample { kbps, speed, dropped });
+                        while s.history.len() > HISTORY {
+                            s.history.pop_front();
+                        }
                     }
                 }
             });
@@ -495,7 +585,9 @@ impl Streamer {
         self.pacer.reset(now);
         self.started = Some(now);
         let mut sh = self.shared.lock().unwrap();
-        *sh = Shared { status: format!("{} · {}", s.destination.name(), target), ..Default::default() };
+        // A reconnect keeps the graph (the gap shows); a fresh Start begins a new one.
+        let history = if self.retries > 0 { std::mem::take(&mut sh.history) } else { Default::default() };
+        *sh = Shared { status: format!("{} · {}", s.destination.name(), target), history, ..Default::default() };
         Ok(())
     }
 
@@ -564,6 +656,32 @@ impl Streamer {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn progress_blocks_become_samples() {
+        let mut p = Progress::default();
+        let block = "frame=60\nfps=30.00\nbitrate=2048.5kbits/s\ntotal_size=123\nspeed=0.98x\nprogress=continue";
+        let got: Vec<_> = block.lines().filter_map(|l| p.line(l)).collect();
+        assert_eq!(got, vec![(2048.5, 0.98)]);
+        // FFmpeg writes N/A before it knows: keep the last value.
+        assert_eq!(["bitrate=N/A", "speed=N/A", "progress=continue"].iter().filter_map(|l| p.line(l)).collect::<Vec<_>>(), vec![(2048.5, 0.98)]);
+    }
+
+    #[test]
+    fn health_looks_at_the_last_ten_seconds() {
+        let mk = |speed: f32, dropped: u64| Sample { kbps: 3000.0, speed, dropped };
+        // Warm-up seconds (slow) don't count.
+        let mut h: std::collections::VecDeque<Sample> = [mk(0.5, 0), mk(0.7, 0), mk(0.9, 0), mk(1.0, 0), mk(1.0, 0)].into();
+        assert_eq!(Health::of(&h), Health::Starting);
+        h.extend((0..10).map(|_| mk(1.0, 5)));
+        assert_eq!(Health::of(&h), Health::Good, "old drops don't count");
+        h.push_back(mk(1.0, 9));
+        assert_eq!(Health::of(&h), Health::Struggling { dropped: 4, speed: 1.0 });
+        let slow: std::collections::VecDeque<Sample> = (0..14).map(|_| mk(0.8, 0)).collect();
+        assert!(matches!(Health::of(&slow), Health::Struggling { dropped: 0, .. }));
+    }
+
     #[test]
     fn reconnects_back_off_to_every_15_seconds() {
         let d: Vec<f64> = (1..=6).map(super::reconnect_delay).collect();

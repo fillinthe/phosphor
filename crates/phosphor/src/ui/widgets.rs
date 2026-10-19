@@ -332,3 +332,29 @@ pub fn layer_items<T: PartialEq>(ui: &mut egui::Ui, layers: &[phosphor_engine::L
         ui.selectable_value(value, make(l.id), format!("Layer: {}", l.name));
     }
 }
+
+/// A small history graph: `values` as a line (scaled to their peak), oldest left, filling `slots` columns from the
+/// right so it scrolls as samples arrive; `marks` paints a red bar on the columns where something went wrong.
+pub(crate) fn history_graph(ui: &mut egui::Ui, size: egui::Vec2, values: &[f32], marks: &[bool], slots: usize) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 3.0, ui.visuals().extreme_bg_color);
+    let slots = slots.max(2);
+    let step = rect.width() / (slots - 1) as f32;
+    let first = slots.saturating_sub(values.len());
+    let x = |i: usize| rect.right() - (slots - 1 - (first + i)) as f32 * step;
+    for (i, &bad) in marks.iter().enumerate().take(values.len()) {
+        if bad {
+            let r = egui::Rect::from_center_size(egui::pos2(x(i), rect.center().y), egui::vec2(step.max(2.0), rect.height()));
+            painter.rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(230, 70, 60, 110));
+        }
+    }
+    let peak = values.iter().copied().fold(0.0f32, f32::max);
+    if peak > 0.0 && values.len() >= 2 {
+        let pad = 3.0;
+        let points: Vec<egui::Pos2> =
+            values.iter().enumerate().map(|(i, v)| egui::pos2(x(i), rect.bottom() - pad - (v / peak).clamp(0.0, 1.0) * (rect.height() - 2.0 * pad))).collect();
+        painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, crate::theme::ACCENT)));
+    }
+    response
+}

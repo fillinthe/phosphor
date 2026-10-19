@@ -131,6 +131,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             ui.colored_label(ACCENT, format!("{} LIVE {:02}:{:02}", icon::RECORD, (stream.elapsed(now) / 60.0) as u32, stream.elapsed(now) as u32 % 60));
+            stream_health(ui, stream);
         } else if ui.button(label(icon::BROADCAST, "Start")).clicked() {
             match stream.start(cw, ch, now) {
                 Ok(()) => *notice = None,
@@ -163,5 +164,44 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         let name = std::path::Path::new(&path).file_name().map_or(path.clone(), |n| n.to_string_lossy().to_string());
         st.comp.add_media(&name, &path);
         st.notice = Some(format!("Recording saved: {path} (in the media bin)"));
+    }
+}
+
+/// Beside LIVE: the last two minutes (bitrate line, red where frames were dropped) and a short verdict.
+fn stream_health(ui: &mut egui::Ui, stream: &crate::stream::Streamer) {
+    use crate::stream::Health;
+    let history = stream.history();
+    if history.is_empty() {
+        return;
+    }
+    let kbps: Vec<f32> = history.iter().map(|s| s.kbps).collect();
+    let mut prev = history.front().map_or(0, |s| s.dropped);
+    let marks: Vec<bool> = history
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let bad = s.dropped > prev || (i >= crate::stream::WARM_UP && s.speed < 0.95);
+            prev = s.dropped;
+            bad
+        })
+        .collect();
+    let last = history.back().copied().unwrap_or_default();
+    crate::ui::history_graph(ui, egui::vec2(160.0, 20.0), &kbps, &marks, crate::stream::HISTORY)
+        .on_hover_text("Last two minutes: bitrate (line); red = frames dropped or falling behind real time");
+    let (color, text) = match stream.health() {
+        Health::Starting => (Color32::GRAY, "Measuring…".to_string()),
+        Health::Good => (Color32::GRAY, format!("{} Healthy · {:.1} Mbit/s", icon::CHECK_CIRCLE, last.kbps / 1000.0)),
+        Health::Struggling { dropped, speed } => (
+            WARN,
+            if dropped > 0 {
+                format!("{} {dropped} frames dropped (10 s)", icon::WARNING)
+            } else {
+                format!("{} Falling behind ({speed:.2}x)", icon::WARNING)
+            },
+        ),
+    };
+    let r = ui.colored_label(color, text);
+    if !matches!(stream.health(), Health::Good | Health::Starting) {
+        r.on_hover_text("The connection or the computer can't keep up: lower the bitrate, frame rate or size, or check the network");
     }
 }
