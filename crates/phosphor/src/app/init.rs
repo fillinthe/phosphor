@@ -209,6 +209,8 @@ impl PhosphorApp {
                 dmx: Default::default(),
                 clip_page: 0,
                 media_memory_at: 0.0,
+                #[cfg(not(target_arch = "wasm32"))]
+                convert: Default::default(),
                 mod_inputs: ModInputs::default(),
                 mod_phases: Default::default(),
             },
