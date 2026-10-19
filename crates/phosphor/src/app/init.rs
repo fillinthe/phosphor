@@ -61,14 +61,21 @@ impl PhosphorApp {
                 detached = det;
             }
         }
-        // The three areas arrived (2026-10-19): open in Show once, instead of the old everything-at-once layout.
+        // The areas, each its own arrangement (2026-10-19): the first launch with them starts from the defaults in
+        // Show; after that every area comes back the way you left it.
         let first_areas = stored(KEY_AREAS).is_none() && !recovering;
-        if first_areas {
+        let mut area_docks: HashMap<usize, (DockState<Tab>, Vec<Tab>)> = if first_areas {
             dock = super::layout::layout_show();
             detached.clear();
-        }
+            HashMap::new()
+        } else {
+            stored(KEY_AREA_DOCKS).and_then(|s| from_text::<Vec<(usize, DockState<Tab>, Vec<Tab>)>>(&s)).unwrap_or_default().into_iter().map(|(i, d, t)| (i, (d, t))).collect()
+        };
+        let area = if first_areas { 0 } else { stored(KEY_AREA).and_then(|s| s.parse().ok()).unwrap_or(0) };
+        // The current area's arrangement is `dock` itself, not a saved copy.
+        area_docks.remove(&area);
         let known: Vec<Tab> = stored(KEY_KNOWN_TABS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        ensure_new_tabs(&mut dock, &known);
+        ensure_new_tabs(&mut dock, &known, area);
         // Account moved from the bottom panels to the top bar (2026-10-15): take it out of saved layouts once.
         if stored(KEY_ACCOUNT_TAB_MOVED).is_none()
             && let Some(path) = dock.find_tab(&Tab::Account)
@@ -205,13 +212,10 @@ impl PhosphorApp {
                 mod_phases: Default::default(),
             },
             dock,
-            workspace: Some(0),
-            // Bench pictures of one panel (--tab) use the dock; everything else the unified areas.
-            use_areas: stored(KEY_USE_AREAS).as_deref() != Some("0") && !bench.as_ref().is_some_and(|b| b.tab.is_some()),
-            area_tabs: Default::default(),
+            workspace: Some(area),
             ui_brightness: bench.as_ref().and_then(|b| b.brightness).or_else(|| stored(KEY_BRIGHTNESS).and_then(|s| s.parse().ok())).unwrap_or(theme::DEFAULT_BRIGHTNESS),
             logged_notice: None,
-            workspace_docks: HashMap::new(),
+            workspace_docks: area_docks,
             #[cfg(target_os = "macos")]
             native_menu: None,
             title: String::new(),
@@ -261,7 +265,7 @@ impl PhosphorApp {
         if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.area_tab.clone())
             && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)
         {
-            app.show_tab_in_areas(*tab);
+            app.show_tab_anywhere(*tab);
         }
         if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.tab.clone())
             && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)

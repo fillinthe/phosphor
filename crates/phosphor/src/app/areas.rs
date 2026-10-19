@@ -1,224 +1,65 @@
-//! The unified frame: every area (Show, Outputs, Control) has the same shape. The Library on the left (media,
-//! effects and generators, presets: drag from it onto anything), the area's stage in the middle, one Inspector on
-//! the right for what's selected, the status line at the bottom. Each panel lives in exactly one place
-//! (`Area::tabs`). The free dock is still there as "Custom" (`PhosphorApp::use_areas` off).
+//! The three areas (Show, Outputs, Control): each is its own arrangement of panels that you can change freely (drag
+//! a tab anywhere, split, stack, pop out into a window). Each area remembers its arrangement, also across restarts
+//! (`workspace_docks`); View > Reset Layout puts the current one back to its default (`layout::LAYOUTS`). Every
+//! panel's home area is `area_of`; asking for a panel opens its area. The Library (media, effects, presets) is
+//! opened and closed as a column on the left (`toggle_library`).
 
-use eframe::egui::{self, Color32, RichText};
+use egui_dock::{DockState, NodeIndex};
 
 use super::PhosphorApp;
-use crate::panels::{self, Tab};
+use crate::panels::Tab;
 
-/// Which tabs each area's stage shows under its main view (the first is the default).
-const SHOW_BOTTOM: &[Tab] = &[Tab::Clips, Tab::Layers, Tab::Mixer, Tab::Cues, Tab::ShaderEditor];
-const OUTPUTS_BOTTOM: &[Tab] = &[Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices];
-const LIBRARY: &[Tab] = &[Tab::Media, Tab::Library, Tab::Presets];
+/// The Library's panels (opened together by the Library button).
+pub(crate) const LIBRARY: &[Tab] = &[Tab::Media, Tab::Library, Tab::Presets];
 
-/// Where a panel lives in the areas: (area, sub-tab group it belongs to).
+/// The area a panel belongs to by default (None: any area, e.g. the Library or rarely used panels).
 pub(crate) fn area_of(tab: Tab) -> Option<usize> {
-    match tab {
-        Tab::Preview | Tab::Inspector => Some(0),
-        t if SHOW_BOTTOM.contains(&t) => Some(0),
-        Tab::Studio | Tab::Mapping => Some(1),
-        t if OUTPUTS_BOTTOM.contains(&t) => Some(1),
-        Tab::Control | Tab::Surface | Tab::Modulators => Some(2),
-        _ => None,
-    }
-}
-
-/// The per-area choices of sub-tab (remembered while the app runs).
-#[derive(Clone, Copy)]
-pub(crate) struct AreaTabs {
-    pub library: Tab,
-    pub show_bottom: Tab,
-    pub outputs_bottom: Tab,
-    /// The side columns can be hidden (status line toggles) to give the stage the room.
-    pub show_library: bool,
-    pub show_inspector: bool,
-}
-
-impl Default for AreaTabs {
-    fn default() -> Self {
-        // The Library is a drawer (closed until you open it); the Inspector shows while something is selected.
-        Self { library: Tab::Media, show_bottom: Tab::Clips, outputs_bottom: Tab::Output, show_library: false, show_inspector: true }
-    }
-}
-
-/// A row of small tabs (the Library's kinds, the stage's lower half).
-fn sub_tabs(ui: &mut egui::Ui, current: &mut Tab, tabs: &[Tab]) {
-    ui.horizontal(|ui| {
-        for t in tabs {
-            let text = RichText::new(t.title()).size(12.5);
-            if ui.selectable_label(*current == *t, text).clicked() {
-                *current = *t;
-            }
-        }
+    let (_, areas) = super::layout::LAYOUTS.iter().enumerate().fold((0, None), |(i, found), (_, (_, make))| {
+        let here = make().iter_all_tabs().any(|(_, t)| *t == tab);
+        (i + 1, found.or(here.then_some(i)))
     });
-    ui.add_space(2.0);
+    areas
 }
 
-/// A panel that may be taller than its space, kept inside it.
-fn scrolled(ui: &mut egui::Ui, id: &str, add: impl FnOnce(&mut egui::Ui)) {
-    egui::ScrollArea::vertical().id_salt(id).auto_shrink(false).show(ui, add);
-}
-
-/// Small caps heading for a column.
-fn heading(ui: &mut egui::Ui, text: &str) {
-    ui.add_space(4.0);
-    ui.label(RichText::new(text.to_uppercase()).size(11.0).strong().color(Color32::from_gray(140)));
-}
-
-/// What the stage asked for this frame.
-#[derive(Default)]
-struct StageAsk {
-    /// Back to Show (the Done button of Outputs / Control).
-    done: bool,
-}
-
-/// A mode's title bar: "Done" back to Show, and what this mode is for.
-fn mode_bar(ui: &mut egui::Ui, title: &str, about: &str, ask: &mut StageAsk) {
-    ui.horizontal(|ui| {
-        if ui.button(RichText::new(format!("{} Done", egui_phosphor::regular::ARROW_LEFT)).strong()).on_hover_text("Back to the show (⌘1)").clicked() {
-            ask.done = true;
-        }
-        ui.label(RichText::new(title).strong().size(14.0));
-        crate::ui::hint(ui, about);
-    });
-    ui.add_space(4.0);
-}
-
-/// The middle of an area.
-fn stage(ui: &mut egui::Ui, area: usize, both: &mut (&mut crate::app::State, &mut AreaTabs), ask: &mut StageAsk) {
-    match area {
-        0 => {
-            // Show: one screen. A slim toolbar, the preview, then the clip grid whose rows are the layers.
-            ui.horizontal(|ui| {
-                let tabs = &mut *both.1;
-                ui.toggle_value(&mut tabs.show_library, format!("{} Library", egui_phosphor::regular::BOOKS)).on_hover_text("Media, effects and presets: drag them onto layers and clips");
-                if ui.button(format!("{} Layer", egui_phosphor::regular::PLUS)).on_hover_text("Add a layer (a new clip row)").clicked() {
-                    both.0.add_layer();
-                }
-            });
-            crate::ui::split_vertical(
-                ui,
-                "show_bottom",
-                0.5,
-                160.0,
-                both,
-                |ui, (st, _)| panels::draw_tab(ui, st, Tab::Preview),
-                |ui, (st, tabs)| {
-                    sub_tabs(ui, &mut tabs.show_bottom, SHOW_BOTTOM);
-                    panels::draw_tab(ui, st, tabs.show_bottom);
-                },
-            )
-        }
-        1 => {
-            mode_bar(ui, "Outputs", "every projector, screen and feed; mapping; streaming; inputs", ask);
-            crate::ui::split_vertical(ui, "outputs_bottom", 0.32, 120.0, both, |ui, (st, _)| panels::studio_stage(ui, st), |ui, (st, tabs)| {
-                sub_tabs(ui, &mut tabs.outputs_bottom, OUTPUTS_BOTTOM);
-                scrolled(ui, "outputs_bottom", |ui| panels::draw_tab(ui, st, tabs.outputs_bottom));
-            })
-        }
-        _ => {
-            mode_bar(ui, "Control", "MIDI, OSC, TouchOSC, keys, your Control Surface", ask);
-            crate::ui::split_horizontal(
-                ui,
-                "control",
-                0.58,
-                320.0,
-                &mut *both.0,
-                |ui, st| {
-                    heading(ui, "MIDI / OSC / TouchOSC");
-                    panels::draw_tab(ui, st, Tab::Control);
-                },
-                |ui, st| {
-                    heading(ui, "Control Surface");
-                    panels::draw_tab(ui, st, Tab::Surface);
-                },
-            )
-        }
-    }
+/// Is the Library open in this arrangement?
+pub(crate) fn library_open(dock: &DockState<crate::panels::Tab>) -> bool {
+    dock.iter_all_tabs().any(|(_, t)| LIBRARY.contains(t))
 }
 
 impl PhosphorApp {
-    /// Draws the current area in the unified frame.
-    pub(crate) fn areas_frame(&mut self, ui: &mut egui::Ui) {
-        let area = self.workspace.unwrap_or(0).min(2);
-        let tabs = &mut self.area_tabs;
-        let st = &mut self.state;
-        // Side columns: their width changes only when you drag their edge, capped at about a quarter of the window
-        // each, so the stage keeps its room; their content can't push them wider. The Library is a drawer in Show;
-        // the Inspector shows in Show while something is selected (× closes it).
-        let w = ui.available_width();
-        let selected = st.selected.is_some();
-        let left = (area == 0 && tabs.show_library).then_some((250.0f32.min(w * 0.22), 170.0, (w * 0.22).max(180.0)));
-        let right = (tabs.show_inspector && (area != 0 || selected)).then_some((330.0f32.min(w * 0.26), 220.0, (w * 0.26).max(220.0)));
-        let mut ask = StageAsk::default();
-        let mut both = (st, tabs);
-        crate::ui::columns(
-            ui,
-            "areas",
-            left,
-            right,
-            &mut both,
-            |ui, (st, tabs)| {
-                ui.horizontal(|ui| {
-                    heading(ui, "Library");
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(egui_phosphor::regular::X).on_hover_text("Close the Library").clicked() {
-                            tabs.show_library = false;
-                        }
-                    });
-                });
-                sub_tabs(ui, &mut tabs.library, LIBRARY);
-                panels::draw_tab(ui, st, tabs.library);
-            },
-            |ui, both| stage(ui, area, both, &mut ask),
-            |ui, (st, _)| {
-                ui.horizontal(|ui| {
-                    heading(ui, match area {
-                        1 => "Output",
-                        2 => "Modulators",
-                        _ => "Inspector",
-                    });
-                    if area == 0 {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button(egui_phosphor::regular::X).on_hover_text("Close (click a layer to edit it again)").clicked() {
-                                st.selected = None;
-                            }
-                        });
-                    }
-                });
-                match area {
-                    1 => scrolled(ui, "area_inspector_out", |ui| panels::studio_properties(ui, st)),
-                    2 => panels::draw_tab(ui, st, Tab::Modulators),
-                    _ => panels::draw_tab(ui, st, Tab::Inspector),
+    /// Opens the Library as a column on the left of the current area, or closes it.
+    pub(crate) fn toggle_library(&mut self) {
+        if library_open(&self.dock) {
+            for t in LIBRARY {
+                if let Some(path) = self.dock.find_tab(t) {
+                    self.dock.remove_tab(path);
                 }
-            },
-        );
-        if ask.done {
-            self.switch_workspace(0);
+            }
+            self.detached.retain(|t| !LIBRARY.contains(t));
+        } else {
+            self.dock.main_surface_mut().split_left(NodeIndex::root(), 0.2, LIBRARY.to_vec());
         }
     }
 
-    /// Something asked for a panel: in the areas, go to the area that has it (choosing its sub-tab), or open it
-    /// as a floating window if no area does.
-    pub(crate) fn show_tab_in_areas(&mut self, tab: Tab) {
-        match area_of(tab) {
-            Some(a) => {
-                self.workspace = Some(a);
-                if SHOW_BOTTOM.contains(&tab) {
-                    self.area_tabs.show_bottom = tab;
-                } else if OUTPUTS_BOTTOM.contains(&tab) {
-                    self.area_tabs.outputs_bottom = tab;
-                }
-            }
-            None if LIBRARY.contains(&tab) => {
-                // The Library is a drawer in Show: open it there.
-                self.workspace = Some(0);
-                self.area_tabs.library = tab;
-                self.area_tabs.show_library = true;
-            }
-            None => self.detach(tab),
+    /// Something asked for a panel: show it where it is; if this area doesn't have it, go to the area whose panel
+    /// it is (or add it here when it has no home area, e.g. the Library).
+    pub(crate) fn show_tab_anywhere(&mut self, tab: Tab) {
+        let here = self.dock.find_tab(&tab).is_some() || self.detached.contains(&tab);
+        if !here && let Some(a) = area_of(tab).filter(|a| Some(*a) != self.workspace) {
+            self.switch_workspace(a);
+        }
+        if LIBRARY.contains(&tab) && !library_open(&self.dock) {
+            self.toggle_library();
+        }
+        self.show_tab(tab);
+    }
+
+    /// The current area's default arrangement (View > Reset Layout).
+    pub(crate) fn reset_area_layout(&mut self) {
+        let i = self.workspace.unwrap_or(0);
+        if let Some((_, make)) = super::layout::LAYOUTS.get(i) {
+            self.dock = make();
+            self.detached.clear();
         }
     }
 }
@@ -227,15 +68,11 @@ impl PhosphorApp {
 mod tests {
     use super::*;
 
-    /// Every panel has one home: an area, the Library, or (rare ones) a floating window.
     #[test]
-    fn each_panel_has_one_home() {
-        for t in Tab::ALL {
-            let in_library = LIBRARY.contains(&t);
-            assert!(!(in_library && area_of(t).is_some()), "{t:?} is in the Library and an area");
-        }
-        for t in SHOW_BOTTOM.iter().chain(OUTPUTS_BOTTOM) {
-            assert!(area_of(*t).is_some());
-        }
+    fn panels_find_their_area() {
+        assert_eq!(area_of(Tab::Clips), Some(0));
+        assert_eq!(area_of(Tab::Studio), Some(1));
+        assert_eq!(area_of(Tab::Surface), Some(2));
+        assert_eq!(area_of(Tab::Media), None, "the Library opens in any area");
     }
 }

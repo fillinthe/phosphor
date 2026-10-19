@@ -112,7 +112,7 @@ impl PhosphorApp {
             Command::OpenTab(tab) => self.show_tab(tab),
             Command::TriggerColumn(c) => st.trigger(Trigger::Column(c), now),
             Command::ToggleOutput => st.toggle_output(),
-            Command::ResetLayout => self.dock = default_layout(),
+            Command::ResetLayout => self.reset_area_layout(),
             Command::NewLayer => {
                 st.add_layer();
             }
@@ -209,10 +209,14 @@ pub(crate) fn default_layout() -> DockState<Tab> {
 
 /// Panels added in newer builds show up in layouts saved by older ones; panels the user closed
 /// on purpose stay closed.
-pub(crate) fn ensure_new_tabs(dock: &mut DockState<Tab>, known: &[Tab]) {
+/// Only for upgrades (a fresh install has no `known` list and starts from the defaults), and only panels whose
+/// home is this area (`area`); others appear when you open their area or from View › Panels.
+pub(crate) fn ensure_new_tabs(dock: &mut DockState<Tab>, known: &[Tab], area: usize) {
+    if known.is_empty() {
+        return;
+    }
     for tab in Tab::ALL {
-        // Account opens as a window from the top bar, not as a panel (View › Panels can still dock it).
-        if tab != Tab::Account && !known.contains(&tab) && dock.find_tab(&tab).is_none() {
+        if !known.contains(&tab) && super::areas::area_of(tab) == Some(area) && dock.find_tab(&tab).is_none() {
             dock.push_to_focused_leaf(tab);
         }
     }
@@ -318,13 +322,13 @@ pub(crate) struct AccountLayouts {
 /// The three areas (top-bar buttons, ⌘1 / ⌘2 / ⌘3): each job in one place, nothing shown twice.
 pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] = &[("Show", layout_show), ("Outputs", layout_outputs), ("Control", layout_control)];
 
-/// Building and playing the show: preview, layers and their settings, clips, media, effects, mixer, cues.
+/// Building and playing the show: a big preview, the clip grid (each row is a layer) and the other show panels
+/// under it, the Inspector on the right. The Library opens on the left when you want it.
 pub(crate) fn layout_show() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Preview]);
     let surface = dock.main_surface_mut();
-    let [left, right] = surface.split_right(NodeIndex::root(), 0.7, vec![Tab::Layers]);
-    surface.split_below(right, 0.46, vec![Tab::Inspector, Tab::Presets]);
-    surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Media, Tab::Library, Tab::Mixer, Tab::Cues, Tab::ShaderEditor]);
+    let [left, _] = surface.split_right(NodeIndex::root(), 0.75, vec![Tab::Inspector]);
+    surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Layers, Tab::Mixer, Tab::Cues, Tab::ShaderEditor]);
     dock
 }
 
@@ -333,8 +337,7 @@ pub(crate) fn layout_show() -> DockState<Tab> {
 pub(crate) fn layout_outputs() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Studio]);
     let surface = dock.main_surface_mut();
-    let [_, bottom] = surface.split_below(NodeIndex::root(), 0.7, vec![Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices]);
-    surface.split_right(bottom, 0.7, vec![Tab::Preview]);
+    surface.split_below(NodeIndex::root(), 0.68, vec![Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices]);
     dock
 }
 
@@ -342,8 +345,8 @@ pub(crate) fn layout_outputs() -> DockState<Tab> {
 pub(crate) fn layout_control() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Control]);
     let surface = dock.main_surface_mut();
-    let [_, right] = surface.split_right(NodeIndex::root(), 0.42, vec![Tab::Surface]);
-    surface.split_below(right, 0.62, vec![Tab::Modulators, Tab::Preview]);
+    let [_, right] = surface.split_right(NodeIndex::root(), 0.45, vec![Tab::Surface]);
+    surface.split_below(right, 0.66, vec![Tab::Modulators]);
     dock
 }
 

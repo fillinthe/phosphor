@@ -127,9 +127,6 @@ impl PhosphorApp {
         }
         rescue_windows(&mut self.dock, ctx.content_rect(), std::mem::take(&mut self.gather_windows));
 
-        if self.use_areas && !self.lock.active {
-            egui::CentralPanel::no_frame().show(ui, |ui| self.areas_frame(ui));
-        } else {
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let mut style = egui_dock::Style::from_egui(ui.style());
             style.tab_bar.fill_tab_bar = true;
@@ -144,7 +141,6 @@ impl PhosphorApp {
                 self.detach(tab);
             }
         });
-        }
         self.detached_windows(&ctx);
         crate::explorer::fx_browser_window(&ctx, &mut self.state);
         if !self.lock.active
@@ -154,11 +150,7 @@ impl PhosphorApp {
         }
         self.lock_window(&ctx);
         if let Some(tab) = self.state.open_tab.take() {
-            if self.use_areas {
-                self.show_tab_in_areas(tab);
-            } else {
-                self.show_tab(tab);
-            }
+            self.show_tab_anywhere(tab);
         }
         if let Some(src) = self.state.new_monitor.take() {
             self.add_monitor_with(src);
