@@ -113,6 +113,12 @@ impl PhosphorApp {
         if self.state.render_due(now) {
             self.render(now);
         }
+        if self.state.notice != self.logged_notice {
+            if let Some(n) = &self.state.notice {
+                log::info!("notice: {n}");
+            }
+            self.logged_notice = self.state.notice.clone();
+        }
         if self.lock.active {
             self.locked_top_bar(ui);
         } else {

@@ -269,7 +269,7 @@ impl Updater {
         };
         if let Some(text) = text
             && ui
-                .add(egui::Button::new(egui::RichText::new(text).strong().color(egui::Color32::BLACK)).fill(crate::theme::ACCENT))
+                .add(egui::Button::new(egui::RichText::new(text).strong().color(egui::Color32::BLACK)).fill(crate::theme::accent()))
                 .on_hover_text("A new Phosphor is out: click to see what's new and install it")
                 .clicked()
         {
@@ -448,13 +448,13 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 });
             }
             Status::UpToDate => {
-                ui.colored_label(crate::theme::ACCENT, "You're up to date.");
+                ui.colored_label(crate::theme::accent(), "You're up to date.");
                 if ui.button("Check again").clicked() {
                     up.check(ctx);
                 }
             }
             Status::Available(r) => {
-                ui.colored_label(crate::theme::ACCENT, format!("Phosphor {} is out.", r.version));
+                ui.colored_label(crate::theme::accent(), format!("Phosphor {} is out.", r.version));
                 if !r.notes.trim().is_empty() {
                     egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                         ui.add(egui::Label::new(egui::RichText::new(r.notes.trim()).small()).wrap());
@@ -482,7 +482,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 });
             }
             Status::Ready(path) => {
-                ui.colored_label(crate::theme::ACCENT, "Installed. Relaunch to start using it.");
+                ui.colored_label(crate::theme::accent(), "Installed. Relaunch to start using it.");
                 #[cfg(not(target_arch = "wasm32"))]
                 if ui.button(format!("{} Relaunch now", icon::ARROW_CLOCKWISE)).clicked() {
                     relaunch(ctx, &path);
@@ -501,7 +501,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 let _ = path;
             }
             Status::InstallFailed(r, e) => {
-                ui.colored_label(crate::theme::ACCENT, format!("Phosphor {} is out, but it couldn't install itself here.", r.version));
+                ui.colored_label(crate::theme::accent(), format!("Phosphor {} is out, but it couldn't install itself here.", r.version));
                 crate::ui::hint(ui, e);
                 ui.add_space(4.0);
                 ui.label("Download it and install it by hand, it takes a minute:");
@@ -510,7 +510,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 ui.label("3. Open it. If macOS warns, go to System Settings > Privacy & Security and click Open Anyway.");
                 ui.horizontal(|ui| {
                     let url = r.zip.clone().unwrap_or_else(|| r.page.clone());
-                    if ui.button(egui::RichText::new(format!("{} Download Phosphor {}", icon::DOWNLOAD_SIMPLE, r.version)).color(crate::theme::ACCENT)).clicked() {
+                    if ui.button(egui::RichText::new(format!("{} Download Phosphor {}", icon::DOWNLOAD_SIMPLE, r.version)).color(crate::theme::accent())).clicked() {
                         ctx.open_url(egui::OpenUrl::new_tab(url));
                     }
                     if ui.button("Release page").clicked() {

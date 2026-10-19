@@ -25,7 +25,7 @@ impl PhosphorApp {
                     .horizontal(|ui| {
                         ui.label(small(icon::PROJECTOR_SCREEN.to_string(), Color32::GRAY));
                         for (name, open) in &outs {
-                            let dot = if *open { theme::ACCENT } else { Color32::from_gray(90) };
+                            let dot = if *open { theme::accent() } else { Color32::from_gray(90) };
                             ui.label(small(format!("{} {name}", icon::CIRCLE), dot));
                         }
                     })
@@ -60,7 +60,15 @@ impl PhosphorApp {
                     (a.midi_seen.values().any(|t| fresh(*t)), a.osc.values().any(|s| fresh(s.last_seen)))
                 };
                 for (on, name) in [(midi, "MIDI"), (osc, "OSC")] {
-                    ui.label(small(format!("{} {name}", icon::CIRCLE), if on { theme::ACCENT } else { Color32::from_gray(70) }));
+                    ui.label(small(format!("{} {name}", icon::CIRCLE), if on { theme::accent() } else { Color32::from_gray(70) }));
+                }
+                // Show / hide the side columns of the areas (small screens).
+                if self.use_areas {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let t = &mut self.area_tabs;
+                        ui.toggle_value(&mut t.show_inspector, RichText::new(format!("{} Inspector", icon::SIDEBAR_SIMPLE)).small()).on_hover_text("Show or hide the Inspector on the right");
+                        ui.toggle_value(&mut t.show_library, RichText::new(format!("{} Library", icon::SIDEBAR_SIMPLE)).small()).on_hover_text("Show or hide the Library on the left");
+                    });
                 }
             });
         });

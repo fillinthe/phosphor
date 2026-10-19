@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::account::Account;
 use crate::app::{State, Trigger};
-use crate::theme::{ACCENT, WARN};
+use crate::theme::{accent, WARN};
 
 pub(crate) use crate::ui::*;
 

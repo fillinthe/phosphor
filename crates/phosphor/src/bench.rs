@@ -23,6 +23,12 @@ pub struct BenchConfig {
     pub export: Option<String>,
     /// Bring this panel to the front (its title, e.g. "Control Surface"), for screenshots.
     pub tab: Option<String>,
+    /// Window size in points ("1280x800"): UI pictures at smaller sizes.
+    pub window: Option<(f32, f32)>,
+    /// Open a tab inside the unified areas ("Mixer", "Effects", "Stream & Record"…) for UI pictures.
+    pub area_tab: Option<String>,
+    /// Interface brightness for UI pictures (0 darkest … 1 light).
+    pub brightness: Option<f32>,
     /// Select this layer/group id (after the project loads), for UI shots of the Inspector.
     pub select: Option<u64>,
     /// Save a picture of the whole Phosphor window here at the end (checks UI changes).
@@ -97,6 +103,9 @@ impl BenchConfig {
                 ("--stream-copy", Some(v)) => cfg.stream_copy = Some(v),
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
+                ("--window", Some(v)) => cfg.window = v.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))),
+                ("--area-tab", Some(v)) => cfg.area_tab = Some(v),
+                ("--brightness", Some(v)) => cfg.brightness = v.parse().ok(),
                 ("--select", Some(v)) => cfg.select = v.parse().ok(),
                 ("--ui-shot", Some(v)) => cfg.ui_shot = Some(v),
                 ("--live", Some(v)) => cfg.live = Some(v),

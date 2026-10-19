@@ -5,6 +5,7 @@ use super::*;
 impl PhosphorApp {
     /// Switches workspace (a built-in layout): the one you leave keeps how you arranged it, for this session.
     pub(crate) fn switch_workspace(&mut self, i: usize) {
+        log::info!("area: {}", LAYOUTS.get(i).map_or("?", |(n, _)| n));
         if self.workspace == Some(i) {
             return;
         }

@@ -70,7 +70,7 @@ impl PhosphorApp {
             egui::Area::new(egui::Id::new("map_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(14, 34, 40)).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(format!("{} MAP MODE", icon::PLUG)).strong().color(theme::ACCENT));
+                        ui.label(egui::RichText::new(format!("{} MAP MODE", icon::PLUG)).strong().color(theme::accent()));
                         ui.label("Click any highlighted control, then move a knob, send OSC, or press a key.");
                         if ui.small_button("Done (Esc)").clicked() {
                             self.state.map_mode = false;

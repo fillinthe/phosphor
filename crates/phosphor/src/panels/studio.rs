@@ -491,7 +491,7 @@ fn input_view(
     for s in o.mapping.surfaces.iter_mut().filter(|s| s.layer == sel_source) {
         let is_sel = Some(s.id) == selected;
         let r = egui::Rect::from_min_max(to_screen(s.input[0], s.input[1]), to_screen(s.input[0] + s.input[2], s.input[1] + s.input[3]));
-        let color = if is_sel { ACCENT } else { Color32::from_gray(140) };
+        let color = if is_sel { accent() } else { Color32::from_gray(140) };
         p.rect_stroke(r, 0.0, Stroke::new(if is_sel { 2.0 } else { 1.0 }, color), StrokeKind::Middle);
         p.text(r.left_top() + egui::vec2(4.0, 2.0), egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(11.0), color);
         if !is_sel {
@@ -536,7 +536,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
         if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon::POLYGON).color(ACCENT));
+                ui.label(RichText::new(icon::POLYGON).color(accent()));
                 ui.toggle_value(&mut s.enabled, RichText::new("ON").small().strong());
                 ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(f32::INFINITY));
             });
@@ -559,7 +559,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
             mask_settings(ui, m);
         } else {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(ACCENT));
+                ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
                 ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(f32::INFINITY));
             });
             ui.toggle_value(&mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");

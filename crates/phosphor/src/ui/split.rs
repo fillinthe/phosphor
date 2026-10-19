@@ -1,27 +1,30 @@
 //! Two regions with a draggable divider (the stages of the areas): each side gets a fixed rectangle, its
 //! content clipped to it, so a long panel scrolls inside its half instead of pushing the other one away.
-//! The divider position is remembered per id.
+//! The divider position is remembered per id; the second side keeps a minimum size (layer cards need room).
 
 use eframe::egui;
 
 /// Splits the remaining space top / bottom. `bottom` starts at `default` (fraction of the height). `with` is
 /// handed to each side in turn (usually the app state).
-pub(crate) fn split_vertical<T>(ui: &mut egui::Ui, id: &str, default: f32, with: &mut T, top: impl FnOnce(&mut egui::Ui, &mut T), bottom: impl FnOnce(&mut egui::Ui, &mut T)) {
-    split(ui, id, default, true, with, top, bottom);
+pub(crate) fn split_vertical<T>(ui: &mut egui::Ui, id: &str, default: f32, min_second: f32, with: &mut T, top: impl FnOnce(&mut egui::Ui, &mut T), bottom: impl FnOnce(&mut egui::Ui, &mut T)) {
+    split(ui, id, default, min_second, true, with, top, bottom);
 }
 
 /// Splits the remaining space left / right. `second` (the right side) starts at `default` of the width.
-pub(crate) fn split_horizontal<T>(ui: &mut egui::Ui, id: &str, default: f32, with: &mut T, first: impl FnOnce(&mut egui::Ui, &mut T), second: impl FnOnce(&mut egui::Ui, &mut T)) {
-    split(ui, id, default, false, with, first, second);
+pub(crate) fn split_horizontal<T>(ui: &mut egui::Ui, id: &str, default: f32, min_second: f32, with: &mut T, first: impl FnOnce(&mut egui::Ui, &mut T), second: impl FnOnce(&mut egui::Ui, &mut T)) {
+    split(ui, id, default, min_second, false, with, first, second);
 }
 
-fn split<T>(ui: &mut egui::Ui, id: &str, default: f32, vertical: bool, with: &mut T, first: impl FnOnce(&mut egui::Ui, &mut T), second: impl FnOnce(&mut egui::Ui, &mut T)) {
+fn split<T>(ui: &mut egui::Ui, id: &str, default: f32, min_second: f32, vertical: bool, with: &mut T, first: impl FnOnce(&mut egui::Ui, &mut T), second: impl FnOnce(&mut egui::Ui, &mut T)) {
     let full = ui.available_rect_before_wrap();
     let key = egui::Id::new(("split", id));
     let mut frac: f32 = ui.ctx().data(|d| d.get_temp(key)).unwrap_or(default);
     const GAP: f32 = 8.0;
     let len = if vertical { full.height() } else { full.width() };
-    let second_len = (len * frac).clamp(80.0f32.min(len * 0.3), (len - 80.0).max(len * 0.7));
+    // The second side never gets narrower than it needs (`min_second`, while the first keeps 80), nor the first
+    // than 80.
+    let lo = min_second.max(80.0).min((len - 80.0).max(len * 0.3));
+    let second_len = (len * frac).clamp(lo, (len - 80.0).max(lo));
     let (a, divider, b) = if vertical {
         let cut = full.bottom() - second_len;
         (

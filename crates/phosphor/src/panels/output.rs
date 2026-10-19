@@ -150,14 +150,14 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                 }
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("{}", i + 1)).strong().color(ACCENT));
+                        ui.label(RichText::new(format!("{}", i + 1)).strong().color(accent()));
                         ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
                         ui.toggle_value(&mut o.enabled, RichText::new("ON").small()).on_hover_text("Render this output");
                         #[cfg(target_os = "macos")]
                         ui.toggle_value(&mut o.syphon, RichText::new("SYPHON").small())
                             .on_hover_text("Also publish this output (after mapping) as a Syphon source for MadMapper, Resolume, OBS…");
                         if o.mapping.active() {
-                            ui.label(RichText::new(format!("{} mapped", icon::PROJECTOR_SCREEN)).small().color(ACCENT));
+                            ui.label(RichText::new(format!("{} mapped", icon::PROJECTOR_SCREEN)).small().color(accent()));
                         }
                     });
                     ui.horizontal(|ui| {
@@ -194,7 +194,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
             if !o.screen.is_empty() {
                 ui.horizontal(|ui| {
                     let connected = crate::screens::find_screen(&displays, &o.screen).is_some();
-                    let (glyph, color) = if connected { (icon::CHECK_CIRCLE, ACCENT) } else { (icon::WARNING, Color32::from_rgb(230, 160, 60)) };
+                    let (glyph, color) = if connected { (icon::CHECK_CIRCLE, accent()) } else { (icon::WARNING, Color32::from_rgb(230, 160, 60)) };
                     ui.label(RichText::new(format!("{glyph} Screen: {}", o.screen)).small().color(color))
                         .on_hover_text(if connected { "Saved with the project; \"All to their screens\" sends it here" } else { "That screen isn't connected right now" });
                     if ui.small_button(icon::X).on_hover_text("Forget this screen").clicked() {

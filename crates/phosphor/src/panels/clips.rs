@@ -74,7 +74,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         for i in 0..4 {
             let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::hover());
             let lit = i == beat;
-            let color = if lit { ACCENT.gamma_multiply(1.0 - 0.6 * phase) } else { Color32::from_gray(60) };
+            let color = if lit { accent().gamma_multiply(1.0 - 0.6 * phase) } else { Color32::from_gray(60) };
             ui.painter().circle_filled(r.center(), if lit { 5.0 } else { 4.0 }, color);
         }
         if st.control.midi_clock.active(now) {
@@ -103,7 +103,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
         launch_controls(ui, &mut st.comp);
         if !st.pending_triggers.is_empty() {
-            ui.colored_label(ACCENT, format!("{} queued", st.pending_triggers.len()));
+            ui.colored_label(accent(), format!("{} queued", st.pending_triggers.len()));
         }
         ui.separator();
         ui.label(RichText::new("Bank").small());
@@ -170,7 +170,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 for c in 0..cols {
                     let keyed = c / CLIP_PAGE_SIZE == bank;
                     let text = RichText::new(format!("{} {}", icon::PLAY, c + 1));
-                    let text = if keyed { text.color(ACCENT) } else { text };
+                    let text = if keyed { text.color(accent()) } else { text };
                     let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
                     let head = ui.add_sized([cell.x, 22.0], egui::Button::new(text)).on_hover_text(tip);
                     if head.clicked() {
@@ -200,7 +200,8 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                         let active = clip.is_some_and(|k| !k.is_empty() && layer.active_clip == Some(k.id));
                         let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(cell.x, cell.x / aspect));
                         let p = ui.painter();
-                        p.rect_filled(rect, 4.0, if active { Color32::from_rgb(24, 40, 32) } else { Color32::from_gray(18) });
+                        let empty = ui.visuals().extreme_bg_color;
+                        p.rect_filled(rect, 4.0, if active { crate::theme::tint(empty, 0.14) } else { empty });
                         match clip {
                             Some(k) if !k.is_empty() => {
                                 let tex = match &k.source {
@@ -247,22 +248,22 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                 let own = if k.own.is_some() { "S" } else { "" };
                                 let badge = format!("{}{own}", badge.unwrap_or(""));
                                 if !badge.is_empty() {
-                                    p.text(egui::pos2(rect.right() - 4.0, rect.top() + 3.0), egui::Align2::RIGHT_TOP, badge, egui::FontId::monospace(11.0), ACCENT);
+                                    p.text(egui::pos2(rect.right() - 4.0, rect.top() + 3.0), egui::Align2::RIGHT_TOP, badge, egui::FontId::monospace(11.0), accent());
                                 }
                             }
                             _ => {
-                                p.text(rect.center(), egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(18.0), Color32::from_gray(70));
+                                p.text(rect.center(), egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(18.0), ui.visuals().weak_text_color());
                             }
                         }
                         let stroke = if drag_at.is_some_and(|p| rect.contains(p)) {
                             // Files from the Finder land here (and fill the row to the right).
                             Stroke::new(2.5, Color32::from_rgb(255, 196, 70))
                         } else if active {
-                            Stroke::new(2.0, ACCENT)
+                            Stroke::new(2.0, accent())
                         } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() {
-                            Stroke::new(1.0, ACCENT.gamma_multiply(0.7))
+                            Stroke::new(1.0, accent().gamma_multiply(0.7))
                         } else {
-                            Stroke::new(1.0, Color32::from_gray(45))
+                            ui.visuals().widgets.noninteractive.bg_stroke
                         };
                         p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
                         if let Some(m) = resp.dnd_release_payload::<MediaDrag>() {
@@ -399,7 +400,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: 
         ui.set_min_size(size);
         ui.add_space((size.y - 40.0).max(0.0) / 2.0);
         let name: String = layer.name.chars().take(14).collect();
-        ui.menu_button(RichText::new(name).color(Color32::LIGHT_GRAY), |ui| {
+        ui.menu_button(RichText::new(name).color(ui.visuals().text_color()), |ui| {
             ui.set_min_width(220.0);
             let q = crate::app::Quick::Fill;
             if ui.button(format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
@@ -443,7 +444,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, size: 
         .on_hover_text("Click for autopilot and fill with variations");
         if layer.autopilot != Autopilot::Off {
             let when = if layer.autopilot_beats > 0.0 { format!("{:.0} beats", layer.autopilot_beats) } else { "at end".into() };
-            ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(ACCENT));
+            ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(accent()));
         }
     });
     (fill, beat_all)

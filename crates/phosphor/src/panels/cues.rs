@@ -9,7 +9,7 @@ use crate::app::format_tc;
 pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     ui.horizontal_wrapped(|ui| {
-        let go = ui.add(egui::Button::new(RichText::new(format!("{} GO", icon::PLAY)).strong().size(16.0)).min_size(egui::vec2(80.0, 30.0)).fill(ACCENT.gamma_multiply(0.35)))
+        let go = ui.add(egui::Button::new(RichText::new(format!("{} GO", icon::PLAY)).strong().size(16.0)).min_size(egui::vec2(80.0, 30.0)).fill(accent().gamma_multiply(0.35)))
             .on_hover_text("Next cue · right-click to map a pad, key or OSC");
         map_menu(ui, &go, ControlTarget::App(AppControl::CueGo));
         if go.clicked() {
@@ -45,7 +45,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
         }
         match st.timecode(now) {
             Some(t) => {
-                ui.label(RichText::new(format_tc(t)).monospace().strong().color(ACCENT));
+                ui.label(RichText::new(format_tc(t)).monospace().strong().color(accent()));
             }
             None if st.comp.cues.timecode == TimecodeSource::Midi => {
                 hint(ui, "waiting for MIDI timecode…");
@@ -69,7 +69,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             card_frame(ui, is_current).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new(format!("{}", i + 1)).monospace().strong().color(if is_current { ACCENT } else { Color32::GRAY }));
+                    ui.label(RichText::new(format!("{}", i + 1)).monospace().strong().color(if is_current { accent() } else { Color32::GRAY }));
                     if ui.small_button(icon::PLAY).on_hover_text("Go to this cue").clicked() {
                         fire = Some(i);
                     }

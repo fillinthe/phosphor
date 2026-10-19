@@ -30,7 +30,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     let mut touched = false;
     for s in &mut mapping.surfaces {
         let is_selected = *selected == Some(s.id);
-        let base = if s.enabled { ACCENT } else { Color32::GRAY };
+        let base = if s.enabled { accent() } else { Color32::GRAY };
         let line = if is_selected { Stroke::new(2.0, base) } else { Stroke::new(1.0, base.gamma_multiply(0.55)) };
         let id = ui.id().with(("surface", s.id));
         // Outline: the corner quad, or the mesh's curved grid lines.
@@ -294,14 +294,14 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                         p.text(pic.center(), egui::Align2::CENTER_CENTER, "off", egui::FontId::proportional(12.0), Color32::GRAY);
                     }
                 }
-                let border = if selected { ACCENT } else if r.hovered() { Color32::from_gray(140) } else { Color32::from_gray(50) };
+                let border = if selected { accent() } else if r.hovered() { Color32::from_gray(140) } else { Color32::from_gray(50) };
                 p.rect_stroke(pic, 4.0, Stroke::new(if selected { 2.0 } else { 1.0 }, border), egui::StrokeKind::Inside);
                 // Number badge, like Identify shows on the projector.
                 let badge = egui::Rect::from_min_size(pic.min + egui::vec2(4.0, 4.0), egui::vec2(18.0, 16.0));
                 p.rect_filled(badge, 3.0, Color32::from_black_alpha(170));
-                p.text(badge.center(), egui::Align2::CENTER_CENTER, format!("{}", i + 1), egui::FontId::proportional(11.0), ACCENT);
+                p.text(badge.center(), egui::Align2::CENTER_CENTER, format!("{}", i + 1), egui::FontId::proportional(11.0), accent());
                 if o.mapping.active() {
-                    p.text(pic.right_top() + egui::vec2(-5.0, 4.0), egui::Align2::RIGHT_TOP, icon::POLYGON, egui::FontId::proportional(12.0), ACCENT);
+                    p.text(pic.right_top() + egui::vec2(-5.0, 4.0), egui::Align2::RIGHT_TOP, icon::POLYGON, egui::FontId::proportional(12.0), accent());
                 }
                 // Name, then where it goes: on a screen, in a window, or nowhere yet.
                 // Fit the card (about 6.5 px a character at these sizes).
@@ -310,11 +310,11 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                     if text.chars().count() > n { format!("{}…", text.chars().take(n - 1).collect::<String>()) } else { text.to_string() }
                 };
                 let name_at = egui::pos2(pic.left() + 2.0, pic.bottom() + 3.0);
-                p.text(name_at, egui::Align2::LEFT_TOP, fit(&o.name, pic_w - 4.0), egui::FontId::proportional(12.0), if selected { ACCENT } else { Color32::WHITE });
+                p.text(name_at, egui::Align2::LEFT_TOP, fit(&o.name, pic_w - 4.0), egui::FontId::proportional(12.0), if selected { accent() } else { Color32::WHITE });
                 let on_screen = !o.screen.is_empty() && crate::screens::find_screen(&displays, &o.screen).is_some();
                 let (dot, place) = match (open, on_screen) {
-                    (true, true) => (ACCENT, format!("{} {}", icon::PROJECTOR_SCREEN, o.screen)),
-                    (true, false) => (ACCENT, format!("{} window", icon::APP_WINDOW)),
+                    (true, true) => (accent(), format!("{} {}", icon::PROJECTOR_SCREEN, o.screen)),
+                    (true, false) => (accent(), format!("{} window", icon::APP_WINDOW)),
                     (false, _) if !o.screen.is_empty() => (Color32::from_gray(110), format!("closed · {}", o.screen)),
                     _ => (Color32::from_gray(110), "not shown".to_string()),
                 };

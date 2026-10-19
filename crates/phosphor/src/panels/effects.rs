@@ -24,10 +24,11 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
             action = Some(FxAction::Browse(Some(add.rect.left_bottom())));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.add_enabled(clipboard_len > 0, egui::Button::new(label(icon::CLIPBOARD_TEXT, "Paste"))).on_hover_text("Append the copied chain").clicked() {
+            // Icons only: the row has to fit narrow columns (names on hover).
+            if ui.add_enabled(clipboard_len > 0, egui::Button::new(icon::CLIPBOARD_TEXT)).on_hover_text("Paste: append the copied chain").clicked() {
                 action = Some(FxAction::PasteChain);
             }
-            if ui.add_enabled(!effects.is_empty(), egui::Button::new(label(icon::COPY, "Copy"))).on_hover_text("Copy this whole chain").clicked() {
+            if ui.add_enabled(!effects.is_empty(), egui::Button::new(icon::COPY)).on_hover_text("Copy this whole chain").clicked() {
                 action = Some(FxAction::CopyChain);
             }
         });
@@ -109,7 +110,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
             drop = Some((p.0, fx.id));
         }
         if frame.response.dnd_hover_payload::<FxDrag>().is_some_and(|p| p.0 != fx.id) {
-            ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+            ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
         }
     }
     if let Some((from, onto)) = drop

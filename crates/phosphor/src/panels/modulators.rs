@@ -25,7 +25,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             egui::Frame::group(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
-                    ui.add(egui::ProgressBar::new(value).desired_width(110.0).fill(ACCENT.gamma_multiply(0.7)));
+                    ui.add(egui::ProgressBar::new(value).desired_width(110.0).fill(accent().gamma_multiply(0.7)));
                     if i > 0 && ui.small_button(icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
                         moves = Some((i, i - 1));
                     }

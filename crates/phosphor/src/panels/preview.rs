@@ -16,7 +16,7 @@ pub(crate) fn thumbnail(ui: &mut egui::Ui, tex: Option<egui::TextureId>, size: e
             p.text(rect.center(), egui::Align2::CENTER_CENTER, "no source", egui::FontId::proportional(11.0), Color32::GRAY);
         }
     }
-    let stroke = if resp.hovered() { Stroke::new(1.0, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(52)) };
+    let stroke = if resp.hovered() { Stroke::new(1.0, accent()) } else { Stroke::new(1.0, Color32::from_gray(52)) };
     p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
     resp
 }

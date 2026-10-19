@@ -36,7 +36,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     };
     ui.horizontal(|ui| {
         ui.label(&user.email);
-        let plan = if a.pro() { RichText::new("Pro").color(ACCENT).strong() } else { RichText::new("Free").color(Color32::GRAY) };
+        let plan = if a.pro() { RichText::new("Pro").color(accent()).strong() } else { RichText::new("Free").color(Color32::GRAY) };
         ui.label(plan);
         if ui.small_button("Account page").clicked() {
             a.open_web(&ctx, "/account/");
@@ -48,7 +48,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     ui.separator();
     if let Some((used, max)) = a.storage {
         let frac = if max > 0 { used as f32 / max as f32 } else { 0.0 };
-        ui.add(egui::ProgressBar::new(frac).desired_height(6.0).fill(ACCENT.gamma_multiply(0.6)));
+        ui.add(egui::ProgressBar::new(frac).desired_height(6.0).fill(accent().gamma_multiply(0.6)));
         ui.horizontal(|ui| {
             hint(ui, format!("{:.1} MB of {} MB used · your layouts are kept here too", used as f64 / 1_048_576.0, max >> 20));
             if !a.pro() && ui.small_button(label(icon::STAR, "More space")).on_hover_text("Phosphor Pro: 1 GB").clicked() {
@@ -95,7 +95,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
                 if ui.button(label(icon::FOLDER_OPEN, "Open")).clicked() {
                     open = Some(p.id.clone());
                 }
-                let name = if current { RichText::new(&p.name).color(ACCENT) } else { RichText::new(&p.name) };
+                let name = if current { RichText::new(&p.name).color(accent()) } else { RichText::new(&p.name) };
                 ui.label(name);
                 hint(ui, format!("{} · {:.0} KB", ago_secs(p.updated), p.size as f64 / 1024.0));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

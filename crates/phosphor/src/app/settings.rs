@@ -52,6 +52,7 @@ impl PhosphorApp {
         storage.set_string(KEY_ACCOUNT_TAB_MOVED, "1".into());
         storage.set_string(KEY_AREAS, "1".into());
         storage.set_string(KEY_USE_AREAS, if self.use_areas { "1" } else { "0" }.into());
+        storage.set_string(KEY_BRIGHTNESS, self.ui_brightness.to_string());
         if let Ok(json) = serde_json::to_string(&self.state.control.settings()) {
             storage.set_string(KEY_CONTROL, json);
         }

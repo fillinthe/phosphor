@@ -209,6 +209,8 @@ impl PhosphorApp {
             // Bench pictures of one panel (--tab) use the dock; everything else the unified areas.
             use_areas: stored(KEY_USE_AREAS).as_deref() != Some("0") && !bench.as_ref().is_some_and(|b| b.tab.is_some()),
             area_tabs: Default::default(),
+            ui_brightness: bench.as_ref().and_then(|b| b.brightness).or_else(|| stored(KEY_BRIGHTNESS).and_then(|s| s.parse().ok())).unwrap_or(theme::DEFAULT_BRIGHTNESS),
+            logged_notice: None,
             workspace_docks: HashMap::new(),
             #[cfg(target_os = "macos")]
             native_menu: None,
@@ -243,6 +245,9 @@ impl PhosphorApp {
         app.install_native_menu();
         // A fresh install (nothing saved yet): say hello once.
         app.welcome_open = fresh_install;
+        if app.ui_brightness != theme::DEFAULT_BRIGHTNESS {
+            theme::set_brightness(&cc.egui_ctx, app.ui_brightness);
+        }
         if let Some(i) = app.bench.as_ref().and_then(|b| b.cfg.layout.as_deref()).and_then(|n| super::layout::LAYOUTS.iter().position(|(l, _)| *l == n)) {
             app.switch_workspace(i);
         }
@@ -252,6 +257,11 @@ impl PhosphorApp {
                 "30" => phosphor_engine::RenderRate::Fps30,
                 _ => phosphor_engine::RenderRate::Fps60,
             };
+        }
+        if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.area_tab.clone())
+            && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)
+        {
+            app.show_tab_in_areas(*tab);
         }
         if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.tab.clone())
             && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)

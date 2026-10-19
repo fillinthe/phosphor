@@ -1,48 +1,83 @@
-//! Phosphor's look: near-black panels, a single green accent, soft corners.
+//! Phosphor's look: near-black panels (or as light as you like: `set_brightness`), one green accent, soft corners.
 
 use eframe::egui::{self, Color32, CornerRadius, Stroke};
 
-pub const ACCENT: Color32 = Color32::from_rgb(120, 255, 170);
 pub const WARN: Color32 = Color32::from_rgb(255, 140, 90);
+
+/// True while the interface is on the light side (`set_brightness` above about half).
+static LIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The one accent colour: bright green on dark backgrounds, a deeper green on light ones (readable as text).
+pub fn accent() -> Color32 {
+    if LIGHT.load(std::sync::atomic::Ordering::Relaxed) { Color32::from_rgb(16, 138, 74) } else { Color32::from_rgb(120, 255, 170) }
+}
+
+/// `base` nudged toward the accent (selected cards, the playing clip): works on any brightness.
+pub fn tint(base: Color32, amount: f32) -> Color32 {
+    base.lerp_to_gamma(accent(), amount)
+}
+
+/// The interface brightness a fresh install starts at (Phosphor's usual near-black).
+pub const DEFAULT_BRIGHTNESS: f32 = 0.35;
+
+/// Named steps for the brightness menu.
+pub const BRIGHTNESS_PRESETS: &[(&str, f32)] = &[("Darkest", 0.0), ("Dark", DEFAULT_BRIGHTNESS), ("Dim", 0.5), ("Soft light", 0.75), ("Light", 1.0)];
+
+/// The background and widget tones at one brightness.
+#[derive(Clone, Copy)]
+struct Palette {
+    panel: u8,
+    window: u8,
+    extreme: u8,
+    faint: u8,
+    noninteractive: u8,
+    stroke: u8,
+    inactive: u8,
+    inactive_weak: u8,
+    hovered: u8,
+    hovered_weak: u8,
+}
+
+/// Anchors, blended in between. Two families: dark (light text) up to 0.5 = a lifted charcoal, light (dark text)
+/// from just above 0.5 = soft grey, up to white at 1. No mid-grey in between, where neither text would read.
+const ANCHORS: [(f32, Palette); 5] = [
+    (0.0, Palette { panel: 6, window: 10, extreme: 0, faint: 14, noninteractive: 10, stroke: 28, inactive: 24, inactive_weak: 18, hovered: 38, hovered_weak: 32 }),
+    (0.35, Palette { panel: 21, window: 27, extreme: 13, faint: 31, noninteractive: 27, stroke: 47, inactive: 45, inactive_weak: 39, hovered: 60, hovered_weak: 53 }),
+    (0.5, Palette { panel: 44, window: 50, extreme: 32, faint: 54, noninteractive: 50, stroke: 72, inactive: 68, inactive_weak: 62, hovered: 84, hovered_weak: 77 }),
+    (0.5001, Palette { panel: 206, window: 214, extreme: 226, faint: 198, noninteractive: 210, stroke: 170, inactive: 190, inactive_weak: 198, hovered: 176, hovered_weak: 184 }),
+    (1.0, Palette { panel: 238, window: 246, extreme: 255, faint: 228, noninteractive: 242, stroke: 204, inactive: 222, inactive_weak: 230, hovered: 206, hovered_weak: 214 }),
+];
+
+fn palette(b: f32) -> Palette {
+    let b = b.clamp(0.0, 1.0);
+    let i = ANCHORS.iter().rposition(|(at, _)| *at <= b).unwrap_or(0).min(ANCHORS.len() - 2);
+    let ((a0, p0), (a1, p1)) = (ANCHORS[i], ANCHORS[i + 1]);
+    let t = ((b - a0) / (a1 - a0)).clamp(0.0, 1.0);
+    let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
+    Palette {
+        panel: m(p0.panel, p1.panel),
+        window: m(p0.window, p1.window),
+        extreme: m(p0.extreme, p1.extreme),
+        faint: m(p0.faint, p1.faint),
+        noninteractive: m(p0.noninteractive, p1.noninteractive),
+        stroke: m(p0.stroke, p1.stroke),
+        inactive: m(p0.inactive, p1.inactive),
+        inactive_weak: m(p0.inactive_weak, p1.inactive_weak),
+        hovered: m(p0.hovered, p1.hovered),
+        hovered_weak: m(p0.hovered_weak, p1.hovered_weak),
+    }
+}
+
+/// A grey with a hint of blue (Phosphor's panels aren't pure grey).
+fn tone(g: u8) -> Color32 {
+    Color32::from_rgb(g.saturating_sub(3), g.saturating_sub(1), g)
+}
 
 pub fn apply(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     ctx.set_fonts(fonts);
-    ctx.set_theme(egui::Theme::Dark);
-    let mut v = egui::Visuals::dark();
-    v.panel_fill = Color32::from_rgb(20, 22, 24);
-    v.window_fill = Color32::from_rgb(26, 28, 31);
-    v.extreme_bg_color = Color32::from_rgb(12, 13, 15);
-    v.faint_bg_color = Color32::from_rgb(29, 32, 35);
-    v.widgets.noninteractive.bg_fill = Color32::from_rgb(26, 28, 31);
-    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(44, 48, 52));
-    v.widgets.inactive.bg_fill = Color32::from_rgb(42, 46, 50);
-    v.widgets.inactive.weak_bg_fill = Color32::from_rgb(36, 40, 44);
-    v.widgets.hovered.bg_fill = Color32::from_rgb(56, 62, 68);
-    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(48, 54, 60);
-    v.widgets.hovered.bg_stroke = Stroke::new(1.0, ACCENT.gamma_multiply(0.6));
-    v.widgets.active.bg_fill = ACCENT.gamma_multiply(0.35);
-    v.widgets.open.bg_fill = Color32::from_rgb(48, 54, 60);
-    v.selection.bg_fill = ACCENT.gamma_multiply(0.32);
-    v.selection.stroke = Stroke::new(1.0, ACCENT);
-    v.hyperlink_color = ACCENT;
-    // Sliders: a thick filled bar with a thin line where the value sits (no round knob).
-    v.slider_trailing_fill = true;
-    v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.18 };
-    v.window_corner_radius = CornerRadius::same(8);
-    v.menu_corner_radius = CornerRadius::same(6);
-    for w in [
-        &mut v.widgets.noninteractive,
-        &mut v.widgets.inactive,
-        &mut v.widgets.hovered,
-        &mut v.widgets.active,
-        &mut v.widgets.open,
-    ] {
-        w.corner_radius = CornerRadius::same(5);
-    }
-    ctx.set_visuals(v);
-    ctx.style_mut_of(egui::Theme::Dark, |s| {
+    ctx.all_styles_mut(|s| {
         use egui::{FontId, TextStyle};
         // Compact: smaller labels so more controls fit on screen.
         s.text_styles = [
@@ -60,6 +95,64 @@ pub fn apply(ctx: &egui::Context) {
         s.spacing.interact_size.y = 19.0;
         s.spacing.menu_margin = egui::Margin::same(6);
     });
+    set_brightness(ctx, DEFAULT_BRIGHTNESS);
+}
+
+/// Interface brightness, 0 = darkest, 1 = light (0.35 is Phosphor's usual look). Above the middle the text turns
+/// dark and the accent deepens so everything stays readable.
+pub fn set_brightness(ctx: &egui::Context, b: f32) {
+    let light = b > 0.5;
+    LIGHT.store(light, std::sync::atomic::Ordering::Relaxed);
+    let p = palette(b);
+    let accent = accent();
+    let mut v = if light { egui::Visuals::light() } else { egui::Visuals::dark() };
+    v.panel_fill = tone(p.panel);
+    v.window_fill = tone(p.window);
+    v.extreme_bg_color = tone(p.extreme);
+    v.faint_bg_color = tone(p.faint);
+    v.widgets.noninteractive.bg_fill = tone(p.noninteractive);
+    v.widgets.noninteractive.weak_bg_fill = tone(p.noninteractive);
+    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, tone(p.stroke));
+    v.widgets.inactive.bg_fill = tone(p.inactive);
+    v.widgets.inactive.weak_bg_fill = tone(p.inactive_weak);
+    v.widgets.hovered.bg_fill = tone(p.hovered);
+    v.widgets.hovered.weak_bg_fill = tone(p.hovered_weak);
+    v.widgets.hovered.bg_stroke = Stroke::new(1.0, accent.gamma_multiply(0.6));
+    v.widgets.active.bg_fill = accent.gamma_multiply(if light { 0.55 } else { 0.35 });
+    v.widgets.open.bg_fill = tone(p.hovered_weak);
+    v.selection.bg_fill = accent.gamma_multiply(if light { 0.4 } else { 0.32 });
+    v.selection.stroke = Stroke::new(1.0, accent);
+    v.hyperlink_color = accent;
+    // Sliders: a thick filled bar with a thin line where the value sits (no round knob).
+    v.slider_trailing_fill = true;
+    v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.18 };
+    v.window_corner_radius = CornerRadius::same(8);
+    v.menu_corner_radius = CornerRadius::same(6);
+    for w in [
+        &mut v.widgets.noninteractive,
+        &mut v.widgets.inactive,
+        &mut v.widgets.hovered,
+        &mut v.widgets.active,
+        &mut v.widgets.open,
+    ] {
+        w.corner_radius = CornerRadius::same(5);
+    }
+    let theme = if light { egui::Theme::Light } else { egui::Theme::Dark };
+    ctx.set_visuals_of(theme, v);
+    ctx.set_theme(theme);
+}
+
+#[cfg(test)]
+mod brightness_tests {
+    #[test]
+    fn brightness_blends_between_anchors() {
+        assert_eq!(super::palette(0.35).panel, 21, "the default is Phosphor's usual panel");
+        assert!(super::palette(0.0).panel < super::palette(0.2).panel);
+        assert!(super::palette(0.9).panel > super::palette(0.6).panel);
+        assert!(super::palette(0.5).panel < 60 && super::palette(0.51).panel > 190, "no mid-grey");
+        assert_eq!(super::palette(1.0).extreme, 255);
+        assert_eq!(super::palette(-3.0).panel, super::palette(0.0).panel);
+    }
 }
 
 /// Every non-ASCII character in the app's string literals must be in the UI fonts (missing ones draw as boxes).

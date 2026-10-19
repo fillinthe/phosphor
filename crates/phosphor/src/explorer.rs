@@ -8,7 +8,7 @@ use phosphor_engine::{CompileError, EffectState, MASTER_ID, PreviewItem, custom,
 
 use crate::app::State;
 use crate::panels::{self, Tab, label};
-use crate::theme::{ACCENT, WARN};
+use crate::theme::{accent, WARN};
 
 /// Drag payload from the explorer: drop on a layer card (or MASTER) to apply.
 #[derive(Clone, Copy, Debug)]
@@ -74,13 +74,17 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         Some(id) => st.comp.layers.iter().find(|l| l.id == id).map_or("a new layer".into(), |l| l.name.clone()),
         None => "a new layer".into(),
     };
+    // Search on its own row (nothing can cover it), then the rest wraps in narrow columns.
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
-        ui.add(egui::TextEdit::singleline(&mut st.explorer.search).hint_text("Search effects, looks, categories…").desired_width(220.0));
-        if !st.explorer.search.is_empty() && ui.small_button(icon::X).clicked() {
+        let clear = !st.explorer.search.is_empty();
+        let w = ui.available_width() - if clear { 28.0 } else { 0.0 };
+        ui.add(egui::TextEdit::singleline(&mut st.explorer.search).hint_text("Search effects, looks, categories…").desired_width(w));
+        if clear && ui.small_button(icon::X).clicked() {
             st.explorer.search.clear();
         }
-        ui.separator();
+    });
+    ui.horizontal_wrapped(|ui| {
         ui.selectable_value(&mut st.explorer.sources, false, label(icon::MAGIC_WAND, "Effects"));
         ui.selectable_value(&mut st.explorer.sources, true, label(icon::SPARKLE, "Sources"));
         ui.separator();
@@ -103,10 +107,10 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     // The picked tile and what to do with it; nothing changes on screen until you choose.
     let picked = st.explorer.picked.and_then(|id| list.iter().find(|d| d.id == id).copied());
     let mut add_to: Option<Option<u64>> = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         match picked {
             Some(d) => {
-                ui.label(RichText::new(d.name).strong().color(ACCENT));
+                ui.label(RichText::new(d.name).strong().color(accent()));
                 if st.explorer.sources {
                     if ui.button(label(icon::SPARKLE, &format!("Use on {target_name}"))).clicked() {
                         add_to = Some(None);
@@ -128,11 +132,11 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 crate::ui::hint(ui, format!("Click to pick · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
             }
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
-            crate::ui::hint(ui, status).on_hover_text("ISF shaders from /Library/Graphics/ISF and ~/Library/Graphics/ISF. Skipped ones need multi-pass or feedback support.");
-        });
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    ui.horizontal(|ui| {
+        let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
+        crate::ui::hint(ui, status).on_hover_text("ISF shaders from /Library/Graphics/ISF and ~/Library/Graphics/ISF. Skipped ones need multi-pass or feedback support.");
     });
     ui.add_space(2.0);
 
@@ -194,9 +198,9 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                     p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, egui::FontId::proportional(14.0), Color32::from_rgb(255, 210, 90));
                 }
                 let stroke = if st.explorer.picked == Some(desc.id) {
-                    Stroke::new(2.5, ACCENT)
+                    Stroke::new(2.5, accent())
                 } else if resp.hovered() {
-                    Stroke::new(1.5, ACCENT)
+                    Stroke::new(1.5, accent())
                 } else {
                     Stroke::new(1.0, Color32::from_gray(48))
                 };
@@ -412,7 +416,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             }
             for (i, sh) in st.editor.shaders.iter().enumerate() {
                 let name = custom::parse_header(&sh.source).map(|h| h.name).unwrap_or_else(|_| sh.slug.clone());
-                let dot = if sh.error.is_some() { RichText::new(icon::RECORD).color(WARN) } else { RichText::new(icon::RECORD).color(ACCENT) };
+                let dot = if sh.error.is_some() { RichText::new(icon::RECORD).color(WARN) } else { RichText::new(icon::RECORD).color(accent()) };
                 ui.horizontal(|ui| {
                     ui.label(dot.small());
                     if ui.selectable_label(st.editor.current == Some(i), name).clicked() {
@@ -508,7 +512,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.monospace(&sh.slug);
         match &sh.error {
             Some(_) => ui.colored_label(WARN, format!("{} error", icon::RECORD)),
-            None if sh.compiled => ui.colored_label(ACCENT, format!("{} compiled · saved", icon::RECORD)),
+            None if sh.compiled => ui.colored_label(accent(), format!("{} compiled · saved", icon::RECORD)),
             None => crate::ui::hint(ui, "not compiled"),
         };
     });
@@ -819,7 +823,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
                     }
                     p.text(egui::pos2(rect.left() + 5.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, d.name, egui::FontId::proportional(11.5), Color32::WHITE);
                     let first = i == 0 && !b.search.is_empty();
-                    let stroke = if resp.hovered() || first { Stroke::new(1.5, ACCENT) } else { Stroke::new(1.0, Color32::from_gray(48)) };
+                    let stroke = if resp.hovered() || first { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, Color32::from_gray(48)) };
                     p.rect_stroke(rect, 5.0, stroke, StrokeKind::Inside);
                     if resp.clicked() {
                         picked = Some((d.id, ui.input(|i| i.modifiers.shift)));

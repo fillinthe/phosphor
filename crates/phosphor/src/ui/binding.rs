@@ -107,7 +107,7 @@ pub(crate) fn binding_list(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + st
         bindings.remove(i);
     }
     ui.horizontal(|ui| {
-        ui.label(RichText::new(icon::PLUS).color(ACCENT));
+        ui.label(RichText::new(icon::PLUS).color(accent()));
         if let Some(t) = target_picker(ui, (id_salt, "add"), targets, None, 200.0) {
             bindings.push(Binding { target: t, range: ValueRange::default() });
         }

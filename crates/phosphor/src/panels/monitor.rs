@@ -79,7 +79,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
             p.line_segment([egui::pos2(x, frame.top()), egui::pos2(x, frame.bottom())], stroke);
             p.line_segment([egui::pos2(frame.left(), y), egui::pos2(frame.right(), y)], stroke);
         }
-        p.circle_stroke(frame.center(), 6.0, Stroke::new(1.0, ACCENT));
+        p.circle_stroke(frame.center(), 6.0, Stroke::new(1.0, accent()));
     }
     ui.allocate_rect(rect, Sense::hover());
 }
