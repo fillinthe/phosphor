@@ -6,6 +6,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.59 (2026-10-19)
 
+- **Simpler sliders everywhere:** every level and effect control is now a plain bar with its name and value
+  inside. Click or drag anywhere on it, double-click to reset, right-click to type an exact value, map it to a
+  controller, or make it move. When something moves a bar on its own, a white line shows where it really is.
+- **Hide a layer in one click:** an eye next to each layer's opacity shows or hides it.
+- **Volume on each layer:** layers playing a movie have a volume bar (and mute) right under their opacity.
+- **Surprise is easier to undo:** Surprise now says what it did; ⌘Z undoes it, and the new *Quick › Stop the
+  Motion* keeps the look but stops everything moving with the sound. *Reset to default* on a control now also
+  stops it moving (before, it kept jumping with the music).
 - **Watch Folder works again:** a watched folder now fills the Media panel straight away and picks up new files
   every few seconds (it only loaded when another file window was used).
 - **Show folders on disk:** each subfolder of a watched folder is its own group in the Media panel (for example

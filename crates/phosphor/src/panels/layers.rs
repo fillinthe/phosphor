@@ -536,15 +536,18 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
 /// A layer's opacity: slider (mappable, modulation marker), % field and the ~ modulation button.
 pub(crate) fn opacity_row(ui: &mut egui::Ui, layer: &mut LayerState) {
     ui.horizontal(|ui| {
-        ui.spacing_mut().slider_width = (ui.available_width() - 100.0).max(60.0);
-        let r = guarded!(ui, layer.opacity, Slider::new(&mut layer.opacity, 0.0..=1.0).show_value(false)).on_hover_text("Opacity");
-        mod_marker(ui, &r, layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref());
-        mapped_badge(ui, &r, &ControlTarget::LayerOpacity(layer.id));
-        if control_menu(&r, Some(&ControlTarget::LayerOpacity(layer.id)), Some(&mut layer.opacity_mod)) {
-            layer.opacity = 1.0;
-        }
-        value_bubble(ui, &r, format!("{:.0}%", layer.opacity * 100.0));
-        percent_field(ui, &mut layer.opacity);
-        mod_button(ui, &mut layer.opacity_mod);
+        show_button(ui, layer);
+        Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).show(ui);
     });
+}
+
+/// The eye next to a layer's opacity: show / hide the layer in one click (Learn on right-click).
+pub(crate) fn show_button(ui: &mut egui::Ui, layer: &mut LayerState) {
+    let (glyph, color, tip) = if layer.enabled { (icon::EYE, ui.visuals().text_color(), "Showing: click to hide this layer") } else { (icon::EYE_SLASH, WARN, "Hidden: click to show this layer") };
+    let r = ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false).min_size(egui::vec2(22.0, 18.0))).on_hover_text(tip);
+    if r.clicked() {
+        layer.enabled = !layer.enabled;
+    }
+    mapped_badge(ui, &r, &ControlTarget::LayerEnabled(layer.id));
+    r.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
 }

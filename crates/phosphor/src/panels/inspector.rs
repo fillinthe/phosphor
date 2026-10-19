@@ -47,7 +47,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             let w = ui.available_width().min(360.0);
             thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);
             ui.horizontal(|ui| {
-                ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong());
+                super::layers::show_button(ui, layer);
                 ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
             });
             quick = crate::app::quick_row(ui);
@@ -172,8 +172,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             });
             ui.horizontal(|ui| {
                 ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
-                    let speed = guarded!(ui, layer.rate, Slider::new(&mut layer.rate, 0.1..=4.0).text("Speed").logarithmic(true));
-                    map_menu(ui, &speed, ControlTarget::LayerSpeed(layer.id));
+                    Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
                 });
             });
             ui.horizontal(|ui| {
@@ -235,16 +234,14 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     egui::CollapsingHeader::new(title).id_salt(("transform", id)).show(ui, |ui| {
         let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32| {
             ui.horizontal(|ui| {
-                let r = guarded!(ui, *value, Slider::new(value, range).text(text).logarithmic(log).fixed_decimals(2));
-                mapped_badge(ui, &r, &target);
-                if let Some(m) = m {
-                    if control_menu(&r, Some(&target), Some(&mut *m)) {
-                        *value = reset;
-                    }
-                    mod_button(ui, m);
-                } else if control_menu(&r, Some(&target), None) {
-                    *value = reset;
+                let mut level = Level::range(value, *range.start(), *range.end(), text).default(reset).target(target);
+                if log {
+                    level = level.log();
                 }
+                if let Some(m) = m {
+                    level = level.modulation(m);
+                }
+                level.show(ui);
             });
         };
         row(ui, &mut t.x, -1.0..=1.0, "X", ControlTarget::LayerX(id), None, false, 0.0);
@@ -278,11 +275,16 @@ pub(crate) fn mute_button(ui: &mut egui::Ui, muted: &mut bool, what: &str) -> eg
 fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
     ui.horizontal(|ui| {
         mute_button(ui, &mut layer.muted, "this layer");
-        let r = guarded!(ui, layer.volume, Slider::new(&mut layer.volume, 0.0..=2.0).text("Volume").show_value(false));
-        value_bubble(ui, &r, format!("{:.0}%", layer.volume * 100.0));
-        map_menu(ui, &r, ControlTarget::LayerVolume(layer.id));
+        let w = ui.available_width();
+        volume_bar(ui, layer, w);
     });
     ui.checkbox(&mut layer.volume_follows_opacity, "Sound follows opacity").on_hover_text("Fading the layer (or its group, or the crossfader) fades its sound too");
+}
+
+/// A layer's volume (to 200%; the mark is 100%).
+pub(crate) fn volume_bar(ui: &mut egui::Ui, layer: &mut LayerState, width: f32) {
+    let tip = if layer.muted { "Volume (muted: click the speaker to hear it)" } else { "Volume" };
+    Level::percent(&mut layer.volume, "Volume").max(2.0).target(ControlTarget::LayerVolume(layer.id)).width(width).tip(tip).show(ui);
 }
 
 /// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, colour,

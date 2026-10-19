@@ -18,10 +18,12 @@ pub enum Quick {
     Fill,
     /// Replace the layers with a ready-to-play set (undo brings them back).
     InstantSet,
+    /// Take the motion off every layer (the look stays).
+    Still,
 }
 
 impl Quick {
-    pub const ALL: [Quick; 6] = [Quick::Surprise, Quick::SurpriseLayer, Quick::Shuffle, Quick::React, Quick::Fill, Quick::InstantSet];
+    pub const ALL: [Quick; 7] = [Quick::Surprise, Quick::SurpriseLayer, Quick::Shuffle, Quick::React, Quick::Still, Quick::Fill, Quick::InstantSet];
 
     /// Menu / palette wording (one place for both).
     pub const fn label(self) -> &'static str {
@@ -32,6 +34,7 @@ impl Quick {
             Quick::React => "Make It React to the Music",
             Quick::Fill => "Fill Empty Clips with Variations",
             Quick::InstantSet => "Instant Set (replace layers)",
+            Quick::Still => "Stop the Motion (all layers)",
         }
     }
 
@@ -43,6 +46,7 @@ impl Quick {
             Quick::React => icon::WAVEFORM,
             Quick::Fill => icon::GRID_NINE,
             Quick::InstantSet => icon::ROCKET_LAUNCH,
+            Quick::Still => icon::PAUSE,
         }
     }
 
@@ -54,6 +58,7 @@ impl Quick {
             Quick::React => "Make the selected layer move with the music: kick pumps, beat-synced sweeps, colour drift",
             Quick::Fill => "Fill the selected layer's empty clip slots with generator variations",
             Quick::InstantSet => "Three layers of clips ready to play, column 1 launched. Outputs and mapping stay. Undo brings your layers back",
+            Quick::Still => "Keep the look but take off all the motion (music-following and sweeps) on every layer",
         }
     }
 }
@@ -79,6 +84,14 @@ impl State {
 
     /// Runs a Quick action; layer actions go to `layer`.
     pub(crate) fn quick_on(&mut self, q: Quick, layer: Option<u64>, now: f64) {
+        log::info!("quick: {q:?}");
+        if q == Quick::Still {
+            for l in &mut self.comp.layers {
+                l.still();
+            }
+            self.notice = Some("Motion off: the look stays still (undo with ⌘Z)".into());
+            return;
+        }
         let mut d = dice();
         let now32 = now as f32;
         // Every Quick action adds motion that listens to the music (except Shuffle): make sure something is listening.
@@ -93,7 +106,10 @@ impl State {
             }
         }
         match q {
-            Quick::Surprise => self.comp.surprise(now32, &mut d),
+            Quick::Surprise => {
+                self.comp.surprise(now32, &mut d);
+                self.notice = Some("Surprise: a random look on every layer that moves with the sound. ⌘Z undoes it; Quick › Stop the Motion keeps it still".into());
+            }
             Quick::InstantSet => {
                 self.comp.instant_set(now32, &mut d);
                 self.selected = self.comp.layers.last().map(|l| l.id);

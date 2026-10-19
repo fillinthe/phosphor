@@ -7,18 +7,13 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
         values.resize(i + 1, p.default);
     }
     ui.horizontal(|ui| {
-        // A range must run low to high (egui's slider clamps with it and panics otherwise).
-        let r = guarded!(ui, values[i], Slider::new(&mut values[i], p.min.min(p.max)..=p.max.max(p.min)).text(p.name)).on_hover_text("Double-click to reset · right-click for Learn / Modulate");
         let slot = mods.iter().position(|m| m.index == i);
-        mod_marker(ui, &r, values[i], p.min, p.max, slot.map(|k| &mods[k].m));
-        if let Some(t) = &target {
-            mapped_badge(ui, &r, t);
-        }
         let mut m = slot.map(|k| mods[k].m);
-        if r.double_clicked() | control_menu(&r, target.as_ref(), Some(&mut m)) {
-            values[i] = p.default;
+        let mut level = Level::range(&mut values[i], p.min, p.max, p.name).default(p.default).modulation(&mut m);
+        if let Some(t) = target {
+            level = level.target(t);
         }
-        mod_button(ui, &mut m);
+        level.show(ui);
         match (slot, m) {
             (Some(k), Some(nm)) => mods[k].m = nm,
             (Some(k), None) => {
@@ -43,20 +38,6 @@ pub(crate) const MODULATORS: &str = "phosphor_modulators";
 
 pub(crate) fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
     ui.ctx().data(|d| d.get_temp(egui::Id::new("phosphor_mod_inputs"))).unwrap_or_default()
-}
-
-/// Draws where a modulated slider actually is right now (a green tick on the rail).
-pub(crate) fn mod_marker(ui: &egui::Ui, slider: &egui::Response, base: f32, min: f32, max: f32, m: Option<&Modulation>) {
-    let Some(m) = m else { return };
-    let live = phosphor_engine::control::modulate(base, min, max, Some(m), &mod_inputs(ui));
-    let t = if (max - min).abs() > f32::EPSILON { ((live - min) / (max - min)).clamp(0.0, 1.0) } else { 0.0 };
-    let rail = ui.spacing().slider_width;
-    let r = slider.rect;
-    let pad = r.height() * 0.5;
-    let x = r.left() + pad + t * (rail - 2.0 * pad).max(1.0);
-    let y = r.center().y;
-    ui.painter().line_segment([egui::pos2(x, y - 6.0), egui::pos2(x, y + 6.0)], Stroke::new(2.0, accent()));
-    ui.painter().circle_filled(egui::pos2(x, y), 3.0, accent());
 }
 
 pub(crate) const SYNC_CHOICES: &[(f32, &str)] =

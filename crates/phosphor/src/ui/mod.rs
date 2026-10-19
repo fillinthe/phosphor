@@ -13,6 +13,7 @@ use crate::theme::{accent, WARN};
 
 mod binding;
 mod learn;
+mod level;
 mod modulation;
 mod saves;
 mod tool_window;
@@ -20,6 +21,7 @@ mod widgets;
 
 pub(crate) use binding::*;
 pub(crate) use learn::*;
+pub(crate) use level::*;
 pub(crate) use modulation::*;
 pub(crate) use saves::*;
 pub(crate) use tool_window::*;

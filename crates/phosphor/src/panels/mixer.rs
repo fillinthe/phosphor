@@ -3,20 +3,7 @@
 use super::*;
 
 pub(crate) fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulation>, target: ControlTarget, height: f32) {
-    ui.spacing_mut().slider_width = height;
-    let r = guarded!(ui, *value, Slider::new(value, 0.0..=1.0).vertical().show_value(false));
-    value_bubble(ui, &r, format!("{:.0}%", *value * 100.0));
-    if let Some(mm) = m.as_ref() {
-        let live = phosphor_engine::control::modulate(*value, 0.0, 1.0, Some(mm), &mod_inputs(ui));
-        let rr = r.rect;
-        let pad = rr.width() * 0.5;
-        let y = rr.bottom() - pad - live * (height - 2.0 * pad).max(1.0);
-        ui.painter().line_segment([egui::pos2(rr.left() - 2.0, y), egui::pos2(rr.right() + 2.0, y)], Stroke::new(2.0, accent()));
-    }
-    mapped_badge(ui, &r, &target);
-    if control_menu(&r, Some(&target), Some(m)) {
-        *value = 1.0;
-    }
+    Level::percent(value, "Opacity").modulation(m).target(target).vertical(height).show(ui);
 }
 
 /// One Mixer strip: card, thumbnail (click selects) and name; `body` adds the controls. Returns true when clicked.
@@ -65,9 +52,8 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 let lit = layer.enabled && !muted;
                 if strip(ui, layer.id, *selected == Some(layer.id), tex(layer.id), aspect, lit, name, |ui| {
                     fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
-                    percent_field(ui, &mut layer.opacity);
                     ui.horizontal(|ui| {
-                        on_toggle(ui, &mut layer.enabled, ControlTarget::LayerEnabled(layer.id));
+                        super::layers::show_button(ui, layer);
                         ui.toggle_value(&mut layer.solo, RichText::new("S").small());
                     });
                     ui.horizontal(|ui| {
@@ -91,7 +77,6 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                     let name = RichText::new(format!("{} {}", icon::STACK, short(&g.name))).small().strong().color(accent());
                     if strip(ui, g.id, *selected == Some(g.id), tex(g.id), aspect, g.enabled, name, |ui| {
                         fader(ui, &mut g.opacity, &mut g.opacity_mod, ControlTarget::LayerOpacity(g.id), height);
-                        percent_field(ui, &mut g.opacity);
                         on_toggle(ui, &mut g.enabled, ControlTarget::LayerEnabled(g.id));
                         choice_combo(ui, ("mix_group_blend", g.id), &mut g.blend, 70.0, true);
                     }) {
@@ -103,7 +88,6 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
             let name = RichText::new("MASTER").small().strong().color(accent());
             if strip(ui, MASTER_ID, *selected == Some(MASTER_ID), *texture, aspect, true, name, |ui| {
                 fader(ui, master_fade, master_fade_mod, ControlTarget::MasterFade, height);
-                percent_field(ui, master_fade);
             }) {
                 *selected = Some(MASTER_ID);
             }

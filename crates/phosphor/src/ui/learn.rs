@@ -128,17 +128,32 @@ pub(crate) fn map_overlay(ui: &egui::Ui, resp: &egui::Response, target: &Control
     r.on_hover_text(hint).right_menu(|ui| learn_items(ui, target));
 }
 
-/// The standard right-click menu for a slider: Learn, Modulate, Reset. Returns true on Reset.
-pub(crate) fn control_menu(resp: &egui::Response, target: Option<&ControlTarget>, m: Option<&mut Option<Modulation>>) -> bool {
+/// The standard right-click menu for a slider: Learn, Modulate, Reset. Returns true on Reset (which also takes
+/// off any modulation, so the value really stays at its default).
+/// `extra` items come first (`ui::Level` puts a field to type the exact value there).
+pub(crate) fn control_menu_with(resp: &egui::Response, target: Option<&ControlTarget>, m: Option<&mut Option<Modulation>>, extra: Option<&mut dyn FnMut(&mut egui::Ui)>) -> bool {
     let mut reset = false;
     resp.right_menu(|ui| {
+        if let Some(extra) = extra {
+            extra(ui);
+            ui.separator();
+        }
         if let Some(t) = target {
             learn_items(ui, t);
         }
+        let moving = m.as_ref().is_some_and(|m| m.is_some());
         if let Some(m) = m {
-            ui.menu_button(label(icon::WAVE_SINE, "Modulate…"), |ui| modulation_editor(ui, m));
-        }
-        if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).clicked() {
+            ui.menu_button(label(icon::WAVE_SINE, "Modulate…"), |ui| modulation_editor(ui, &mut *m));
+            if moving && ui.button(label(icon::PAUSE, "Stop the motion")).on_hover_text("Keeps the value where it is set, without the modulation").clicked() {
+                *m = None;
+                ui.close();
+            }
+            if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).on_hover_text("The default value, with no modulation").clicked() {
+                *m = None;
+                reset = true;
+                ui.close();
+            }
+        } else if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).clicked() {
             reset = true;
             ui.close();
         }

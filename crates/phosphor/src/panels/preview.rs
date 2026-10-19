@@ -25,16 +25,8 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     egui::Panel::bottom("preview_bar").show_separator_line(false).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(RichText::new("MASTER").small().strong());
-            ui.spacing_mut().slider_width = (ui.available_width() - 200.0).max(80.0);
-            let r = guarded!(ui, st.comp.master_fade, Slider::new(&mut st.comp.master_fade, 0.0..=1.0).show_value(false));
-            mod_marker(ui, &r, st.comp.master_fade, 0.0, 1.0, st.comp.master_fade_mod.as_ref());
-            mapped_badge(ui, &r, &ControlTarget::MasterFade);
-            if control_menu(&r, Some(&ControlTarget::MasterFade), Some(&mut st.comp.master_fade_mod)) {
-                st.comp.master_fade = 1.0;
-            }
-            value_bubble(ui, &r, format!("{:.0}%", st.comp.master_fade * 100.0));
-            percent_field(ui, &mut st.comp.master_fade);
-            mod_button(ui, &mut st.comp.master_fade_mod);
+            let w = (ui.available_width() - 110.0).max(80.0);
+            Level::percent(&mut st.comp.master_fade, "Fade").modulation(&mut st.comp.master_fade_mod).target(ControlTarget::MasterFade).width(w).tip("Master fade: everything that goes out").show(ui);
             let text = if st.output_open() { label(icon::STOP, "Output") } else { label(icon::PLAY, "Output") };
             if ui.button(text).on_hover_text("Open the output window (F = fullscreen, E = edit mapping)").clicked() {
                 st.toggle_output();

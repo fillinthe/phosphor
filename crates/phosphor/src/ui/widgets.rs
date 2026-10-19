@@ -263,17 +263,6 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, region: Option<(&
     None
 }
 
-/// A 0..1 value as a percentage you can drag or click to type (next to sliders without a number).
-pub(crate) fn percent_field(ui: &mut egui::Ui, v: &mut f32) -> egui::Response {
-    let mut pct = (*v * 100.0).round();
-    let r = guarded!(ui, pct, egui::DragValue::new(&mut pct).range(0.0..=100.0).speed(0.5).fixed_decimals(0).suffix("%"))
-        .on_hover_text("Drag, or click to type a value");
-    if r.changed() {
-        *v = (pct / 100.0).clamp(0.0, 1.0);
-    }
-    r
-}
-
 /// While a slider is being dragged, shows its value in a small bubble at the pointer.
 pub(crate) fn value_bubble(ui: &egui::Ui, slider: &egui::Response, text: impl Into<String>) {
     if !slider.dragged() {
