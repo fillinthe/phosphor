@@ -138,7 +138,7 @@ fn get_target_reads_back_what_set_target_wrote() {
 #[test]
 fn osc_feedback_reaches_the_sender() {
     use std::net::UdpSocket;
-    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_571, feedback: true, feedback_port: 18_572 });
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_571, feedback: true, feedback_port: 18_572, soft_takeover: false });
     let device = UdpSocket::bind("127.0.0.1:18572").unwrap();
     device.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
     let msg = rosc::encoder::encode(&rosc::OscPacket::Message(rosc::OscMessage { addr: "/phosphor/master".into(), args: vec![rosc::OscType::Float(0.8)] })).unwrap();
@@ -173,7 +173,7 @@ fn surface_widgets_send_osc_to_another_app() {
     use std::net::UdpSocket;
     let app = UdpSocket::bind("127.0.0.1:18573").unwrap();
     app.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
-    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_574, feedback: false, feedback_port: 18_575 });
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_574, feedback: false, feedback_port: 18_575, soft_takeover: false });
     let mut comp = Composition::starter();
     comp.surface.osc_host = "127.0.0.1".into();
     comp.surface.osc_port = 18_573;
@@ -202,7 +202,7 @@ fn locks_to_midi_clock_from_a_real_midi_port() {
     use midir::os::unix::VirtualOutput;
     let Ok(out) = midir::MidiOutput::new("phosphor-test") else { return };
     let Ok(mut port) = out.create_virtual("Phosphor Test Clock") else { return };
-    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_581, feedback: false, feedback_port: 18_582 });
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_581, feedback: false, feedback_port: 18_582, soft_takeover: false });
     assert!(hub.midi_ports.iter().any(|p| p.contains("Phosphor Test Clock")), "virtual port not opened: {:?}", hub.midi_ports);
     let start = std::time::Instant::now();
     let tick = std::time::Duration::from_secs_f64(60.0 / 128.0 / 24.0);
@@ -268,4 +268,32 @@ fn a_knob_sets_a_hand_modulator_and_osc_has_an_address() {
     assert_eq!(get_target(&comp, &ControlTarget::Modulator(7)), Some(0.8));
     assert!(all_targets(&comp).iter().any(|(t, name)| *t == ControlTarget::Modulator(7) && name.contains("Knob")));
     assert_eq!(default_osc_address(&ControlTarget::Modulator(7)), "/phosphor/modulator/7");
+}
+
+/// Soft takeover: a fader far from the value doesn't jump it; once it passes the value it follows; a mouse move
+/// in between makes it catch up again.
+#[test]
+fn faders_take_over_softly() {
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_576, feedback: false, feedback_port: 18_577, soft_takeover: true });
+    let mut comp = Composition::starter();
+    comp.master_fade = 0.5;
+    let source = ControlSource::Osc { address: "/fader1".into() };
+    comp.control_maps.push(phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade));
+    let mut send = |hub: &mut ControlHub, comp: &mut Composition, v: f32| {
+        hub.fresh.insert(source.clone(), v);
+        hub.apply(comp, 0.0);
+    };
+    send(&mut hub, &mut comp, 0.9);
+    assert!((comp.master_fade - 0.5).abs() < 1e-6, "far away: no jump");
+    send(&mut hub, &mut comp, 0.7);
+    assert!((comp.master_fade - 0.5).abs() < 1e-6, "still above it");
+    send(&mut hub, &mut comp, 0.45);
+    assert!((comp.master_fade - 0.45).abs() < 1e-6, "passed the value: it follows");
+    send(&mut hub, &mut comp, 0.3);
+    assert!((comp.master_fade - 0.3).abs() < 1e-6);
+    comp.master_fade = 0.8; // the mouse moved it
+    send(&mut hub, &mut comp, 0.35);
+    assert!((comp.master_fade - 0.8).abs() < 1e-6, "after a mouse move it has to catch up again");
+    send(&mut hub, &mut comp, 0.79);
+    assert!((comp.master_fade - 0.79).abs() < 1e-6, "near the value: caught");
 }

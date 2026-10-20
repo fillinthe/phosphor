@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.72 (2026-10-20)
+
+- **Soft takeover for MIDI and OSC faders** (as in VDMX): a fader or knob only changes a value once it reaches it
+  (or moves past it), so nothing jumps when the hardware was left somewhere else, or after you moved the value with
+  the mouse, a phone or a Surprise. On by default; the switch is in the MIDI / OSC panel.
+
 ## 0.2.71 (2026-10-20)
 
 - **Stopping a collection is easy to find:** a stop button on the layer's strip in Clips (next to the collection's
