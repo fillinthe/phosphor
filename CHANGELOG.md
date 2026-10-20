@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.69 (2026-10-20)
+
+- **Stage:** a tab in the Outputs area that shows every output on one screen, live and as big as fits, with each
+  output's name, size, GRID button and where it goes. Click one to pick it in the Mapping Studio.
+- **Comps to outputs:** the "Shows on" screen button is on comps (groups) too, next to their name in the Inspector.
+- Fixed: the alignment grid blacked out the output's picture underneath it.
+
 ## 0.2.68 (2026-10-20)
 
 - **Alignment grid on any output:** the GRID button on an output (Outputs panel, or the strip in the Outputs
@@ -12,8 +19,6 @@ What changed in each Phosphor release, newest first. Downloads are on the
   called "Slice test pattern".
 - **Corners by number:** a slice's four corners can be typed or nudged as percentages in its settings, for
   fine alignment (arrow keys on the canvas still nudge the selected slice; Shift = 10 px).
-
-## 0.2.67 (2026-10-20)
 
 - **Collections that work:** *New collection* in the Media panel makes one straight away (rename it in its
   header). Put files in it (right-click › Collections) or **Add folder…** so every clip in a folder, and new ones

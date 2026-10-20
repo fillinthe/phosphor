@@ -33,6 +33,15 @@ ASSETS="dist/Phosphor-mac.zip"
 # The Windows build of the newest code commit (docs-only commits don't build; see paths-ignore in windows.yml).
 CODE_SHA=$(git log -1 --format=%H -- . ':(exclude)docs' ':(exclude)*.md')
 WIN_RUN=$(bash scripts/windows-run.sh --success || true)
+if [ -z "$WIN_RUN" ] && [ "${ALLOW_NO_WINDOWS:-}" != 1 ]; then
+  ANY=$(bash scripts/windows-run.sh || true)
+  if [ -n "$ANY" ]; then
+    echo "The Windows build of this code (run $ANY) hasn't finished successfully yet: wait for it, then release again (ALLOW_NO_WINDOWS=1 to publish Mac only)." >&2
+  else
+    echo "No Windows build for this code: push and let CI run, then release again (ALLOW_NO_WINDOWS=1 to publish Mac only)." >&2
+  fi
+  exit 1
+fi
 if [ -n "$WIN_RUN" ]; then
   rm -rf dist/win && mkdir -p dist/win
   if gh run download "$WIN_RUN" -R fillinthe/phosphor -n Phosphor-windows -D dist/win; then

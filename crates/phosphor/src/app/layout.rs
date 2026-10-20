@@ -337,7 +337,7 @@ pub(crate) fn layout_show() -> DockState<Tab> {
 /// Where the picture goes and what comes in: every output (strip + mapping), screens, streaming and recording,
 /// the phone session, LEDs, audio in, connected devices.
 pub(crate) fn layout_outputs() -> DockState<Tab> {
-    let mut dock = DockState::new(vec![Tab::Studio]);
+    let mut dock = DockState::new(vec![Tab::Studio, Tab::Stage]);
     let surface = dock.main_surface_mut();
     surface.split_below(NodeIndex::root(), 0.68, vec![Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices]);
     dock

@@ -127,8 +127,7 @@ app that's much smaller and lighter on the CPU.
     - [ ] Soft edge per side; more test patterns; a background photo of the stage per output
     - [ ] OSC/MIDI targets and cues for surface geometry; surface groups, multi-select, per-surface blend mode
     - [ ] Freehand masks, mask attached to a surface; add/remove single mesh points
-    - [ ] "All outputs on one screen": a stage view showing every output live at once (Studio strip exists; make it
-          a full view, with the grid overlays)
+    - [x] "All outputs on one screen": Outputs area › Stage (0.2.69)
     - [ ] Masters: several program outputs ("masters") with their own mixes (undecided; design comps so one can be)
 
 ## TODO

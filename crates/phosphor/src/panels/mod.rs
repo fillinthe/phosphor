@@ -37,6 +37,7 @@ mod output;
 mod preset_list;
 mod preview;
 mod stream;
+mod stage;
 mod studio;
 mod surface;
 
@@ -61,6 +62,7 @@ pub(crate) use output::*;
 pub(crate) use preset_list::*;
 pub(crate) use preview::*;
 pub(crate) use stream::*;
+pub(crate) use stage::*;
 pub(crate) use studio::*;
 pub(crate) use surface::*;
 
@@ -81,6 +83,8 @@ pub enum Tab {
     Network,
     Output,
     ShaderEditor,
+    /// Every output on one screen, live.
+    Stage,
     /// An extra preview panel; the number tells monitors apart.
     Monitor(u8),
     Mixer,
@@ -94,7 +98,7 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: [Tab; 23] = [
+    pub const ALL: [Tab; 24] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -110,6 +114,7 @@ impl Tab {
         Tab::Network,
         Tab::Output,
         Tab::ShaderEditor,
+        Tab::Stage,
         Tab::Mixer,
         Tab::Devices,
         Tab::Surface,
@@ -149,6 +154,7 @@ impl Tab {
             Tab::Cues => "Cues",
             Tab::LayerWindows => "Layer Windows",
             Tab::Studio => "Mapping Studio",
+            Tab::Stage => "Stage",
             Tab::Monitor(_) => unreachable!(),
         }
         .to_string()
@@ -224,5 +230,6 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Cues => cues(ui, st),
         Tab::LayerWindows => layer_windows(ui, st),
         Tab::Studio => studio(ui, st),
+        Tab::Stage => stage(ui, st),
     }
 }
