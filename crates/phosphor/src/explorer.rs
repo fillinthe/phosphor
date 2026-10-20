@@ -309,6 +309,79 @@ pub struct EditorState {
     pub current: Option<usize>,
     dirty_at: Option<f64>,
     loaded: bool,
+    /// The Import from Shadertoy window, while open.
+    shadertoy: Option<ShadertoyImport>,
+}
+
+/// Opens Import from Shadertoy (bench `--quick shadertoy`).
+pub fn open_shadertoy(st: &mut State) {
+    st.editor.shadertoy.get_or_insert_with(Default::default);
+}
+
+/// What's typed into Import from Shadertoy.
+#[derive(Default)]
+struct ShadertoyImport {
+    name: String,
+    credit: String,
+    code: String,
+    error: Option<String>,
+}
+
+/// The Import from Shadertoy window: paste the Image tab's code, name it, credit its author; it's saved as an ISF
+/// shader in your ISF folder and shows up in Effects / Sources (ISF › Shadertoy) once the library has rescanned.
+#[cfg(not(target_arch = "wasm32"))]
+fn shadertoy_window(ctx: &egui::Context, st: &mut State) {
+    let Some(imp) = st.editor.shadertoy.as_mut() else { return };
+    let mut open = true;
+    let mut done: Option<String> = None;
+    egui::Window::new(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy")).open(&mut open).default_width(560.0).show(ctx, |ui| {
+        crate::ui::hint(ui, "Open a shader on shadertoy.com, copy all the code in its Image tab and paste it here. Shaders that read iChannel0 become effects on a layer's picture; the rest are sources. Check its licence before you share a show with it.");
+        ui.horizontal(|ui| {
+            ui.label("Name");
+            ui.add(egui::TextEdit::singleline(&mut imp.name).hint_text("e.g. Star Nest").desired_width(180.0));
+            ui.label("By");
+            ui.add(egui::TextEdit::singleline(&mut imp.credit).hint_text("its author").desired_width(160.0));
+        });
+        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+            ui.add(egui::TextEdit::multiline(&mut imp.code).code_editor().desired_rows(16).desired_width(f32::INFINITY).hint_text("void mainImage( out vec4 fragColor, in vec2 fragCoord ) { … }"));
+        });
+        if let Some(e) = &imp.error {
+            ui.colored_label(WARN, e);
+        }
+        let ready = !imp.name.trim().is_empty() && !imp.code.trim().is_empty();
+        if ui.add_enabled(ready, egui::Button::new(label(icon::CHECK, "Import"))).clicked() {
+            let credit = if imp.credit.trim().is_empty() { "Shadertoy".to_string() } else { format!("{} (Shadertoy)", imp.credit.trim()) };
+            let result = phosphor_isf::shadertoy::to_isf(&imp.code, &credit).and_then(|isf| {
+                // Check it converts before saving (same converter the library uses).
+                let slug = custom::slug(imp.name.trim());
+                match phosphor_isf::import(&slug, &isf, None) {
+                    Ok(sh) if sh.unsupported.is_none() => Ok(isf),
+                    Ok(sh) => Err(format!("Can't use it yet: {}", sh.unsupported.unwrap_or_default())),
+                    Err(e) => Err(format!("Doesn't convert: {e:?}")),
+                }
+            });
+            match result {
+                Ok(isf) => match crate::show::storage_dir().map(|d| d.join("isf")) {
+                    Some(dir) => {
+                        let file = dir.join(format!("{}.fs", imp.name.trim().replace(['/', '\\', ':'], "-")));
+                        match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, isf)) {
+                            Ok(()) => done = Some(imp.name.trim().to_string()),
+                            Err(e) => imp.error = Some(format!("Couldn't save it: {e}")),
+                        }
+                    }
+                    None => imp.error = Some("No folder to save it in".into()),
+                },
+                Err(e) => imp.error = Some(e),
+            }
+        }
+    });
+    if let Some(name) = done {
+        st.editor.shadertoy = None;
+        st.isf = crate::isf_lib::IsfLibrary::scan();
+        st.notice = Some(format!("Imported \"{name}\": it appears in Effects / Sources (ISF › Shadertoy) in a few seconds"));
+    } else if !open {
+        st.editor.shadertoy = None;
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -404,6 +477,8 @@ pub fn new_shader(st: &mut State, source: String) {
 
 pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
+    #[cfg(not(target_arch = "wasm32"))]
+    shadertoy_window(&ui.ctx().clone(), st);
     let mut delete: Option<usize> = None;
     let mut create: Option<String> = None;
     egui::Panel::left("shader_list").resizable(true).default_size(190.0).show(ui, |ui| {
@@ -415,6 +490,10 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
                 create = Some(custom::template(true));
             }
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy…")).on_hover_text("Paste a shader from shadertoy.com").clicked() {
+            st.editor.shadertoy.get_or_insert_with(Default::default);
+        }
         ui.menu_button(label(icon::SPARKLE, "New from template…"), |ui| {
             ui.set_min_width(260.0);
             for t in custom::TEMPLATES {

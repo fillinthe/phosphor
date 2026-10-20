@@ -275,7 +275,10 @@ impl Engine {
     /// Registers an already-converted shader (e.g. ISF) that is compiled the first time it is
     /// drawn. `wgsl` must define `@fragment fn <entry>(in: VOut)` on top of the common prelude.
     pub fn register_lazy(&mut self, desc: &'static crate::shaders::ShaderDesc, wgsl: String) {
-        self.pending_modules.insert(desc.entry, wgsl);
+        // Already built (a rescan of the library): keep it, so what's on screen doesn't blink while it rebuilds.
+        if !self.gpu.custom_modules.contains_key(desc.entry) && !self.compiling.contains(desc.entry) {
+            self.pending_modules.insert(desc.entry, wgsl);
+        }
         crate::shaders::register_custom(desc);
     }
 

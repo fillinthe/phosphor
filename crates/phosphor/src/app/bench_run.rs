@@ -359,6 +359,11 @@ impl PhosphorApp {
                 println!("QUICK template{n}: {:?}", crate::explorer::bench_template(&mut self.state, n));
                 continue;
             }
+            if name == "shadertoy" {
+                crate::explorer::open_shadertoy(&mut self.state);
+                println!("QUICK shadertoy: import window open");
+                continue;
+            }
             if name == "takeover" {
                 // Web control off: phones may only watch.
                 self.state.set_web_control(false);

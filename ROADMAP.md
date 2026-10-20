@@ -85,8 +85,8 @@ app that's much smaller and lighter on the CPU.
     - [x] Ship Vidvox's ISF collection (MIT, 327 shaders, all convert) with Phosphor: Mac Resources/isf, Windows isf/ (2026-10-20)
     - [x] Shader transitions as a clip transition style + gl-transitions bundled (123 of 125 convert; 62 new beyond
           Vidvox's 68) (2026-10-20)
-    - [ ] Next sources (docs/research/generative-visuals.md): a Shadertoy
-          importer + MIT/CC0 pack, TiXL/Tooll 3 operators (MIT, HLSL port), lostjared/shaders (MIT, curate),
+    - [x] Shadertoy importer (Shader Editor › Import from Shadertoy…; single pass, iChannel0 = the layer) (2026-10-20)
+    - [ ] Next sources (docs/research/generative-visuals.md): a Shadertoy MIT/CC0 pack (check each header), TiXL/Tooll 3 operators (MIT, HLSL port), lostjared/shaders (MIT, curate),
           Godot Shaders CC0/MIT (curate), daitomanabe/isf-shaders-for-vj (MIT, drop-in)
     - [ ] Gather more free ISF/GLSL packs (Vidvox ISF-Files, Shadertoy ports with a licence that allows it,
           Interactive Shader Format community), test each with `isf_corpus`, ship the ones that work
