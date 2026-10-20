@@ -318,3 +318,22 @@ fn the_monitor_lists_incoming_messages() {
     }
     assert_eq!(hub.recent.len(), super::MONITOR_LEN);
 }
+
+/// A smoothed mapping glides to the new value over its time instead of jumping.
+#[test]
+fn smoothed_mappings_glide() {
+    let mut hub = ControlHub::new();
+    let mut comp = Composition::starter();
+    comp.master_fade = 0.0;
+    let source = ControlSource::MidiCc { channel: 0, cc: 9 };
+    let mut map = phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade);
+    map.fx.push(phosphor_engine::ValueFx::Smooth(1.0));
+    comp.control_maps.push(map);
+    hub.inject(&mut comp, Incoming { source, value: 1.0 });
+    hub.apply(&mut comp, 10.0);
+    assert!(comp.master_fade < 0.05, "starts where it was");
+    hub.apply(&mut comp, 10.5);
+    assert!(comp.master_fade > 0.5 && comp.master_fade < 0.9, "half way through: {}", comp.master_fade);
+    hub.apply(&mut comp, 11.2);
+    assert!((comp.master_fade - 1.0).abs() < 1e-6, "arrived");
+}

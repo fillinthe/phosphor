@@ -124,6 +124,8 @@ pub struct ControlHub {
     /// The monitor is paused (messages still work; the list stops moving).
     pub monitor_paused: bool,
     pickups: HashMap<String, Pickup>,
+    /// Smoothed mappings on their way to a new value.
+    glides: HashMap<String, Glide>,
     fresh: HashMap<ControlSource, f32>,
     /// Last value sent to (or received from) each controller input: only changes go out, nothing echoes back.
     sent: HashMap<ControlSource, f32>,
@@ -163,6 +165,15 @@ struct Pickup {
     last_in: Option<f32>,
     /// What this mapping last set the target to (if the target is different now, something else moved it).
     last_set: Option<f32>,
+}
+
+/// A smoothed value gliding from `from` to `to` over `secs` (app seconds from `start`).
+struct Glide {
+    target: ControlTarget,
+    from: f32,
+    to: f32,
+    start: f32,
+    secs: f32,
 }
 
 /// Messages the MIDI / OSC monitor keeps.
@@ -224,6 +235,7 @@ impl ControlHub {
             recent: std::collections::VecDeque::new(),
             monitor_paused: false,
             pickups: HashMap::new(),
+            glides: HashMap::new(),
             fresh: HashMap::new(),
             sent: HashMap::new(),
             feedback_ips: Vec::new(),
@@ -399,6 +411,7 @@ impl ControlHub {
     /// Writes this frame's values into their targets, then forgets them so the UI stays in charge
     /// until the controller moves again.
     pub fn apply(&mut self, comp: &mut Composition, now: f32) {
+        self.glide(comp, now);
         if self.fresh.is_empty() {
             return;
         }
@@ -413,14 +426,21 @@ impl ControlHub {
                 }
                 FLIP
             } else {
-                map.range.apply(v)
+                map.range.apply(map.shape(v))
             };
-            if self.soft_takeover && v != FLIP && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+            // (A smoothed mapping glides instead of jumping, so it doesn't need soft takeover.)
+            if self.soft_takeover && v != FLIP && map.smoothing() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+                continue;
+            }
+            let secs = map.smoothing();
+            if secs > 0.0 && v != FLIP {
+                // Glide there over `secs` (from where it is now), frame by frame in `glide`.
+                let from = get_target(comp, &map.target).unwrap_or(v);
+                self.glides.insert(format!("{:?}", map.target), Glide { target: map.target.clone(), from, to: v, start: now, secs });
                 continue;
             }
             set_target(comp, &map.target, v, &mut self.triggers);
         }
-        let _ = now;
         // Built-in addresses work without any mapping: /phosphor/master, /phosphor/layer/3/opacity…
         let osc: Vec<(String, f32)> = self
             .fresh
@@ -443,6 +463,25 @@ impl ControlHub {
 }
 
 impl ControlHub {
+    /// Moves smoothed mappings along (ease out), and drops the ones that arrived.
+    fn glide(&mut self, comp: &mut Composition, now: f32) {
+        if self.glides.is_empty() {
+            return;
+        }
+        let mut done = Vec::new();
+        for (key, g) in &self.glides {
+            let t = ((now - g.start) / g.secs.max(1e-3)).clamp(0.0, 1.0);
+            let eased = 1.0 - (1.0 - t) * (1.0 - t);
+            set_target(comp, &g.target, g.from + (g.to - g.from) * eased, &mut self.triggers);
+            if t >= 1.0 {
+                done.push(key.clone());
+            }
+        }
+        for k in done {
+            self.glides.remove(&k);
+        }
+    }
+
     /// Soft takeover: may this fader / knob (at `v`, the target's 0..1) change its target now? Only once it has
     /// caught the current value (near it, or passed it), and until something else moves the value.
     fn picked_up(&mut self, comp: &Composition, map: &phosphor_engine::ControlMap, v: f32) -> bool {
