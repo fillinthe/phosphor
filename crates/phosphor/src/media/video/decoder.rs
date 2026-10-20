@@ -753,8 +753,12 @@ fn open_decoder(
     let src_fmt = unsafe { (*params.as_ptr()).format };
     let has_alpha = alpha_mode || fmt_flags(src_fmt) & ffi::AV_PIX_FMT_FLAG_ALPHA as u64 != 0;
     // Codecs VideoToolbox handles on Apple Silicon; others (MPEG-4 Part 2...) only log init failures.
-    let try_hw =
-        try_hw && !has_alpha && matches!(id, Id::H264 | Id::HEVC | Id::PRORES | Id::VP9 | Id::AV1);
+    // Hardware decoding is VideoToolbox, so only on the Mac (elsewhere the native AV1 decoder, which only works with
+    // a hwaccel, would give no frames: libdav1d decodes AV1 there).
+    let try_hw = try_hw
+        && cfg!(target_os = "macos")
+        && !has_alpha
+        && matches!(id, Id::H264 | Id::HEVC | Id::PRORES | Id::VP9 | Id::AV1);
 
     let codec = match id {
         // libavcodec's native VP8/VP9 decoders drop the alpha side channel; libvpx keeps it.

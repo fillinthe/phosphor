@@ -197,3 +197,14 @@ fn curve_lut_is_identity_for_a_straight_default() {
     let bent = curve_lut(&[0.0, 0.0, 0.5, 0.9, 1.0, 1.0], 256);
     assert!((bent[128 * 4] as i32 - 230).abs() <= 2);
 }
+
+
+/// ISF 1: inputs declared again as uniforms, and `vv_vertShaderInit` in the vertex shader.
+#[test]
+fn isf1_redeclared_uniforms_and_vv_names() {
+    let fs = "/*{ \"INPUTS\": [ {\"NAME\": \"inputImage\", \"TYPE\": \"image\"}, {\"NAME\": \"amount\", \"TYPE\": \"float\", \"DEFAULT\": 0.5} ] }*/\nuniform float amount;\nvarying vec2 off;\nvoid main() { gl_FragColor = IMG_NORM_PIXEL(inputImage, off) * amount; }\n";
+    let vs = "varying vec2 off;\nuniform float amount;\nvoid main() { vv_vertShaderInit(); off = vv_FragNormCoord + vec2(amount * 0.01, 0.0); }\n";
+    let sh = crate::import("isf1", fs, Some(vs)).expect("converts");
+    assert!(sh.unsupported.is_none(), "{:?}", sh.unsupported);
+    crate::validate_wgsl(&sh.wgsl).expect("valid WGSL");
+}
