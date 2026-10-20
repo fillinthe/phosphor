@@ -10,6 +10,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
   transition* and pick one: cube, doorway, page curl, book flip, star wipe, ripple, glitch, burn, kaleidoscope,
   mosaic and more. They come from two free collections that now ship with Phosphor (Vidvox's ISF transitions,
   which didn't work before, and gl-transitions).
+- **Import from Shadertoy:** in the Shader Editor, *Import from Shadertoy…*: paste a shader's code from
+  shadertoy.com, name it, and it becomes a source (or an effect, if it reads the layer's picture). Check a shader's
+  licence before sharing a show that uses it.
 
 ## 0.2.64 (2026-10-20)
 

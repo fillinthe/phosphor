@@ -11,6 +11,7 @@
 
 mod glsl;
 pub mod gltransition;
+pub mod shadertoy;
 mod mad_noise;
 mod mad_sdf;
 mod mad_shim;
