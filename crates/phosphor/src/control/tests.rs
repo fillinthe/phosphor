@@ -297,3 +297,24 @@ fn faders_take_over_softly() {
     send(&mut hub, &mut comp, 0.79);
     assert!((comp.master_fade - 0.79).abs() < 1e-6, "near the value: caught");
 }
+
+/// The monitor keeps what came in (newest last), capped, and stops listing while paused.
+#[test]
+fn the_monitor_lists_incoming_messages() {
+    let mut hub = ControlHub::new();
+    let mut comp = Composition::starter();
+    let cc = ControlSource::MidiCc { channel: 0, cc: 7 };
+    hub.inject(&mut comp, Incoming { source: cc.clone(), value: 0.25 });
+    hub.inject(&mut comp, Incoming { source: ControlSource::Osc { address: "/1/fader1".into() }, value: 0.5 });
+    assert_eq!(hub.recent.len(), 2);
+    assert_eq!(hub.recent.back().unwrap().1, ControlSource::Osc { address: "/1/fader1".into() });
+    hub.monitor_paused = true;
+    hub.inject(&mut comp, Incoming { source: cc.clone(), value: 0.75 });
+    assert_eq!(hub.recent.len(), 2, "paused: not listed");
+    assert_eq!(hub.last.as_ref().unwrap().value, 0.75, "but still received");
+    hub.monitor_paused = false;
+    for i in 0..300 {
+        hub.inject(&mut comp, Incoming { source: cc.clone(), value: i as f32 / 300.0 });
+    }
+    assert_eq!(hub.recent.len(), super::MONITOR_LEN);
+}
