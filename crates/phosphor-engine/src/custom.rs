@@ -36,6 +36,8 @@ pub struct Header {
     pub name: String,
     pub generator: bool,
     pub params: Vec<Param>,
+    /// `// @feedback`: `last(uv)` reads this shader's previous frame (trails, echoes, smears).
+    pub feedback: bool,
 }
 
 fn leak(s: String) -> &'static str {
@@ -49,7 +51,7 @@ pub fn slug(name: &str) -> String {
 }
 
 pub fn parse_header(source: &str) -> Result<Header, CompileError> {
-    let mut header = Header { name: "Untitled".into(), generator: false, params: Vec::new() };
+    let mut header = Header { name: "Untitled".into(), generator: false, params: Vec::new(), feedback: false };
     for (i, line) in source.lines().enumerate() {
         let Some(rest) = line.trim().strip_prefix("// @") else { continue };
         let err = |m: &str| CompileError { line: Some(i as u32 + 1), message: m.to_string() };
@@ -58,6 +60,7 @@ pub fn parse_header(source: &str) -> Result<Header, CompileError> {
         match key {
             "name" => header.name = value.to_string(),
             "kind" => header.generator = value.eq_ignore_ascii_case("generator"),
+            "feedback" => header.feedback = true,
             "param" => {
                 let parts: Vec<&str> = value.split_whitespace().collect();
                 if parts.len() < 4 {
@@ -87,9 +90,19 @@ pub(crate) fn module_source(source: &str, entry: &str) -> Result<(String, u32), 
     if count != 1 {
         return Err(CompileError { line: None, message: "define exactly one `@fragment fn main(in: VOut) -> @location(0) vec4f`".into() });
     }
-    let user = source.replace("fn main(", &format!("fn {entry}("));
     let prelude = shaders::common_source();
     let prelude_lines = prelude.lines().count() as u32 + 1;
+    if parse_header(source).is_ok_and(|h| h.feedback) {
+        // Two passes (`feedback_plan`): the user's main draws into buf0, which still holds last frame's picture for
+        // `last()`; the second pass shows it. The wrapper goes after the user's code so error lines stay theirs.
+        // A plain function now: no entry-point attributes.
+        let user = source.replace("@fragment", "").replace("-> @location(0)", "->").replace("fn main(", &format!("fn {entry}_user("));
+        let wrapper = format!(
+            "\n// Feedback: last frame, and the two passes.\nfn last(uv: vec2f) -> vec4f {{\n    return textureSampleLevel(buf0, samp, uv, 0.0);\n}}\n@fragment\nfn {entry}(in: VOut) -> @location(0) vec4f {{\n    if u.p[15].x < 0.5 {{\n        return {entry}_user(in);\n    }}\n    return textureSampleLevel(buf0, samp, in.uv, 0.0);\n}}\n"
+        );
+        return Ok((format!("{prelude}\n{user}{wrapper}"), prelude_lines));
+    }
+    let user = source.replace("fn main(", &format!("fn {entry}("));
     Ok((format!("{prelude}\n{user}"), prelude_lines))
 }
 
@@ -273,6 +286,34 @@ fn main(in: VOut) -> @location(0) vec4f {
 ",
     },
     Template {
+        name: "Feedback: trails",
+        about: "Each frame keeps a fading copy of the last one, zoomed and turned a little, so movement leaves trails",
+        source: "// @name My Trails
+// @kind effect
+// @feedback
+// @param Trail 0 0.99 0.9
+// @param Zoom 0.95 1.05 1.01
+// @param Spin -0.05 0.05 0.005
+// @param Hue drift 0 0.1 0.01
+
+// @feedback gives you last(uv): this effect's own picture from the frame before.
+// Mixing it back in, a bit faded, zoomed and turned, makes trails, echoes and tunnels.
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    var p = centered(in.uv);                             // around the centre, square
+    let a = P(2u);
+    p = vec2f(p.x * cos(a) - p.y * sin(a), p.x * sin(a) + p.y * cos(a)) / P(1u); // turn and zoom
+    let back = vec2f(p.x / aspect(), p.y) + 0.5;
+    var prev = last(back);                               // last frame, from slightly further in
+    var hsv = rgb2hsv(prev.rgb);
+    hsv.x = fract(hsv.x + P(3u));                        // colours drift as they fade
+    prev = vec4f(hsv2rgb(hsv), prev.a) * P(0u);          // Trail: how much of it stays
+    return max(c, prev);                                 // new picture over the fading trail
+}
+",
+    },
+    Template {
         name: "Generator: pulsing rings",
         about: "Rings moving out from the centre; map Pulse to the kick to make them hit with the music",
         source: "// @name My Rings
@@ -320,6 +361,16 @@ fn main(in: VOut) -> @location(0) vec4f {
 ",
     },
 ];
+
+/// How a `// @feedback` shader runs: pass 0 into a float buffer (keeps last frame), pass 1 to the output.
+pub fn feedback_plan() -> shaders::PassPlan {
+    shaders::PassPlan {
+        passes: vec![shaders::PlanPass { target: Some(0), float: true, width: None, height: None }, shaders::PlanPass::default()],
+        buffers: 1,
+        vars: Vec::new(),
+        images: Vec::new(),
+    }
+}
 
 /// The source of a built-in single-pass effect or generator, as an editable user shader.
 pub fn builtin_as_custom(id: &str) -> Option<String> {
@@ -380,3 +431,4 @@ mod tests {
         assert_eq!(err.line, Some(4), "{err}");
     }
 }
+

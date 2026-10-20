@@ -88,7 +88,8 @@ app that's much smaller and lighter on the CPU.
 13. **Make your own effects** (asked 2026-10-20; could be its own project): the Shader Editor already writes ISF
     effects with live preview. Next:
     - [x] "New from template…" in the Shader Editor: 8 starters, every line explained (2026-10-20)
-    - [ ] Templates that use feedback (the last frame) and several passes
+    - [x] Feedback in user shaders (`// @feedback` → `last(uv)`) + Trails template (2026-10-20)
+    - [ ] User shaders with several passes / blur buffers
     - [ ] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code
     - [ ] Describe it in words → an AI drafts the shader, previewed live, editable (needs an API key: owner)
     - [ ] Share effects to your account / the online library

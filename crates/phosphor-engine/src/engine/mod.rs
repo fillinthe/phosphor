@@ -338,6 +338,9 @@ impl Engine {
         self.gpu.custom_modules.insert(entry, module);
         self.gpu.pipeline(entry);
         let desc: &'static crate::shaders::ShaderDesc = Box::leak(Box::new(crate::custom::make_desc(id, &header, entry)));
+        if header.feedback {
+            crate::shaders::set_pass_plan(entry, crate::custom::feedback_plan());
+        }
         crate::shaders::register_custom(desc);
         Ok(desc)
     }
