@@ -42,7 +42,12 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             }
         });
         if !playing.is_empty() {
-            hint(ui, format!("Playing on: {}", playing.join(", ")));
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(format!("{} Playing on: {}", icon::PLAY, playing.join(", "))).small().color(accent()));
+                if ui.small_button(label(icon::STOP, "Stop")).on_hover_text("Those layers stop stepping through this collection (what's showing stays)").clicked() {
+                    acts.push(MediaAct::StopCollection(name.to_string()));
+                }
+            });
         }
         for f in folders {
             ui.horizontal(|ui| {

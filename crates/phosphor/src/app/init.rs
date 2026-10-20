@@ -237,6 +237,7 @@ impl PhosphorApp {
             welcome_open: false,
             #[cfg(not(target_arch = "wasm32"))]
             heartbeat: Default::default(),
+            bench_session: bench.is_some(),
             bench: bench.map(|cfg| BenchRun { cfg, started: None, samples: Vec::new(), rebuilt: false, shot_requested: false }),
             gather_windows: false,
             remote_published: 0.0,

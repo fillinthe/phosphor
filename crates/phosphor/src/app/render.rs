@@ -16,7 +16,7 @@ impl PhosphorApp {
     /// Advances media, renders the frame, and keeps the preview + thumbnail textures registered.
     pub(crate) fn render(&mut self, now: f64) {
         #[cfg(not(target_arch = "wasm32"))]
-        if self.bench.is_none() {
+        if !self.bench_session {
             self.heartbeat.beat(now);
         }
         let State {

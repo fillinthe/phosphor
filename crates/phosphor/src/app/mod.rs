@@ -606,6 +606,9 @@ pub struct PhosphorApp {
     show_start: Option<u32>,
     dock: DockState<Tab>,
     bench: Option<BenchRun>,
+    /// This run is a bench/test (stays true after the bench finishes and `bench` is cleared): nothing it does may be
+    /// saved over the user's project, settings or crash-recovery snapshot.
+    bench_session: bool,
     gather_windows: bool,
     remote_published: f64,
     #[cfg(not(target_arch = "wasm32"))]
@@ -699,7 +702,7 @@ impl eframe::App for PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let now = ui.ctx().input(|i| i.time);
-            if self.bench.is_none() && self.saver.due(now) {
+            if !self.bench_session && self.saver.due(now) {
                 let snap = self.snapshot();
                 self.saver.save(now, &snap);
             }
@@ -712,7 +715,7 @@ impl eframe::App for PhosphorApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn on_exit(&mut self) {
-        if self.bench.is_none() {
+        if !self.bench_session {
             let snap = self.snapshot();
             self.saver = Default::default();
             if let (Ok(json), Some(dir)) = (serde_json::to_string(&snap), crate::show::storage_dir()) {

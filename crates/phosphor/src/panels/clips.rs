@@ -482,8 +482,18 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         })
         .response
         .on_hover_text("Click for autopilot and fill with variations");
-        if layer.autopilot != Autopilot::Off {
-            let when = if layer.autopilot_beats > 0.0 { format!("{:.0} beats", layer.autopilot_beats) } else { "at end".into() };
+        let when = if layer.autopilot_beats > 0.0 { format!("{:.0} beats", layer.autopilot_beats) } else { "at end".into() };
+        if let Some(c) = layer.collection.clone() {
+            // Playing a collection: say which, and a one-click stop right here.
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                let r = ui.small_button(RichText::new(icon::STOP).color(accent())).on_hover_text("Stop stepping through the collection (what's showing stays)");
+                if r.clicked() {
+                    layer.collection = None;
+                }
+                ui.label(RichText::new(format!("{} {c} · {when}", icon::BOOKMARKS_SIMPLE)).small().color(accent())).on_hover_text("Playing a collection by itself (order and timing: Inspector)");
+            });
+        } else if layer.autopilot != Autopilot::Off {
             ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(accent()));
         }
     });
