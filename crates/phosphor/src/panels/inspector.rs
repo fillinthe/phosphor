@@ -295,6 +295,12 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), None, false, 0.0);
         row(ui, &mut t.scale, 0.05..=4.0, "Scale", ControlTarget::LayerScale(id), Some(&mut t.scale_mod), true, 1.0);
         row(ui, &mut t.rotation, -180.0..=180.0, "Rotation °", ControlTarget::LayerRotation(id), Some(&mut t.rotation_mod), false, 0.0);
+        // Crop: one bar per edge.
+        for (k, side) in ["Crop left", "Crop right", "Crop top", "Crop bottom"].into_iter().enumerate() {
+            ui.horizontal(|ui| {
+                Level::percent(&mut t.crop[k], side).max(0.5).default(0.0).show(ui);
+            });
+        }
         ui.horizontal(|ui| {
             guarded!(ui, t.stretch_x, egui::DragValue::new(&mut t.stretch_x).range(0.05..=8.0).speed(0.01).prefix("width ×"));
             guarded!(ui, t.stretch_y, egui::DragValue::new(&mut t.stretch_y).range(0.05..=8.0).speed(0.01).prefix("height ×"));

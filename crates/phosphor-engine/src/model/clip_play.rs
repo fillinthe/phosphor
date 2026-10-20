@@ -40,10 +40,12 @@ pub enum Autopilot {
     Next,
     Previous,
     Random,
+    /// Play once, then empty the layer (VDMX's "eject when done").
+    Clear,
 }
 
 impl Autopilot {
-    pub const ALL: [Autopilot; 4] = [Autopilot::Off, Autopilot::Next, Autopilot::Previous, Autopilot::Random];
+    pub const ALL: [Autopilot; 5] = [Autopilot::Off, Autopilot::Next, Autopilot::Previous, Autopilot::Random, Autopilot::Clear];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -51,6 +53,7 @@ impl Autopilot {
             Autopilot::Next => "Next clip",
             Autopilot::Previous => "Previous clip",
             Autopilot::Random => "Random clip",
+            Autopilot::Clear => "Clear the layer",
         }
     }
 }
@@ -172,7 +175,7 @@ impl LayerState {
         let at = self.active_slot().and_then(|s| filled.iter().position(|f| *f == s));
         let n = filled.len();
         let i = match (self.autopilot, at) {
-            (Autopilot::Off, _) => return None,
+            (Autopilot::Off | Autopilot::Clear, _) => return None,
             (Autopilot::Next, Some(a)) => (a + 1) % n,
             (Autopilot::Previous, Some(a)) => (a + n - 1) % n,
             (Autopilot::Next | Autopilot::Previous, None) => 0,
@@ -213,7 +216,11 @@ mod tests {
         l.autopilot = Autopilot::Random;
         for k in 0..10 {
             assert_ne!(l.autopilot_next(k as f32 / 10.0), Some(4));
-        }
+        }        // Clear: nothing plays next; stopping empties the layer.
+        l.autopilot = Autopilot::Clear;
+        assert_eq!(l.autopilot_next(0.5), None);
+        l.stop(1.0, 0.0);
+        assert!(l.active_slot().is_none() && matches!(l.source, SourceSpec::None));
     }
 
     #[test]

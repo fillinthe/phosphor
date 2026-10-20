@@ -464,7 +464,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             }
             ui.separator();
             ui.label(RichText::new(format!("{} Autopilot", icon::AIRPLANE_TILT)).strong());
-            hint(ui, "Plays another clip by itself when this one is done.");
+            hint(ui, "When this clip is done: play another one by itself, or clear the layer.");
             for a in Autopilot::ALL {
                 ui.radio_value(&mut layer.autopilot, a, a.name());
             }

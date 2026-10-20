@@ -11,6 +11,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
   Glide slides between steps; shift the pattern, Random, Clear. Add several tracks for a multi-track sequencer.
   Any slider can follow a track: right-click › Modulate › pick it. An old 8-step modulator turns into a track
   with More steps….
+- **Crop a layer:** Inspector › Transform has Crop left / right / top / bottom; the cut stays with the picture
+  when you move, scale or rotate it.
+- **Play once, then clear:** a layer's autopilot has a new rule, Clear the layer: when the clip ends (or after
+  the beats you set) the layer empties, with the launch fade if Fade is on.
 
 ## 0.2.76 (2026-10-20)
 

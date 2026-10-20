@@ -28,6 +28,7 @@ impl State {
     pub(crate) fn run_autopilot(&mut self, now: f64) {
         let beats = self.clock.beats(now);
         let mut fire: Vec<(u64, usize)> = Vec::new();
+        let mut clear: Vec<u64> = Vec::new();
         self.run_collections(now, beats);
         for layer in self.comp.layers.iter().filter(|l| l.autopilot != phosphor_engine::Autopilot::Off && l.collection.is_none()) {
             let passes = self.media.passes(layer.id);
@@ -50,6 +51,10 @@ impl State {
             if !due {
                 continue;
             }
+            if layer.autopilot == phosphor_engine::Autopilot::Clear {
+                clear.push(layer.id);
+                continue;
+            }
             // A cheap random number is plenty for "pick another clip".
             let pick = ((now * 7919.0).fract() * 0.618_034 + (beats * 0.137).fract()).fract() as f32;
             if let Some(slot) = layer.autopilot_next(pick) {
@@ -60,6 +65,13 @@ impl State {
         }
         for (layer, slot) in fire {
             self.comp.trigger_clip(layer, slot, now as f32);
+        }
+        // Played once: empty the layer (with the launch fade, if Fade is on).
+        let secs = if self.comp.launch.fade { self.comp.launch.fade_secs } else { 0.0 };
+        for id in clear {
+            if let Some(l) = self.comp.layer_mut(id) {
+                l.stop(now as f32, secs);
+            }
         }
         let live: std::collections::HashSet<u64> = self.comp.layers.iter().map(|l| l.id).collect();
         self.autopilot.retain(|id, _| live.contains(id));

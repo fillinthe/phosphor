@@ -141,7 +141,7 @@ app that's much smaller and lighter on the CPU.
     - [ ] A two-LUT mixer (blend between two grades)
     - [x] Gamepad input as control sources (0.2.75; other HID devices still to do)
     - [ ] Video tracking (Vision: hands, faces, body, remove background) as sources
-    - [ ] Media bin voice modes, "on movie end" launch rules, layer crop
+    - [x] On-end rules (autopilot Next / Previous / Random / Clear the layer) and layer crop (0.2.77)
     - [x] Multi-track step sequencer (0.2.77: step tracks on shared modulators)
     - [ ] Extra preview windows that send clicks as data
 
