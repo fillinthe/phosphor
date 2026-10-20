@@ -27,6 +27,8 @@ cp target/bundle/release/phosphor "$APP/Contents/MacOS/Phosphor"
 mkdir -p "$APP/Contents/Frameworks"
 cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
 cp vendor/Syphon-LICENSE.txt "$APP/Contents/Resources/"
+# The free ISF collection (MIT), so every Mac has those effects without VDMX.
+cp -R assets/isf "$APP/Contents/Resources/isf"
 
 # The ffmpeg command (streaming, ProRes / H.264 recording) rides along; its libraries are relinked below.
 cp "$VENDOR_FFMPEG/bin/ffmpeg" "$APP/Contents/MacOS/ffmpeg"
