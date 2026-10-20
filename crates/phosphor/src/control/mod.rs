@@ -119,6 +119,10 @@ pub struct ControlHub {
     pub feedback_port: u16,
     /// Faders and knobs only change a value once they reach it (no jump when the hardware is elsewhere).
     pub soft_takeover: bool,
+    /// The last messages that came in, newest last (the MIDI / OSC monitor): when, from what, value.
+    pub recent: std::collections::VecDeque<(std::time::Instant, ControlSource, f32)>,
+    /// The monitor is paused (messages still work; the list stops moving).
+    pub monitor_paused: bool,
     pickups: HashMap<String, Pickup>,
     fresh: HashMap<ControlSource, f32>,
     /// Last value sent to (or received from) each controller input: only changes go out, nothing echoes back.
@@ -160,6 +164,9 @@ struct Pickup {
     /// What this mapping last set the target to (if the target is different now, something else moved it).
     last_set: Option<f32>,
 }
+
+/// Messages the MIDI / OSC monitor keeps.
+pub(crate) const MONITOR_LEN: usize = 200;
 
 /// Within this of the current value (0..1), a fader counts as caught.
 const PICKUP_NEAR: f32 = 0.03;
@@ -214,6 +221,8 @@ impl ControlHub {
             feedback: true,
             feedback_port: DEFAULT_FEEDBACK_PORT,
             soft_takeover: true,
+            recent: std::collections::VecDeque::new(),
+            monitor_paused: false,
             pickups: HashMap::new(),
             fresh: HashMap::new(),
             sent: HashMap::new(),
@@ -300,6 +309,12 @@ impl ControlHub {
         } else if let Some(target) = self.learning.take() {
             comp.control_maps.retain(|m| m.target != target);
             comp.control_maps.push(ControlMap::new(msg.source.clone(), target));
+        }
+        if !self.monitor_paused {
+            self.recent.push_back((std::time::Instant::now(), msg.source.clone(), msg.value));
+            while self.recent.len() > MONITOR_LEN {
+                self.recent.pop_front();
+            }
         }
         self.fresh.insert(msg.source.clone(), msg.value);
         self.sent.insert(msg.source.clone(), msg.value);

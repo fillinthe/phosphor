@@ -40,13 +40,51 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 .on_hover_text("The port your OSC controller listens on (TouchOSC: the connection's receive port, 9000 by default)");
         });
     });
-    match &control.last {
-        Some(m) => ui.monospace(format!("last input: {}  {:.3}", m.source.label(), m.value)),
-        None => hint(ui, "No controller messages received yet."),
-    };
+    monitor(ui, st);
     ui.separator();
 
     mappings_editor(ui, st);
+}
+
+/// The MIDI / OSC monitor: every message as it comes in (newest at the bottom), what it's mapped to, pause / clear.
+fn monitor(ui: &mut egui::Ui, st: &mut State) {
+    let header = egui::CollapsingHeader::new(RichText::new(format!("{} Monitor: what your controllers send", icon::PULSE)).strong()).id_salt("control_monitor").default_open(true);
+    header.show(ui, |ui| {
+        let comp = &st.comp;
+        let control = &mut st.control;
+        ui.horizontal(|ui| {
+            let pause = if control.monitor_paused { label(icon::PLAY, "Resume") } else { label(icon::PAUSE, "Pause") };
+            if ui.small_button(pause).clicked() {
+                control.monitor_paused = !control.monitor_paused;
+            }
+            if ui.small_button(label(icon::TRASH, "Clear")).clicked() {
+                control.recent.clear();
+            }
+            hint(ui, format!("{} messages", control.recent.len()));
+        });
+        if control.recent.is_empty() {
+            hint(ui, "Nothing yet: move a knob, press a pad, or send OSC to this Mac.");
+            return;
+        }
+        let now = std::time::Instant::now();
+        egui::ScrollArea::vertical().id_salt("monitor_list").max_height(180.0).stick_to_bottom(true).show(ui, |ui| {
+            egui::Grid::new("monitor_grid").num_columns(4).spacing([12.0, 2.0]).striped(true).show(ui, |ui| {
+                for (at, source, value) in &control.recent {
+                    let ago = now.saturating_duration_since(*at).as_secs_f32();
+                    ui.monospace(RichText::new(if ago < 60.0 { format!("{ago:4.1}s") } else { format!("{:3.0}m", ago / 60.0) }).small());
+                    ui.monospace(RichText::new(source.label()).small());
+                    ui.monospace(RichText::new(format!("{value:.3}")).small());
+                    let mapped: Vec<String> = comp.control_maps.iter().filter(|m| m.source == *source).map(|m| crate::control::target_label(comp, &m.target)).collect();
+                    if mapped.is_empty() {
+                        ui.label(RichText::new("not mapped").small().color(Color32::GRAY));
+                    } else {
+                        ui.label(RichText::new(format!("{} {}", icon::ARROW_RIGHT, mapped.join(", "))).small().color(accent()));
+                    }
+                    ui.end_row();
+                }
+            });
+        });
+    });
 }
 
 /// Every controller mapping, editable: Listen for a new input, retype or re-listen an input, pick
