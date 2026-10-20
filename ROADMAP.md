@@ -142,7 +142,8 @@ app that's much smaller and lighter on the CPU.
     - [x] Gamepad input as control sources (0.2.75; other HID devices still to do)
     - [ ] Video tracking (Vision: hands, faces, body, remove background) as sources
     - [ ] Media bin voice modes, "on movie end" launch rules, layer crop
-    - [ ] Multi-track step sequencer; extra preview windows that send clicks as data
+    - [x] Multi-track step sequencer (0.2.77: step tracks on shared modulators)
+    - [ ] Extra preview windows that send clicks as data
 
 ## TODO
 

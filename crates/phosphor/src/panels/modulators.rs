@@ -14,6 +14,12 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             let n = st.comp.modulators.len() + 1;
             st.comp.modulators.push(Modulator { id, name: format!("Mod {n}"), ..Default::default() });
         }
+        if ui.button(label(icon::SQUARES_FOUR, "Step track")).on_hover_text("A step sequencer track on the beat (levels or on/off gates) that any control can follow").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
+            let id = st.comp.new_id();
+            let n = st.comp.modulators.iter().filter(|m| m.sequence.is_some()).count() + 1;
+            let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Steps, ..Default::default() };
+            st.comp.modulators.push(Modulator { id, name: format!("Track {n}"), signal, sequence: Some(super::sequencer::new_track()), ..Default::default() });
+        }
         hint(ui, "One source drives many controls: right-click any slider, Modulate, then pick it. Chain one into the next.");
     });
     let mut remove = None;
@@ -25,8 +31,8 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
             egui::Frame::group(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
-                    ui.add(egui::ProgressBar::new(value).desired_width(110.0).fill(accent().gamma_multiply(0.7)));
+                    ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(100.0));
+                    ui.add(egui::ProgressBar::new(value).desired_width(70.0).fill(accent().gamma_multiply(0.7)));
                     if i > 0 && ui.small_button(icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
                         moves = Some((i, i - 1));
                     }
@@ -45,11 +51,24 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     });
                     looper_row(ui, &mut m.looper, beats);
                 }
-                // Its signal: the same editor as any control's Modulate menu.
-                let mut sig = Some(m.signal);
-                ui.push_id(("modsig", m.id), |ui| modulation_editor_signal(ui, &mut sig));
-                if let Some(s) = sig {
-                    m.signal = s;
+                // A step track, or its signal: the same editor as any control's Modulate menu.
+                if let (phosphor_engine::ModSource::Steps, Some(track)) = (m.signal.source, &mut m.sequence) {
+                    let seed = (inputs.time.to_bits() as u64) << 16 ^ m.id;
+                    if ui.push_id(("seq", m.id), |ui| super::sequencer::track_editor(ui, track, beats, seed)).inner {
+                        m.sequence = None;
+                        m.signal.source = phosphor_engine::ModSource::LfoSine;
+                    }
+                } else {
+                    let mut sig = Some(m.signal);
+                    ui.push_id(("modsig", m.id), |ui| modulation_editor_signal(ui, &mut sig));
+                    if let Some(s) = sig {
+                        m.signal = s;
+                    }
+                    if m.signal.source == phosphor_engine::ModSource::Steps && ui.small_button(label(icon::SQUARES_FOUR, "More steps…")).on_hover_text("Turn it into a step sequencer track (4 to 64 steps on the beat grid, gates)").clicked() {
+                        let s = &m.signal;
+                        let per_beat = if s.sync { 8.0 / s.rate.max(0.25) } else { 2.0 };
+                        m.sequence = Some(phosphor_engine::StepTrack { steps: s.steps.to_vec(), per_beat, ..Default::default() });
+                    }
                 }
                 // Chain: take from an earlier modulator.
                 ui.horizontal(|ui| {

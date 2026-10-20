@@ -118,20 +118,9 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     }
     if mm.link == 0 && mm.source == ModSource::Steps {
         ui.label(RichText::new("Steps (drag to set)").small().color(Color32::GRAY));
-        let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 56.0), Sense::click_and_drag());
-        let w = rect.width() / 8.0;
         let cycles = if mm.sync { inputs.beats / mm.rate.max(1.0 / 16.0) } else { inputs.time * mm.rate };
         let playing = ((cycles.rem_euclid(1.0)) * 8.0) as usize;
-        if let Some(pos) = resp.interact_pointer_pos() {
-            let i = (((pos.x - rect.left()) / w) as usize).min(7);
-            mm.steps[i] = (1.0 - (pos.y - rect.top()) / rect.height()).clamp(0.0, 1.0);
-        }
-        for (i, v) in mm.steps.iter().enumerate() {
-            let x0 = rect.left() + i as f32 * w + 2.0;
-            let bar = egui::Rect::from_min_max(egui::pos2(x0, rect.bottom() - v * rect.height()), egui::pos2(x0 + w - 4.0, rect.bottom()));
-            ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(x0, rect.top()), egui::pos2(x0 + w - 4.0, rect.bottom())), 2.0, Color32::from_gray(26));
-            ui.painter().rect_filled(bar, 2.0, if i == playing { accent() } else { accent().gamma_multiply(0.45) });
-        }
+        step_bars(ui, &mut mm.steps, Some(playing), false, 56.0);
     }
     if signal_only {
         let v = phosphor_engine::control::source_value(mm, &inputs);
