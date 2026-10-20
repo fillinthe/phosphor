@@ -123,15 +123,18 @@ app that's much smaller and lighter on the CPU.
     - [x] Alignment grid overlay per output (GRID: cells, crosshair, circle, diagonals, border; 0.2.68)
     - [x] Corners by number (0.2.68)
     - [x] Fine-tune: typed x/y for points, Tab to the next point, lock, snap to other slices' points (0.2.76–79)
-    - [ ] Zoom to a point; per-point bezier handles
+    - [x] Zoom to the selected slice(s) (0.2.81)
+    - [ ] Per-point bezier handles
     - [x] Soft edge per side; lock a slice (0.2.76)
     - [x] Test patterns and a stage photo per output (0.2.79)
     - [x] Per-slice blend mode (0.2.79)
     - [x] OSC/MIDI targets for slices; cues store slice geometry (0.2.80)
     - [x] Copy a slice's look to other slices (0.2.80)
-    - [ ] Slice groups, multi-select
+    - [x] Multi-select slices (0.2.81)
+    - [ ] Slice groups (saved, nested)
     - [x] Add / remove mesh rows and columns at a point (0.2.80)
-    - [ ] Freehand masks, mask attached to a surface
+    - [x] Freehand masks (0.2.81)
+    - [x] Mask attached to a slice (0.2.81)
     - [x] "All outputs on one screen": Outputs area › Stage (0.2.69)
     - [ ] Masters: several program outputs ("masters") with their own mixes (undecided; design comps so one can be)
 
@@ -148,7 +151,7 @@ app that's much smaller and lighter on the CPU.
     - [x] On-end rules (autopilot Next / Previous / Random / Clear the layer) and layer crop (0.2.77)
     - [x] Multi-track step sequencer (0.2.77: step tracks on shared modulators)
     - [x] Extra preview windows for any layer / group / output (0.2.78)
-    - [ ] Clicks in a preview window as XY data
+    - [x] Clicks in a preview window as XY data (0.2.81)
 
 ## TODO
 

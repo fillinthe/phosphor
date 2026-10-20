@@ -76,8 +76,10 @@ impl Engine {
         if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled) {
             return;
         }
-        let hash = hash_points(mapping.masks.iter().filter(|m| m.enabled).flat_map(|m| m.points.iter()), &mapping.masks.iter().filter(|m| m.enabled).flat_map(|m| [m.points.len() as u32 * 2 + m.invert as u32, m.feather.to_bits()]).collect::<Vec<_>>());
-        let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || mapping.mask_triangles()) else { return };
+        // Attached masks are placed on their slice first, so the hash follows the slice too.
+        let placed = mapping.placed_masks();
+        let hash = hash_points(placed.iter().flat_map(|m| m.points.iter()), &placed.iter().flat_map(|m| [m.points.len() as u32 * 2 + m.invert as u32, m.feather.to_bits()]).collect::<Vec<_>>());
+        let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || placed.iter().flat_map(mapping::Mask::triangles).collect()) else { return };
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [size.0 as f32, size.1 as f32];
         passes.push(Pass { entry: "fs_mask", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });

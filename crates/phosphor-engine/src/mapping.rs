@@ -707,11 +707,14 @@ pub struct Mask {
     pub smooth: bool,
     /// Per point: a sharp corner in a smooth outline (the curve heads straight at its neighbours). Missing = smooth.
     pub corners: Vec<bool>,
+    /// Attached to this slice: the points are in the slice's own square (0..1) and follow it when it moves or warps.
+    #[serde(default)]
+    pub attached: Option<u64>,
 }
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new() }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None }
     }
 }
 
@@ -1047,6 +1050,18 @@ impl Mapping {
         self.add_mask_shape(id, MaskShape::Rectangle, 16.0 / 9.0)
     }
 
+    /// A mask from a line drawn by hand (output space 0..1): simplified to its shape and drawn as a smooth outline.
+    /// None for fewer than three distinct points.
+    pub fn add_mask_stroke(&mut self, id: u64, stroke: &[[f32; 2]]) -> Option<&mut Mask> {
+        let points = simplify_stroke(stroke, 0.004, 96);
+        if points.len() < 3 {
+            return None;
+        }
+        let n = self.masks.len() + 1;
+        self.masks.push(Mask { id, name: format!("Drawn {n}"), points, smooth: true, ..Default::default() });
+        self.masks.last_mut()
+    }
+
     /// A new mask of `shape` in the middle of an output `aspect` (width / height) wide, so circles look round.
     pub fn add_mask_shape(&mut self, id: u64, shape: MaskShape, aspect: f32) -> &mut Mask {
         let n = self.masks.len() + 1;
@@ -1054,9 +1069,84 @@ impl Mapping {
         self.masks.last_mut().unwrap()
     }
 
+    /// The enabled masks with their points on the output (attached ones placed on their slice).
+    pub fn placed_masks(&self) -> Vec<Mask> {
+        self.masks
+            .iter()
+            .filter(|m| m.enabled)
+            .map(|m| Mask { points: m.points.iter().map(|p| mask_to_output(&self.surfaces, m, *p)).collect(), attached: None, ..m.clone() })
+            .collect()
+    }
+
+    /// Removes the slices `gone` says yes to; masks attached to them stay where they are on the output.
+    pub fn remove_slices(&mut self, gone: impl Fn(&Surface) -> bool) {
+        let ids: Vec<u64> = self.surfaces.iter().filter(|s| gone(s)).map(|s| s.id).collect();
+        let attached: Vec<u64> = self.masks.iter().filter(|m| m.attached.is_some_and(|a| ids.contains(&a))).map(|m| m.id).collect();
+        for m in attached {
+            self.attach_mask(m, None);
+        }
+        self.surfaces.retain(|s| !ids.contains(&s.id));
+    }
+
+    /// Attaches mask `mask` to slice `slice` (or detaches it with None), keeping it where it is on the output.
+    pub fn attach_mask(&mut self, mask: u64, slice: Option<u64>) {
+        let Some(i) = self.masks.iter().position(|m| m.id == mask) else { return };
+        let out: Vec<[f32; 2]> = self.masks[i].points.iter().map(|p| mask_to_output(&self.surfaces, &self.masks[i], *p)).collect();
+        self.masks[i].attached = slice.filter(|id| self.surfaces.iter().any(|s| s.id == *id));
+        let local: Vec<[f32; 2]> = out.iter().map(|p| output_to_mask(&self.surfaces, &self.masks[i], *p)).collect();
+        self.masks[i].points = local;
+    }
+
     /// Everything the enabled masks black out, as one triangle list.
     pub fn mask_triangles(&self) -> Vec<[f32; 4]> {
-        self.masks.iter().filter(|m| m.enabled).flat_map(Mask::triangles).collect()
+        self.placed_masks().iter().flat_map(Mask::triangles).collect()
+    }
+}
+
+/// A hand-drawn line with fewer points (Ramer–Douglas–Peucker): points closer than `tolerance` to the simplified
+/// line go; the tolerance grows until at most `max` points are left.
+pub fn simplify_stroke(stroke: &[[f32; 2]], tolerance: f32, max: usize) -> Vec<[f32; 2]> {
+    fn rdp(p: &[[f32; 2]], tol: f32, out: &mut Vec<[f32; 2]>) {
+        let (a, b) = (p[0], p[p.len() - 1]);
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let len = dx.hypot(dy).max(1e-9);
+        let (mut far, mut at) = (0.0, 0);
+        for (i, q) in p.iter().enumerate().take(p.len() - 1).skip(1) {
+            let d = ((q[0] - a[0]) * dy - (q[1] - a[1]) * dx).abs() / len;
+            if d > far {
+                (far, at) = (d, i);
+            }
+        }
+        if far > tol {
+            rdp(&p[..=at], tol, out);
+            out.pop();
+            rdp(&p[at..], tol, out);
+        } else {
+            out.push(a);
+            out.push(b);
+        }
+    }
+    let mut pts: Vec<[f32; 2]> = Vec::with_capacity(stroke.len());
+    for p in stroke {
+        if pts.last().is_none_or(|l: &[f32; 2]| (l[0] - p[0]).hypot(l[1] - p[1]) > 1e-4) {
+            pts.push(*p);
+        }
+    }
+    if pts.len() < 3 {
+        return pts;
+    }
+    let mut tol = tolerance;
+    loop {
+        let mut out = Vec::new();
+        rdp(&pts, tol, &mut out);
+        // A closed outline: the last point joins the first by itself.
+        if out.len() > 3 && (out[0][0] - out[out.len() - 1][0]).hypot(out[0][1] - out[out.len() - 1][1]) < tol * 4.0 {
+            out.pop();
+        }
+        if out.len() <= max.max(3) {
+            return out;
+        }
+        tol *= 1.5;
     }
 }
 
@@ -1107,6 +1197,36 @@ pub fn quad_to_square(corners: &[[f32; 2]; 4]) -> Option<[f32; 9]> {
     invert3(&square_to_quad(corners))
 }
 
+/// Where a point of the slice's own square (s, t) lands on the output: through its warp, or its corner-pin.
+pub fn surface_to_output(s: &Surface, p: [f32; 2]) -> [f32; 2] {
+    if let Some(m) = &s.mesh {
+        return m.eval(p[0], p[1]);
+    }
+    let h = square_to_quad(&s.corners);
+    let w = h[6] * p[0] + h[7] * p[1] + h[8];
+    let w = if w.abs() < 1e-9 { 1e-9 } else { w };
+    [(h[0] * p[0] + h[1] * p[1] + h[2]) / w, (h[3] * p[0] + h[4] * p[1] + h[5]) / w]
+}
+
+/// A mask point on the output (attached masks follow their slice; a missing slice leaves points as they are).
+pub fn mask_to_output(surfaces: &[Surface], m: &Mask, p: [f32; 2]) -> [f32; 2] {
+    match m.attached.and_then(|id| surfaces.iter().find(|s| s.id == id)) {
+        Some(s) => surface_to_output(s, p),
+        None => p,
+    }
+}
+
+/// The other way: an output point into the mask's own space (a warped slice is read through its outer corners).
+pub fn output_to_mask(surfaces: &[Surface], m: &Mask, p: [f32; 2]) -> [f32; 2] {
+    match m.attached.and_then(|id| surfaces.iter().find(|s| s.id == id)) {
+        Some(s) => {
+            let corners = s.mesh.as_ref().map_or(s.corners, |mesh| mesh.corners());
+            output_to_surface(&corners, p).unwrap_or(p)
+        }
+        None => p,
+    }
+}
+
 pub fn output_to_surface(corners: &[[f32; 2]; 4], p: [f32; 2]) -> Option<[f32; 2]> {
     let m = quad_to_square(corners)?;
     let w = m[6] * p[0] + m[7] * p[1] + m[8];
@@ -1119,6 +1239,40 @@ pub fn output_to_surface(corners: &[[f32; 2]; 4], p: [f32; 2]) -> Option<[f32; 2
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_drawn_circle_becomes_a_small_smooth_mask() {
+        let stroke: Vec<[f32; 2]> = (0..=400).map(|k| {
+            let a = k as f32 / 400.0 * std::f32::consts::TAU;
+            [0.5 + 0.2 * a.cos(), 0.5 + 0.2 * a.sin()]
+        }).collect();
+        let mut m = Mapping::default();
+        let mask = m.add_mask_stroke(9, &stroke).unwrap();
+        assert!(mask.smooth && (8..=96).contains(&mask.points.len()), "{} points", mask.points.len());
+        assert!(m.add_mask_stroke(10, &[[0.1, 0.1], [0.1, 0.1]]).is_none(), "a click is not a mask");
+        assert!(simplify_stroke(&stroke, 0.0001, 12).len() <= 12);
+    }
+
+    #[test]
+    fn an_attached_mask_follows_its_slice() {
+        let mut m = Mapping::default();
+        m.add_surface(1);
+        m.surfaces[0].corners = [[0.2, 0.2], [0.6, 0.2], [0.6, 0.6], [0.2, 0.6]];
+        m.add_mask(2);
+        m.masks[0].points = vec![[0.3, 0.3], [0.5, 0.3], [0.4, 0.5]];
+        m.attach_mask(2, Some(1));
+        assert!(m.masks[0].attached.is_some());
+        let near = |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).abs() < 1e-4 && (a[1] - b[1]).abs() < 1e-4;
+        assert!(near(m.masks[0].points[0], [0.25, 0.25]), "stored in the slice's square: {:?}", m.masks[0].points[0]);
+        assert!(near(m.placed_masks()[0].points[0], [0.3, 0.3]), "and still where it was on the output");
+        m.surfaces[0].translate(0.1, 0.0);
+        assert!(near(m.placed_masks()[0].points[0], [0.4, 0.3]), "moves with the slice");
+        m.attach_mask(2, None);
+        assert!(m.masks[0].attached.is_none() && near(m.masks[0].points[0], [0.4, 0.3]), "detached where it is");
+        m.attach_mask(2, Some(1));
+        m.remove_slices(|s| s.id == 1);
+        assert!(m.masks[0].attached.is_none() && near(m.masks[0].points[0], [0.4, 0.3]), "its slice deleted: stays put");
+    }
 
     #[test]
     fn copying_a_look_keeps_place_and_source() {

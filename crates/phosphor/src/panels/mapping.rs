@@ -28,8 +28,12 @@ pub(crate) const MASK_COLOR: Color32 = Color32::from_rgb(255, 130, 80);
 pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mapping, selected: &mut Option<u64>, labels: bool) -> bool {
     let to_screen = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
     let mut touched = false;
+    let many = super::mapping_points::selected_slices(ui.ctx(), *selected);
+    let shift = ui.input(|i| i.modifiers.shift);
+    let mut group_move: Option<[f32; 2]> = None;
+    let mut clicked: Option<u64> = None;
     for s in &mut mapping.surfaces {
-        let is_selected = *selected == Some(s.id);
+        let is_selected = *selected == Some(s.id) || many.contains(&s.id);
         let base = if s.enabled { accent() } else { Color32::GRAY };
         let line = if is_selected { Stroke::new(2.0, base) } else { Stroke::new(1.0, base.gamma_multiply(0.55)) };
         let id = ui.id().with(("surface", s.id));
@@ -70,8 +74,8 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         let mut d = [0.0, 0.0];
         let base = if s.locked { Color32::from_gray(120) } else { base };
         let r = point_handle(ui, id.with("move"), to_screen(s.center()), frame, base, true, &mut d);
-        if r.clicked() || r.drag_started() {
-            *selected = Some(s.id);
+        if r.clicked() || (r.drag_started() && !many.contains(&s.id)) {
+            clicked = Some(s.id);
             super::mapping_points::select_point(ui.ctx(), None);
             touched = true;
         }
@@ -79,10 +83,15 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             d = [0.0, 0.0];
         }
         if d != [0.0, 0.0] {
-            s.translate(d[0], d[1]);
+            // Dragging one of several selected slices moves them all (after this loop).
+            if many.len() > 1 && many.contains(&s.id) {
+                group_move = Some(d);
+            } else {
+                s.translate(d[0], d[1]);
+            }
             touched = true;
         }
-        r.on_hover_text("Drag to move the whole surface");
+        r.on_hover_text("Drag to move the whole slice · Shift-click to select several");
         // Line points, mesh points, or the four corners.
         if let Some(l) = &s.line {
             let pts: Vec<egui::Pos2> = l.points.iter().map(|p| to_screen(*p)).collect();
@@ -164,18 +173,29 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             ui.painter().text(at, egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(12.0), Color32::WHITE);
         }
     }
+    if let Some(id) = clicked {
+        super::mapping_points::click_slice(ui.ctx(), selected, id, shift);
+    }
+    if let Some(d) = group_move {
+        super::mapping_points::move_slices(mapping, &many, d);
+    }
     // Masks: drag points, + between points adds one, right-click a point to delete it or make it a sharp corner.
-    for m in &mut mapping.masks {
+    use phosphor_engine::mapping::{mask_to_output, output_to_mask};
+    let surfaces = &mapping.surfaces;
+    for m in mapping.masks.iter_mut() {
         let id = ui.id().with(("mask", m.id));
         let color = if m.enabled { MASK_COLOR } else { Color32::GRAY };
         let is_selected = *selected == Some(m.id);
-        let pts: Vec<egui::Pos2> = m.points.iter().map(|p| to_screen(*p)).collect();
-        let outline: Vec<egui::Pos2> = m.outline().iter().map(|p| to_screen(*p)).collect();
+        // Attached masks live in their slice's square: draw and drag them where they land on the output.
+        let out: Vec<[f32; 2]> = m.points.iter().map(|p| mask_to_output(surfaces, m, *p)).collect();
+        let pts: Vec<egui::Pos2> = out.iter().map(|p| to_screen(*p)).collect();
+        let placed = phosphor_engine::mapping::Mask { points: out.clone(), attached: None, ..m.clone() };
+        let outline: Vec<egui::Pos2> = placed.outline().iter().map(|p| to_screen(*p)).collect();
         if outline.len() >= 2 {
             ui.painter().add(egui::Shape::closed_line(outline, Stroke::new(if is_selected { 2.0 } else { 1.0 }, color)));
         }
-        let n = m.points.len().max(1) as f32;
-        let centre = m.points.iter().fold([0.0, 0.0], |a, p| [a[0] + p[0] / n, a[1] + p[1] / n]);
+        let n = out.len().max(1) as f32;
+        let centre = out.iter().fold([0.0, 0.0], |a, p| [a[0] + p[0] / n, a[1] + p[1] / n]);
         let mut d = [0.0, 0.0];
         let r = point_handle(ui, id.with("move"), to_screen(centre), frame, color, true, &mut d);
         if r.clicked() || r.drag_started() {
@@ -183,10 +203,8 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             touched = true;
         }
         if d != [0.0, 0.0] {
-            m.points.iter_mut().for_each(|p| {
-                p[0] += d[0];
-                p[1] += d[1];
-            });
+            let moved: Vec<[f32; 2]> = out.iter().map(|p| output_to_mask(surfaces, m, [p[0] + d[0], p[1] + d[1]])).collect();
+            m.points = moved;
             touched = true;
         }
         r.on_hover_text(format!("{}: drag to move the mask", m.name));
@@ -199,9 +217,10 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             if r.clicked() || r.drag_started() {
                 *selected = Some(m.id);
             }
-            m.points[i][0] += d[0];
-            m.points[i][1] += d[1];
-            touched |= d != [0.0, 0.0];
+            if d != [0.0, 0.0] {
+                m.points[i] = output_to_mask(surfaces, m, [out[i][0] + d[0], out[i][1] + d[1]]);
+                touched = true;
+            }
             if m.smooth && m.is_corner(i) {
                 ui.painter().rect_stroke(egui::Rect::from_center_size(pts[i], egui::vec2(11.0, 11.0)), 0.0, Stroke::new(1.0, color), egui::StrokeKind::Middle);
             }
@@ -556,8 +575,9 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     if let Some(i) = remove {
-        let removed = o.mapping.surfaces.remove(i);
-        if *selected_surface == Some(removed.id) {
+        let removed = o.mapping.surfaces[i].id;
+        o.mapping.remove_slices(|s| s.id == removed);
+        if *selected_surface == Some(removed) {
             *selected_surface = None;
         }
     }
@@ -580,6 +600,27 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
 /// (Mapping panel cards and the Mapping Studio).
 /// Temp-data key: a surface asked for its 3D model file (the app opens the dialog).
 pub(crate) const PICK_MODEL: &str = "phosphor_pick_model";
+
+/// "Attached to": a mask follows a slice (moves and warps with it) or stays put on the output.
+pub(crate) fn mask_attach_row(ui: &mut egui::Ui, mapping: &mut phosphor_engine::Mapping, mask: u64) {
+    let Some(current) = mapping.masks.iter().find(|m| m.id == mask).map(|m| m.attached) else { return };
+    let name = |id: Option<u64>| id.and_then(|id| mapping.surfaces.iter().find(|s| s.id == id)).map_or("Nothing (stays put)".to_string(), |s| s.name.clone());
+    let mut pick = current;
+    ui.horizontal(|ui| {
+        ui.label("Attached to");
+        egui::ComboBox::from_id_salt(("mask_attach", mask)).selected_text(name(current)).show_ui(ui, |ui| {
+            ui.selectable_value(&mut pick, None, "Nothing (stays put)");
+            for s in &mapping.surfaces {
+                ui.selectable_value(&mut pick, Some(s.id), &s.name);
+            }
+        });
+    })
+    .response
+    .on_hover_text("Attached, the mask moves and warps with that slice");
+    if pick != current {
+        mapping.attach_mask(mask, pick);
+    }
+}
 
 /// Temp-data key: an output asked for a stage photo (the app opens the dialog).
 pub(crate) const PICK_STAGE_PHOTO: &str = "phosphor_pick_stage_photo";
