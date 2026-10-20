@@ -10,6 +10,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   address, and set *OSC out* (the other computer's address and port) at the top of the panel. Whenever it moves,
   from your Mac, a guest's phone, a MIDI knob or a modulator, its value goes to TouchDesigner, a lighting desk,
   Resolume or anything that speaks OSC. XY pads send x and y, colours red, green and blue.
+- **See who changed what from the web:** the Devices panel lists every change made from a phone or browser, with
+  the time and who (a fader dragged from a phone is one line).
 
 ## 0.2.62 (2026-10-20)
 

@@ -149,6 +149,7 @@ impl PhosphorApp {
                 render_pacer: Default::default(),
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
                 web_activity: None,
+                web_log: Vec::new(),
                 #[cfg(not(target_arch = "wasm32"))]
                 dialogs: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]

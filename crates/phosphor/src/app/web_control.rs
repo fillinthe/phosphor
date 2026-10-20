@@ -8,6 +8,50 @@ use eframe::egui::RichText;
 
 /// Seconds after the last web change that "… is controlling" stays lit.
 const ACTIVE_SECS: f64 = 3.0;
+/// Changes kept in the Devices panel's log.
+const LOG_MAX: usize = 100;
+
+/// One change made from the web, for the log.
+#[derive(Clone)]
+pub(crate) struct WebChange {
+    /// App time of the latest change of this kind in a row (a dragged fader is one entry).
+    pub at: f64,
+    pub wall: String,
+    pub who: String,
+    pub what: String,
+}
+
+/// A remote / guest command in words ("Master fade 45%", "Clip 3 on Layer 2", "Surprise").
+fn describe(st: &State, cmd: &serde_json::Value) -> String {
+    use serde_json::Value;
+    let f = |k: &str| cmd.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    let layer = |k: &str| {
+        let id = cmd.get(k).and_then(Value::as_u64).unwrap_or(0);
+        st.comp.layers.iter().find(|l| l.id == id).map_or_else(|| "a layer".to_string(), |l| l.name.clone())
+    };
+    let pct = format!("{:.0}%", f("v") * 100.0);
+    let on = if cmd.get("v").and_then(Value::as_bool).unwrap_or(false) { "on" } else { "off" };
+    match cmd.get("t").and_then(Value::as_str).unwrap_or("") {
+        "master" => format!("Master fade {pct}"),
+        "opacity" => format!("{} opacity {pct}", layer("layer")),
+        "enabled" => format!("{} {on}", layer("layer")),
+        "solo" => format!("{} solo {on}", layer("layer")),
+        "clip" => format!("Clip {} on {}", f("slot") as usize + 1, layer("layer")),
+        "column" => format!("Column {}", f("col") as usize + 1),
+        "select" => format!("Selected {}", layer("layer")),
+        "tap" => "Tap tempo".into(),
+        "surprise" => "Surprise".into(),
+        "autoshow" => format!("Auto show {on}"),
+        "timing" => "Launch timing".into(),
+        "mix" | "fxon" | "fx" => "An effect setting".into(),
+        "gen" => format!("{} generator setting", layer("layer")),
+        "set" => cmd
+            .get("target")
+            .and_then(|t| serde_json::from_value::<phosphor_engine::ControlTarget>(t.clone()).ok())
+            .map_or_else(|| "A control".to_string(), |t| format!("{} {pct}", crate::control::target_label(&st.comp, &t))),
+        other => other.to_string(),
+    }
+}
 
 impl State {
     /// Remembers who just changed something from the web (for the badge).
@@ -17,6 +61,21 @@ impl State {
             .and_then(|id| self.net.peers().into_iter().find(|p| p.id == id))
             .map(|p| if !p.name.is_empty() { p.name } else if !p.device.is_empty() { p.device } else { p.ip })
             .unwrap_or_else(|| "A phone".to_string());
+        let what = describe(self, cmd);
+        // A fader dragged from a phone is many commands: one log entry, updated.
+        let kind = cmd.get("t").and_then(serde_json::Value::as_str).unwrap_or("");
+        let same = self.web_log.last().is_some_and(|l| l.who == who && now - l.at < 1.5 && l.what.split_whitespace().next() == what.split_whitespace().next() && kind != "clip" && kind != "column" && kind != "surprise" && kind != "tap");
+        if same {
+            let l = self.web_log.last_mut().unwrap();
+            l.at = now;
+            l.what = what;
+        } else {
+            let wall = chrono_now();
+            self.web_log.push(WebChange { at: now, wall, who: who.clone(), what });
+            if self.web_log.len() > LOG_MAX {
+                self.web_log.remove(0);
+            }
+        }
         self.web_activity = Some((now, who));
     }
 
@@ -41,6 +100,29 @@ impl State {
         log::info!("web control: {}", if on { "on" } else { "off (taken over)" });
         self.notice = Some(if on { "Web control is on: phones can change the visuals again".into() } else { "You have the controls: phones and the web can only watch".into() });
     }
+}
+
+/// Local wall-clock time "21:04:17" for the log.
+fn chrono_now() -> String {
+    let secs = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
+    let local = secs + local_offset_secs();
+    format!("{:02}:{:02}:{:02}", (local / 3600).rem_euclid(24), (local / 60).rem_euclid(60), local.rem_euclid(60))
+}
+
+/// This computer's offset from UTC in seconds (0 if unknown).
+fn local_offset_secs() -> i64 {
+    #[cfg(unix)]
+    {
+        // SAFETY: localtime_r fills the struct we own.
+        unsafe {
+            let t = libc::time(std::ptr::null_mut());
+            let mut tm: libc::tm = std::mem::zeroed();
+            if !libc::localtime_r(&t, &mut tm).is_null() {
+                return tm.tm_gmtoff;
+            }
+        }
+    }
+    0
 }
 
 /// The web control badge: nothing while no session runs; "Web control off" (click: hand back), "N can control",

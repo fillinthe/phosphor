@@ -50,6 +50,25 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                     ui.end_row();
                 }
             });
+            if !st.web_log.is_empty() {
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Changes from the web").small().strong());
+                    if ui.small_button("Clear").clicked() {
+                        st.web_log.clear();
+                    }
+                });
+                egui::ScrollArea::vertical().id_salt("web_log").max_height(160.0).stick_to_bottom(true).show(ui, |ui| {
+                    egui::Grid::new("web_log_grid").num_columns(3).spacing([10.0, 2.0]).show(ui, |ui| {
+                        for l in &st.web_log {
+                            ui.monospace(RichText::new(&l.wall).small());
+                            ui.label(RichText::new(&l.who).small().strong());
+                            ui.label(RichText::new(&l.what).small());
+                            ui.end_row();
+                        }
+                    });
+                });
+            }
             let blocked = st.net.blocked();
             if !blocked.is_empty() {
                 ui.add_space(4.0);

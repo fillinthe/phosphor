@@ -216,6 +216,8 @@ pub struct State {
     pub require_password: bool,
     /// When someone last changed something from the web, and who (the web control badge).
     pub web_activity: Option<(f64, String)>,
+    /// Changes made from phones / browsers, newest last (Devices panel).
+    pub(crate) web_log: Vec<web_control::WebChange>,
     #[cfg(not(target_arch = "wasm32"))]
     pub dialogs: crate::dialogs::Dialogs,
     #[cfg(not(target_arch = "wasm32"))]
