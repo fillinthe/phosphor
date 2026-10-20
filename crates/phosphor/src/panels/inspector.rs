@@ -115,9 +115,12 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         ui.horizontal(|ui| {
             ui.label(RichText::new("Fade style").strong());
             choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
-            transition_effect_combo(ui, ("trans_fx", layer.id), layer.transition_kind, &mut layer.transition_effect);
+            if transition_effect_combo(ui, ("trans_fx", layer.id), layer.transition_kind, &mut layer.transition_effect) {
+                layer.transition_values.clear();
+            }
             hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
         });
+        transition_settings(ui, layer);
         ui.separator();
         if matches!(layer.source, SourceSpec::Movie { .. }) {
             ui.label(RichText::new("Playback").strong());
@@ -319,6 +322,32 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
         Level::range(&mut style.line_spacing, 0.6, 2.0, "Line spacing").default(1.0).show(ui);
     });
     hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
+}
+
+/// A shader transition's own settings (all but its progress), as bars; "Reset" goes back to its defaults.
+fn transition_settings(ui: &mut egui::Ui, layer: &mut LayerState) {
+    use phosphor_engine::{TransitionKind, shaders};
+    if layer.transition_kind != TransitionKind::Shader {
+        return;
+    }
+    let Some(desc) = shaders::transition(&layer.transition_effect) else { return };
+    let progress = shaders::progress_index(desc);
+    if desc.params.len() <= usize::from(progress.is_some()) {
+        return;
+    }
+    if layer.transition_values.len() != desc.params.len() {
+        layer.transition_values = desc.defaults();
+    }
+    egui::CollapsingHeader::new(RichText::new(format!("{} settings", desc.name)).small()).id_salt(("trans_settings", layer.id)).show(ui, |ui| {
+        for (i, p) in desc.params.iter().enumerate() {
+            if Some(i) == progress {
+                continue;
+            }
+            ui.horizontal(|ui| {
+                Level::range(&mut layer.transition_values[i], p.min, p.max, p.name).default(p.default).show(ui);
+            });
+        }
+    });
 }
 
 /// Picks what a fade uses: the effect a "Through an effect" fade runs both pictures through, or the shader of a
