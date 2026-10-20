@@ -156,6 +156,9 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
                         crate::ui::toggle(ui, &mut o.enabled, "ON").on_hover_text("Render this output");
                         grid_toggle(ui, &mut o.grid);
+                        if ui.small_button(icon::MONITOR).on_hover_text("Preview this output (after mapping) in a window").clicked() {
+                            request_preview(ui, MonitorSource::OneOutput(id));
+                        }
                         #[cfg(target_os = "macos")]
                         crate::ui::toggle(ui, &mut o.syphon, "SYPHON")
                             .on_hover_text("Also publish this output (after mapping) as a Syphon source for MadMapper, Resolume, OBS…");

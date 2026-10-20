@@ -139,7 +139,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             D("Layouts"),
             I(A::SaveLayout, "Save Current Layout…", None),
             I(A::ResetLayout, "Reset Layout", None),
-            I(A::AddMonitor, "Add Monitor", None),
+            I(A::AddMonitor, "New Preview Window", None),
             I(A::Gather, "Gather Floating Windows", None),
             S,
             I(A::Lock, "Lock Controls… / Unlock", Some((true, Key::L))),

@@ -163,6 +163,14 @@ impl PhosphorApp {
         if let Some(tab) = self.state.open_tab.take() {
             self.show_tab_anywhere(tab);
         }
+        if let Some(src) = ctx.data_mut(|d| {
+            let id = egui::Id::new(panels::PREVIEW_REQUEST);
+            let s = d.get_temp::<panels::MonitorSource>(id);
+            d.remove::<panels::MonitorSource>(id);
+            s
+        }) {
+            self.state.new_monitor = Some(src);
+        }
         if let Some(src) = self.state.new_monitor.take() {
             self.add_monitor_with(src);
         }

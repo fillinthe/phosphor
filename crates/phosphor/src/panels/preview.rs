@@ -25,10 +25,13 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     egui::Panel::bottom("preview_bar").show_separator_line(false).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(RichText::new("MASTER").small().strong());
-            let w = (ui.available_width() - 110.0).max(80.0);
+            let w = (ui.available_width() - 140.0).max(80.0);
             Level::percent(&mut st.comp.master_fade, "Fade").modulation(&mut st.comp.master_fade_mod).target(ControlTarget::MasterFade).width(w - 26.0).tip("Master fade: everything that goes out").show(ui);
             let r = super::inspector::mute_button(ui, &mut st.comp.sound_muted, "all sound");
             map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MuteSound));
+            if ui.button(icon::PLUS).on_hover_text("New preview window: the mix, a layer, a group or one output, as many as you like").clicked() {
+                st.new_monitor = Some(MonitorSource::Mix);
+            }
             let text = if st.output_open() { label(icon::STOP, "Output") } else { label(icon::PLAY, "Output") };
             if ui.button(text).on_hover_text("Open the output window (F = fullscreen, E = edit mapping)").clicked() {
                 st.toggle_output();
@@ -61,7 +64,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
         });
-        if ui.button(label(icon::MONITOR, "New monitor")).clicked() {
+        if ui.button(label(icon::MONITOR, "New preview window")).clicked() {
             st.new_monitor = Some(MonitorSource::Mix);
             ui.close();
         }

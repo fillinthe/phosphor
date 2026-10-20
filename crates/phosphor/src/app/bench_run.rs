@@ -219,6 +219,22 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "previews" {
+                // Preview windows: the top layer, a group of the bottom layer, and output 1 after mapping.
+                use crate::panels::MonitorSource;
+                let ids: Vec<u64> = self.state.comp.layers.iter().map(|l| l.id).collect();
+                if let Some(&top) = ids.last() {
+                    self.add_monitor_with(MonitorSource::Layer(top));
+                }
+                if let Some(g) = ids.first().and_then(|&b| self.state.comp.create_group(&[b])) {
+                    self.add_monitor_with(MonitorSource::Group(g));
+                }
+                if let Some(o) = self.state.comp.outputs.first().map(|o| o.id) {
+                    self.add_monitor_with(MonitorSource::OneOutput(o));
+                }
+                println!("QUICK previews: layer, group, output");
+                continue;
+            }
             if name == "seq" {
                 // Two step-sequencer tracks: a gate on the beat and a 16-step level line.
                 use phosphor_engine::{ModSource, Modulation, Modulator, StepTrack};
