@@ -386,7 +386,9 @@ impl VideoPlayer {
         if self.live || self.mode == mode {
             return;
         }
-        let turned = self.mode.direction != direction;
+        // Forward → ping-pong carries on forward (it turns at the end): nothing to restart. Any change into or out of
+        // reverse (or out of ping-pong, which may be going backwards) restarts from the frame on screen.
+        let turned = self.mode.direction != direction && !(self.mode.direction == PlayDirection::Forward && direction == PlayDirection::PingPong);
         self.mode = mode;
         if let Ok(mut ctl) = self.shared.ctl.lock() {
             ctl.mode = mode;
