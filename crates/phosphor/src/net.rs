@@ -668,6 +668,10 @@ mod native {
                         continue;
                     }
                     if allowed {
+                        // Who sent it, for "… is controlling" on the Mac (guests carry `_from` instead).
+                        if let Some(o) = v.as_object_mut() {
+                            o.insert("_by".into(), serde_json::json!(seat.id));
+                        }
                         cmds.lock().unwrap().push(v);
                     }
                 }

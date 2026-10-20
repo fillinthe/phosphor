@@ -148,6 +148,7 @@ impl PhosphorApp {
                 render_rate: stored(KEY_RENDER_RATE).and_then(|t| layout::from_text(&t)).unwrap_or_default(),
                 render_pacer: Default::default(),
                 require_password: stored(KEY_REMOTE_PASSWORD).is_some_and(|p| !p.is_empty()),
+                web_activity: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 dialogs: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]

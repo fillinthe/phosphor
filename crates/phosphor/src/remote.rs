@@ -75,6 +75,7 @@ pub fn state_json(st: &mut State, now: f64) -> String {
         "layers": layers,
         "params": params,
         "play": play,
+        "paused": comp.web_control_off,
     })
     .to_string()
 }

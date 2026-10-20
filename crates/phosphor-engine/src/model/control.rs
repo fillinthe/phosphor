@@ -96,10 +96,12 @@ pub enum AppControl {
     MuteSound,
     /// Even out the movies' loudness.
     AutoLevel,
+    /// Phones / web may control the visuals (off = you take over).
+    WebControl,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 24] = [
+    pub const ALL: [AppControl; 25] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -124,6 +126,7 @@ impl AppControl {
         AppControl::Shuffle,
         AppControl::MuteSound,
         AppControl::AutoLevel,
+        AppControl::WebControl,
     ];
 
     pub fn name(self) -> &'static str {
@@ -152,6 +155,7 @@ impl AppControl {
             AppControl::Shuffle => "Shuffle the selected layer",
             AppControl::MuteSound => "Mute all sound",
             AppControl::AutoLevel => "Even out volume levels on/off",
+            AppControl::WebControl => "Web control on/off (take over)",
         }
     }
 
@@ -182,12 +186,13 @@ impl AppControl {
             AppControl::Shuffle => "shuffle",
             AppControl::MuteSound => "mute",
             AppControl::AutoLevel => "autolevel",
+            AppControl::WebControl => "webcontrol",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel | AppControl::WebControl)
     }
 }
 

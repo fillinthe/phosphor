@@ -64,6 +64,9 @@ impl PhosphorApp {
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
+        if self.state.net.running() {
+            println!("WEB control={} master={:.2} last={:?}", if self.state.comp.web_control_off { "off" } else { "on" }, self.state.comp.master_fade, self.state.web_activity.as_ref().map(|(_, w)| w.as_str()));
+        }
         if !self.state.comp.modulators.is_empty() {
             let vals: Vec<String> = self.state.comp.modulators.iter().map(|m| format!("{}={:.2}", m.name, self.state.mod_inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1))).collect();
             println!("MODULATORS {}", vals.join(" "));
@@ -332,6 +335,12 @@ impl PhosphorApp {
                 self.state.comp.play.turn_secs = 10;
                 self.state.comp.play.rest_secs = 15;
                 println!("QUICK play: on, 10 s turns, 15 s rest");
+                continue;
+            }
+            if name == "takeover" {
+                // Web control off: phones may only watch.
+                self.state.set_web_control(false);
+                println!("QUICK takeover: web control off");
                 continue;
             }
             #[cfg(not(target_arch = "wasm32"))]

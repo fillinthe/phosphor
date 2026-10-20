@@ -4,6 +4,19 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.61 (2026-10-20)
+
+- **Take over from the web in one click:** when phones or browsers control the visuals (the remote page or
+  audience play), you always see it: the status line shows how many can control and who is changing things right
+  now, and the preview shows "… is controlling from the web · Take over". One click (or *Output › Web Control
+  On / Off*, or a pad you map) and phones can only watch; their screens say the visuals are run from the booth.
+  Click again to hand control back.
+- **Mute all sound** is also in the Output menu.
+- **Simpler sliders in every panel:** mapping, output colour, LEDs, modulators, text layers and the
+  modulation editor use the new bars too.
+- **Plays every common format:** checked 27 formats, from H.264, HEVC, AV1, VP9 with alpha and ProRes 4444 to DNxHR,
+  Cineform, Hap and Resolume DXV.
+
 ## 0.2.60 (2026-10-19)
 
 - **Mute all sound:** one speaker button on the MASTER bar (and in the Audio panel) silences everything Phosphor

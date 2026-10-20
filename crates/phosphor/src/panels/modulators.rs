@@ -39,8 +39,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                 // Hand / MIDI knob: a fader that any knob, OSC message or the remote can move (right-click it: Learn).
                 if m.signal.source == phosphor_engine::ModSource::Hand {
                     ui.horizontal(|ui| {
-                        let r = guarded!(ui, m.value, egui::Slider::new(&mut m.value, 0.0..=1.0).text("value"));
-                        crate::ui::map_menu(ui, &r, phosphor_engine::ControlTarget::Modulator(m.id));
+                        Level::percent(&mut m.value, "Value").default(0.0).target(phosphor_engine::ControlTarget::Modulator(m.id)).show(ui);
                         hint(ui, "right-click: Learn a MIDI knob");
                     });
                 }
@@ -64,7 +63,9 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                                 ui.selectable_value(&mut c.from, *id, name);
                             }
                         });
-                        guarded!(ui, c.amount, egui::Slider::new(&mut c.amount, 0.0..=1.0).text("amount"));
+                        ui.horizontal(|ui| {
+                            Level::percent(&mut c.amount, "Amount").default(1.0).show(ui);
+                        });
                         if i == 0 || c.mode == ChainMode::Multiply && c.from == 0 {
                             hint(ui, "chains take from modulators above this one");
                         }

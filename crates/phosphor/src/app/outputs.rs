@@ -10,8 +10,12 @@ impl PhosphorApp {
         }
         let pw = self.state.require_password.then(|| self.state.remote_password.clone());
         self.state.net.set_password(pw);
-        for cmd in self.state.net.take_remote_commands() {
-            crate::remote::apply(&mut self.state, &cmd, now);
+        let cmds = self.state.net.take_remote_commands();
+        if !self.state.comp.web_control_off {
+            for cmd in cmds {
+                self.state.note_web_activity(&cmd, now);
+                crate::remote::apply(&mut self.state, &cmd, now);
+            }
         }
         if now - self.remote_published > 0.05 {
             self.remote_published = now;

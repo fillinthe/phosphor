@@ -311,11 +311,15 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             ui.selectable_value(&mut style.align, a, glyph).on_hover_text(tip);
         }
     });
-    let size = guarded!(ui, style.size, Slider::new(&mut style.size, 0.02..=0.8).text("Size").show_value(false));
-    value_bubble(ui, &size, format!("{:.0}% of the height", style.size * 100.0));
-    let outline = guarded!(ui, style.outline, Slider::new(&mut style.outline, 0.0..=0.15).text("Outline").show_value(false));
-    value_bubble(ui, &outline, if style.outline > 0.0 { format!("{:.0}%", style.outline * 100.0) } else { "off".into() });
-    guarded!(ui, style.line_spacing, Slider::new(&mut style.line_spacing, 0.6..=2.0).text("Line spacing").fixed_decimals(2));
+    ui.horizontal(|ui| {
+        Level::range(&mut style.size, 0.02, 0.8, "Size").default(0.18).tip("Text height, as a share of the picture's height").show(ui);
+    });
+    ui.horizontal(|ui| {
+        Level::range(&mut style.outline, 0.0, 0.15, "Outline").default(0.0).show(ui);
+    });
+    ui.horizontal(|ui| {
+        Level::range(&mut style.line_spacing, 0.6, 2.0, "Line spacing").default(1.0).show(ui);
+    });
     hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
 }
 

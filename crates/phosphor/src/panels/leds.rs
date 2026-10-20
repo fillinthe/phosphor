@@ -165,15 +165,23 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 if f.shape == FixtureShape::MovingHead {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().slider_width = 90.0;
-                        guarded!(ui, f.pan, Slider::new(&mut f.pan, 0.0..=1.0).text("pan"));
-                        guarded!(ui, f.tilt, Slider::new(&mut f.tilt, 0.0..=1.0).text("tilt"));
-                        guarded!(ui, f.dimmer, Slider::new(&mut f.dimmer, 0.0..=1.0).text("dimmer"));
+                        ui.horizontal(|ui| {
+                            Level::percent(&mut f.pan, "Pan").default(0.5).show(ui);
+                        });
+                        ui.horizontal(|ui| {
+                            Level::percent(&mut f.tilt, "Tilt").default(0.5).show(ui);
+                        });
+                        ui.horizontal(|ui| {
+                            Level::percent(&mut f.dimmer, "Dimmer").default(1.0).show(ui);
+                        });
                     });
                     ui.horizontal_wrapped(|ui| {
                         choice_buttons(ui, &mut f.motion, |_, _| {});
                         if f.motion != phosphor_engine::HeadMotion::Still {
                             ui.spacing_mut().slider_width = 80.0;
-                            guarded!(ui, f.motion_size, Slider::new(&mut f.motion_size, 0.0..=1.0).text("size"));
+                            ui.horizontal(|ui| {
+                                Level::percent(&mut f.motion_size, "Size").default(0.2).show(ui);
+                            });
                             guarded!(ui, f.motion_beats, egui::DragValue::new(&mut f.motion_beats).range(0.25..=64.0).speed(0.25).suffix(" beats"));
                         }
                     });
@@ -183,8 +191,12 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     guarded!(ui, f.universe, egui::DragValue::new(&mut f.universe).range(0..=32767).prefix("universe "));
                     guarded!(ui, f.channel, egui::DragValue::new(&mut f.channel).range(1..=512).prefix("channel "));
                     ui.spacing_mut().slider_width = 90.0;
-                    guarded!(ui, f.brightness, Slider::new(&mut f.brightness, 0.0..=1.0).text("bright"));
-                    guarded!(ui, f.gamma, Slider::new(&mut f.gamma, 1.0..=3.0).text("gamma")).on_hover_text("2.2 makes fades look even on most LEDs");
+                    ui.horizontal(|ui| {
+                        Level::percent(&mut f.brightness, "Bright").default(1.0).show(ui);
+                    });
+                    ui.horizontal(|ui| {
+                        Level::range(&mut f.gamma, 1.0, 3.0, "Gamma").default(2.2).tip("2.2 makes fades look even on most LEDs").show(ui);
+                    });
                 });
             });
             if r.response.clicked() {

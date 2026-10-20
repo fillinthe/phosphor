@@ -143,6 +143,11 @@ impl PhosphorApp {
             A::Identify => st.identify_outputs(now),
             A::Syphon => *st.comp.share_out_mut() = !st.comp.share_out(),
             A::Ndi => st.comp.ndi.enabled = !st.comp.ndi.enabled,
+            A::MuteAll => st.comp.sound_muted = !st.comp.sound_muted,
+            A::WebControl => {
+                let on = st.comp.web_control_off;
+                st.set_web_control(on);
+            }
             A::Notes => open_doc("NOTES.md"),
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
