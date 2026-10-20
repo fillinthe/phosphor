@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.75 (2026-10-20)
+
+- **Game controllers** (as in VDMX): buttons, sticks and triggers on a connected gamepad (Xbox, PlayStation,
+  Switch Pro and most USB / Bluetooth pads) are control sources like MIDI: press Listen in MIDI / OSC (or right-click
+  a slider › Listen) and move a stick. Buttons act like pads; sticks and triggers like faders.
+
 ## 0.2.74 (2026-10-20)
 
 - **LUT colour grades as effects** (as in VDMX): drop `.cube` files (from grading apps, cameras or LUT packs) into

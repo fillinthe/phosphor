@@ -218,3 +218,35 @@ pub fn local_ip() -> Option<String> {
     s.connect("8.8.8.8:80").ok()?;
     Some(s.local_addr().ok()?.ip().to_string())
 }
+
+/// Game controllers (gilrs): one thread for as long as Phosphor runs, sending each button / stick / trigger change
+/// as an `Incoming` (buttons press 1 / release 0; sticks -1..1 and triggers 0..1 as 0..1).
+pub fn start_gamepads(tx: mpsc::Sender<super::Incoming>) {
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if STARTED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    let _ = std::thread::Builder::new().name("phosphor-gamepads".into()).spawn(move || {
+        let Ok(mut g) = gilrs::Gilrs::new() else {
+            log::info!("gamepads: not available");
+            return;
+        };
+        loop {
+            while let Some(ev) = g.next_event() {
+                let (input, value) = match ev.event {
+                    gilrs::EventType::ButtonChanged(b, v, _) => (format!("{b:?}"), v),
+                    gilrs::EventType::AxisChanged(a, v, _) => (format!("{a:?}"), (v + 1.0) * 0.5),
+                    _ => continue,
+                };
+                if input == "Unknown" {
+                    continue;
+                }
+                let source = phosphor_engine::ControlSource::Gamepad { input };
+                if tx.send(super::Incoming { source, value: value.clamp(0.0, 1.0) }).is_err() {
+                    return;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(4));
+        }
+    });
+}

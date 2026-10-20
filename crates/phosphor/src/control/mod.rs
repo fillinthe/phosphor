@@ -25,7 +25,7 @@ pub const FLIP: f32 = -1.0;
 
 /// Pads and keys send press (1) / release (0); on/off targets toggle on press instead of following.
 fn momentary(source: &ControlSource) -> bool {
-    matches!(source, ControlSource::MidiNote { .. } | ControlSource::Key { .. })
+    source.is_momentary()
 }
 
 fn is_toggle(comp: &Composition, target: &ControlTarget) -> bool {
@@ -280,6 +280,7 @@ impl ControlHub {
             };
             self.oscquery = None;
             self.oscquery = oscquery::Server::start(self.osc_port, self.local_ip.as_deref()).ok();
+            native::start_gamepads(self.tx.clone());
             self.next_query = 0.0;
             if let Some(q) = &self.oscquery {
                 self.osc_status.push_str(&format!(" · OSC Query on http://{}:{}", self.local_ip.clone().unwrap_or_else(|| "localhost".into()), q.port));
@@ -400,7 +401,7 @@ impl ControlHub {
                     ControlSource::Osc { address } => self.backend.send_osc(&self.feedback_ips, self.feedback_port, address, v),
                     ControlSource::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | channel, *cc, (v * 127.0).round() as u8]),
                     ControlSource::MidiNote { channel, note } => self.backend.send_midi(&[0x90 | channel, *note, if v > 0.5 { 127 } else { 0 }]),
-                    ControlSource::Key { .. } => {}
+                    ControlSource::Key { .. } | ControlSource::Gamepad { .. } => {}
                 }
             }
         }
