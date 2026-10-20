@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.77 (2026-10-20)
 
+- **Capture a screen or another app's window as a layer** (as in VDMX): a layer's Live menu › Screens and
+  windows. Full Retina size at up to 60 fps, straight to the GPU. macOS asks for the Screen Recording permission
+  the first time (System Settings › Privacy & Security › Screen & System Audio Recording).
 - **Step sequencer** (as in VDMX): Modulators › Step track adds a track of 4 to 64 steps that plays on the beat
   (a step lasts a bar, a beat, or 1/8, 1/16, 1/32). Draw levels, or switch on Gates and click steps on and off;
   Glide slides between steps; shift the pattern, Random, Clear. Add several tracks for a multi-track sequencer.
