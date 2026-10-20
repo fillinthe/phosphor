@@ -170,12 +170,37 @@ impl Decoder {
             if let Some((t, generation)) = seek {
                 self.generation = generation;
                 self.out_clock = None;
+                let turning = mode.direction == PlayDirection::Reverse && !self.live && !self.reversing;
+                // Turning around where we are: the frames just shown play backwards straight away (no wait for
+                // decoding); the group before them is decoded while they play.
+                let mut kept = if turning { std::mem::take(&mut self.tail) } else { Vec::new() };
                 self.drop_reverse(sh);
                 self.reversing = mode.direction == PlayDirection::Reverse && !self.live;
                 if self.reversing {
-                    // Include the frame on screen at `t`.
-                    self.rev_end = t + 1e-4;
+                    // Include the frame on screen at `t`; frames decoded past it were never seen.
+                    while kept.last().is_some_and(|f| f.0 > t + 1e-4) {
+                        if let Some((_, _, f)) = kept.pop() {
+                            sh.recycle(f);
+                        }
+                    }
+                    match kept.first() {
+                        Some(first) if kept.last().is_some_and(|l| t - l.0 < 0.1) => {
+                            self.rev_end = first.0;
+                            self.rev_buf = kept;
+                            let (lo, _) = self.bounds(mode);
+                            self.start_rev_job(self.rev_end, lo)?;
+                        }
+                        _ => {
+                            for (_, _, f) in kept {
+                                sh.recycle(f);
+                            }
+                            self.rev_end = t + 1e-4;
+                        }
+                    }
                 } else {
+                    for (_, _, f) in kept {
+                        sh.recycle(f);
+                    }
                     self.seek_to(t)?;
                 }
             }
@@ -251,16 +276,22 @@ impl Decoder {
                 }
             }
             let out = self.picture(sh)?;
-            // Ping-pong: keep the end of the forward pass for the turn (only frames that are cheap to keep).
-            if mode.direction == PlayDirection::PingPong && hi.is_finite() && rel >= hi - (self.rev_cap(sh) as f64 + 1.0) * dur.max(1e-3) {
-                match out.cheap_clone() {
-                    Some(c) => {
-                        self.tail.push((rel, dur, c));
-                        if self.tail.len() > self.rev_cap(sh) {
-                            self.tail.remove(0);
-                        }
+            // Keep the frames just shown (only ones that are cheap to keep): about a second, so a switch to reverse
+            // starts at once; ping-pong keeps the end of the forward pass for its turn.
+            let pingpong_end = mode.direction == PlayDirection::PingPong && hi.is_finite() && rel >= hi - (self.rev_cap(sh) as f64 + 1.0) * dur.max(1e-3);
+            let keep = if pingpong_end { self.rev_cap(sh) } else { ((1.0 / dur.max(1e-3)).ceil() as usize + 2).min(self.rev_cap(sh)) };
+            match out.cheap_clone() {
+                Some(c) => {
+                    self.tail.push((rel, dur, c));
+                    while self.tail.len() > keep {
+                        let (_, _, old) = self.tail.remove(0);
+                        sh.recycle(old);
                     }
-                    None => self.tail.clear(),
+                }
+                None => {
+                    for (_, _, f) in self.tail.drain(..) {
+                        sh.recycle(f);
+                    }
                 }
             }
             self.last_sent = rel;
@@ -387,7 +418,7 @@ impl Decoder {
         }
         self.seek_to((end - self.default_dur).max(lo))?;
         self.seek_target = None;
-        self.rev_job = Some(RevJob { end, keep_from: None, done: false });
+        self.rev_job = Some(RevJob { end, keep_from: None, done: false, at: f64::NAN, wrap: false });
         Ok(())
     }
 
@@ -408,7 +439,7 @@ impl Decoder {
             // The first frame after the seek is the keyframe: keep from there, or the last `cap` frames.
             let keep_from = job.keep_from.unwrap_or_else(|| rel.max(job.end - cap as f64 * dur.max(1e-3)).max(lo));
             let done = rel >= job.end - 1e-6;
-            self.rev_job = Some(RevJob { keep_from: Some(keep_from), done, ..job });
+            self.rev_job = Some(RevJob { keep_from: Some(keep_from), done, at: rel, ..job });
             if done {
                 return Ok(());
             }
@@ -435,8 +466,16 @@ impl Decoder {
                     return Ok(false);
                 }
             }
-            // Meanwhile, a few frames of the group before this one (sending waited for the player anyway).
-            self.advance_rev_job(sh, lo, REVERSE_DECODE_AHEAD)?;
+            // Meanwhile, some of the group before this one (sending waited for the player anyway): enough that it's
+            // ready before these frames run out, at least a few.
+            let budget = match self.rev_job {
+                Some(j) if !j.done && j.at.is_finite() => {
+                    let left = ((j.end - j.at) / self.default_dur.max(1e-3)).ceil().max(0.0) as usize;
+                    (left / self.rev_buf.len().max(1) + 1).clamp(REVERSE_DECODE_AHEAD, 32)
+                }
+                _ => REVERSE_DECODE_AHEAD,
+            };
+            self.advance_rev_job(sh, lo, budget)?;
             return Ok(true);
         }
         if !hi.is_finite() {
@@ -445,10 +484,19 @@ impl Decoder {
             return Ok(true);
         }
         self.rev_end = self.rev_end.min(hi);
-        if self.rev_job.is_none() {
-            if self.rev_end <= lo + 1e-6 {
+        if self.rev_end <= lo + 1e-6 {
+            // At the start of the section. Looping round: the group at the end may already be decoding (`wrap`).
+            if !self.rev_job.is_some_and(|j| j.wrap) {
                 return self.at_end(sh, tx, mode, lo, hi, false);
             }
+            if !self.at_end(sh, tx, mode, lo, hi, false)? {
+                return Ok(false);
+            }
+            if !self.reversing || self.rev_end <= lo + 1e-6 {
+                return Ok(true);
+            }
+        }
+        if self.rev_job.is_none() {
             self.start_rev_job(self.rev_end, lo)?;
         }
         // This group is used up: finish the next one (usually done already) and play it.
@@ -466,8 +514,16 @@ impl Decoder {
         if self.rev_buf.is_empty() && self.rev_end <= lo + 1e-6 {
             return self.at_end(sh, tx, mode, lo, hi, false);
         }
-        // Start on the group before this one right away; it fills in while this one plays.
-        self.start_rev_job(self.rev_end, lo)?;
+        // Start on the group before this one right away; it fills in while this one plays. At the start of a looping
+        // reverse section, that's the group at its end.
+        if self.rev_end <= lo + 1e-6 && mode.direction == PlayDirection::Reverse && hi.is_finite() && sh.ctl.lock().is_ok_and(|c| c.looping) {
+            self.start_rev_job(hi, lo)?;
+            if let Some(j) = self.rev_job.as_mut() {
+                j.wrap = true;
+            }
+        } else {
+            self.start_rev_job(self.rev_end, lo)?;
+        }
         Ok(true)
     }
 
@@ -795,4 +851,8 @@ struct RevJob {
     end: f64,
     keep_from: Option<f64>,
     done: bool,
+    /// Media time of the last frame decoded (NaN before the first): how much is left.
+    at: f64,
+    /// The group at the end of the section, decoded early because reverse is about to loop round to it.
+    wrap: bool,
 }

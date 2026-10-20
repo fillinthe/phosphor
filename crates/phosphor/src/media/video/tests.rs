@@ -106,3 +106,74 @@ fn loop_region_and_ping_pong() {
     let jumps = late.windows(2).filter(|w| (w[1] - w[0]).abs() > 0.2).count();
     assert_eq!(jumps, 0, "ping-pong jumped instead of turning: {pos:?}");
 }
+
+/// Footage check (not run by default): every movie in `PHOSPHOR_FOOTAGE` plays forward, reverse and ping-pong for
+/// 5 s of real time, polled at 60 Hz like the app (zero-copy on). Prints one FOOTAGE line per clip and direction:
+/// frames shown vs the clip's own rate, the longest gap between new pictures (a visible hitch), frames dropped.
+///   PHOSPHOR_FOOTAGE=~/Documents/_FOOTAGE/_ORIG cargo test --release -p phosphor footage -- --ignored --nocapture
+#[test]
+#[ignore]
+fn footage_plays_every_way() {
+    use phosphor_engine::PlayDirection;
+    let Ok(dir) = std::env::var("PHOSPHOR_FOOTAGE") else { return };
+    let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).filter(|p| p.is_file() && crate::media::is_movie(&p.to_string_lossy())).collect();
+    files.sort();
+    super::set_zero_copy(true);
+    // Silent: this runs while someone may be using the Mac.
+    super::sound::set_enabled(false);
+    const SECS: f64 = 5.0;
+    let mut worst: Vec<(f64, String)> = Vec::new();
+    for (n, path) in files.iter().enumerate() {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        for dir in [PlayDirection::Forward, PlayDirection::Reverse, PlayDirection::PingPong] {
+            let Ok(mut p) = VideoPlayer::open(&path.to_string_lossy()) else {
+                println!("FOOTAGE {n:02} {name} {dir:?}: could not open");
+                continue;
+            };
+            p.set_looping(true);
+            // How it's used live: forward first, then the switch (reverse) or a short section turning around
+            // (ping-pong, 2 s so it turns several times). Measured from the switch.
+            p.set_mode(PlayDirection::Forward, None);
+            let t0 = std::time::Instant::now();
+            let lead = if dir == PlayDirection::Forward { 0.0 } else { 2.0 };
+            while t0.elapsed().as_secs_f64() < lead + 0.5 && (p.poll_frame(t0.elapsed().as_secs_f64()).is_none() || t0.elapsed().as_secs_f64() < lead) {
+                std::thread::sleep(std::time::Duration::from_micros(16_600));
+            }
+            match dir {
+                PlayDirection::PingPong => p.set_mode(dir, Some((1.0, 3.0))),
+                _ => p.set_mode(dir, None),
+            }
+            let clock0 = t0.elapsed().as_secs_f64();
+            let t0 = std::time::Instant::now();
+            let (mut shown, mut gap, mut last, mut gap_at, mut gap_pos) = (0u64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+            while t0.elapsed().as_secs_f64() < SECS {
+                let now = t0.elapsed().as_secs_f64();
+                if let Some(f) = p.poll_frame(clock0 + now) {
+                    shown += 1;
+                    if now - last > gap {
+                        gap = now - last;
+                        gap_at = now;
+                        gap_pos = p.position();
+                    }
+                    last = now;
+                    p.recycle(f);
+                }
+                std::thread::sleep(std::time::Duration::from_micros(16_600));
+            }
+            gap = gap.max(SECS - last);
+            let s = p.stats();
+            let fps = crate::convert::probe(&path.to_string_lossy()).map_or(30.0, |p| p.fps);
+            let expected = (SECS * fps.min(60.0)).round();
+            let (w, h) = p.size();
+            println!(
+                "FOOTAGE {n:02} {dir:?} {}x{} {:.0}fps {}: shown {shown}/{expected:.0} ({:.0}%), longest gap {:.0} ms (at {gap_at:.1} s, clip {gap_pos:.2} s of {:.1}), dropped {}, {} {}",
+                w, h, fps, s.codec, shown as f64 * 100.0 / expected.max(1.0), gap * 1000.0, p.duration().unwrap_or(0.0), s.frames_skipped, if s.hardware { "hw" } else { "sw" }, name
+            );
+            worst.push((gap, format!("{name} {dir:?}")));
+        }
+    }
+    worst.sort_by(|a, b| b.0.total_cmp(&a.0));
+    for (g, what) in worst.iter().take(8) {
+        println!("FOOTAGE_WORST {:.0} ms {what}", g * 1000.0);
+    }
+}
