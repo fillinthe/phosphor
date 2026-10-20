@@ -6,6 +6,25 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
     if values.len() <= i {
         values.resize(i + 1, p.default);
     }
+    // A menu (ISF "long" inputs, the LUT mixer's LUTs): pick a name instead of sliding a number.
+    if !p.labels.is_empty() {
+        ui.horizontal(|ui| {
+            ui.label(p.name);
+            let current = p.label_of(values[i]).unwrap_or("?");
+            let r = egui::ComboBox::from_id_salt(("param_menu", p.name, i)).selected_text(current).show_ui(ui, |ui| {
+                for (k, name) in p.labels.iter().enumerate() {
+                    let v = p.min + k as f32;
+                    if ui.selectable_label((values[i] - v).abs() < 0.5, *name).clicked() {
+                        values[i] = v;
+                    }
+                }
+            });
+            if let Some(t) = target {
+                map_menu(ui, &r.response, t);
+            }
+        });
+        return;
+    }
     ui.horizontal(|ui| {
         let slot = mods.iter().position(|m| m.index == i);
         let mut m = slot.map(|k| mods[k].m);
@@ -101,7 +120,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     ui.separator();
     if mm.link == 0 && mm.source.is_lfo() {
         ui.horizontal(|ui| {
-            ui.checkbox(&mut mm.sync, "Sync to tempo");
+            crate::ui::toggle(ui, &mut mm.sync, "Sync to tempo");
             if mm.sync {
                 let current = SYNC_CHOICES.iter().find(|(v, _)| (*v - mm.rate).abs() < 1e-3).map_or("custom", |(_, n)| *n);
                 ComboBox::from_id_salt("sync_rate").width(100.0).selected_text(format!("every {current}")).show_ui(ui, |ui| {
@@ -128,9 +147,10 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         return;
     }
     ui.horizontal(|ui| {
-        ui.selectable_value(&mut mm.range, false, "Add to slider").on_hover_text("The signal pushes the slider up (or down) by Amount");
-        ui.selectable_value(&mut mm.range, true, "Sweep a range").on_hover_text("The signal moves the control between From and To; the slider is ignored");
-        ui.checkbox(&mut mm.invert, "Invert");
+        segmented(ui, &mut mm.range, &[(false, "Add to slider".to_string()), (true, "Sweep a range".to_string())], |_, r, sweep| {
+            r.clone().on_hover_text(if *sweep { "The signal moves the control between From and To; the slider is ignored" } else { "The signal pushes the slider up (or down) by Amount" });
+        });
+        crate::ui::toggle(ui, &mut mm.invert, "Invert");
     });
     if mm.range {
         ui.horizontal(|ui| {

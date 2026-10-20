@@ -115,11 +115,11 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(any(target_os = "macos", windows))]
         {
             let mut at_login = crate::login_item::is_enabled();
-            if ui.checkbox(&mut at_login, "Start Phosphor when this Mac logs in (installations)").on_hover_text("A LaunchAgent opens Phosphor at login; with the option below, the show comes up on its screens by itself").changed() {
+            if crate::ui::toggle(ui, &mut at_login, "Start Phosphor when this Mac logs in (installations)").on_hover_text("A LaunchAgent opens Phosphor at login; with the option below, the show comes up on its screens by itself").changed() {
                 st.notice = Some(crate::login_item::set(at_login).unwrap_or_else(|e| format!("Couldn't change the login item: {e}")));
             }
         }
-        ui.checkbox(&mut st.comp.outputs_on_open, "Open outputs on their screens when this project opens")
+        crate::ui::toggle(ui, &mut st.comp.outputs_on_open, "Open outputs on their screens when this project opens")
             .on_hover_text("For a venue: outputs go fullscreen on the screens they were last sent to, at launch and when you open this project");
     }
     #[cfg(target_os = "macos")]
@@ -353,7 +353,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
             ui.label("Cells across");
             guarded!(ui, g.cells, egui::DragValue::new(&mut g.cells).range(2..=64));
         });
-        ui.checkbox(&mut g.crosshair, "Crosshair, circle and diagonals");
+        crate::ui::toggle(ui, &mut g.crosshair, "Crosshair, circle and diagonals");
         ui.horizontal(|ui| {
             ui.label("Line");
             guarded!(ui, g.width, egui::DragValue::new(&mut g.width).range(0.5..=12.0).speed(0.1).suffix(" px"));

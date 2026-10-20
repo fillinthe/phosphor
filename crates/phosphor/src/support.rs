@@ -118,7 +118,7 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
     crate::ui::tool_window(ctx, &format!("{} Report a Bug", icon::BUG), &mut open, &mut detached, 460.0, |ui| {
         ui.label("What happened, and what you were doing? One report per problem is perfect.");
         ui.add(egui::TextEdit::multiline(&mut st.bug.text).desired_rows(6).desired_width(f32::INFINITY).hint_text("e.g. Dragging a movie onto the Clips grid shows a black cell. Expected: the first frame."));
-        ui.checkbox(&mut st.bug.include_diagnostics, "Include diagnostics (version, macOS, project shape, end of crash.log)");
+        crate::ui::toggle(ui, &mut st.bug.include_diagnostics, "Include diagnostics (version, macOS, project shape, end of crash.log)");
         if st.bug.include_diagnostics {
             let diag = diagnostics(st);
             egui::CollapsingHeader::new("What gets included").id_salt("bug_diag").show(ui, |ui| {

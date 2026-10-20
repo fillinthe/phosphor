@@ -320,7 +320,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                 }
                                 ui.separator();
                                 if is_movie {
-                                    ui.checkbox(&mut k.muted, "Mute sound").on_hover_text("This clip plays without sound, wherever it's triggered");
+                                    crate::ui::toggle(ui, &mut k.muted, "Mute sound").on_hover_text("This clip plays without sound, wherever it's triggered");
                                 }
                                 let mut own = k.own.is_some();
                                 if ui

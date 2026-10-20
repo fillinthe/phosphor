@@ -75,7 +75,7 @@ pub fn parse_header(source: &str) -> Result<Header, CompileError> {
                 }
                 let name = parts[..parts.len() - 3].join(" ");
                 let (lo, hi) = (nums[0].min(nums[1]), nums[0].max(nums[1]));
-                header.params.push(Param { name: leak(name), min: lo, max: hi, default: nums[2].clamp(lo, hi) });
+                header.params.push(Param::new(leak(name), lo, hi, nums[2].clamp(lo, hi)));
             }
             _ => {}
         }

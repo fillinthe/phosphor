@@ -45,6 +45,43 @@ fn three<'a>(mut w: impl Iterator<Item = &'a str>) -> Option<[f32; 3]> {
 }
 
 impl Lut {
+    /// The colour this table gives `c` (0..1 RGB), blending between its entries (trilinear).
+    pub fn sample(&self, c: [f32; 3]) -> [f32; 3] {
+        let n = self.size;
+        let f = c.map(|v| v.clamp(0.0, 1.0) * (n - 1) as f32);
+        let i0 = f.map(|v| (v.floor() as usize).min(n - 1));
+        let i1 = i0.map(|v| (v + 1).min(n - 1));
+        let t = [f[0] - i0[0] as f32, f[1] - i0[1] as f32, f[2] - i0[2] as f32];
+        let at = |r: usize, g: usize, b: usize| self.data[r + g * n + b * n * n];
+        let mut out = [0.0; 3];
+        for (k, o) in out.iter_mut().enumerate() {
+            let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+            let c00 = lerp(at(i0[0], i0[1], i0[2])[k], at(i1[0], i0[1], i0[2])[k], t[0]);
+            let c10 = lerp(at(i0[0], i1[1], i0[2])[k], at(i1[0], i1[1], i0[2])[k], t[0]);
+            let c01 = lerp(at(i0[0], i0[1], i1[2])[k], at(i1[0], i0[1], i1[2])[k], t[0]);
+            let c11 = lerp(at(i0[0], i1[1], i1[2])[k], at(i1[0], i1[1], i1[2])[k], t[0]);
+            *o = lerp(lerp(c00, c10, t[1]), lerp(c01, c11, t[1]), t[2]);
+        }
+        out
+    }
+
+    /// The same grade on an `n`³ table (so tables of different sizes can share one picture).
+    pub fn resample(&self, n: usize) -> Lut {
+        if n == self.size {
+            return Lut { size: n, data: self.data.clone() };
+        }
+        let step = 1.0 / (n - 1) as f32;
+        let mut data = Vec::with_capacity(n * n * n);
+        for b in 0..n {
+            for g in 0..n {
+                for r in 0..n {
+                    data.push(self.sample([r as f32 * step, g as f32 * step, b as f32 * step]));
+                }
+            }
+        }
+        Lut { size: n, data }
+    }
+
     /// The table as a picture: (width, height, RGBA8).
     pub fn pack(&self) -> (u32, u32, Vec<u8>) {
         let n = self.size;
@@ -63,6 +100,52 @@ impl Lut {
         }
         (w as u32, h as u32, rgba)
     }
+}
+
+/// Size every table in the LUT mixer is resampled to.
+pub const MIX_SIZE: usize = 33;
+
+/// The LUT mixer's picture: every table at `MIX_SIZE`³, stacked top to bottom (one band of `MIX_SIZE` rows each).
+pub fn pack_all(luts: &[Lut]) -> (u32, u32, Vec<u8>) {
+    let mut rgba = Vec::new();
+    let mut w = 0;
+    for l in luts {
+        let (lw, _, px) = l.resample(MIX_SIZE).pack();
+        w = lw;
+        rgba.extend(px);
+    }
+    (w, (MIX_SIZE * luts.len()) as u32, rgba)
+}
+
+/// The LUT mixer's shader: LUT A (P(0)) and LUT B (P(1)) from the stacked picture, blended by Mix (P(2)), mixed
+/// into the picture by Amount (P(3)).
+pub fn wgsl_mix(entry: &str, count: usize) -> String {
+    let n = MIX_SIZE;
+    format!(
+        "fn lut_band(c: vec3f, band: f32) -> vec3f {{
+    let n = {n}.0;
+    let rows = n * {count}.0;
+    let col = clamp(c, vec3f(0.0), vec3f(1.0)) * (n - 1.0);
+    let b0 = floor(col.b);
+    let b1 = min(b0 + 1.0, n - 1.0);
+    let w = n * n;
+    let y = (band * n + col.g + 0.5) / rows;
+    let a = textureSampleLevel(buf0, samp, vec2f((col.r + 0.5 + b0 * n) / w, y), 0.0).rgb;
+    let b = textureSampleLevel(buf0, samp, vec2f((col.r + 0.5 + b1 * n) / w, y), 0.0).rgb;
+    return mix(a, b, col.b - b0);
+}}
+
+@fragment
+fn {entry}(in: VOut) -> @location(0) vec4f {{
+    let c = src(in.uv);
+    let last = {count}.0 - 1.0;
+    let a = lut_band(c.rgb, clamp(round(P(0u)), 0.0, last));
+    let b = lut_band(c.rgb, clamp(round(P(1u)), 0.0, last));
+    let graded = mix(a, b, P(2u));
+    return vec4f(mix(c.rgb, graded, P(3u)), c.a);
+}}
+"
+    )
 }
 
 /// The effect's shader: the layer's colour looked up in the packed table (buf0), mixed in by Amount (P(0)).
@@ -103,6 +186,17 @@ mod tests {
     }
 
     #[test]
+    fn resampling_keeps_the_grade() {
+        let lut = parse_cube(&invert_cube()).unwrap();
+        let big = lut.resample(5);
+        assert_eq!((big.size, big.data.len()), (5, 125));
+        let v = big.sample([0.25, 0.5, 1.0]);
+        assert!((v[0] - 0.75).abs() < 1e-5 && (v[1] - 0.5).abs() < 1e-5 && v[2].abs() < 1e-5, "{v:?}");
+        let (w, h, px) = pack_all(&[lut.resample(3), big]);
+        assert_eq!((w as usize, h as usize, px.len()), (MIX_SIZE * MIX_SIZE, MIX_SIZE * 2, MIX_SIZE * MIX_SIZE * MIX_SIZE * 2 * 4));
+    }
+
+    #[test]
     fn a_cube_file_reads_and_packs() {
         let lut = parse_cube(&invert_cube()).unwrap();
         assert_eq!(lut.size, 2);
@@ -122,5 +216,8 @@ mod tests {
         let full = format!("{}\n{}", phosphor_engine::shaders::common_source(), wgsl("isf_lut_test", 33));
         let module = naga::front::wgsl::parse_str(&full).expect("parses");
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::default()).validate(&module).expect("valid");
+        let mix = format!("{}\n{}", phosphor_engine::shaders::common_source(), wgsl_mix("isf_lut_mixer", 3));
+        let module = naga::front::wgsl::parse_str(&mix).unwrap_or_else(|e| panic!("{}", e.emit_to_string(&mix)));
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::default()).validate(&module).expect("mixer valid");
     }
 }

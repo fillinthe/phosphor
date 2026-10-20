@@ -49,16 +49,37 @@ pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
     }
     output_strip(ui, st, 96.0);
     ui.separator();
+    let layout = egui::Layout::top_down(egui::Align::Min);
+    // Each part in its own clipped area, so nothing spills into its neighbour.
+    let part = |ui: &mut egui::Ui, rect: egui::Rect| {
+        let mut child = ui.new_child(UiBuilder::new().max_rect(rect).layout(layout));
+        child.set_clip_rect(rect.intersect(ui.clip_rect()));
+        child
+    };
+    // Too narrow for three columns (a side tab): one part at a time.
+    if ui.available_width() < 760.0 {
+        let key = egui::Id::new("studio_narrow_part");
+        let mut pick: u8 = ui.ctx().data(|d| d.get_temp(key)).unwrap_or(1);
+        segmented(ui, &mut pick, &[(0, "Slices".to_string()), (1, "Canvas".to_string()), (2, "Properties".to_string())], |_, _, _| {});
+        ui.ctx().data_mut(|d| d.insert_temp(key, pick));
+        let full = ui.available_rect_before_wrap();
+        match pick {
+            0 => tree(&mut part(ui, full), st),
+            2 => properties(&mut part(ui, full), st),
+            _ => canvases(&mut part(ui, full), st),
+        }
+        ui.allocate_rect(full, Sense::hover());
+        return;
+    }
     let full = ui.available_rect_before_wrap();
     let left_w = 230.0f32.min(full.width() * 0.22);
     let right_w = 340.0f32.min(full.width() * 0.3);
     let left = egui::Rect::from_min_size(full.min, egui::vec2(left_w, full.height()));
     let right = egui::Rect::from_min_max(egui::pos2(full.right() - right_w, full.top()), full.max);
     let center = egui::Rect::from_min_max(egui::pos2(left.right() + 8.0, full.top()), egui::pos2(right.left() - 8.0, full.bottom()));
-    let layout = egui::Layout::top_down(egui::Align::Min);
-    tree(&mut ui.new_child(UiBuilder::new().max_rect(left).layout(layout)), st);
-    canvases(&mut ui.new_child(UiBuilder::new().max_rect(center).layout(layout)), st);
-    properties(&mut ui.new_child(UiBuilder::new().max_rect(right).layout(layout)), st);
+    tree(&mut part(ui, left), st);
+    canvases(&mut part(ui, center), st);
+    properties(&mut part(ui, right), st);
     let p = ui.painter();
     p.vline(left.right() + 4.0, full.y_range(), Stroke::new(1.0, Color32::from_gray(40)));
     p.vline(right.left() - 4.0, full.y_range(), Stroke::new(1.0, Color32::from_gray(40)));
@@ -222,9 +243,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
     let State { comp, selected_surface, layer_textures, output, thumbs, .. } = st;
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
     ui.horizontal_wrapped(|ui| {
-        ui.selectable_value(&mut vs.view, View::Split, "Output + input");
-        ui.selectable_value(&mut vs.view, View::Output, "Output");
-        ui.selectable_value(&mut vs.view, View::Input, "Input");
+        segmented(ui, &mut vs.view, &[(View::Split, "Output + input".to_string()), (View::Output, "Output".to_string()), (View::Input, "Input".to_string())], |_, _, _| {});
         ui.separator();
         if ui.button(label(icon::CORNERS_OUT, "Fit")).on_hover_text("Show the whole output").clicked() {
             vs.zoom = 1.0;
@@ -255,7 +274,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
         toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)");
         stage_photo_menu(ui, o);
-        if ui.checkbox(&mut edit_on_output, "Edit on output (E)").changed() {
+        if crate::ui::toggle(ui, &mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
     });
@@ -513,7 +532,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             }
         });
         let mut line = s.line.is_some();
-        if ui.checkbox(&mut line, "Line slice").on_hover_text("The picture runs along a line with a width").changed() {
+        if crate::ui::toggle(ui, &mut line, "Line slice").on_hover_text("The picture runs along a line with a width").changed() {
             s.set_line(line);
             if line {
                 s.model = None;
@@ -521,7 +540,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             ui.close();
         }
         if let Some(m) = &mut s.model {
-            if ui.checkbox(&mut m.calibrating, "Calibrate (pin points)").on_hover_text("Click model points, drag their pins onto the real object; 4+ pins solve the projector").changed() {
+            if crate::ui::toggle(ui, &mut m.calibrating, "Calibrate (pin points)").on_hover_text("Click model points, drag their pins onto the real object; 4+ pins solve the projector").changed() {
                 ui.close();
             }
             if !m.pins.is_empty() && ui.button("Clear calibration pins").clicked() {
@@ -534,7 +553,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             }
         }
         let mut model = s.model.is_some();
-        if ui.checkbox(&mut model, "3D model…").on_hover_text("Map onto a real object from its OBJ model").changed() {
+        if crate::ui::toggle(ui, &mut model, "3D model…").on_hover_text("Map onto a real object from its OBJ model").changed() {
             if model {
                 s.model = Some(phosphor_engine::mapping::Model3d::default());
                 s.line = None;
@@ -570,10 +589,10 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         }
     });
     ui.separator();
-    ui.checkbox(&mut o.mapping.enabled, "Mapping on");
-    ui.checkbox(&mut o.grid.on, "Alignment grid").on_hover_text("Over the whole output: cells, crosshair, circle, border (settings: right-click GRID in the strip)");
-    ui.checkbox(&mut o.mapping.test_pattern, "Slice test pattern");
-    ui.checkbox(&mut vs.snap, "Snap to grid");
+    crate::ui::toggle(ui, &mut o.mapping.enabled, "Mapping on");
+    crate::ui::toggle(ui, &mut o.grid.on, "Alignment grid").on_hover_text("Over the whole output: cells, crosshair, circle, border (settings: right-click GRID in the strip)");
+    crate::ui::toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern");
+    crate::ui::toggle(ui, &mut vs.snap, "Snap to grid");
     if ui.button(label(icon::CORNERS_OUT, "Fit the view")).clicked() {
         vs.zoom = 1.0;
         vs.pan = egui::Vec2::ZERO;

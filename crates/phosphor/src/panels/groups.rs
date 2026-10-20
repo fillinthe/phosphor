@@ -196,7 +196,7 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
             ui.label("Blend");
             choice_combo(ui, ("group_blend_insp", g.id), &mut g.blend, 120.0, false);
         });
-        ui.checkbox(&mut g.in_mix, "In the mix").on_hover_text("Off: the group appears only on mapping surfaces that pick it");
+        crate::ui::toggle(ui, &mut g.in_mix, "In the mix").on_hover_text("Off: the group appears only on mapping surfaces that pick it");
         ui.separator();
         fx_action = effects_editor(ui, &mut g.effects, clipboard_len);
     });

@@ -4,6 +4,18 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.82 (2026-10-20)
+
+- **LUT Mix** (as in VDMX): with two or more LUTs in your LUT folder, a LUT Mix effect blends between any two of
+  them: pick LUT A and LUT B by name, slide Mix between them (or put an LFO on it), Amount over the picture.
+- **Effect menus show their names:** ISF effects with a menu setting (a mode, a shape, a direction) now show a
+  list of named choices instead of a number slider.
+- **One look for switches and choices everywhere:** the remaining tick boxes for on/off settings are now the same
+  lit switches as elsewhere, and the remaining rows of pick-one buttons (view, order, timing, alignment, loop
+  length, "add to slider / sweep a range") are joined segments.
+- **Mapping Studio in a narrow tab:** instead of squeezing three columns over each other, it shows Slices,
+  Canvas or Properties one at a time (pick at the top).
+
 ## 0.2.81 (2026-10-20)
 
 - **Preview windows as an XY pad** (as in VDMX): switch on XY in a preview window, then click or drag on the

@@ -53,7 +53,7 @@ impl PhosphorApp {
                 r.request_focus();
                 save = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             });
-            ui.checkbox(&mut draft.1, "Open with this layout when Phosphor starts");
+            crate::ui::toggle(ui, &mut draft.1, "Open with this layout when Phosphor starts");
             if self.layouts.saved.iter().any(|l| l.name == draft.0.trim()) {
                 crate::ui::hint(ui, "Replaces the saved layout with this name.");
             }

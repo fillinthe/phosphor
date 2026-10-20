@@ -93,10 +93,10 @@ impl PhosphorApp {
                             ui.label("Show name");
                             ui.text_edit_singleline(&mut st.export.name);
                         });
-                        ui.checkbox(&mut st.export.autostart, "Open the outputs full screen when the show starts");
-                        ui.checkbox(&mut st.export.zip, "Also make a .zip (easier to send)");
+                        crate::ui::toggle(ui, &mut st.export.autostart, "Open the outputs full screen when the show starts");
+                        crate::ui::toggle(ui, &mut st.export.zip, "Also make a .zip (easier to send)");
                         ui.horizontal(|ui| {
-                            ui.checkbox(&mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other computer: just the preview, clips, keys, controllers and outputs");
+                            crate::ui::toggle(ui, &mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other computer: just the preview, clips, keys, controllers and outputs");
                             ui.add_enabled(st.export.lock, egui::TextEdit::singleline(&mut st.export.lock_password).password(true).hint_text("unlock password (optional)").desired_width(170.0));
                         });
                         let (files, bytes, missing) = *st.export.summary.get_or_insert_with(|| crate::export::summary(&st.comp));

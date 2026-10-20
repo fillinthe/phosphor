@@ -92,7 +92,7 @@ impl PhosphorApp {
             if probe.has_audio && matches!(c.format, Format::Hap | Format::HapAlpha) {
                 crate::ui::hint(ui, "Hap has no sound: the converted file will be silent.");
             }
-            ui.checkbox(&mut c.swap, "Use the converted file in this project (in place of the original)");
+            crate::ui::toggle(ui, &mut c.swap, "Use the converted file in this project (in place of the original)");
             ui.add_space(6.0);
             match progress {
                 None => {

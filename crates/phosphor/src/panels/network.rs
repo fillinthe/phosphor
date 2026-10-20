@@ -57,7 +57,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         ui.label(RichText::new(format!("{} Phone / tablet remote", icon::DEVICE_MOBILE)).strong());
         hint(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
         ui.horizontal(|ui| {
-            ui.checkbox(require_password, label(icon::LOCK, "Password to control"))
+            crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");
             ui.add_enabled(
                 *require_password,
@@ -107,7 +107,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     ui.label(RichText::new(format!("{} Audience play", icon::GAME_CONTROLLER)).strong());
     hint(ui, "People scan the code, line up, and each gets the controls for a while: your Control Surface, clip columns, Surprise.");
     let play = &mut st.comp.play;
-    ui.checkbox(&mut play.enabled, "Let the audience play");
+    crate::ui::toggle(ui, &mut play.enabled, "Let the audience play");
     if !play.enabled {
         return;
     }
@@ -118,10 +118,10 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         guarded!(ui, play.rest_secs, egui::DragValue::new(&mut play.rest_secs).range(0..=600).suffix(" s")).on_hover_text("How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.");
         ui.label("Players at once");
         guarded!(ui, play.players, egui::DragValue::new(&mut play.players).range(1..=8)).on_hover_text("More than one: each player gets their own Surface page (page 1, 2, …) unless you pick one page for all");
-        ui.checkbox(&mut play.columns, "Clip columns");
-        ui.checkbox(&mut play.surprise, "Surprise button");
+        crate::ui::toggle(ui, &mut play.columns, "Clip columns");
+        crate::ui::toggle(ui, &mut play.surprise, "Surprise button");
     });
-    ui.checkbox(&mut play.show_names, "Show the players' names on the output").on_hover_text("A \"Now playing: …\" text layer along the bottom; guests type their name on the play page");
+    crate::ui::toggle(ui, &mut play.show_names, "Show the players' names on the output").on_hover_text("A \"Now playing: …\" text layer along the bottom; guests type their name on the play page");
     ui.horizontal(|ui| {
         ui.label("Surface page");
         let pages = &st.comp.surface.pages;
@@ -138,7 +138,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     let style_changed = ui
         .horizontal(|ui| {
             ui.label("Code on the output");
-            choice_combo(ui, "qr_style", &mut play.qr_style, 190.0, false).changed() | ui.checkbox(&mut play.qr_caption, "Words under it").changed()
+            choice_combo(ui, "qr_style", &mut play.qr_style, 190.0, false).changed() | crate::ui::toggle(ui, &mut play.qr_caption, "Words under it").changed()
         })
         .inner;
     #[cfg(not(target_arch = "wasm32"))]

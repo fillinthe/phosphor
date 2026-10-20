@@ -10,10 +10,25 @@ pub struct Param {
     pub min: f32,
     pub max: f32,
     pub default: f32,
+    /// A menu: the name of each whole number from `min` up (ISF "long" inputs, the LUT mixer's LUTs). Empty = a slider.
+    pub labels: &'static [&'static str],
 }
 
 const fn p(name: &'static str, min: f32, max: f32, default: f32) -> Param {
-    Param { name, min, max, default }
+    Param { name, min, max, default, labels: &[] }
+}
+
+impl Param {
+    /// A plain slider parameter.
+    pub const fn new(name: &'static str, min: f32, max: f32, default: f32) -> Param {
+        p(name, min, max, default)
+    }
+
+    /// The menu entry a value picks (None for sliders).
+    pub fn label_of(&self, v: f32) -> Option<&'static str> {
+        let i = (v - self.min).round();
+        (i >= 0.0).then(|| self.labels.get(i as usize).copied()).flatten()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

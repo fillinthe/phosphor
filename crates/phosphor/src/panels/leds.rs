@@ -152,7 +152,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                         FixtureShape::Grid => {
                             guarded!(ui, f.cols, egui::DragValue::new(&mut f.cols).range(1..=512).suffix(" wide"));
                             guarded!(ui, f.rows, egui::DragValue::new(&mut f.rows).range(1..=512).suffix(" high"));
-                            ui.checkbox(&mut f.zigzag, "Zig-zag").on_hover_text("Every other row is wired backwards (most LED matrices)");
+                            crate::ui::toggle(ui, &mut f.zigzag, "Zig-zag").on_hover_text("Every other row is wired backwards (most LED matrices)");
                         }
                         FixtureShape::MovingHead => {
                             choice_combo(ui, ("head_layout", f.id), &mut f.head, 230.0, false).on_hover_text("Set the head to the DMX mode with these channels");

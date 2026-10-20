@@ -122,7 +122,7 @@ fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     if comp.sound_muted {
         hint(ui, "All sound is off. Streams and recordings started now have no audio; one already running keeps its audio device until it restarts.");
     }
-    let r = ui.checkbox(&mut comp.sound_auto_level, "Even out volume levels").on_hover_text("Each movie is brought towards the same loudness as it plays (up to 4× up or down; silence isn't boosted)");
+    let r = crate::ui::toggle(ui, &mut comp.sound_auto_level, "Even out volume levels").on_hover_text("Each movie is brought towards the same loudness as it plays (up to 4× up or down; silence isn't boosted)");
     map_menu(ui, &r, ControlTarget::App(AppControl::AutoLevel));
     if comp.sound_auto_level {
         hint(ui, "Loud and quiet clips now play about equally loud; each layer's volume still works on top.");

@@ -227,7 +227,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             let smooth = m.smooth;
             let mut corner = m.is_corner(i);
             r.right_menu(|ui| {
-                if smooth && ui.checkbox(&mut corner, "Sharp corner").on_hover_text("The smooth outline makes a point here instead of curving through it").changed() {
+                if smooth && crate::ui::toggle(ui, &mut corner, "Sharp corner").on_hover_text("The smooth outline makes a point here instead of curving through it").changed() {
                     ui.close();
                 }
                 if !smooth {
@@ -376,8 +376,8 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                         todo.push(Do::Identify);
                         ui.close();
                     }
-                    ui.checkbox(&mut o.enabled, "Output on");
-                    ui.checkbox(&mut o.mapping.enabled, "Mapping on");
+                    crate::ui::toggle(ui, &mut o.enabled, "Output on");
+                    crate::ui::toggle(ui, &mut o.mapping.enabled, "Mapping on");
                     if count > 1 && ui.button(label(icon::TRASH, "Remove output")).clicked() {
                         todo.push(Do::Remove(id));
                         ui.close();
@@ -460,7 +460,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             })
             .response
             .on_hover_text("A shape that blacks out part of this output (doors, faces, the booth…); drag its points to fit");
-            if ui.checkbox(&mut edit_on_output, "Edit on output (E)").on_hover_text("Show draggable handles in this output's window").changed() {
+            if crate::ui::toggle(ui, &mut edit_on_output, "Edit on output (E)").on_hover_text("Show draggable handles in this output's window").changed() {
                 output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
             }
         });
@@ -664,7 +664,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     });
     ui.horizontal(|ui| {
         let mut per_side = s.edges.is_some();
-        if ui.checkbox(&mut per_side, "Soft edge per side").on_hover_text("A different soft edge on each side: e.g. only the side that overlaps the next projector").changed() {
+        if crate::ui::toggle(ui, &mut per_side, "Soft edge per side").on_hover_text("A different soft edge on each side: e.g. only the side that overlaps the next projector").changed() {
             s.edges = per_side.then_some([s.feather; 4]);
         }
         let text = if s.locked { label(icon::LOCK, "Locked") } else { label(icon::LOCK_OPEN, "Lock") };
@@ -727,7 +727,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             ui.horizontal(|ui| {
                 Level::range(&mut m.scale, 0.1, 4.0, "Size").default(1.0).log().show(ui);
             });
-            ui.checkbox(&mut m.cull, "Hide back faces");
+            crate::ui::toggle(ui, &mut m.cull, "Hide back faces");
         });
         ui.horizontal(|ui| {
             toggle(ui, &mut m.calibrating, label(icon::CROSSHAIR, "Calibrate")).on_hover_text("Pin model points and drag them onto the real object: from 4 pins the projector is solved for you (6+ also solves the lens)");
@@ -831,9 +831,9 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
         .on_hover_text("Send one layer to just this surface (its own picture, with its effects), or show the whole composition (everything in the mix, with MASTER effects)");
         let tip = "Off: only surfaces that pick it show it, not the mix or other surfaces";
         if let Some(l) = s.layer.and_then(|id| layers.iter_mut().find(|l| l.id == id)) {
-            ui.checkbox(&mut l.in_mix, "Also in the mix").on_hover_text(tip);
+            crate::ui::toggle(ui, &mut l.in_mix, "Also in the mix").on_hover_text(tip);
         } else if let Some(g) = s.layer.and_then(|id| groups.iter_mut().find(|g| g.id == id)) {
-            ui.checkbox(&mut g.in_mix, "Also in the mix").on_hover_text(tip);
+            crate::ui::toggle(ui, &mut g.in_mix, "Also in the mix").on_hover_text(tip);
         }
     });
 }

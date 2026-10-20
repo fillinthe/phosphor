@@ -73,7 +73,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                 // Chain: take from an earlier modulator.
                 ui.horizontal(|ui| {
                     let mut on = m.chain.is_some();
-                    if ui.checkbox(&mut on, "Chain:").on_hover_text("Combine with an earlier modulator").changed() {
+                    if crate::ui::toggle(ui, &mut on, "Chain:").on_hover_text("Combine with an earlier modulator").changed() {
                         m.chain = on.then(|| ModChain { from: earlier.get(i.saturating_sub(1)).map_or(0, |e| e.0), ..Default::default() });
                     }
                     if let Some(c) = &mut m.chain {
@@ -115,10 +115,13 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
 fn looper_row(ui: &mut egui::Ui, l: &mut phosphor_engine::Looper, beats: f32) {
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new(format!("{} Loop", icon::REPEAT)).strong());
-        for n in [1.0, 2.0, 4.0, 8.0, 16.0] {
-            if ui.selectable_label(l.len() == n, format!("{n:.0}")).on_hover_text(format!("{n:.0} beats")).clicked() && l.recording.is_none() {
-                l.beats = n;
-            }
+        let mut len = l.len();
+        let lengths: Vec<(f32, String)> = [1.0f32, 2.0, 4.0, 8.0, 16.0].into_iter().map(|n| (n, format!("{n:.0}"))).collect();
+        if segmented(ui, &mut len, &lengths, |_, r, n| {
+            r.clone().on_hover_text(format!("{n:.0} beats"));
+        }) && l.recording.is_none()
+        {
+            l.beats = len;
         }
         match l.recording {
             Some(start) if beats < start => {
