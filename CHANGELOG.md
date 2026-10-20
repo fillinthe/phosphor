@@ -9,8 +9,6 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **LUT colour grades as effects** (as in VDMX): drop `.cube` files (from grading apps, cameras or LUT packs) into
   *Help › Open LUT Folder*, and each one is an effect (category LUT) with an Amount slider at the next launch.
 
-## 0.2.73 (2026-10-20)
-
 - **MIDI / OSC monitor:** the MIDI / OSC panel lists every message as it comes in (which knob, pad or OSC address,
   its value, and what it's mapped to), with pause and clear. No more guessing what a controller sends.
 - **Value effects on mappings** (like VDMX's): the ~ button on a mapping adds *Smooth* (glide to each new value),
