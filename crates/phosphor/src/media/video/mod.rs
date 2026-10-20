@@ -130,6 +130,8 @@ pub struct VideoStats {
     /// Frames decoded but dropped before conversion because they were already late.
     pub frames_skipped: u64,
     pub frames_shown: u64,
+    /// Backwards play has had to wait for decoding (few keyframes): converting the file makes it smooth.
+    pub reverse_slow: bool,
 }
 
 pub struct VideoPlayer {
@@ -191,6 +193,8 @@ struct Shared {
     skipped: AtomicU64,
     /// Frames handed on to be shown (decoded counts re-decodes too, e.g. for reverse play).
     shown: AtomicU64,
+    /// Playing backwards made the picture wait (a group took long to decode): the file is slow in reverse.
+    reverse_slow: AtomicBool,
     pool: Mutex<Vec<VideoFrame>>,
     codec: Mutex<String>,
 }
@@ -269,6 +273,7 @@ impl VideoPlayer {
             decoded: AtomicU64::new(0),
             skipped: AtomicU64::new(0),
             shown: AtomicU64::new(0),
+            reverse_slow: AtomicBool::new(false),
             pool: Mutex::new(Vec::new()),
             codec: Mutex::new(dec.codec.clone()),
         });
@@ -332,6 +337,7 @@ impl VideoPlayer {
             decoded: AtomicU64::new(0),
             skipped: AtomicU64::new(0),
             shown: AtomicU64::new(0),
+            reverse_slow: AtomicBool::new(false),
             pool: Mutex::new(Vec::new()),
             codec: Mutex::new("audio".into()),
         });
@@ -625,6 +631,7 @@ impl VideoPlayer {
             frames_decoded: self.shared.decoded.load(Ordering::Relaxed),
             frames_skipped: self.shared.skipped.load(Ordering::Relaxed),
             frames_shown: self.shared.shown.load(Ordering::Relaxed),
+            reverse_slow: self.shared.reverse_slow.load(Ordering::Relaxed),
         }
     }
 }
