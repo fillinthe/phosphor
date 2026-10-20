@@ -130,6 +130,18 @@ app that's much smaller and lighter on the CPU.
     - [x] "All outputs on one screen": Outputs area › Stage (0.2.69)
     - [ ] Masters: several program outputs ("masters") with their own mixes (undecided; design comps so one can be)
 
+16. **More of VDMX** (asked 2026-10-20; list and order in docs/research/vdmx-gaps.md):
+    - [x] Soft takeover for MIDI/OSC faders (0.2.72)
+    - [ ] Screen / window capture as a layer (ScreenCaptureKit; FFmpeg's screen input crashes the window loop)
+    - [ ] Value effects on any control: smooth, delay, curve, quantize, formula ($VAL)
+    - [ ] Data looper: record control moves, loop them (quantized), play back as a source
+    - [ ] MIDI / OSC monitor panel
+    - [ ] LUT effects (.cube) and a two-LUT mixer
+    - [ ] Gamepad / HID input as control sources
+    - [ ] Video tracking (Vision: hands, faces, body, remove background) as sources
+    - [ ] Media bin voice modes, "on movie end" launch rules, layer crop
+    - [ ] Multi-track step sequencer; extra preview windows that send clicks as data
+
 ## TODO
 
 Legend: [x] done · [~] in progress · [ ] not started

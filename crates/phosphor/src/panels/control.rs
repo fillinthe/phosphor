@@ -31,6 +31,8 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     });
     let control = &mut st.control;
     ui.horizontal(|ui| {
+        ui.checkbox(&mut control.soft_takeover, "Soft takeover")
+            .on_hover_text("A fader or knob only takes over once it reaches the value on screen (moves it past it), so the picture never jumps when the hardware was left somewhere else");
         ui.checkbox(&mut control.feedback, "Send feedback")
             .on_hover_text("Controllers follow Phosphor: values changed here (mouse, phone, other controllers) go back to TouchOSC faders and to MIDI controllers with motor faders or LED rings");
         ui.add_enabled_ui(control.feedback, |ui| {

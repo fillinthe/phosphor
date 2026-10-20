@@ -117,6 +117,9 @@ pub struct ControlHub {
     /// outputs of the same devices) so faders, encoders and LEDs follow changes made anywhere else.
     pub feedback: bool,
     pub feedback_port: u16,
+    /// Faders and knobs only change a value once they reach it (no jump when the hardware is elsewhere).
+    pub soft_takeover: bool,
+    pickups: HashMap<String, Pickup>,
     fresh: HashMap<ControlSource, f32>,
     /// Last value sent to (or received from) each controller input: only changes go out, nothing echoes back.
     sent: HashMap<ControlSource, f32>,
@@ -139,13 +142,27 @@ pub struct ControlSettings {
     pub osc_port: u16,
     pub feedback: bool,
     pub feedback_port: u16,
+    pub soft_takeover: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT }
+        Self { osc_port: DEFAULT_OSC_PORT, feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true }
     }
 }
+
+/// Soft takeover for one mapping: has the controller caught the value, and what it last set.
+#[derive(Clone, Copy, Default)]
+struct Pickup {
+    caught: bool,
+    /// The controller's last value (mapped to the target's range), to see it pass the current value.
+    last_in: Option<f32>,
+    /// What this mapping last set the target to (if the target is different now, something else moved it).
+    last_set: Option<f32>,
+}
+
+/// Within this of the current value (0..1), a fader counts as caught.
+const PICKUP_NEAR: f32 = 0.03;
 
 impl ControlHub {
     /// Opens MIDI and OSC with saved settings.
@@ -154,17 +171,20 @@ impl ControlHub {
         hub.osc_port = s.osc_port;
         hub.feedback = s.feedback;
         hub.feedback_port = s.feedback_port;
+        hub.soft_takeover = s.soft_takeover;
         hub.reconnect();
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, feedback: self.feedback, feedback_port: self.feedback_port }
+        ControlSettings { osc_port: self.osc_port, feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover }
     }
 
+    /// A hub for tests: values apply at once (soft takeover off; its own test turns it on).
     #[cfg(test)]
     pub fn new() -> Self {
         let mut hub = Self::new_unopened();
+        hub.soft_takeover = false;
         hub.reconnect();
         hub
     }
@@ -193,6 +213,8 @@ impl ControlHub {
             triggers: Vec::new(),
             feedback: true,
             feedback_port: DEFAULT_FEEDBACK_PORT,
+            soft_takeover: true,
+            pickups: HashMap::new(),
             fresh: HashMap::new(),
             sent: HashMap::new(),
             feedback_ips: Vec::new(),
@@ -378,6 +400,9 @@ impl ControlHub {
             } else {
                 map.range.apply(v)
             };
+            if self.soft_takeover && v != FLIP && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+                continue;
+            }
             set_target(comp, &map.target, v, &mut self.triggers);
         }
         let _ = now;
@@ -399,6 +424,27 @@ impl ControlHub {
             }
         }
         self.fresh.clear();
+    }
+}
+
+impl ControlHub {
+    /// Soft takeover: may this fader / knob (at `v`, the target's 0..1) change its target now? Only once it has
+    /// caught the current value (near it, or passed it), and until something else moves the value.
+    fn picked_up(&mut self, comp: &Composition, map: &phosphor_engine::ControlMap, v: f32) -> bool {
+        let Some(current) = get_target(comp, &map.target) else { return true };
+        let p = self.pickups.entry(format!("{:?}|{:?}", map.source, map.target)).or_default();
+        // Moved by something else since we last set it (mouse, phone, modulator, Surprise): catch it again.
+        if p.last_set.is_some_and(|s| (s - current).abs() > 0.005) {
+            p.caught = false;
+        }
+        let near = (v - current).abs() <= PICKUP_NEAR;
+        let passed = p.last_in.is_some_and(|last| (last - current) * (v - current) <= 0.0);
+        if !p.caught && (near || passed) {
+            p.caught = true;
+        }
+        p.last_in = Some(v);
+        p.last_set = if p.caught { Some(v) } else { None };
+        p.caught
     }
 }
 
