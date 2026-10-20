@@ -50,9 +50,14 @@ fn leak(s: String) -> &'static str {
 /// The ISF shaders shipped with Phosphor: Phosphor.app/Contents/Resources/isf on the Mac, `isf` next to the exe
 /// elsewhere, or the repo's assets/isf when run from a build folder.
 fn bundled_isf() -> Option<std::path::PathBuf> {
+    bundled("isf")
+}
+
+/// A folder shipped with Phosphor (see `bundled_isf`).
+fn bundled(name: &str) -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    [dir.join("../Resources/isf"), dir.join("isf"), std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/isf"))].into_iter().find(|d| d.is_dir())
+    [dir.join("../Resources").join(name), dir.join(name), std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets")).join(name)].into_iter().find(|d| d.is_dir())
 }
 
 /// Folders scanned for `.fs` files.
@@ -68,6 +73,8 @@ pub fn folders() -> Vec<std::path::PathBuf> {
     dirs.extend(crate::show::shader_dir("isf"));
     // Last, so copies installed elsewhere win: the ISF collection Phosphor ships (assets/isf).
     dirs.extend(bundled_isf());
+    // gl-transitions (converted to ISF transitions as they load); after the ISF ones, which win on the same name.
+    dirs.extend(bundled("gl-transitions"));
     // MadMapper's own materials and FX, when it's installed (they're ISF with MadMapper's extras).
     if let Ok(apps) = std::fs::read_dir("/Applications") {
         for app in apps.flatten().map(|e| e.path()).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("MadMapper") && n.ends_with(".app"))) {
@@ -161,6 +168,7 @@ impl IsfLibrary {
             .name("phosphor-isf".into())
             .spawn(move || {
                 let mut seen = std::collections::HashSet::new();
+                let mut seen_loose = std::collections::HashSet::new();
                 for dir in folders() {
                     // Two levels deep: MadMapper keeps each material in its own folder.
                     let mut files: Vec<std::path::PathBuf> = Vec::new();
@@ -170,7 +178,7 @@ impl IsfLibrary {
                         for p in entries.flatten().map(|e| e.path()) {
                             if p.is_dir() && depth < 2 {
                                 stack.push((p, depth + 1));
-                            } else if p.extension().is_some_and(|e| e == "fs") && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                            } else if p.extension().is_some_and(|e| e == "fs" || e == "glsl") && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
                                 files.push(p);
                             }
                         }
@@ -179,10 +187,29 @@ impl IsfLibrary {
                     for path in files {
                         let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
                         let slug = phosphor_engine::custom::slug(&stem);
-                        if !seen.insert(slug.clone()) {
+                        // The same shader under a differently spelled name ("Bow Tie Horizontal" / "BowTieHorizontal").
+                        let loose: String = stem.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_lowercase();
+                        if !seen.insert(slug.clone()) || !seen_loose.insert(loose) {
                             continue;
                         }
                         let Ok(fs) = std::fs::read_to_string(&path) else { continue };
+                        // A gl-transition (.glsl): becomes an ISF transition first; other .glsl files are skipped.
+                        let fs = if path.extension().is_some_and(|e| e == "glsl") {
+                            if !fs.contains("getToColor") {
+                                continue;
+                            }
+                            match phosphor_isf::gltransition::to_isf(&fs) {
+                                Ok(isf) => isf,
+                                Err(e) => {
+                                    if tx.send(Err(e)).is_err() {
+                                        return;
+                                    }
+                                    continue;
+                                }
+                            }
+                        } else {
+                            fs
+                        };
                         let vs = std::fs::read_to_string(path.with_extension("vs")).ok();
                         let converted = std::panic::catch_unwind(|| phosphor_isf::import(&slug, &fs, vs.as_deref()));
                         let Ok(converted) = converted else {

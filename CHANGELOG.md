@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.65 (2026-10-20)
+
+- **130 shader transitions for clip changes:** set a layer's (or every layer's) *Fade style* to *Shader
+  transition* and pick one: cube, doorway, page curl, book flip, star wipe, ripple, glitch, burn, kaleidoscope,
+  mosaic and more. They come from two free collections that now ship with Phosphor (Vidvox's ISF transitions,
+  which didn't work before, and gl-transitions).
+
 ## 0.2.64 (2026-10-20)
 
 - **Reverse and ping-pong are smooth:** switching a clip to reverse starts at once (no pause), looping backwards
