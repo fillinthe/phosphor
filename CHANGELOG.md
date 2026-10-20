@@ -10,6 +10,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   transition* and pick one: cube, doorway, page curl, book flip, star wipe, ripple, glitch, burn, kaleidoscope,
   mosaic and more. They come from two free collections that now ship with Phosphor (Vidvox's ISF transitions,
   which didn't work before, and gl-transitions).
+- **11 new VJ effects:** datamosh, pixel sort, flow smear, motion heat and other glitch effects from
+  Daito Manabe's free isf-shaders-for-vj collection.
 - **Import from Shadertoy:** in the Shader Editor, *Import from Shadertoy…*: paste a shader's code from
   shadertoy.com, name it, and it becomes a source (or an effect, if it reads the layer's picture). Check a shader's
   licence before sharing a show that uses it.
