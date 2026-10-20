@@ -161,6 +161,14 @@ impl PhosphorApp {
                     st.notice = Some(format!("ISF shaders you drop into {} appear in the browsers at the next launch", dir.display()));
                 }
             }
+            A::LutFolder => {
+                // ~/Library/Application Support/Phosphor/luts: each .cube becomes an effect (category LUT).
+                if let Some(dir) = crate::show::storage_dir().map(|d| d.join("luts")) {
+                    let _ = std::fs::create_dir_all(&dir);
+                    crate::os::open(&dir);
+                    st.notice = Some("Colour-grading LUTs (.cube) you drop in this folder become effects (category LUT) at the next launch".into());
+                }
+            }
             A::ReportBug => st.bug.open = true,
             A::CheckUpdates => {
                 st.updater.window = true;

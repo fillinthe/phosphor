@@ -136,7 +136,8 @@ app that's much smaller and lighter on the CPU.
     - [x] Value effects on controller mappings: smooth, steps, curve, formula ($VAL) (0.2.73; delay still to do)
     - [x] Data looper on Hand modulators (0.2.73)
     - [x] MIDI / OSC monitor (0.2.73)
-    - [ ] LUT effects (.cube) and a two-LUT mixer
+    - [x] LUT effects (.cube in the LUT folder, 0.2.74)
+    - [ ] A two-LUT mixer (blend between two grades)
     - [ ] Gamepad / HID input as control sources
     - [ ] Video tracking (Vision: hands, faces, body, remove background) as sources
     - [ ] Media bin voice modes, "on movie end" launch rules, layer crop

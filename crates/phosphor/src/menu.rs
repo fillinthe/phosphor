@@ -59,6 +59,7 @@ pub enum Action {
     Quick(crate::app::Quick),
     /// Reveals the folder Phosphor scans for your own ISF shaders.
     ShaderFolder,
+    LutFolder,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -169,6 +170,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Roadmap, "Roadmap", None),
             I(A::Website, "phosphorfx.com", None),
             I(A::ShaderFolder, "Open ISF Shader Folder", None),
+            I(A::LutFolder, "Open LUT Folder (colour grades)", None),
             I(A::Donate, "Donate to Phosphor…", None),
             S,
             I(A::ReportBug, "Report a Bug…", None),
