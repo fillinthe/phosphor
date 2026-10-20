@@ -28,6 +28,7 @@ mod layers;
 mod modulators;
 mod leds;
 mod mapping;
+mod collections;
 mod media;
 mod mixer;
 mod monitor;

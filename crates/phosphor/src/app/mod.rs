@@ -86,6 +86,8 @@ const KEY_RECENT_PROJECTS: &str = "recent_projects";
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_WATCHED: &str = "watched_folders";
+/// Set once the Library has been opened by default for an existing arrangement (0.2.67).
+const KEY_LIBRARY_DEFAULT: &str = "library_default_v1";
 const KEY_CONTROL: &str = "control";
 const KEY_ACCOUNT_HELLO: &str = "account_hello_never";
 const KEY_ACCOUNT_TAB_MOVED: &str = "account_tab_moved";

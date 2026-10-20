@@ -14,6 +14,10 @@ pub(crate) const LIBRARY: &[Tab] = &[Tab::Media, Tab::Library, Tab::Presets];
 
 /// The area a panel belongs to by default (None: any area, e.g. the Library or rarely used panels).
 pub(crate) fn area_of(tab: Tab) -> Option<usize> {
+    // The Library is a column in any area (open in Show by default), not a panel that belongs to one.
+    if LIBRARY.contains(&tab) {
+        return None;
+    }
     let (_, areas) = super::layout::LAYOUTS.iter().enumerate().fold((0, None), |(i, found), (_, (_, make))| {
         let here = make().iter_all_tabs().any(|(_, t)| *t == tab);
         (i + 1, found.or(here.then_some(i)))

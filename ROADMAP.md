@@ -110,6 +110,17 @@ app that's much smaller and lighter on the CPU.
     - [ ] Per-person limits: which controls each guest page may touch (today: one Surface page + columns + Surprise)
     - [x] A log of who changed what (Devices panel, last 100, drags merged) (2026-10-20)
 
+15. **Master → comp → layer, slices → outputs** (asked 2026-10-20; the owner's model of the app; questions pending):
+    - [x] Effects chains on layers, comps (groups) and MASTER; layers play clip rows or a media collection
+    - [x] "Shows on": send a layer / comp to any outputs as a slice of its own (Inspector; 0.2.67)
+    - [ ] Comps as first-class: a Comp has its own layers, effects, size; several comps; a comp can feed other comps
+    - [ ] Projection mapping: a mapping layer takes any input (comp, layer, output, file), is cut into slices, each
+          slice routed to outputs; slices listed/duplicated/modified in one place (Studio)
+    - [ ] Alignment grid: a test grid / crosshair overlay per output (toggle, size, colour) to line up projectors
+    - [ ] Fine-tune every point: numeric x/y for each corner and mesh point, arrow-key nudge (exists for slices:
+          arrows/Shift), per-point bezier handles; zoom into the canvas on a point
+    - [ ] Masters: several program outputs ("masters") with their own mixes, not only slices of one
+
 ## TODO
 
 Legend: [x] done · [~] in progress · [ ] not started

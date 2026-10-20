@@ -6,6 +6,8 @@ mod choice;
 mod composition;
 mod control;
 mod clip_play;
+mod collections;
+mod routing;
 mod cues;
 mod dmx;
 mod group;
@@ -20,6 +22,7 @@ mod surface;
 
 pub use choice::*;
 pub use clip_play::*;
+pub use collections::*;
 pub use cues::*;
 pub use dmx::*;
 pub use composition::*;

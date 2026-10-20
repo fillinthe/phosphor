@@ -99,6 +99,7 @@ impl PhosphorApp {
 
         let open_audio = bench.as_ref().is_some_and(|b| b.audio);
         let fresh_install = bench.is_none() && stored(KEY_COMPOSITION).is_none();
+        let library_default_done = stored(KEY_LIBRARY_DEFAULT).is_some();
         let mut app = Self {
             state: State {
                 selected: comp.layers.last().map(|l| l.id),
@@ -285,6 +286,9 @@ impl PhosphorApp {
             if let Some(p) = crate::show::bundled().and_then(|b| b.manifest.lock.clone()) {
                 app.lock = lock::Lock { active: true, password: p, ..Default::default() };
             }
+        }
+        if app.bench.is_none() && !library_default_done && !super::areas::library_open(&app.dock) {
+            app.toggle_library();
         }
         if app.bench.is_none() {
             app.state.outputs_on_open();

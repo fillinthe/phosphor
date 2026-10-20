@@ -17,6 +17,12 @@ impl PhosphorApp {
         use crate::dialogs::Purpose;
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
         // Watched folders first: this has to run every frame (it rescans every 10 s), not only when a dialog closes.
+        // A collection's folders are watched too (an opened project may bring new ones).
+        for f in &self.state.comp.collection_folders {
+            if !self.state.folders.folders.contains(&f.folder) {
+                self.state.folders.add(f.folder.clone());
+            }
+        }
         if let Some(found) = self.state.folders.poll(now) {
             // Files that vanished from a watched folder leave the bin; new ones join it.
             let folders = self.state.folders.folders.clone();
@@ -48,6 +54,14 @@ impl PhosphorApp {
                 Purpose::WatchFolder => {
                     if let Some(p) = paths.first() {
                         st.folders.add(p.to_string_lossy().to_string());
+                    }
+                }
+                Purpose::CollectionFolder(name) => {
+                    if let Some(p) = paths.first() {
+                        let folder = p.to_string_lossy().to_string();
+                        st.comp.add_collection_folder(&name, &folder);
+                        st.folders.add(folder);
+                        st.notice = Some(format!("\"{name}\" now has every clip in that folder, and new ones as they arrive"));
                     }
                 }
                 Purpose::OpenProject => {
