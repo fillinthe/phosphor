@@ -72,6 +72,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         let r = point_handle(ui, id.with("move"), to_screen(s.center()), frame, base, true, &mut d);
         if r.clicked() || r.drag_started() {
             *selected = Some(s.id);
+            super::mapping_points::select_point(ui.ctx(), None);
             touched = true;
         }
         if s.locked {
@@ -88,18 +89,20 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             ui.painter().add(egui::Shape::line(pts, line));
         }
         let locked = s.locked;
-        let points: Vec<&mut [f32; 2]> = match (&mut s.line, &mut s.mesh) {
-            _ if s.model.is_some() || locked => Vec::new(),
-            (Some(l), _) => l.points.iter_mut().collect(),
-            (None, Some(m)) => m.points.iter_mut().collect(),
-            (None, None) => s.corners.iter_mut().collect(),
-        };
+        let sid = s.id;
+        let picked = super::mapping_points::selected_point(ui.ctx()).filter(|(p, _)| *p == sid).map(|(_, i)| i);
+        let points = if locked { Vec::new() } else { super::mapping_points::points_mut(s) };
         for (i, p) in points.into_iter().enumerate() {
             let mut d = [0.0, 0.0];
             let r = point_handle(ui, id.with(i), to_screen(*p), frame, base, false, &mut d);
             if r.clicked() || r.drag_started() {
-                *selected = Some(s.id);
+                *selected = Some(sid);
+                super::mapping_points::select_point(ui.ctx(), Some((sid, i)));
                 touched = true;
+            }
+            // The selected point (Tab moves it on; arrows nudge it).
+            if picked == Some(i) && is_selected {
+                ui.painter().circle_stroke(to_screen(*p), 10.0, Stroke::new(2.0, Color32::WHITE));
             }
             p[0] += d[0];
             p[1] += d[1];
@@ -578,11 +581,20 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
 /// Temp-data key: a surface asked for its 3D model file (the app opens the dialog).
 pub(crate) const PICK_MODEL: &str = "phosphor_pick_model";
 
+/// Temp-data key: an output asked for a stage photo (the app opens the dialog).
+pub(crate) const PICK_STAGE_PHOTO: &str = "phosphor_pick_stage_photo";
+
 pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], others: &[(u64, String)]) {
     surface_source(ui, s, layers, groups, others);
     ui.horizontal(|ui| {
         ui.label("Shape");
         choice_buttons(ui, &mut s.shape, |_, _| {});
+    });
+    ui.horizontal(|ui| {
+        ui.label("Blend");
+        choice_buttons(ui, &mut s.blend, |_, r| {
+            r.clone().on_hover_text("How this slice lands on the slices under it (Add: overlaps get brighter)");
+        });
     });
     if s.line.is_none() && s.model.is_none() {
         egui::CollapsingHeader::new(RichText::new("Corners, by number").small()).id_salt(("corner_numbers", s.id)).show(ui, |ui| {

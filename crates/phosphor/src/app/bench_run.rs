@@ -219,6 +219,34 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if let Some(b) = name.strip_prefix("sliceblend=") {
+                use phosphor_engine::mapping::SliceBlend;
+                if let (Some(blend), Some(o)) = (SliceBlend::ALL.into_iter().find(|x| x.name().eq_ignore_ascii_case(b)), self.state.comp.outputs.first_mut()) {
+                    o.mapping.surfaces.iter_mut().for_each(|s| s.blend = blend);
+                    println!("QUICK sliceblend: {}", blend.name());
+                }
+                continue;
+            }
+            if let Some(path) = name.strip_prefix("stagephoto=") {
+                if let Some(o) = self.state.comp.outputs.first_mut() {
+                    o.stage_photo = path.to_string();
+                    o.stage_photo_opacity = 1.0;
+                    println!("QUICK stagephoto: {path}");
+                }
+                continue;
+            }
+            if let Some(pat) = name.strip_prefix("pattern=") {
+                // A test pattern on the first output (Grid, Card, Bars, White, Checker, Ramp), mapping off.
+                use phosphor_engine::Choice;
+                let pattern = phosphor_engine::TestPattern::ALL.into_iter().find(|p| format!("{p:?}").eq_ignore_ascii_case(pat) || p.label().eq_ignore_ascii_case(pat));
+                if let (Some(p), Some(o)) = (pattern, self.state.comp.outputs.first_mut()) {
+                    o.grid.on = true;
+                    o.grid.pattern = p;
+                    o.mapping.enabled = false;
+                    println!("QUICK pattern: {}", p.label());
+                }
+                continue;
+            }
             if name == "previews" {
                 // Preview windows: the top layer, a group of the bottom layer, and output 1 after mapping.
                 use crate::panels::MonitorSource;

@@ -61,6 +61,11 @@ impl PhosphorApp {
         if let Some(sid) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(crate::panels::PICK_MODEL))) {
             self.state.dialogs.pick_file(crate::dialogs::Purpose::Model3d(sid), Some(("3D model (OBJ)", &["obj"])));
         }
+        // An output asked for a stage photo.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(oid) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(crate::panels::PICK_STAGE_PHOTO))) {
+            self.state.dialogs.pick_file(crate::dialogs::Purpose::StagePhoto(oid), Some(("Photo", &["jpg", "jpeg", "png", "heic", "tif", "tiff", "webp"])));
+        }
         #[cfg(not(target_arch = "wasm32"))]
         self.handle_dialogs_and_folders(now);
         #[cfg(not(target_arch = "wasm32"))]

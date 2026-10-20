@@ -4,6 +4,21 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.79 (2026-10-20)
+
+Projection mapping, more like MadMapper:
+- **Fine-tune one point:** click a corner or mesh point (or press Tab) in the Mapping Studio. Tab and Shift-Tab
+  go to the next and previous point, the arrows nudge it one pixel (Shift = 10), and Properties shows its X and Y
+  in pixels to type. Esc goes back to moving the whole slice.
+- **Snap to other slices:** with Snap on, a dragged point lands on another slice's point when it comes within a
+  few pixels (otherwise on the grid), so neighbouring slices meet exactly.
+- **Test patterns:** right-click an output's GRID: Grid, Test card (colour bars, grey ramp and a different colour in
+  each corner, so a flipped projector is obvious), Colour bars, White, Checkerboard, Grey ramp.
+- **Stage photo:** Mapping Studio › Stage photo: a photo of the real stage taken from the projector shows behind
+  the slices while you line them up (never on the output).
+- **Blend per slice:** Normal, Add, Screen or Multiply: overlapping slices can add up instead of covering.
+- Fixed: preview windows could stay empty or show another window's picture after opening several.
+
 ## 0.2.78 (2026-10-20)
 
 - **Preview windows** (as in VDMX): open as many as you like (+ on the Preview bar, View › New Preview Window,

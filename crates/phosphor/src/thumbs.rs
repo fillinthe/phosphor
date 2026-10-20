@@ -7,6 +7,9 @@ use eframe::egui;
 
 pub const THUMB_W: u32 = 192;
 
+/// Between a path and its size in a `get_sized` key.
+const SIZE_SEP: char = '\u{1}';
+
 pub struct Thumbs {
     cache: HashMap<String, Option<egui::TextureHandle>>,
     pending: HashSet<String>,
@@ -35,6 +38,14 @@ impl Thumbs {
             self.worker.request(path.to_string());
         }
         None
+    }
+
+    /// A picture of `path` up to `max` pixels on its long side (stage photos), made on the same background thread.
+    pub fn get_sized(&mut self, path: &str, max: u32) -> Option<egui::TextureId> {
+        if max == THUMB_W {
+            return self.get(path);
+        }
+        self.get(&format!("{path}{SIZE_SEP}{max}"))
     }
 
     /// A thumbnail made right here (text clips): `build` runs once per key and the picture is kept.
@@ -75,7 +86,7 @@ mod native {
 
     use eframe::egui;
 
-    use super::THUMB_W;
+    use super::{SIZE_SEP, THUMB_W};
 
     pub struct Worker {
         req: Sender<String>,
@@ -106,21 +117,42 @@ mod native {
         }
     }
 
-    fn build(path: &str) -> Option<egui::ColorImage> {
+    pub(super) fn build(key: &str) -> Option<egui::ColorImage> {
+        let (path, size) = match key.split_once(SIZE_SEP) {
+            Some((p, s)) => (p, s.parse().unwrap_or(THUMB_W)),
+            None => (key, THUMB_W),
+        };
         let name = path.to_ascii_lowercase();
         let img = if crate::media::is_movie(&name) {
             let ffmpeg = crate::stream::ffmpeg_path()?;
             let out = Command::new(ffmpeg)
-                .args(["-v", "error", "-ss", "0.5", "-i", path, "-frames:v", "1", "-vf", &format!("scale={THUMB_W}:-2"), "-f", "image2pipe", "-vcodec", "png", "-"])
+                .args(["-v", "error", "-ss", "0.5", "-i", path, "-frames:v", "1", "-vf", &format!("scale={size}:-2"), "-f", "image2pipe", "-vcodec", "png", "-"])
                 .stdin(Stdio::null())
                 .stderr(Stdio::null())
                 .output()
                 .ok()?;
             image::load_from_memory(&out.stdout).ok()?
         } else {
-            image::open(path).ok()?.thumbnail(THUMB_W, THUMB_W)
+            image::open(path).ok()?.thumbnail(size, size)
         };
         let rgba = img.to_rgba8();
         Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
     }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    #[test]
+    fn sized_pictures_are_bigger_than_thumbnails() {
+        let icon = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/icon-1024.png");
+        let small = super::native_build(icon).expect("thumbnail");
+        let big = super::native_build(&format!("{icon}{}{}", super::SIZE_SEP, 800)).expect("sized");
+        assert_eq!(small.size[0].max(small.size[1]), super::THUMB_W as usize);
+        assert_eq!(big.size[0].max(big.size[1]), 800);
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+fn native_build(key: &str) -> Option<egui::ColorImage> {
+    native::build(key)
 }

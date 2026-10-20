@@ -133,6 +133,11 @@ impl PhosphorApp {
                         st.begin_resolume_import(&p.to_string_lossy());
                     }
                 }
+                Purpose::StagePhoto(oid) => {
+                    if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter_mut().find(|o| o.id == oid)) {
+                        o.stage_photo = p.to_string_lossy().to_string();
+                    }
+                }
                 Purpose::Model3d(sid) => {
                     if let Some(p) = paths.first() {
                         let path = p.to_string_lossy().to_string();

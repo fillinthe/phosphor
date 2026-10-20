@@ -202,6 +202,8 @@ pub struct Engine {
     /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
     monitor_req: Vec<(u64, u32, u32)>,
     monitor_targets: Vec<Option<Target>>,
+    /// What each monitor slot showed last frame (a slot whose source changes starts empty, never the old picture).
+    monitor_sources: Vec<u64>,
     preview_source: u64,
     preview_src: Option<Target>,
     preview_targets: Vec<Option<Target>>,
@@ -250,6 +252,7 @@ impl Engine {
             previews: Vec::new(),
             monitor_req: Vec::new(),
             monitor_targets: Vec::new(),
+            monitor_sources: Vec::new(),
             preview_source: MASTER_ID,
             preview_src: None,
             preview_targets: Vec::new(),
@@ -426,6 +429,12 @@ impl Engine {
         if self.monitor_targets.len() < monitors.len() {
             self.monitor_targets.resize_with(monitors.len(), || None);
         }
+        for (i, &(src, _, _)) in monitors.iter().enumerate() {
+            if self.monitor_sources.get(i) != Some(&src) {
+                self.monitor_targets[i] = None;
+            }
+        }
+        self.monitor_sources = monitors.iter().map(|m| m.0).collect();
         let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
         // Layers shown on their own by a mapping surface, and their pictures this frame.
         // Full-size pictures kept for mapping surfaces and for layers that use another layer as their source.
@@ -598,7 +607,7 @@ impl Engine {
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
-                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
                 // Line slice: a strip along a polyline, drawn like a mesh.
@@ -616,7 +625,7 @@ impl Engine {
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
-                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
                 // Mesh warp: one pass drawing the cached, finely subdivided mesh.
@@ -633,7 +642,7 @@ impl Engine {
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
-                    passes.push(Pass { entry: "fs_mesh", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
                 let Some(inv) = mapping::quad_to_square(&s.corners) else { continue };
@@ -651,7 +660,7 @@ impl Engine {
                 u.p[5] = g0;
                 u.p[6] = g1;
                 [u.p[7], u.p[8]] = s.color.uniforms();
-                passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+                passes.push(Pass { entry: s.blend.entry(false), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
             self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
             self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
