@@ -102,8 +102,8 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 activity_dot(ui, seen.get(&name).copied());
                 let mut on = !st.control.midi_disabled.contains(&name);
-                let text = RichText::new(if on { "ON" } else { "OFF" }).small();
-                if ui.toggle_value(&mut on, text).changed() {
+                let text = if on { "ON" } else { "OFF" };
+                if toggle(ui, &mut on, text).changed() {
                     if on {
                         st.control.midi_disabled.remove(&name);
                     } else {

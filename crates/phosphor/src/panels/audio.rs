@@ -36,7 +36,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         }
         let mut on = audio.is_open();
         let text = if on { label(icon::MICROPHONE, "Listening") } else { label(icon::MICROPHONE, "Off") };
-        if ui.toggle_value(&mut on, text).clicked() {
+        if toggle(ui, &mut on, text).clicked() {
             if on {
                 if let Err(e) = audio.open(audio.current().map(str::to_string).as_deref()) {
                     *notice = Some(e);
@@ -102,7 +102,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         Level::range(&mut audio.beats.sensitivity, 1.1, 3.0, "Kick threshold").default(1.5).target(ControlTarget::App(phosphor_engine::AppControl::KickThreshold)).tip("Lower catches softer kicks; higher ignores everything but strong hits").show(ui);
     });
     ui.horizontal(|ui| {
-        let r = ui.toggle_value(follow_audio, label(icon::METRONOME, "Follow audio"))
+        let r = toggle(ui, follow_audio, label(icon::METRONOME, "Follow audio"))
             .on_hover_text("Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick");
         map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
         hint(ui, "Also: Audio beat (kick) under any slider's wave button.");

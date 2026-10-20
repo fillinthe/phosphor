@@ -29,7 +29,7 @@ fn short(name: &str) -> String {
 
 /// ON toggle with Learn on right-click (layers and groups).
 fn on_toggle(ui: &mut egui::Ui, enabled: &mut bool, target: ControlTarget) {
-    let on = ui.toggle_value(enabled, RichText::new("ON").small());
+    let on = toggle(ui, enabled, "ON");
     mapped_badge(ui, &on, &target);
     on.right_menu(|ui| learn_items(ui, &target));
 }
@@ -54,7 +54,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                     fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
                     ui.horizontal(|ui| {
                         super::layers::show_button(ui, layer);
-                        ui.toggle_value(&mut layer.solo, RichText::new("S").small());
+                        toggle(ui, &mut layer.solo, "S");
                     });
                     ui.horizontal(|ui| {
                         for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {

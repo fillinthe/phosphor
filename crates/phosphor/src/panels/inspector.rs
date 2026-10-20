@@ -204,15 +204,18 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 });
             }
             ui.horizontal(|ui| {
+                // Play / pause makes something happen: an action button (not a toggle pill).
                 let text = if layer.playing { label(icon::PAUSE, "Pause") } else { label(icon::PLAY, "Play") };
-                ui.toggle_value(&mut layer.playing, text);
+                if action_button(ui, Act::Go, text).clicked() {
+                    layer.playing = !layer.playing;
+                }
                 if ui.button(icon::SKIP_BACK).on_hover_text("Back to the start").clicked() {
                     seek_to = Some(0.0);
                 }
-                ui.checkbox(&mut layer.looping, "Loop");
+                toggle(ui, &mut layer.looping, "Loop");
                 ui.separator();
                 let target = ControlTarget::LayerDirection(layer.id);
-                choice_buttons(ui, &mut layer.direction, |ui, r| map_menu(ui, r, target.clone()));
+                choice_mapped(ui, &mut layer.direction, target.clone());
             });
             ui.horizontal(|ui| {
                 ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
@@ -221,7 +224,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             });
             ui.horizontal(|ui| {
                 let mut sync = layer.sync_beats > 0.0;
-                if ui.toggle_value(&mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
+                if toggle(ui, &mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
                     layer.sync_beats = if sync { 16.0 } else { 0.0 };
                 }
                 #[cfg(not(target_arch = "wasm32"))]
@@ -295,8 +298,8 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         ui.horizontal(|ui| {
             guarded!(ui, t.stretch_x, egui::DragValue::new(&mut t.stretch_x).range(0.05..=8.0).speed(0.01).prefix("width ×"));
             guarded!(ui, t.stretch_y, egui::DragValue::new(&mut t.stretch_y).range(0.05..=8.0).speed(0.01).prefix("height ×"));
-            ui.toggle_value(&mut t.flip_x, format!("Flip {}", icon::ARROWS_LEFT_RIGHT));
-            ui.toggle_value(&mut t.flip_y, format!("Flip {}", icon::ARROWS_DOWN_UP));
+            toggle(ui, &mut t.flip_x, format!("Flip {}", icon::ARROWS_LEFT_RIGHT));
+            toggle(ui, &mut t.flip_y, format!("Flip {}", icon::ARROWS_DOWN_UP));
             if ui.add_enabled(!t.is_identity(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset"))).clicked() {
                 *t = Default::default();
             }

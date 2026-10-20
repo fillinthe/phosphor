@@ -109,12 +109,12 @@ fn looper_row(ui: &mut egui::Ui, l: &mut phosphor_engine::Looper, beats: f32) {
                 ui.label(RichText::new(format!("{} recording", icon::RECORD)).color(crate::theme::WARN));
             }
             None => {
-                if ui.button(RichText::new(format!("{} Rec", icon::RECORD)).color(crate::theme::WARN)).on_hover_text("Record what this knob does for the loop's length, from the next loop start; then it plays back by itself").clicked() {
+                if action_button(ui, Act::Record, format!("{} Rec", icon::RECORD)).on_hover_text("Record what this knob does for the loop's length, from the next loop start; then it plays back by itself").clicked() {
                     l.arm(beats);
                 }
                 if !l.samples.is_empty() {
                     let play = if l.playing { label(icon::STOP, "Stop") } else { label(icon::PLAY, "Play") };
-                    if ui.button(play).on_hover_text("Play the take back, looped with the beat (stopped: the knob drives it again)").clicked() {
+                    if action_button(ui, Act::Go, play).on_hover_text("Play the take back, looped with the beat (stopped: the knob drives it again)").clicked() {
                         l.playing = !l.playing;
                     }
                     if ui.small_button(icon::TRASH).on_hover_text("Forget the take").clicked() {

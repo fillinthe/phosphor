@@ -1,5 +1,12 @@
 //! Small shared pieces every panel uses the same way, so a field looks like a field and a rename works the same
-//! everywhere. (Sliders: `Level`; buttons: `label` + `ui.button`; help text: `hint`; pick-one: `choice_*`.)
+//! everywhere. (Sliders: `Level`; help text: `hint`; pick-one enums: `choice_buttons` / `choice_combo`.)
+//!
+//! Buttons by what they do, each with its own look so you can tell them apart at a glance:
+//! - `action_button`: makes something happen now (play, trigger, record, Surprise): solid fill, bold.
+//! - `toggle`: an on/off state (ON, Loop, GRID, Syphon, mute): a pill with a light, lit when on.
+//! - `segmented`: pick one of a few (Forward / Reverse / Ping-pong, Now / Beat / Bar, filters): joined segments,
+//!   the picked one raised.
+//! - plain `ui.button` = a command (Import…, Rename, Add folder…); `danger_button` = Delete and the like.
 
 use super::*;
 
@@ -59,4 +66,100 @@ fn name_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, init
     });
     ui.ctx().data_mut(|d| d.insert_temp(key, text));
     out
+}
+
+
+/// What an action button does: its colour.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Act {
+    /// Play / trigger / go (the accent colour).
+    Go,
+    /// Record (red).
+    Record,
+}
+
+/// A button that makes something happen now: solid, bold. (Commands that open or edit things stay plain buttons.)
+pub(crate) fn action_button(ui: &mut egui::Ui, act: Act, text: impl Into<String>) -> egui::Response {
+    action_button_sized(ui, act, text, egui::vec2(0.0, 22.0))
+}
+
+/// `action_button` at a set size (clip column triggers).
+pub(crate) fn action_button_sized(ui: &mut egui::Ui, act: Act, text: impl Into<String>, size: egui::Vec2) -> egui::Response {
+    let fill = match act {
+        Act::Go => accent(),
+        Act::Record => Color32::from_rgb(225, 70, 60),
+    };
+    let ink = if act == Act::Go { Color32::from_gray(12) } else { Color32::WHITE };
+    let b = egui::Button::new(RichText::new(text.into()).strong().color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(size);
+    let r = if size.x > 0.0 { ui.add_sized(size, b) } else { ui.add(b) };
+    if r.hovered() {
+        ui.painter().rect_stroke(r.rect, 6.0, Stroke::new(1.5, Color32::WHITE.gamma_multiply(0.7)), StrokeKind::Inside);
+    }
+    r
+}
+
+/// An on/off state: a pill with a light. Lit (accent) when on, hollow when off. Returns the response (`changed`).
+pub(crate) fn toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<String>) -> egui::Response {
+    toggle_locked(ui, on, text, false)
+}
+
+/// `toggle` that ignores clicks while `locked`.
+pub(crate) fn toggle_locked(ui: &mut egui::Ui, on: &mut bool, text: impl Into<String>, locked: bool) -> egui::Response {
+    let text: String = text.into();
+    let font = egui::FontId::proportional(12.0);
+    let galley = ui.painter().layout_no_wrap(text, font, Color32::WHITE);
+    let size = egui::vec2(galley.size().x + 30.0, 22.0);
+    let (rect, mut r) = ui.allocate_exact_size(size, Sense::click());
+    if r.clicked() && !locked {
+        *on = !*on;
+        r.mark_changed();
+    }
+    let v = ui.visuals();
+    let hovered = r.hovered();
+    let (fill, stroke, ink) = if *on {
+        (accent().gamma_multiply(0.22), Stroke::new(1.0, accent()), accent())
+    } else {
+        (Color32::TRANSPARENT, Stroke::new(1.0, if hovered { v.widgets.hovered.fg_stroke.color } else { v.widgets.inactive.bg_stroke.color.gamma_multiply(1.6) }), v.widgets.inactive.fg_stroke.color)
+    };
+    let p = ui.painter();
+    p.rect(rect, size.y * 0.5, fill, stroke, StrokeKind::Inside);
+    let dot = rect.left_center() + egui::vec2(11.0, 0.0);
+    if *on {
+        p.circle_filled(dot, 4.0, accent());
+        p.circle_filled(dot, 7.0, accent().gamma_multiply(0.18));
+    } else {
+        p.circle_stroke(dot, 3.5, Stroke::new(1.0, ink.gamma_multiply(0.7)));
+    }
+    p.galley(egui::pos2(rect.left() + 21.0, rect.center().y - galley.size().y * 0.5), galley, ink);
+    r.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, ""));
+    r
+}
+
+/// Pick one of a few: joined segments in one rounded frame, the picked one raised. `each` gets each segment's
+/// response (to add a map menu, a tooltip…). Returns true when the choice changed.
+pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, options: &[(T, String)], mut each: impl FnMut(&mut egui::Ui, &egui::Response, &T)) -> bool {
+    let before = value.clone();
+    let v = ui.visuals().clone();
+    egui::Frame::new().fill(v.extreme_bg_color).corner_radius(6.0).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.horizontal(|ui| {
+            for (opt, text) in options {
+                let picked = *value == *opt;
+                let ink = if picked { v.strong_text_color() } else { v.weak_text_color() };
+                let fill = if picked { v.widgets.active.weak_bg_fill } else { Color32::TRANSPARENT };
+                let b = egui::Button::new(RichText::new(text).color(ink)).fill(fill).stroke(if picked { Stroke::new(1.0, v.widgets.hovered.bg_stroke.color) } else { Stroke::NONE }).corner_radius(4.0).min_size(egui::vec2(0.0, 18.0));
+                let r = ui.add(b);
+                if r.clicked() {
+                    *value = opt.clone();
+                }
+                each(ui, &r, opt);
+            }
+        });
+    });
+    *value != before
+}
+
+/// A destructive command (Delete, Remove…): red text.
+pub(crate) fn danger_button(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
+    ui.button(RichText::new(text.into()).color(crate::theme::WARN))
 }

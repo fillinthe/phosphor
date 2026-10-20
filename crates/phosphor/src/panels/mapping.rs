@@ -421,10 +421,10 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         let State { comp, output, .. } = st;
         let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
         ui.horizontal(|ui| {
-            ui.toggle_value(&mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
+            toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
                 .on_hover_text("When on, this output shows only its surfaces");
             super::output::grid_toggle(ui, &mut o.grid);
-            ui.toggle_value(&mut o.mapping.test_pattern, label(icon::CHECKERBOARD, "Slice test pattern"));
+            toggle(ui, &mut o.mapping.test_pattern, label(icon::CHECKERBOARD, "Slice test pattern"));
             if ui.button(label(icon::PLUS, "Surface")).clicked() {
                 add_surface = true;
             }
@@ -494,7 +494,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             let frame = card_frame(ui, is_selected).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    ui.toggle_value(&mut s.enabled, RichText::new("ON").small().strong());
+                    toggle(ui, &mut s.enabled, "ON");
                     ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(140.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button(icon::TRASH).on_hover_text("Delete surface").clicked() {
@@ -535,7 +535,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
-                    ui.toggle_value(&mut m.enabled, RichText::new("ON").small().strong());
+                    toggle(ui, &mut m.enabled, "ON");
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
                     hint(ui, format!("{} points", m.points.len()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -615,7 +615,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             s.edges = per_side.then_some([s.feather; 4]);
         }
         let text = if s.locked { label(icon::LOCK, "Locked") } else { label(icon::LOCK_OPEN, "Lock") };
-        ui.toggle_value(&mut s.locked, text).on_hover_text("Locked: its points can't be dragged or nudged");
+        toggle(ui, &mut s.locked, text).on_hover_text("Locked: its points can't be dragged or nudged");
     });
     if let Some(e) = s.edges.as_mut() {
         for (k, side) in ["Left", "Right", "Top", "Bottom"].iter().enumerate() {
@@ -632,7 +632,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     color_grade_editor(ui, s.id, &mut s.color);
     ui.horizontal(|ui| {
         let mut on3d = s.model.is_some();
-        if ui.toggle_value(&mut on3d, label(icon::CUBE, "3D model")).on_hover_text("Map onto a real object from its 3D model (OBJ with UVs): line the virtual camera up with the projector").changed() {
+        if toggle(ui, &mut on3d, label(icon::CUBE, "3D model")).on_hover_text("Map onto a real object from its 3D model (OBJ with UVs): line the virtual camera up with the projector").changed() {
             if on3d {
                 s.model = Some(phosphor_engine::mapping::Model3d::default());
                 s.line = None;
@@ -677,7 +677,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             ui.checkbox(&mut m.cull, "Hide back faces");
         });
         ui.horizontal(|ui| {
-            ui.toggle_value(&mut m.calibrating, label(icon::CROSSHAIR, "Calibrate")).on_hover_text("Pin model points and drag them onto the real object: from 4 pins the projector is solved for you (6+ also solves the lens)");
+            toggle(ui, &mut m.calibrating, label(icon::CROSSHAIR, "Calibrate")).on_hover_text("Pin model points and drag them onto the real object: from 4 pins the projector is solved for you (6+ also solves the lens)");
             if m.calibrating {
                 let n = m.pins.len();
                 hint(ui, if n < 4 { format!("{n} pinned, {} more to solve", 4 - n) } else if n < 6 { format!("{n} pinned: solving position (6 also solve the lens)") } else { format!("{n} pinned: solving position and lens") });
@@ -690,7 +690,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     }
     ui.horizontal(|ui| {
         let mut on = s.line.is_some();
-        if ui.toggle_value(&mut on, label(icon::LINE_SEGMENTS, "Line")).on_hover_text("The picture runs along a line with a width: outlines, edges, strips. Drag its points on the canvas").changed() {
+        if toggle(ui, &mut on, label(icon::LINE_SEGMENTS, "Line")).on_hover_text("The picture runs along a line with a width: outlines, edges, strips. Drag its points on the canvas").changed() {
             s.set_line(on);
         }
         if let Some(l) = &mut s.line {
@@ -711,7 +711,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     ui.add_enabled_ui(s.line.is_none(), |ui| ui.horizontal(|ui| {
         let mut on = s.mesh.is_some();
         let (mut cols, mut rows) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));
-        let mut changed = ui.toggle_value(&mut on, label(icon::GRID_NINE, "Mesh warp")).on_hover_text("Bend the surface onto curved or uneven objects with a grid of points").changed();
+        let mut changed = toggle(ui, &mut on, label(icon::GRID_NINE, "Mesh warp")).on_hover_text("Bend the surface onto curved or uneven objects with a grid of points").changed();
         if on {
             changed |= guarded!(ui, cols, egui::DragValue::new(&mut cols).range(1..=8).prefix("cols ")).changed();
             changed |= guarded!(ui, rows, egui::DragValue::new(&mut rows).range(1..=8).prefix("rows ")).changed();
@@ -742,8 +742,8 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
 /// A mask's settings: invert, smooth curve, soft edge.
 pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping::Mask) {
     ui.horizontal(|ui| {
-        ui.toggle_value(&mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
-        ui.toggle_value(&mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point to make it a sharp corner)");
+        toggle(ui, &mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
+        toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point to make it a sharp corner)");
     });
     ui.horizontal(|ui| {
         Level::range(&mut m.feather, 0.0, 0.2, "Soft edge").default(0.0).tip("Fade the mask's edge (0 = hard); the fade is centred on the outline").show(ui);

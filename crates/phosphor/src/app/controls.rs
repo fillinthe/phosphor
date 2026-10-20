@@ -9,6 +9,13 @@ impl PhosphorApp {
         let st = &mut self.state;
         let mapped: panels::MappedList = std::sync::Arc::new(st.comp.control_maps.iter().map(|m| (m.target.clone(), m.source.label())).collect());
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::MAPPED_TARGETS), mapped));
+        // Locks and snap points: changes asked for last frame, then this frame's copy for the widgets.
+        let changes = ctx.data_mut(|d| d.remove_temp::<Vec<crate::ui::PrefChange>>(egui::Id::new(crate::ui::PREFS_REQUEST)));
+        for c in changes.unwrap_or_default() {
+            c.apply(&mut st.comp.control_prefs);
+        }
+        let prefs = std::sync::Arc::new(st.comp.control_prefs.clone());
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(crate::ui::CONTROL_PREFS), prefs));
         if let Some((target, source)) = ctx.data_mut(|d| {
             let id = egui::Id::new(panels::MAP_REQUEST);
             let t = d.get_temp::<(phosphor_engine::ControlTarget, phosphor_engine::ControlSource)>(id);

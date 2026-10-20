@@ -245,7 +245,7 @@ impl PhosphorApp {
                 // The dice says where it will land: the selected layer, else every layer.
                 let target = self.state.selected.filter(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
                 let where_ = target.map_or("all layers".to_string(), |id| crate::ui::layer_name(&self.state.comp.layers, id));
-                let dice = ui.button(named(icon::DICE_FIVE, &format!("Surprise · {where_}"))).on_hover_text(format!(
+                let dice = crate::ui::action_button(ui, crate::ui::Act::Go, named(icon::DICE_FIVE, &format!("Surprise · {where_}"))).on_hover_text(format!(
                     "{} (⌘R: all layers). Click: a new look on {where_}. The arrow: pick several layers. Right-click to map a pad or key.",
                     super::Quick::Surprise.about()
                 ));

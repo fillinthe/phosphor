@@ -391,6 +391,14 @@ impl State {
 
     /// Fires a trigger now, or queues it for the next beat when quantise is on.
     pub fn trigger(&mut self, t: Trigger, now: f64) {
+        let locked = match &t {
+            Trigger::Clip { layer, slot } => self.comp.control_locked(&phosphor_engine::ControlTarget::TriggerClip { layer: *layer, slot: *slot }),
+            Trigger::Column(c) => self.comp.control_locked(&phosphor_engine::ControlTarget::TriggerColumn(*c)),
+            Trigger::Source { .. } => false,
+        };
+        if locked {
+            return;
+        }
         if self.comp.launch.timing == phosphor_engine::LaunchTiming::Now {
             self.fire(t, now as f32);
             return;

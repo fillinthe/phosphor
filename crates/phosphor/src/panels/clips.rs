@@ -9,10 +9,15 @@ pub const CLIP_PAGE_SIZE: usize = 9;
 /// Cut / Fade and Now / Beat / Bar: how clips and media land on layers.
 pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     ui.label(RichText::new("Launch").small().color(Color32::GRAY));
-    let cut = ui.selectable_value(&mut comp.launch.fade, false, "Cut").on_hover_text("Switch instantly");
-    map_menu(ui, &cut, ControlTarget::App(phosphor_engine::AppControl::LaunchFade));
-    let fade = ui.selectable_value(&mut comp.launch.fade, true, "Fade").on_hover_text("Fade between sources in the chosen style");
-    map_menu(ui, &fade, ControlTarget::App(phosphor_engine::AppControl::LaunchFade));
+    let fade_target = ControlTarget::App(phosphor_engine::AppControl::LaunchFade);
+    let was = comp.launch.fade;
+    segmented(ui, &mut comp.launch.fade, &[(false, "Cut".to_string()), (true, "Fade".to_string())], |ui, r, fade| {
+        let r = r.clone().on_hover_text(if *fade { "Fade between sources in the chosen style" } else { "Switch instantly" });
+        map_menu(ui, &r, fade_target.clone());
+    });
+    if is_locked(ui, &fade_target) {
+        comp.launch.fade = was;
+    }
     if comp.launch.fade {
         let secs = guarded!(ui, comp.launch.fade_secs, egui::DragValue::new(&mut comp.launch.fade_secs).range(0.05..=10.0).speed(0.02).fixed_decimals(2).suffix(" s"));
         map_menu(ui, &secs, ControlTarget::App(phosphor_engine::AppControl::FadeTime));
@@ -31,18 +36,18 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
         }
     }
     ui.separator();
-    choice_buttons(ui, &mut comp.launch.timing, |ui, r| map_menu(ui, r, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming)));
+    choice_mapped(ui, &mut comp.launch.timing, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming));
     #[cfg(not(target_arch = "wasm32"))]
-    ui.toggle_value(&mut comp.launch.auto_beat_match, label(icon::MAGIC_WAND, "Auto-match"))
+    toggle(ui, &mut comp.launch.auto_beat_match, label(icon::MAGIC_WAND, "Auto-match"))
         .on_hover_text("Every movie that lands in the grid is scanned for its visual beat and locked to the tempo (Match the beat)");
     let auto = &mut comp.auto_show;
-    ui.toggle_value(&mut auto.enabled, label(icon::PLAY_CIRCLE, "Auto show"))
+    toggle(ui, &mut auto.enabled, label(icon::PLAY_CIRCLE, "Auto show"))
         .on_hover_text("The show runs itself: the next column with clips every few bars (on the launch quantise), and Surprise when the music drops");
     if auto.enabled {
         ui.label("every");
         guarded!(ui, auto.bars, egui::DragValue::new(&mut auto.bars).range(1..=64).suffix(" bars"));
-        ui.toggle_value(&mut auto.surprise_on_drops, "Surprise on drops").on_hover_text("A jump in the music's level fires Surprise (at most every 8 s)");
-        ui.toggle_value(&mut auto.react, "React").on_hover_text("Every layer's generator and effects follow the music (re-applied after each Surprise)");
+        toggle(ui, &mut auto.surprise_on_drops, "Surprise on drops").on_hover_text("A jump in the music's level fires Surprise (at most every 8 s)");
+        toggle(ui, &mut auto.react, "React").on_hover_text("Every layer's generator and effects follow the music (re-applied after each Surprise)");
     }
 }
 
@@ -77,7 +82,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         }
         if st.control.midi_clock.active(now) {
             let bpm = st.control.midi_clock.bpm().map_or("…".to_string(), |b| format!("{b:.1}"));
-            ui.toggle_value(&mut st.clock.follow_midi, RichText::new(format!("MIDI {bpm}")).small().strong())
+            toggle(ui, &mut st.clock.follow_midi, format!("MIDI {bpm}"))
                 .on_hover_text("MIDI clock is coming in: tempo follows it, and after a Start the beat does too. Click to ignore it.");
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -87,13 +92,13 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 Some(l) => format!("LINK {}", l.peers()),
                 None => "LINK".into(),
             };
-            let r = ui.toggle_value(&mut on, RichText::new(text).small().strong()).on_hover_text("Ableton Link: share tempo and beat with Live, Traktor, Resolume and other Link apps on the network (the number = apps connected)");
+            let r = toggle(ui, &mut on, text).on_hover_text("Ableton Link: share tempo and beat with Live, Traktor, Resolume and other Link apps on the network (the number = apps connected)");
             map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::Link));
             if r.changed() {
                 st.link = on.then(|| crate::link::LinkSync::new(st.clock.bpm));
             }
         }
-        let auto = ui.toggle_value(&mut st.clock.follow_audio, RichText::new("AUTO").small().strong()).on_hover_text("Follow the audio beat detector (tempo and beat)");
+        let auto = toggle(ui, &mut st.clock.follow_audio, "AUTO").on_hover_text("Follow the audio beat detector (tempo and beat)");
         map_menu(ui, &auto, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
         if st.mod_inputs.audio_beat > 0.05 {
             ui.painter().circle_filled(auto.rect.right_top() + egui::vec2(-2.0, 2.0), 2.0 + 3.0 * st.mod_inputs.audio_beat, Color32::from_rgb(255, 196, 70));
@@ -167,10 +172,14 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 ui.allocate_exact_size(egui::vec2(ROW_HEADER_W, 22.0), Sense::hover());
                 for c in 0..cols {
                     let keyed = c / CLIP_PAGE_SIZE == bank;
-                    let text = RichText::new(format!("{} {}", icon::PLAY, c + 1));
-                    let text = if keyed { text.color(accent()) } else { text };
                     let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
-                    let head = ui.add_sized([cell.x, 22.0], egui::Button::new(text)).on_hover_text(tip);
+                    // Triggers are actions: solid buttons (the columns on the number keys in full colour).
+                    let head = if keyed {
+                        action_button_sized(ui, Act::Go, format!("{} {}", icon::PLAY, c + 1), egui::vec2(cell.x, 22.0))
+                    } else {
+                        ui.add_sized([cell.x, 22.0], egui::Button::new(format!("{} {}", icon::PLAY, c + 1)))
+                    }
+                    .on_hover_text(tip);
                     if head.clicked() {
                         triggers.push(Trigger::Column(c));
                     }
