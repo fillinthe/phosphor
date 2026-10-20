@@ -47,6 +47,14 @@ fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
+/// The ISF shaders shipped with Phosphor: Phosphor.app/Contents/Resources/isf on the Mac, `isf` next to the exe
+/// elsewhere, or the repo's assets/isf when run from a build folder.
+fn bundled_isf() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    [dir.join("../Resources/isf"), dir.join("isf"), std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/isf"))].into_iter().find(|d| d.is_dir())
+}
+
 /// Folders scanned for `.fs` files.
 pub fn folders() -> Vec<std::path::PathBuf> {
     let mut dirs = vec![std::path::PathBuf::from("/Library/Graphics/ISF")];
@@ -58,6 +66,8 @@ pub fn folders() -> Vec<std::path::PathBuf> {
         dirs.push(d.join("isf"));
     }
     dirs.extend(crate::show::shader_dir("isf"));
+    // Last, so copies installed elsewhere win: the ISF collection Phosphor ships (assets/isf).
+    dirs.extend(bundled_isf());
     // MadMapper's own materials and FX, when it's installed (they're ISF with MadMapper's extras).
     if let Ok(apps) = std::fs::read_dir("/Applications") {
         for app in apps.flatten().map(|e| e.path()).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("MadMapper") && n.ends_with(".app"))) {

@@ -63,6 +63,7 @@ jobs:
           Copy-Item target\release\phosphor.exe dist\Phosphor\Phosphor.exe
           Copy-Item "$env:FFMPEG_DIR\bin\*.dll" dist\Phosphor\
           Copy-Item "$env:FFMPEG_DIR\bin\ffmpeg.exe" dist\Phosphor\
+          Copy-Item -Recurse assets\isf dist\Phosphor\isf
           Compress-Archive -Path dist\Phosphor -DestinationPath dist\Phosphor-windows.zip
 
       - uses: actions/upload-artifact@v4

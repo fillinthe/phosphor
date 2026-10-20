@@ -81,6 +81,7 @@ app that's much smaller and lighter on the CPU.
     - [ ] Not possible without the makers' SDKs: Blackmagic RAW, RED R3D, ARRIRAW (the converter can't read them
           either; export to ProRes from their apps)
 12. **Every effect** (asked 2026-10-20): ISF collection 327/327 ✔, MadMapper materials 39/42, Surface FX 19/23.
+    - [x] Ship Vidvox's ISF collection (MIT, 327 shaders, all convert) with Phosphor: Mac Resources/isf, Windows isf/ (2026-10-20)
     - [ ] Gather more free ISF/GLSL packs (Vidvox ISF-Files, Shadertoy ports with a licence that allows it,
           Interactive Shader Format community), test each with `isf_corpus`, ship the ones that work
     - [ ] The last MadMapper materials/Surface FX that fail; MadMapper 3D particle generators
