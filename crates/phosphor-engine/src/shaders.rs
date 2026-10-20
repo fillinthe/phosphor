@@ -427,6 +427,8 @@ pub const CUSTOM_GENERATOR: &str = "customgen:";
 /// Prefix for imported ISF shaders.
 pub const ISF_EFFECT: &str = "isf:";
 pub const ISF_GENERATOR: &str = "isfgen:";
+/// Imported ISF transitions (old picture → new picture as `progress` goes 0 → 1): clip transition styles.
+pub const ISF_TRANSITION: &str = "isftr:";
 
 static CUSTOM_INFO: std::sync::RwLock<Vec<(&'static str, &'static str, &'static str)>> = std::sync::RwLock::new(Vec::new());
 
@@ -464,6 +466,22 @@ fn custom(id: &str) -> Option<&'static ShaderDesc> {
 pub fn all_effects() -> Vec<&'static ShaderDesc> {
     let user = CUSTOM.read().unwrap();
     EFFECTS.iter().chain(user.iter().copied().filter(|d| is_custom_effect(d.id))).collect()
+}
+
+/// Shader transitions (Fade style › Shader transition), by name.
+pub fn all_transitions() -> Vec<&'static ShaderDesc> {
+    let mut list: Vec<_> = CUSTOM.read().unwrap().iter().copied().filter(|d| d.id.starts_with(ISF_TRANSITION)).collect();
+    list.sort_by_key(|d| d.name.to_lowercase());
+    list
+}
+
+pub fn transition(id: &str) -> Option<&'static ShaderDesc> {
+    if id.starts_with(ISF_TRANSITION) { custom(id) } else { None }
+}
+
+/// The parameter a transition's progress goes to.
+pub fn progress_index(desc: &ShaderDesc) -> Option<usize> {
+    desc.params.iter().position(|p| p.name.eq_ignore_ascii_case("progress"))
 }
 
 pub fn all_generators() -> Vec<&'static ShaderDesc> {

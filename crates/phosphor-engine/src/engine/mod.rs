@@ -455,6 +455,14 @@ impl Engine {
             match &layer.transition {
                 Some(t) if t.progress(time) < 1.0 => {
                     if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, &mut passes) {
+                        // A shader transition (ISF): old → new in one pass, once it's compiled (crossfade until then).
+                        let shader = (t.kind == crate::model::TransitionKind::Shader)
+                            .then(|| crate::shaders::transition(&t.effect))
+                            .flatten()
+                            .filter(|d| crate::shaders::pass_plan(d.entry).is_none() && self.ensure_module(d.entry));
+                        if let Some(d) = shader {
+                            frame = self.shader_transition(layer.id, frame, out, t, d, time, layer.fit, (w, h), &mut passes);
+                        } else {
                         // "Through an effect": both pictures run through the effect, strongest half-way.
                         if t.kind == crate::model::TransitionKind::Effect
                             && let Some(d) = crate::shaders::effect(&t.effect)
@@ -465,6 +473,7 @@ impl Engine {
                             out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, &mut passes);
                         }
                         frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), &mut passes);
+                        }
                     }
                 }
                 _ => {

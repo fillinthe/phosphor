@@ -120,6 +120,8 @@ pub struct IsfShader {
     pub inputs: Vec<IsfInput>,
     /// Has an `inputImage` input (or is a MadMapper FX): the engine binds the source to `tex0`.
     pub is_filter: bool,
+    /// An ISF transition: `startImage` (the old picture) to `endImage` (the new) as `progress` goes 0 → 1.
+    pub is_transition: bool,
     /// Render passes declared by the header (1 for plain single-pass shaders).
     pub passes: usize,
     /// The passes, in order (empty for single-pass shaders).
@@ -271,6 +273,8 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         i.pixels = divided && defaults_unit;
     }
     let is_filter = dialect == Dialect::MadFx || inputs.iter().any(|i| i.name == "inputImage");
+    let is_image = |n: &str| inputs.iter().any(|i| i.name == n && matches!(i.kind, IsfInputKind::Image));
+    let is_transition = !is_filter && is_image("startImage") && is_image("endImage") && inputs.iter().any(|i| i.name == "progress");
 
     let mut shader = IsfShader {
         name: name_slug.to_string(),
@@ -279,6 +283,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         categories: header.categories.clone(),
         inputs: Vec::new(),
         is_filter,
+        is_transition,
         passes: header.passes.max(1),
         pass_plan: header.pass_specs.clone(),
         buffers: buffer_names(&header.pass_specs),

@@ -193,7 +193,13 @@ impl IsfLibrary {
                         };
                         let result = match converted {
                             Ok(sh) if sh.unsupported.is_none() && !sh.wgsl.is_empty() => {
-                                let prefix = if sh.is_filter { shaders::ISF_EFFECT } else { shaders::ISF_GENERATOR };
+                                let prefix = if sh.is_transition {
+                                    shaders::ISF_TRANSITION
+                                } else if sh.is_filter {
+                                    shaders::ISF_EFFECT
+                                } else {
+                                    shaders::ISF_GENERATOR
+                                };
                                 let mut about = sh.description.clone();
                                 if let Some(c) = sh.categories.first() {
                                     about = if about.is_empty() { c.clone() } else { format!("{about} ({c})") };
