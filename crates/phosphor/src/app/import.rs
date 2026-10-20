@@ -102,7 +102,7 @@ impl PhosphorApp {
             egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
                 for (i, d) in imp.file.decks.iter().enumerate() {
                     let text = format!("{} — {} clips with media, {} columns", d.name, d.files(), d.columns);
-                    ui.checkbox(&mut imp.chosen[i], text);
+                    crate::ui::toggle(ui, &mut imp.chosen[i], text);
                 }
             });
             ui.horizontal(|ui| {

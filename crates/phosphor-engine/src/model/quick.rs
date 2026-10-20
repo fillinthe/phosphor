@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn shuffle_survives_odd_ranges() {
-        let params = [Param { name: "Backwards", min: 1.0, max: 0.0, default: 0.5 }, Param { name: "Speed", min: f32::NAN, max: 2.0, default: 1.0 }];
+        let params = [Param::new("Backwards", 1.0, 0.0, 0.5), Param::new("Speed", f32::NAN, 2.0, 1.0)];
         let mut v = Vec::new();
         shuffle_values(&params, &mut v, 1.0, &mut Dice::new(5));
         assert!((0.0..=1.0).contains(&v[0]));

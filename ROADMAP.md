@@ -145,7 +145,7 @@ app that's much smaller and lighter on the CPU.
     - [x] Data looper on Hand modulators (0.2.73)
     - [x] MIDI / OSC monitor (0.2.73)
     - [x] LUT effects (.cube in the LUT folder, 0.2.74)
-    - [ ] A two-LUT mixer (blend between two grades)
+    - [x] A two-LUT mixer (0.2.82: LUT Mix)
     - [x] Gamepad input as control sources (0.2.75; other HID devices still to do)
     - [ ] Video tracking (Vision: hands, faces, body, remove background) as sources
     - [x] On-end rules (autopilot Next / Previous / Random / Clear the layer) and layer crop (0.2.77)

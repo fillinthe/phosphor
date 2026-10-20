@@ -95,15 +95,14 @@ mod name_tests {
 }
 
 /// A `.cube` LUT as an effect: id `isf:lut_<slug>`, one Amount, the table as the shader's picture (buffer 0).
-fn lut_effect(slug: &str, stem: &str, text: &str) -> Result<Loaded, String> {
-    let lut = crate::lut::parse_cube(text).map_err(|e| format!("{stem}.cube: {e}"))?;
+fn lut_effect(slug: &str, stem: &str, lut: &crate::lut::Lut) -> Loaded {
     let entry = format!("isf_lut_{slug}");
     let (w, h, rgba) = lut.pack();
-    Ok(Loaded {
+    Loaded {
         id: format!("{}lut_{slug}", shaders::ISF_EFFECT),
         name: display_name(stem),
         about: format!("Colour grade from {stem}.cube ({n}³ LUT)", n = lut.size),
-        params: vec![Param { name: "Amount", min: 0.0, max: 1.0, default: 1.0 }],
+        params: vec![Param::new("Amount", 0.0, 1.0, 1.0)],
         wgsl: crate::lut::wgsl(&entry, lut.size),
         entry,
         plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: 1, vars: Vec::new(), images: vec![0] }),
@@ -111,7 +110,35 @@ fn lut_effect(slug: &str, stem: &str, text: &str) -> Result<Loaded, String> {
         audio_slots: Vec::new(),
         vertex_entry: None,
         category: "LUT",
-    })
+    }
+}
+
+/// VDMX's LUT Mixer: every LUT found, LUT A and LUT B picked by name, Mix between them, Amount over the picture.
+fn lut_mix_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
+    let names: Vec<&'static str> = luts.iter().map(|(n, _)| leak(n.clone())).collect();
+    let names: &'static [&'static str] = Box::leak(names.into_boxed_slice());
+    let last = (luts.len() - 1) as f32;
+    let tables: Vec<crate::lut::Lut> = luts.iter().map(|(_, l)| l.resample(crate::lut::MIX_SIZE)).collect();
+    let (w, h, rgba) = crate::lut::pack_all(&tables);
+    let entry = "isf_lut_mixer".to_string();
+    Loaded {
+        id: format!("{}lut_mixer", shaders::ISF_EFFECT),
+        name: "LUT Mix".into(),
+        about: format!("Blend between two of your {} colour grades (LUT A to LUT B)", luts.len()),
+        params: vec![
+            Param { name: "LUT A", min: 0.0, max: last, default: 0.0, labels: names },
+            Param { name: "LUT B", min: 0.0, max: last, default: 1.0, labels: names },
+            Param::new("Mix", 0.0, 1.0, 0.5),
+            Param::new("Amount", 0.0, 1.0, 1.0),
+        ],
+        wgsl: crate::lut::wgsl_mix(&entry, luts.len()),
+        entry,
+        plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: 1, vars: Vec::new(), images: vec![0] }),
+        images: vec![(0, w, h, rgba)],
+        audio_slots: Vec::new(),
+        vertex_entry: None,
+        category: "LUT",
+    }
 }
 
 /// Folders scanned for `.fs` files.
@@ -148,44 +175,49 @@ pub fn folders() -> Vec<std::path::PathBuf> {
 fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
     use phosphor_isf::IsfInputKind as K;
     let mut slots: Vec<Option<Param>> = vec![None; shader.param_count().min(shaders::MAX_PARAMS)];
-    let mut put = |i: usize, name: String, min: f32, max: f32, default: f32| {
+    // Some shaders declare MIN above MAX (Radial Spectrogram: 1 → 0.05); a range must run low to high.
+    fn put(slots: &mut [Option<Param>], i: usize, name: String, min: f32, max: f32, default: f32, labels: &'static [&'static str]) {
         if let Some(s) = slots.get_mut(i) {
-            // Some shaders declare MIN above MAX (Radial Spectrogram: 1 → 0.05); a range must run low to high.
             let (lo, hi) = if min <= max { (min, max) } else { (max, min) };
-            *s = Some(Param { name: leak(name), min: lo, max: hi, default: default.clamp(lo, hi) });
+            *s = Some(Param { name: leak(name), min: lo, max: hi, default: default.clamp(lo, hi), labels });
         }
-    };
+    }
     for input in &shader.inputs {
         let Some(o) = input.offset else { continue };
         let name = if input.label.is_empty() { input.name.clone() } else { input.label.clone() };
         match &input.kind {
-            K::Float { min, max, default } => put(o, name, *min, *max, *default),
-            K::Bool { default } => put(o, name, 0.0, 1.0, *default as i32 as f32),
-            K::Event => put(o, name, 0.0, 1.0, 0.0),
-            K::Long { values, default, .. } => {
-                let lo = values.iter().copied().min().unwrap_or(0) as f32;
-                let hi = values.iter().copied().max().unwrap_or(1) as f32;
-                put(o, name, lo, hi.max(lo + 1.0), *default as f32)
+            K::Float { min, max, default } => put(&mut slots, o, name, *min, *max, *default, &[]),
+            K::Bool { default } => put(&mut slots, o, name, 0.0, 1.0, *default as i32 as f32, &[]),
+            K::Event => put(&mut slots, o, name, 0.0, 1.0, 0.0, &[]),
+            K::Long { values, labels, default } => {
+                let lo = values.iter().copied().min().unwrap_or(0);
+                let hi = values.iter().copied().max().unwrap_or(1).max(lo + 1);
+                // A menu: one name per whole number from the lowest value (gaps keep their number).
+                let names: Vec<&'static str> = (lo..=hi)
+                    .map(|v| values.iter().position(|x| *x == v).and_then(|k| labels.get(k)).map_or_else(|| leak(v.to_string()), |l| leak(l.clone())))
+                    .collect();
+                let names: &'static [&'static str] = if labels.is_empty() { &[] } else { Box::leak(names.into_boxed_slice()) };
+                put(&mut slots, o, name, lo as f32, hi as f32, *default as f32, names)
             }
-            K::Int { min, max, default } => put(o, name, *min as f32, *max as f32, *default as f32),
+            K::Int { min, max, default } => put(&mut slots, o, name, *min as f32, *max as f32, *default as f32, &[]),
             K::Color { default } => {
                 for (k, ch) in ["R", "G", "B", "A"].iter().enumerate() {
-                    put(o + k, format!("{name} {ch}"), 0.0, 1.0, default[k]);
+                    put(&mut slots, o + k, format!("{name} {ch}"), 0.0, 1.0, default[k], &[]);
                 }
             }
             K::Point2D { default, min, max } => {
-                put(o, format!("{name} X"), min[0], max[0], default[0]);
-                put(o + 1, format!("{name} Y"), min[1], max[1], default[1]);
+                put(&mut slots, o, format!("{name} X"), min[0], max[0], default[0], &[]);
+                put(&mut slots, o + 1, format!("{name} Y"), min[1], max[1], default[1], &[]);
             }
             K::Curve { .. } => {
                 for (k, v) in input.default_floats().into_iter().enumerate() {
-                    put(o + k, format!("{name} {}%", k * 100 / (phosphor_isf::CURVE_POINTS - 1)), 0.0, 1.0, v);
+                    put(&mut slots, o + k, format!("{name} {}%", k * 100 / (phosphor_isf::CURVE_POINTS - 1)), 0.0, 1.0, v, &[]);
                 }
             }
             K::Image | K::Audio { .. } => {}
         }
     }
-    slots.into_iter().enumerate().map(|(i, p)| p.unwrap_or(Param { name: leak(format!("p{i}")), min: 0.0, max: 1.0, default: 0.0 })).collect()
+    slots.into_iter().enumerate().map(|(i, p)| p.unwrap_or(Param::new(leak(format!("p{i}")), 0.0, 1.0, 0.0))).collect()
 }
 
 /// The engine's pass plan for a multi-pass ISF shader: which buffer each pass writes (by index)
@@ -225,6 +257,8 @@ impl IsfLibrary {
             .spawn(move || {
                 let mut seen = std::collections::HashSet::new();
                 let mut seen_loose = std::collections::HashSet::new();
+                // Every LUT found, for the LUT mixer (at most 32: the picture stays small).
+                let mut luts: Vec<(String, crate::lut::Lut)> = Vec::new();
                 for dir in folders() {
                     // Two levels deep: MadMapper keeps each material in its own folder.
                     let mut files: Vec<std::path::PathBuf> = Vec::new();
@@ -251,7 +285,17 @@ impl IsfLibrary {
                         let Ok(fs) = std::fs::read_to_string(&path) else { continue };
                         // A colour-grading LUT (.cube): an effect of its own.
                         if path.extension().is_some_and(|e| e == "cube") {
-                            if tx.send(lut_effect(&slug, &stem, &fs)).is_err() {
+                            let sent = match crate::lut::parse_cube(&fs) {
+                                Ok(lut) => {
+                                    let effect = lut_effect(&slug, &stem, &lut);
+                                    if luts.len() < 32 {
+                                        luts.push((display_name(&stem), lut));
+                                    }
+                                    tx.send(Ok(effect))
+                                }
+                                Err(e) => tx.send(Err(format!("{stem}.cube: {e}"))),
+                            };
+                            if sent.is_err() {
                                 return;
                             }
                             continue;
@@ -307,6 +351,10 @@ impl IsfLibrary {
                             return;
                         }
                     }
+                }
+                // Two or more LUTs: the LUT mixer too.
+                if luts.len() >= 2 {
+                    let _ = tx.send(Ok(lut_mix_effect(&luts)));
                 }
             })
             .ok();

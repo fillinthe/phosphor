@@ -137,16 +137,12 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             });
             ui.horizontal_wrapped(|ui| {
                 ui.label("Order");
-                for a in [phosphor_engine::Autopilot::Next, phosphor_engine::Autopilot::Previous, phosphor_engine::Autopilot::Random] {
-                    ui.selectable_value(&mut layer.autopilot, a, a.name());
-                }
+                use phosphor_engine::Autopilot;
+                let orders: Vec<(Autopilot, String)> = [Autopilot::Next, Autopilot::Previous, Autopilot::Random].into_iter().map(|a| (a, a.name().to_string())).collect();
+                segmented(ui, &mut layer.autopilot, &orders, |_, _, _| {});
                 let mut at_end = layer.autopilot_beats <= 0.0;
-                if ui.selectable_label(at_end, "when the clip ends").clicked() {
-                    at_end = true;
-                    layer.autopilot_beats = 0.0;
-                }
-                if ui.selectable_label(!at_end, "after").clicked() && at_end {
-                    layer.autopilot_beats = 16.0;
+                if segmented(ui, &mut at_end, &[(true, "when the clip ends".to_string()), (false, "after".to_string())], |_, _, _| {}) {
+                    layer.autopilot_beats = if at_end { 0.0 } else { 16.0 };
                 }
                 if layer.autopilot_beats > 0.0 {
                     guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));
@@ -253,11 +249,8 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 }
                 if sync {
                     guarded!(ui, layer.sync_beats, egui::DragValue::new(&mut layer.sync_beats).range(1.0..=256.0).speed(0.1).suffix(" beats"));
-                    for b in [4.0, 8.0, 16.0, 32.0] {
-                        if ui.selectable_label(layer.sync_beats == b, format!("{b:.0}")).clicked() {
-                            layer.sync_beats = b;
-                        }
-                    }
+                    let counts: Vec<(f32, String)> = [4.0f32, 8.0, 16.0, 32.0].into_iter().map(|b| (b, format!("{b:.0}"))).collect();
+                    segmented(ui, &mut layer.sync_beats, &counts, |_, _, _| {});
                     if layer.loop_beats > 0.0 {
                         hint(ui, "off while a beat loop is set");
                     }
@@ -331,7 +324,7 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
         let w = ui.available_width();
         volume_bar(ui, layer, w);
     });
-    ui.checkbox(&mut layer.volume_follows_opacity, "Sound follows opacity").on_hover_text("Fading the layer (or its group, or the crossfader) fades its sound too");
+    crate::ui::toggle(ui, &mut layer.volume_follows_opacity, "Sound follows opacity").on_hover_text("Fading the layer (or its group, or the crossfader) fades its sound too");
 }
 
 /// A layer's volume (to 200%; the mark is 100%).
@@ -360,9 +353,14 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
         if ui.color_edit_button_srgba(&mut c).changed() {
             style.color = c.to_srgba_unmultiplied();
         }
-        for (a, glyph, tip) in [(TextAlign::Left, icon::TEXT_ALIGN_LEFT, "Left"), (TextAlign::Center, icon::TEXT_ALIGN_CENTER, "Centre"), (TextAlign::Right, icon::TEXT_ALIGN_RIGHT, "Right")] {
-            ui.selectable_value(&mut style.align, a, glyph).on_hover_text(tip);
-        }
+        let aligns = [(TextAlign::Left, icon::TEXT_ALIGN_LEFT.to_string()), (TextAlign::Center, icon::TEXT_ALIGN_CENTER.to_string()), (TextAlign::Right, icon::TEXT_ALIGN_RIGHT.to_string())];
+        segmented(ui, &mut style.align, &aligns, |_, r, a| {
+            r.clone().on_hover_text(match a {
+                TextAlign::Left => "Left",
+                TextAlign::Center => "Centre",
+                TextAlign::Right => "Right",
+            });
+        });
     });
     ui.horizontal(|ui| {
         Level::range(&mut style.size, 0.02, 0.8, "Size").default(0.18).tip("Text height, as a share of the picture's height").show(ui);

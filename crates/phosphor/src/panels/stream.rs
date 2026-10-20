@@ -23,7 +23,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         });
         if !matches!(s.destination, Destination::File | Destination::Whip) {
             ui.horizontal(|ui| {
-                ui.checkbox(&mut s.second_enabled, "Also send to").on_hover_text("A second live destination from the same encode (YouTube + Twitch at once)");
+                crate::ui::toggle(ui, &mut s.second_enabled, "Also send to").on_hover_text("A second live destination from the same encode (YouTube + Twitch at once)");
                 if s.second_enabled {
                     ComboBox::from_id_salt("stream_second").width(130.0).selected_text(s.second_destination.name()).show_ui(ui, |ui| {
                         for d in [Destination::YouTube, Destination::Twitch, Destination::CustomRtmp] {
@@ -37,7 +37,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
             ui.horizontal(|ui| {
-                ui.checkbox(&mut s.copy_enabled, "Also record a copy").on_hover_text("An H.264 .mp4 of the stream, written while it goes out");
+                crate::ui::toggle(ui, &mut s.copy_enabled, "Also record a copy").on_hover_text("An H.264 .mp4 of the stream, written while it goes out");
                 if s.copy_enabled {
                     ui.add(egui::TextEdit::singleline(&mut s.copy_path).hint_text("…/stream-copy.mp4").desired_width(240.0));
                 }
@@ -48,7 +48,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     ui.label("Stream key");
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
-                    ui.checkbox(&mut s.secure, "Secure (RTMPS)").on_hover_text("Encrypted ingest (rtmps://, port 443): what YouTube and Twitch recommend; turn off only if a network blocks it");
+                    crate::ui::toggle(ui, &mut s.secure, "Secure (RTMPS)").on_hover_text("Encrypted ingest (rtmps://, port 443): what YouTube and Twitch recommend; turn off only if a network blocks it");
                 });
             }
             Destination::CustomRtmp => {

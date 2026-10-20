@@ -264,7 +264,7 @@ impl PhosphorApp {
                     let mut picks: Vec<u64> = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
                     for l in self.state.comp.layers.iter().rev() {
                         let mut on = picks.contains(&l.id);
-                        if ui.checkbox(&mut on, &l.name).changed() {
+                        if crate::ui::toggle(ui, &mut on, &l.name).changed() {
                             if on { picks.push(l.id) } else { picks.retain(|x| *x != l.id) }
                         }
                     }
@@ -531,7 +531,7 @@ impl PhosphorApp {
                         close = true;
                     }
                 });
-                ui.checkbox(&mut st.account_hello_never, "Don't show this again");
+                crate::ui::toggle(ui, &mut st.account_hello_never, "Don't show this again");
             });
             if close {
                 st.account_hello = false;

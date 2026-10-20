@@ -52,7 +52,8 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                 let handle = ui.add(egui::Label::new(RichText::new(icon::DOTS_SIX_VERTICAL).color(Color32::GRAY)).sense(Sense::drag()));
                 handle.dnd_set_drag_payload(FxDrag(fx.id));
                 handle.on_hover_text("Drag to reorder");
-                let on = ui.checkbox(&mut fx.enabled, RichText::new(desc.name).strong());
+                let locked = is_locked(ui, &ControlTarget::EffectEnabled(fx.id));
+                let on = crate::ui::toggle_locked(ui, &mut fx.enabled, desc.name, locked);
                 mapped_badge(ui, &on, &ControlTarget::EffectEnabled(fx.id));
                 on.right_menu(|ui| {
                     learn_items(ui, &ControlTarget::EffectEnabled(fx.id));

@@ -31,9 +31,9 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     });
     let control = &mut st.control;
     ui.horizontal(|ui| {
-        ui.checkbox(&mut control.soft_takeover, "Soft takeover")
+        crate::ui::toggle(ui, &mut control.soft_takeover, "Soft takeover")
             .on_hover_text("A fader or knob only takes over once it reaches the value on screen (moves it past it), so the picture never jumps when the hardware was left somewhere else");
-        ui.checkbox(&mut control.feedback, "Send feedback")
+        crate::ui::toggle(ui, &mut control.feedback, "Send feedback")
             .on_hover_text("Controllers follow Phosphor: values changed here (mouse, phone, other controllers) go back to TouchOSC faders and to MIDI controllers with motor faders or LED rings");
         ui.add_enabled_ui(control.feedback, |ui| {
             guarded!(ui, control.feedback_port, egui::DragValue::new(&mut control.feedback_port).range(1024..=65535).prefix("to port "))
@@ -173,7 +173,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 if !q.is_empty() && !name.to_lowercase().contains(&q) && !m.source.label().to_lowercase().contains(&q) {
                     continue;
                 }
-                ui.checkbox(&mut m.enabled, "").on_hover_text("On / off");
+                crate::ui::toggle(ui, &mut m.enabled, "").on_hover_text("On / off");
                 ui.horizontal(|ui| {
                     source_editor(ui, ("map_source", i), &mut m.source);
                     let relisten = *listen_for == Some(ListenFor::Replace(i)) && control.listen_source;
