@@ -104,10 +104,17 @@ impl State {
         }
         for (layer, i) in launch {
             let Some(item) = self.comp.media_bin.get(i).cloned() else { continue };
-            if let Some(l) = self.comp.layer_mut(layer) {
+            let Some(keep) = self.comp.layer_mut(layer).map(|l| {
                 l.active_clip = None;
-            }
+                l.name.clone()
+            }) else {
+                continue;
+            };
             self.launch_source(layer, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
+            // The layer is the collection's (named after it), not each file's.
+            if let Some(l) = self.comp.layer_mut(layer) {
+                l.name = keep;
+            }
         }
     }
 }

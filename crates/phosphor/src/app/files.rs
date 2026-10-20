@@ -47,13 +47,28 @@ impl PhosphorApp {
                     }
                 }
                 Purpose::ImportFiles => {
+                    // Importing while a collection is showing puts the files in it (else you'd not see them).
+                    let into = match &st.media_view.filter {
+                        crate::panels::MediaFilter::Collection(c) => Some(c.clone()),
+                        _ => None,
+                    };
                     for p in &paths {
-                        st.comp.add_media(&name_of(p), &p.to_string_lossy());
+                        st.comp.add_media_to(&name_of(p), &p.to_string_lossy(), into.as_deref());
+                    }
+                    if let Some(c) = into {
+                        st.notice = Some(format!("{} file(s) added to \"{c}\"", paths.len()));
                     }
                 }
                 Purpose::WatchFolder => {
+                    // A watched folder is a collection (like a VDMX media bin page): named after the folder, every
+                    // clip in it and new ones as they arrive, ready to Play on a layer.
                     if let Some(p) = paths.first() {
-                        st.folders.add(p.to_string_lossy().to_string());
+                        let folder = p.to_string_lossy().to_string();
+                        let name = st.comp.create_collection(&name_of(p));
+                        st.comp.add_collection_folder(&name, &folder);
+                        st.folders.add(folder);
+                        st.media_view.filter = crate::panels::MediaFilter::Collection(name.clone());
+                        st.notice = Some(format!("\"{name}\": every clip in that folder, and new ones as they arrive (Play on, to put it on a layer)"));
                     }
                 }
                 Purpose::CollectionFolder(name) => {

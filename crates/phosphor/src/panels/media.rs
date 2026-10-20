@@ -77,7 +77,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 let exts = crate::media::dialog_extensions();
                 st.dialogs.pick_files(crate::dialogs::Purpose::ImportFiles, Some(("Media", &exts)));
             }
-            if ui.button(label(icon::EYE, "Watch folder…")).on_hover_text("Loads every clip in a folder (and its subfolders) and picks up new files automatically").clicked() {
+            if ui.button(label(icon::EYE, "Watch folder…")).on_hover_text("A collection of every clip in a folder (and its subfolders); new files join as they arrive").clicked() {
                 st.dialogs.pick_folder(crate::dialogs::Purpose::WatchFolder);
             }
             if st.folders.scanning() {
@@ -171,31 +171,37 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     };
     let collections = st.comp.media_collections.clone();
     let mut acts = acts;
-    ui.horizontal(|ui| {
-        let tip = "A new layer with every file shown here (after search, filter and sort) as its clips, the first one playing";
-        if ui.add_enabled(!shown.is_empty(), egui::Button::new(label(icon::SQUARES_FOUR, &format!("Make a clip layer ({})", shown.len())))).on_hover_text(tip).clicked() {
-            acts.push(MediaAct::ShownToLayer(shown.clone()));
-        }
-    });
-    // Show folders (collections): pick one above, then play from it at random.
+    // What to do with the files shown: a clip layer of them, one at random, or a layer shuffling them. In a
+    // collection, its header's Play on does the playing (and follows new files), so only Random stays here.
+    let in_collection = matches!(st.media_view.filter, MediaFilter::Collection(_));
     ui.horizontal_wrapped(|ui| {
+        if !in_collection {
+            let tip = "A new layer with every file shown here (after search, filter and sort) as its clips, the first one playing";
+            if ui.add_enabled(!shown.is_empty(), egui::Button::new(label(icon::SQUARES_FOUR, &format!("Clip layer ({})", shown.len())))).on_hover_text(tip).clicked() {
+                acts.push(MediaAct::ShownToLayer(shown.clone()));
+            }
+        }
         if ui.add_enabled(!shown.is_empty(), egui::Button::new(label(icon::DICE_FIVE, "Random"))).on_hover_text("Play one of the files shown here, at random, on the selected layer (click again for another)").clicked() {
             acts.push(MediaAct::RandomOne(shown.clone()));
         }
-        let name = match &st.media_view.filter {
-            MediaFilter::Collection(c) => c.clone(),
-            MediaFilter::Favorites => "Favourites".to_string(),
-            _ => "Shuffle".to_string(),
-        };
-        if ui.add_enabled(shown.len() > 1, egui::Button::new(label(icon::SHUFFLE, "Shuffle on a new layer"))).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
-            acts.push(MediaAct::ShuffleLayer(shown.clone(), name));
+        if !in_collection {
+            let name = if st.media_view.filter == MediaFilter::Favorites { "Favourites" } else { "Shuffle" }.to_string();
+            if ui.add_enabled(shown.len() > 1, egui::Button::new(label(icon::SHUFFLE, "Shuffle layer"))).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
+                acts.push(MediaAct::ShuffleLayer(shown.clone(), name));
+            }
         }
     });
 
     // Where a click plays (the selected layer, else a new one) and every layer for "Play on".
     let layers: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
     let click_target = st.selected.and_then(|id| layers.iter().find(|(l, _)| *l == id)).map(|(_, n)| n.clone());
-    let targets = MediaTargets { layers: &layers, click: click_target.as_deref() };
+    let mut playing: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    for l in st.comp.layers.iter().filter(|l| l.enabled) {
+        if let SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } = &l.source {
+            playing.entry(p.clone()).or_default().push(l.name.clone());
+        }
+    }
+    let targets = MediaTargets { layers: &layers, click: click_target.as_deref(), playing: &playing };
     let State { comp, thumbs, .. } = st;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
@@ -400,6 +406,8 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
 pub(crate) struct MediaTargets<'a> {
     pub layers: &'a [(u64, String)],
     pub click: Option<&'a str>,
+    /// Files on screen now (path → the layers showing them), marked on their tiles.
+    pub playing: &'a std::collections::HashMap<String, Vec<String>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -430,8 +438,15 @@ pub(crate) fn media_tile(
             p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
         }
     }
-    let stroke = if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, Color32::from_gray(50)) };
+    let on = targets.playing.get(&item.path);
+    let stroke = if on.is_some() { Stroke::new(2.5, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, Color32::from_gray(50)) };
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
+    if on.is_some() {
+        // On screen now: a play badge in the corner (which layers: on hover).
+        let badge = egui::Rect::from_min_size(thumb_rect.left_bottom() + egui::vec2(4.0, -20.0), egui::vec2(18.0, 16.0));
+        p.rect_filled(badge, 3.0, accent());
+        p.text(badge.center(), egui::Align2::CENTER_CENTER, icon::PLAY, egui::FontId::proportional(11.0), Color32::BLACK);
+    }
     let max_chars = ((w / 6.5) as usize).max(8);
     let mut name = item.name.clone();
     if name.chars().count() > max_chars {
@@ -459,7 +474,8 @@ pub(crate) fn media_tile(
         Some(name) => format!("Click: play on \"{name}\" · drag onto any layer or clip slot · right-click: Play on…"),
         None => "Click: play on a new layer · drag onto any layer or clip slot · right-click: Play on…".to_string(),
     };
-    resp.on_hover_text(format!("{}\n{click}", item.path)).right_menu(|ui| {
+    let showing = on.map_or(String::new(), |ls| format!("\nOn screen now: {}", ls.join(", ")));
+    resp.on_hover_text(format!("{}{showing}\n{click}", item.path)).right_menu(|ui| {
         ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
             for (id, name) in targets.layers {
                 if ui.button(name).clicked() {

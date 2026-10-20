@@ -410,6 +410,15 @@ impl Composition {
         true
     }
 
+    /// `add_media`, also putting the file in `collection` (the one the Media panel shows) when there is one, even if
+    /// the file was already in the bin.
+    pub fn add_media_to(&mut self, name: &str, path: &str, collection: Option<&str>) {
+        self.add_media(name, path);
+        if let (Some(c), Some(i)) = (collection, self.media_bin.iter().position(|m| m.path == path)) {
+            self.add_to_collection(i, c);
+        }
+    }
+
     /// Adds a file from a watched folder (no duplicates). Returns true if it was new.
     pub fn add_folder_media(&mut self, name: &str, path: &str, folder: &str) -> bool {
         if let Some(m) = self.media_bin.iter_mut().find(|m| m.path == path) {
