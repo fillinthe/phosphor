@@ -132,7 +132,7 @@ impl Engine {
         let (end, start, result) = (slot_in.as_ref().unwrap().view.clone(), slot_out.as_ref().unwrap().view.clone(), slot_result.as_ref().unwrap().view.clone());
         super::fit::push_fit_copy(end.clone(), &incoming, canvas, fit, canvas, passes);
         super::fit::push_fit_copy(start.clone(), &outgoing, canvas, fit, canvas, passes);
-        let mut values = desc.defaults();
+        let mut values = if t.values.len() == desc.params.len() { t.values.clone() } else { desc.defaults() };
         if let Some(i) = crate::shaders::progress_index(desc) {
             values[i] = t.progress(time);
         }

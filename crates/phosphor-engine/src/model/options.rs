@@ -237,6 +237,8 @@ pub struct Transition {
     pub kind: TransitionKind,
     /// Effect id for `TransitionKind::Effect`, transition id for `Shader` (empty / not found = plain crossfade).
     pub effect: String,
+    /// The shader transition's settings (see `LayerState::transition_values`).
+    pub values: Vec<f32>,
 }
 
 impl Transition {

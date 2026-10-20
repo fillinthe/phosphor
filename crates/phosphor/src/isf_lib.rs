@@ -60,6 +60,38 @@ fn bundled(name: &str) -> Option<std::path::PathBuf> {
     [dir.join("../Resources").join(name), dir.join(name), std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets")).join(name)].into_iter().find(|d| d.is_dir())
 }
 
+/// A shader's name for the lists, from its file name: "BookFlip" / "book_flip" / "book-flip" → "Book Flip".
+fn display_name(stem: &str) -> String {
+    let mut out = String::with_capacity(stem.len() + 4);
+    let mut prev: Option<char> = None;
+    for c in stem.chars() {
+        let c = if c == '_' || c == '-' { ' ' } else { c };
+        if c.is_uppercase() && prev.is_some_and(|p| p.is_lowercase()) {
+            out.push(' ');
+        }
+        if !(c == ' ' && out.ends_with(' ')) {
+            out.push(c);
+        }
+        prev = Some(c);
+    }
+    let out = out.trim();
+    let mut chars = out.chars();
+    chars.next().map_or_else(String::new, |f| f.to_uppercase().chain(chars).collect())
+}
+
+#[cfg(test)]
+mod name_tests {
+    #[test]
+    fn file_names_read_as_names() {
+        assert_eq!(super::display_name("BookFlip"), "Book Flip");
+        assert_eq!(super::display_name("powerKaleido"), "Power Kaleido");
+        assert_eq!(super::display_name("directional-easing"), "Directional easing");
+        assert_eq!(super::display_name("Multi Pass Gaussian Blur"), "Multi Pass Gaussian Blur");
+        assert_eq!(super::display_name("old_tv_lost_signal"), "Old tv lost signal");
+        assert_eq!(super::display_name("CV Motion RGB Tear"), "CV Motion RGB Tear");
+    }
+}
+
 /// Folders scanned for `.fs` files.
 pub fn folders() -> Vec<std::path::PathBuf> {
     let mut dirs = vec![std::path::PathBuf::from("/Library/Graphics/ISF")];
@@ -235,7 +267,7 @@ impl IsfLibrary {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
                                 let images = load_images(&path, &sh.images);
-                                Ok(Loaded { id: format!("{prefix}{slug}"), name: if sh.name.is_empty() { stem.clone() } else { sh.name.clone() }, about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), wgsl: sh.wgsl })
+                                Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(&stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), wgsl: sh.wgsl })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
                             Err(e) => Err(format!("{e:?}")),

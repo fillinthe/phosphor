@@ -191,6 +191,9 @@ pub struct LayerState {
     /// Effect for the "Through an effect" fade style (effect id).
     #[serde(default = "default_transition_effect")]
     pub transition_effect: String,
+    /// A shader transition's own settings (one value per parameter; empty or a different length = its defaults).
+    #[serde(default)]
+    pub transition_values: Vec<f32>,
     /// Plays the next / previous / a random clip by itself.
     pub autopilot: Autopilot,
     /// Autopilot moves on after this many beats (0 = when the clip ends).
@@ -270,6 +273,7 @@ impl Default for LayerState {
             transition_secs: 0.5,
             transition_kind: TransitionKind::Crossfade,
             transition_effect: default_transition_effect(),
+            transition_values: Vec::new(),
             autopilot: Autopilot::Off,
             autopilot_beats: 0.0,
             flash_return: None,
@@ -315,6 +319,7 @@ impl LayerState {
                 duration: secs,
                 kind: self.transition_kind,
                 effect: self.transition_effect.clone(),
+                values: self.transition_values.clone(),
             });
         } else {
             self.transition = None;
