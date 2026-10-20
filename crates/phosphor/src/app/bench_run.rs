@@ -366,7 +366,8 @@ impl PhosphorApp {
             }
             if name == "grid" {
                 // The alignment grid on every output (seen in the Outputs area's strip).
-                if self.state.comp.outputs.is_empty() {
+                // Two outputs, so the Stage view has something to tile.
+                while self.state.comp.outputs.len() < 2 {
                     self.state.comp.add_output();
                 }
                 for o in &mut self.state.comp.outputs {

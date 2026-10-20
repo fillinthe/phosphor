@@ -169,8 +169,11 @@ pub(crate) fn apply_group_action(st: &mut State, gid: u64, action: GroupAction) 
 }
 
 /// Inspector for a selected group: its settings and effect chain. Returns an effect-chain action.
-pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<egui::TextureId>, aspect: f32, clipboard_len: usize) -> Option<FxAction> {
+/// `outs` = the outputs and whether this group shows on each ("Shows on"); returns an effect-chain action and an
+/// output switched on/off.
+pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<egui::TextureId>, aspect: f32, clipboard_len: usize, outs: &[(u64, String, bool)]) -> (Option<FxAction>, Option<(u64, bool)>) {
     let mut fx_action = None;
+    let mut send = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
         let w = ui.available_width().min(360.0);
@@ -178,9 +181,10 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
         ui.horizontal(|ui| {
             ui.toggle_value(&mut g.enabled, RichText::new("ON").small().strong());
             ui.label(icon::STACK);
+            send = outputs_menu(ui, outs).or(send);
             ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(f32::INFINITY));
         });
-        hint(ui, "A group mixes its layers together first; its opacity, blend and effects then apply to that mix.");
+        hint(ui, "A comp: its layers mix together first; its opacity, blend and effects then apply to that mix. The screen button sends it to outputs of its own.");
         ui.horizontal(|ui| {
             Level::percent(&mut g.opacity, "Opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
         });
@@ -192,5 +196,5 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
         ui.separator();
         fx_action = effects_editor(ui, &mut g.effects, clipboard_len);
     });
-    fx_action
+    (fx_action, send)
 }

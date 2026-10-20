@@ -10,9 +10,15 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     };
     let clipboard_len = st.fx_clipboard.len();
     let mut fx_action: Option<FxAction> = None;
+    // "Shows on": the outputs, and whether the selection already shows on each.
+    let outs: Vec<(u64, String, bool)> = {
+        let showing = st.comp.outputs_showing(sel);
+        st.comp.outputs.iter().map(|o| (o.id, o.name.clone(), showing.contains(&o.id))).collect()
+    };
+    let mut send: Option<(u64, bool)> = None;
     if let Some(g) = st.comp.groups.iter_mut().find(|g| g.id == sel) {
         let thumb = st.layer_textures.get(&sel).map(|(t, _)| *t);
-        fx_action = group_inspector(ui, g, thumb, aspect, clipboard_len);
+        (fx_action, send) = group_inspector(ui, g, thumb, aspect, clipboard_len, &outs);
     } else if sel == MASTER_ID {
         let tex = st.texture;
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
@@ -41,11 +47,6 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         };
         #[cfg(target_arch = "wasm32")]
         let (beat_pending, beat): (bool, Option<(f32, f32)>) = (false, None);
-        let outs: Vec<(u64, String, bool)> = {
-            let showing = st.comp.outputs_showing(sel);
-            st.comp.outputs.iter().map(|o| (o.id, o.name.clone(), showing.contains(&o.id))).collect()
-        };
-        let mut send: Option<(u64, bool)> = None;
         let layer = st.comp.layer_mut(sel).unwrap();
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
@@ -75,18 +76,18 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         if let Some(t) = seek_to {
             st.media.seek(sel, t);
         }
-        if let Some((o, on)) = send {
-            if on {
-                st.comp.send_to_output(sel, o);
-            } else {
-                st.comp.remove_from_output(sel, o);
-            }
-            let oname = st.comp.outputs.iter().find(|x| x.id == o).map_or(String::new(), |x| x.name.clone());
-            st.notice = Some(if on { format!("Now on \"{oname}\" as a slice (Outputs area to shape it)") } else { format!("No longer on \"{oname}\" on its own") });
-        }
         if let Some(q) = quick {
             st.quick_on(q, Some(sel), ui.ctx().input(|i| i.time));
         }
+    }
+    if let Some((o, on)) = send {
+        if on {
+            st.comp.send_to_output(sel, o);
+        } else {
+            st.comp.remove_from_output(sel, o);
+        }
+        let oname = st.comp.outputs.iter().find(|x| x.id == o).map_or(String::new(), |x| x.name.clone());
+        st.notice = Some(if on { format!("Now on \"{oname}\" as a slice (Outputs area to shape it)") } else { format!("No longer on \"{oname}\" on its own") });
     }
     if let Some(action) = fx_action {
         apply_fx_action(st, sel, action);
