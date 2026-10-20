@@ -64,6 +64,7 @@ jobs:
           Copy-Item "$env:FFMPEG_DIR\bin\*.dll" dist\Phosphor\
           Copy-Item "$env:FFMPEG_DIR\bin\ffmpeg.exe" dist\Phosphor\
           Copy-Item -Recurse assets\isf dist\Phosphor\isf
+          Copy-Item -Recurse assets\gl-transitions dist\Phosphor\gl-transitions
           Compress-Archive -Path dist\Phosphor -DestinationPath dist\Phosphor-windows.zip
 
       - uses: actions/upload-artifact@v4

@@ -10,6 +10,7 @@
 //! share one module.
 
 mod glsl;
+pub mod gltransition;
 mod mad_noise;
 mod mad_sdf;
 mod mad_shim;
