@@ -10,9 +10,6 @@ What changed in each Phosphor release, newest first. Downloads are on the
   Inspector under the transition you picked, and each layer remembers them.
 - **Readable effect names:** imported effects and transitions show proper names ("Book Flip", "Multi Pass
   Gaussian Blur") instead of file ids.
-
-## 0.2.65 (2026-10-20)
-
 - **130 shader transitions for clip changes:** set a layer's (or every layer's) *Fade style* to *Shader
   transition* and pick one: cube, doorway, page curl, book flip, star wipe, ripple, glitch, burn, kaleidoscope,
   mosaic and more. They come from two free collections that now ship with Phosphor (Vidvox's ISF transitions,
