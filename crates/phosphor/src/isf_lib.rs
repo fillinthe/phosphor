@@ -22,6 +22,8 @@ pub struct Loaded {
     audio_slots: Vec<(usize, bool)>,
     /// A real vertex stage (ISF vertex shaders that move the quad).
     vertex_entry: Option<String>,
+    /// Explorer category.
+    category: &'static str,
 }
 
 /// Decodes the pictures an ISF shader imports (paths relative to the shader file; missing ones are skipped)
@@ -92,6 +94,26 @@ mod name_tests {
     }
 }
 
+/// A `.cube` LUT as an effect: id `isf:lut_<slug>`, one Amount, the table as the shader's picture (buffer 0).
+fn lut_effect(slug: &str, stem: &str, text: &str) -> Result<Loaded, String> {
+    let lut = crate::lut::parse_cube(text).map_err(|e| format!("{stem}.cube: {e}"))?;
+    let entry = format!("isf_lut_{slug}");
+    let (w, h, rgba) = lut.pack();
+    Ok(Loaded {
+        id: format!("{}lut_{slug}", shaders::ISF_EFFECT),
+        name: display_name(stem),
+        about: format!("Colour grade from {stem}.cube ({n}³ LUT)", n = lut.size),
+        params: vec![Param { name: "Amount", min: 0.0, max: 1.0, default: 1.0 }],
+        wgsl: crate::lut::wgsl(&entry, lut.size),
+        entry,
+        plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: 1, vars: Vec::new(), images: vec![0] }),
+        images: vec![(0, w, h, rgba)],
+        audio_slots: Vec::new(),
+        vertex_entry: None,
+        category: "LUT",
+    })
+}
+
 /// Folders scanned for `.fs` files.
 pub fn folders() -> Vec<std::path::PathBuf> {
     let mut dirs = vec![std::path::PathBuf::from("/Library/Graphics/ISF")];
@@ -101,6 +123,8 @@ pub fn folders() -> Vec<std::path::PathBuf> {
     }
     if let Some(d) = crate::show::storage_dir() {
         dirs.push(d.join("isf"));
+        // Colour-grading LUTs (.cube) you add.
+        dirs.push(d.join("luts"));
     }
     dirs.extend(crate::show::shader_dir("isf"));
     // Last, so copies installed elsewhere win: the ISF collection Phosphor ships (assets/isf).
@@ -210,7 +234,7 @@ impl IsfLibrary {
                         for p in entries.flatten().map(|e| e.path()) {
                             if p.is_dir() && depth < 2 {
                                 stack.push((p, depth + 1));
-                            } else if p.extension().is_some_and(|e| e == "fs" || e == "glsl") && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                            } else if p.extension().is_some_and(|e| e == "fs" || e == "glsl" || e == "cube") && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
                                 files.push(p);
                             }
                         }
@@ -225,6 +249,13 @@ impl IsfLibrary {
                             continue;
                         }
                         let Ok(fs) = std::fs::read_to_string(&path) else { continue };
+                        // A colour-grading LUT (.cube): an effect of its own.
+                        if path.extension().is_some_and(|e| e == "cube") {
+                            if tx.send(lut_effect(&slug, &stem, &fs)).is_err() {
+                                return;
+                            }
+                            continue;
+                        }
                         // A gl-transition (.glsl): becomes an ISF transition first; other .glsl files are skipped.
                         let fs = if path.extension().is_some_and(|e| e == "glsl") {
                             if !fs.contains("getToColor") {
@@ -267,7 +298,7 @@ impl IsfLibrary {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
                                 let images = load_images(&path, &sh.images);
-                                Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(&stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), wgsl: sh.wgsl })
+                                Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(&stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), wgsl: sh.wgsl, category: "ISF" })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
                             Err(e) => Err(format!("{e:?}")),
@@ -294,7 +325,7 @@ impl IsfLibrary {
                         entry: leak(l.entry),
                         params: Box::leak(l.params.into_boxed_slice()),
                     }));
-                    shaders::set_custom_info(desc.id, "ISF", leak(l.about));
+                    shaders::set_custom_info(desc.id, l.category, leak(l.about));
                     if let Some(plan) = l.plan {
                         shaders::set_pass_plan(desc.entry, plan);
                     }

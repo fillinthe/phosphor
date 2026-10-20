@@ -29,6 +29,7 @@ mod os;
 mod session_log;
 #[cfg(not(target_arch = "wasm32"))]
 mod convert;
+mod lut;
 mod pacing;
 mod panels;
 mod ui;
