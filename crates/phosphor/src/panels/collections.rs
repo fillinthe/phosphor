@@ -37,7 +37,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             if ui.button(label(icon::FOLDER_PLUS, "Add folder…")).on_hover_text("Every clip in that folder (and its subfolders) joins this collection, and new files as they arrive").clicked() {
                 st.dialogs.pick_folder(crate::dialogs::Purpose::CollectionFolder(name.to_string()));
             }
-            if ui.button(label(icon::TRASH, "Delete")).on_hover_text("The files stay in the media bin").clicked() {
+            if danger_button(ui, label(icon::TRASH, "Delete")).on_hover_text("The files stay in the media bin").clicked() {
                 acts.push(MediaAct::DeleteCollection(name.to_string()));
             }
         });

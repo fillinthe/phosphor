@@ -195,9 +195,7 @@ pub(crate) enum OutputStatus<'a> {
 
 /// An output's on/off toggle, mappable to a controller (right-click / Map mode).
 pub(crate) fn output_toggle(ui: &mut egui::Ui, on: &mut bool, glyph: &str, name: &str, hover: &str, control: phosphor_engine::AppControl) -> egui::Response {
-    let r = ui.toggle_value(on, label(glyph, name)).on_hover_text(hover);
-    map_menu(ui, &r, ControlTarget::App(control));
-    r
+    super::toggle_mapped(ui, on, label(glyph, name), ControlTarget::App(control)).on_hover_text(hover)
 }
 
 pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
@@ -304,10 +302,8 @@ pub(crate) fn choice_combo<T: phosphor_engine::Choice>(ui: &mut egui::Ui, id: im
 
 /// A row of buttons for any `Choice` setting; `each` gets every button (to attach mapping menus, hover text…).
 pub(crate) fn choice_buttons<T: phosphor_engine::Choice>(ui: &mut egui::Ui, value: &mut T, mut each: impl FnMut(&mut egui::Ui, &egui::Response)) {
-    for &o in T::OPTIONS {
-        let r = ui.selectable_value(value, o, o.label());
-        each(ui, &r);
-    }
+    let options: Vec<(T, String)> = T::OPTIONS.iter().map(|&o| (o, o.label().to_string())).collect();
+    super::segmented(ui, value, &options, |ui, r, _| each(ui, r));
 }
 
 /// A layer's name for pickers ("(removed layer)" if it's gone).

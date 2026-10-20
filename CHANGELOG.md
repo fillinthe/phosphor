@@ -6,6 +6,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.76 (2026-10-20)
 
+- **Buttons look like what they do.** Play, triggers, Surprise and Rec are solid, bold buttons. On/off switches
+  (ON, Loop, Syphon, Link, Mute…) are pills with a light that glows when on. Pick-one choices (Cut / Fade,
+  Now / Beat / Bar, Forward / Reverse, the media filters) are joined segments. Delete is red.
+- **Type a slider's value:** right-click a slider and the value is already selected; type a number and press Enter.
+- **Lock any control:** right-click › Lock. A locked slider, button, clip or column can't be changed by the
+  mouse, a controller, OSC or a phone until you unlock it. Locked sliders turn grey with a lock.
+- **Snap points:** hold Shift while dragging a slider to land on the ends, the default or 100%. Right-click ›
+  Snap points to add your own (they show as small ticks).
 - **Soft edge per side** (as in MadMapper): a slice can fade only the side that overlaps the next projector
   (Soft edge per side: left, right, top, bottom).
 - **Lock a slice:** once it's lined up, Lock stops its points being dragged or nudged by accident.

@@ -34,6 +34,7 @@ pub(crate) fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
 /// OSC / MIDI CC / key mappings, and Forget.
 pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     ui.set_min_width(300.0);
+    lock_item(ui, target);
     if ui.button(label(icon::EAR, "Listen: move a knob, send OSC, or press a key")).clicked() {
         request(ui, LEARN_REQUEST, target.clone());
         ui.close();
@@ -76,6 +77,12 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
 
 /// Small badge on a control that has a MIDI/OSC/key mapping.
 pub(crate) fn mapped_badge(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget) {
+    lock_badge(ui, resp, target);
+    mapped_dot(ui, resp, target);
+}
+
+/// The mapped dot and Map mode overlay, without the lock badge (sliders draw their own lock).
+pub(crate) fn mapped_dot(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget) {
     let mapped = is_mapped(ui, target);
     if mapped {
         let p = resp.rect.left_top() + egui::vec2(1.0, 1.0);

@@ -5,6 +5,7 @@
 mod choice;
 mod composition;
 mod control;
+mod control_prefs;
 mod clip_play;
 mod collections;
 mod routing;
@@ -27,6 +28,7 @@ pub use cues::*;
 pub use dmx::*;
 pub use composition::*;
 pub use control::*;
+pub use control_prefs::*;
 pub use group::*;
 pub use layer::*;
 pub use modulators::*;

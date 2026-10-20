@@ -26,7 +26,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
 
     // Toolbar.
     ui.horizontal(|ui| {
-        ui.toggle_value(&mut edit, label(icon::PENCIL_SIMPLE, "Edit")).on_hover_text("Edit: add, move (drag), resize (drag the corner) and wire up widgets. Off: play them.");
+        toggle(ui, &mut edit, label(icon::PENCIL_SIMPLE, "Edit")).on_hover_text("Edit: add, move (drag), resize (drag the corner) and wire up widgets. Off: play them.");
         if edit {
             ui.menu_button(label(icon::PLUS, "Add"), |ui| {
                 for &kind in <WidgetKind as phosphor_engine::Choice>::OPTIONS {

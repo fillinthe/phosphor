@@ -75,7 +75,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             }
             ui.horizontal(|ui| {
                 ui.label(RichText::new(format!("{} {}", icon::PROJECTOR_SCREEN, o.name)).strong());
-                ui.toggle_value(&mut o.mapping.enabled, RichText::new("MAPPING").small()).on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
+                toggle(ui, &mut o.mapping.enabled, "MAPPING").on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
             });
             for s in &mut o.mapping.surfaces {
                 ui.horizontal(|ui| {
@@ -214,9 +214,9 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             vs.pan = egui::Vec2::ZERO;
         }
         hint(ui, format!("{:.0}%", vs.zoom * 100.0));
-        ui.toggle_value(&mut vs.snap, label(icon::GRID_FOUR, "Snap")).on_hover_text("Corners and points snap to a 1/64 grid");
+        toggle(ui, &mut vs.snap, label(icon::GRID_FOUR, "Snap")).on_hover_text("Corners and points snap to a 1/64 grid");
         super::output::grid_toggle(ui, &mut o.grid);
-        ui.toggle_value(&mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
+        toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
         if ui.checkbox(&mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
@@ -521,7 +521,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
         if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::POLYGON).color(accent()));
-                ui.toggle_value(&mut s.enabled, RichText::new("ON").small().strong());
+                toggle(ui, &mut s.enabled, "ON");
                 ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(f32::INFINITY));
             });
             if ui.small_button(label(icon::CORNERS_OUT, "Corners to the full output")).clicked() {
@@ -536,7 +536,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
         } else if let Some(m) = o.mapping.masks.iter_mut().find(|m| Some(m.id) == *selected_surface) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
-                ui.toggle_value(&mut m.enabled, RichText::new("ON").small().strong());
+                toggle(ui, &mut m.enabled, "ON");
                 ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(f32::INFINITY));
             });
             hint(ui, format!("{} points · drag them on the canvas; double-click an edge to add one, right-click a point to remove it", m.points.len()));
@@ -546,7 +546,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
                 ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(f32::INFINITY));
             });
-            ui.toggle_value(&mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
+            toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
             ui.horizontal(|ui| {
                 ui.label("Size");
                 guarded!(ui, o.width, egui::DragValue::new(&mut o.width).range(0..=8192).suffix(" w"));

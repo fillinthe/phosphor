@@ -109,10 +109,13 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
         let State { comp, media_view: view, .. } = st;
         ui.horizontal_wrapped(|ui| {
             let count = |f: &dyn Fn(&phosphor_engine::MediaItem) -> bool| comp.media_bin.iter().filter(|m| f(m)).count();
-            ui.selectable_value(&mut view.filter, MediaFilter::All, format!("All {}", comp.media_bin.len()));
-            ui.selectable_value(&mut view.filter, MediaFilter::Favorites, format!("{} {}", icon::STAR, count(&|m| m.favorite)));
-            ui.selectable_value(&mut view.filter, MediaFilter::Videos, format!("{} {}", icon::FILM_STRIP, count(&|m| crate::media::is_movie(&m.name))));
-            ui.selectable_value(&mut view.filter, MediaFilter::Images, format!("{} {}", icon::IMAGE, count(&|m| !crate::media::is_movie(&m.name))));
+            let filters = [
+                (MediaFilter::All, format!("All {}", comp.media_bin.len())),
+                (MediaFilter::Favorites, format!("{} {}", icon::STAR, count(&|m| m.favorite))),
+                (MediaFilter::Videos, format!("{} {}", icon::FILM_STRIP, count(&|m| crate::media::is_movie(&m.name)))),
+                (MediaFilter::Images, format!("{} {}", icon::IMAGE, count(&|m| !crate::media::is_movie(&m.name)))),
+            ];
+            segmented(ui, &mut view.filter, &filters, |_, _, _| {});
             for c in comp.media_collections.clone() {
                 let n = count(&|m| comp.in_collection(m, &c));
                 let r = ui.selectable_value(&mut view.filter, MediaFilter::Collection(c.clone()), format!("{} {c} {n}", icon::BOOKMARKS_SIMPLE));

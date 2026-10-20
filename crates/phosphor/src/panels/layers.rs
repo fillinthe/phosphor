@@ -237,7 +237,7 @@ pub(crate) fn layer_card(
             }
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    let on = ui.toggle_value(&mut layer.enabled, RichText::new("ON").small().strong()).on_hover_text("Layer on/off (Space) · right-click to Learn");
+                    let on = toggle(ui, &mut layer.enabled, "ON").on_hover_text("Layer on/off (Space) · right-click to Learn");
                     mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
                     let solo_color = if layer.solo { WARN } else { Color32::GRAY };

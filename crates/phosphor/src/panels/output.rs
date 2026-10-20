@@ -154,10 +154,10 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(format!("{}", i + 1)).strong().color(accent()));
                         ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
-                        ui.toggle_value(&mut o.enabled, RichText::new("ON").small()).on_hover_text("Render this output");
+                        crate::ui::toggle(ui, &mut o.enabled, "ON").on_hover_text("Render this output");
                         grid_toggle(ui, &mut o.grid);
                         #[cfg(target_os = "macos")]
-                        ui.toggle_value(&mut o.syphon, RichText::new("SYPHON").small())
+                        crate::ui::toggle(ui, &mut o.syphon, "SYPHON")
                             .on_hover_text("Also publish this output (after mapping) as a Syphon source for MadMapper, Resolume, OBS…");
                         if o.mapping.active() {
                             ui.label(RichText::new(format!("{} mapped", icon::PROJECTOR_SCREEN)).small().color(accent()));
@@ -210,7 +210,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                 egui::CollapsingHeader::new(title).id_salt(("out_surfaces", id)).show(ui, |ui| {
                     for s in o.mapping.surfaces.iter_mut() {
                         ui.horizontal(|ui| {
-                            ui.toggle_value(&mut s.enabled, RichText::new("ON").small());
+                            crate::ui::toggle(ui, &mut s.enabled, "ON");
                             ui.label(&s.name);
                         });
                         super::mapping::surface_source(ui, s, layers, groups, &others);
@@ -333,7 +333,7 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
 /// The alignment grid toggle for an output (GRID), with its settings on right-click: cells across, crosshair,
 /// line width, colour. Used in the Outputs panel and the Mapping Studio.
 pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverlay) {
-    let r = ui.toggle_value(&mut g.on, RichText::new(label(icon::GRID_FOUR, "GRID")).small()).on_hover_text("Alignment grid over this output (cells, crosshair, circle, border) to line up the projector · right-click for its settings · off for the show");
+    let r = toggle(ui, &mut g.on, label(icon::GRID_FOUR, "GRID")).on_hover_text("Alignment grid over this output (cells, crosshair, circle, border) to line up the projector · right-click for its settings · off for the show");
     r.right_menu(|ui| {
         ui.label(RichText::new("Alignment grid").strong());
         ui.horizontal(|ui| {

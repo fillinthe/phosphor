@@ -46,6 +46,8 @@ pub struct Composition {
     pub master_effects: Vec<EffectState>,
     /// MIDI/OSC bindings.
     pub control_maps: Vec<ControlMap>,
+    /// Locked controls and slider snap points.
+    pub control_prefs: ControlPrefs,
     pub master_fx_bypass: bool,
     pub media_bin: Vec<MediaItem>,
     /// Columns shown in the Clips grid.
@@ -99,7 +101,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_prefs: ControlPrefs::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 

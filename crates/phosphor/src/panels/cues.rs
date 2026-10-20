@@ -76,14 +76,14 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     ui.add(egui::TextEdit::singleline(&mut cue.name).desired_width(140.0));
                     guarded!(ui, cue.fade, egui::DragValue::new(&mut cue.fade).range(0.0..=60.0).speed(0.05).prefix("fade ").suffix(" s"));
                     let mut follows = cue.follow > 0.0;
-                    if ui.toggle_value(&mut follows, "then next").on_hover_text("Go to the next cue by itself after this many seconds").changed() {
+                    if toggle(ui, &mut follows, "then next").on_hover_text("Go to the next cue by itself after this many seconds").changed() {
                         cue.follow = if follows { 5.0 } else { 0.0 };
                     }
                     if follows {
                         guarded!(ui, cue.follow, egui::DragValue::new(&mut cue.follow).range(0.1..=3600.0).speed(0.1).prefix("after ").suffix(" s"));
                     }
                     let mut timed = cue.at.is_some();
-                    if ui.toggle_value(&mut timed, label(icon::CLOCK, "at")).on_hover_text("Fire at a timecode (choose the timecode at the top)").changed() {
+                    if toggle(ui, &mut timed, label(icon::CLOCK, "at")).on_hover_text("Fire at a timecode (choose the timecode at the top)").changed() {
                         cue.at = timed.then_some(0.0);
                     }
                     if let Some(at) = &mut cue.at {

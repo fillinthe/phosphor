@@ -134,7 +134,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             let r = card_frame(ui, is_sel).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    ui.toggle_value(&mut f.enabled, RichText::new("ON").small().strong());
+                    toggle(ui, &mut f.enabled, "ON");
                     ui.add(egui::TextEdit::singleline(&mut f.name).desired_width(120.0));
                     hint(ui, f.span());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

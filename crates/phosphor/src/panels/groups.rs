@@ -42,7 +42,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
             }
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    let on = ui.toggle_value(&mut g.enabled, RichText::new("ON").small().strong()).on_hover_text("Group on/off · right-click to Learn");
+                    let on = toggle(ui, &mut g.enabled, "ON").on_hover_text("Group on/off · right-click to Learn");
                     mapped_badge(ui, &on, &ControlTarget::LayerEnabled(g.id));
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(g.id)));
                     let name = RichText::new(format!("{} {}", icon::STACK, g.name)).strong().size(12.5);
@@ -179,7 +179,7 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w / aspect), g.enabled);
         ui.horizontal(|ui| {
-            ui.toggle_value(&mut g.enabled, RichText::new("ON").small().strong());
+            toggle(ui, &mut g.enabled, "ON");
             ui.label(icon::STACK);
             send = outputs_menu(ui, outs).or(send);
             ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(f32::INFINITY));
