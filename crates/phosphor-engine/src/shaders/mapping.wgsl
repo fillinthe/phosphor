@@ -70,6 +70,11 @@ fn surface_color(st: vec2f) -> vec4f {
 
 @fragment
 fn fs_surface(in: VOut) -> @location(0) vec4f {
+    return corner_pinned(in);
+}
+
+/// A corner-pinned slice at this pixel: the inverse homography (u.p[2..4]) back to surface coordinates.
+fn corner_pinned(in: VOut) -> vec4f {
     let q = in.pos.xy / u.resolution;
     let h = mat3x3f(
         vec3f(u.p[2].x, u.p[2].w, u.p[3].z),
@@ -99,6 +104,20 @@ fn vs_mesh(v: MeshIn) -> VOut {
 fn fs_mesh(in: VOut) -> @location(0) vec4f {
     return surface_color(in.uv);
 }
+
+// The same slices with another blend state (`SliceBlend::entry`; the pipeline does the blending).
+@fragment
+fn fs_surface_add(in: VOut) -> @location(0) vec4f { return corner_pinned(in); }
+@fragment
+fn fs_surface_screen(in: VOut) -> @location(0) vec4f { return corner_pinned(in); }
+@fragment
+fn fs_surface_mul(in: VOut) -> @location(0) vec4f { return corner_pinned(in); }
+@fragment
+fn fs_mesh_add(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
+@fragment
+fn fs_mesh_screen(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
+@fragment
+fn fs_mesh_mul(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
 
 @fragment
 fn fs_mask(in: VOut) -> @location(0) vec4f {
@@ -131,5 +150,37 @@ fn fs_grid(in: VOut) -> @location(0) vec4f {
     // Outer border, so the projector's edge is obvious.
     let edge = min(min(px.x, px.y), min(u.resolution.x - px.x, u.resolution.y - px.y));
     a = max(a, 1.0 - smoothstep(u.p[0].y * 1.5, u.p[0].y * 1.5 + 1.0, edge));
-    return vec4f(u.p[1].rgb * a, a);
+    let lines = u.p[1].rgb * a;
+    // Full-frame patterns (p[0].w): 1 card, 2 bars, 3 white, 4 checker, 5 ramp. 0 = the see-through grid.
+    let pattern = u32(u.p[0].w + 0.5);
+    if (pattern == 0u) {
+        return vec4f(lines, a);
+    }
+    let uv = in.uv;
+    let bars = array<vec3f, 7>(vec3f(0.75), vec3f(0.75, 0.75, 0.0), vec3f(0.0, 0.75, 0.75), vec3f(0.0, 0.75, 0.0), vec3f(0.75, 0.0, 0.75), vec3f(0.75, 0.0, 0.0), vec3f(0.0, 0.0, 0.75));
+    let bar = bars[min(u32(uv.x * 7.0), 6u)];
+    let step = floor(uv.x * 10.0) / 9.0;
+    var c = vec3f(0.0);
+    switch pattern {
+        case 2u: { c = bar; }
+        case 3u: { c = vec3f(1.0); }
+        case 4u: {
+            let k = floor(px / cell);
+            c = vec3f(f32((u32(k.x) + u32(k.y)) % 2u));
+        }
+        case 5u: { c = vec3f(min(step, 1.0)); }
+        default: {
+            // Test card: dark grey, bars across the middle, a ramp under them, coloured corners, the grid on top.
+            c = vec3f(0.12);
+            if (uv.y > 0.36 && uv.y < 0.52) { c = bar; }
+            if (uv.y >= 0.52 && uv.y < 0.6) { c = vec3f(min(step, 1.0)); }
+            let s = 0.08;
+            if (uv.x < s && uv.y < s * 1.6) { c = vec3f(1.0, 0.1, 0.1); }
+            if (uv.x > 1.0 - s && uv.y < s * 1.6) { c = vec3f(0.1, 1.0, 0.1); }
+            if (uv.x > 1.0 - s && uv.y > 1.0 - s * 1.6) { c = vec3f(0.2, 0.3, 1.0); }
+            if (uv.x < s && uv.y > 1.0 - s * 1.6) { c = vec3f(1.0, 0.9, 0.1); }
+            c = mix(c, u.p[1].rgb, a);
+        }
+    }
+    return vec4f(c, 1.0);
 }

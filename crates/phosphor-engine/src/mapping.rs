@@ -45,6 +45,9 @@ pub struct Surface {
     /// Locked: its points can't be dragged or nudged (nothing moves by accident once it's lined up).
     #[serde(default)]
     pub locked: bool,
+    /// How it lands on the slices under it.
+    #[serde(default)]
+    pub blend: SliceBlend,
 }
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
@@ -478,6 +481,54 @@ impl SliceShape {
     }
 }
 
+/// How a slice lands on the slices drawn before it (MadMapper's surface blend modes).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SliceBlend {
+    /// Covers what's under it.
+    #[default]
+    Normal,
+    /// Adds light: overlaps get brighter.
+    Add,
+    /// Brightens without blowing out.
+    Screen,
+    /// Darkens: only lets through what's under it.
+    Multiply,
+}
+
+impl SliceBlend {
+    pub const ALL: [SliceBlend; 4] = [SliceBlend::Normal, SliceBlend::Add, SliceBlend::Screen, SliceBlend::Multiply];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            SliceBlend::Normal => "Normal",
+            SliceBlend::Add => "Add",
+            SliceBlend::Screen => "Screen",
+            SliceBlend::Multiply => "Multiply",
+        }
+    }
+
+    /// The shader entry that draws a slice this way: `mesh` = a warped / line / 3D slice, else a corner-pinned one.
+    pub fn entry(self, mesh: bool) -> &'static str {
+        match (mesh, self) {
+            (false, SliceBlend::Normal) => "fs_surface",
+            (false, SliceBlend::Add) => "fs_surface_add",
+            (false, SliceBlend::Screen) => "fs_surface_screen",
+            (false, SliceBlend::Multiply) => "fs_surface_mul",
+            (true, SliceBlend::Normal) => "fs_mesh",
+            (true, SliceBlend::Add) => "fs_mesh_add",
+            (true, SliceBlend::Screen) => "fs_mesh_screen",
+            (true, SliceBlend::Multiply) => "fs_mesh_mul",
+        }
+    }
+}
+
+impl crate::model::Choice for SliceBlend {
+    const OPTIONS: &'static [Self] = &SliceBlend::ALL;
+    fn label(self) -> &'static str {
+        self.name()
+    }
+}
+
 impl crate::model::Choice for SliceShape {
     const OPTIONS: &'static [Self] = &SliceShape::ALL;
     fn label(self) -> &'static str {
@@ -802,6 +853,7 @@ impl Default for Surface {
             model: None,
             edges: None,
             locked: false,
+            blend: SliceBlend::Normal,
         }
     }
 }

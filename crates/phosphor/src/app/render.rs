@@ -43,7 +43,6 @@ impl PhosphorApp {
             selected,
             notice,
             monitor_wants,
-            monitor_keys,
             monitor_textures,
             output_textures,
             #[cfg(target_os = "macos")]
@@ -259,21 +258,30 @@ impl PhosphorApp {
                 }
                 live
             });
-            for i in 0..mkeys.len() {
+            // Preview windows: slot i of the engine's monitors belongs to window mkeys[i]. A window whose picture
+            // isn't there yet keeps nothing (never another window's picture); a replaced picture is re-linked.
+            for (i, n) in mkeys.iter().enumerate() {
                 let Some(t) = engine.monitor(i) else { continue };
-                let key = (t.width, t.height);
-                match monitor_textures.get_mut(i) {
-                    Some((_, k)) if *k == key => {}
-                    Some((id, k)) => {
+                match monitor_textures.get_mut(n) {
+                    Some((_, tex)) if *tex == t.texture => {}
+                    Some((id, tex)) => {
                         renderer.update_egui_texture_from_wgpu_texture(&rs.device, &t.view, linear, *id);
-                        *k = key;
+                        *tex = t.texture.clone();
                     }
                     None => {
                         let id = renderer.register_native_texture(&rs.device, &t.view, linear);
-                        monitor_textures.push((id, key));
+                        monitor_textures.insert(*n, (id, t.texture.clone()));
                     }
                 }
             }
+            // Windows that closed (or show the output window itself) let go of theirs.
+            monitor_textures.retain(|n, (id, _)| {
+                let keep = mkeys.contains(n);
+                if !keep {
+                    renderer.free_texture(id);
+                }
+                keep
+            });
             // Explorer / editor previews, one texture slot per index.
             for i in 0..keys.len() {
                 let Some(t) = engine.preview(i) else { continue };
@@ -299,7 +307,7 @@ impl PhosphorApp {
             });
         }
         *preview_keys = keys;
-        *monitor_keys = mkeys;
+
         {
             let _ = texture;
             let mut map = output.lock().unwrap();

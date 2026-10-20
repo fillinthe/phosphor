@@ -239,8 +239,9 @@ pub struct State {
     pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
     /// Monitor pictures requested this frame: (monitor number, source, width, height).
     pub monitor_wants: Vec<(u8, u64, u32, u32)>,
-    monitor_keys: Vec<u8>,
-    monitor_textures: Vec<(egui::TextureId, (u32, u32))>,
+    /// Preview windows' pictures by window number, with the engine texture each was made from (re-linked when that
+    /// texture is replaced).
+    monitor_textures: HashMap<u8, (egui::TextureId, egui_wgpu::wgpu::Texture)>,
     pub displays: Vec<crate::screens::Display>,
     /// Set by panels: open a new monitor with this source.
     pub new_monitor: Option<panels::MonitorSource>,
@@ -297,8 +298,7 @@ impl State {
 
     /// A monitor's picture (from the previous frame).
     pub fn monitor_tex(&self, n: u8) -> Option<egui::TextureId> {
-        let i = self.monitor_keys.iter().position(|k| *k == n)?;
-        self.monitor_textures.get(i).map(|(t, _)| *t)
+        self.monitor_textures.get(&n).map(|(t, _)| *t)
     }
 
     /// A rendered explorer/editor/clip preview by key (from the previous frame).

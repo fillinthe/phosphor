@@ -29,6 +29,7 @@ mod modulators;
 mod sequencer;
 mod leds;
 mod mapping;
+mod mapping_points;
 mod collections;
 mod media;
 mod mixer;

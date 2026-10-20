@@ -101,10 +101,10 @@ impl Engine {
                 ],
             }));
             // Surfaces, meshes and masks draw on top of what the output already has.
-            let surface = matches!(pass.entry, "fs_surface" | "fs_mesh" | "fs_mask" | "fs_grid");
+            let surface = pass.entry.starts_with("fs_surface") || pass.entry.starts_with("fs_mesh") || matches!(pass.entry, "fs_mask" | "fs_grid");
             let vertices = match pass.entry {
                 _ if pass.mesh.is_some() => pass.mesh.as_ref().map_or(0, |m| m.vertices),
-                "fs_surface" => 6,
+                e if e.starts_with("fs_surface") => 6,
                 "fs_rutt" => {
                     let rows = (pass.uniforms.p[0][0] as u32).max(2);
                     let cols = (pass.uniforms.p[0][1] as u32).max(2);

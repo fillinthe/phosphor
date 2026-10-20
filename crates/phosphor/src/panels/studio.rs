@@ -202,7 +202,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
     let canvas = (st.comp.width, st.comp.height);
     let mut edit_on_output = st.output.lock().unwrap().get(&oid).is_some_and(|o| o.edit_mapping);
     let mut action: Option<TreeAction> = None;
-    let State { comp, selected_surface, layer_textures, output, .. } = st;
+    let State { comp, selected_surface, layer_textures, output, thumbs, .. } = st;
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
     ui.horizontal_wrapped(|ui| {
         ui.selectable_value(&mut vs.view, View::Split, "Output + input");
@@ -214,14 +214,15 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             vs.pan = egui::Vec2::ZERO;
         }
         hint(ui, format!("{:.0}%", vs.zoom * 100.0));
-        toggle(ui, &mut vs.snap, label(icon::GRID_FOUR, "Snap")).on_hover_text("Corners and points snap to a 1/64 grid");
+        toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("Dragged points land on other slices' points nearby, otherwise on a 1/64 grid");
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
+        stage_photo_menu(ui, o);
         if ui.checkbox(&mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
     });
-    hint(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · arrows nudge the selected slice (Shift = 10 px) · double-click a mask edge to add a point");
+    hint(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points");
     let area = ui.available_rect_before_wrap();
     let (out_area, in_area) = match vs.view {
         View::Split => {
@@ -266,6 +267,12 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if let Some(t) = tex {
             paint_texture(&p, t, frame);
         }
+        // The stage photo over the output, to line slices up with the real stage (editor only).
+        if !o.stage_photo.is_empty()
+            && let Some(t) = thumbs.get_sized(&o.stage_photo, 2048)
+        {
+            p.image(t, frame, FULL_UV, Color32::from_white_alpha((o.stage_photo_opacity.clamp(0.0, 1.0) * 255.0) as u8));
+        }
         if vs.snap {
             for k in 1..16 {
                 let f = k as f32 / 16.0;
@@ -277,7 +284,20 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         p.rect_stroke(frame, 0.0, Stroke::new(1.0, Color32::from_gray(80)), StrokeKind::Outside);
         let touched = mapping_handles(&mut child, frame, &mut o.mapping, selected_surface, true);
         if touched && vs.snap {
-            snap_selected(&mut o.mapping, *selected_surface);
+            // Dragging one point: onto another slice's point within 8 screen pixels, else onto the grid.
+            let dragging = ui.input(|i| i.pointer.primary_down());
+            match super::mapping_points::selected_point(ui.ctx()).filter(|(sid, _)| Some(*sid) == *selected_surface && dragging) {
+                Some((sid, i)) => {
+                    let radius = [8.0 / frame.width(), 8.0 / frame.height()];
+                    if !super::mapping_points::snap_to_others(&mut o.mapping, sid, i, radius)
+                        && let Some(p) = o.mapping.surfaces.iter_mut().find(|s| s.id == sid).and_then(|s| super::mapping_points::points_mut(s).into_iter().nth(i))
+                    {
+                        p[0] = (p[0] * 64.0).round() / 64.0;
+                        p[1] = (p[1] * 64.0).round() / 64.0;
+                    }
+                }
+                None => snap_selected(&mut o.mapping, *selected_surface),
+            }
         }
         // Right-click: what can be done here. The slice under the pointer becomes the selected one.
         let menu_key = key.with("menu_at");
@@ -299,18 +319,9 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             let at: [f32; 2] = ui.ctx().data(|d| d.get_temp(menu_key)).unwrap_or([0.5, 0.5]);
             canvas_menu(ui, o, *selected_surface, at, &mut action, &mut vs);
         });
-        // Arrow keys nudge the selected slice by one output pixel (ten with Shift).
-        if bg.hovered() && !ui.ctx().egui_wants_keyboard_input() {
-            let (dx, dy) = ui.ctx().input(|i| {
-                let step = if i.modifiers.shift { 10.0 } else { 1.0 };
-                let k = |key| i.key_pressed(key) as i32 as f32;
-                ((k(egui::Key::ArrowRight) - k(egui::Key::ArrowLeft)) * step, (k(egui::Key::ArrowDown) - k(egui::Key::ArrowUp)) * step)
-            });
-            if (dx, dy) != (0.0, 0.0)
-                && let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface && !s.locked)
-            {
-                s.translate(dx / ow.max(1) as f32, dy / oh.max(1) as f32);
-            }
+        // Keys: Tab through points, arrows nudge the selected point (or the whole slice), one output pixel a press.
+        if bg.hovered() || child.ui_contains_pointer() {
+            super::mapping_points::point_keys(ui, &mut o.mapping, *selected_surface, (ow, oh));
         }
     }
     if let Some(area) = in_area {
@@ -318,6 +329,30 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
     }
     ui.ctx().data_mut(|d| d.insert_temp(key, vs));
     apply_action(st, action);
+}
+
+/// "Stage photo": pick a photo of the stage taken from the projector, how strongly it shows, or remove it.
+fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
+    let text = if o.stage_photo.is_empty() { label(icon::IMAGE, "Stage photo…") } else { label(icon::IMAGE, "Stage photo") };
+    ui.menu_button(text, |ui| {
+        ui.set_min_width(260.0);
+        hint(ui, "A photo of the stage taken from where the projector stands: line the slices up with it. Only shows here, never on the output.");
+        if ui.button(label(icon::FOLDER_OPEN, if o.stage_photo.is_empty() { "Choose a photo…" } else { "Another photo…" })).clicked() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(super::mapping::PICK_STAGE_PHOTO), o.id));
+            ui.close();
+        }
+        if !o.stage_photo.is_empty() {
+            ui.horizontal(|ui| {
+                Level::percent(&mut o.stage_photo_opacity, "Shows").default(0.5).show(ui);
+            });
+            if danger_button(ui, label(icon::X, "Remove the photo")).clicked() {
+                o.stage_photo.clear();
+                ui.close();
+            }
+        }
+    })
+    .response
+    .on_hover_text("A photo of the real stage behind the slices, for lining them up");
 }
 
 /// The Studio canvas's right-click menu: the slice under the pointer (warp, shape, line, 3D model, fill, duplicate,
@@ -515,7 +550,9 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
     let State { comp, selected_surface, .. } = st;
     let others: Vec<(u64, String)> = comp.outputs.iter().filter(|o| o.id != oid).map(|o| (o.id, o.name.clone())).collect();
     let (layers, groups) = (&mut comp.layers, &mut comp.groups);
+    let canvas = (comp.width, comp.height);
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
+    let size = o.size(canvas);
     egui::ScrollArea::vertical().id_salt("studio_props").auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
         if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
@@ -531,6 +568,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
                     s.mesh = Some(phosphor_engine::mapping::Mesh::from_corners(&s.corners, c, r));
                 }
             }
+            super::mapping_points::point_fields(ui, s, size);
             ui.separator();
             surface_settings(ui, s, layers, groups, &others);
         } else if let Some(m) = o.mapping.masks.iter_mut().find(|m| Some(m.id) == *selected_surface) {

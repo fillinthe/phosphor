@@ -157,7 +157,7 @@ impl Gpu {
 
     /// Compiles every pipeline up front so the first use of an effect never hitches a show.
     pub fn prewarm(&mut self) {
-        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_mesh", "fs_mask", "fs_sample"];
+        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_mesh", "fs_mask", "fs_sample", "fs_surface_add", "fs_surface_screen", "fs_surface_mul", "fs_mesh_add", "fs_mesh_screen", "fs_mesh_mul"];
         let all = fixed
             .into_iter()
             .chain(shaders::all_effect_entries())
@@ -195,9 +195,15 @@ impl Gpu {
 pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &'static str, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
     // Mapping surfaces are real quads blended onto the output; everything else is a
     // fullscreen triangle that overwrites its target.
-    let surface = entry == "fs_surface";
+    let surface = entry.starts_with("fs_surface");
     // Mesh-warped surfaces and masks draw triangles from a vertex buffer (x, y, s, t).
-    let mesh = entry == "fs_mesh" || entry == "fs_mask";
+    let mesh = entry.starts_with("fs_mesh") || entry == "fs_mask";
+    // Slice blend modes (`SliceBlend::entry`), all on premultiplied colour.
+    let slice_blend = |src_factor, dst_factor| {
+        let c = wgpu::BlendComponent { src_factor, dst_factor, operation: wgpu::BlendOperation::Add };
+        let a = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha, operation: wgpu::BlendOperation::Add };
+        Some(wgpu::BlendState { color: c, alpha: a })
+    };
     // Rutt-Etra draws additive line lists generated in the vertex shader.
     let rutt = entry == "fs_rutt" || entry == "fs_rutt_points";
     let points = entry == "fs_rutt_points";
@@ -241,7 +247,13 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format,
-                blend: if surface || entry == "fs_mesh" || entry == "fs_mask" || entry == "fs_grid" {
+                blend: if entry.ends_with("_add") && (surface || mesh) {
+                    slice_blend(wgpu::BlendFactor::One, wgpu::BlendFactor::One)
+                } else if entry.ends_with("_screen") {
+                    slice_blend(wgpu::BlendFactor::One, wgpu::BlendFactor::OneMinusSrc)
+                } else if entry.ends_with("_mul") {
+                    slice_blend(wgpu::BlendFactor::Dst, wgpu::BlendFactor::OneMinusSrcAlpha)
+                } else if surface || mesh || entry == "fs_grid" {
                     Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                 } else if rutt {
                     Some(wgpu::BlendState { color: additive, alpha: additive })

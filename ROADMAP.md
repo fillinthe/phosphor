@@ -122,11 +122,12 @@ app that's much smaller and lighter on the CPU.
           slice routed to outputs; slices listed/duplicated/modified in one place (Studio)
     - [x] Alignment grid overlay per output (GRID: cells, crosshair, circle, diagonals, border; 0.2.68)
     - [x] Corners by number (0.2.68)
-    - [ ] Fine-tune (from the MadMapper review): typed x/y for mesh points, Tab to the next point, lock a surface,
-          snap to other surfaces' corners, zoom to a point; per-point bezier handles
+    - [x] Fine-tune: typed x/y for points, Tab to the next point, lock, snap to other slices' points (0.2.76–79)
+    - [ ] Zoom to a point; per-point bezier handles
     - [x] Soft edge per side; lock a slice (0.2.76)
-    - [ ] More test patterns; a background photo of the stage per output
-    - [ ] OSC/MIDI targets and cues for surface geometry; surface groups, multi-select, per-surface blend mode
+    - [x] Test patterns and a stage photo per output (0.2.79)
+    - [x] Per-slice blend mode (0.2.79)
+    - [ ] OSC/MIDI targets and cues for surface geometry; surface groups, multi-select
     - [ ] Freehand masks, mask attached to a surface; add/remove single mesh points
     - [x] "All outputs on one screen": Outputs area › Stage (0.2.69)
     - [ ] Masters: several program outputs ("masters") with their own mixes (undecided; design comps so one can be)
