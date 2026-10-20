@@ -6,6 +6,7 @@ use phosphor_engine::{ChainMode, ModChain, Modulator};
 use super::*;
 
 pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
+    let beats = st.mod_inputs.beats;
     let inputs = st.mod_inputs;
     ui.horizontal(|ui| {
         if ui.button(label(icon::PLUS, "Modulator")).on_hover_text("A shared signal: pick it in any control's Modulate menu").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
@@ -42,6 +43,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         Level::percent(&mut m.value, "Value").default(0.0).target(phosphor_engine::ControlTarget::Modulator(m.id)).show(ui);
                         hint(ui, "right-click: Learn a MIDI knob");
                     });
+                    looper_row(ui, &mut m.looper, beats);
                 }
                 // Its signal: the same editor as any control's Modulate menu.
                 let mut sig = Some(m.signal);
@@ -87,5 +89,52 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     }
     if st.comp.modulators.is_empty() {
         hint(ui, "No modulators yet. Add one, set its signal (an LFO on the beat, the bass, a step sequence…), then pick it from any slider's Modulate menu.");
+    }
+}
+
+/// A Hand modulator's data looper: loop length, record (from the next loop start), play / stop, clear, and the take.
+fn looper_row(ui: &mut egui::Ui, l: &mut phosphor_engine::Looper, beats: f32) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new(format!("{} Loop", icon::REPEAT)).strong());
+        for n in [1.0, 2.0, 4.0, 8.0, 16.0] {
+            if ui.selectable_label(l.len() == n, format!("{n:.0}")).on_hover_text(format!("{n:.0} beats")).clicked() && l.recording.is_none() {
+                l.beats = n;
+            }
+        }
+        match l.recording {
+            Some(start) if beats < start => {
+                ui.label(RichText::new(format!("{} waiting for the beat…", icon::RECORD)).color(crate::theme::WARN));
+            }
+            Some(_) => {
+                ui.label(RichText::new(format!("{} recording", icon::RECORD)).color(crate::theme::WARN));
+            }
+            None => {
+                if ui.button(RichText::new(format!("{} Rec", icon::RECORD)).color(crate::theme::WARN)).on_hover_text("Record what this knob does for the loop's length, from the next loop start; then it plays back by itself").clicked() {
+                    l.arm(beats);
+                }
+                if !l.samples.is_empty() {
+                    let play = if l.playing { label(icon::STOP, "Stop") } else { label(icon::PLAY, "Play") };
+                    if ui.button(play).on_hover_text("Play the take back, looped with the beat (stopped: the knob drives it again)").clicked() {
+                        l.playing = !l.playing;
+                    }
+                    if ui.small_button(icon::TRASH).on_hover_text("Forget the take").clicked() {
+                        l.samples.clear();
+                        l.playing = false;
+                    }
+                }
+            }
+        }
+    });
+    if !l.samples.is_empty() {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(260.0), 28.0), Sense::hover());
+        let p = ui.painter();
+        p.rect_filled(rect, 3.0, ui.visuals().extreme_bg_color);
+        let n = l.samples.len().max(2);
+        let pts: Vec<egui::Pos2> = l.samples.iter().enumerate().map(|(i, v)| egui::pos2(rect.left() + rect.width() * i as f32 / (n - 1) as f32, rect.bottom() - v * rect.height())).collect();
+        p.add(egui::Shape::line(pts, Stroke::new(1.5, accent())));
+        if l.playing {
+            let x = rect.left() + rect.width() * (beats.rem_euclid(l.len()) / l.len());
+            p.vline(x, rect.y_range(), Stroke::new(1.0, Color32::WHITE));
+        }
     }
 }

@@ -64,11 +64,79 @@ pub struct Modulator {
     pub chain: Option<ModChain>,
     /// The "Hand / MIDI knob" source's value (0..1): set by its fader, a mapped knob, OSC or the remote.
     pub value: f32,
+    /// Data looper (Hand source): a recorded take of the value that plays back in time with the beat.
+    #[serde(default)]
+    pub looper: Looper,
+}
+
+/// Samples per beat in a looper take.
+pub const LOOPER_RES: usize = 32;
+
+/// A Hand modulator's looper (VDMX's Data Looper): record the knob's moves for a number of beats, starting on the
+/// next multiple of that length so the loop lines up with the music, then play the take back looped.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Looper {
+    /// Loop length in beats (0 = 4).
+    pub beats: f32,
+    /// The take: `LOOPER_RES` values per beat (empty = nothing recorded).
+    pub samples: Vec<f32>,
+    pub playing: bool,
+    /// Recording, from this beat (it waits until then).
+    #[serde(skip)]
+    pub recording: Option<f32>,
+}
+
+impl Looper {
+    pub fn len(&self) -> f32 {
+        if self.beats > 0.0 { self.beats } else { 4.0 }
+    }
+
+    /// Record from the next multiple of the loop length (now, if the clock is right on one).
+    pub fn arm(&mut self, beats: f32) {
+        let len = self.len();
+        self.recording = Some((beats / len - 1e-4).ceil() * len);
+        self.samples.clear();
+        self.playing = false;
+    }
+
+    /// Every frame: while recording, keep `value` at this point of the take; at the end it starts playing.
+    pub fn record(&mut self, beats: f32, value: f32) {
+        let Some(start) = self.recording else { return };
+        if beats < start {
+            return;
+        }
+        let total = (self.len() * LOOPER_RES as f32) as usize;
+        let at = ((beats - start) * LOOPER_RES as f32) as usize;
+        if at >= total {
+            let last = self.samples.last().copied().unwrap_or(value);
+            self.samples.resize(total, last);
+            self.recording = None;
+            self.playing = true;
+            return;
+        }
+        // Frames are slower than the take's resolution: fill the gap with the last value.
+        let last = self.samples.last().copied().unwrap_or(value);
+        self.samples.resize(at, last);
+        self.samples.push(value.clamp(0.0, 1.0));
+    }
+
+    /// The take's value at this beat while playing (None while recording or with nothing recorded).
+    pub fn value_at(&self, beats: f32) -> Option<f32> {
+        if !self.playing || self.recording.is_some() || self.samples.is_empty() {
+            return None;
+        }
+        let pos = beats.rem_euclid(self.len()) * LOOPER_RES as f32;
+        let i = (pos as usize).min(self.samples.len() - 1);
+        let j = (i + 1) % self.samples.len();
+        let f = pos.fract();
+        Some(self.samples[i] * (1.0 - f) + self.samples[j] * f)
+    }
 }
 
 impl Default for Modulator {
     fn default() -> Self {
-        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None, value: 0.5 }
+        Self { id: 0, name: "Modulator".into(), signal: Modulation { source: super::ModSource::LfoSine, sync: true, rate: 4.0, ..Default::default() }, chain: None, value: 0.5, looper: Looper::default() }
     }
 }
 
@@ -115,7 +183,7 @@ pub fn evaluate(mods: &[Modulator], inputs: &ModInputs, phases: &mut ModPhases) 
         // The signal at that phase: a free-running one-cycle-per-second view of the same source.
         let at_phase = super::Modulation { sync: false, rate: 1.0, ..*s };
         let mut v = if s.source == super::ModSource::Hand {
-            let v = m.value.clamp(0.0, 1.0);
+            let v = m.looper.value_at(inputs.beats).unwrap_or(m.value).clamp(0.0, 1.0);
             if s.invert { 1.0 - v } else { v }
         } else {
             source_value(&at_phase, &ModInputs { time: phase.rem_euclid(1_000_000.0) as f32, ..inp })
@@ -144,8 +212,8 @@ mod tests {
 
     #[test]
     fn modulators_chain_in_order_and_controls_follow_them() {
-        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None, value: 0.0 };
-        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0 };
+        let square = Modulator { id: 1, name: "gate".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default() };
+        let saw = Modulator { id: 2, name: "ramp".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default() };
         // t = 0.25 s: the square is on (1), the saw at 0.25: 0.25 × 1.
         let on = evaluate(&[square.clone(), saw.clone()], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
         assert_eq!(on[0], (1, 1.0));
@@ -162,8 +230,8 @@ mod tests {
 
     #[test]
     fn speed_chaining_changes_the_rate_without_jumps() {
-        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None, value: 0.0 };
-        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }), value: 0.0 };
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Steps, steps: [1.0; 8], rate: 1.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default() };
+        let saw = Modulator { id: 2, name: "saw".into(), signal: Modulation { source: ModSource::LfoSaw, rate: 0.1, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Speed, amount: 1.0 }), value: 0.0, looper: Default::default() };
         let mods = [knob, saw];
         let mut ph = ModPhases::default();
         let mut prev = evaluate(&mods, &ModInputs { time: 0.0, ..Default::default() }, &mut ph)[1].1;
@@ -177,10 +245,34 @@ mod tests {
 
     #[test]
     fn a_hand_modulator_feeds_the_chain() {
-        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Hand, ..Default::default() }, chain: None, value: 0.3 };
-        let lfo = Modulator { id: 2, name: "lfo".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0 };
+        let knob = Modulator { id: 1, name: "knob".into(), signal: Modulation { source: ModSource::Hand, ..Default::default() }, chain: None, value: 0.3, looper: Default::default() };
+        let lfo = Modulator { id: 2, name: "lfo".into(), signal: Modulation { source: ModSource::LfoSquare, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: 1, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default() };
         let out = evaluate(&[knob, lfo], &ModInputs { time: 0.25, ..Default::default() }, &mut ModPhases::default());
         assert_eq!(out[0], (1, 0.3));
         assert!((out[1].1 - 0.3).abs() < 1e-6, "{:?}", out[1]);
+    }
+}
+
+#[cfg(test)]
+mod looper_tests {
+    use super::*;
+
+    #[test]
+    fn a_take_starts_on_the_loop_and_plays_back() {
+        let mut l = Looper { beats: 2.0, ..Default::default() };
+        l.arm(3.1);
+        assert_eq!(l.recording, Some(4.0), "waits for the next 2-beat boundary");
+        // A knob going 0 → 1 over the two beats, at 60 fps / 120 bpm (half a beat a second).
+        let mut b = 3.1f32;
+        while l.recording.is_some() {
+            l.record(b, ((b - 4.0) / 2.0).clamp(0.0, 1.0));
+            b += 0.5 / 60.0;
+        }
+        assert!(l.playing && l.samples.len() == 2 * LOOPER_RES);
+        assert!(l.value_at(4.0).unwrap() < 0.05, "loop start");
+        assert!((l.value_at(5.0).unwrap() - 0.5).abs() < 0.05, "half way");
+        assert!((l.value_at(7.0).unwrap() - 0.5).abs() < 0.05, "and again one loop later");
+        l.arm(7.5);
+        assert_eq!(l.value_at(8.0), None, "recording again: the live value");
     }
 }
