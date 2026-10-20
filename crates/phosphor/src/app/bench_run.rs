@@ -66,6 +66,9 @@ impl PhosphorApp {
         println!("AUDIO {}", self.state.audio.debug_line());
         if self.state.net.running() {
             println!("WEB control={} master={:.2} last={:?}", if self.state.comp.web_control_off { "off" } else { "on" }, self.state.comp.master_fade, self.state.web_activity.as_ref().map(|(_, w)| w.as_str()));
+            for l in &self.state.web_log {
+                println!("WEBLOG {} {} | {}", l.wall, l.who, l.what);
+            }
         }
         if !self.state.comp.modulators.is_empty() {
             let vals: Vec<String> = self.state.comp.modulators.iter().map(|m| format!("{}={:.2}", m.name, self.state.mod_inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1))).collect();

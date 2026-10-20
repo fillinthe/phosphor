@@ -100,7 +100,7 @@ app that's much smaller and lighter on the CPU.
           the preview shows "<name> is controlling from the web · Take over" while someone does
     - [x] OSC out from the Control Surface: each widget's Send OSC address → the surface's OSC out host (2026-10-20)
     - [ ] Per-person limits: which controls each guest page may touch (today: one Surface page + columns + Surprise)
-    - [ ] A log of who changed what (Devices panel)
+    - [x] A log of who changed what (Devices panel, last 100, drags merged) (2026-10-20)
 
 ## TODO
 
