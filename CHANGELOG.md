@@ -4,6 +4,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.77 (2026-10-20)
+
+- **Step sequencer** (as in VDMX): Modulators › Step track adds a track of 4 to 64 steps that plays on the beat
+  (a step lasts a bar, a beat, or 1/8, 1/16, 1/32). Draw levels, or switch on Gates and click steps on and off;
+  Glide slides between steps; shift the pattern, Random, Clear. Add several tracks for a multi-track sequencer.
+  Any slider can follow a track: right-click › Modulate › pick it. An old 8-step modulator turns into a track
+  with More steps….
+
 ## 0.2.76 (2026-10-20)
 
 - **Buttons look like what they do.** Play, triggers, Surprise and Rec are solid, bold buttons. On/off switches

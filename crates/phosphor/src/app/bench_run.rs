@@ -219,12 +219,23 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "seq" {
+                // Two step-sequencer tracks: a gate on the beat and a 16-step level line.
+                use phosphor_engine::{ModSource, Modulation, Modulator, StepTrack};
+                for (k, gate) in [(1, true), (2, false)] {
+                    let id = self.state.comp.new_id();
+                    let sequence = StepTrack { gate, steps: if gate { [1.0, 0.0, 0.0, 0.0].repeat(4) } else { (0..16).map(|i| i as f32 / 15.0).collect() }, ..Default::default() };
+                    self.state.comp.modulators.push(Modulator { id, name: format!("Track {k}"), signal: Modulation { source: ModSource::Steps, ..Default::default() }, sequence: Some(sequence), ..Default::default() });
+                }
+                println!("QUICK seq: two step tracks");
+                continue;
+            }
             if name == "mods" {
                 // Two shared modulators, the second gated by the first, and the first layer's generator speed following it.
                 use phosphor_engine::{ChainMode, ModChain, ModSource, Modulation, Modulator};
                 let (a, b) = (self.state.comp.new_id(), self.state.comp.new_id());
-                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default() });
-                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default() });
+                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None });
+                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None });
                 if let Some(l) = self.state.comp.layers.first_mut() {
                     l.generator_mods.retain(|m| m.index != 0);
                     l.generator_mods.push(phosphor_engine::ParamMod { index: 0, m: Modulation { link: b, range: true, min: 0.0, max: 1.0, ..Default::default() } });

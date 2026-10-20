@@ -9,6 +9,7 @@ mod control_prefs;
 mod clip_play;
 mod collections;
 mod routing;
+mod sequencer;
 mod cues;
 mod dmx;
 mod group;
@@ -36,6 +37,7 @@ pub use options::*;
 pub use output::*;
 pub use play::*;
 pub use quick::*;
+pub use sequencer::*;
 pub use source::*;
 pub use surface::*;
 

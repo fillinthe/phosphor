@@ -26,6 +26,7 @@ mod inspector;
 mod layer_windows;
 mod layers;
 mod modulators;
+mod sequencer;
 mod leds;
 mod mapping;
 mod collections;

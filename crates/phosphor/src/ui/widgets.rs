@@ -343,3 +343,57 @@ pub(crate) fn history_graph(ui: &mut egui::Ui, size: egui::Vec2, values: &[f32],
     }
     response
 }
+
+/// A row of steps to draw on (step sequencers): drag across to set levels, or click / drag to paint gates on and
+/// off. `playing` lights the step that's playing; steps are shaded in groups of four (one beat of sixteenths).
+/// Returns true when a step changed.
+pub(crate) fn step_bars(ui: &mut egui::Ui, steps: &mut [f32], playing: Option<usize>, gate: bool, height: f32) -> bool {
+    let n = steps.len().max(1);
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), Sense::click_and_drag());
+    let w = rect.width() / n as f32;
+    let paint_id = resp.id.with("paint");
+    let mut changed = false;
+    let primary = ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released());
+    if primary
+        && (resp.dragged() || resp.clicked() || resp.drag_started())
+        && let Some(pos) = resp.interact_pointer_pos()
+        && rect.expand(w).contains(pos)
+    {
+        let i = (((pos.x - rect.left()) / w).max(0.0) as usize).min(n - 1);
+        let v = if gate {
+            // The first step touched decides: paint on, or paint off.
+            if resp.drag_started() || resp.clicked() {
+                let on = steps[i] < 0.5;
+                ui.ctx().data_mut(|d| d.insert_temp(paint_id, on));
+            }
+            let on = ui.ctx().data(|d| d.get_temp::<bool>(paint_id)).unwrap_or(true);
+            on as u8 as f32
+        } else {
+            (1.0 - (pos.y - rect.top()) / rect.height()).clamp(0.0, 1.0)
+        };
+        if steps[i] != v {
+            steps[i] = v;
+            changed = true;
+        }
+    }
+    let p = ui.painter();
+    for (i, v) in steps.iter().enumerate() {
+        let x0 = rect.left() + i as f32 * w + 1.0;
+        let cell = egui::Rect::from_min_max(egui::pos2(x0, rect.top()), egui::pos2(x0 + w - 2.0, rect.bottom()));
+        p.rect_filled(cell, 2.0, Color32::from_gray(if (i / 4) % 2 == 0 { 30 } else { 22 }));
+        let lit = playing == Some(i);
+        let color = if lit { accent() } else { accent().gamma_multiply(0.5) };
+        if gate {
+            if *v >= 0.5 {
+                p.rect_filled(cell.shrink(2.0), 2.0, color);
+            }
+        } else {
+            let bar = egui::Rect::from_min_max(egui::pos2(cell.left(), rect.bottom() - v * rect.height()), cell.right_bottom());
+            p.rect_filled(bar, 2.0, color);
+        }
+        if lit {
+            p.rect_stroke(cell, 2.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
+        }
+    }
+    changed
+}
