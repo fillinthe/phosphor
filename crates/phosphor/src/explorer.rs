@@ -368,6 +368,24 @@ fn compile(st: &mut State, index: usize, save: bool) {
     let _ = save;
 }
 
+/// Bench `--quick templateN`: compiles template N (not saved to your effects folder) and puts it on the top
+/// layer (a generator replaces its source; an effect is added). Returns its name.
+pub fn bench_template(st: &mut State, n: usize) -> Option<String> {
+    let t = custom::TEMPLATES.get(n)?;
+    let slug = format!("bench_template_{n}");
+    st.editor.shaders.push(UserShader { id: id_for(&slug, t.source), slug, source: t.source.to_string(), error: None, compiled: false });
+    let i = st.editor.shaders.len() - 1;
+    compile(st, i, false);
+    let sh = &st.editor.shaders[i];
+    if let Some(e) = &sh.error {
+        return Some(format!("{}: ERROR {e}", t.name));
+    }
+    let id: &'static str = shaders::effect(&sh.id).or_else(|| shaders::generator(&sh.id)).map(|d| d.id)?;
+    let layer = st.comp.layers.last().map(|l| l.id)?;
+    apply_palette(st, PaletteDrag { effect: shaders::effect(id).map(|d| d.id), generator: shaders::generator(id).map(|d| d.id) }, Some(layer));
+    Some(t.name.to_string())
+}
+
 pub fn new_shader(st: &mut State, source: String) {
     let name = custom::parse_header(&source).map(|h| h.name).unwrap_or_else(|_| "shader".into());
     let base = custom::slug(&name);
@@ -397,6 +415,17 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
                 create = Some(custom::template(true));
             }
         });
+        ui.menu_button(label(icon::SPARKLE, "New from template…"), |ui| {
+            ui.set_min_width(260.0);
+            for t in custom::TEMPLATES {
+                if ui.button(t.name).on_hover_text(t.about).clicked() {
+                    create = Some(t.source.to_string());
+                    ui.close();
+                }
+            }
+        })
+        .response
+        .on_hover_text("Starters that each do one thing (colour, warp, pixelate, mirror, mask, glow, rings, clouds), every line explained");
         ui.menu_button(label(icon::COPY, "Copy a built-in…"), |ui| {
             egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                 for d in shaders::EFFECTS.iter().chain(shaders::GENERATORS) {
@@ -443,7 +472,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Shader Editor").strong().size(16.0));
             crate::ui::hint(ui, "Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
-            crate::ui::hint(ui, format!("Start with + Effect, or right-click any effect in the explorer {} Edit a copy.", icon::ARROW_RIGHT));
+            crate::ui::hint(ui, format!("Start from a template (New from template…), with + Effect, or right-click any effect in the explorer {} Edit a copy.", icon::ARROW_RIGHT));
         });
         return;
     };
