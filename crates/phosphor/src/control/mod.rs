@@ -122,6 +122,8 @@ pub struct ControlHub {
     sent: HashMap<ControlSource, f32>,
     feedback_ips: Vec<String>,
     next_feedback: f64,
+    /// Control Surface OSC out: what each widget last sent.
+    surface_sent: HashMap<u64, Vec<f32>>,
     #[cfg(not(target_arch = "wasm32"))]
     backend: native::Backend,
     /// OSC Query server (browse every address), with when it last got the project's controls.
@@ -195,6 +197,7 @@ impl ControlHub {
             sent: HashMap::new(),
             feedback_ips: Vec::new(),
             next_feedback: 0.0,
+            surface_sent: HashMap::new(),
             #[cfg(not(target_arch = "wasm32"))]
             backend: native::Backend::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -279,6 +282,26 @@ impl ControlHub {
         self.fresh.insert(msg.source.clone(), msg.value);
         self.sent.insert(msg.source.clone(), msg.value);
         self.last = Some(msg);
+    }
+
+    /// Control Surface widgets with an OSC address send their value to the surface's OSC host when it changes
+    /// (whoever moved it: the Mac, a phone, MIDI, a modulator).
+    pub fn surface_osc(&mut self, comp: &Composition) {
+        let messages = comp.surface.osc_messages();
+        if messages.is_empty() {
+            self.surface_sent.clear();
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let host = vec![comp.surface.osc_host.trim().to_string()];
+            for (id, address, values) in messages {
+                if self.surface_sent.get(&id) != Some(&values) {
+                    self.backend.send_osc_args(&host, comp.surface.osc_port, &address, &values);
+                    self.surface_sent.insert(id, values);
+                }
+            }
+        }
     }
 
     /// Sends values that changed since the last check back to controllers. Cheap when nothing listens.

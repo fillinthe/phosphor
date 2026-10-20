@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.63 (2026-10-20)
+
+- **Control Surface → other apps:** give any button, fader, XY pad or colour on your Control Surface a *Send OSC*
+  address, and set *OSC out* (the other computer's address and port) at the top of the panel. Whenever it moves,
+  from your Mac, a guest's phone, a MIDI knob or a modulator, its value goes to TouchDesigner, a lighting desk,
+  Resolume or anything that speaks OSC. XY pads send x and y, colours red, green and blue.
+
 ## 0.2.62 (2026-10-20)
 
 - **Make your own effects from a template:** Shader Editor › *New from template…* gives eight starters that each do

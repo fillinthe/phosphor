@@ -98,7 +98,7 @@ app that's much smaller and lighter on the CPU.
           (phones then only watch and see "run from the booth"), 2026-10-20
     - [x] Always visible: status line shows "N can control" / "<name> is controlling" (orange) / "Web control off";
           the preview shows "<name> is controlling from the web · Take over" while someone does
-    - [ ] OSC from the web: let surface widgets send OSC to other apps too (TouchDesigner, lights)
+    - [x] OSC out from the Control Surface: each widget's Send OSC address → the surface's OSC out host (2026-10-20)
     - [ ] Per-person limits: which controls each guest page may touch (today: one Surface page + columns + Surprise)
     - [ ] A log of who changed what (Devices panel)
 

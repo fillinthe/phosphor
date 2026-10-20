@@ -167,6 +167,34 @@ fn osc_feedback_reaches_the_sender() {
     assert!(device.recv(&mut buf).is_err(), "unchanged values must not be resent");
 }
 
+/// A Control Surface fader with a Send OSC address reaches another app when it moves, once per change.
+#[test]
+fn surface_widgets_send_osc_to_another_app() {
+    use std::net::UdpSocket;
+    let app = UdpSocket::bind("127.0.0.1:18573").unwrap();
+    app.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_574, feedback: false, feedback_port: 18_575 });
+    let mut comp = Composition::starter();
+    comp.surface.osc_host = "127.0.0.1".into();
+    comp.surface.osc_port = 18_573;
+    comp.surface.widgets.push(phosphor_engine::SurfaceWidget { id: 77, kind: phosphor_engine::WidgetKind::Fader, value: 0.4, osc_out: "/lights/dim".into(), ..Default::default() });
+    hub.surface_osc(&comp);
+    let mut buf = [0u8; 1024];
+    let n = app.recv(&mut buf).expect("the fader's value");
+    let (_, packet) = rosc::decoder::decode_udp(&buf[..n]).unwrap();
+    let rosc::OscPacket::Message(m) = packet else { panic!("bundle") };
+    assert_eq!(m.addr, "/lights/dim");
+    assert_eq!(m.args, vec![rosc::OscType::Float(0.4)]);
+    hub.surface_osc(&comp);
+    assert!(app.recv(&mut buf).is_err(), "unchanged: not sent again");
+    comp.surface.widgets.last_mut().unwrap().value = 0.9; // a phone moved it
+    hub.surface_osc(&comp);
+    let n = app.recv(&mut buf).expect("the new value");
+    let (_, packet) = rosc::decoder::decode_udp(&buf[..n]).unwrap();
+    let rosc::OscPacket::Message(m) = packet else { panic!("bundle") };
+    assert_eq!(m.args, vec![rosc::OscType::Float(0.9)]);
+}
+
 /// A virtual MIDI device on this Mac sends 128 BPM clock with a Start; the hub's MIDI clock locks to it.
 #[cfg(target_os = "macos")]
 #[test]
