@@ -104,6 +104,11 @@ impl Backend {
 
     /// One float message to every recipient; never blocks (UDP).
     pub fn send_osc(&mut self, ips: &[String], port: u16, address: &str, value: f32) {
+        self.send_osc_args(ips, port, address, &[value]);
+    }
+
+    /// One message with any number of floats to every recipient; never blocks (UDP).
+    pub fn send_osc_args(&mut self, ips: &[String], port: u16, address: &str, values: &[f32]) {
         if ips.is_empty() {
             return;
         }
@@ -111,7 +116,7 @@ impl Backend {
             self.osc_out = UdpSocket::bind("0.0.0.0:0").and_then(|s| s.set_nonblocking(true).map(|()| s)).ok();
         }
         let Some(sock) = &self.osc_out else { return };
-        let msg = rosc::OscPacket::Message(rosc::OscMessage { addr: address.to_string(), args: vec![rosc::OscType::Float(value)] });
+        let msg = rosc::OscPacket::Message(rosc::OscMessage { addr: address.to_string(), args: values.iter().map(|v| rosc::OscType::Float(*v)).collect() });
         let Ok(bytes) = rosc::encoder::encode(&msg) else { return };
         for ip in ips {
             let _ = sock.send_to(&bytes, (ip.as_str(), port));

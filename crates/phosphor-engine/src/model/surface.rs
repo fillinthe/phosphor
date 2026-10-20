@@ -76,11 +76,13 @@ pub struct SurfaceWidget {
     pub value_z: f32,
     /// Which page of the surface it's on (index into `ControlSurface::pages`).
     pub page: usize,
+    /// Also send its value as OSC to `ControlSurface::osc_host` at this address ("" = don't).
+    pub osc_out: String,
 }
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0 }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new() }
     }
 }
 
@@ -107,15 +109,37 @@ pub struct ControlSurface {
     /// Page names (at least one); `page` is the one showing on the Mac.
     pub pages: Vec<String>,
     pub page: usize,
+    /// Where widgets with an OSC address send their values (another app or computer; "" = nowhere).
+    pub osc_host: String,
+    pub osc_port: u16,
 }
 
 impl Default for ControlSurface {
     fn default() -> Self {
-        Self { widgets: Vec::new(), columns: 12, next_id: 1, pages: vec!["Main".into()], page: 0 }
+        Self { widgets: Vec::new(), columns: 12, next_id: 1, pages: vec!["Main".into()], page: 0, osc_host: String::new(), osc_port: 9000 }
     }
 }
 
 impl ControlSurface {
+    /// What widgets with an OSC address send: (widget id, address, values). XY pads send x y, colours r g b.
+    pub fn osc_messages(&self) -> Vec<(u64, String, Vec<f32>)> {
+        if self.osc_host.trim().is_empty() {
+            return Vec::new();
+        }
+        self.widgets
+            .iter()
+            .filter(|w| w.osc_out.starts_with('/') && w.kind != WidgetKind::Label)
+            .map(|w| {
+                let values = match w.kind {
+                    WidgetKind::XyPad => vec![w.value, w.value_y],
+                    WidgetKind::Color => w.rgb().to_vec(),
+                    _ => vec![w.value],
+                };
+                (w.id, w.osc_out.clone(), values)
+            })
+            .collect()
+    }
+
     /// Adds a widget to the page showing, at the first free spot there.
     pub fn add(&mut self, kind: WidgetKind) -> u64 {
         let id = self.next_id;
@@ -214,5 +238,22 @@ mod page_tests {
         assert!(sf.widget(a).is_none() && sf.widget(b).unwrap().page == 0, "page 1 moved up");
         sf.remove_page(0);
         assert_eq!(sf.pages.len(), 1, "the last page stays");
+    }
+}
+
+#[cfg(test)]
+mod osc_out_tests {
+    use super::*;
+
+    #[test]
+    fn widgets_send_osc_only_with_a_host_and_address() {
+        let mut s = ControlSurface::default();
+        s.widgets.push(SurfaceWidget { id: 1, kind: WidgetKind::Fader, value: 0.25, osc_out: "/lights/dim".into(), ..Default::default() });
+        s.widgets.push(SurfaceWidget { id: 2, kind: WidgetKind::XyPad, value: 0.1, value_y: 0.9, osc_out: "/td/xy".into(), ..Default::default() });
+        s.widgets.push(SurfaceWidget { id: 3, kind: WidgetKind::Fader, ..Default::default() });
+        assert!(s.osc_messages().is_empty(), "no host: nothing goes out");
+        s.osc_host = "127.0.0.1".into();
+        let m = s.osc_messages();
+        assert_eq!(m, vec![(1, "/lights/dim".to_string(), vec![0.25]), (2, "/td/xy".to_string(), vec![0.1, 0.9])]);
     }
 }
