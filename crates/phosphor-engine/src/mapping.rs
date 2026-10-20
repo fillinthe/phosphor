@@ -599,6 +599,67 @@ impl Mesh {
         Self { cols, rows, points }
     }
 
+    /// (column, row) of point `k`.
+    pub fn grid_pos(&self, k: usize) -> (u32, u32) {
+        let w = self.cols as usize + 1;
+        ((k % w) as u32, (k / w) as u32)
+    }
+
+    /// One more column of points, through the middle of the cells right of column `i` (on the current curve, so
+    /// the shape doesn't change). None at the 16-column limit or past the last column.
+    pub fn with_column_after(&self, i: u32) -> Option<Self> {
+        if self.cols >= 16 || i >= self.cols {
+            return None;
+        }
+        let mut points = Vec::with_capacity(((self.cols + 2) * (self.rows + 1)) as usize);
+        for j in 0..=self.rows {
+            for c in 0..=self.cols {
+                points.push(self.point(c, j));
+                if c == i {
+                    points.push(self.eval((i as f32 + 0.5) / self.cols as f32, j as f32 / self.rows as f32));
+                }
+            }
+        }
+        Some(Self { cols: self.cols + 1, rows: self.rows, points })
+    }
+
+    /// One more row of points, through the middle of the cells below row `j`.
+    pub fn with_row_after(&self, j: u32) -> Option<Self> {
+        if self.rows >= 16 || j >= self.rows {
+            return None;
+        }
+        let mut points = Vec::with_capacity(((self.cols + 1) * (self.rows + 2)) as usize);
+        for r in 0..=self.rows {
+            for c in 0..=self.cols {
+                points.push(self.point(c, r));
+            }
+            if r == j {
+                for c in 0..=self.cols {
+                    points.push(self.eval(c as f32 / self.cols as f32, (j as f32 + 0.5) / self.rows as f32));
+                }
+            }
+        }
+        Some(Self { cols: self.cols, rows: self.rows + 1, points })
+    }
+
+    /// Without column `i` (an inner one: the outer edges stay).
+    pub fn without_column(&self, i: u32) -> Option<Self> {
+        if i == 0 || i >= self.cols {
+            return None;
+        }
+        let points = self.points.iter().enumerate().filter(|(k, _)| self.grid_pos(*k).0 != i).map(|(_, p)| *p).collect();
+        Some(Self { cols: self.cols - 1, rows: self.rows, points })
+    }
+
+    /// Without row `j` (an inner one).
+    pub fn without_row(&self, j: u32) -> Option<Self> {
+        if j == 0 || j >= self.rows {
+            return None;
+        }
+        let points = self.points.iter().enumerate().filter(|(k, _)| self.grid_pos(*k).1 != j).map(|(_, p)| *p).collect();
+        Some(Self { cols: self.cols, rows: self.rows - 1, points })
+    }
+
     /// Triangles for drawing: each vertex is (x, y, s, t). Subdivided finely enough to look smooth.
     pub fn triangles(&self) -> Vec<[f32; 4]> {
         let nx = (self.cols * 8).clamp(8, 96);
@@ -859,6 +920,17 @@ impl Default for Surface {
 }
 
 impl Surface {
+    /// Takes `other`'s look (opacity, soft edges, edge curve, colour, blend, shape), not its place or source.
+    pub fn copy_look_from(&mut self, other: &Surface) {
+        self.opacity = other.opacity;
+        self.feather = other.feather;
+        self.edges = other.edges;
+        self.blend_gamma = other.blend_gamma;
+        self.color = other.color.clone();
+        self.blend = other.blend;
+        self.shape = other.shape;
+    }
+
     /// For the slice shader (`u.p[11]` widths, `u.p[12].x` on): per-side soft edges, when set.
     pub fn edge_uniforms(&self) -> [[f32; 4]; 2] {
         match self.edges {
@@ -1047,6 +1119,35 @@ pub fn output_to_surface(corners: &[[f32; 2]; 4], p: [f32; 2]) -> Option<[f32; 2
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copying_a_look_keeps_place_and_source() {
+        let mut a = Surface::new(1, 0);
+        a.opacity = 0.4;
+        a.edges = Some([0.1, 0.0, 0.0, 0.2]);
+        a.blend = SliceBlend::Add;
+        let mut b = Surface::new(2, 1);
+        b.layer = Some(7);
+        let corners = b.corners;
+        b.copy_look_from(&a);
+        assert_eq!((b.opacity, b.edges, b.blend), (0.4, a.edges, SliceBlend::Add));
+        assert_eq!((b.corners, b.layer, b.id), (corners, Some(7), 2));
+    }
+
+    #[test]
+    fn mesh_lines_come_and_go_without_moving_the_shape() {
+        let corners = [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]];
+        let m = Mesh::from_corners(&corners, 2, 2);
+        let wider = m.with_column_after(0).unwrap();
+        assert_eq!((wider.cols, wider.points.len()), (3, 12));
+        assert_eq!(wider.corners(), m.corners(), "outline kept");
+        assert_eq!(wider.point(1, 0), m.eval(0.25, 0.0), "the new point sits where the picture already was");
+        let taller = m.with_row_after(1).unwrap();
+        assert_eq!((taller.rows, taller.points.len()), (3, 12));
+        assert_eq!(wider.without_column(1).unwrap(), m, "removing the added column gives the original back");
+        assert!(m.without_column(0).is_none() && m.without_row(2).is_none(), "outer edges stay");
+        assert_eq!(m.grid_pos(4), (1, 1));
+    }
 
     fn close(a: [f32; 2], b: [f32; 2]) -> bool {
         (a[0] - b[0]).abs() < 1e-4 && (a[1] - b[1]).abs() < 1e-4

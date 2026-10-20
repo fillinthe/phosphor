@@ -337,3 +337,23 @@ fn smoothed_mappings_glide() {
     hub.apply(&mut comp, 11.2);
     assert!((comp.master_fade - 1.0).abs() < 1e-6, "arrived");
 }
+
+#[test]
+fn slices_are_controls() {
+    let mut comp = Composition::default();
+    let out = comp.add_output();
+    let sid = comp.new_id();
+    comp.outputs.iter_mut().find(|o| o.id == out).unwrap().mapping.add_surface(sid);
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &ControlTarget::SliceOpacity(sid), 0.25, &mut deferred);
+    assert_eq!(get_target(&comp, &ControlTarget::SliceOpacity(sid)), Some(0.25));
+    set_target(&mut comp, &ControlTarget::SliceEnabled(sid), 0.0, &mut deferred);
+    assert_eq!(get_target(&comp, &ControlTarget::SliceEnabled(sid)), Some(0.0), "0 = off");
+    set_target(&mut comp, &ControlTarget::SliceEnabled(sid), FLIP, &mut deferred);
+    assert_eq!(get_target(&comp, &ControlTarget::SliceEnabled(sid)), Some(1.0), "a button press flips it");
+    assert_eq!(default_osc_address(&ControlTarget::SliceOpacity(sid)), format!("/phosphor/slice/{sid}/opacity"));
+    assert!(all_targets(&comp).iter().any(|(t, _)| *t == ControlTarget::SliceEnabled(sid)));
+    comp.control_prefs.set_locked(&ControlTarget::SliceOpacity(sid), true);
+    set_target(&mut comp, &ControlTarget::SliceOpacity(sid), 1.0, &mut deferred);
+    assert_eq!(comp.slice(sid).unwrap().opacity, 0.25, "locked");
+}

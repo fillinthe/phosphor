@@ -1,5 +1,6 @@
 //! Cue list (show control, MadMapper / Resolume Arena style): each cue remembers every layer's source, on/off,
-//! opacity, blend, generator and effect values and the master fader. Going to a cue changes sources through
+//! opacity, blend, generator and effect values, the master fader and every mapping slice (on/off, opacity, corners,
+//! mesh points). Going to a cue changes sources through
 //! the layer's transition and glides every number over the cue's fade time. Cues can follow on by themselves
 //! or fire at a timecode.
 
@@ -21,12 +22,26 @@ pub struct CueLayer {
     pub effects: Vec<(u64, bool, f32, Vec<f32>)>,
 }
 
+/// One mapping slice as a cue remembers it (MadMapper scenes: switch slice layouts between songs).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CueSlice {
+    pub id: u64,
+    pub enabled: bool,
+    pub opacity: f32,
+    pub corners: [[f32; 2]; 4],
+    /// Its mesh points (empty without a mesh warp).
+    pub mesh: Vec<[f32; 2]>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Cue {
     pub id: u64,
     pub name: String,
     pub layers: Vec<CueLayer>,
+    /// Mapping slices on every output (old cues have none: the mapping stays as it is).
+    pub slices: Vec<CueSlice>,
     pub master_fade: f32,
     /// Seconds to glide into this cue.
     pub fade: f32,
@@ -38,7 +53,7 @@ pub struct Cue {
 
 impl Default for Cue {
     fn default() -> Self {
-        Self { id: 0, name: "Cue".into(), layers: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None }
+        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None }
     }
 }
 
@@ -86,6 +101,9 @@ pub struct CueFade {
     layers: Vec<(u64, f32, Vec<f32>, Vec<(u64, f32, Vec<f32>)>)>,
     /// Layers the cue turns off: switched off when the fade ends.
     turn_off: Vec<u64>,
+    /// (slice id, opacity, corners, mesh points) at the start, and slices switched off when the fade ends.
+    slices: Vec<(u64, f32, [[f32; 2]; 4], Vec<[f32; 2]>)>,
+    slices_off: Vec<u64>,
 }
 
 impl CueFade {
@@ -110,7 +128,13 @@ impl Composition {
                 effects: l.effects.iter().map(|e| (e.id, e.enabled, e.mix, e.values.clone())).collect(),
             })
             .collect();
-        Cue { id: self.new_id(), name, layers, master_fade: self.master_fade, ..Default::default() }
+        let slices = self
+            .outputs
+            .iter()
+            .flat_map(|o| o.mapping.surfaces.iter())
+            .map(|s| CueSlice { id: s.id, enabled: s.enabled, opacity: s.opacity, corners: s.corners, mesh: s.mesh.as_ref().map_or(Vec::new(), |m| m.points.clone()) })
+            .collect();
+        Cue { id: self.new_id(), name, layers, slices, master_fade: self.master_fade, ..Default::default() }
     }
 
     /// Starts going to cue `index`: sources change now (through each layer's transition), numbers glide
@@ -118,7 +142,7 @@ impl Composition {
     pub fn go_to_cue(&mut self, index: usize, now: f32) -> Option<CueFade> {
         let cue = self.cues.cues.get(index)?.clone();
         let secs = cue.fade.max(0.0);
-        let mut fade = CueFade { cue: index, start: now, secs, master_from: self.master_fade, layers: Vec::new(), turn_off: Vec::new() };
+        let mut fade = CueFade { cue: index, start: now, secs, master_from: self.master_fade, layers: Vec::new(), turn_off: Vec::new(), slices: Vec::new(), slices_off: Vec::new() };
         for c in &cue.layers {
             let Some(l) = self.layers.iter_mut().find(|l| l.id == c.id) else { continue };
             let switching = l.source != c.source;
@@ -150,6 +174,18 @@ impl Composition {
                 .collect();
             let values_from = if switching { c.generator_values.clone() } else { l.generator_values.clone() };
             fade.layers.push((l.id, from_opacity, values_from, fx_from));
+        }
+        for c in &cue.slices {
+            let Some(s) = self.slice_mut(c.id) else { continue };
+            let mut from = s.opacity;
+            if c.enabled && !s.enabled {
+                s.enabled = true;
+                from = 0.0;
+            } else if !c.enabled && s.enabled {
+                fade.slices_off.push(s.id);
+            }
+            let mesh = s.mesh.as_ref().map_or(Vec::new(), |m| m.points.clone());
+            fade.slices.push((s.id, from, s.corners, mesh));
         }
         self.step_cue(&fade, now);
         Some(fade)
@@ -184,6 +220,29 @@ impl Composition {
             if t >= 1.0 && off {
                 l.enabled = false;
                 l.opacity = c.opacity;
+            }
+        }
+        let lerp2 = |a: [f32; 2], b: [f32; 2]| [lerp(a[0], b[0]), lerp(a[1], b[1])];
+        for (id, op_from, corners_from, mesh_from) in &fade.slices {
+            let Some(c) = cue.slices.iter().find(|c| c.id == *id) else { continue };
+            let Some(s) = self.slice_mut(*id) else { continue };
+            let off = fade.slices_off.contains(id);
+            s.opacity = lerp(*op_from, if off { 0.0 } else { c.opacity });
+            for k in 0..4 {
+                s.corners[k] = lerp2(corners_from[k], c.corners[k]);
+            }
+            // Mesh points glide when the warp has the same points as when the cue was recorded.
+            if let Some(m) = &mut s.mesh
+                && m.points.len() == c.mesh.len()
+                && mesh_from.len() == c.mesh.len()
+            {
+                for (p, (from, to)) in m.points.iter_mut().zip(mesh_from.iter().zip(&c.mesh)) {
+                    *p = lerp2(*from, *to);
+                }
+            }
+            if t >= 1.0 && off {
+                s.enabled = false;
+                s.opacity = c.opacity;
             }
         }
     }
@@ -221,6 +280,27 @@ mod tests {
         comp.step_cue(&f, 12.0);
         assert!((comp.layers[0].opacity - 0.2).abs() < 1e-6);
         assert!(comp.layers.iter().any(|l| l.id == id));
+    }
+
+    #[test]
+    fn cues_move_slices() {
+        let mut comp = Composition::default();
+        let out = comp.add_output();
+        let sid = comp.new_id();
+        comp.outputs.iter_mut().find(|o| o.id == out).unwrap().mapping.add_surface(sid);
+        comp.slice_mut(sid).unwrap().corners[0] = [0.0, 0.0];
+        let a = comp.record_cue("A".into());
+        let s = comp.slice_mut(sid).unwrap();
+        s.corners[0] = [0.4, 0.2];
+        s.enabled = false;
+        comp.cues.cues.push(a);
+        let f = comp.go_to_cue(0, 0.0).unwrap();
+        assert!(comp.slice(sid).unwrap().enabled, "comes on at the start of the fade");
+        comp.step_cue(&f, 1.0);
+        let c = comp.slice(sid).unwrap().corners[0];
+        assert!((c[0] - 0.2).abs() < 1e-3 && (c[1] - 0.1).abs() < 1e-3, "half way: {c:?}");
+        comp.step_cue(&f, 2.0);
+        assert_eq!(comp.slice(sid).unwrap().corners[0], [0.0, 0.0]);
     }
 
     #[test]

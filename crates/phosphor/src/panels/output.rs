@@ -213,7 +213,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                 egui::CollapsingHeader::new(title).id_salt(("out_surfaces", id)).show(ui, |ui| {
                     for s in o.mapping.surfaces.iter_mut() {
                         ui.horizontal(|ui| {
-                            crate::ui::toggle(ui, &mut s.enabled, "ON");
+                            crate::ui::toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                             ui.label(&s.name);
                         });
                         super::mapping::surface_source(ui, s, layers, groups, &others);

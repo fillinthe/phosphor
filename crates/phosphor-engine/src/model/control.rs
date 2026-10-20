@@ -70,6 +70,9 @@ pub enum ControlTarget {
     LayerY(u64),
     LayerScale(u64),
     LayerRotation(u64),
+    /// A mapping slice's opacity and on/off (MadMapper-style surface control; ids are unique across outputs).
+    SliceOpacity(u64),
+    SliceEnabled(u64),
 }
 
 /// App-wide mappable controls.
