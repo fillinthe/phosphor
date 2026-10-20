@@ -14,8 +14,6 @@ What changed in each Phosphor release, newest first. Downloads are on the
   to 16 beats, starting on the beat, then play it back looped in time with the music. Map anything to that
   modulator and your gesture repeats by itself.
 
-## 0.2.72 (2026-10-20)
-
 - **Soft takeover for MIDI and OSC faders** (as in VDMX): a fader or knob only changes a value once it reaches it
   (or moves past it), so nothing jumps when the hardware was left somewhere else, or after you moved the value with
   the mouse, a phone or a Surprise. On by default; the switch is in the MIDI / OSC panel.
