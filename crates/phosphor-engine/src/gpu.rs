@@ -241,7 +241,7 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format,
-                blend: if surface || entry == "fs_mesh" || entry == "fs_mask" {
+                blend: if surface || entry == "fs_mesh" || entry == "fs_mask" || entry == "fs_grid" {
                     Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                 } else if rutt {
                     Some(wgpu::BlendState { color: additive, alpha: additive })

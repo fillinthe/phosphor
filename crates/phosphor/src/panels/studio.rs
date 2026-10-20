@@ -215,7 +215,8 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         }
         hint(ui, format!("{:.0}%", vs.zoom * 100.0));
         ui.toggle_value(&mut vs.snap, label(icon::GRID_FOUR, "Snap")).on_hover_text("Corners and points snap to a 1/64 grid");
-        ui.toggle_value(&mut o.mapping.test_pattern, "Alignment grid");
+        super::output::grid_toggle(ui, &mut o.grid);
+        ui.toggle_value(&mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
         if ui.checkbox(&mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
@@ -422,7 +423,8 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
     });
     ui.separator();
     ui.checkbox(&mut o.mapping.enabled, "Mapping on");
-    ui.checkbox(&mut o.mapping.test_pattern, "Alignment grid");
+    ui.checkbox(&mut o.grid.on, "Alignment grid").on_hover_text("Over the whole output: cells, crosshair, circle, border (settings: right-click GRID in the strip)");
+    ui.checkbox(&mut o.mapping.test_pattern, "Slice test pattern");
     ui.checkbox(&mut vs.snap, "Snap to grid");
     if ui.button(label(icon::CORNERS_OUT, "Fit the view")).clicked() {
         vs.zoom = 1.0;

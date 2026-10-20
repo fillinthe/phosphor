@@ -73,11 +73,39 @@ pub struct OutputConfig {
     pub color: ColorGrade,
     /// The screen/projector this output goes to (`screens::screen_key`), "" = not chosen. Saved with the project.
     pub screen: String,
+    /// Alignment grid drawn over this output (lining up projectors); off for the show.
+    pub grid: GridOverlay,
+}
+
+/// A test grid over an output: cells across, a centre crosshair and circle, in one colour.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GridOverlay {
+    pub on: bool,
+    /// Cells across the width (the height follows the aspect so cells stay square).
+    pub cells: u32,
+    pub crosshair: bool,
+    pub color: [u8; 3],
+    /// Line width in pixels.
+    pub width: f32,
+}
+
+impl Default for GridOverlay {
+    fn default() -> Self {
+        Self { on: false, cells: 8, crosshair: true, color: [255, 255, 255], width: 2.0 }
+    }
+}
+
+impl GridOverlay {
+    /// What the `fs_grid` pass needs: p[0] = cells, line width, crosshair, 0; p[1] = colour.
+    pub fn uniforms(&self) -> [[f32; 4]; 2] {
+        [[self.cells.max(1) as f32, self.width.max(0.5), if self.crosshair { 1.0 } else { 0.0 }, 0.0], [self.color[0] as f32 / 255.0, self.color[1] as f32 / 255.0, self.color[2] as f32 / 255.0, 1.0]]
+    }
 }
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new() }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default() }
     }
 }
 

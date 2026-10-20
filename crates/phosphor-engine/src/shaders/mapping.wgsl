@@ -100,3 +100,31 @@ fn fs_mask(in: VOut) -> @location(0) vec4f {
     // Premultiplied black at the vertex's darkness (1 inside, fading across a feathered edge).
     return vec4f(0.0, 0.0, 0.0, clamp(in.uv.x, 0.0, 1.0));
 }
+
+// Alignment grid over an output (`GridOverlay`): square cells (p[0].x across), a centre crosshair with a circle
+// (p[0].z), lines p[0].y pixels wide, colour p[1]. Drawn with alpha blending over the finished output.
+@fragment
+fn fs_grid(in: VOut) -> @location(0) vec4f {
+    let px = in.uv * u.resolution;
+    let cell = u.resolution.x / max(u.p[0].x, 1.0);
+    let half = u.p[0].y * 0.5;
+    // Distance to the nearest grid line, in pixels (both axes).
+    let gx = abs(fract(px.x / cell + 0.5) - 0.5) * cell;
+    let gy = abs(fract(px.y / cell + 0.5) - 0.5) * cell;
+    var a = max(1.0 - smoothstep(half - 0.5, half + 0.5, min(gx, gy)), 0.0) * 0.55;
+    if u.p[0].z > 0.5 {
+        let c = u.resolution * 0.5;
+        let d = px - c;
+        // Crosshair through the centre (thicker), a circle of a quarter of the height, and the two diagonals.
+        let cross = min(abs(d.x), abs(d.y));
+        let ring = abs(length(d) - u.resolution.y * 0.25);
+        let diag = min(abs(d.x - d.y), abs(d.x + d.y)) * 0.7071;
+        let strong = 1.0 - smoothstep(half + 0.5, half + 1.5, min(cross, ring));
+        let faint = (1.0 - smoothstep(half - 0.5, half + 0.5, diag)) * 0.35;
+        a = max(a, max(strong, faint));
+    }
+    // Outer border, so the projector's edge is obvious.
+    let edge = min(min(px.x, px.y), min(u.resolution.x - px.x, u.resolution.y - px.y));
+    a = max(a, 1.0 - smoothstep(u.p[0].y * 1.5, u.p[0].y * 1.5 + 1.0, edge));
+    return vec4f(u.p[1].rgb * a, a);
+}

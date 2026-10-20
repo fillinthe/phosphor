@@ -418,7 +418,8 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         ui.horizontal(|ui| {
             ui.toggle_value(&mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
                 .on_hover_text("When on, this output shows only its surfaces");
-            ui.toggle_value(&mut o.mapping.test_pattern, label(icon::GRID_FOUR, "Alignment grid"));
+            super::output::grid_toggle(ui, &mut o.grid);
+            ui.toggle_value(&mut o.mapping.test_pattern, label(icon::CHECKERBOARD, "Slice test pattern"));
             if ui.button(label(icon::PLUS, "Surface")).clicked() {
                 add_surface = true;
             }
@@ -578,6 +579,23 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         ui.label("Shape");
         choice_buttons(ui, &mut s.shape, |_, _| {});
     });
+    if s.line.is_none() && s.model.is_none() {
+        egui::CollapsingHeader::new(RichText::new("Corners, by number").small()).id_salt(("corner_numbers", s.id)).show(ui, |ui| {
+            hint(ui, "Each corner as a share of the output (0–100%); type or drag for a fine move. On the canvas: arrows nudge the selected slice, Shift = 10 px.");
+            for (k, name) in ["Top left", "Top right", "Bottom right", "Bottom left"].iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(*name).small());
+                    for axis in 0..2 {
+                        let mut v = s.corners[k][axis] * 100.0;
+                        let r = guarded!(ui, v, egui::DragValue::new(&mut v).range(-100.0..=200.0).speed(0.02).fixed_decimals(2).suffix("%"));
+                        if r.changed() {
+                            s.corners[k][axis] = v / 100.0;
+                        }
+                    }
+                });
+            }
+        });
+    }
     ui.horizontal(|ui| {
         Level::percent(&mut s.opacity, "Opacity").default(1.0).show(ui);
     });

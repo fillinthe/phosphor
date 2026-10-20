@@ -565,6 +565,7 @@ impl Engine {
                 u.opacity = fade;
                 passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
                 self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
+                self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
                 continue;
             }
             // Black, then each enabled surface blended on top.
@@ -650,6 +651,7 @@ impl Engine {
                 passes.push(Pass { entry: "fs_surface", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
             self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
+            self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
         }
         self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
         self.meshes.sweep();

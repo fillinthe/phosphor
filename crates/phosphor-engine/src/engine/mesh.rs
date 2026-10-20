@@ -59,6 +59,19 @@ pub(super) fn hash_points<'a>(points: impl IntoIterator<Item = &'a [f32; 2]>, ex
 
 impl Engine {
     /// Masks: one pass blacking out every enabled mask's shape on this output (nothing if none).
+    /// The alignment grid over an output, when it's on (one full-screen blended pass).
+    pub(super) fn push_grid(&self, grid: &crate::model::GridOverlay, view: &wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>) {
+        if !grid.on {
+            return;
+        }
+        let mut u = Uniforms::with_params(&[]);
+        u.resolution = [size.0 as f32, size.1 as f32];
+        let [a, b] = grid.uniforms();
+        u.p[0] = a;
+        u.p[1] = b;
+        passes.push(Pass { entry: "fs_grid", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+    }
+
     pub(super) fn push_masks(&mut self, output: u64, mapping: &mapping::Mapping, view: &wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>) {
         if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled) {
             return;
