@@ -364,6 +364,17 @@ impl PhosphorApp {
                 println!("QUICK shadertoy: import window open");
                 continue;
             }
+            if name == "grid" {
+                // The alignment grid on every output (seen in the Outputs area's strip).
+                if self.state.comp.outputs.is_empty() {
+                    self.state.comp.add_output();
+                }
+                for o in &mut self.state.comp.outputs {
+                    o.grid.on = true;
+                }
+                println!("QUICK grid: on for {} output(s)", self.state.comp.outputs.len());
+                continue;
+            }
             if name == "takeover" {
                 // Web control off: phones may only watch.
                 self.state.set_web_control(false);

@@ -110,16 +110,26 @@ app that's much smaller and lighter on the CPU.
     - [ ] Per-person limits: which controls each guest page may touch (today: one Surface page + columns + Surprise)
     - [x] A log of who changed what (Devices panel, last 100, drags merged) (2026-10-20)
 
-15. **Master → comp → layer, slices → outputs** (asked 2026-10-20; the owner's model of the app; questions pending):
+15. **Master → comp → layer, slices → outputs** (asked 2026-10-20; the owner's model of the app). Decided 2026-10-20:
+    comps = separate canvases (own layers, size, effects; several at once; the master mixes comps; any comp to
+    any outputs); masters: maybe several later, undecided, but "see every output on one screen" is wanted;
+    mapping: any input + slice management + numeric fine-tune + curved edges, after a review of MadMapper on the
+    owner's Mac (docs/research/madmapper-parity.md); grid: an overlay per output.
     - [x] Effects chains on layers, comps (groups) and MASTER; layers play clip rows or a media collection
     - [x] "Shows on": send a layer / comp to any outputs as a slice of its own (Inspector; 0.2.67)
     - [ ] Comps as first-class: a Comp has its own layers, effects, size; several comps; a comp can feed other comps
     - [ ] Projection mapping: a mapping layer takes any input (comp, layer, output, file), is cut into slices, each
           slice routed to outputs; slices listed/duplicated/modified in one place (Studio)
-    - [ ] Alignment grid: a test grid / crosshair overlay per output (toggle, size, colour) to line up projectors
-    - [ ] Fine-tune every point: numeric x/y for each corner and mesh point, arrow-key nudge (exists for slices:
-          arrows/Shift), per-point bezier handles; zoom into the canvas on a point
-    - [ ] Masters: several program outputs ("masters") with their own mixes, not only slices of one
+    - [x] Alignment grid overlay per output (GRID: cells, crosshair, circle, diagonals, border; 0.2.68)
+    - [x] Corners by number (0.2.68)
+    - [ ] Fine-tune (from the MadMapper review): typed x/y for mesh points, Tab to the next point, lock a surface,
+          snap to other surfaces' corners, zoom to a point; per-point bezier handles
+    - [ ] Soft edge per side; more test patterns; a background photo of the stage per output
+    - [ ] OSC/MIDI targets and cues for surface geometry; surface groups, multi-select, per-surface blend mode
+    - [ ] Freehand masks, mask attached to a surface; add/remove single mesh points
+    - [ ] "All outputs on one screen": a stage view showing every output live at once (Studio strip exists; make it
+          a full view, with the grid overlays)
+    - [ ] Masters: several program outputs ("masters") with their own mixes (undecided; design comps so one can be)
 
 ## TODO
 

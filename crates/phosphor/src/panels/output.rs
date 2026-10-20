@@ -155,6 +155,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         ui.label(RichText::new(format!("{}", i + 1)).strong().color(accent()));
                         ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
                         ui.toggle_value(&mut o.enabled, RichText::new("ON").small()).on_hover_text("Render this output");
+                        grid_toggle(ui, &mut o.grid);
                         #[cfg(target_os = "macos")]
                         ui.toggle_value(&mut o.syphon, RichText::new("SYPHON").small())
                             .on_hover_text("Also publish this output (after mapping) as a Syphon source for MadMapper, Resolume, OBS…");
@@ -326,5 +327,36 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
         if ui.add_enabled(!g.is_neutral(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset colour"))).clicked() {
             *g = Default::default();
         }
+    });
+}
+
+/// The alignment grid toggle for an output (GRID), with its settings on right-click: cells across, crosshair,
+/// line width, colour. Used in the Outputs panel and the Mapping Studio.
+pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverlay) {
+    let r = ui.toggle_value(&mut g.on, RichText::new(label(icon::GRID_FOUR, "GRID")).small()).on_hover_text("Alignment grid over this output (cells, crosshair, circle, border) to line up the projector · right-click for its settings · off for the show");
+    r.right_menu(|ui| {
+        ui.label(RichText::new("Alignment grid").strong());
+        ui.horizontal(|ui| {
+            ui.label("Cells across");
+            guarded!(ui, g.cells, egui::DragValue::new(&mut g.cells).range(2..=64));
+        });
+        ui.checkbox(&mut g.crosshair, "Crosshair, circle and diagonals");
+        ui.horizontal(|ui| {
+            ui.label("Line");
+            guarded!(ui, g.width, egui::DragValue::new(&mut g.width).range(0.5..=12.0).speed(0.1).suffix(" px"));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Colour");
+            for c in [[255u8, 255, 255], [0, 255, 120], [255, 60, 60], [80, 160, 255], [255, 220, 0]] {
+                let (rect, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::click());
+                ui.painter().circle_filled(rect.center(), 7.0, Color32::from_rgb(c[0], c[1], c[2]));
+                if g.color == c {
+                    ui.painter().circle_stroke(rect.center(), 8.5, Stroke::new(1.5, Color32::WHITE));
+                }
+                if resp.clicked() {
+                    g.color = c;
+                }
+            }
+        });
     });
 }

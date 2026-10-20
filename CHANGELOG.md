@@ -4,6 +4,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.68 (2026-10-20)
+
+- **Alignment grid on any output:** the GRID button on an output (Outputs panel, or the strip in the Outputs
+  area) draws cells, a centre crosshair, a circle, the diagonals and a border over that output, to line up a
+  projector. Right-click it for the number of cells, line width and colour. The old per-slice pattern is now
+  called "Slice test pattern".
+- **Corners by number:** a slice's four corners can be typed or nudged as percentages in its settings, for
+  fine alignment (arrow keys on the canvas still nudge the selected slice; Shift = 10 px).
+
 ## 0.2.67 (2026-10-20)
 
 - **Collections that work:** *New collection* in the Media panel makes one straight away (rename it in its
