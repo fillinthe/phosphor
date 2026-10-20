@@ -128,7 +128,7 @@ impl Tab {
 
     pub fn title(self) -> String {
         match self {
-            Tab::Monitor(n) => return format!("Monitor {n}"),
+            Tab::Monitor(n) => return format!("Preview {n}"),
             _ => {}
         }
         match self {

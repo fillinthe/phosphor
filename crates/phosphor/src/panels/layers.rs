@@ -304,7 +304,7 @@ pub(crate) fn layer_card(
             action = Some(LayerAction::BrowseEffects);
             ui.close();
         }
-        if ui.button(label(icon::MONITOR, "Show in a new monitor")).clicked() {
+        if ui.button(label(icon::MONITOR, "Preview in a window")).clicked() {
             action = Some(LayerAction::Monitor);
             ui.close();
         }

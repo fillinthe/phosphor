@@ -143,7 +143,8 @@ app that's much smaller and lighter on the CPU.
     - [ ] Video tracking (Vision: hands, faces, body, remove background) as sources
     - [x] On-end rules (autopilot Next / Previous / Random / Clear the layer) and layer crop (0.2.77)
     - [x] Multi-track step sequencer (0.2.77: step tracks on shared modulators)
-    - [ ] Extra preview windows that send clicks as data
+    - [x] Extra preview windows for any layer / group / output (0.2.78)
+    - [ ] Clicks in a preview window as XY data
 
 ## TODO
 

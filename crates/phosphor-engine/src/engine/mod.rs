@@ -434,7 +434,7 @@ impl Engine {
         // The layer group being mixed (into accum 2–3) and which of those holds it so far.
         let mut open_group: Option<u64> = None;
         let mut group_current: Option<usize> = None;
-        let mut ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, layers: &comp.layers };
+        let mut ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, layers: &comp.layers, monitors: &monitors };
         for layer in &comp.layers {
             // Leaving a group's members: finish its picture and mix it in like one layer.
             let gid = layer.parent.filter(|p| comp.group(*p).is_some());
@@ -657,6 +657,17 @@ impl Engine {
             self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
         }
         self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
+        // Preview windows showing one output (after its mapping).
+        for (i, &(src, mw, mh)) in monitors.iter().enumerate() {
+            if let Some(view) = self.output_targets.get(&src).and_then(|t| t.as_ref()).map(|t| t.view.clone()) {
+                Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);
+                let mut u = Uniforms::with_params(&[]);
+                u.resolution = [mw as f32, mh as f32];
+                u.opacity = 1.0;
+                let target = self.monitor_targets[i].as_ref().unwrap().view.clone();
+                passes.push(Pass { entry: "fs_finalize", target, tex0: view, tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+            }
+        }
         self.meshes.sweep();
         self.push_samples(&output_view, &mut passes);
 
@@ -698,6 +709,8 @@ struct MixCtx<'a> {
     /// Layer/group ids a mapping surface shows on their own.
     pub wanted: &'a HashSet<u64>,
     pub layers: &'a [LayerState],
+    /// Preview windows: (source id, width, height).
+    pub monitors: &'a [(u64, u32, u32)],
 }
 
 impl Engine {
@@ -739,6 +752,14 @@ impl Engine {
         let frame = Frame::Rgb { view: self.accum[2 + c].as_ref().unwrap().view.clone(), w, h };
         let frame = if g.fx_bypass { frame } else { self.apply_effects(g.id, &g.effects, frame, ctx.time, ctx.mods, ctx.layers, passes) };
         self.push_thumbnail(g.id, FitMode::Stretch, &frame, ctx.canvas, ctx.thumb_h, passes);
+        // Preview windows showing this group.
+        for (i, &(src, mw, mh)) in ctx.monitors.iter().enumerate() {
+            if src == g.id {
+                Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);
+                let view = self.monitor_targets[i].as_ref().unwrap().view.clone();
+                push_fit_copy(view, &frame, ctx.canvas, FitMode::Stretch, (mw, mh), passes);
+            }
+        }
         let res = self.layers.entry(g.id).or_default();
         if ctx.wanted.contains(&g.id) {
             Target::ensure(&mut res.feed, &self.gpu.device, "group feed", w, h);

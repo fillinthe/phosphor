@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.78 (2026-10-20)
+
+- **Preview windows** (as in VDMX): open as many as you like (+ on the Preview bar, View › New Preview Window,
+  or right-click a layer or group › Preview in a window, or the screen button on an output). Each one shows the
+  mix, the output window, one layer, one group, or one output after its mapping; pick it at the top of the window.
+  Drag a preview anywhere, or detach it into its own window for a second screen.
+
 ## 0.2.77 (2026-10-20)
 
 - **Capture a screen or another app's window as a layer** (as in VDMX): a layer's Live menu › Screens and
