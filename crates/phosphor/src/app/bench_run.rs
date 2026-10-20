@@ -64,6 +64,14 @@ impl PhosphorApp {
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
+        for l in self.state.comp.layers.iter().filter(|l| l.collection.is_some()) {
+            let file = match &l.source {
+                phosphor_engine::SourceSpec::Movie { name, .. } | phosphor_engine::SourceSpec::Image { name, .. } => name.clone(),
+                _ => "-".into(),
+            };
+            let c = l.collection.clone().unwrap_or_default();
+            println!("COLLECTION {c}: {} files, layer \"{}\" showing {file}", self.state.comp.collection_items(&c).len(), l.name);
+        }
         if self.state.net.running() {
             println!("WEB control={} master={:.2} last={:?}", if self.state.comp.web_control_off { "off" } else { "on" }, self.state.comp.master_fade, self.state.web_activity.as_ref().map(|(_, w)| w.as_str()));
             for l in &self.state.web_log {
@@ -374,6 +382,23 @@ impl PhosphorApp {
                     o.grid.on = true;
                 }
                 println!("QUICK grid: on for {} output(s)", self.state.comp.outputs.len());
+                continue;
+            }
+            if let Some(folder) = name.strip_prefix("collection=") {
+                // A collection watching `folder`, shown in the Media panel, playing on a new layer (in order).
+                let c = self.state.comp.create_collection("Show A");
+                self.state.comp.add_collection_folder(&c, folder);
+                self.state.folders.add(folder.to_string());
+                self.state.media_view.filter = crate::panels::MediaFilter::Collection(c.clone());
+                let id = self.state.add_layer();
+                if let Some(l) = self.state.comp.layer_mut(id) {
+                    l.collection = Some(c.clone());
+                    l.autopilot = phosphor_engine::Autopilot::Next;
+                    l.autopilot_beats = 4.0;
+                    l.name = c.clone();
+                }
+                self.state.selected = Some(id);
+                println!("QUICK collection: {c} watching {folder}, playing on layer {id}");
                 continue;
             }
             if name == "takeover" {

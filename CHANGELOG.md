@@ -4,6 +4,17 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.70 (2026-10-20)
+
+- **Files you import land where you're looking:** importing while a collection is showing puts the files in that
+  collection (before, they went to the bin only, so you didn't see them).
+- **Watch folder… makes a collection** of that folder (named after it; new files join as they arrive), ready to
+  *Play on* a layer, like a VDMX media bin page.
+- **What's playing is marked** in the Media panel: an outlined tile with a ▶ (hover: which layers).
+- **A layer playing a collection keeps the collection's name** instead of taking each file's name.
+- Tidier Media panel: one row of actions, and inside a collection only *Random* (its *Play on* does the rest);
+  folders show by name (full path on hover).
+
 ## 0.2.69 (2026-10-20)
 
 - **Stage:** a tab in the Outputs area that shows every output on one screen, live and as big as fits, with each
