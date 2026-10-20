@@ -60,6 +60,8 @@ pub(crate) enum MediaAct {
     RemoveCollectionFolder(String, String),
     /// Put this collection on that layer (None = a new layer): it plays through it by itself.
     PlayCollection(String, Option<u64>),
+    /// Every layer playing this collection stops following it.
+    StopCollection(String),
     DeleteCollection(String),
 }
 
@@ -389,6 +391,11 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 }
                 st.selected = Some(id);
                 st.notice = Some(format!("\"{name}\" plays on that layer: next / previous / random is in the Inspector"));
+            }
+            MediaAct::StopCollection(name) => {
+                for l in st.comp.layers.iter_mut().filter(|l| l.collection.as_deref() == Some(name.as_str())) {
+                    l.collection = None;
+                }
             }
             MediaAct::DeleteCollection(name) => {
                 st.comp.delete_collection(&name);

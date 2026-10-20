@@ -4,6 +4,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.71 (2026-10-20)
+
+- **Stopping a collection is easy to find:** a stop button on the layer's strip in Clips (next to the collection's
+  name) and in the collection's header ("Playing on: … Stop"). Putting any clip or file on that layer yourself
+  also stops it following the collection.
+- Fixed: Phosphor's own test runs could save their test project over yours when they finished (that's where
+  "Show A" and a stray test clip came from). They now never touch your project or settings.
+
 ## 0.2.70 (2026-10-20)
 
 - **Files you import land where you're looking:** importing while a collection is showing puts the files in that

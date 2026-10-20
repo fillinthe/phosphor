@@ -152,7 +152,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));
                 }
             });
-            hint(ui, "New files in the collection's folders join as they arrive. Click a clip or file to leave the collection.");
+            hint(ui, "New files in the collection's folders join as they arrive. Put any clip or file on this layer yourself and it stops following the collection.");
             ui.separator();
         }
         ui.horizontal(|ui| {

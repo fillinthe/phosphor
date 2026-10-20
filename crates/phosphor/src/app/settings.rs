@@ -4,7 +4,7 @@ use super::*;
 
 impl PhosphorApp {
     pub(crate) fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
-        if self.bench.is_some() {
+        if self.bench_session {
             return;
         }
         storage.set_string(KEY_COMPOSITION, self.state.comp.to_json());

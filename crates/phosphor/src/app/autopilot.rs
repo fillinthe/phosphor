@@ -9,6 +9,8 @@ pub struct AutoRun {
     clip: Option<u64>,
     /// Collection layers: the file playing.
     file: Option<String>,
+    /// Collection layers: the file the collection itself last put on (anything else = you picked something).
+    launched: Option<String>,
     started_beats: f64,
     passes: Option<u64>,
 }
@@ -31,7 +33,7 @@ impl State {
             let passes = self.media.passes(layer.id);
             let run = self.autopilot.entry(layer.id).or_default();
             if run.clip != layer.active_clip {
-                *run = AutoRun { clip: layer.active_clip, file: None, started_beats: beats, passes };
+                *run = AutoRun { clip: layer.active_clip, file: None, launched: None, started_beats: beats, passes };
             }
             // Only moves on from a clip it (or you) started; an empty layer waits for you.
             if layer.active_clip.is_none() || !layer.enabled {
@@ -54,7 +56,7 @@ impl State {
                 fire.push((layer.id, slot));
             }
             // Wait for the new clip (or, if the same one is picked again, a fresh count).
-            *run = AutoRun { clip: layer.active_clip, file: None, started_beats: beats, passes: self.media.passes(layer.id) };
+            *run = AutoRun { clip: layer.active_clip, file: None, launched: None, started_beats: beats, passes: self.media.passes(layer.id) };
         }
         for (layer, slot) in fire {
             self.comp.trigger_clip(layer, slot, now as f32);
@@ -69,13 +71,19 @@ impl State {
     fn run_collections(&mut self, now: f64, beats: f64) {
         use phosphor_engine::{Autopilot, CollectionStep};
         let mut launch: Vec<(u64, usize)> = Vec::new();
+        let mut stop: Vec<u64> = Vec::new();
         for layer in self.comp.layers.iter().filter(|l| l.collection.is_some() && l.enabled) {
             let Some(name) = layer.collection.as_deref() else { continue };
             let file = source_file(layer).map(str::to_string);
             let passes = self.media.passes(layer.id);
             let run = self.autopilot.entry(layer.id).or_default();
+            // You put something else on this layer (a clip, a file): it stops following the collection.
+            if run.launched.is_some() && file != run.launched {
+                stop.push(layer.id);
+                continue;
+            }
             if run.file != file {
-                *run = AutoRun { clip: None, file: file.clone(), started_beats: beats, passes };
+                *run = AutoRun { clip: None, file: file.clone(), launched: run.launched.clone(), started_beats: beats, passes };
             }
             let in_it = file.as_deref().is_some_and(|f| self.comp.collection_items(name).iter().any(|&i| self.comp.media_bin[i].path == f));
             let due = if !in_it {
@@ -99,8 +107,18 @@ impl State {
             let pick = ((now * 7919.0).fract() * 0.618_034 + (beats * 0.137).fract()).fract() as f32;
             if let Some(i) = self.comp.collection_next(name, if in_it { file.as_deref() } else { None }, step, pick) {
                 launch.push((layer.id, i));
+                run.launched = Some(self.comp.media_bin[i].path.clone());
             }
-            *run = AutoRun { clip: None, file: None, started_beats: beats, passes: None };
+            run.file = None;
+            run.started_beats = beats;
+            run.passes = None;
+        }
+        for id in stop {
+            if let Some(l) = self.comp.layer_mut(id) {
+                l.collection = None;
+            }
+            self.autopilot.remove(&id);
+            self.notice = Some("You took over that layer: it stopped playing its collection".into());
         }
         for (layer, i) in launch {
             let Some(item) = self.comp.media_bin.get(i).cloned() else { continue };
