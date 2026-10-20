@@ -28,7 +28,7 @@ pub(crate) fn target_picker(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
     picked
 }
 
-const SOURCE_KINDS: [&str; 4] = ["MIDI CC", "MIDI Note", "OSC", "Key"];
+const SOURCE_KINDS: [&str; 5] = ["MIDI CC", "MIDI Note", "OSC", "Key", "Gamepad"];
 
 fn source_kind(s: &ControlSource) -> usize {
     match s {
@@ -36,6 +36,7 @@ fn source_kind(s: &ControlSource) -> usize {
         ControlSource::MidiNote { .. } => 1,
         ControlSource::Osc { .. } => 2,
         ControlSource::Key { .. } => 3,
+        ControlSource::Gamepad { .. } => 4,
     }
 }
 
@@ -60,7 +61,8 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             0 => ControlSource::MidiCc { channel: ch, cc: num },
             1 => ControlSource::MidiNote { channel: ch, note: num },
             2 => ControlSource::Osc { address: "/".into() },
-            _ => ControlSource::Key { key: "Q".into() },
+            3 => ControlSource::Key { key: "Q".into() },
+            _ => ControlSource::Gamepad { input: "South".into() },
         };
     }
     match source {
@@ -77,6 +79,10 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             if ui.add(egui::TextEdit::singleline(key).char_limit(12).desired_width(50.0)).changed() {
                 *key = key.to_uppercase();
             }
+        }
+        ControlSource::Gamepad { input } => {
+            ui.add(egui::TextEdit::singleline(input).hint_text("South").desired_width(110.0))
+                .on_hover_text("Button or stick name (South, East, LeftStickX, RightTrigger2…); easiest: press Listen and move it");
         }
     }
     *source != before

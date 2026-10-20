@@ -9,6 +9,8 @@ pub enum ControlSource {
     MidiNote { channel: u8, note: u8 },
     Osc { address: String },
     Key { key: String },
+    /// A game controller's button, stick or trigger (gilrs name: "South", "LeftStickX", "RightTrigger2"…).
+    Gamepad { input: String },
 }
 
 impl ControlSource {
@@ -18,6 +20,16 @@ impl ControlSource {
             ControlSource::MidiNote { channel, note } => format!("MIDI ch{} note {note}", channel + 1),
             ControlSource::Osc { address } => format!("OSC {address}"),
             ControlSource::Key { key } => format!("Key {key}"),
+            ControlSource::Gamepad { input } => format!("Gamepad {input}"),
+        }
+    }
+
+    /// Press / release (pads, keys, gamepad buttons) rather than a value that moves (knobs, sticks, triggers).
+    pub fn is_momentary(&self) -> bool {
+        match self {
+            ControlSource::MidiNote { .. } | ControlSource::Key { .. } => true,
+            ControlSource::Gamepad { input } => !(input.contains("Stick") || input.ends_with('Z') || input.ends_with("Trigger2") || input.starts_with("DPadX") || input.starts_with("DPadY")),
+            _ => false,
         }
     }
 }
@@ -330,5 +342,18 @@ mod value_fx_tests {
         assert_eq!(m.shape(0.4), 0.4, "a broken formula passes the value through");
         m.fx = vec![ValueFx::Smooth(0.5), ValueFx::Curve(1.0)];
         assert_eq!(m.smoothing(), 0.5);
+    }
+}
+
+#[cfg(test)]
+mod gamepad_tests {
+    use super::ControlSource;
+
+    #[test]
+    fn gamepad_buttons_press_sticks_move() {
+        let g = |s: &str| ControlSource::Gamepad { input: s.into() };
+        assert!(g("South").is_momentary() && g("LeftTrigger").is_momentary());
+        assert!(!g("LeftStickX").is_momentary() && !g("RightTrigger2").is_momentary() && !g("LeftZ").is_momentary());
+        assert_eq!(g("South").label(), "Gamepad South");
     }
 }
