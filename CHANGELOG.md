@@ -4,6 +4,18 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.64 (2026-10-20)
+
+- **Reverse and ping-pong are smooth:** switching a clip to reverse starts at once (no pause), looping backwards
+  round to the end doesn't stop, and switching to ping-pong no longer restarts the clip. Checked on 42 clips and
+  every kind of file on a 4,600-clip footage drive: no pause longer than one frame. Big ProRes 4444 and short MPEG
+  clips play backwards properly now too.
+- **Files that are slow backwards say so:** a file with almost no keyframes can't play backwards smoothly in any
+  app; the playback line now tells you, and points to *Convert…*, which fixes it.
+- **Footage drives from Windows PCs:** the hidden "._" files macOS makes on those drives are ignored (watch
+  folders, drops, ISF folders), and old ISF 1 shaders convert.
+- **AV1 on Windows** plays (it showed nothing before).
+
 ## 0.2.63 (2026-10-20)
 
 - **Control Surface → other apps:** give any button, fader, XY pad or colour on your Control Surface a *Send OSC*

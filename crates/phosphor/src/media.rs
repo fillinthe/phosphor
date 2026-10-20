@@ -460,6 +460,7 @@ impl MediaManager {
             }
             let decode = if s.hardware { "hardware decode" } else { "software decode" };
             let skipped = if s.frames_skipped > 0 { format!(" · {} skipped", s.frames_skipped) } else { String::new() };
+            let skipped = if s.reverse_slow { format!("{skipped} · slow backwards (few keyframes): Media › right-click › Convert… makes it smooth") } else { skipped };
             Some(format!("{} · {w}×{h}{dur} · {decode} · {} shown, {} decoded{skipped}", s.codec, s.frames_shown, s.frames_decoded))
         }
         #[cfg(target_arch = "wasm32")]

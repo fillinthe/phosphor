@@ -83,6 +83,9 @@ app that's much smaller and lighter on the CPU.
           either; export to ProRes from their apps)
 12. **Every effect** (asked 2026-10-20): ISF collection 327/327 ✔, MadMapper materials 39/42, Surface FX 19/23.
     - [x] Ship Vidvox's ISF collection (MIT, 327 shaders, all convert) with Phosphor: Mac Resources/isf, Windows isf/ (2026-10-20)
+    - [ ] Next sources (docs/research/generative-visuals.md): gl-transitions (MIT, ~60 new transitions), a Shadertoy
+          importer + MIT/CC0 pack, TiXL/Tooll 3 operators (MIT, HLSL port), lostjared/shaders (MIT, curate),
+          Godot Shaders CC0/MIT (curate), daitomanabe/isf-shaders-for-vj (MIT, drop-in)
     - [ ] Gather more free ISF/GLSL packs (Vidvox ISF-Files, Shadertoy ports with a licence that allows it,
           Interactive Shader Format community), test each with `isf_corpus`, ship the ones that work
     - [ ] The last MadMapper materials/Surface FX that fail; MadMapper 3D particle generators

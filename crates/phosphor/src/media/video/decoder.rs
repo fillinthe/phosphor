@@ -21,6 +21,8 @@ pub(super) struct Decoder {
     pub(super) dec: ff::decoder::Video,
     /// VideoToolbox was attached; cleared if it fails before the first frame.
     hw: bool,
+    /// Every frame is a keyframe (ProRes, Hap, DXV, MJPEG, DNxHD…): reverse can jump straight to any frame.
+    intra: bool,
     frame: ff::frame::Video,
     mapped: ff::frame::Video,
     scaler: Scaler,
@@ -119,6 +121,11 @@ impl Decoder {
             0
         };
         let (dec, codec, hw) = open_decoder(&input, stream, true)?;
+        // SAFETY: a static table lookup by codec id.
+        let intra = unsafe {
+            let d = ffi::avcodec_descriptor_get(dec.id().into());
+            !d.is_null() && (*d).props & ffi::AV_CODEC_PROP_INTRA_ONLY != 0
+        };
         // Hap goes to the GPU as it is stored (blocks), skipping FFmpeg's CPU texture decoder.
         let hap = (gpu_hap() && st_is_hap(&input, stream)).then(Vec::new);
         Ok(Self {
@@ -135,6 +142,7 @@ impl Decoder {
             codec,
             dec,
             hw,
+            intra,
             frame: ff::frame::Video::empty(),
             mapped: ff::frame::Video::empty(),
             scaler: Scaler::default(),
@@ -310,8 +318,9 @@ impl Decoder {
             _ => f64::INFINITY,
         };
         match mode.range {
-            Some((a, b)) => (a.clamp(0.0, len), b.min(len)),
-            None => (0.0, len),
+            // A section that's empty once clamped to this clip (in point past the end) plays the whole clip.
+            Some((a, b)) if a.clamp(0.0, len) + self.default_dur < b.min(len) => (a.clamp(0.0, len), b.min(len)),
+            _ => (0.0, len),
         }
     }
 
@@ -404,6 +413,11 @@ impl Decoder {
     /// How many frames one reverse group may hold: about 512 MB of hardware surfaces (NV12, 1.5 bytes a
     /// pixel; enough for a 5 s keyframe group at 1080p), or 256 MB of converted RGBA pictures.
     fn rev_cap(&self, _sh: &Shared) -> usize {
+        self.rev_cap_frames()
+    }
+
+    /// Frames of one reverse group that fit the memory budget.
+    fn rev_cap_frames(&self) -> usize {
         let px = (self.dec.width() as usize * self.dec.height() as usize).max(1);
         let surfaces = self.hw && cfg!(target_os = "macos") && super::zero_copy();
         let budget = if surfaces { (512 << 20) / (px * 3 / 2) } else { (256 << 20) / (px * 4) };
@@ -416,16 +430,37 @@ impl Decoder {
             self.rev_job = None;
             return Ok(());
         }
-        self.seek_to((end - self.default_dur).max(lo))?;
+        // Keyframes only: go back a whole group's worth in one jump (one jump per frame would refill the decoder each
+        // time). Otherwise the keyframe before `end` is where it lands anyway.
+        // Short sections (everything back to the start fits the budget): decode it all from the start, which every
+        // file can seek to reliably (MPEG program streams can't seek to an exact time).
+        let room = self.rev_cap_frames() as f64 * self.default_dur;
+        let back = if end - lo <= room * 0.95 {
+            end - lo
+        } else if self.intra {
+            room
+        } else {
+            self.default_dur
+        };
+        self.seek_to((end - back).max(lo))?;
         self.seek_target = None;
-        self.rev_job = Some(RevJob { end, keep_from: None, done: false, at: f64::NAN, wrap: false });
+        self.rev_job = Some(RevJob { end, keep_from: None, done: false, at: f64::NAN, wrap: false, back });
         Ok(())
     }
 
     /// Decodes up to `budget` frames of the reverse job (frames before the kept window aren't converted).
     fn advance_rev_job(&mut self, sh: &Shared, lo: f64, budget: usize) -> Result<(), String> {
+        self.advance_rev_job_for(sh, lo, budget, None)
+    }
+
+    /// `advance_rev_job`, stopping early once `time` has passed (slow decoders mustn't hold up the next frame).
+    fn advance_rev_job_for(&mut self, sh: &Shared, lo: f64, budget: usize, time: Option<std::time::Duration>) -> Result<(), String> {
         let cap = self.rev_cap(sh);
+        let start = std::time::Instant::now();
         for _ in 0..budget {
+            if time.is_some_and(|t| start.elapsed() > t) {
+                return Ok(());
+            }
             let Some(job) = self.rev_job else { return Ok(()) };
             if job.done {
                 return Ok(());
@@ -436,6 +471,14 @@ impl Decoder {
             }
             sh.decoded.fetch_add(1, Ordering::Relaxed);
             let (rel, dur) = self.timing();
+            // Files without a seek index (MPEG program streams) can land after the point asked for: go further back.
+            if job.keep_from.is_none() && rel > job.end - dur.max(1e-3) * 0.5 && job.end - job.back > lo + 1e-6 {
+                let back = job.back * 4.0;
+                self.seek_to((job.end - back).max(lo))?;
+                self.seek_target = None;
+                self.rev_job = Some(RevJob { back, ..job });
+                continue;
+            }
             // The first frame after the seek is the keyframe: keep from there, or the last `cap` frames.
             let keep_from = job.keep_from.unwrap_or_else(|| rel.max(job.end - cap as f64 * dur.max(1e-3)).max(lo));
             let done = rel >= job.end - 1e-6;
@@ -475,7 +518,9 @@ impl Decoder {
                 }
                 _ => REVERSE_DECODE_AHEAD,
             };
-            self.advance_rev_job(sh, lo, budget)?;
+            // At most about half a frame's time, so a slow decoder (big ProRes 4444) never stalls the picture.
+            let time = std::time::Duration::from_secs_f64((self.default_dur * 0.5).clamp(0.004, 0.05));
+            self.advance_rev_job_for(sh, lo, budget, Some(time))?;
             return Ok(true);
         }
         if !hi.is_finite() {
@@ -500,8 +545,12 @@ impl Decoder {
             self.start_rev_job(self.rev_end, lo)?;
         }
         // This group is used up: finish the next one (usually done already) and play it.
+        let waited = std::time::Instant::now();
         while self.rev_job.is_some_and(|j| !j.done) {
             self.advance_rev_job(sh, lo, 64)?;
+        }
+        if waited.elapsed().as_secs_f64() > 0.25 {
+            sh.reverse_slow.store(true, Ordering::Relaxed);
         }
         let keep_from = self.rev_job.and_then(|j| j.keep_from);
         self.rev_job = None;
@@ -859,4 +908,6 @@ struct RevJob {
     at: f64,
     /// The group at the end of the section, decoded early because reverse is about to loop round to it.
     wrap: bool,
+    /// How far before `end` the seek went (grows when a seek lands too late).
+    back: f64,
 }
