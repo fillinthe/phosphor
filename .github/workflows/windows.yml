@@ -112,6 +112,43 @@ jobs:
           Get-Content dist\export-run.txt | Select-String "LAYERS|SUMMARY|LAYER_ERROR"
           if (-not (Select-String -Path dist\export-run.txt -Pattern "Plasma" -Quiet)) { exit 1 }
 
+      # Codecs: make a short clip in each common format with this FFmpeg and play each through Phosphor
+      # (the Mac runs the same list with scripts/codec-test.sh).
+      - name: Codec test
+        continue-on-error: true
+        shell: pwsh
+        timeout-minutes: 20
+        env:
+          WGPU_BACKEND: dx12
+        run: |
+          $d = "$env:RUNNER_TEMP\codecs"; New-Item -ItemType Directory -Force $d | Out-Null
+          $ff = "dist\Phosphor\ffmpeg.exe"
+          $clips = [ordered]@{
+            "h264.mp4" = "-c:v libx264 -pix_fmt yuv420p"; "h264_422_10bit.mov" = "-c:v libx264 -pix_fmt yuv422p10le"
+            "hevc.mp4" = "-c:v libx265 -tag:v hvc1 -pix_fmt yuv420p"; "hevc_10bit.mov" = "-c:v libx265 -pix_fmt yuv420p10le -tag:v hvc1"
+            "av1.mp4" = "-c:v libsvtav1 -pix_fmt yuv420p"; "vp8.webm" = "-c:v libvpx"; "vp9.webm" = "-c:v libvpx-vp9"
+            "vp9_alpha.webm" = "-c:v libvpx-vp9 -pix_fmt yuva420p"; "prores422.mov" = "-c:v prores_ks -profile:v 2"
+            "prores4444_alpha.mov" = "-c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le"; "dnxhr.mxf" = "-c:v dnxhd -profile:v dnxhr_sq -pix_fmt yuv422p"
+            "mjpeg.avi" = "-c:v mjpeg -q:v 3 -pix_fmt yuvj420p"; "mpeg2.mpg" = "-c:v mpeg2video"; "mpeg4.avi" = "-c:v mpeg4"
+            "cineform.mov" = "-c:v cfhd"; "qtrle_animation.mov" = "-c:v qtrle"; "png.mov" = "-c:v png"; "animation.gif" = "-c:v gif"
+            "ffv1.mkv" = "-c:v ffv1"; "utvideo.avi" = "-c:v utvideo"; "huffyuv.avi" = "-c:v huffyuv"; "wmv2.wmv" = "-c:v wmv2"
+          }
+          foreach ($k in $clips.Keys) {
+            $a = "-hide_banner -loglevel error -y -f lavfi -i testsrc2=size=640x352:rate=30 -t 3 $($clips[$k]) $d\$k"
+            Start-Process $ff -ArgumentList $a -NoNewWindow -Wait
+          }
+          Start-Process $ff -ArgumentList "-hide_banner -loglevel error -y -f lavfi -i testsrc2=size=640x352:rate=30 -t 3 -c:v dxv -pix_fmt rgba $d\dxv.mov" -NoNewWindow -Wait
+          $ok = 0; $bad = 0
+          foreach ($f in Get-ChildItem $d) {
+            $out = "$env:RUNNER_TEMP\codec-out.txt"
+            $p = Start-Process dist\Phosphor\Phosphor.exe -ArgumentList "--bench","3","--window","480x300","--movie",$f.FullName -PassThru -NoNewWindow -RedirectStandardOutput $out
+            if (-not $p.WaitForExit(90000)) { $p.Kill() }
+            $line = (Get-Content $out | Select-String "^VIDEO|^LAYER_ERROR" | Select-Object -First 1)
+            if ("$line" -like "VIDEO*") { $ok++ } else { $bad++ }
+            "{0,-24} {1}" -f $f.Name, "$line" | Tee-Object -Append -FilePath dist\codecs.txt
+          }
+          "CODECS $ok played, $bad failed" | Tee-Object -Append -FilePath dist\codecs.txt
+
       # Spout: does a receiver built from the official Spout SDK get Phosphor's picture?
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Spout test
@@ -137,6 +174,7 @@ jobs:
         with:
           name: launch-test
           path: |
+            dist/codecs.txt
             dist/win-snapshot*.png
             dist/launch.txt
             dist/launch-err.txt
