@@ -30,6 +30,7 @@ impl PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.state.folders.folders) {
             storage.set_string(KEY_WATCHED, json);
         }
+        storage.set_string(KEY_LIBRARY_DEFAULT, "1".into());
         if let Ok(json) = serde_json::to_string(&self.state.recent) {
             storage.set_string(KEY_RECENT_PROJECTS, json);
         }

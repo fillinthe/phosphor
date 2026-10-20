@@ -41,6 +41,11 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         };
         #[cfg(target_arch = "wasm32")]
         let (beat_pending, beat): (bool, Option<(f32, f32)>) = (false, None);
+        let outs: Vec<(u64, String, bool)> = {
+            let showing = st.comp.outputs_showing(sel);
+            st.comp.outputs.iter().map(|o| (o.id, o.name.clone(), showing.contains(&o.id))).collect()
+        };
+        let mut send: Option<(u64, bool)> = None;
         let layer = st.comp.layer_mut(sel).unwrap();
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
@@ -48,6 +53,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);
             ui.horizontal(|ui| {
                 super::layers::show_button(ui, layer);
+                send = outputs_menu(ui, &outs).or(send);
                 ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
             });
             quick = crate::app::quick_row(ui);
@@ -68,6 +74,15 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let _ = match_beat;
         if let Some(t) = seek_to {
             st.media.seek(sel, t);
+        }
+        if let Some((o, on)) = send {
+            if on {
+                st.comp.send_to_output(sel, o);
+            } else {
+                st.comp.remove_from_output(sel, o);
+            }
+            let oname = st.comp.outputs.iter().find(|x| x.id == o).map_or(String::new(), |x| x.name.clone());
+            st.notice = Some(if on { format!("Now on \"{oname}\" as a slice (Outputs area to shape it)") } else { format!("No longer on \"{oname}\" on its own") });
         }
         if let Some(q) = quick {
             st.quick_on(q, Some(sel), ui.ctx().input(|i| i.time));
@@ -110,6 +125,33 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         if let SourceSpec::Text(style) = &mut layer.source {
             ui.label(RichText::new("Text").strong());
             text_editor(ui, style, layer.id);
+            ui.separator();
+        }
+        if let Some(name) = layer.collection.clone() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(format!("{} Playing collection · {name}", icon::BOOKMARKS_SIMPLE)).strong());
+                if ui.small_button(label(icon::STOP, "Stop")).on_hover_text("Keep what's showing; stop stepping through the collection").clicked() {
+                    layer.collection = None;
+                }
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Order");
+                for a in [phosphor_engine::Autopilot::Next, phosphor_engine::Autopilot::Previous, phosphor_engine::Autopilot::Random] {
+                    ui.selectable_value(&mut layer.autopilot, a, a.name());
+                }
+                let mut at_end = layer.autopilot_beats <= 0.0;
+                if ui.selectable_label(at_end, "when the clip ends").clicked() {
+                    at_end = true;
+                    layer.autopilot_beats = 0.0;
+                }
+                if ui.selectable_label(!at_end, "after").clicked() && at_end {
+                    layer.autopilot_beats = 16.0;
+                }
+                if layer.autopilot_beats > 0.0 {
+                    guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));
+                }
+            });
+            hint(ui, "New files in the collection's folders join as they arrive. Click a clip or file to leave the collection.");
             ui.separator();
         }
         ui.horizontal(|ui| {

@@ -329,6 +329,8 @@ pub(crate) fn layout_show() -> DockState<Tab> {
     let surface = dock.main_surface_mut();
     let [left, _] = surface.split_right(NodeIndex::root(), 0.75, vec![Tab::Inspector]);
     surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Layers, Tab::Mixer, Tab::Cues, Tab::ShaderEditor]);
+    // Media (the Library) open from the start: it's the daily tool.
+    surface.split_left(NodeIndex::root(), 0.2, super::areas::LIBRARY.to_vec());
     dock
 }
 

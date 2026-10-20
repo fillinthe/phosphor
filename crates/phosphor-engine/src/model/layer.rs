@@ -198,6 +198,10 @@ pub struct LayerState {
     pub autopilot: Autopilot,
     /// Autopilot moves on after this many beats (0 = when the clip ends).
     pub autopilot_beats: f32,
+    /// Play this media collection instead of the clip row: the autopilot steps through it (next / previous /
+    /// random), new files in its watched folders included.
+    #[serde(default)]
+    pub collection: Option<String>,
     /// What a flash clip goes back to when released.
     #[serde(skip)]
     pub flash_return: Option<Box<Clip>>,
@@ -276,6 +280,7 @@ impl Default for LayerState {
             transition_values: Vec::new(),
             autopilot: Autopilot::Off,
             autopilot_beats: 0.0,
+            collection: None,
             flash_return: None,
             transition: None,
             active_clip: None,

@@ -20,6 +20,8 @@ pub enum Purpose {
     RelinkFolder,
     /// A 3D model (OBJ) for this mapping surface.
     Model3d(u64),
+    /// A folder for this collection to watch.
+    CollectionFolder(String),
 }
 
 pub struct Dialogs {

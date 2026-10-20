@@ -234,13 +234,52 @@ impl PhosphorApp {
                 let compact = ui.available_width() < 560.0;
                 let named = |glyph: &str, name: &str| if compact { glyph.to_string() } else { format!("{glyph} {name}") };
                 // One-click visuals: the dice = Surprise me; the arrow = every Quick action.
-                let dice = ui.button(named(icon::DICE_FIVE, "Surprise")).on_hover_text(format!("{} (⌘R). Right-click to map a pad or key.", super::Quick::Surprise.about()));
+                // The dice says where it will land: the selected layer, else every layer.
+                let target = self.state.selected.filter(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
+                let where_ = target.map_or("all layers".to_string(), |id| crate::ui::layer_name(&self.state.comp.layers, id));
+                let dice = ui.button(named(icon::DICE_FIVE, &format!("Surprise · {where_}"))).on_hover_text(format!(
+                    "{} (⌘R: all layers). Click: a new look on {where_}. The arrow: pick several layers. Right-click to map a pad or key.",
+                    super::Quick::Surprise.about()
+                ));
                 crate::ui::map_menu(ui, &dice, phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Surprise));
                 if dice.clicked() {
-                    self.state.quick(super::Quick::Surprise, now);
+                    match target {
+                        Some(id) => self.state.quick_on(super::Quick::SurpriseLayer, Some(id), now),
+                        None => self.state.quick(super::Quick::Surprise, now),
+                    }
                 }
                 let mut picked = None;
-                ui.menu_button(icon::CARET_DOWN, |ui| picked = super::quick_menu(ui)).response.on_hover_text("Quick visuals: shuffle, react to the music, fill clips, instant set");
+                let mut surprise: Vec<u64> = Vec::new();
+                let key = egui::Id::new("surprise_picks");
+                ui.menu_button(icon::CARET_DOWN, |ui| {
+                    ui.label(egui::RichText::new("Surprise which layers").strong());
+                    let mut picks: Vec<u64> = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+                    for l in self.state.comp.layers.iter().rev() {
+                        let mut on = picks.contains(&l.id);
+                        if ui.checkbox(&mut on, &l.name).changed() {
+                            if on { picks.push(l.id) } else { picks.retain(|x| *x != l.id) }
+                        }
+                    }
+                    picks.retain(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
+                    ui.horizontal(|ui| {
+                        if ui.add_enabled(!picks.is_empty(), egui::Button::new(format!("{} Surprise these", icon::DICE_FIVE))).clicked() {
+                            surprise = picks.clone();
+                            ui.close();
+                        }
+                        if ui.button("All layers").clicked() {
+                            surprise = self.state.comp.layers.iter().map(|l| l.id).collect();
+                            ui.close();
+                        }
+                    });
+                    ui.ctx().data_mut(|d| d.insert_temp(key, picks));
+                    ui.separator();
+                    picked = super::quick_menu(ui);
+                })
+                .response
+                .on_hover_text("Surprise several layers at once, or any Quick action: shuffle, react to the music, fill clips, instant set");
+                for id in surprise {
+                    self.state.quick_on(super::Quick::SurpriseLayer, Some(id), now);
+                }
                 if let Some(q) = picked {
                     self.state.quick(q, now);
                 }

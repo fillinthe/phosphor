@@ -12,6 +12,7 @@ use crate::app::{State, Trigger};
 use crate::theme::{accent, WARN};
 
 mod binding;
+mod kit;
 mod learn;
 mod level;
 mod modulation;
@@ -20,6 +21,7 @@ mod tool_window;
 mod widgets;
 
 pub(crate) use binding::*;
+pub(crate) use kit::*;
 pub(crate) use learn::*;
 pub(crate) use level::*;
 pub(crate) use modulation::*;

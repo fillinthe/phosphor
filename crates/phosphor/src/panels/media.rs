@@ -27,12 +27,11 @@ pub struct MediaView {
     pub sort: MediaSort,
     pub by_folder: bool,
     pub tile: f32,
-    new_collection: String,
 }
 
 impl Default for MediaView {
     fn default() -> Self {
-        Self { search: String::new(), filter: MediaFilter::All, sort: MediaSort::Name, by_folder: true, tile: 128.0, new_collection: String::new() }
+        Self { search: String::new(), filter: MediaFilter::All, sort: MediaSort::Name, by_folder: true, tile: 128.0 }
     }
 }
 
@@ -55,7 +54,12 @@ pub(crate) enum MediaAct {
     /// These as a new clip layer that plays them in random order by itself (named after the collection).
     ShuffleLayer(Vec<usize>, String),
     Unwatch(String),
+    /// A new collection (empty name = "Collection N"), optionally with this file in it.
     NewCollection(String, Option<usize>),
+    RenameCollection(String, String),
+    RemoveCollectionFolder(String, String),
+    /// Put this collection on that layer (None = a new layer): it plays through it by itself.
+    PlayCollection(String, Option<u64>),
     DeleteCollection(String),
 }
 
@@ -108,7 +112,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             ui.selectable_value(&mut view.filter, MediaFilter::Videos, format!("{} {}", icon::FILM_STRIP, count(&|m| crate::media::is_movie(&m.name))));
             ui.selectable_value(&mut view.filter, MediaFilter::Images, format!("{} {}", icon::IMAGE, count(&|m| !crate::media::is_movie(&m.name))));
             for c in comp.media_collections.clone() {
-                let n = count(&|m| m.collections.contains(&c));
+                let n = count(&|m| comp.in_collection(m, &c));
                 let r = ui.selectable_value(&mut view.filter, MediaFilter::Collection(c.clone()), format!("{} {c} {n}", icon::BOOKMARKS_SIMPLE));
                 r.right_menu(|ui| {
                     if ui.button(label(icon::TRASH, "Delete collection")).on_hover_text("The media stays in the bin").clicked() {
@@ -117,15 +121,13 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                     }
                 });
             }
-            ui.menu_button(label(icon::PLUS, "Collection"), |ui| {
-                ui.add(egui::TextEdit::singleline(&mut view.new_collection).hint_text("e.g. Drops").desired_width(140.0));
-                if ui.add_enabled(!view.new_collection.trim().is_empty(), egui::Button::new("Create")).clicked() {
-                    acts.push(MediaAct::NewCollection(view.new_collection.trim().to_string(), None));
-                    view.new_collection.clear();
-                    ui.close();
-                }
-            });
+            if ui.button(label(icon::PLUS, "New collection")).on_hover_text("A set of files for a show: add files or whole folders, then play it on a layer").clicked() {
+                acts.push(MediaAct::NewCollection(String::new(), None));
+            }
         });
+    }
+    if let MediaFilter::Collection(c) = st.media_view.filter.clone() {
+        super::collections::collection_header(ui, st, &c, &mut acts);
     }
     ui.add_space(2.0);
 
@@ -143,7 +145,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             MediaFilter::Favorites => m.favorite,
             MediaFilter::Videos => crate::media::is_movie(&m.name),
             MediaFilter::Images => !crate::media::is_movie(&m.name),
-            MediaFilter::Collection(c) => m.collections.contains(c),
+            MediaFilter::Collection(c) => st.comp.in_collection(m, c),
         })
         .map(|(i, _)| i)
         .collect();
@@ -353,20 +355,37 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 st.folders.remove(&folder);
             }
             MediaAct::NewCollection(name, item) => {
-                if !st.comp.media_collections.contains(&name) {
-                    st.comp.media_collections.push(name.clone());
+                let name = st.comp.create_collection(&name);
+                if let Some(i) = item {
+                    st.comp.add_to_collection(i, &name);
                 }
-                if let Some(m) = item.and_then(|i| st.comp.media_bin.get_mut(i))
-                    && !m.collections.contains(&name)
-                {
-                    m.collections.push(name);
+                st.media_view.filter = MediaFilter::Collection(name);
+            }
+            MediaAct::RenameCollection(from, to) => {
+                if st.comp.rename_collection(&from, &to) {
+                    st.media_view.filter = MediaFilter::Collection(to);
+                } else {
+                    st.notice = Some(format!("There's already a collection called \"{to}\""));
                 }
             }
-            MediaAct::DeleteCollection(name) => {
-                st.comp.media_collections.retain(|c| *c != name);
-                for m in &mut st.comp.media_bin {
-                    m.collections.retain(|c| *c != name);
+            MediaAct::RemoveCollectionFolder(name, folder) => st.comp.remove_collection_folder(&name, &folder),
+            MediaAct::PlayCollection(name, layer) => {
+                let id = match layer {
+                    Some(id) => id,
+                    None => st.add_layer(),
+                };
+                if let Some(l) = st.comp.layer_mut(id) {
+                    l.collection = Some(name.clone());
+                    if l.autopilot == phosphor_engine::Autopilot::Off {
+                        l.autopilot = phosphor_engine::Autopilot::Next;
+                    }
+                    l.name = name.clone();
                 }
+                st.selected = Some(id);
+                st.notice = Some(format!("\"{name}\" plays on that layer: next / previous / random is in the Inspector"));
+            }
+            MediaAct::DeleteCollection(name) => {
+                st.comp.delete_collection(&name);
                 if st.media_view.filter == MediaFilter::Collection(name) {
                     st.media_view.filter = MediaFilter::All;
                 }
@@ -467,29 +486,14 @@ pub(crate) fn media_tile(
                 }
             }
             ui.separator();
-            let id = egui::Id::new(("new_coll", &item.path));
-            let mut text: String = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_default();
-            ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut text).hint_text("New collection").desired_width(120.0));
-                if ui.add_enabled(!text.trim().is_empty(), egui::Button::new("Add")).clicked() {
-                    acts.push(MediaAct::NewCollection(text.trim().to_string(), Some(i)));
-                    text.clear();
-                    ui.close();
-                }
-            });
-            ui.ctx().data_mut(|d| d.insert_temp(id, text));
+            if let Some(name) = new_name_menu(ui, ("new_coll", &item.path), "New collection", "Add") {
+                acts.push(MediaAct::NewCollection(name, Some(i)));
+            }
         });
         ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-            let id = egui::Id::new(("rename", &item.path));
-            let mut text: String = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_else(|| item.name.clone());
-            ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut text).desired_width(160.0));
-                if ui.button("OK").clicked() {
-                    acts.push(MediaAct::Rename(i, text.trim().to_string()));
-                    ui.close();
-                }
-            });
-            ui.ctx().data_mut(|d| d.insert_temp(id, text));
+            if let Some(name) = rename_menu(ui, ("rename", &item.path), &item.name) {
+                acts.push(MediaAct::Rename(i, name));
+            }
         });
         #[cfg(not(target_arch = "wasm32"))]
         if crate::media::is_movie(&item.name) && ui.button(label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show (Hap, ProRes, or H.264 with every frame a keyframe); see the size first").clicked() {

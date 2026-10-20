@@ -4,6 +4,18 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.67 (2026-10-20)
+
+- **Collections that work:** *New collection* in the Media panel makes one straight away (rename it in its
+  header). Put files in it (right-click › Collections) or **Add folder…** so every clip in a folder, and new ones
+  as they arrive, belong to it. **Play on ▸** a layer: the layer steps through the collection by itself, next /
+  previous / random, when a clip ends or after so many beats (Inspector).
+- **Send a layer or comp to an output:** the screen button next to a layer's name in the Inspector lists your
+  outputs; tick one and the layer shows there as a slice of its own (shape it in the Outputs area), besides the mix.
+- **Surprise says where:** the top button reads "Surprise · Layer 2" (the selected layer) or "Surprise · all
+  layers", and its arrow lets you tick several layers and surprise just those.
+- **Media open from the start:** the Library column (Media, Effects, Presets) is open in the Show area by default.
+
 ## 0.2.66 (2026-10-20)
 
 - **Shader transition settings:** a shader transition's own controls (shadow, bounces, angle, colour…) are in the
