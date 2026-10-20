@@ -307,7 +307,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
                 ((k(egui::Key::ArrowRight) - k(egui::Key::ArrowLeft)) * step, (k(egui::Key::ArrowDown) - k(egui::Key::ArrowUp)) * step)
             });
             if (dx, dy) != (0.0, 0.0)
-                && let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface)
+                && let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface && !s.locked)
             {
                 s.translate(dx / ow.max(1) as f32, dy / oh.max(1) as f32);
             }

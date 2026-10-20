@@ -594,6 +594,7 @@ impl Engine {
                     u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
+                    [u.p[11], u.p[12]] = s.edge_uniforms();
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
@@ -611,6 +612,7 @@ impl Engine {
                     u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
+                    [u.p[11], u.p[12]] = s.edge_uniforms();
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
@@ -627,6 +629,7 @@ impl Engine {
                     u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, s.shape as u32 as f32];
+                    [u.p[11], u.p[12]] = s.edge_uniforms();
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();

@@ -38,6 +38,13 @@ pub struct Surface {
     /// the picture through the model's own UVs. When set, the corners are not used.
     #[serde(default)]
     pub model: Option<Model3d>,
+    /// Soft edge per side (left, right, top, bottom; fractions of the surface) instead of `feather` on all four:
+    /// for a projector that overlaps its neighbour on one side only.
+    #[serde(default)]
+    pub edges: Option<[f32; 4]>,
+    /// Locked: its points can't be dragged or nudged (nothing moves by accident once it's lined up).
+    #[serde(default)]
+    pub locked: bool,
 }
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
@@ -793,11 +800,21 @@ impl Default for Surface {
             shape: SliceShape::Rectangle,
             line: None,
             model: None,
+            edges: None,
+            locked: false,
         }
     }
 }
 
 impl Surface {
+    /// For the slice shader (`u.p[11]` widths, `u.p[12].x` on): per-side soft edges, when set.
+    pub fn edge_uniforms(&self) -> [[f32; 4]; 2] {
+        match self.edges {
+            Some(e) => [e, [1.0, 0.0, 0.0, 0.0]],
+            None => [[0.0; 4]; 2],
+        }
+    }
+
     /// A surface covering the middle of the output, so a new one is visible and grabbable.
     pub fn new(id: u64, index: usize) -> Self {
         let inset = 0.15 + 0.05 * (index % 4) as f32;

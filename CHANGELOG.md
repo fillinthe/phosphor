@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.76 (2026-10-20)
+
+- **Soft edge per side** (as in MadMapper): a slice can fade only the side that overlaps the next projector
+  (Soft edge per side: left, right, top, bottom).
+- **Lock a slice:** once it's lined up, Lock stops its points being dragged or nudged by accident.
+
 ## 0.2.75 (2026-10-20)
 
 - **Game controllers** (as in VDMX): buttons, sticks and triggers on a connected gamepad (Xbox, PlayStation,

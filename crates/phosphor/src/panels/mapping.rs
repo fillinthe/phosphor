@@ -68,10 +68,14 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             }
         }
         let mut d = [0.0, 0.0];
+        let base = if s.locked { Color32::from_gray(120) } else { base };
         let r = point_handle(ui, id.with("move"), to_screen(s.center()), frame, base, true, &mut d);
         if r.clicked() || r.drag_started() {
             *selected = Some(s.id);
             touched = true;
+        }
+        if s.locked {
+            d = [0.0, 0.0];
         }
         if d != [0.0, 0.0] {
             s.translate(d[0], d[1]);
@@ -83,8 +87,9 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             let pts: Vec<egui::Pos2> = l.points.iter().map(|p| to_screen(*p)).collect();
             ui.painter().add(egui::Shape::line(pts, line));
         }
+        let locked = s.locked;
         let points: Vec<&mut [f32; 2]> = match (&mut s.line, &mut s.mesh) {
-            _ if s.model.is_some() => Vec::new(),
+            _ if s.model.is_some() || locked => Vec::new(),
             (Some(l), _) => l.points.iter_mut().collect(),
             (None, Some(m)) => m.points.iter_mut().collect(),
             (None, None) => s.corners.iter_mut().collect(),
@@ -600,8 +605,25 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         Level::percent(&mut s.opacity, "Opacity").default(1.0).show(ui);
     });
     ui.horizontal(|ui| {
-        Level::range(&mut s.feather, 0.0, 0.5, "Soft edge").default(0.0).show(ui);
+        if s.edges.is_none() {
+            Level::range(&mut s.feather, 0.0, 0.5, "Soft edge").default(0.0).show(ui);
+        }
     });
+    ui.horizontal(|ui| {
+        let mut per_side = s.edges.is_some();
+        if ui.checkbox(&mut per_side, "Soft edge per side").on_hover_text("A different soft edge on each side: e.g. only the side that overlaps the next projector").changed() {
+            s.edges = per_side.then_some([s.feather; 4]);
+        }
+        let text = if s.locked { label(icon::LOCK, "Locked") } else { label(icon::LOCK_OPEN, "Lock") };
+        ui.toggle_value(&mut s.locked, text).on_hover_text("Locked: its points can't be dragged or nudged");
+    });
+    if let Some(e) = s.edges.as_mut() {
+        for (k, side) in ["Left", "Right", "Top", "Bottom"].iter().enumerate() {
+            ui.horizontal(|ui| {
+                Level::range(&mut e[k], 0.0, 0.5, *side).default(0.0).show(ui);
+            });
+        }
+    }
     if s.feather > 0.0 {
         ui.horizontal(|ui| {
             Level::range(&mut s.blend_gamma, 0.5, 4.0, "Blend curve").default(1.0).tip("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.").show(ui);
