@@ -23,7 +23,7 @@ impl Composition {
     /// Stops output `output` showing `source` on its own (its slice goes; the mix stays as it was).
     pub fn remove_from_output(&mut self, source: u64, output: u64) {
         if let Some(o) = self.outputs.iter_mut().find(|o| o.id == output) {
-            o.mapping.surfaces.retain(|s| s.layer != Some(source));
+            o.mapping.remove_slices(|s| s.layer == Some(source));
         }
     }
 

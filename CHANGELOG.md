@@ -4,6 +4,19 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.81 (2026-10-20)
+
+- **Preview windows as an XY pad** (as in VDMX): switch on XY in a preview window, then click or drag on the
+  picture. Two modulators, "Preview 1 X" and "Preview 1 Y", follow the pointer; any slider can follow them
+  (right-click › Modulate › pick one). Handy for moving a layer or an effect's centre by pointing at the picture.
+- **Select several slices** (as in MadMapper): Shift-click slices on the canvas or in the list. Drag one to move
+  them all, arrows nudge them all, and Properties sets on/off, lock, opacity and blend for all of them together.
+- **Draw a mask by hand:** Mapping Studio › Draw mask, then drag around what to hide. It becomes a smooth mask you
+  can edit point by point, invert or soften like any other.
+- **Attach a mask to a slice:** a mask's Attached to setting makes it move and warp with that slice (it stays put
+  if the slice is deleted).
+- **Zoom to slice:** a Mapping Studio button that fills the view with the selected slice(s) for close-up work.
+
 ## 0.2.80 (2026-10-20)
 
 Projection mapping, more like MadMapper:

@@ -25,6 +25,10 @@ struct ViewState {
     zoom: f32,
     pan: egui::Vec2,
     snap: bool,
+    /// Drag on the canvas to draw a mask by hand.
+    drawing: bool,
+    /// Centre the view on this output point next frame (Zoom to slice; the pan needs the canvas size).
+    zoom_to: Option<[f32; 2]>,
 }
 
 enum TreeAction {
@@ -32,6 +36,8 @@ enum TreeAction {
     /// A slice centred where the canvas was right-clicked (output space 0..1).
     AddSliceAt(u64, [f32; 2]),
     AddMask(u64, MaskShape),
+    /// A mask drawn by hand on output `.0` (output space points).
+    DrawnMask(u64, Vec<[f32; 2]>),
     Duplicate(u64, u64),
     Delete(u64, u64),
 }
@@ -82,9 +88,11 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                     ui.add_space(14.0);
                     let glyph = if s.enabled { icon::EYE } else { icon::EYE_SLASH };
                     ui.toggle_value(&mut s.enabled, RichText::new(glyph).small());
-                    let r = ui.selectable_label(*selected_surface == Some(s.id), format!("{} {}", icon::POLYGON, s.name));
+                    let picked = super::mapping_points::selected_slices(ui.ctx(), *selected_surface).contains(&s.id);
+                    let r = ui.selectable_label(picked, format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several");
                     if r.clicked() {
-                        *selected_surface = Some(s.id);
+                        let shift = ui.input(|i| i.modifiers.shift);
+                        super::mapping_points::click_slice(ui.ctx(), selected_surface, s.id, shift);
                     }
                     r.right_menu(|ui| {
                         if ui.button(label(icon::COPY, "Duplicate")).clicked() {
@@ -166,6 +174,15 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
             }
             st.selected_surface = Some(id);
         }
+        Some(TreeAction::DrawnMask(oid, stroke)) => {
+            let id = st.comp.new_id();
+            if let Some(o) = st.comp.output_mut(oid)
+                && o.mapping.add_mask_stroke(id, &stroke).is_some()
+            {
+                o.mapping.enabled = true;
+                st.selected_surface = Some(id);
+            }
+        }
         Some(TreeAction::Duplicate(oid, sid)) => {
             let id = st.comp.new_id();
             if let Some(o) = st.comp.output_mut(oid)
@@ -181,7 +198,7 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
         }
         Some(TreeAction::Delete(oid, id)) => {
             if let Some(o) = st.comp.output_mut(oid) {
-                o.mapping.surfaces.retain(|s| s.id != id);
+                o.mapping.remove_slices(|s| s.id == id);
                 o.mapping.masks.retain(|m| m.id != id);
             }
             if st.selected_surface == Some(id) {
@@ -213,10 +230,30 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             vs.zoom = 1.0;
             vs.pan = egui::Vec2::ZERO;
         }
+        // Zoom so the selected slices fill the view (their outline with a margin).
+        let many = super::mapping_points::selected_slices(ui.ctx(), *selected_surface);
+        let pts: Vec<[f32; 2]> = o.mapping.surfaces.iter_mut().filter(|s| many.contains(&s.id)).flat_map(|s| {
+            let mut v: Vec<[f32; 2]> = super::mapping_points::points_mut(s).into_iter().map(|p| *p).collect();
+            v.extend(s.corners);
+            v
+        }).collect();
+        if ui.add_enabled(!pts.is_empty(), egui::Button::new(label(icon::MAGNIFYING_GLASS_PLUS, "Zoom to slice"))).on_hover_text("Fill the view with the selected slice(s)").clicked() {
+            let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+            for p in &pts {
+                for k in 0..2 {
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
+                }
+            }
+            let (w, h) = ((hi[0] - lo[0]).max(0.02), (hi[1] - lo[1]).max(0.02));
+            vs.zoom = (0.8 / w.max(h)).clamp(0.25, 12.0);
+            vs.zoom_to = Some([(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5]);
+        }
         hint(ui, format!("{:.0}%", vs.zoom * 100.0));
         toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("Dragged points land on other slices' points nearby, otherwise on a 1/64 grid");
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
+        toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)");
         stage_photo_menu(ui, o);
         if ui.checkbox(&mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
@@ -254,10 +291,15 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if bg.dragged_by(egui::PointerButton::Middle) {
             vs.pan += bg.drag_delta();
         }
+        // Drawing a mask: the pointer's path while the primary button is down, a mask when it's let go.
+        let stroke_id = key.with("stroke");
         if bg.clicked() {
             *selected_surface = None;
         }
         let base = fit_rect(area.shrink(12.0), aspect);
+        if let Some(c) = vs.zoom_to.take() {
+            vs.pan = egui::vec2((0.5 - c[0]) * base.width(), (0.5 - c[1]) * base.height()) * vs.zoom;
+        }
         let frame = egui::Rect::from_center_size(base.center() + vs.pan, base.size() * vs.zoom);
         let mut child = ui.new_child(UiBuilder::new().max_rect(area));
         child.set_clip_rect(area.intersect(ui.clip_rect()));
@@ -282,6 +324,30 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             }
         }
         p.rect_stroke(frame, 0.0, Stroke::new(1.0, Color32::from_gray(80)), StrokeKind::Outside);
+        if vs.drawing {
+            let to_out = |p: egui::Pos2| [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
+            let mut stroke: Vec<[f32; 2]> = ui.ctx().data(|d| d.get_temp(stroke_id)).unwrap_or_default();
+            if bg.drag_started_by(egui::PointerButton::Primary) {
+                stroke.clear();
+            }
+            if bg.dragged_by(egui::PointerButton::Primary)
+                && let Some(p) = bg.interact_pointer_pos()
+            {
+                stroke.push(to_out(p));
+            }
+            if stroke.len() > 1 {
+                let pts: Vec<egui::Pos2> = stroke.iter().map(|q| egui::pos2(frame.left() + q[0] * frame.width(), frame.top() + q[1] * frame.height())).collect();
+                p.add(egui::Shape::line(pts, Stroke::new(2.0, MASK_COLOR)));
+            }
+            if bg.drag_stopped_by(egui::PointerButton::Primary) {
+                action = Some(TreeAction::DrawnMask(o.id, std::mem::take(&mut stroke)));
+                vs.drawing = false;
+            }
+            ui.ctx().data_mut(|d| d.insert_temp(stroke_id, stroke));
+            if bg.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+        }
         let touched = mapping_handles(&mut child, frame, &mut o.mapping, selected_surface, true);
         if touched && vs.snap {
             // Dragging one point: onto another slice's point within 8 screen pixels, else onto the grid.
@@ -607,7 +673,10 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
     let size = o.size(canvas);
     egui::ScrollArea::vertical().id_salt("studio_props").auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
-        if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
+        let many = super::mapping_points::selected_slices(ui.ctx(), *selected_surface);
+        if many.len() > 1 {
+            super::mapping_points::group_settings(ui, &mut o.mapping, &many);
+        } else if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::POLYGON).color(accent()));
                 toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
@@ -631,6 +700,8 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
             });
             hint(ui, format!("{} points · drag them on the canvas; double-click an edge to add one, right-click a point to remove it", m.points.len()));
             mask_settings(ui, m);
+            let mid = m.id;
+            super::mapping::mask_attach_row(ui, &mut o.mapping, mid);
         } else {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
