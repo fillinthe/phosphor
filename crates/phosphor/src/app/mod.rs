@@ -56,6 +56,8 @@ mod recovery;
 mod render;
 mod settings;
 mod areas;
+mod web_control;
+pub(crate) use web_control::web_badge;
 #[cfg(not(target_arch = "wasm32"))]
 mod convert_window;
 mod status;
@@ -212,6 +214,8 @@ pub struct State {
     pub render_rate: phosphor_engine::RenderRate,
     pub render_pacer: crate::pacing::FramePacer,
     pub require_password: bool,
+    /// When someone last changed something from the web, and who (the web control badge).
+    pub web_activity: Option<(f64, String)>,
     #[cfg(not(target_arch = "wasm32"))]
     pub dialogs: crate::dialogs::Dialogs,
     #[cfg(not(target_arch = "wasm32"))]

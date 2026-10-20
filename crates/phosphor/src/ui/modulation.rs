@@ -110,7 +110,9 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
                     }
                 });
             } else {
-                guarded!(ui, mm.rate, Slider::new(&mut mm.rate, 0.01..=10.0).text("Hz").logarithmic(true));
+                ui.horizontal(|ui| {
+                    Level::range(&mut mm.rate, 0.01, 10.0, "Hz").default(1.0).log().show(ui);
+                });
             }
         });
     }
@@ -142,10 +144,16 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         ui.checkbox(&mut mm.invert, "Invert");
     });
     if mm.range {
-        guarded!(ui, mm.min, Slider::new(&mut mm.min, 0.0..=1.0).text("From"));
-        guarded!(ui, mm.max, Slider::new(&mut mm.max, 0.0..=1.0).text("To"));
+        ui.horizontal(|ui| {
+            Level::percent(&mut mm.min, "From").default(0.0).show(ui);
+        });
+        ui.horizontal(|ui| {
+            Level::percent(&mut mm.max, "To").default(1.0).show(ui);
+        });
     } else {
-        guarded!(ui, mm.amount, Slider::new(&mut mm.amount, -1.0..=1.0).text("Amount"));
+        ui.horizontal(|ui| {
+            Level::range(&mut mm.amount, -1.0, 1.0, "Amount").default(0.5).show(ui);
+        });
     }
     let v = phosphor_engine::control::source_value(mm, &inputs);
     ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));

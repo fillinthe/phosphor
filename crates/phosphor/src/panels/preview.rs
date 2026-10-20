@@ -90,4 +90,15 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     ui.painter().rect_filled(pill, 4.0, Color32::from_black_alpha(150));
     ui.painter().galley(pill.min + egui::vec2(7.0, 4.0), galley, Color32::WHITE);
     ui.allocate_rect(rect, Sense::hover());
+    // Someone on a phone is changing the visuals: say so on the picture, with Take over one click away.
+    let now = ui.ctx().input(|i| i.time);
+    if let Some(who) = st.web_active(now).map(str::to_string) {
+        let text = RichText::new(format!("{} {who} is controlling from the web · Take over", icon::DEVICE_MOBILE)).strong().color(Color32::BLACK);
+        let at = egui::Rect::from_min_size(rect.left_top() + egui::vec2(6.0, 6.0), egui::vec2(rect.width().min(380.0), 22.0));
+        let take = ui.put(at, egui::Button::new(text).fill(crate::support::DONATE_ORANGE)).on_hover_text("Ignore phones and browsers until you hand control back (status line, or Output › Web Control)");
+        if take.clicked() {
+            st.set_web_control(false);
+        }
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+    }
 }

@@ -15,6 +15,7 @@ impl PhosphorApp {
         let now = ui.ctx().input(|i| i.time);
         let mut open_outputs = false;
         let mut unmute = false;
+        let mut web_toggle = false;
         egui::Panel::bottom("status_line").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
@@ -52,6 +53,7 @@ impl PhosphorApp {
                     let n = st.net.peers().len();
                     ui.label(small(format!("{} Session · {n} connected", icon::DEVICE_MOBILE), Color32::GRAY));
                 }
+                web_toggle = super::web_badge(ui, st, now);
                 if st.comp.share_out() {
                     ui.label(small(format!("{} {}", icon::SHARE_NETWORK, if cfg!(windows) { "Spout" } else { "Syphon" }), Color32::GRAY));
                 }
@@ -83,6 +85,10 @@ impl PhosphorApp {
                 });
             });
         });
+        if web_toggle {
+            let on = self.state.comp.web_control_off;
+            self.state.set_web_control(on);
+        }
         if unmute {
             self.state.comp.sound_muted = false;
         }

@@ -37,6 +37,8 @@ pub enum Action {
     ToggleOutput,
     Identify,
     Syphon,
+    WebControl,
+    MuteAll,
     Ndi,
     Notes,
     Roadmap,
@@ -155,6 +157,9 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             S,
             I(A::Syphon, if cfg!(windows) { "Spout On / Off" } else { "Syphon On / Off" }, None),
             I(A::Ndi, "NDI On / Off", None),
+            S,
+            I(A::MuteAll, "Mute All Sound On / Off", None),
+            I(A::WebControl, "Web Control On / Off (Take Over)", None),
         ],
     ),
     (

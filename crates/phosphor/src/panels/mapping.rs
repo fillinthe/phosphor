@@ -578,11 +578,16 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         ui.label("Shape");
         choice_buttons(ui, &mut s.shape, |_, _| {});
     });
-    guarded!(ui, s.opacity, Slider::new(&mut s.opacity, 0.0..=1.0).text("Opacity"));
-    guarded!(ui, s.feather, Slider::new(&mut s.feather, 0.0..=0.5).text("Soft edge"));
+    ui.horizontal(|ui| {
+        Level::percent(&mut s.opacity, "Opacity").default(1.0).show(ui);
+    });
+    ui.horizontal(|ui| {
+        Level::range(&mut s.feather, 0.0, 0.5, "Soft edge").default(0.0).show(ui);
+    });
     if s.feather > 0.0 {
-        guarded!(ui, s.blend_gamma, Slider::new(&mut s.blend_gamma, 0.5..=4.0).text("Blend curve").fixed_decimals(2))
-            .on_hover_text("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.");
+        ui.horizontal(|ui| {
+            Level::range(&mut s.blend_gamma, 0.5, 4.0, "Blend curve").default(1.0).tip("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.").show(ui);
+        });
     }
     color_grade_editor(ui, s.id, &mut s.color);
     ui.horizontal(|ui| {
@@ -608,15 +613,27 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     if let Some(m) = &mut s.model {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().slider_width = 110.0;
-            guarded!(ui, m.yaw, Slider::new(&mut m.yaw, -0.5..=0.5).text("turn"));
-            guarded!(ui, m.pitch, Slider::new(&mut m.pitch, -0.25..=0.25).text("tilt"));
-            guarded!(ui, m.roll, Slider::new(&mut m.roll, -0.25..=0.25).text("roll"));
+            ui.horizontal(|ui| {
+                Level::range(&mut m.yaw, -0.5, 0.5, "Turn").default(0.08).show(ui);
+            });
+            ui.horizontal(|ui| {
+                Level::range(&mut m.pitch, -0.25, 0.25, "Tilt").default(0.05).show(ui);
+            });
+            ui.horizontal(|ui| {
+                Level::range(&mut m.roll, -0.25, 0.25, "Roll").default(0.0).show(ui);
+            });
         });
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().slider_width = 110.0;
-            guarded!(ui, m.distance, Slider::new(&mut m.distance, 0.8..=12.0).logarithmic(true).text("distance"));
-            guarded!(ui, m.fov, Slider::new(&mut m.fov, 10.0..=90.0).text("lens °")).on_hover_text("The projector's vertical throw angle; a long-throw lens is narrow");
-            guarded!(ui, m.scale, Slider::new(&mut m.scale, 0.1..=4.0).logarithmic(true).text("size"));
+            ui.horizontal(|ui| {
+                Level::range(&mut m.distance, 0.8, 12.0, "Distance").default(3.0).log().show(ui);
+            });
+            ui.horizontal(|ui| {
+                Level::range(&mut m.fov, 10.0, 90.0, "Lens °").default(30.0).tip("The projector's vertical throw angle; a long-throw lens is narrow").show(ui);
+            });
+            ui.horizontal(|ui| {
+                Level::range(&mut m.scale, 0.1, 4.0, "Size").default(1.0).log().show(ui);
+            });
             ui.checkbox(&mut m.cull, "Hide back faces");
         });
         ui.horizontal(|ui| {
@@ -637,7 +654,9 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             s.set_line(on);
         }
         if let Some(l) = &mut s.line {
-            guarded!(ui, l.width, Slider::new(&mut l.width, 0.005..=0.5).text("width").logarithmic(true));
+            ui.horizontal(|ui| {
+                Level::range(&mut l.width, 0.005, 0.5, "Width").default(0.06).log().show(ui);
+            });
             if ui.small_button(label(icon::PLUS, "point")).on_hover_text("Adds a point after the last one").clicked() {
                 let n = l.points.len();
                 let last = l.points[n - 1];
@@ -665,10 +684,18 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         }
     }));
     ui.collapsing("Input region (part of the picture shown)", |ui| {
-        guarded!(ui, s.input[0], Slider::new(&mut s.input[0], 0.0..=1.0).text("X"));
-        guarded!(ui, s.input[1], Slider::new(&mut s.input[1], 0.0..=1.0).text("Y"));
-        guarded!(ui, s.input[2], Slider::new(&mut s.input[2], 0.05..=1.0).text("Width"));
-        guarded!(ui, s.input[3], Slider::new(&mut s.input[3], 0.05..=1.0).text("Height"));
+        ui.horizontal(|ui| {
+            Level::range(&mut s.input[0], 0.0, 1.0, "X").default(0.0).show(ui);
+        });
+        ui.horizontal(|ui| {
+            Level::range(&mut s.input[1], 0.0, 1.0, "Y").default(0.0).show(ui);
+        });
+        ui.horizontal(|ui| {
+            Level::range(&mut s.input[2], 0.05, 1.0, "Width").default(1.0).show(ui);
+        });
+        ui.horizontal(|ui| {
+            Level::range(&mut s.input[3], 0.05, 1.0, "Height").default(1.0).show(ui);
+        });
     });
 }
 
@@ -679,10 +706,7 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
         ui.toggle_value(&mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point to make it a sharp corner)");
     });
     ui.horizontal(|ui| {
-        ui.spacing_mut().slider_width = (ui.available_width() - 90.0).max(60.0);
-        let r = guarded!(ui, m.feather, Slider::new(&mut m.feather, 0.0..=0.2).text("Soft edge").show_value(false))
-            .on_hover_text("Fade the mask's edge (0 = hard); the fade is centred on the outline");
-        value_bubble(ui, &r, if m.feather > 0.0 { format!("{:.1}% of the output", m.feather * 100.0) } else { "hard edge".into() });
+        Level::range(&mut m.feather, 0.0, 0.2, "Soft edge").default(0.0).tip("Fade the mask's edge (0 = hard); the fade is centred on the outline").show(ui);
     });
 }
 

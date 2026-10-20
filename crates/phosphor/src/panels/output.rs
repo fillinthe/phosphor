@@ -50,7 +50,9 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.end_row();
 
         ui.label("Master");
-        guarded!(ui, st.comp.master_fade, Slider::new(&mut st.comp.master_fade, 0.0..=1.0).text("fade"));
+        ui.horizontal(|ui| {
+            Level::percent(&mut st.comp.master_fade, "Fade").default(1.0).show(ui);
+        });
         ui.end_row();
 
         ui.label("Render at");
@@ -304,12 +306,22 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
     let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
     egui::CollapsingHeader::new(title).id_salt(("color_grade", id)).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
-        guarded!(ui, g.brightness, Slider::new(&mut g.brightness, -1.0..=1.0).text("Brightness").fixed_decimals(2));
-        guarded!(ui, g.contrast, Slider::new(&mut g.contrast, 0.0..=3.0).text("Contrast").fixed_decimals(2));
-        guarded!(ui, g.gamma, Slider::new(&mut g.gamma, 0.2..=3.0).text("Gamma").fixed_decimals(2).logarithmic(true));
-        guarded!(ui, g.saturation, Slider::new(&mut g.saturation, 0.0..=2.0).text("Saturation").fixed_decimals(2));
+        ui.horizontal(|ui| {
+            Level::range(&mut g.brightness, -1.0, 1.0, "Brightness").default(0.0).show(ui);
+        });
+        ui.horizontal(|ui| {
+            Level::range(&mut g.contrast, 0.0, 3.0, "Contrast").default(1.0).show(ui);
+        });
+        ui.horizontal(|ui| {
+            Level::range(&mut g.gamma, 0.2, 3.0, "Gamma").default(1.0).log().show(ui);
+        });
+        ui.horizontal(|ui| {
+            Level::range(&mut g.saturation, 0.0, 2.0, "Saturation").default(1.0).show(ui);
+        });
         for (k, name) in ["Red", "Green", "Blue"].iter().enumerate() {
-            guarded!(ui, g.gains[k], Slider::new(&mut g.gains[k], 0.0..=2.0).text(*name).fixed_decimals(2));
+            ui.horizontal(|ui| {
+                Level::range(&mut g.gains[k], 0.0, 2.0, *name).default(1.0).show(ui);
+            });
         }
         if ui.add_enabled(!g.is_neutral(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset colour"))).clicked() {
             *g = Default::default();

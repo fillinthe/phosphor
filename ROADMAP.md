@@ -72,6 +72,35 @@ app that's much smaller and lighter on the CPU.
     (cached, with thumbnails), new-drops badge; later user uploads/packs tied to the account
 10. **Distribution**: LGPL FFmpeg build (current bundled one is Homebrew's GPL build) · bundle FFmpeg inside the .app (LGPL build), notarize, auto-update, Intel test
 
+11. **Every codec** (asked 2026-10-20): `scripts/codec-test.sh` makes and plays 27 formats; all play ✔ (H.264 incl.
+    4:2:2 10-bit, HEVC 8/10-bit, AV1, VP8, VP9 (+alpha), ProRes 422/4444 (+alpha), DNxHD/HR, Cineform, Hap,
+    Resolume DXV, MJPEG, MPEG-2/4, QuickTime Animation, PNG, GIF, FFV1, UtVideo, HuffYUV, VC-2, WMV2, FLV).
+    - [ ] NotchLC: decoder is in; find a sample file to verify (no encoder available here)
+    - [ ] Hap Q / Hap Q Alpha / HapR from other apps: verify with real files; Hap R (BC7) needs a GPU path
+    - [ ] Run the codec test on Windows in CI (its FFmpeg differs)
+    - [ ] Not possible without the makers' SDKs: Blackmagic RAW, RED R3D, ARRIRAW (the converter can't read them
+          either; export to ProRes from their apps)
+12. **Every effect** (asked 2026-10-20): ISF collection 327/327 ✔, MadMapper materials 39/42, Surface FX 19/23.
+    - [ ] Gather more free ISF/GLSL packs (Vidvox ISF-Files, Shadertoy ports with a licence that allows it,
+          Interactive Shader Format community), test each with `isf_corpus`, ship the ones that work
+    - [ ] The last MadMapper materials/Surface FX that fail; MadMapper 3D particle generators
+    - [ ] FFGL plugins (Resolume / VDMX effect plugins): load .bundle FFGL 2 effects and generators (big; separate)
+13. **Make your own effects** (asked 2026-10-20; could be its own project): the Shader Editor already writes ISF
+    effects with live preview. Next:
+    - [ ] "New effect from…" templates (colour, distort, feedback, mask, generator) so nobody starts from a blank page
+    - [ ] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code
+    - [ ] Describe it in words → an AI drafts the shader, previewed live, editable (needs an API key: owner)
+    - [ ] Share effects to your account / the online library
+14. **Web control for the audience and guests** (asked 2026-10-20):
+    - [x] Build buttons, faders, toggles and XY pads for phones: the Control Surface (any page can be the guests' page)
+    - [x] Kill switch: Output › Web Control On / Off, the status line, or Take over on the preview; mappable to a pad
+          (phones then only watch and see "run from the booth"), 2026-10-20
+    - [x] Always visible: status line shows "N can control" / "<name> is controlling" (orange) / "Web control off";
+          the preview shows "<name> is controlling from the web · Take over" while someone does
+    - [ ] OSC from the web: let surface widgets send OSC to other apps too (TouchDesigner, lights)
+    - [ ] Per-person limits: which controls each guest page may touch (today: one Surface page + columns + Surprise)
+    - [ ] A log of who changed what (Devices panel)
+
 ## TODO
 
 Legend: [x] done · [~] in progress · [ ] not started

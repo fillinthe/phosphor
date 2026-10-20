@@ -90,6 +90,10 @@
   body.guest .page:not(#p-surface), body.guest.fixedpage #surftabs { display:none !important; }
   body.guest #p-surface { display:block; }
   body.guest.locked #surface, body.guest.locked #playbtns { pointer-events:none; opacity:.35; filter:grayscale(1); }
+  /* The Mac took over (Web control off): everything watches, nothing controls. */
+  #paused { display:none; margin:10px 12px 0; padding:12px; border-radius:10px; background:#3a2a12; color:#ffc27a; font-weight:600; text-align:center; }
+  body.paused #paused { display:block; }
+  body.paused header button, body.paused .section:not(#play .section) { pointer-events:none; opacity:.35; filter:grayscale(1); }
   #playtitle { font-size:22px; font-weight:700; letter-spacing:.02em; }
   #playstat { margin-top:6px; font-size:16px; color:var(--dim); }
   #playstat b { color:var(--acc); }
@@ -116,6 +120,7 @@
   <input id="pw" type="password" placeholder="Password" autocomplete="current-password">
   <button id="pwgo" class="big">Unlock</button>
 </div>
+<div id="paused">The visuals are being run from the booth right now. You can watch; controls come back when the VJ hands them over.</div>
 <div id="prevwrap"><img id="prev" alt=""></div>
 <div id="play"><div class="section"><div id="playtitle"></div><div id="playstat"></div><div id="playclock"></div>
   <div class="row" id="namerow"><span class="label">Your name</span><input id="playname" maxlength="24" placeholder="shown on the screen" autocomplete="nickname"></div></div></div>
@@ -168,6 +173,7 @@ function setIfIdle(el, v) { if (el && !touching.has(el.dataset.key)) el.setValue
 
 function render() {
   if (!state) return;
+  document.body.classList.toggle('paused', !!state.paused);
   if (guest) renderPlay();
   $('#bpm').textContent = state.bpm.toFixed(1) + ' bpm';
   const tb = $('#timing'); tb.textContent = { Now: 'Now', Beat: 'Beat', Bar: 'Bar' }[state.timing] || 'Now'; tb.classList.toggle('on', state.timing && state.timing !== 'Now');
