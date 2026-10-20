@@ -103,6 +103,19 @@ impl State {
 }
 
 /// Local wall-clock time "21:04:17" for the log.
+#[cfg(windows)]
+fn chrono_now() -> String {
+    // SAFETY: GetLocalTime only fills the struct we pass.
+    let t = unsafe {
+        let mut t: windows_sys::Win32::Foundation::SYSTEMTIME = std::mem::zeroed();
+        windows_sys::Win32::System::SystemInformation::GetLocalTime(&mut t);
+        t
+    };
+    format!("{:02}:{:02}:{:02}", t.wHour, t.wMinute, t.wSecond)
+}
+
+/// Local wall-clock time "21:04:17" for the log.
+#[cfg(not(windows))]
 fn chrono_now() -> String {
     let secs = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
     let local = secs + local_offset_secs();
@@ -110,6 +123,7 @@ fn chrono_now() -> String {
 }
 
 /// This computer's offset from UTC in seconds (0 if unknown).
+#[cfg(not(windows))]
 fn local_offset_secs() -> i64 {
     #[cfg(unix)]
     {
