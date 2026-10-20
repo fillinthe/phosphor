@@ -4,6 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.73 (2026-10-20)
+
+- **MIDI / OSC monitor:** the MIDI / OSC panel lists every message as it comes in (which knob, pad or OSC address,
+  its value, and what it's mapped to), with pause and clear. No more guessing what a controller sends.
+- **Value effects on mappings** (like VDMX's): the ~ button on a mapping adds *Smooth* (glide to each new value),
+  *Steps* (snap to a few values), *Curve* (ease in or out) or a *Formula* such as `1 - $VAL`.
+- **Data looper** (as in VDMX): a Hand modulator (the one a knob drives) can record what you do with the knob for 1
+  to 16 beats, starting on the beat, then play it back looped in time with the music. Map anything to that
+  modulator and your gesture repeats by itself.
+
 ## 0.2.72 (2026-10-20)
 
 - **Soft takeover for MIDI and OSC faders** (as in VDMX): a fader or knob only changes a value once it reaches it

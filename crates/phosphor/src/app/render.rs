@@ -102,7 +102,11 @@ impl PhosphorApp {
             audio_high: an.high,
             shared: Default::default(),
         };
-        // Shared modulators (and their chains), once per frame, before anything reads them.
+        // Data loopers keep what their knob does (while recording), then shared modulators (and their chains), once
+        // per frame, before anything reads them.
+        for m in comp.modulators.iter_mut().filter(|m| m.signal.source == phosphor_engine::ModSource::Hand) {
+            m.looper.record(mod_inputs.beats, m.value);
+        }
         mod_inputs.shared = phosphor_engine::evaluate(&comp.modulators, mod_inputs, mod_phases);
         let wants = std::mem::take(preview_wants);
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
