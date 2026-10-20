@@ -15,8 +15,6 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - Tidier Media panel: one row of actions, and inside a collection only *Random* (its *Play on* does the rest);
   folders show by name (full path on hover).
 
-## 0.2.69 (2026-10-20)
-
 - **Stage:** a tab in the Outputs area that shows every output on one screen, live and as big as fits, with each
   output's name, size, GRID button and where it goes. Click one to pick it in the Mapping Studio.
 - **Comps to outputs:** the "Shows on" screen button is on comps (groups) too, next to their name in the Inspector.
