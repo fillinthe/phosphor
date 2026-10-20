@@ -151,6 +151,23 @@ fn is_ident(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 
+/// Removes top-level `uniform <type> <name>;` lines that declare one of the shader's own ISF inputs again
+/// (ISF 1 style); every input is already declared by the prelude.
+pub(crate) fn drop_input_uniforms(src: &str, inputs: &[&str]) -> String {
+    let mut out = String::with_capacity(src.len());
+    for line in src.split_inclusive('\n') {
+        let t = line.trim();
+        let redeclared = t.strip_prefix("uniform").filter(|r| r.starts_with(char::is_whitespace)).and_then(|r| r.trim().strip_suffix(';')).is_some_and(|decl| {
+            let mut words = decl.split_whitespace();
+            matches!((words.next(), words.next(), words.next()), (Some(_), Some(name), None) if inputs.contains(&name))
+        });
+        if !redeclared {
+            out.push_str(line);
+        }
+    }
+    out
+}
+
 /// Rewrites top-level `varying` / `in` / `out` / `attribute` declarations into
 /// plain globals (or removes them when `drop` is set and they were already
 /// declared by the vertex shader). Returns the rewritten source and the names declared.

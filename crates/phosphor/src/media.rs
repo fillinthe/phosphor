@@ -39,6 +39,11 @@ pub fn is_movie(name: &str) -> bool {
 }
 
 pub fn is_supported(name: &str) -> bool {
+    // "._clip.mov": the metadata macOS writes next to every file on drives formatted for Windows, not a movie.
+    let file = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    if file.starts_with("._") {
+        return false;
+    }
     let ext = extension(name);
     IMAGE_EXTS.contains(&ext.as_str()) || MOVIE_EXTS.contains(&ext.as_str())
 }
@@ -481,5 +486,16 @@ fn load_image_path(engine: &mut Engine, layer: u64, path: &str) -> Result<(), St
     {
         let _ = (engine, layer);
         Err(format!("{}: loading files in the browser is coming soon", file_name(path)))
+    }
+}
+
+#[cfg(test)]
+mod appledouble_tests {
+    /// macOS metadata files next to footage on Windows-formatted drives aren't media.
+    #[test]
+    fn metadata_files_are_not_media() {
+        assert!(super::is_supported("/Volumes/X/clip.mov"));
+        assert!(!super::is_supported("/Volumes/X/._clip.mov"));
+        assert!(!super::is_supported("._clip.mp4"));
     }
 }

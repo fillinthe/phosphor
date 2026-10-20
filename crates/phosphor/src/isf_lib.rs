@@ -170,7 +170,7 @@ impl IsfLibrary {
                         for p in entries.flatten().map(|e| e.path()) {
                             if p.is_dir() && depth < 2 {
                                 stack.push((p, depth + 1));
-                            } else if p.extension().is_some_and(|e| e == "fs") {
+                            } else if p.extension().is_some_and(|e| e == "fs") && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
                                 files.push(p);
                             }
                         }

@@ -240,6 +240,13 @@ fn layout_inputs(inputs: &mut [IsfInput], is_fx: bool) -> Option<String> {
 pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Result<IsfShader, IsfError> {
     let (json, body) = header::split_header(fs_source)?;
     let header = header::parse_header(json)?;
+    // ISF 1 files declare their inputs again (`uniform float amount;`) and use `vv_` names: Phosphor declares every
+    // input itself, so drop those lines, and read the old names as the new ones.
+    let input_names: Vec<&str> = header.inputs.iter().map(|i| i.name.as_str()).collect();
+    let body_owned = glsl::drop_input_uniforms(body, &input_names);
+    let body = body_owned.as_str();
+    let vs_owned = vs_source.map(|vs| glsl::drop_input_uniforms(vs, &input_names).replace("vv_vertShaderInit", "isf_vertShaderInit"));
+    let vs_source = vs_owned.as_deref();
     let entry = format!("isf_{}", sanitize_slug(name_slug));
 
     let stripped = glsl::strip_comments(body);
