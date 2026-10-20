@@ -90,6 +90,9 @@ pub struct MediaManager {
     /// Syphon layers whose source isn't there yet (the other app may start later): next retry time.
     #[cfg(target_os = "macos")]
     syphon_waiting: HashMap<u64, f64>,
+    /// Display / window capture layers.
+    #[cfg(target_os = "macos")]
+    captures: HashMap<u64, crate::screen_capture::ScreenCapture>,
     /// Zero-copy video frames still on screen or in flight on the GPU, per (layer, outgoing): kept alive a
     /// few frames so the decoder never reuses memory the GPU is reading.
     #[cfg(not(target_arch = "wasm32"))]
@@ -134,6 +137,19 @@ fn show_frame(engine: &mut Engine, held: &mut Held, player: &video::VideoPlayer,
     }
     #[cfg(target_os = "macos")]
     if let video::VideoFrame::Surface(pb) = frame {
+        show_surface(engine, held, id, outgoing, pb);
+        return;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = held;
+    player.recycle(frame);
+}
+
+/// Puts a hardware frame (an NV12 IOSurface) on a layer with no copy: the texture wrappers are made once per
+/// IOSurface and the last few frames are kept alive while the GPU may still read them. Video and screen capture.
+#[cfg(target_os = "macos")]
+fn show_surface(engine: &mut Engine, held: &mut Held, id: u64, outgoing: bool, pb: video::surface::PixelBuffer) {
+    {
         let zc = held.entry((id, outgoing)).or_default();
         let key = pb.surface_id();
         let cached = zc.planes.iter().find(|(k, l, _)| *k == key && (l.width(), l.height()) == pb.size()).map(|(_, l, c)| (l.clone(), c.clone()));
@@ -152,11 +168,7 @@ fn show_frame(engine: &mut Engine, held: &mut Held, player: &video::VideoPlayer,
         while zc.recent.len() > 3 {
             zc.recent.pop_front();
         }
-        return;
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = held;
-    player.recycle(frame);
 }
 
 impl MediaManager {
@@ -181,6 +193,8 @@ impl MediaManager {
                 self.syphon.remove(&layer.id);
                 #[cfg(target_os = "macos")]
                 self.syphon_waiting.remove(&layer.id);
+                #[cfg(target_os = "macos")]
+                self.captures.remove(&layer.id);
                 #[cfg(any(target_os = "macos", windows))]
                 self.ndi.remove(&layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
@@ -251,6 +265,10 @@ impl MediaManager {
                     }
                 },
                 #[cfg(target_os = "macos")]
+                SourceSpec::Live { format, url, .. } if format == "screen" => {
+                    self.captures.insert(layer.id, crate::screen_capture::ScreenCapture::start(url));
+                }
+                #[cfg(target_os = "macos")]
                 SourceSpec::Live { format, .. } if format == "syphon" => {
                     // Connected (with retries) in update_video.
                     self.syphon_waiting.insert(layer.id, 0.0);
@@ -276,6 +294,8 @@ impl MediaManager {
         self.held.retain(|(id, _), _| live.contains(id));
         #[cfg(target_os = "macos")]
         self.syphon.retain(|id, _| live.contains(id));
+        #[cfg(target_os = "macos")]
+        self.captures.retain(|id, _| live.contains(id));
         #[cfg(any(target_os = "macos", windows))]
         self.ndi.retain(|id, _| live.contains(id));
         #[cfg(target_os = "macos")]
@@ -347,6 +367,16 @@ impl MediaManager {
                 && let Some(tex) = client.new_frame(engine.device())
             {
                 engine.set_layer_texture(*id, tex);
+            }
+        }
+        #[cfg(target_os = "macos")]
+        for (id, c) in &self.captures {
+            if let Some(e) = c.error() {
+                self.errors.insert(*id, e);
+            } else if let Some(pb) = c.take()
+                && comp.layers.iter().any(|l| l.id == *id && l.enabled)
+            {
+                show_surface(engine, &mut self.held, *id, false, pb);
             }
         }
         #[cfg(any(target_os = "macos", windows))]

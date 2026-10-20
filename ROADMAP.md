@@ -133,7 +133,7 @@ app that's much smaller and lighter on the CPU.
 
 16. **More of VDMX** (asked 2026-10-20; list and order in docs/research/vdmx-gaps.md):
     - [x] Soft takeover for MIDI/OSC faders (0.2.72)
-    - [ ] Screen / window capture as a layer (ScreenCaptureKit; FFmpeg's screen input crashes the window loop)
+    - [x] Screen / window capture as a layer (0.2.77, ScreenCaptureKit)
     - [x] Value effects on controller mappings: smooth, steps, curve, formula ($VAL) (0.2.73; delay still to do)
     - [x] Data looper on Hand modulators (0.2.73)
     - [x] MIDI / OSC monitor (0.2.73)

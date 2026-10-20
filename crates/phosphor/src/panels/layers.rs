@@ -464,6 +464,34 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
                     ui.close();
                 }
             }
+            ui.separator();
+            ui.label(RichText::new("Screens and windows").small().color(Color32::GRAY));
+            let (targets, error) = crate::screen_capture::targets();
+            if let Some(e) = error {
+                hint(ui, &e);
+            } else if targets.is_empty() {
+                hint(ui, "Looking…");
+            }
+            let (displays, windows): (Vec<_>, Vec<_>) = targets.iter().partition(|t| t.url.starts_with("display:"));
+            for t in displays {
+                if ui.button(label(icon::MONITOR, &t.label)).clicked() {
+                    picked = Some(crate::media::live::screen_source(&t.label, &t.url));
+                    ui.close();
+                }
+            }
+            if !windows.is_empty() {
+                ui.menu_button(label(icon::APP_WINDOW, &format!("A window ({})", windows.len())), |ui| {
+                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                        for t in windows {
+                            let text = if t.label.chars().count() > 60 { format!("{}…", t.label.chars().take(59).collect::<String>()) } else { t.label.clone() };
+                            if ui.button(text).on_hover_text(&t.label).clicked() {
+                                picked = Some(crate::media::live::screen_source(&t.label, &t.url));
+                                ui.close();
+                            }
+                        }
+                    });
+                });
+            }
         }
         #[cfg(any(target_os = "macos", windows))]
         {
@@ -493,7 +521,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
         });
         ui.ctx().data_mut(|d| d.insert_temp(url_id, url));
     });
-    r.response.on_hover_text("Live input: camera, capture card or network stream (RTSP, SRT, HLS, RTMP)");
+    r.response.on_hover_text("Live input: camera, capture card, a screen or window, Syphon, NDI or a network stream (RTSP, SRT, HLS, RTMP)");
     picked
 }
 
