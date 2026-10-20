@@ -61,7 +61,9 @@ fn fs_composite(in: VOut) -> @location(0) vec4f {
     }
     let st = uv * u.uv_xform.xy + u.uv_xform.zw;
     var s = sample_source(st);
-    if (any(st < vec2f(0.0)) || any(st > vec2f(1.0))) {
+    // Outside the picture, or cropped off (p[11] = left, right, top, bottom).
+    let c = u.p[11];
+    if (any(st < vec2f(c.x, c.z)) || any(st > vec2f(1.0 - c.y, 1.0 - c.w))) {
         s = vec4f(0.0);
     }
     if (u.mode >= 10u) {

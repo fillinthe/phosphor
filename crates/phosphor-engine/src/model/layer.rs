@@ -228,11 +228,13 @@ pub struct LayerTransform {
     pub flip_y: bool,
     pub scale_mod: Option<Modulation>,
     pub rotation_mod: Option<Modulation>,
+    /// Cut off the picture's edges (left, right, top, bottom; fractions of the picture), before it's placed.
+    pub crop: [f32; 4],
 }
 
 impl Default for LayerTransform {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, scale: 1.0, stretch_x: 1.0, stretch_y: 1.0, rotation: 0.0, flip_x: false, flip_y: false, scale_mod: None, rotation_mod: None }
+        Self { x: 0.0, y: 0.0, scale: 1.0, stretch_x: 1.0, stretch_y: 1.0, rotation: 0.0, flip_x: false, flip_y: false, scale_mod: None, rotation_mod: None, crop: [0.0; 4] }
     }
 }
 

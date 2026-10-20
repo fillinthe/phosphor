@@ -668,9 +668,15 @@ impl Engine {
 }
 
 /// A layer's transform as `fs_composite` uniforms (p[9], p[10]); None when it sits as it is.
-fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModInputs) -> Option<[[f32; 4]; 2]> {
+/// A layer's placement for the composite shader: p[9], p[10] (move / scale / rotate; p[10].w = on) and p[11] (crop).
+fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModInputs) -> Option<[[f32; 4]; 3]> {
+    let crop = t.crop.map(|c| c.clamp(0.0, 0.5));
     if t.is_identity() {
         return None;
+    }
+    if (crate::LayerTransform { crop: [0.0; 4], ..t.clone() }).is_identity() {
+        // Only cropped: the transform stays off.
+        return Some([[0.0, 0.0, 1.0, 1.0], [1.0, 0.0, 1.0, 0.0], crop]);
     }
     let scale = modulate(t.scale, 0.01, 8.0, t.scale_mod.as_ref(), mods);
     let rotation = modulate(t.rotation, -180.0, 180.0, t.rotation_mod.as_ref(), mods);
@@ -680,7 +686,7 @@ fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModI
     let a = rotation.to_radians();
     let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
     // y is up for people, down in texture space.
-    Some([[t.x, -t.y, sx, sy], [a.cos(), a.sin(), aspect, 1.0]])
+    Some([[t.x, -t.y, sx, sy], [a.cos(), a.sin(), aspect, 1.0], crop])
 }
 
 /// What mixing a stack needs besides the engine (so helpers don't take ten arguments).
@@ -697,7 +703,7 @@ struct MixCtx<'a> {
 impl Engine {
     /// Blends `frame` onto a stack (accum `base`/`base + 1`, ping-ponged; `current` = which holds it so far).
     #[allow(clippy::too_many_arguments)]
-    fn push_blend(&self, frame: Frame, fit: FitMode, opacity: f32, blend: BlendMode, place: Option<[[f32; 4]; 2]>, base: usize, current: &mut Option<usize>, canvas: (u32, u32), time: f32, passes: &mut Vec<Pass>) {
+    fn push_blend(&self, frame: Frame, fit: FitMode, opacity: f32, blend: BlendMode, place: Option<[[f32; 4]; 3]>, base: usize, current: &mut Option<usize>, canvas: (u32, u32), time: f32, passes: &mut Vec<Pass>) {
         let next = current.map_or(0, |c| 1 - c);
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [canvas.0 as f32, canvas.1 as f32];
@@ -705,9 +711,10 @@ impl Engine {
         u.opacity = opacity;
         u.mode = blend.shader_index();
         u.uv_xform = fit_transform(frame.size(), canvas, fit);
-        if let Some([a, b]) = place {
+        if let Some([a, b, c]) = place {
             u.p[9] = a;
             u.p[10] = b;
+            u.p[11] = c;
         }
         let (tex0, tex2, yuv) = frame.bind();
         u.yuv = yuv;
