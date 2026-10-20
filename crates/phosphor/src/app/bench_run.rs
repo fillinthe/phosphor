@@ -332,6 +332,20 @@ impl PhosphorApp {
                 println!("QUICK transfx: pixelate fade started");
                 continue;
             }
+            if let Some(file) = name.strip_prefix("trans=") {
+                // An 8 s shader transition (ISF file name, e.g. trans=Doorway) from the first layer's source to a
+                // tunnel; crossfades until the ISF library has loaded and compiled it.
+                let t = now as f32;
+                let id = format!("{}{}", phosphor_engine::shaders::ISF_TRANSITION, phosphor_engine::custom::slug(file));
+                if let Some(l) = self.state.comp.layers.first_mut() {
+                    l.transition_kind = phosphor_engine::TransitionKind::Shader;
+                    l.transition_effect = id.clone();
+                    l.start_transition(t, 8.0);
+                    l.set_generator("tunnel");
+                }
+                println!("QUICK trans: {id}");
+                continue;
+            }
             if name == "play" {
                 // Audience play on with short turns and a rest, for checking the play page in a browser.
                 self.state.comp.play.enabled = true;

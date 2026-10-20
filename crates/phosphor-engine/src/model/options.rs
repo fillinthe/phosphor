@@ -159,10 +159,12 @@ pub enum TransitionKind {
     Overlay,
     /// Both pictures pass through an effect (the layer's `transition_effect`) that peaks half-way, under a crossfade.
     Effect,
+    /// A shader transition (an ISF transition: cube, doorway, morph…), named by the layer's `transition_effect`.
+    Shader,
 }
 
 impl TransitionKind {
-    pub const ALL: [TransitionKind; 12] = [
+    pub const ALL: [TransitionKind; 13] = [
         TransitionKind::Crossfade,
         TransitionKind::DipToBlack,
         TransitionKind::Wipe,
@@ -175,6 +177,7 @@ impl TransitionKind {
         TransitionKind::Difference,
         TransitionKind::Overlay,
         TransitionKind::Effect,
+        TransitionKind::Shader,
     ];
 
     pub fn name(self) -> &'static str {
@@ -191,6 +194,7 @@ impl TransitionKind {
             TransitionKind::Difference => "Difference",
             TransitionKind::Overlay => "Overlay",
             TransitionKind::Effect => "Through an effect",
+            TransitionKind::Shader => "Shader transition",
         }
     }
 
@@ -211,7 +215,14 @@ impl TransitionKind {
 
     /// `fs_crossfade` mode: 0 crossfade, 1 dip, 2 wipe, 3 blend (mode in p[1].x).
     pub(crate) fn shader_index(self) -> u32 {
-        if self.blend().is_some() || self == TransitionKind::Effect { if self == TransitionKind::Effect { 0 } else { 3 } } else { self.index() as u32 }
+        // Effect and Shader transitions crossfade underneath (Shader falls back to it when its shader isn't there).
+        if matches!(self, TransitionKind::Effect | TransitionKind::Shader) {
+            0
+        } else if self.blend().is_some() {
+            3
+        } else {
+            self.index() as u32
+        }
     }
 }
 
@@ -224,7 +235,7 @@ pub struct Transition {
     pub start: f32,
     pub duration: f32,
     pub kind: TransitionKind,
-    /// Effect id for `TransitionKind::Effect` (empty = plain crossfade).
+    /// Effect id for `TransitionKind::Effect`, transition id for `Shader` (empty / not found = plain crossfade).
     pub effect: String,
 }
 

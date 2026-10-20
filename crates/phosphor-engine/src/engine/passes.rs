@@ -107,6 +107,43 @@ impl Engine {
 
     /// Blends the outgoing source into the incoming one at the canvas size.
     #[allow(clippy::too_many_arguments)]
+    /// A shader transition: both pictures fitted to the canvas, then the transition's own pass with `progress`
+    /// (startImage = the old picture in tex0, endImage = the new one in tex1).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn shader_transition(
+        &mut self,
+        layer_id: u64,
+        incoming: Frame,
+        outgoing: Frame,
+        t: &crate::model::Transition,
+        desc: &'static crate::shaders::ShaderDesc,
+        time: f32,
+        fit: FitMode,
+        canvas: (u32, u32),
+        passes: &mut Vec<Pass>,
+    ) -> Frame {
+        let (w, h) = canvas;
+        let device = &self.gpu.device;
+        let res = self.layers.entry(layer_id).or_default();
+        let [slot_in, slot_out, slot_result] = &mut res.trans;
+        for slot in [&mut *slot_in, &mut *slot_out, &mut *slot_result] {
+            Target::ensure(slot, device, "transition", w, h);
+        }
+        let (end, start, result) = (slot_in.as_ref().unwrap().view.clone(), slot_out.as_ref().unwrap().view.clone(), slot_result.as_ref().unwrap().view.clone());
+        super::fit::push_fit_copy(end.clone(), &incoming, canvas, fit, canvas, passes);
+        super::fit::push_fit_copy(start.clone(), &outgoing, canvas, fit, canvas, passes);
+        let mut values = desc.defaults();
+        if let Some(i) = crate::shaders::progress_index(desc) {
+            values[i] = t.progress(time);
+        }
+        let mut u = Uniforms::with_params(&values);
+        u.resolution = [w as f32, h as f32];
+        u.time = time;
+        u.opacity = 1.0;
+        passes.push(Pass { entry: desc.entry, target: result.clone(), tex0: start, tex1: Some(end), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+        Frame::Rgb { view: result, w, h }
+    }
+
     pub(super) fn crossfade(
         &mut self,
         layer_id: u64,

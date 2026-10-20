@@ -115,9 +115,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         ui.horizontal(|ui| {
             ui.label(RichText::new("Fade style").strong());
             choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
-            if layer.transition_kind == phosphor_engine::TransitionKind::Effect {
-                transition_effect_combo(ui, ("trans_fx", layer.id), &mut layer.transition_effect);
-            }
+            transition_effect_combo(ui, ("trans_fx", layer.id), layer.transition_kind, &mut layer.transition_effect);
             hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
         });
         ui.separator();
@@ -323,12 +321,21 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
 }
 
-/// Picks the effect a "Through an effect" fade runs both pictures through. Returns true when it changed.
-pub(crate) fn transition_effect_combo(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, effect: &mut String) -> bool {
-    let current = phosphor_engine::shaders::effect(effect).map(|d| d.name).unwrap_or("Pick an effect");
+/// Picks what a fade uses: the effect a "Through an effect" fade runs both pictures through, or the shader of a
+/// "Shader transition" (cube, doorway, morph…). Returns true when it changed. Other styles: nothing to pick.
+pub(crate) fn transition_effect_combo(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, kind: phosphor_engine::TransitionKind, effect: &mut String) -> bool {
+    use phosphor_engine::{TransitionKind, shaders};
+    let (list, current, empty) = match kind {
+        TransitionKind::Effect => (shaders::all_effects(), shaders::effect(effect).map(|d| d.name), "Pick an effect"),
+        TransitionKind::Shader => (shaders::all_transitions(), shaders::transition(effect).map(|d| d.name), "Pick a transition"),
+        _ => return false,
+    };
     let mut changed = false;
-    egui::ComboBox::from_id_salt(id).selected_text(current).width(130.0).show_ui(ui, |ui| {
-        for d in phosphor_engine::shaders::all_effects() {
+    egui::ComboBox::from_id_salt(id).selected_text(current.unwrap_or(empty)).width(150.0).height(360.0).show_ui(ui, |ui| {
+        if list.is_empty() {
+            hint(ui, "No shader transitions found (they come with the ISF collection).");
+        }
+        for d in list {
             if ui.selectable_label(d.id == effect.as_str(), d.name).clicked() {
                 *effect = d.id.to_string();
                 changed = true;
