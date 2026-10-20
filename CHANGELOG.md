@@ -4,6 +4,19 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.80 (2026-10-20)
+
+Projection mapping, more like MadMapper:
+- **Control slices from MIDI, OSC or a phone:** every slice's opacity and ON can be learned (right-click › Listen)
+  or sent to `/phosphor/slice/<id>/opacity` and `/phosphor/slice/<id>/on`, and they can be locked like any control.
+- **Cues remember the mapping:** a recorded cue now keeps every slice's on/off, opacity, corners and mesh points;
+  GO glides the slices into place over the cue's fade (switch stage layouts between songs). Older cues leave the
+  mapping as it is.
+- **Edit a mesh line by line:** select a mesh point, then right-click the canvas to add a column or row beside it,
+  or remove its column or row. The picture keeps its shape.
+- **Copy a slice's look:** right-click a slice › Copy its look to another slice or every slice on the output
+  (opacity, soft edges, colour, blend, shape; not its place or picture).
+
 ## 0.2.79 (2026-10-20)
 
 Projection mapping, more like MadMapper:

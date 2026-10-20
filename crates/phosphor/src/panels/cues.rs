@@ -56,7 +56,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             None => {}
         }
     });
-    hint(ui, "Cues remember every layer. GO fades to the next one; sources change through each layer's transition.");
+    hint(ui, "Cues remember every layer and every mapping slice (on/off, opacity, corners). GO fades to the next one; sources change through each layer's transition, slices glide into place.");
     ui.add_space(4.0);
     let mut fire = None;
     let mut update = None;
@@ -99,7 +99,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         if ui.small_button(icon::ARROWS_CLOCKWISE).on_hover_text("Re-record: save how everything looks now into this cue").clicked() {
                             update = Some(i);
                         }
-                        hint(ui, format!("{} layers", cue.layers.len()));
+                        hint(ui, if cue.slices.is_empty() { format!("{} layers", cue.layers.len()) } else { format!("{} layers · {} slices", cue.layers.len(), cue.slices.len()) });
                     });
                 });
                 if let Some((c, p)) = progress

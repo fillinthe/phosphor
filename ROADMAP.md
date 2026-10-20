@@ -127,8 +127,11 @@ app that's much smaller and lighter on the CPU.
     - [x] Soft edge per side; lock a slice (0.2.76)
     - [x] Test patterns and a stage photo per output (0.2.79)
     - [x] Per-slice blend mode (0.2.79)
-    - [ ] OSC/MIDI targets and cues for surface geometry; surface groups, multi-select
-    - [ ] Freehand masks, mask attached to a surface; add/remove single mesh points
+    - [x] OSC/MIDI targets for slices; cues store slice geometry (0.2.80)
+    - [x] Copy a slice's look to other slices (0.2.80)
+    - [ ] Slice groups, multi-select
+    - [x] Add / remove mesh rows and columns at a point (0.2.80)
+    - [ ] Freehand masks, mask attached to a surface
     - [x] "All outputs on one screen": Outputs area › Stage (0.2.69)
     - [ ] Masters: several program outputs ("masters") with their own mixes (undecided; design comps so one can be)
 

@@ -35,6 +35,8 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         // Opacity, on/off and bypass also drive groups (same id space as layers).
         ControlTarget::LayerOpacity(id) => comp.mix_controls(*id)?.0,
         ControlTarget::LayerEnabled(id) => on(comp.mix_controls(*id)?.1),
+        ControlTarget::SliceOpacity(id) => comp.slice(*id)?.opacity,
+        ControlTarget::SliceEnabled(id) => on(comp.slice(*id)?.enabled),
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
         ControlTarget::LayerVolume(id) => layer(id)?.volume / 2.0,
@@ -218,6 +220,16 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 *m.enabled = toggled(*m.enabled, v);
             }
         }
+        ControlTarget::SliceOpacity(id) => {
+            if let Some(s) = comp.slice_mut(*id) {
+                s.opacity = v.clamp(0.0, 1.0);
+            }
+        }
+        ControlTarget::SliceEnabled(id) => {
+            if let Some(s) = comp.slice_mut(*id) {
+                s.enabled = toggled(s.enabled, v);
+            }
+        }
         ControlTarget::GeneratorParam { layer, index } => {
             if let Some(l) = comp.layer_mut(*layer)
                 && let phosphor_engine::SourceSpec::Generator(g) = &l.source
@@ -284,6 +296,12 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         }
     };
     effects("MASTER", &comp.master_effects, &mut out);
+    for o in &comp.outputs {
+        for s in &o.mapping.surfaces {
+            out.push((ControlTarget::SliceOpacity(s.id), format!("{} · {} · opacity", o.name, s.name)));
+            out.push((ControlTarget::SliceEnabled(s.id), format!("{} · {} · on/off", o.name, s.name)));
+        }
+    }
     for g in &comp.groups {
         out.push((ControlTarget::LayerOpacity(g.id), format!("{} · opacity", g.name)));
         out.push((ControlTarget::LayerEnabled(g.id), format!("{} · on/off", g.name)));
@@ -329,6 +347,8 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::MasterFade => "/phosphor/master".into(),
         ControlTarget::LayerOpacity(id) => format!("/phosphor/layer/{id}/opacity"),
         ControlTarget::LayerEnabled(id) => format!("/phosphor/layer/{id}/on"),
+        ControlTarget::SliceOpacity(id) => format!("/phosphor/slice/{id}/opacity"),
+        ControlTarget::SliceEnabled(id) => format!("/phosphor/slice/{id}/on"),
         ControlTarget::GeneratorParam { layer, index } => format!("/phosphor/layer/{layer}/source/{}", index + 1),
         ControlTarget::EffectParam { effect, index } => format!("/phosphor/fx/{effect}/{}", index + 1),
         ControlTarget::EffectMix(id) => format!("/phosphor/fx/{id}/mix"),

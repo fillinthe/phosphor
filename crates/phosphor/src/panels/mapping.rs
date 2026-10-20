@@ -497,7 +497,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             let frame = card_frame(ui, is_selected).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    toggle(ui, &mut s.enabled, "ON");
+                    toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                     ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(140.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button(icon::TRASH).on_hover_text("Delete surface").clicked() {
@@ -614,7 +614,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         });
     }
     ui.horizontal(|ui| {
-        Level::percent(&mut s.opacity, "Opacity").default(1.0).show(ui);
+        Level::percent(&mut s.opacity, "Opacity").default(1.0).target(ControlTarget::SliceOpacity(s.id)).show(ui);
     });
     ui.horizontal(|ui| {
         if s.edges.is_none() {

@@ -360,8 +360,55 @@ fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
 fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selected: Option<u64>, at: [f32; 2], action: &mut Option<TreeAction>, vs: &mut ViewState) {
     use phosphor_engine::mapping::{Mesh, SliceShape};
     let oid = o.id;
+    // Other slices on this output, for "Copy its look to" (applied at the end, outside the borrow of this slice).
+    let others: Vec<(u64, String)> = o.mapping.surfaces.iter().filter(|s| Some(s.id) != selected).map(|s| (s.id, s.name.clone())).collect();
+    let mut copy_to: Vec<u64> = Vec::new();
     if let Some(s) = selected.and_then(|id| o.mapping.surfaces.iter_mut().find(|s| s.id == id)) {
         ui.label(RichText::new(&s.name).strong());
+        if !others.is_empty() {
+            ui.menu_button(label(icon::COPY, "Copy its look to"), |ui| {
+                hint(ui, "Opacity, soft edges, colour, blend and shape; not where it sits or what it shows");
+                if ui.button("Every other slice here").clicked() {
+                    copy_to = others.iter().map(|(id, _)| *id).collect();
+                    ui.close();
+                }
+                ui.separator();
+                for (id, name) in &others {
+                    if ui.button(name).clicked() {
+                        copy_to = vec![*id];
+                        ui.close();
+                    }
+                }
+            });
+        }
+        // A selected mesh point: add or remove the grid line through it (MadMapper's mesh point editing).
+        let point = super::mapping_points::selected_point(ui.ctx()).filter(|(sid, _)| *sid == s.id).map(|(_, k)| k);
+        if let (Some(k), Some(m)) = (point, s.mesh.clone()) {
+            let (i, j) = m.grid_pos(k);
+            let mut changed = None;
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("Point {} (column {}, row {})", k + 1, i + 1, j + 1)).small());
+            });
+            let col_right = if i < m.cols { i } else { i.saturating_sub(1) };
+            let row_below = if j < m.rows { j } else { j.saturating_sub(1) };
+            for (text, next) in [
+                ("Add a column beside it", m.with_column_after(col_right)),
+                ("Add a row beside it", m.with_row_after(row_below)),
+                ("Remove its column", m.without_column(i)),
+                ("Remove its row", m.without_row(j)),
+            ] {
+                let can = next.is_some();
+                if ui.add_enabled(can, egui::Button::new(text)).on_disabled_hover_text("Not here: the outer edges stay, and a grid has at most 16 cells a side").clicked() {
+                    changed = next;
+                    ui.close();
+                }
+            }
+            if let Some(next) = changed {
+                s.mesh = Some(next);
+                super::mapping_points::select_point(ui.ctx(), None);
+            }
+            ui.separator();
+        }
         let flat = s.model.is_none() && s.line.is_none();
         ui.add_enabled_ui(flat, |ui| {
             ui.menu_button(label(icon::GRID_NINE, "Mesh warp"), |ui| {
@@ -466,6 +513,11 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         vs.pan = egui::Vec2::ZERO;
         ui.close();
     }
+    if let Some(src) = selected.and_then(|id| o.mapping.surfaces.iter().find(|s| s.id == id)).cloned() {
+        for s in o.mapping.surfaces.iter_mut().filter(|s| copy_to.contains(&s.id)) {
+            s.copy_look_from(&src);
+        }
+    }
 }
 
 /// Rounds the selected slice's corners / mesh points (or mask points) to a 1/64 grid.
@@ -558,7 +610,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
         if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::POLYGON).color(accent()));
-                toggle(ui, &mut s.enabled, "ON");
+                toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                 ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(f32::INFINITY));
             });
             if ui.small_button(label(icon::CORNERS_OUT, "Corners to the full output")).clicked() {

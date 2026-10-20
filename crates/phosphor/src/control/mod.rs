@@ -30,7 +30,7 @@ fn momentary(source: &ControlSource) -> bool {
 
 fn is_toggle(comp: &Composition, target: &ControlTarget) -> bool {
     match target {
-        ControlTarget::LayerEnabled(_) | ControlTarget::EffectEnabled(_) | ControlTarget::LayerFxBypass(_) => true,
+        ControlTarget::LayerEnabled(_) | ControlTarget::EffectEnabled(_) | ControlTarget::LayerFxBypass(_) | ControlTarget::SliceEnabled(_) => true,
         ControlTarget::App(a) => a.is_toggle(),
         ControlTarget::Surface(id) => comp.surface.widget(*id).is_some_and(|w| w.kind == phosphor_engine::WidgetKind::Toggle),
         _ => false,

@@ -27,6 +27,15 @@ impl Composition {
         }
     }
 
+    /// A mapping slice by id, on whichever output it is.
+    pub fn slice(&self, id: u64) -> Option<&crate::mapping::Surface> {
+        self.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).find(|s| s.id == id)
+    }
+
+    pub fn slice_mut(&mut self, id: u64) -> Option<&mut crate::mapping::Surface> {
+        self.outputs.iter_mut().flat_map(|o| o.mapping.surfaces.iter_mut()).find(|s| s.id == id)
+    }
+
     /// Ids of the outputs with an enabled slice showing `source`.
     pub fn outputs_showing(&self, source: u64) -> Vec<u64> {
         self.outputs
