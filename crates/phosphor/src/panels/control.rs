@@ -194,7 +194,10 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 if let Some(t) = target_picker(ui, ("map_target", i), &targets, Some(&m.target), 220.0) {
                     m.target = t;
                 }
-                ui.horizontal(|ui| range_editor(ui, &mut m.range));
+                ui.horizontal(|ui| {
+                    range_editor(ui, &mut m.range);
+                    value_fx_menu(ui, ("map_fx", i), &mut m.fx);
+                });
                 if ui.small_button(icon::TRASH).on_hover_text("Delete").clicked() {
                     remove = Some(i);
                 }
@@ -206,4 +209,52 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         comp.control_maps.remove(i);
         *listen_for = None;
     }
+}
+
+/// The ~ menu on a mapping: effects its value goes through (smooth, steps, curve, formula), in order.
+fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, fx: &mut Vec<phosphor_engine::ValueFx>) {
+    use phosphor_engine::ValueFx;
+    let text = if fx.is_empty() { RichText::new(icon::WAVE_SINE) } else { RichText::new(format!("{} {}", icon::WAVE_SINE, fx.len())).color(accent()) };
+    ui.menu_button(text, |ui| {
+        ui.set_min_width(260.0);
+        ui.label(RichText::new("On the way in").strong());
+        hint(ui, "The controller's value goes through these, top to bottom, before its range.");
+        let mut remove = None;
+        for (k, f) in fx.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(f.name()).strong());
+                match f {
+                    ValueFx::Smooth(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=10.0).speed(0.01).suffix(" s")).on_hover_text("Glide to each new value over this long");
+                    }
+                    ValueFx::Steps(n) => {
+                        guarded!(ui, *n, egui::DragValue::new(n).range(2..=64)).on_hover_text("Snap to this many steps");
+                    }
+                    ValueFx::Curve(c) => {
+                        guarded!(ui, *c, egui::DragValue::new(c).range(0.1..=8.0).speed(0.02)).on_hover_text("Above 1: slow then fast; below 1: fast then slow");
+                    }
+                    ValueFx::Formula(f) => {
+                        text_field(ui, f, "1 - $VAL", Some(140.0)).on_hover_text("$VAL is the value (0..1); + - * / ^, sin, cos, abs, min, max, clamp…");
+                    }
+                }
+                if ui.small_button(icon::X).clicked() {
+                    remove = Some(k);
+                }
+            });
+        }
+        if let Some(k) = remove {
+            fx.remove(k);
+        }
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            for (name, f) in [("Smooth", ValueFx::Smooth(0.3)), ("Steps", ValueFx::Steps(4)), ("Curve", ValueFx::Curve(2.0)), ("Formula", ValueFx::Formula("1 - $VAL".into()))] {
+                if ui.small_button(label(icon::PLUS, name)).clicked() {
+                    fx.push(f);
+                }
+            }
+        });
+    })
+    .response
+    .on_hover_text("Smooth, steps, curve or a formula on this mapping's value");
+    let _ = id;
 }

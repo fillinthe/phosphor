@@ -251,10 +251,84 @@ pub struct ControlMap {
     pub range: ValueRange,
     #[serde(default = "yes")]
     pub enabled: bool,
+    /// What happens to the controller's value on the way (VDMX's data-source effects): curve, steps, formula,
+    /// smoothing. Applied in order, before the range.
+    #[serde(default)]
+    pub fx: Vec<ValueFx>,
 }
 
 impl ControlMap {
     pub fn new(source: ControlSource, target: ControlTarget) -> Self {
-        Self { source, target, range: ValueRange::default(), enabled: true }
+        Self { source, target, range: ValueRange::default(), enabled: true, fx: Vec::new() }
+    }
+
+    /// The controller value (0..1) after the instant effects (curve, steps, formula); smoothing is the hub's.
+    pub fn shape(&self, v: f32) -> f32 {
+        self.fx.iter().fold(v.clamp(0.0, 1.0), |v, fx| fx.apply(v))
+    }
+
+    /// Seconds this mapping glides over (0 = it jumps).
+    pub fn smoothing(&self) -> f32 {
+        self.fx.iter().map(|f| if let ValueFx::Smooth(s) = f { *s } else { 0.0 }).fold(0.0, f32::max)
+    }
+}
+
+/// One step a controller's value goes through (0..1 in, 0..1 out).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum ValueFx {
+    /// Glide to each new value over this many seconds.
+    Smooth(f32),
+    /// Snap to this many steps (2 = off/on).
+    Steps(u32),
+    /// Ease: above 1 slow then fast, below 1 fast then slow (value ^ this).
+    Curve(f32),
+    /// A formula of `$VAL` (0..1), e.g. `1 - $VAL`, `$VAL * $VAL`, `sin($VAL * 3.14)`; the result is kept in 0..1.
+    Formula(String),
+}
+
+impl ValueFx {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ValueFx::Smooth(_) => "Smooth",
+            ValueFx::Steps(_) => "Steps",
+            ValueFx::Curve(_) => "Curve",
+            ValueFx::Formula(_) => "Formula",
+        }
+    }
+
+    /// The instant ones; Smooth passes through here (it works over time).
+    pub fn apply(&self, v: f32) -> f32 {
+        match self {
+            ValueFx::Smooth(_) => v,
+            ValueFx::Steps(n) => {
+                let n = (*n).max(2) as f32 - 1.0;
+                (v * n).round() / n
+            }
+            ValueFx::Curve(k) => v.clamp(0.0, 1.0).powf(k.max(0.05)),
+            ValueFx::Formula(f) => crate::expr::eval(f, &|name| matches!(name, "$VAL" | "VAL").then_some(v as f64)).map_or(v, |r| (r as f32).clamp(0.0, 1.0)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod value_fx_tests {
+    use super::*;
+
+    #[test]
+    fn value_effects_shape_a_controller() {
+        let mut m = ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 1 }, ControlTarget::MasterFade);
+        assert_eq!(m.shape(0.3), 0.3);
+        m.fx.push(ValueFx::Steps(5));
+        assert!((m.shape(0.3) - 0.25).abs() < 1e-6, "5 steps: 0, .25, .5, .75, 1");
+        m.fx = vec![ValueFx::Curve(2.0)];
+        assert!((m.shape(0.5) - 0.25).abs() < 1e-6);
+        m.fx = vec![ValueFx::Formula("1 - $VAL".into())];
+        assert!((m.shape(0.2) - 0.8).abs() < 1e-6);
+        m.fx = vec![ValueFx::Formula("$VAL * 3".into())];
+        assert_eq!(m.shape(0.5), 1.0, "kept in 0..1");
+        m.fx = vec![ValueFx::Formula("nonsense(".into())];
+        assert_eq!(m.shape(0.4), 0.4, "a broken formula passes the value through");
+        m.fx = vec![ValueFx::Smooth(0.5), ValueFx::Curve(1.0)];
+        assert_eq!(m.smoothing(), 0.5);
     }
 }
