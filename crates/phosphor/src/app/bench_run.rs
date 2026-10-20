@@ -337,6 +337,11 @@ impl PhosphorApp {
                 println!("QUICK play: on, 10 s turns, 15 s rest");
                 continue;
             }
+            if let Some(n) = name.strip_prefix("template").and_then(|n| n.parse::<usize>().ok()) {
+                crate::explorer::load_user_shaders(&mut self.state);
+                println!("QUICK template{n}: {:?}", crate::explorer::bench_template(&mut self.state, n));
+                continue;
+            }
             if name == "takeover" {
                 // Web control off: phones may only watch.
                 self.state.set_web_control(false);

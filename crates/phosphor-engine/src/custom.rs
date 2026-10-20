@@ -133,6 +133,194 @@ pub fn template(generator: bool) -> String {
     }
 }
 
+/// A starting point for a new effect or generator (Shader Editor › New from template): each does one clear
+/// thing, with every line explained, so changing it is easier than starting from a blank page.
+pub struct Template {
+    pub name: &'static str,
+    pub about: &'static str,
+    pub source: &'static str,
+}
+
+/// Starters for the Shader Editor. Every one compiles (tested).
+pub const TEMPLATES: &[Template] = &[
+    Template {
+        name: "Colour: tint and hue spin",
+        about: "Recolours the picture: a tint you mix in, and a hue that turns over time",
+        source: "// @name My Colour
+// @kind effect
+// @param Amount 0 1 1
+// @param Hue spin 0 2 0.3
+// @param Tint red 0 1 1
+// @param Tint green 0 1 0.4
+// @param Tint blue 0 1 0.8
+
+// Each @param line above becomes a slider: name, lowest, highest, starting value. P(0u) is the first.
+// Tip: right-click any slider in Phosphor > Modulate to make it follow the kick or an LFO.
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);                                  // the layer's picture at this point
+    var hsv = rgb2hsv(c.rgb);                            // hue, saturation, brightness
+    hsv.x = fract(hsv.x + u.time * 0.1 * P(1u));         // turn the hue with time
+    let spun = hsv2rgb(hsv);
+    let tint = vec3f(P(2u), P(3u), P(4u));
+    let out = spun * tint;                               // multiply = tint
+    return vec4f(mix(c.rgb, out, P(0u)), c.a);           // Amount mixes it in
+}
+",
+    },
+    Template {
+        name: "Distort: wave warp",
+        about: "Bends the picture with moving waves (where each pixel reads from is moved)",
+        source: "// @name My Wave Warp
+// @kind effect
+// @param Strength 0 0.1 0.02
+// @param Waves 1 40 8
+// @param Speed 0 6 1.5
+
+// Distortion = reading the picture from somewhere else. Move `uv` and the picture moves.
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    var uv = in.uv;                                      // 0..1 across and down
+    let t = u.time * P(2u);
+    uv.x += sin(uv.y * P(1u) + t) * P(0u);               // sideways ripples, travelling down
+    uv.y += cos(uv.x * P(1u) * 0.7 + t) * P(0u) * 0.5;
+    return src(uv);
+}
+",
+    },
+    Template {
+        name: "Pixelate: blocks",
+        about: "Chunky pixels: snaps each point to the centre of its block",
+        source: "// @name My Pixelate
+// @kind effect
+// @param Blocks across 4 200 40
+
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let across = P(0u);
+    let cells = vec2f(across, across / aspect());        // square blocks whatever the picture's shape
+    let uv = (floor(in.uv * cells) + 0.5) / cells;       // the middle of this point's block
+    return src(uv);
+}
+",
+    },
+    Template {
+        name: "Mirror: kaleidoscope",
+        about: "Folds the picture around the centre into slices",
+        source: "// @name My Kaleidoscope
+// @kind effect
+// @param Slices 2 16 6
+// @param Spin 0 2 0.2
+// @param Zoom 0.3 3 1
+
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let p = centered(in.uv) * 2.0;                       // from the centre: -1..1 top to bottom, wider across
+    var a = atan2(p.y, p.x) + u.time * P(1u);            // angle around the centre
+    let r = length(p) / P(2u);                           // distance from the centre (Zoom shrinks it)
+    let slice = 6.2831853 / max(P(0u), 1.0);
+    a = abs((a % slice + slice) % slice - slice * 0.5);  // fold every slice onto the first, mirrored
+    let q = vec2f(cos(a), sin(a)) * r;
+    let uv = vec2f(q.x / aspect(), q.y) * 0.5 + 0.5;
+    return src(1.0 - abs(fract(uv * 0.5) * 2.0 - 1.0));  // past an edge, mirror back in (no smeared edges)
+}
+",
+    },
+    Template {
+        name: "Mask: soft circle",
+        about: "Shows the picture inside a circle with a soft edge (outside is see-through)",
+        source: "// @name My Circle Mask
+// @kind effect
+// @param Size 0 2 0.8
+// @param Softness 0 0.5 0.1
+// @param Invert 0 1 0
+
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    let d = length(centered(in.uv)) * 2.0;               // 0 at the centre, 1 at the top and bottom edges
+    var m = 1.0 - smoothstep(P(0u) - P(1u), P(0u) + P(1u), d); // 1 inside, 0 outside, soft between
+    m = mix(m, 1.0 - m, P(2u));                          // Invert flips it
+    return vec4f(c.rgb * m, c.a * m);                    // alpha 0 = layers below show through
+}
+",
+    },
+    Template {
+        name: "Glow: bright parts bloom",
+        about: "Blurs only the bright parts and adds them back, so lights glow",
+        source: "// @name My Glow
+// @kind effect
+// @param Threshold 0 1 0.6
+// @param Size 0 0.05 0.012
+// @param Strength 0 3 1.2
+
+// Samples a ring of points around each pixel: a cheap blur.
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    var glow = vec3f(0.0);
+    for (var i = 0; i < 16; i++) {
+        let a = f32(i) * 0.3927;                         // 16 directions around the circle
+        for (var k = 1; k < 4; k++) {
+            let off = vec2f(cos(a) / aspect(), sin(a)) * P(1u) * f32(k);
+            let s = src(in.uv + off).rgb;
+            glow += max(s - vec3f(P(0u)), vec3f(0.0));   // only what's brighter than Threshold
+        }
+    }
+    glow /= 48.0;
+    return vec4f(c.rgb + glow * P(2u), c.a);
+}
+",
+    },
+    Template {
+        name: "Generator: pulsing rings",
+        about: "Rings moving out from the centre; map Pulse to the kick to make them hit with the music",
+        source: "// @name My Rings
+// @kind generator
+// @param Rings 1 30 8
+// @param Speed -4 4 1
+// @param Pulse 0 1 0
+// @param Hue 0 1 0.6
+
+// A generator makes its own picture: no src() here.
+// Right-click Pulse in Phosphor > Modulate > Kick to make the rings jump with the music.
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let d = length(centered(in.uv));
+    let wave = sin(d * P(0u) * 6.2831853 - u.time * P(1u) * 3.0);
+    let ring = smoothstep(0.0, 0.15, wave) * (1.0 + P(2u) * 2.0);
+    let col = hsv2rgb(vec3f(fract(P(3u) + d * 0.2), 0.8, 1.0));
+    return vec4f(col * ring, 1.0);
+}
+",
+    },
+    Template {
+        name: "Generator: noise clouds",
+        about: "Soft drifting clouds from layered noise, coloured by a palette",
+        source: "// @name My Clouds
+// @kind generator
+// @param Scale 0.5 12 3
+// @param Speed 0 2 0.3
+// @param Detail 1 6 4
+// @param Colour shift 0 1 0
+
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    var p = centered(in.uv) * P(0u);
+    let t = u.time * P(1u);
+    var v = 0.0;
+    var amp = 0.5;
+    for (var i = 0; i < i32(P(2u)); i++) {               // add finer and finer noise (fractal)
+        v += value_noise(p + vec2f(t, t * 0.7)) * amp;
+        p *= 2.0;
+        amp *= 0.5;
+    }
+    return vec4f(palette(v + P(3u)), 1.0);
+}
+",
+    },
+];
+
 /// The source of a built-in single-pass effect or generator, as an editable user shader.
 pub fn builtin_as_custom(id: &str) -> Option<String> {
     let (desc, generator) = match shaders::effect(id) {
@@ -168,6 +356,14 @@ mod tests {
             assert_eq!(header.generator, generator);
             let (full, pre) = module_source(&src, "custom_test").unwrap();
             validate(&full, pre).unwrap();
+        }
+        for t in TEMPLATES {
+            let header = parse_header(t.source).unwrap_or_else(|e| panic!("{}: {e}", t.name));
+            assert!(!header.name.is_empty());
+            let lines = t.source.lines().filter(|l| l.starts_with("// @param")).count();
+            assert_eq!(header.params.len(), lines, "{}: every @param line is a slider", t.name);
+            let (full, pre) = module_source(t.source, "custom_template").unwrap();
+            validate(&full, pre).unwrap_or_else(|e| panic!("{}: {e}", t.name));
         }
         for id in ["kaleidoscope", "plasma", "crt"] {
             let src = builtin_as_custom(id).unwrap_or_else(|| panic!("no copy for {id}"));

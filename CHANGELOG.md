@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.62 (2026-10-20)
+
+- **Make your own effects from a template:** Shader Editor › *New from template…* gives eight starters that each do
+  one thing, with every line explained: colour tint and hue spin, wave warp, pixelate, kaleidoscope, soft circle
+  mask, glow, pulsing rings and noise clouds. Change a number and watch it update live; right-click any of its
+  sliders › Modulate to make it move with the music.
+
 ## 0.2.61 (2026-10-20)
 
 - **Take over from the web in one click:** when phones or browsers control the visuals (the remote page or

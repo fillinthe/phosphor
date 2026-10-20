@@ -87,7 +87,8 @@ app that's much smaller and lighter on the CPU.
     - [ ] FFGL plugins (Resolume / VDMX effect plugins): load .bundle FFGL 2 effects and generators (big; separate)
 13. **Make your own effects** (asked 2026-10-20; could be its own project): the Shader Editor already writes ISF
     effects with live preview. Next:
-    - [ ] "New effect from…" templates (colour, distort, feedback, mask, generator) so nobody starts from a blank page
+    - [x] "New from template…" in the Shader Editor: 8 starters, every line explained (2026-10-20)
+    - [ ] Templates that use feedback (the last frame) and several passes
     - [ ] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code
     - [ ] Describe it in words → an AI drafts the shader, previewed live, editable (needs an API key: owner)
     - [ ] Share effects to your account / the online library
