@@ -76,7 +76,8 @@ app that's much smaller and lighter on the CPU.
     4:2:2 10-bit, HEVC 8/10-bit, AV1, VP8, VP9 (+alpha), ProRes 422/4444 (+alpha), DNxHD/HR, Cineform, Hap,
     Resolume DXV, MJPEG, MPEG-2/4, QuickTime Animation, PNG, GIF, FFV1, UtVideo, HuffYUV, VC-2, WMV2, FLV).
     - [ ] NotchLC: decoder is in; find a sample file to verify (no encoder available here)
-    - [ ] Hap Q / Hap Q Alpha / HapR from other apps: verify with real files; Hap R (BC7) needs a GPU path
+    - [x] Hap / Hap Alpha / Hap Q / Hap Q Alpha / Hap R decode (unit tests per format; GPU BC7 path for Hap R)
+    - [ ] Verify Hap Q and Hap R files made by other apps (no encoder here)
     - [ ] Run the codec test on Windows in CI (its FFmpeg differs)
     - [ ] Not possible without the makers' SDKs: Blackmagic RAW, RED R3D, ARRIRAW (the converter can't read them
           either; export to ProRes from their apps)
