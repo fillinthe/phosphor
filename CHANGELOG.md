@@ -16,8 +16,6 @@ Projection mapping, more like MadMapper:
   or remove its column or row. The picture keeps its shape.
 - **Copy a slice's look:** right-click a slice › Copy its look to another slice or every slice on the output
   (opacity, soft edges, colour, blend, shape; not its place or picture).
-
-Projection mapping, more like MadMapper:
 - **Fine-tune one point:** click a corner or mesh point (or press Tab) in the Mapping Studio. Tab and Shift-Tab
   go to the next and previous point, the arrows nudge it one pixel (Shift = 10), and Properties shows its X and Y
   in pixels to type. Esc goes back to moving the whole slice.
