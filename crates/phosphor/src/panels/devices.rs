@@ -34,7 +34,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                     if p.kind == crate::net::PeerKind::Audio {
                         ui.horizontal(|ui| {
                             ui.label(RichText::new(what).small());
-                            ui.add(egui::ProgressBar::new(p.level).desired_width(60.0).desired_height(8.0)).on_hover_text("Level of the audio this phone is sending");
+                            ui.add(crate::ui::meter(p.level).desired_width(60.0).desired_height(8.0)).on_hover_text("Level of the audio this phone is sending");
                         });
                     } else {
                         ui.label(RichText::new(what).small());

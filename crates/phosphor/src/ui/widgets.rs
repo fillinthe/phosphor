@@ -224,10 +224,10 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, region: Option<(&
     let x_of = |f: f32| rect.left() + rect.width() * f.clamp(0.0, 1.0);
     let f_of = |x: f32| ((x - rect.left()) / rect.width()).clamp(0.0, 1.0);
     let p = ui.painter().clone();
-    p.rect_filled(rect, 4.0, Color32::from_gray(32));
+    p.rect_filled(rect, 0.0, Color32::from_gray(32));
     let mut done = rect;
     done.set_width(rect.width() * frac);
-    p.rect_filled(done, 4.0, accent().gamma_multiply(0.5));
+    p.rect_filled(done, 0.0, accent().gamma_multiply(0.5));
     if let Some((lo, hi)) = region {
         if *lo > 0.0 || *hi < 1.0 {
             let r = egui::Rect::from_x_y_ranges(x_of(*lo)..=x_of(*hi), rect.y_range());
@@ -318,6 +318,12 @@ pub fn layer_items<T: PartialEq>(ui: &mut egui::Ui, layers: &[phosphor_engine::L
     }
 }
 
+/// A level meter or progress bar with square corners (like every slider: the owner's choice). Chain `.text(…)`,
+/// `.fill(…)`, `.desired_width(…)` as on an egui ProgressBar.
+pub(crate) fn meter(value: f32) -> egui::ProgressBar {
+    egui::ProgressBar::new(value).corner_radius(0)
+}
+
 /// A small history graph: `values` as a line (scaled to their peak), oldest left, filling `slots` columns from the
 /// right so it scrolls as samples arrive; `marks` paints a red bar on the columns where something went wrong.
 pub(crate) fn history_graph(ui: &mut egui::Ui, size: egui::Vec2, values: &[f32], marks: &[bool], slots: usize) -> egui::Response {
@@ -380,19 +386,19 @@ pub(crate) fn step_bars(ui: &mut egui::Ui, steps: &mut [f32], playing: Option<us
     for (i, v) in steps.iter().enumerate() {
         let x0 = rect.left() + i as f32 * w + 1.0;
         let cell = egui::Rect::from_min_max(egui::pos2(x0, rect.top()), egui::pos2(x0 + w - 2.0, rect.bottom()));
-        p.rect_filled(cell, 2.0, Color32::from_gray(if (i / 4) % 2 == 0 { 30 } else { 22 }));
+        p.rect_filled(cell, 0.0, Color32::from_gray(if (i / 4) % 2 == 0 { 30 } else { 22 }));
         let lit = playing == Some(i);
         let color = if lit { accent() } else { accent().gamma_multiply(0.5) };
         if gate {
             if *v >= 0.5 {
-                p.rect_filled(cell.shrink(2.0), 2.0, color);
+                p.rect_filled(cell.shrink(2.0), 0.0, color);
             }
         } else {
             let bar = egui::Rect::from_min_max(egui::pos2(cell.left(), rect.bottom() - v * rect.height()), cell.right_bottom());
-            p.rect_filled(bar, 2.0, color);
+            p.rect_filled(bar, 0.0, color);
         }
         if lit {
-            p.rect_stroke(cell, 2.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
+            p.rect_stroke(cell, 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
         }
     }
     changed

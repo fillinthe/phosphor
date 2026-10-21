@@ -67,7 +67,7 @@ pub(crate) fn scan_window(ctx: &egui::Context, st: &mut State) {
             }
             match &st.scanner.status {
                 Status::Idle => hint(ui, format!("{}×{} projector", size.0, size.1)),
-                Status::Scanning { step, of } => ui.add(egui::ProgressBar::new(*step as f32 / (*of).max(1) as f32).text(format!("picture {} of {of}", step + 1))),
+                Status::Scanning { step, of } => ui.add(crate::ui::meter(*step as f32 / (*of).max(1) as f32).text(format!("picture {} of {of}", step + 1))),
                 Status::Decoding => hint(ui, "Working it out…"),
                 Status::Done { coverage, error: Some(e), .. } => ui.colored_label(accent(), format!("{} Test passed: {:.0}% decoded, every point within {e:.1} projector pixels.", icon::CHECK, coverage * 100.0)),
                 Status::Done { coverage, .. } => ui.colored_label(accent(), format!("{} Done: the camera saw the projector on {:.0}% of its picture. It's this output's stage photo now.", icon::CHECK, coverage * 100.0)),

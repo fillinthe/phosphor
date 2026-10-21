@@ -103,7 +103,7 @@ impl PhosphorApp {
                     crate::ui::hint(ui, "The new file goes next to the original; the original stays as it is.");
                 }
                 Some(p) if !p.finished => {
-                    ui.add(egui::ProgressBar::new(p.done).show_percentage());
+                    ui.add(crate::ui::meter(p.done).show_percentage());
                     ctx.request_repaint_after(std::time::Duration::from_millis(200));
                 }
                 Some(p) => match &p.error {

@@ -48,7 +48,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     ui.separator();
     if let Some((used, max)) = a.storage {
         let frac = if max > 0 { used as f32 / max as f32 } else { 0.0 };
-        ui.add(egui::ProgressBar::new(frac).desired_height(6.0).fill(accent().gamma_multiply(0.6)));
+        ui.add(crate::ui::meter(frac).desired_height(6.0).fill(accent().gamma_multiply(0.6)));
         ui.horizontal(|ui| {
             hint(ui, format!("{:.1} MB of {} MB used · your layouts are kept here too", used as f64 / 1_048_576.0, max >> 20));
             if !a.pro() && ui.small_button(label(icon::STAR, "More space")).on_hover_text("Phosphor Pro: 1 GB").clicked() {
