@@ -85,6 +85,11 @@ impl PhosphorApp {
         if let Some(e) = &self.state.engine {
             println!("GPU timing: {}", e.gpu_timing_status());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.state.comp.tracking.enabled {
+            let vals: Vec<String> = self.state.comp.tracking.outputs().iter().map(|n| format!("{}={:.3}", n.trim_start_matches("Track "), self.state.comp.hand(n).unwrap_or(-1.0))).collect();
+            println!("TRACK {} · {}", self.state.tracker.status, vals.join(" "));
+        }
         if self.state.comp.auto_show.enabled {
             let reacting = self.state.comp.layers.iter().filter(|l| !l.generator_mods.is_empty() || l.effects.iter().any(|f| !f.mods.is_empty())).count();
             println!("AUTOSHOW columns fired: {} · layers reacting: {reacting}/{}", self.state.auto_run.fired, self.state.comp.layers.len());
@@ -217,6 +222,12 @@ impl PhosphorApp {
             #[cfg(any(target_os = "macos", windows))]
             if name == "login" {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
+                continue;
+            }
+            if name == "tracking" {
+                // Video tracking on the mix: faces, hands and body (TRACK line at the end).
+                let t = &mut self.state.comp.tracking;
+                (t.enabled, t.faces, t.hands, t.body, t.smoothing) = (true, true, true, true, 0.0);
                 continue;
             }
             if name == "bezier" {

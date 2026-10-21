@@ -75,6 +75,28 @@ pub struct Modulator {
 /// Samples per beat in a looper take.
 pub const LOOPER_RES: usize = 32;
 
+impl super::Composition {
+    /// Sets (or first makes) the Hand modulator called `name` to `v` (preview XY pads, video tracking). Does nothing
+    /// when the modulator list is full.
+    pub fn set_hand(&mut self, name: &str, v: f32) {
+        if let Some(m) = self.modulators.iter_mut().find(|m| m.name == name) {
+            m.value = v;
+            return;
+        }
+        if self.modulators.len() >= crate::control::MAX_SHARED {
+            return;
+        }
+        let id = self.new_id();
+        let signal = super::Modulation { source: super::ModSource::Hand, ..Default::default() };
+        self.modulators.push(Modulator { id, name: name.to_string(), signal, value: v, ..Default::default() });
+    }
+
+    /// The value of the Hand modulator called `name`, if there is one.
+    pub fn hand(&self, name: &str) -> Option<f32> {
+        self.modulators.iter().find(|m| m.name == name).map(|m| m.value)
+    }
+}
+
 /// A Hand modulator's looper (VDMX's Data Looper): record the knob's moves for a number of beats, starting on the
 /// next multiple of that length so the loop lines up with the music, then play the take back looped.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

@@ -47,7 +47,7 @@ app that's much smaller and lighter on the CPU.
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
    mappable themselves; Mappings editor with Listen + ranges. on the phone/iPad remote ✔. Next: TouchOSC `.tosc` export, multiple surface pages
 4. ~~**Mapping upgrades**~~ mesh warp ✔ (Catmull-Rom grid up to 8×8), masks ✔ (polygons, invert). Per-output colour ✔,
-   blend curve ✔, mask feather ✔, circle/triangle masks ✔, smooth (Catmull-Rom) mask outlines ✔. Next: per-point bezier handles
+   blend curve ✔, mask feather ✔, circle/triangle masks ✔, smooth (Catmull-Rom) mask outlines ✔, bezier handles on mask points ✔ (0.2.84). Next: bezier edges on slices
 5. **OBS / pro I/O**: Syphon out ✔, NDI out ✔, cameras/capture ✔, network streams in ✔, Syphon in ✔, NDI in ✔. Next:
    virtual camera out (needs a Developer ID); capture-card audio shows up as an input device already (Audio panel)
 6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
@@ -124,7 +124,7 @@ app that's much smaller and lighter on the CPU.
     - [x] Corners by number (0.2.68)
     - [x] Fine-tune: typed x/y for points, Tab to the next point, lock, snap to other slices' points (0.2.76–79)
     - [x] Zoom to the selected slice(s) (0.2.81)
-    - [ ] Per-point bezier handles
+    - [x] Per-point bezier handles (mask points, 0.2.84)
     - [x] Soft edge per side; lock a slice (0.2.76)
     - [x] Test patterns and a stage photo per output (0.2.79)
     - [x] Per-slice blend mode (0.2.79)
@@ -147,7 +147,8 @@ app that's much smaller and lighter on the CPU.
     - [x] LUT effects (.cube in the LUT folder, 0.2.74)
     - [x] A two-LUT mixer (0.2.82: LUT Mix)
     - [x] Gamepad input as control sources (0.2.75; other HID devices still to do)
-    - [ ] Video tracking (Vision: hands, faces, body, remove background) as sources
+    - [x] Video tracking (Vision: faces, hands, body as modulators, 0.2.84)
+    - [ ] Remove background (Vision person segmentation) as an effect
     - [x] On-end rules (autopilot Next / Previous / Random / Clear the layer) and layer crop (0.2.77)
     - [x] Multi-track step sequencer (0.2.77: step tracks on shared modulators)
     - [x] Extra preview windows for any layer / group / output (0.2.78)

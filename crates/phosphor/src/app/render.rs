@@ -53,6 +53,8 @@ impl PhosphorApp {
             spout,
             #[cfg(not(target_arch = "wasm32"))]
             dmx,
+            #[cfg(not(target_arch = "wasm32"))]
+            tracker,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -106,6 +108,9 @@ impl PhosphorApp {
         for m in comp.modulators.iter_mut().filter(|m| m.signal.source == phosphor_engine::ModSource::Hand) {
             m.looper.record(mod_inputs.beats, m.value);
         }
+        // What video tracking found lands in its Hand modulators before they're read.
+        #[cfg(not(target_arch = "wasm32"))]
+        tracker.apply(comp);
         mod_inputs.shared = phosphor_engine::evaluate(&comp.modulators, mod_inputs, mod_phases);
         let wants = std::mem::take(preview_wants);
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
@@ -124,7 +129,14 @@ impl PhosphorApp {
                 .collect();
             engine.request_previews(source, items);
         }
-        let mwants = std::mem::take(monitor_wants);
+        let mut mwants = std::mem::take(monitor_wants);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((src, w, h)) = tracker.picture(&comp.tracking, (comp.width, comp.height)) {
+            mwants.push((crate::tracking::MONITOR_KEY, src, w, h));
+            if tracker.due(now) {
+                engine.read_monitor(mwants.len() - 1);
+            }
+        }
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
         // LED / DMX: sample the fixtures' pixels from this frame when the lights want one.
@@ -144,6 +156,10 @@ impl PhosphorApp {
         {
             let universes = comp.dmx.universes(&colors, mod_inputs.beats as f64);
             dmx.send(&comp.dmx, &universes);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        for f in engine.take_monitor_reads() {
+            tracker.give(f.rgba, f.width, f.height, &comp.tracking);
         }
         let render_secs = t0.elapsed().as_secs_f64();
         // Layer thumbnails for phones on the remote page: one small readback at a time, only while one is connected.

@@ -21,6 +21,7 @@ mod play;
 mod quick;
 mod source;
 mod surface;
+mod tracking;
 
 pub use choice::*;
 pub use clip_play::*;
@@ -40,5 +41,6 @@ pub use quick::*;
 pub use sequencer::*;
 pub use source::*;
 pub use surface::*;
+pub use tracking::*;
 
 choice!(BlendMode, FitMode, CrossGroup, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape, HeadLayout, HeadMotion, TimecodeSource, QrStyle, RenderRate, ChainMode, TestPattern);

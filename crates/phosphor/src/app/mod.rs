@@ -138,6 +138,9 @@ pub struct State {
     /// LED / DMX sender (Art-Net, sACN).
     #[cfg(not(target_arch = "wasm32"))]
     pub dmx: crate::dmx::DmxOut,
+    /// Video tracking (faces, hands, body → `Track …` modulators).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub tracker: crate::tracking::Tracker,
     /// A Resolume composition waiting for the deck choice.
     #[cfg(not(target_arch = "wasm32"))]
     pub avc_import: Option<import::AvcImport>,

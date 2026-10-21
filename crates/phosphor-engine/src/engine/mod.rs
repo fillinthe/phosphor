@@ -204,6 +204,9 @@ pub struct Engine {
     monitor_targets: Vec<Option<Target>>,
     /// What each monitor slot showed last frame (a slot whose source changes starts empty, never the old picture).
     monitor_sources: Vec<u64>,
+    /// Monitor slots to read back to the CPU after this frame (video tracking), and the ring they come back in.
+    monitor_reads: Vec<usize>,
+    monitor_capture: crate::capture::Capture,
     preview_source: u64,
     preview_src: Option<Target>,
     preview_targets: Vec<Option<Target>>,
@@ -253,6 +256,8 @@ impl Engine {
             monitor_req: Vec::new(),
             monitor_targets: Vec::new(),
             monitor_sources: Vec::new(),
+            monitor_reads: Vec::new(),
+            monitor_capture: Default::default(),
             preview_source: MASTER_ID,
             preview_src: None,
             preview_targets: Vec::new(),
@@ -364,6 +369,17 @@ impl Engine {
     /// rendered at the given size.
     pub fn request_monitors(&mut self, req: Vec<(u64, u32, u32)>) {
         self.monitor_req = req;
+    }
+
+    /// Reads monitor slot `index` (as requested this frame) back to the CPU after the frame renders; it arrives a
+    /// few frames later from `take_monitor_reads`, tagged with the slot. Skipped while the readback ring is busy.
+    pub fn read_monitor(&mut self, index: usize) {
+        self.monitor_reads.push(index);
+    }
+
+    /// Finished monitor readbacks (non-blocking): tag = monitor slot, RGBA8.
+    pub fn take_monitor_reads(&mut self) -> Vec<crate::capture::CapturedFrame> {
+        self.monitor_capture.poll(&self.gpu.device)
     }
 
     pub fn monitor(&self, index: usize) -> Option<&Target> {
@@ -682,6 +698,11 @@ impl Engine {
 
         self.encode(&passes);
         self.read_samples();
+        for i in std::mem::take(&mut self.monitor_reads) {
+            if let Some(t) = self.monitor_targets.get(i).and_then(|t| t.as_ref()) {
+                self.monitor_capture.enqueue_tagged(&self.gpu.device, &self.gpu.queue, t, i as u64);
+            }
+        }
         self.frame_index += 1;
         FrameInfo { passes: passes.len(), layers_drawn }
     }

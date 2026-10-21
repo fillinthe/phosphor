@@ -22,6 +22,8 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         }
         hint(ui, "One source drives many controls: right-click any slider, Modulate, then pick it. Chain one into the next.");
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    super::tracking::tracking_section(ui, st);
     let mut remove = None;
     let mut moves: Option<(usize, usize)> = None;
     let earlier: Vec<(u64, String)> = st.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();
