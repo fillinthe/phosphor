@@ -16,3 +16,9 @@ naga = { version = "30", features = ["wgsl-in"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wgpu = { version = "30", default-features = false, features = ["wgsl", "webgpu"] }
 
+
+[dev-dependencies]
+pollster = "0.4"
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+wgpu = { version = "30", features = ["metal"] }

@@ -3429,6 +3429,7 @@ dependencies = [
  "bytemuck",
  "earcutr",
  "naga",
+ "pollster 0.4.0",
  "serde",
  "serde_json",
  "wgpu",

@@ -38,7 +38,9 @@ fn sample_source(st: vec2f) -> vec4f {
         let rgb = vec3f(c.a + co - cg, c.a + cg, c.a - co - cg);
         var a = 1.0;
         if (u.yuv == 4u) { a = textureSampleLevel(tex2, samp, st, 0.0).r; }
-        return vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)) * a, a);
+        // Straight alpha, like every other source (compositing multiplies by alpha itself; multiplying here too
+        // darkened soft edges).
+        return vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)), a);
     }
     return textureSampleLevel(tex0, samp, st, 0.0);
 }
