@@ -35,17 +35,23 @@ fn on_toggle(ui: &mut egui::Ui, enabled: &mut bool, target: ControlTarget) {
 }
 
 pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
+    comp_tabs(ui, st);
     let aspect = st.aspect();
     let height = (ui.available_height() - 210.0).clamp(80.0, 600.0);
     crossfader(ui, st);
     let State { comp, selected, layer_textures, texture, .. } = st;
     let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
     let tex = |id: u64| layer_textures.get(&id).map(|(t, _)| *t);
-    let phosphor_engine::Composition { layers, groups, master_fade, master_fade_mod, .. } = comp;
+    // The open comp's layers (and, with several comps, a strip per comp before MASTER).
+    let shown: Vec<bool> = comp.layers.iter().map(|l| comp.in_open_comp(l)).collect();
+    let phosphor_engine::Composition { layers, groups, comps, master_fade, master_fade_mod, .. } = comp;
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
             let count = layers.len();
             for i in 0..count {
+                if !shown[i] {
+                    continue;
+                }
                 let layer = &mut layers[i];
                 let muted = any_solo && !layer.solo;
                 let name = RichText::new(short(&layer.name)).small().strong();
@@ -81,6 +87,18 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                         choice_combo(ui, ("mix_group_blend", g.id), &mut g.blend, 70.0, true);
                     }) {
                         *selected = Some(g.id);
+                    }
+                }
+            }
+            if comps.len() > 1 {
+                for c in comps.iter_mut() {
+                    let name = RichText::new(format!("{} {}", icon::FRAME_CORNERS, short(&c.name))).small().strong().color(accent());
+                    if strip(ui, c.id, *selected == Some(c.id), tex(c.id), aspect, c.enabled, name, |ui| {
+                        fader(ui, &mut c.opacity, &mut c.opacity_mod, ControlTarget::LayerOpacity(c.id), height);
+                        on_toggle(ui, &mut c.enabled, ControlTarget::LayerEnabled(c.id));
+                        choice_combo(ui, ("mix_comp_blend", c.id), &mut c.blend, 70.0, true);
+                    }) {
+                        *selected = Some(c.id);
                     }
                 }
             }

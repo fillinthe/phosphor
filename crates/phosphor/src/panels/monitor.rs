@@ -45,7 +45,7 @@ pub fn monitor_source_name(st: &State, n: u8) -> String {
         MonitorSource::Output => "Output".into(),
         MonitorSource::Mix => "Mix".into(),
         MonitorSource::Layer(id) => crate::ui::layer_name(&st.comp.layers, id),
-        MonitorSource::Group(id) => st.comp.group(id).map_or("(removed group)".into(), |g| g.name.clone()),
+        MonitorSource::Group(id) => st.comp.group(id).map(|g| g.name.clone()).or_else(|| st.comp.comp(id).map(|c| format!("Comp: {}", c.name))).unwrap_or_else(|| "(removed group)".into()),
         MonitorSource::OneOutput(id) => st.comp.outputs.iter().find(|o| o.id == id).map_or("(removed output)".into(), |o| o.name.clone()),
     }
 }
@@ -71,6 +71,12 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
                 ui.separator();
                 for g in &st.comp.groups {
                     ui.selectable_value(&mut cfg.source, MonitorSource::Group(g.id), format!("Group: {}", g.name));
+                }
+            }
+            if st.comp.comps.len() > 1 {
+                ui.separator();
+                for c in &st.comp.comps {
+                    ui.selectable_value(&mut cfg.source, MonitorSource::Group(c.id), format!("Comp: {}", c.name));
                 }
             }
             ui.separator();

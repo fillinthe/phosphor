@@ -48,11 +48,11 @@ impl Composition {
         self.groups.iter_mut().find(|g| g.id == id)
     }
 
-    /// The mix controls (opacity, on/off, effects bypass) of a layer or a group: what controllers drive.
+    /// The mix controls (opacity, on/off, effects bypass) of a layer, a group or a comp: what controllers drive.
     pub fn mix_controls(&self, id: u64) -> Option<(f32, bool, bool)> {
         match self.layers.iter().find(|l| l.id == id) {
             Some(l) => Some((l.opacity, l.enabled, l.fx_bypass)),
-            None => self.group(id).map(|g| (g.opacity, g.enabled, g.fx_bypass)),
+            None => self.group(id).map(|g| (g.opacity, g.enabled, g.fx_bypass)).or_else(|| self.comp(id).map(|c| (c.opacity, c.enabled, c.fx_bypass))),
         }
     }
 
@@ -61,15 +61,18 @@ impl Composition {
             let l = &mut self.layers[i];
             return Some(MixControls { opacity: &mut l.opacity, enabled: &mut l.enabled, fx_bypass: &mut l.fx_bypass });
         }
-        self.group_mut(id).map(|g| MixControls { opacity: &mut g.opacity, enabled: &mut g.enabled, fx_bypass: &mut g.fx_bypass })
+        if self.group(id).is_some() {
+            return self.group_mut(id).map(|g| MixControls { opacity: &mut g.opacity, enabled: &mut g.enabled, fx_bypass: &mut g.fx_bypass });
+        }
+        self.comp_mut(id).map(|c| MixControls { opacity: &mut c.opacity, enabled: &mut c.enabled, fx_bypass: &mut c.fx_bypass })
     }
 
-    /// The effect chain of MASTER (`MASTER_ID`), a layer or a group.
+    /// The effect chain of MASTER (`MASTER_ID`), a layer, a group, a comp or a mapping slice.
     pub fn effects(&self, target: u64) -> Option<&Vec<EffectState>> {
         if target == crate::MASTER_ID {
             return Some(&self.master_effects);
         }
-        self.layers.iter().find(|l| l.id == target).map(|l| &l.effects).or_else(|| self.group(target).map(|g| &g.effects)).or_else(|| self.slice(target).map(|s| &s.effects))
+        self.layers.iter().find(|l| l.id == target).map(|l| &l.effects).or_else(|| self.group(target).map(|g| &g.effects)).or_else(|| self.comp(target).map(|c| &c.effects)).or_else(|| self.slice(target).map(|s| &s.effects))
     }
 
     pub fn effects_mut(&mut self, target: u64) -> Option<&mut Vec<EffectState>> {
@@ -82,15 +85,19 @@ impl Composition {
         if self.groups.iter().any(|g| g.id == target) {
             return self.groups.iter_mut().find(|g| g.id == target).map(|g| &mut g.effects);
         }
+        if self.comps.iter().any(|c| c.id == target) {
+            return self.comp_mut(target).map(|c| &mut c.effects);
+        }
         self.slice_mut(target).map(|s| &mut s.effects)
     }
 
-    /// Every effect in the project (MASTER, layers, groups, mapping slices).
+    /// Every effect in the project (MASTER, layers, groups, comps, mapping slices).
     pub fn all_effects(&self) -> impl Iterator<Item = &EffectState> {
         self.master_effects
             .iter()
             .chain(self.layers.iter().flat_map(|l| l.effects.iter()))
             .chain(self.groups.iter().flat_map(|g| g.effects.iter()))
+            .chain(self.comps.iter().flat_map(|c| c.effects.iter()))
             .chain(self.outputs.iter().flat_map(|o| o.mapping.surfaces.iter().flat_map(|s| s.effects.iter())))
     }
 
@@ -99,6 +106,7 @@ impl Composition {
             .iter_mut()
             .chain(self.layers.iter_mut().flat_map(|l| l.effects.iter_mut()))
             .chain(self.groups.iter_mut().flat_map(|g| g.effects.iter_mut()))
+            .chain(self.comps.iter_mut().flat_map(|c| c.effects.iter_mut()))
             .chain(self.outputs.iter_mut().flat_map(|o| o.mapping.surfaces.iter_mut().flat_map(|s| s.effects.iter_mut())))
     }
 
@@ -137,7 +145,9 @@ impl Composition {
     /// a layer next to a group jumps over the whole group.
     pub fn move_layer(&mut self, id: u64, up: bool) {
         let Some(i) = self.layers.iter().position(|l| l.id == id) else { return };
-        let Some(j) = (if up { i.checked_add(1).filter(|j| *j < self.layers.len()) } else { i.checked_sub(1) }) else {
+        let next = if up { i.checked_add(1).filter(|j| *j < self.layers.len()) } else { i.checked_sub(1) };
+        // The edge of its comp is the edge of the stack.
+        let Some(j) = next.filter(|j| self.same_comp(i, *j)) else {
             // Already at the end of the stack: only leaving the group is left to do.
             self.layers[i].parent = None;
             self.normalize_groups();
@@ -162,11 +172,11 @@ impl Composition {
         let Some((a, b)) = self.group_span(id) else { return };
         let len = b - a + 1;
         if up {
-            let Some(next) = self.layers.get(b + 1) else { return };
+            let Some(next) = self.layers.get(b + 1).filter(|_| self.same_comp(b, b + 1)) else { return };
             let end = next.parent.and_then(|h| self.group_span(h)).map_or(b + 1, |(_, d)| d);
             self.layers[a..=end].rotate_left(len);
         } else {
-            let Some(prev) = a.checked_sub(1).and_then(|p| self.layers.get(p)) else { return };
+            let Some(prev) = a.checked_sub(1).filter(|p| self.same_comp(a, *p)).and_then(|p| self.layers.get(p)) else { return };
             let start = prev.parent.and_then(|h| self.group_span(h)).map_or(a - 1, |(c, _)| c);
             self.layers[start..=b].rotate_right(len);
         }
@@ -179,8 +189,10 @@ impl Composition {
         }
         let (Some(a), Some(b)) = (self.layers.iter().position(|l| l.id == from), self.layers.iter().position(|l| l.id == onto)) else { return };
         let parent = self.layers[b].parent;
+        let comp = self.layers[b].comp;
         let mut moved = self.layers.remove(a);
         moved.parent = parent;
+        moved.comp = comp;
         self.layers.insert(b, moved);
         self.normalize_groups();
     }
@@ -188,6 +200,7 @@ impl Composition {
     /// Repairs groups after any change (or loading): unknown groups are dropped, empty groups removed, and each
     /// group's members gathered next to each other at its top member's place.
     pub fn normalize_groups(&mut self) {
+        self.normalize_comps();
         let known: HashSet<u64> = self.groups.iter().map(|g| g.id).collect();
         for l in &mut self.layers {
             if l.parent.is_some_and(|p| !known.contains(&p)) {

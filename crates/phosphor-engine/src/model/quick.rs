@@ -254,11 +254,12 @@ impl Composition {
 
     /// A random look on every layer that's on (two new layers if there are none).
     pub fn surprise(&mut self, now: f32, dice: &mut Dice) {
-        if self.layers.is_empty() {
+        if !self.layers.iter().any(|l| self.in_open_comp(l)) {
             self.add_layer();
             self.add_layer();
         }
-        let ids: Vec<u64> = self.layers.iter().filter(|l| l.enabled).map(|l| l.id).collect();
+        // The open comp's layers (every layer without comps).
+        let ids: Vec<u64> = self.layers.iter().filter(|l| l.enabled && self.in_open_comp(l)).map(|l| l.id).collect();
         for id in ids {
             self.surprise_layer(id, now, dice);
         }

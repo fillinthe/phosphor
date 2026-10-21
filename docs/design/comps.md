@@ -1,4 +1,12 @@
-# Comps as separate canvases: design (draft for the owner, 2026-10-20)
+# Comps as separate canvases: design (draft for the owner, 2026-10-20; built in 0.2.90)
+
+**As built (0.2.90):** layers stay in one list with `LayerState::comp` naming their comp (not moved into each
+comp), so ids, controls, cues, slices and collections needed no changes; a comp's layers are kept together in
+comp order (`normalize_comps`). A project without comps has one implicit "Main"; `+ Comp` makes "Main" real and
+adds the new one. The three questions below were answered with the defaults (owner asked to go ahead,
+2026-10-21): one shared tempo and launch settings; Surprise and column triggers act on the open comp; a new comp
+starts at the master's size. Engine: a single plain comp renders exactly as before; otherwise each comp is drawn
+at its size into its own stack (`comp_accum`), through its effects, then blended into the master with its fit.
 
 You described the app as **master → comp → layer**, and chose comps as *separate canvases*. This is how I'd build
 it; please read the "What you'll see" part and say what's off before I start (it touches the project format, the

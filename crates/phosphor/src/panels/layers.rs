@@ -18,9 +18,12 @@ pub(crate) enum LayerAction {
     ClearSource,
     /// Put this source on the layer (through the launch settings).
     Launch(SourceSpec),
+    /// Into another comp.
+    MoveToComp(u64),
 }
 
 pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
+    comp_tabs(ui, st);
     ui.horizontal(|ui| {
         if ui.button(label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
@@ -32,6 +35,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let output_tex = st.texture;
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let feeds = feed_choices(&st.comp);
+    let others = other_comps(&st.comp);
     let State { comp, selected, media, layer_textures, .. } = st;
     let count = comp.layers.len();
     let mut action = None;
@@ -49,6 +53,9 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.add_space(4.0);
         for idx in (0..count).rev() {
+            if !comp.in_open_comp(&comp.layers[idx]) {
+                continue;
+            }
             // A group's card goes above its top member; folded groups hide their members.
             let parent = comp.layers[idx].parent;
             if let Some(gid) = parent {
@@ -82,11 +89,11 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             let out = if parent.is_some() {
                 ui.horizontal(|ui| {
                     ui.add_space(14.0);
-                    ui.vertical(|ui| layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref(), &feeds)).inner
+                    ui.vertical(|ui| layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref(), &feeds, &others)).inner
                 })
                 .inner
             } else {
-                layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref(), &feeds)
+                layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref(), &feeds, &others)
             };
             if out.select {
                 *selected = Some(layer.id);
@@ -211,6 +218,7 @@ pub(crate) fn layer_card(
     muted: bool,
     err: Option<&str>,
     feeds: &[(u64, String)],
+    other_comps: &[(u64, String)],
 ) -> CardOut {
     let mut select = false;
     let mut action = None;
@@ -322,6 +330,9 @@ pub(crate) fn layer_card(
             action = Some(LayerAction::ClearSource);
             ui.close();
         }
+        if let Some(c) = move_to_comp_menu(ui, other_comps) {
+            action = Some(LayerAction::MoveToComp(c));
+        }
         ui.separator();
         if layer.parent.is_some() {
             if ui.button(label(icon::SELECTION_SLASH, "Take out of the group")).clicked() {
@@ -355,6 +366,7 @@ pub(crate) fn layer_card(
 /// What a layer can take another picture from: the program (feedback), groups and layers.
 pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, String)> {
     std::iter::once((MASTER_ID, "Program (feedback)".to_string()))
+        .chain(comp.comps.iter().filter(|_| comp.comps.len() > 1).map(|c| (c.id, format!("Comp: {}", c.name))))
         .chain(comp.groups.iter().map(|g| (g.id, g.name.clone())))
         .chain(comp.layers.iter().rev().map(|l| (l.id, l.name.clone())))
         .collect()
@@ -530,6 +542,7 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
         }
         LayerAction::Duplicate => duplicate_layer(st, id),
         LayerAction::Remove => remove_layer(st, id),
+        LayerAction::MoveToComp(c) => st.comp.move_to_comp(id, c),
         LayerAction::BrowseSources => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, true, None)),
         LayerAction::OpenFile => {
             #[cfg(not(target_arch = "wasm32"))]

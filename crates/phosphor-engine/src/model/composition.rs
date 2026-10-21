@@ -38,6 +38,10 @@ pub struct Composition {
     pub layers: Vec<LayerState>,
     /// Layer groups (members point at them with `LayerState::parent`).
     pub groups: Vec<LayerGroup>,
+    /// Comps: canvases of their own, mixed into the master in order. Empty = one ("Main") holding every layer.
+    pub comps: Vec<Comp>,
+    /// The comp whose layers the Clips / Layers / Mixer panels show (None = the first).
+    pub open_comp: Option<u64>,
     pub next_id: u64,
     /// Legacy single-output mapping; moved into `outputs[0]` on load.
     pub mapping: Mapping,
@@ -106,7 +110,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 
@@ -179,12 +183,16 @@ impl Composition {
         ids
     }
 
+    /// Adds a layer on top of the open comp's stack.
     pub fn add_layer(&mut self) -> &mut LayerState {
         let id = self.new_id();
-        let name = format!("Layer {}", self.layers.len() + 1);
+        let comp = self.open_comp();
+        let name = format!("Layer {}", self.layers.iter().filter(|l| self.comp_of(l) == comp).count() + 1);
         let transition_kind = self.launch.style;
-        self.layers.push(LayerState { id, name, transition_kind, ..Default::default() });
-        self.layers.last_mut().unwrap()
+        // On top of its comp: after that comp's last layer (comps keep their layers together).
+        let at = self.layers.iter().rposition(|l| self.comp_of(l) == comp).map_or(self.layers.len(), |i| i + 1);
+        self.layers.insert(at, LayerState { id, name, transition_kind, comp, ..Default::default() });
+        &mut self.layers[at]
     }
 
     /// How loud a layer's movie sound plays: its volume × the master volume; silent while the layer or its
@@ -308,10 +316,12 @@ impl Composition {
         self.outputs.iter_mut().find(|o| o.id == id)
     }
 
-    /// Triggers column `col` on every layer that has a clip there.
+    /// Triggers column `col` on every layer of the open comp that has a clip there.
     pub fn trigger_column(&mut self, col: usize, now: f32) {
         let secs = self.launch_secs();
-        for l in &mut self.layers {
+        let open = self.open_comp();
+        let ids: Vec<u64> = self.layers.iter().filter(|l| self.comp_of(l) == open).map(|l| l.id).collect();
+        for l in self.layers.iter_mut().filter(|l| ids.contains(&l.id)) {
             l.trigger_clip(col, now, secs);
         }
     }

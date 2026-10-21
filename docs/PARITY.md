@@ -42,6 +42,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Layer corner pin (quad), corners mappable | VDMX | ✅ |
 | Crop per layer | VDMX | ✅ |
 | Layer groups (mixed first, own effects/opacity) | Resolume | ✅ |
+| Comps: several canvases, own size/layers/effects, mixed by the master, sent to their own outputs, fed into other comps | VDMX, Resolume | ✅ (0.2.90) |
 | A/B crossfader | Resolume, VDMX | ✅ |
 | Crossfader auto-fade | VDMX | ✅ |
 | Layer as mask / track matte (brightness, inverted, alpha) | Resolume, VDMX | ✅ |
@@ -76,7 +77,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 |---|---|---|
 | Quads with perspective, mesh warp, masks (polygon/circle/triangle, feather, invert) | MadMapper, Resolume | ✅ |
 | Many outputs, many slices per output, saved screens, auto-open | all | ✅ |
-| Slice shows the whole composition, a layer or a group | Resolume, MadMapper | ✅ |
+| Slice shows the whole composition, a comp, a layer, a group or another output | Resolume, MadMapper | ✅ |
 | Soft-edge blending, blend curve, per-output and per-slice colour | all | ✅ |
 | Edit on the projector output, alignment grid, identify | all | ✅ |
 | Venue presets | — | ✅ |
