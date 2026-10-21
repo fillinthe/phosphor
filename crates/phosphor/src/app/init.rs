@@ -215,6 +215,7 @@ impl PhosphorApp {
                 ffgl: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 following: None,
+                follow_at_launch: if bench.is_some() { String::new() } else { stored(KEY_FOLLOW_AT_LAUNCH).unwrap_or_default() },
                 #[cfg(not(target_arch = "wasm32"))]
                 leader: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
@@ -337,6 +338,11 @@ impl PhosphorApp {
             #[cfg(any(target_os = "macos", windows))]
             crate::ndi::sources();
             app.state.comp.ndi.enabled = true;
+        }
+        // A player follows its leader from the start (its outputs open on their screens as usual).
+        #[cfg(not(target_arch = "wasm32"))]
+        if !app.state.follow_at_launch.trim().is_empty() {
+            app.state.following = Some(crate::follow::Link::connect(&app.state.follow_at_launch.clone()));
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(addr) = app.bench.as_ref().and_then(|b| b.cfg.follow.clone()) {
