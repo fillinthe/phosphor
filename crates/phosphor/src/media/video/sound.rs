@@ -76,8 +76,8 @@ impl Tap {
     }
 }
 
-/// The mix, mono, for the audio analyser while "Clip sound" is its source.
-static TAP: Tap = Tap::new(48_000);
+/// The mix, stereo interleaved, for the audio analyser while "Clip sound" is its source.
+static TAP: Tap = Tap::new(2 * 48_000);
 /// The mix, stereo, for streams and recordings ("Movie sound" in the Stream panel).
 static PROGRAM: Tap = Tap::new(2 * 48_000);
 
@@ -86,7 +86,7 @@ pub fn set_tap(on: bool) {
     TAP.set(on);
 }
 
-/// Everything mixed since the last call (mono, at `stats().0` Hz).
+/// Everything mixed since the last call (stereo interleaved, at `stats().0` Hz).
 pub fn take_tap() -> Vec<f32> {
     TAP.take()
 }
@@ -583,7 +583,7 @@ fn run_output() -> Result<bool, String> {
         scratch.clear();
         scratch.resize(frames * 2, 0.0);
         mix_clips(&mut scratch);
-        TAP.push(scratch.chunks_exact(2).map(|lr| 0.5 * (lr[0] + lr[1])));
+        TAP.push(scratch.iter().copied());
         PROGRAM.push(scratch.iter().copied());
         if !LOCAL.load(Ordering::Relaxed) {
             scratch.iter_mut().for_each(|s| *s = 0.0);

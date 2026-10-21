@@ -139,7 +139,8 @@ mod native {
 
     use super::{AudioAnalysis, BeatTracker, FFT_SIZE, SPECTRUM_BARS, FFT_BINS, WAVE_SAMPLES};
 
-    type Ring = Arc<Mutex<VecDeque<f32>>>;
+    /// The newest (left, right) samples; mono sources fill both.
+    type Ring = Arc<Mutex<VecDeque<[f32; 2]>>>;
 
     fn device_name(d: &cpal::Device) -> Option<String> {
         d.description().ok().map(|desc| desc.name().to_string())
@@ -157,6 +158,8 @@ mod native {
         fft: Arc<dyn Fft<f32>>,
         window: Vec<f32>,
         raw: Vec<f32>,
+        /// `raw` as left and right (shaders' audio pictures).
+        stereo: Vec<[f32; 2]>,
         scratch: Vec<Complex<f32>>,
         analysis: AudioAnalysis,
         spectrum: Vec<f32>,
@@ -198,6 +201,7 @@ mod native {
                 fft: FftPlanner::new().plan_fft_forward(FFT_SIZE),
                 window,
                 raw: vec![0.0; FFT_SIZE],
+                stereo: vec![[0.0; 2]; FFT_SIZE],
                 scratch: vec![Complex::default(); FFT_SIZE],
                 analysis: AudioAnalysis::default(),
                 spectrum: vec![0.0; SPECTRUM_BARS],
@@ -267,7 +271,7 @@ mod native {
             self.clips
         }
 
-        /// Feeds the clip mix (mono at `rate` Hz) into the analyser.
+        /// Feeds the clip mix (stereo interleaved at `rate` Hz) into the analyser.
         pub fn push_clips(&mut self, samples: &[f32], rate: u32) {
             if !self.clips || samples.is_empty() {
                 return;
@@ -277,7 +281,7 @@ mod native {
                 self.beats = BeatTracker::default();
             }
             let mut q = self.ring.lock().unwrap();
-            q.extend(samples.iter().copied());
+            q.extend(samples.chunks_exact(2).map(|lr| [lr[0], lr[1]]));
             while q.len() > FFT_SIZE * 2 {
                 q.pop_front();
             }
@@ -289,7 +293,7 @@ mod native {
                 return;
             }
             let mut q = self.ring.lock().unwrap();
-            q.extend(samples.iter().copied());
+            q.extend(samples.iter().map(|v| [*v; 2]));
             while q.len() > FFT_SIZE * 2 {
                 q.pop_front();
             }
@@ -304,11 +308,10 @@ mod native {
             &self.bins
         }
 
-        /// The latest samples for shaders (`WAVE_SAMPLES` values, -1..1, gain applied).
-        pub fn waveform(&self) -> Vec<f32> {
-            let step = (FFT_SIZE / WAVE_SAMPLES).max(1);
+        /// The newest `WAVE_SAMPLES` (left, right) samples in a row, as ISF hosts give them (-1..1, gain applied).
+        pub fn waveform(&self) -> Vec<[f32; 2]> {
             let g = self.gain;
-            self.raw.iter().step_by(step).take(WAVE_SAMPLES).map(|v| (v * g).clamp(-1.0, 1.0)).collect()
+            self.stereo[FFT_SIZE - WAVE_SAMPLES..].iter().map(|s| s.map(|v| (v * g).clamp(-1.0, 1.0))).collect()
         }
 
         pub fn analysis(&self) -> AudioAnalysis {
@@ -343,7 +346,7 @@ mod native {
             let ring = self.ring.clone();
             *self.ltc.lock().unwrap() = Ltc::new(self.sample_rate);
             let (ltc, ltc_on) = (self.ltc.clone(), self.ltc_on.clone());
-            // Mixes all channels to mono and keeps only the newest samples.
+            // Keeps the first two channels (one channel = both sides) and only the newest samples.
             let push = move |data: &[f32]| {
                 if ltc_on.load(std::sync::atomic::Ordering::Relaxed)
                     && let Ok(mut l) = ltc.lock()
@@ -356,7 +359,7 @@ mod native {
                 }
                 let mut q = ring.lock().unwrap();
                 for frame in data.chunks(channels) {
-                    q.push_back(frame.iter().sum::<f32>() / frame.len() as f32);
+                    q.push_back([frame[0], frame.get(1).copied().unwrap_or(frame[0])]);
                 }
                 while q.len() > FFT_SIZE * 2 {
                     q.pop_front();
@@ -410,8 +413,10 @@ mod native {
                     return self.analysis;
                 }
                 let start = q.len() - FFT_SIZE;
-                for (i, v) in self.raw.iter_mut().enumerate() {
-                    *v = q[start + i];
+                for i in 0..FFT_SIZE {
+                    let s = q[start + i];
+                    self.stereo[i] = s;
+                    self.raw[i] = (s[0] + s[1]) * 0.5;
                 }
             }
             let rms = (self.raw.iter().map(|v| v * v).sum::<f32>() / FFT_SIZE as f32).sqrt();
@@ -490,7 +495,7 @@ mod stub {
         pub fn bins(&self) -> &[f32] {
             &[]
         }
-        pub fn waveform(&self) -> Vec<f32> {
+        pub fn waveform(&self) -> Vec<[f32; 2]> {
             Vec::new()
         }
         pub fn analysis(&self) -> AudioAnalysis {
