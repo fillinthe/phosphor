@@ -710,6 +710,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
         ..
     } = st;
     let others = super::mapping::picture_sources(comp, oid);
+    let comps: Vec<(u64, String, bool)> = comp.comps.iter().map(|c| (c.id, c.name.clone(), c.in_mix)).collect();
     let (layers, groups) = (&mut comp.layers, &mut comp.groups);
     let canvas = (comp.width, comp.height);
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
@@ -756,6 +757,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
                 ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(f32::INFINITY));
             });
             toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
+            super::program_picker(ui, o, &comps);
             ui.horizontal(|ui| {
                 ui.label("Size");
                 guarded!(ui, o.width, egui::DragValue::new(&mut o.width).range(0..=8192).suffix(" w"));

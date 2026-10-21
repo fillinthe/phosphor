@@ -488,7 +488,7 @@ impl Engine {
         let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
         // Layers shown on their own by a mapping surface, and their pictures this frame.
         // Full-size pictures kept for mapping surfaces and for layers that use another layer as their source.
-        let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.mapping.layer_feeds()).chain(comp.feed_sources()).collect();
+        let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.effective_mapping().layer_feeds().collect::<Vec<_>>()).chain(comp.feed_sources()).collect();
         let mut feeds: HashMap<u64, wgpu::TextureView> = HashMap::new();
         let ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, layers: &comp.layers, monitors: &monitors };
         // Comps: one that mixes in plainly is drawn straight into the master's stack (as with no comps); otherwise
@@ -562,6 +562,8 @@ impl Engine {
 
         // Each output: its own size and mapping surfaces.
         for o in comp.outputs.iter().filter(|o| o.enabled) {
+            // Its mapping, or the comp it shows as its program (one full-size slice).
+            let mapping = o.effective_mapping();
             let (ow, oh) = o.size((w, h));
             let (ow, oh) = (ow.max(16), oh.max(16));
             let slot = self.output_targets.entry(o.id).or_insert(None);
@@ -572,19 +574,18 @@ impl Engine {
             let [g0, g1] = o.color.uniforms();
             u.p[5] = g0;
             u.p[6] = g1;
-            if !o.mapping.active() {
+            if !mapping.active() {
                 u.opacity = fade;
                 passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
-                self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
+                self.push_masks(o.id, &mapping, &view, (ow, oh), &mut passes);
                 self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
-            self.push_scan(o.id, &view, (ow, oh), &mut passes);
                 self.push_scan(o.id, &view, (ow, oh), &mut passes);
                 continue;
             }
             // Black, then each enabled surface blended on top.
             u.opacity = 0.0;
             passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
-            for s in o.mapping.shown() {
+            for s in mapping.shown() {
                 // A layer's, group's or comp's own picture (black while it's off); the mix if it's gone.
                 let src = match s.layer {
                     Some(id) if comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() || comp.comp(id).is_some() => feeds.get(&id).cloned().unwrap_or_else(|| self.gpu.blank.clone()),
@@ -624,7 +625,7 @@ impl Engine {
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
                     u.uv_xform = input_xform;
-                    u.mode = o.mapping.test_pattern as u32;
+                    u.mode = mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
                     u.p[5] = g0;
@@ -642,7 +643,7 @@ impl Engine {
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
                     u.uv_xform = input_xform;
-                    u.mode = o.mapping.test_pattern as u32;
+                    u.mode = mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
                     u.p[5] = g0;
@@ -661,7 +662,7 @@ impl Engine {
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
                     u.uv_xform = input_xform;
-                    u.mode = o.mapping.test_pattern as u32;
+                    u.mode = mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, s.shape as u32 as f32];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
                     u.p[5] = g0;
@@ -676,7 +677,7 @@ impl Engine {
                 u.resolution = [ow as f32, oh as f32];
                 u.opacity = s.opacity * fade;
                 u.uv_xform = input_xform;
-                u.mode = o.mapping.test_pattern as u32;
+                u.mode = mapping.test_pattern as u32;
                 u.p[0] = [c[0][0], c[0][1], c[1][0], c[1][1]];
                 u.p[1] = [c[2][0], c[2][1], c[3][0], c[3][1]];
                 u.p[2] = [inv[0], inv[1], inv[2], inv[3]];
@@ -687,7 +688,7 @@ impl Engine {
                 [u.p[7], u.p[8]] = s.color.uniforms();
                 passes.push(Pass { entry: s.blend.entry(false), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
-            self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
+            self.push_masks(o.id, &mapping, &view, (ow, oh), &mut passes);
             self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
         }
         self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));

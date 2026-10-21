@@ -82,6 +82,10 @@ pub struct OutputConfig {
     /// The projector on this output, switched on/off and shuttered over PJLink.
     #[serde(default)]
     pub projector: Option<Projector>,
+    /// What this output shows when it isn't mapped: `None` = the main mix, `Some(comp)` = that comp as its own program
+    /// (a "master": several outputs, each its own mix).
+    #[serde(default)]
+    pub program: Option<u64>,
 }
 
 /// A network projector (PJLink): its address (IP or name, `:port` optional) and PJLink password (often empty).
@@ -156,12 +160,51 @@ impl GridOverlay {
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None }
     }
 }
 
 impl OutputConfig {
+    /// What the output draws: its mapping, or, showing a comp as its program with mapping off, one full-size slice
+    /// of that comp (its masks and test pattern kept). The engine reads this, never `mapping` directly.
+    pub fn effective_mapping(&self) -> std::borrow::Cow<'_, crate::mapping::Mapping> {
+        match self.program {
+            Some(comp) if !self.mapping.active() => {
+                let program = crate::mapping::Surface { id: u64::MAX - self.id, name: "Program".into(), layer: Some(comp), ..Default::default() };
+                std::borrow::Cow::Owned(crate::mapping::Mapping {
+                    enabled: true,
+                    surfaces: vec![program],
+                    masks: self.mapping.masks.clone(),
+                    test_pattern: self.mapping.test_pattern,
+                    ..Default::default()
+                })
+            }
+            _ => std::borrow::Cow::Borrowed(&self.mapping),
+        }
+    }
+
     pub fn size(&self, canvas: (u32, u32)) -> (u32, u32) {
         if self.width == 0 || self.height == 0 { canvas } else { (self.width, self.height) }
+    }
+}
+
+#[cfg(test)]
+mod program_tests {
+    use super::*;
+
+    /// An output showing a comp draws it as one full-size slice; with its own mapping on, the mapping wins.
+    #[test]
+    fn a_program_is_one_full_slice_until_mapping_is_on() {
+        let mut o = OutputConfig { id: 7, program: Some(31), ..Default::default() };
+        let m = o.effective_mapping();
+        assert!(m.active());
+        assert_eq!(m.layer_feeds().collect::<Vec<_>>(), vec![31]);
+        assert_eq!(m.surfaces[0].corners, [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+        o.mapping.enabled = true;
+        o.mapping.add_surface(40);
+        assert_eq!(o.effective_mapping().surfaces[0].id, 40, "its own mapping");
+        o.program = None;
+        o.mapping = Default::default();
+        assert!(!o.effective_mapping().active(), "the main mix");
     }
 }
