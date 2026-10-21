@@ -150,6 +150,9 @@ pub struct State {
     /// "From a link…" (posts on X, Instagram…): the window and its download.
     #[cfg(not(target_arch = "wasm32"))]
     pub link_import: crate::panels::LinkImport,
+    /// Shader Editor › Describe it… (the AI writes a shader).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub ai_shader: crate::panels::AiShader,
     /// Stage scanner (patterns on an output, a camera watching): makes stage photos.
     #[cfg(not(target_arch = "wasm32"))]
     pub scanner: crate::scanner::Scanner,

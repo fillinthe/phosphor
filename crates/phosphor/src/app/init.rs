@@ -225,6 +225,8 @@ impl PhosphorApp {
                 scanner: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 link_import: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
+                ai_shader: Default::default(),
                 clip_page: 0,
                 media_memory_at: 0.0,
                 #[cfg(not(target_arch = "wasm32"))]

@@ -525,6 +525,14 @@ fn bench_shader(st: &mut State, slug: String, source: String, name: &str) -> Opt
     Some(name.to_string())
 }
 
+/// Puts new source into shader `index` (Describe it… › Change the open shader), compiles and saves it, and opens it.
+pub fn replace_source(st: &mut State, index: usize, source: String) {
+    let Some(sh) = st.editor.shaders.get_mut(index) else { return };
+    sh.source = source;
+    st.editor.current = Some(index);
+    compile(st, index, true);
+}
+
 pub fn new_shader(st: &mut State, source: String) {
     let name = custom::parse_header(&source).map(|h| h.name).unwrap_or_else(|_| "shader".into());
     let base = custom::slug(&name);
@@ -571,6 +579,10 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             .response
             .on_hover_text("Build an effect from blocks wired together (blur, warp, colour, mix, trails): no code");
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::MAGIC_WAND, "Describe it…")).on_hover_text("Say what it should look like and the AI writes the shader (your own Anthropic API key)").clicked() {
+            st.ai_shader.open = true;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy…")).on_hover_text("Paste a shader from shadertoy.com").clicked() {
             st.editor.shadertoy.get_or_insert_with(Default::default);

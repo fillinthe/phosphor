@@ -27,6 +27,8 @@ mod layer_windows;
 mod layers;
 #[cfg(not(target_arch = "wasm32"))]
 mod link_import;
+#[cfg(not(target_arch = "wasm32"))]
+mod ai_shader;
 mod modulators;
 mod sequencer;
 mod leds;
@@ -69,6 +71,8 @@ pub(crate) use layer_windows::*;
 pub(crate) use layers::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use link_import::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use ai_shader::*;
 pub(crate) use leds::*;
 pub(crate) use mapping::*;
 pub(crate) use media::*;
