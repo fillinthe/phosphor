@@ -2,7 +2,17 @@
 
 Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` done (with what was checked).
 
-## Quickest first
+## Next round (2026-10-21, "keep going on the large stuff"), quickest first
+
+- [ ] **Stereo audio pictures**: shaders' audio inputs get left and right (today mono), so XY scopes and stereo
+      visualizers work; then ship px-stream's XY scopes.
+- [ ] **Instanced vertex shaders**: draw a shape many times (`gl_InstanceID`), which unlocks MadMapper's particle and
+      instancing effects (Transform Particles, instancing, particles).
+- [ ] **Hand-picked lostjared effects**: render every one of the 2,700 (MIT) to a picture, sort out the blank /
+      broken / near-duplicates automatically, look at the rest on contact sheets, ship the best few dozen.
+- [ ] **Hap R recording** (BC7: Hap's best quality), and with it a real check of Hap R playback.
+
+## First round (asked 2026-10-21)
 
 - [~] **Crash reports sent automatically** (#5): the app side is done (below); **needs you:** a private endpoint
       on your server. Spec: accept `POST` with JSON `{"version", "os", "arch", "report"}` (all strings), answer
