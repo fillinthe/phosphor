@@ -175,6 +175,19 @@ mod tests {
     }
 
     #[test]
+    fn only_selected_shows_just_those() {
+        let mut m = three();
+        m.enabled = true;
+        m.solo = vec![2];
+        assert_eq!(m.shown().map(|s| s.id).collect::<Vec<_>>(), vec![2]);
+        m.solo.clear();
+        assert_eq!(m.shown().count(), 3);
+        m.solo = vec![2];
+        let back: Mapping = serde_json::from_str(&serde_json::to_string(&m).unwrap()).unwrap();
+        assert!(back.solo.is_empty(), "not saved");
+    }
+
+    #[test]
     fn groups_survive_save_and_load() {
         let mut m = three();
         m.group_slices(10, &[1, 3]);
