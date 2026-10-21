@@ -210,6 +210,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     if let Some(id) = clicked {
         super::mapping_points::click_slice(ui.ctx(), selected, id, shift);
     }
+    slice_drop(ui, frame, mapping);
     if let Some(d) = group_move {
         super::mapping_points::move_slices(mapping, &many, d);
     }
@@ -678,6 +679,93 @@ pub(crate) fn mask_attach_row(ui: &mut egui::Ui, mapping: &mut phosphor_engine::
 pub(crate) const PICK_STAGE_PHOTO: &str = "phosphor_pick_stage_photo";
 /// Temp-data key: a slice asked for a file to show (the app opens the dialog).
 pub(crate) const PICK_SLICE_FILE: &str = "phosphor_pick_slice_file";
+/// A media item, live input or layer dropped onto a slice on the mapping canvas (`SliceDrop`, for the app).
+pub(crate) const SLICE_DROP: &str = "phosphor_slice_drop";
+
+/// What was dropped onto slice `.0`.
+#[derive(Clone)]
+pub(crate) enum SliceDrop {
+    Media(usize),
+    Source(super::SourceDrag),
+    Layer(u64),
+}
+
+/// Carries out a drop on slice `sid`: a file or live input gets a layer of its own shown there (not in the mix), a
+/// layer is shown there.
+pub(crate) fn apply_slice_drop(comp: &mut phosphor_engine::Composition, sid: u64, what: SliceDrop) {
+    match what {
+        SliceDrop::Media(i) => {
+            if let Some(item) = comp.media_bin.get(i).cloned() {
+                comp.show_file_on_slice(sid, &item.name, crate::media::spec_for_path(&item.path));
+            }
+        }
+        SliceDrop::Source(d) => {
+            comp.show_file_on_slice(sid, &d.name, d.source);
+        }
+        SliceDrop::Layer(l) => {
+            if comp.layers.iter().any(|x| x.id == l)
+                && let Some(s) = comp.slice_mut(sid)
+            {
+                s.layer = Some(l);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod slice_drop_tests {
+    use super::*;
+
+    #[test]
+    fn drops_put_things_on_the_slice() {
+        let mut comp = phosphor_engine::Composition::default();
+        let base = comp.add_layer().id;
+        comp.add_output();
+        let sid = comp.new_id();
+        comp.outputs[0].mapping.add_surface(sid);
+        comp.add_media("clip.mov", "/x/clip.mov");
+        apply_slice_drop(&mut comp, sid, SliceDrop::Media(0));
+        let shown = comp.slice(sid).and_then(|s| s.layer).expect("a layer on the slice");
+        let l = comp.layers.iter().find(|l| l.id == shown).unwrap();
+        assert!(!l.in_mix && l.name == "clip.mov");
+        apply_slice_drop(&mut comp, sid, SliceDrop::Source(crate::panels::SourceDrag { name: "Cam".into(), source: phosphor_engine::SourceSpec::None }));
+        assert_eq!(comp.layers.len(), 3);
+        apply_slice_drop(&mut comp, sid, SliceDrop::Layer(base));
+        assert_eq!(comp.slice(sid).unwrap().layer, Some(base));
+        apply_slice_drop(&mut comp, sid, SliceDrop::Layer(999));
+        assert_eq!(comp.slice(sid).unwrap().layer, Some(base), "no such layer: nothing changes");
+    }
+}
+
+/// Media, live inputs and layers dragged over the mapping canvas: the slice under the pointer lights up, and a drop
+/// asks the app to show it there (`SLICE_DROP`).
+fn slice_drop(ui: &mut egui::Ui, frame: egui::Rect, mapping: &Mapping) {
+    let ctx = ui.ctx().clone();
+    let carrying = egui::DragAndDrop::has_payload_of_type::<super::MediaDrag>(&ctx)
+        || egui::DragAndDrop::has_payload_of_type::<super::SourceDrag>(&ctx)
+        || egui::DragAndDrop::has_payload_of_type::<u64>(&ctx);
+    let Some(pos) = ctx.pointer_hover_pos().filter(|p| carrying && frame.contains(*p)) else { return };
+    let at = [(pos.x - frame.left()) / frame.width().max(1.0), (pos.y - frame.top()) / frame.height().max(1.0)];
+    // The topmost slice under the pointer (later slices draw on top).
+    let Some(s) = mapping.surfaces.iter().rev().find(|s| s.line.is_none() && s.model.is_none() && s.contains(at)) else { return };
+    let to_screen = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
+    let outline: Vec<egui::Pos2> = s.outline(16).into_iter().map(to_screen).collect();
+    ui.painter().add(egui::Shape::convex_polygon(outline, accent().gamma_multiply(0.25), Stroke::new(2.0, accent())));
+    ui.painter().text(to_screen(s.center()), egui::Align2::CENTER_CENTER, format!("Show on {}", s.name), egui::FontId::proportional(13.0), Color32::WHITE);
+    if !ctx.input(|i| i.pointer.any_released()) {
+        return;
+    }
+    let what = if let Some(m) = egui::DragAndDrop::take_payload::<super::MediaDrag>(&ctx) {
+        SliceDrop::Media(m.0)
+    } else if let Some(d) = egui::DragAndDrop::take_payload::<super::SourceDrag>(&ctx) {
+        SliceDrop::Source((*d).clone())
+    } else if let Some(l) = egui::DragAndDrop::take_payload::<u64>(&ctx) {
+        SliceDrop::Layer(*l)
+    } else {
+        return;
+    };
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(SLICE_DROP), (s.id, what)));
+}
 
 pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], others: &[(u64, String)]) {
     surface_source(ui, s, layers, groups, others);

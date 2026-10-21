@@ -66,6 +66,16 @@ impl PhosphorApp {
         crate::panels::link_window(&ctx, &mut self.state);
         #[cfg(not(target_arch = "wasm32"))]
         crate::panels::ai_shader_window(&ctx, &mut self.state);
+        // Something dropped onto a slice on the mapping canvas: a file or input gets a layer of its own there, a
+        // layer is shown there.
+        if let Some((sid, what)) = ctx.data_mut(|d| {
+            let id = egui::Id::new(crate::panels::SLICE_DROP);
+            let got = d.get_temp::<(u64, crate::panels::SliceDrop)>(id);
+            d.remove::<(u64, crate::panels::SliceDrop)>(id);
+            got
+        }) {
+            crate::panels::apply_slice_drop(&mut self.state.comp, sid, what);
+        }
         // A slice asked for a picture or movie of its own.
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(sid) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(crate::panels::PICK_SLICE_FILE))) {
