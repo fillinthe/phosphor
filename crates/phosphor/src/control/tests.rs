@@ -468,3 +468,23 @@ fn lights_are_controls() {
     set_target(&mut comp, &pan, 0.9, &mut deferred);
     assert_eq!(comp.dmx.fixtures[0].pan, 0.25, "locked");
 }
+
+/// A moving head's extra channels (gobo, zoom…) go out after its layout and are controls too.
+#[test]
+fn extra_light_channels() {
+    let mut comp = Composition::default();
+    let mut f = phosphor_engine::Fixture { id: 5, name: "Head".into(), shape: phosphor_engine::FixtureShape::MovingHead, universe: 0, channel: 1, ..Default::default() };
+    f.extra = vec![phosphor_engine::ExtraChannel { name: "Gobo".into(), value: 0.0 }, phosphor_engine::ExtraChannel { name: "Zoom".into(), value: 0.0 }];
+    comp.dmx.fixtures.push(f);
+    let zoom = ControlTarget::Fixture { fixture: 5, param: 6 };
+    set_target(&mut comp, &zoom, 0.5, &mut Vec::new());
+    assert_eq!(get_target(&comp, &zoom), Some(0.5));
+    assert!(all_targets(&comp).iter().any(|(t, n)| *t == zoom && n == "Light Head · Zoom"));
+    assert_eq!(default_osc_address(&zoom), "/phosphor/light/5/extra/2");
+    let mut universes = std::collections::BTreeMap::new();
+    comp.dmx.fixtures[0].write(&[[255, 0, 0, 255]], &mut universes, 0.0);
+    let u = universes[&0];
+    // Rgb8 = 8 channels, then Gobo (0) and Zoom (128); nothing after.
+    assert_eq!((u[8], u[9], u[10]), (0, 128, 0));
+    assert_eq!(comp.dmx.fixtures[0].next_free(), (0, 11));
+}

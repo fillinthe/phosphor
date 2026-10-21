@@ -329,7 +329,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     }
     for f in &comp.dmx.fixtures {
         for p in f.params() {
-            out.push((ControlTarget::Fixture { fixture: f.id, param: p }, format!("Light {} · {}", f.name, phosphor_engine::Fixture::PARAMS[p as usize])));
+            out.push((ControlTarget::Fixture { fixture: f.id, param: p }, format!("Light {} · {}", f.name, f.param_name(p))));
         }
     }
     for c in comp.comps.iter().filter(|_| comp.comps.len() > 1) {
@@ -390,7 +390,10 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerEnabled(id) => format!("/phosphor/layer/{id}/on"),
         ControlTarget::SliceOpacity(id) => format!("/phosphor/slice/{id}/opacity"),
         ControlTarget::SliceEnabled(id) => format!("/phosphor/slice/{id}/on"),
-        ControlTarget::Fixture { fixture, param } => format!("/phosphor/light/{fixture}/{}", phosphor_engine::Fixture::PARAMS.get(*param as usize).unwrap_or(&"value").replace(' ', "_")),
+        ControlTarget::Fixture { fixture, param } => match phosphor_engine::Fixture::PARAMS.get(*param as usize) {
+            Some(name) => format!("/phosphor/light/{fixture}/{}", name.replace(' ', "_")),
+            None => format!("/phosphor/light/{fixture}/extra/{}", param - 4),
+        },
         ControlTarget::GeneratorParam { layer, index } => format!("/phosphor/layer/{layer}/source/{}", index + 1),
         ControlTarget::EffectParam { effect, index } => format!("/phosphor/fx/{effect}/{}", index + 1),
         ControlTarget::EffectMix(id) => format!("/phosphor/fx/{id}/mix"),
