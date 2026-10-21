@@ -4,6 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.94 (2026-10-21)
+
+- **Library › Inputs:** every camera, capture card, screen, window, Syphon and NDI source in one list, plus a stream
+  address. Drag one onto a layer or a clip cell, or put it on the selected layer or a new one.
+- **Drag onto a slice:** in the Mapping Studio, drop a media file, a live input or a layer on a slice to show it there.
+- **The Inspector shows the clip you click:** name, how a press plays it, MIDI mapping, sound, its own settings.
+- **Moving heads: extra channels** (gobo, prism, zoom, strobe…), each a control you can map and modulate.
+- **Fixed:** dragging media onto a layer card did nothing; some sliders were hidden off the edge (a moving head's
+  tilt and dimmer, the 3D-model mapping sliders, LED gamma).
+
 ## 0.2.93 (2026-10-21)
 
 - **Curved slice edges:** turn on Curved edges on a slice and drag the two handles on each edge to bend it onto
