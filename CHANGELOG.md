@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.99 (2026-10-21)
+
+- **53 new effects** hand-picked from Jared Bruni's lostjared collection: tunnels, kaleidoscopes, mirrors, spirals,
+  stained glass, neon lattices. Several move with the music. Find them under "lostjared" in Effects.
+- Imported ISF shaders that use `textureGrad` now load.
+
 ## 0.2.98 (2026-10-21)
 
 - **Hap R:** record and convert to Hap R, Hap's best quality (better colour than Hap Q, and it keeps
