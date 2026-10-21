@@ -83,6 +83,15 @@ impl Engine {
         *slot = Some(Media::Nv12 { luma: target(luma), chroma: target(chroma), full_range });
     }
 
+    /// A zero-copy 4:4:4-with-alpha frame (one Rgba16Unorm texture of A, Y, Cb, Cr; ProRes 4444) for a layer.
+    pub fn set_layer_ayuv_texture(&mut self, layer: u64, outgoing: bool, texture: wgpu::Texture) {
+        let size = texture.size();
+        let view = texture.create_view(&Default::default());
+        let res = self.layers.entry(layer).or_default();
+        let slot = if outgoing { &mut res.media_out } else { &mut res.media };
+        *slot = Some(Media::Ayuv(Target { texture, view, width: size.width, height: size.height }));
+    }
+
     /// The GPU can sample block-compressed (BC/DXT) textures: Hap movies skip CPU decoding.
     pub fn compressed_supported(&self) -> bool {
         self.gpu.device.features().contains(wgpu::Features::TEXTURE_COMPRESSION_BC)

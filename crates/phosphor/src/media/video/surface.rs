@@ -45,8 +45,9 @@ pub fn set_sixteen_bit(on: bool) {
     SIXTEEN_BIT.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// A retained CVPixelBuffer (released on drop), with its layout. Sent from the decoder thread to the UI thread.
-pub struct PixelBuffer(*mut c_void, bool, bool);
+/// A retained CVPixelBuffer (released on drop), with its layout: (10-bit, full range, AYUV). Sent from the decoder
+/// thread to the UI thread.
+pub struct PixelBuffer(*mut c_void, bool, bool, bool);
 
 // SAFETY: CVPixelBuffers are reference-counted CoreFoundation objects, usable from any thread.
 unsafe impl Send for PixelBuffer {}
@@ -63,7 +64,7 @@ impl Clone for PixelBuffer {
     fn clone(&self) -> Self {
         // SAFETY: the buffer is alive while `self` holds its reference; this adds one more.
         unsafe { CFRetain(self.0) };
-        PixelBuffer(self.0, self.1, self.2)
+        PixelBuffer(self.0, self.1, self.2, self.3)
     }
 }
 
@@ -77,12 +78,14 @@ impl PixelBuffer {
             return None;
         }
         let code = unsafe { CVPixelBufferGetPixelFormatType(pb) }.to_be_bytes();
-        let (_, ten, full) = *LAYOUTS.iter().find(|(c, _, _)| **c == code)?;
+        // 'y416': A, Y, Cb, Cr at 16 bits in one plane (ProRes 4444 with alpha).
+        let ayuv = &code == b"y416";
+        let (ten, full) = if ayuv { (true, false) } else { LAYOUTS.iter().find(|(c, _, _)| **c == code).map(|(_, t, f)| (*t, *f))? };
         if (ten && !SIXTEEN_BIT.load(std::sync::atomic::Ordering::Relaxed)) || unsafe { CVPixelBufferGetIOSurface(pb) }.is_null() {
             return None;
         }
         unsafe { CFRetain(pb) };
-        Some(Self(pb, ten, full))
+        Some(Self(pb, ten, full, ayuv))
     }
 
     /// Full range (0–255) rather than TV range (16–235).
@@ -99,6 +102,17 @@ impl PixelBuffer {
     pub fn size(&self) -> (u32, u32) {
         // SAFETY: valid, retained pixel buffer.
         unsafe { (CVPixelBufferGetWidth(self.0) as u32, CVPixelBufferGetHeight(self.0) as u32) }
+    }
+
+    /// One plane of A, Y, Cb, Cr (`Engine::set_layer_ayuv_texture`) rather than luma + chroma.
+    pub fn is_ayuv(&self) -> bool {
+        self.3
+    }
+
+    /// An AYUV frame as one Rgba16Unorm texture sharing its memory (MTLPixelFormatRGBA16Unorm = 110).
+    pub fn ayuv_texture(&self, device: &wgpu::Device) -> Option<wgpu::Texture> {
+        // SAFETY: the pixel buffer (and so its IOSurface) is retained by `self` while the texture is in use.
+        unsafe { iosurface_texture(device, CVPixelBufferGetIOSurface(self.0), 0, (wgpu::TextureFormat::Rgba16Unorm, 110), self.size(), false) }
     }
 
     /// The luma and chroma planes as wgpu textures sharing the frame's memory.

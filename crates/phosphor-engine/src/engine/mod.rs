@@ -15,6 +15,8 @@ enum Media {
     Rgba(Target),
     /// Bi-planar video frame: luma (R8/R16) + interleaved chroma (RG8/RG16); TV range unless `full_range`.
     Nv12 { luma: Target, chroma: Target, full_range: bool },
+    /// 4:4:4 with alpha in one 16-bit RGBA texture holding A, Y, Cb, Cr (VideoToolbox 'y416': ProRes 4444).
+    Ayuv(Target),
     /// Block-compressed frame straight from a Hap movie (BC1/BC3); `ycocg` = Hap Q colour.
     Compressed { target: Target, alpha: Option<Target>, format: CompressedFormat },
 }
@@ -118,17 +120,19 @@ enum Frame {
     Yuv { luma: wgpu::TextureView, chroma: wgpu::TextureView, w: u32, h: u32, full_range: bool },
     /// Hap Q: scaled YCoCg in a BC3 texture; Hap Q Alpha adds a BC4 alpha texture.
     YCoCg { view: wgpu::TextureView, alpha: Option<wgpu::TextureView>, w: u32, h: u32 },
+    /// A, Y, Cb, Cr in one texture (ProRes 4444 with alpha, zero-copy).
+    Ayuv { view: wgpu::TextureView, w: u32, h: u32 },
 }
 
 impl Frame {
     fn size(&self) -> (u32, u32) {
         match self {
-            Frame::Rgb { w, h, .. } | Frame::Yuv { w, h, .. } | Frame::YCoCg { w, h, .. } => (*w, *h),
+            Frame::Rgb { w, h, .. } | Frame::Yuv { w, h, .. } | Frame::YCoCg { w, h, .. } | Frame::Ayuv { w, h, .. } => (*w, *h),
         }
     }
 
     /// What a pass samples for this frame: (tex0, tex2, `Uniforms::yuv` conversion: 0 RGB, 1 NV12 TV range,
-    /// 2 Hap Q YCoCg, 3 NV12 full range).
+    /// 2 Hap Q YCoCg, 3 NV12 full range, 4 Hap Q Alpha, 5 AYUV 16-bit TV range).
     /// Every shader reading a source goes through `sample_source`, which uses these.
     fn bind(self) -> (wgpu::TextureView, Option<wgpu::TextureView>, u32) {
         match self {
@@ -138,6 +142,7 @@ impl Frame {
                 let mode = if alpha.is_some() { 4 } else { 2 };
                 (view, alpha, mode)
             }
+            Frame::Ayuv { view, .. } => (view, None, 5),
         }
     }
 }
