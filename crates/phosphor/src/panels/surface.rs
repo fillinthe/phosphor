@@ -345,8 +345,13 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
     }
 }
 
-/// Edit mode side panel for the selected widget. Returns false once it's deleted.
-fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(ControlTarget, String)]) -> bool {
+/// The widget the Control Surface has selected (edit mode), if any.
+pub(crate) fn selected_widget(ctx: &egui::Context) -> Option<u64> {
+    ctx.data(|d| d.get_temp::<Option<u64>>(egui::Id::new("surface_selected"))).flatten()
+}
+
+/// Edit mode side panel for the selected widget (also the Inspector). Returns false once it's deleted.
+pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(ControlTarget, String)]) -> bool {
     let mut delete = false;
     let mut duplicate = false;
     let Some(w) = st.comp.surface.widget_mut(id) else { return false };
