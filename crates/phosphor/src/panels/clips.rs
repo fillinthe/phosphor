@@ -286,10 +286,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                             let at = rect.right_top() + egui::vec2(-4.0, 4.0);
                             p.text(at, egui::Align2::RIGHT_TOP, icon::SPEAKER_SIMPLE_X, egui::FontId::proportional(12.0), crate::theme::WARN);
                         }
-                        if let Some(m) = resp.dnd_release_payload::<MediaDrag>() {
+                        if let Some(m) = crate::ui::drop_payload::<MediaDrag>(&resp) {
                             set_cell = Some((idx, c, m.0));
                         }
-                        if let Some(d) = resp.dnd_release_payload::<super::SourceDrag>() {
+                        if let Some(d) = crate::ui::drop_payload::<super::SourceDrag>(&resp) {
                             set_source = Some((idx, c, (*d).clone()));
                         }
                         // Flash / piano clips play from the moment the button goes down until it comes up.

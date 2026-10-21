@@ -218,7 +218,7 @@ pub(crate) fn master_card(
         select = true;
     }
     // Only effects make sense on MASTER.
-    let dropped = frame.response.dnd_release_payload::<crate::explorer::PaletteDrag>().map(|p| *p).filter(|d| d.effect.is_some());
+    let dropped = crate::ui::drop_payload::<crate::explorer::PaletteDrag>(&frame.response).map(|p| *p).filter(|d| d.effect.is_some());
     if frame.response.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some_and(|d| d.effect.is_some()) {
         ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
@@ -375,10 +375,10 @@ pub(crate) fn layer_card(
         }
     });
     // Drop target for a dragged layer or a media bin item.
-    let dropped = frame.response.dnd_release_payload::<u64>().map(|p| *p);
-    let dropped_media = frame.response.dnd_release_payload::<MediaDrag>().map(|p| p.0);
-    let dropped_palette = frame.response.dnd_release_payload::<crate::explorer::PaletteDrag>().map(|p| *p);
-    let dropped_source = frame.response.dnd_release_payload::<SourceDrag>().map(|p| (*p).clone());
+    let dropped = crate::ui::drop_payload::<u64>(&frame.response).map(|p| *p);
+    let dropped_media = crate::ui::drop_payload::<MediaDrag>(&frame.response).map(|p| p.0);
+    let dropped_palette = crate::ui::drop_payload::<crate::explorer::PaletteDrag>(&frame.response).map(|p| *p);
+    let dropped_source = crate::ui::drop_payload::<SourceDrag>(&frame.response).map(|p| (*p).clone());
     let hovering = frame.response.dnd_hover_payload::<u64>().is_some_and(|p| *p != layer.id)
         || frame.response.dnd_hover_payload::<SourceDrag>().is_some()
         || frame.response.dnd_hover_payload::<MediaDrag>().is_some()

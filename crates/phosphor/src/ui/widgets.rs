@@ -275,6 +275,13 @@ pub(crate) fn value_bubble(ui: &egui::Ui, slider: &egui::Response, text: impl In
     painter.galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
 }
 
+/// What was dropped on `r`, if it's a `T`. Use this, never `Response::dnd_release_payload`: egui's takes whatever
+/// is being carried even when it's another type, so a target that checks for one kind first loses the others.
+pub(crate) fn drop_payload<T: std::any::Any + Send + Sync>(r: &egui::Response) -> Option<std::sync::Arc<T>> {
+    r.dnd_hover_payload::<T>()?;
+    r.dnd_release_payload::<T>()
+}
+
 /// Grey help text. In a row it shrinks to the space left (full text on hover) instead of
 /// overlapping its neighbours; on its own line it wraps.
 pub(crate) fn hint(ui: &mut egui::Ui, text: impl Into<egui::RichText>) -> egui::Response {

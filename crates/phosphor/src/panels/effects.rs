@@ -105,7 +105,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                 });
             });
         });
-        if let Some(p) = frame.response.dnd_release_payload::<FxDrag>() {
+        if let Some(p) = crate::ui::drop_payload::<FxDrag>(&frame.response) {
             drop = Some((p.0, fx.id));
         }
         if frame.response.dnd_hover_payload::<FxDrag>().is_some_and(|p| p.0 != fx.id) {
