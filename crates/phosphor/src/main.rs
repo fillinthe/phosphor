@@ -55,6 +55,8 @@ mod menu;
 mod syphon;
 #[cfg(target_os = "macos")]
 mod screen_capture;
+#[cfg(target_os = "macos")]
+mod ffgl;
 #[cfg(not(target_arch = "wasm32"))]
 mod tracking;
 #[cfg(not(target_arch = "wasm32"))]
@@ -101,6 +103,14 @@ fn main() -> eframe::Result {
     if args.get(1).map(String::as_str) == Some("--watchdog") {
         if let Some(pid) = args.get(2).and_then(|p| p.parse().ok()) {
             recovery::run_watchdog(pid);
+        }
+        return Ok(());
+    }
+    // Opens one FFGL plugin and prints what it says (run by the plugin scan, so a bad plugin only takes this down).
+    #[cfg(target_os = "macos")]
+    if args.get(1).map(String::as_str) == Some("--ffgl-probe") {
+        if let Some(path) = args.get(2) {
+            println!("{}", ffgl::probe_main(std::path::Path::new(path)));
         }
         return Ok(());
     }

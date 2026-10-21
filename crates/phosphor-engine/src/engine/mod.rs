@@ -82,6 +82,8 @@ struct PassBuffers {
 /// Resource keys for the effect a "Through an effect" transition runs on the incoming / outgoing picture.
 const TRANSITION_IN: u64 = 1 << 62;
 const TRANSITION_OUT: u64 = 1 << 61;
+/// External (plugin) source keys: a layer's outgoing source during a transition.
+const EXTERNAL_OUTGOING: u64 = 1 << 60;
 
 /// `multipass` keys for a layer's generator source (and its outgoing copy in transitions).
 const GENERATOR_KEY: u64 = u64::MAX;
@@ -155,6 +157,8 @@ struct Pass {
 
 mod cutout;
 mod encode;
+mod external;
+pub use external::ExternalJob;
 mod fit;
 mod media;
 mod mesh;
@@ -210,6 +214,8 @@ pub struct Engine {
     monitor_capture: crate::capture::Capture,
     /// Remove background mattes and the pictures read back to make them.
     cutouts: cutout::Cutouts,
+    /// External effects / sources (FFGL): their textures from the app and this frame's jobs.
+    externals: external::Externals,
     preview_source: u64,
     preview_src: Option<Target>,
     preview_targets: Vec<Option<Target>>,
@@ -262,6 +268,7 @@ impl Engine {
             monitor_reads: Vec::new(),
             monitor_capture: Default::default(),
             cutouts: Default::default(),
+            externals: Default::default(),
             preview_source: MASTER_ID,
             preview_src: None,
             preview_targets: Vec::new(),
@@ -398,6 +405,11 @@ impl Engine {
         &self.gpu.device
     }
 
+    /// Waits until the GPU has done everything submitted so far (before another API reads what it drew).
+    pub fn wait_idle(&self) {
+        let _ = self.gpu.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
+    }
+
     /// The final composited frame. Its identity changes only when the resolution does;
     /// compare `output_generation()` to know when to re-register it with a UI.
     pub fn output(&self) -> Option<&Target> {
@@ -419,6 +431,7 @@ impl Engine {
         let (w, h) = (comp.width.max(16), comp.height.max(16));
         let device = self.gpu.device.clone();
         self.collect_compiled();
+        self.externals_new_frame();
         if let Some(t) = &mut self.gpu_timer {
             t.poll();
         }
@@ -724,6 +737,7 @@ impl Engine {
         self.encode(&passes);
         self.read_samples();
         self.finish_cutouts();
+        self.sweep_externals();
         for (i, tag) in std::mem::take(&mut self.monitor_reads) {
             if let Some(t) = self.monitor_targets.get(i).and_then(|t| t.as_ref()) {
                 self.monitor_capture.enqueue_tagged(&self.gpu.device, &self.gpu.queue, t, tag);

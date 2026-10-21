@@ -146,6 +146,9 @@ pub struct State {
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,
+    /// FFGL plugins: the list found, and the instances drawing for effects and sources.
+    #[cfg(target_os = "macos")]
+    pub ffgl: crate::ffgl::Ffgl,
     /// A Resolume composition waiting for the deck choice.
     #[cfg(not(target_arch = "wasm32"))]
     pub avc_import: Option<import::AvcImport>,

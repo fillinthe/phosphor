@@ -92,46 +92,64 @@ impl PixelBuffer {
     /// The luma and chroma planes as wgpu textures sharing the frame's memory.
     pub fn planes(&self, device: &wgpu::Device) -> Option<(wgpu::Texture, wgpu::Texture)> {
         let (w, h) = self.size();
-        // SAFETY: only reading the raw MTLDevice of a Metal-backed wgpu device.
-        let hal = unsafe { device.as_hal::<wgpu::hal::api::Metal>() }?;
-        let raw = hal.raw_device();
         // SAFETY: valid, retained pixel buffer.
         let surface = unsafe { CVPixelBufferGetIOSurface(self.0) };
-        let plane = |index: usize, format: wgpu::TextureFormat, mtl_format: usize, pw: u32, ph: u32| -> Option<wgpu::Texture> {
-            let class = AnyClass::get(c"MTLTextureDescriptor")?;
-            // SAFETY: +[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:width:height:mipmapped:],
-            // -[MTLDevice newTextureWithDescriptor:iosurface:plane:] (returns +1).
-            let tex: Option<Retained<ProtocolObject<dyn MTLTexture>>> = unsafe {
-                let desc: *mut AnyObject = msg_send![class, texture2DDescriptorWithPixelFormat: mtl_format, width: pw as usize, height: ph as usize, mipmapped: false];
-                let _: () = msg_send![desc, setUsage: 1usize]; // MTLTextureUsageShaderRead
-                msg_send![&**raw, newTextureWithDescriptor: desc, iosurface: surface, plane: index]
-            };
-            let tex = tex?;
-            // SAFETY: a live, sampleable 2D Metal texture from the same device.
-            let hal_tex = unsafe {
-                wgpu::hal::metal::Device::texture_from_raw(tex, format, MTLTextureType::Type2D, 1, 1, wgpu::hal::CopyExtent { width: pw, height: ph, depth: 1 }, None)
-            };
-            let desc = wgpu::TextureDescriptor {
-                label: Some("video plane"),
-                size: wgpu::Extent3d { width: pw, height: ph, depth_or_array_layers: 1 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            };
-            // SAFETY: the hal texture matches `desc`.
-            Some(unsafe { device.create_texture_from_hal::<wgpu::hal::api::Metal>(hal_tex, &desc, wgpu::TextureUses::RESOURCE) })
-        };
         // MTLPixelFormat R8Unorm = 10, RG8Unorm = 30, R16Unorm = 20, RG16Unorm = 60 (10-bit sits in the high bits).
         let (lf, lm, cf, cm) = if self.1 {
             (wgpu::TextureFormat::R16Unorm, 20, wgpu::TextureFormat::Rg16Unorm, 60)
         } else {
             (wgpu::TextureFormat::R8Unorm, 10, wgpu::TextureFormat::Rg8Unorm, 30)
         };
-        let luma = plane(0, lf, lm, w, h)?;
-        let chroma = plane(1, cf, cm, w.div_ceil(2), h.div_ceil(2))?;
+        // SAFETY: the pixel buffer (and so its IOSurface) is retained by `self` while the textures are in use.
+        let luma = unsafe { iosurface_texture(device, surface, 0, (lf, lm), (w, h), false) }?;
+        let chroma = unsafe { iosurface_texture(device, surface, 1, (cf, cm), (w.div_ceil(2), h.div_ceil(2)), false) }?;
         Some((luma, chroma))
     }
+}
+
+/// An IOSurfaceRef as Objective-C sees it (`^{__IOSurface=}`), so message sends type-check in debug builds.
+#[repr(C)]
+struct IOSurfaceOpaque {
+    _private: [u8; 0],
+}
+
+// SAFETY: IOSurfaceRef is a pointer to the opaque `struct __IOSurface`.
+unsafe impl objc2::encode::RefEncode for IOSurfaceOpaque {
+    const ENCODING_REF: objc2::encode::Encoding = objc2::encode::Encoding::Pointer(&objc2::encode::Encoding::Struct("__IOSurface", &[]));
+}
+
+/// A wgpu texture on plane `plane` of an IOSurface (no copy): `format` = (wgpu format, MTLPixelFormat number).
+/// `render` = it can also be drawn into (RENDER_ATTACHMENT), not only sampled.
+///
+/// # Safety
+/// `surface` must be a valid IOSurfaceRef that outlives the texture, with a plane of that size and format.
+pub unsafe fn iosurface_texture(device: &wgpu::Device, surface: *mut c_void, plane: usize, format: (wgpu::TextureFormat, usize), (w, h): (u32, u32), render: bool) -> Option<wgpu::Texture> {
+    // SAFETY: only reading the raw MTLDevice of a Metal-backed wgpu device.
+    let hal = unsafe { device.as_hal::<wgpu::hal::api::Metal>() }?;
+    let raw = hal.raw_device();
+    let class = AnyClass::get(c"MTLTextureDescriptor")?;
+    // SAFETY: +[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:width:height:mipmapped:],
+    // -[MTLDevice newTextureWithDescriptor:iosurface:plane:] (returns +1).
+    let tex: Option<Retained<ProtocolObject<dyn MTLTexture>>> = unsafe {
+        let desc: *mut AnyObject = msg_send![class, texture2DDescriptorWithPixelFormat: format.1, width: w as usize, height: h as usize, mipmapped: false];
+        // MTLTextureUsageShaderRead (1), | RenderTarget (4).
+        let _: () = msg_send![desc, setUsage: if render { 5usize } else { 1usize }];
+        msg_send![&**raw, newTextureWithDescriptor: desc, iosurface: surface as *mut IOSurfaceOpaque, plane: plane]
+    };
+    let tex = tex?;
+    // SAFETY: a live 2D Metal texture from the same device.
+    let hal_tex = unsafe { wgpu::hal::metal::Device::texture_from_raw(tex, format.0, MTLTextureType::Type2D, 1, 1, wgpu::hal::CopyExtent { width: w, height: h, depth: 1 }, None) };
+    let usage = if render { wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT } else { wgpu::TextureUsages::TEXTURE_BINDING };
+    let desc = wgpu::TextureDescriptor {
+        label: Some("iosurface"),
+        size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: format.0,
+        usage,
+        view_formats: &[],
+    };
+    // SAFETY: the hal texture matches `desc`.
+    Some(unsafe { device.create_texture_from_hal::<wgpu::hal::api::Metal>(hal_tex, &desc, wgpu::TextureUses::RESOURCE) })
 }

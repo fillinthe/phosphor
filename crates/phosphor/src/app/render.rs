@@ -55,6 +55,8 @@ impl PhosphorApp {
             dmx,
             #[cfg(not(target_arch = "wasm32"))]
             tracker,
+            #[cfg(target_os = "macos")]
+            ffgl,
             scopes,
             ..
         } = &mut self.state;
@@ -165,8 +167,17 @@ impl PhosphorApp {
                 engine.request_samples();
             }
         }
+        // FFGL plugins draw what the last frame asked for, so this frame shows it.
+        #[cfg(target_os = "macos")]
+        {
+            ffgl.poll();
+            let beats = clock.beats(now);
+            ffgl.run(engine, now, clock.bpm, (beats.rem_euclid(4.0) / 4.0) as f32);
+        }
         let t0 = web_time::Instant::now();
         let info = engine.render(comp, now as f32, mod_inputs);
+        #[cfg(target_os = "macos")]
+        ffgl.take_jobs(engine);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(colors) = engine.take_samples()
             && comp.dmx.enabled
