@@ -833,8 +833,16 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
         toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point for a sharp corner or bezier handles)");
     });
     ui.horizontal(|ui| {
-        Level::range(&mut m.feather, 0.0, 0.2, "Soft edge").default(0.0).tip("Fade the mask's edge (0 = hard); the fade is centred on the outline").show(ui);
+        Level::range(&mut m.feather, 0.0, 0.2, "Soft edge").default(0.0).tip("Fade the mask's edge (0 = hard)").show(ui);
     });
+    if m.feather > 0.0 {
+        ui.horizontal(|ui| {
+            ui.label("Fade");
+            choice_buttons(ui, &mut m.edge, |_, _| {});
+        })
+        .response
+        .on_hover_text("Where the fade sits: centred on the outline, all inside the shape, or all outside it");
+    }
 }
 
 /// Venues: save every output's setup (surfaces, mesh, masks, size, colour) under a name and recall it at the next gig.
