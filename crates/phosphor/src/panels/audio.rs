@@ -65,7 +65,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         ("Mid", mod_inputs.audio_mid),
         ("High", mod_inputs.audio_high),
     ] {
-        ui.add(egui::ProgressBar::new(v).text(name).fill(accent().gamma_multiply(0.6)));
+        ui.add(crate::ui::meter(v).text(name).fill(accent().gamma_multiply(0.6)));
     }
     ui.add_space(4.0);
     let spectrum = audio.spectrum();

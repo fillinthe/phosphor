@@ -20,7 +20,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **A file straight on a slice.** A mapping slice's "Shows" list has **A file…**: pick a picture or movie and
   that slice plays it on its own, without it appearing in the mix.
 
-- **Sharp sliders.** Every slider now has square corners, and the last few plain sliders (crossfader, interface
+- **Sharp sliders.** Every slider, meter, progress bar, video scrub bar and step-sequencer bar now has square corners, and the last few plain sliders (crossfader, interface
   brightness, stream bitrate, media tile size, layer window width) are the same slider as everywhere else: name
   and value inside, double-click to reset, right-click for an exact value. The crossfader's right-click also
   maps it.

@@ -135,7 +135,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     && c == i
                     && p < 1.0
                 {
-                    ui.add(egui::ProgressBar::new(p).desired_height(4.0));
+                    ui.add(crate::ui::meter(p).desired_height(4.0));
                 }
             });
         }

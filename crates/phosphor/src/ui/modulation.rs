@@ -143,7 +143,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     }
     if signal_only {
         let v = phosphor_engine::control::source_value(mm, &inputs);
-        ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
+        ui.add(crate::ui::meter(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
         return;
     }
     ui.horizontal(|ui| {
@@ -165,5 +165,5 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         });
     }
     let v = phosphor_engine::control::source_value(mm, &inputs);
-    ui.add(egui::ProgressBar::new(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
+    ui.add(crate::ui::meter(v).text(format!("live {v:.2}")).fill(accent().gamma_multiply(0.6)));
 }
