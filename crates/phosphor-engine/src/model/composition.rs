@@ -199,7 +199,8 @@ impl Composition {
     /// group is off or another layer is soloed; follows opacity (layer, group, crossfader) unless turned off.
     pub fn sound_gain(&self, layer: &LayerState) -> f32 {
         let group = layer.parent.and_then(|g| self.group(g));
-        let soloed_out = !layer.solo && self.layers.iter().any(|l| l.enabled && l.solo);
+        // Solo works inside a comp.
+        let soloed_out = !layer.solo && self.layers.iter().any(|l| l.enabled && l.solo && self.comp_of(l) == self.comp_of(layer));
         let clip_muted = layer.active_clip.is_some_and(|id| layer.clips.iter().any(|k| k.id == id && k.muted));
         if self.sound_muted || !layer.enabled || soloed_out || group.is_some_and(|g| !g.enabled) || layer.muted || clip_muted {
             return 0.0;
@@ -316,12 +317,11 @@ impl Composition {
         self.outputs.iter_mut().find(|o| o.id == id)
     }
 
-    /// Triggers column `col` on every layer of the open comp that has a clip there.
+    /// Triggers column `col` on every layer (in every comp) that has a clip there: a mapped column button does the
+    /// same whichever comp is on screen.
     pub fn trigger_column(&mut self, col: usize, now: f32) {
         let secs = self.launch_secs();
-        let open = self.open_comp();
-        let ids: Vec<u64> = self.layers.iter().filter(|l| self.comp_of(l) == open).map(|l| l.id).collect();
-        for l in self.layers.iter_mut().filter(|l| ids.contains(&l.id)) {
+        for l in &mut self.layers {
             l.trigger_clip(col, now, secs);
         }
     }

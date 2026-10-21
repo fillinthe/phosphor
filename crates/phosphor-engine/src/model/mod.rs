@@ -20,6 +20,7 @@ mod options;
 mod output;
 mod play;
 mod quick;
+mod remap;
 mod source;
 mod surface;
 mod tracking;

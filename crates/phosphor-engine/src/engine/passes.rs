@@ -329,7 +329,7 @@ impl Engine {
             let params = resolve_params(desc, values, param_mods, mods);
             if external {
                 // A plugin (FFGL): the app draws it; its last result comes back (the picture passes until then).
-                if let Some(out) = self.external_effect(fx_id, desc, params, &input, (w, h), passes) {
+                if let Some(out) = self.external_effect(res_id, fx_id, desc, params, &input, (w, h), passes) {
                     input = out;
                     input_idx = None;
                 }

@@ -25,6 +25,9 @@ impl PhosphorApp {
         if run.cfg.tab.as_deref() == Some("all") {
             let due = ((now - started) / 0.2) as usize;
             if run.tabs_shown <= due && run.tabs_shown < Tab::ALL.len() {
+                if run.tabs_shown == 0 {
+                    println!("TAB_TOTAL {}", Tab::ALL.len());
+                }
                 let tab = Tab::ALL[run.tabs_shown];
                 run.tabs_shown += 1;
                 println!("TAB {}", tab.title());

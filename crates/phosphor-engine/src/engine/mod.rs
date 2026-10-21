@@ -417,10 +417,6 @@ impl Engine {
         self.scan = scan;
     }
 
-    /// Waits until the GPU has done everything submitted so far (before another API reads what it drew).
-    pub fn wait_idle(&self) {
-        let _ = self.gpu.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
-    }
 
     /// The final composited frame. Its identity changes only when the resolution does;
     /// compare `output_generation()` to know when to re-register it with a UI.
@@ -770,6 +766,8 @@ impl Engine {
         let device = self.gpu.device.clone();
         let mut current: Option<usize> = None;
         let mut layers_drawn = 0;
+        // Solo works inside a comp.
+        let any_solo = any_solo && comp.layers.iter().any(|l| l.enabled && l.solo && (only.is_none() || comp.comp_of(l) == only));
         // The layer group being mixed (into accum 2–3) and which of those holds it so far.
         let mut open_group: Option<u64> = None;
         let mut group_current: Option<usize> = None;

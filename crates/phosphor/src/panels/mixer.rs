@@ -40,7 +40,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     let height = (ui.available_height() - 210.0).clamp(80.0, 600.0);
     crossfader(ui, st);
     let State { comp, selected, layer_textures, texture, .. } = st;
-    let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
+    let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo && comp.in_open_comp(l));
     let tex = |id: u64| layer_textures.get(&id).map(|(t, _)| *t);
     // The open comp's layers (and, with several comps, a strip per comp before MASTER).
     let shown: Vec<bool> = comp.layers.iter().map(|l| comp.in_open_comp(l)).collect();

@@ -20,6 +20,7 @@ impl PhosphorApp {
             self.heartbeat.beat(now);
         }
         let State {
+            clip_page,
             comp,
             engine,
             render_state,
@@ -64,6 +65,8 @@ impl PhosphorApp {
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
         media.sync(comp, engine);
+        #[cfg(not(target_arch = "wasm32"))]
+        media.preload_clips(comp, *clip_page, crate::panels::CLIP_PAGE_SIZE);
         media.update_video(comp, engine, now);
 
         net_audio.clear();

@@ -33,7 +33,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(2.0);
     let aspect = st.aspect();
     let output_tex = st.texture;
-    let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
+    let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo && st.comp.in_open_comp(l));
     let feeds = feed_choices(&st.comp);
     let others = other_comps(&st.comp);
     let State { comp, selected, media, layer_textures, .. } = st;

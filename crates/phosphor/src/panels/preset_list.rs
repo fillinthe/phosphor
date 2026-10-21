@@ -42,10 +42,14 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
     match layer_pick {
         Some(SaveAction::Load(json)) => match serde_json::from_str::<LayerState>(&json) {
             Ok(l) => {
-                let l = st.comp.adopt_layer(l);
+                let mut l = st.comp.adopt_layer(l);
+                // Into the comp on screen, out of any group it was saved in.
+                l.comp = st.comp.open_comp();
+                l.parent = None;
                 let at = st.comp.layers.iter().position(|x| x.id == target).map_or(st.comp.layers.len(), |i| i + 1);
                 st.selected = Some(l.id);
                 st.comp.layers.insert(at, l);
+                st.comp.normalize_groups();
             }
             Err(e) => st.notice = Some(format!("Couldn't load the layer: {e}")),
         },

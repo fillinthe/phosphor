@@ -38,6 +38,8 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
     ui.separator();
     choice_mapped(ui, &mut comp.launch.timing, ControlTarget::App(phosphor_engine::AppControl::LaunchTiming));
     #[cfg(not(target_arch = "wasm32"))]
+    toggle(ui, &mut comp.launch.preload, "Preload").on_hover_text("Keep the next movie clips in this bank open, paused on their first frame, so they start the moment you trigger them (a few at a time; uses some memory)");
+    #[cfg(not(target_arch = "wasm32"))]
     toggle(ui, &mut comp.launch.auto_beat_match, label(icon::MAGIC_WAND, "Auto-match"))
         .on_hover_text("Every movie that lands in the grid is scanned for its visual beat and locked to the tempo (Match the beat)");
     let auto = &mut comp.auto_show;

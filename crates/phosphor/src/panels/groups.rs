@@ -139,7 +139,8 @@ pub(crate) fn group_with_below(comp: &mut Composition, selected: &mut Option<u64
     if comp.layers[i].parent.is_some() {
         return;
     }
-    let below = i.checked_sub(1).map(|b| comp.layers[b].id);
+    // The layer below in the same comp (at a comp's bottom it's grouped alone).
+    let below = i.checked_sub(1).filter(|b| comp.comp_of(&comp.layers[*b]) == comp.comp_of(&comp.layers[i])).map(|b| comp.layers[b].id);
     let ids: Vec<u64> = std::iter::once(layer).chain(below).collect();
     if let Some(g) = comp.create_group(&ids) {
         *selected = Some(g);
