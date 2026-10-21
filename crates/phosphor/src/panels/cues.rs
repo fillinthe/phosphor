@@ -6,6 +6,34 @@ use phosphor_engine::{AppControl, TimecodeSource};
 use super::*;
 use crate::app::format_tc;
 
+/// "every day at 18:00" for installations: the time, and which days.
+fn daily_editor(ui: &mut egui::Ui, cue: &mut phosphor_engine::Cue) {
+    let mut on = cue.daily.is_some();
+    if toggle(ui, &mut on, label(icon::CALENDAR, "daily")).on_hover_text("Fire every day at a time on this computer's clock (installations: on at 18:00, off at 02:00)").changed() {
+        cue.daily = on.then_some(18 * 3600);
+    }
+    let Some(t) = &mut cue.daily else { return };
+    let mut minutes = (*t / 60) as f64;
+    if guarded!(ui, minutes, egui::DragValue::new(&mut minutes).range(0.0..=1439.0).speed(1.0).custom_formatter(|v, _| format!("{:02}:{:02}", v as u32 / 60, v as u32 % 60)).custom_parser(|s| {
+        let (h, m) = s.trim().split_once(':')?;
+        Some((h.trim().parse::<u32>().ok()?.min(23) * 60 + m.trim().parse::<u32>().ok()?.min(59)) as f64)
+    }))
+    .changed()
+    {
+        *t = minutes as u32 * 60;
+    }
+    // Days: all lit = every day (stored as 0); click one to leave it out or put it back.
+    for (bit, day) in ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].iter().enumerate() {
+        let all = if cue.days == 0 { 0x7f } else { cue.days };
+        let mut on = all & (1 << bit) != 0;
+        if toggle(ui, &mut on, *day).on_hover_text("The days it fires on").changed() {
+            let days = if on { all | (1 << bit) } else { all & !(1 << bit) };
+            // None left would never fire: back to every day.
+            cue.days = if days == 0x7f || days == 0 { 0 } else { days };
+        }
+    }
+}
+
 pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     ui.horizontal_wrapped(|ui| {
@@ -92,6 +120,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                             *at = secs as f32;
                         }
                     }
+                    daily_editor(ui, cue);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button(icon::TRASH).on_hover_text("Delete cue").clicked() {
                             remove = Some(i);

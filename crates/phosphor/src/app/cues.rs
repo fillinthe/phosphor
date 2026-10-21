@@ -45,6 +45,8 @@ pub struct CueRun {
     /// When the current cue finished fading in (for follow-on cues).
     landed: Option<f64>,
     tc_prev: Option<f32>,
+    /// Local time of day when scheduled cues were last checked.
+    sched_prev: Option<u32>,
     pub clock: ShowClock,
 }
 
@@ -100,6 +102,17 @@ impl State {
         {
             self.cue_run.landed = None;
             self.cue_next(now);
+        }
+        // Daily schedules (installations), checked against the wall clock.
+        if self.comp.cues.cues.iter().any(|c| c.daily.is_some()) {
+            let (secs, weekday) = crate::clock::local_time();
+            if let Some(prev) = self.cue_run.sched_prev
+                && prev != secs
+                && let Some(i) = self.comp.scheduled_cue(prev, secs, weekday)
+            {
+                self.go_cue(i, now);
+            }
+            self.cue_run.sched_prev = Some(secs);
         }
         match self.timecode(now).map(|t| t as f32) {
             Some(tc) => {
