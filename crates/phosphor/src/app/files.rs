@@ -260,6 +260,10 @@ fn folder_media(dir: &std::path::Path, depth: usize, out: &mut Vec<(String, Opti
     let Ok(read) = std::fs::read_dir(dir) else { return };
     let mut entries: Vec<std::path::PathBuf> = read.flatten().map(|e| e.path()).collect();
     entries.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    // Numbered pictures (frame_0001.png…) come in as one image-sequence clip each.
+    for (name, path) in media::sequence::take_sequences(dir, &mut entries) {
+        out.push((name, Some(path)));
+    }
     for p in entries {
         let name = p.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned());
         if name.starts_with('.') {

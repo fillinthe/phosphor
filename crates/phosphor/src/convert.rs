@@ -130,7 +130,7 @@ pub struct Probe {
 
 /// Reads a movie's size, rate and length.
 pub fn probe(path: &str) -> Result<Probe, String> {
-    let input = ff::format::input(&path).map_err(|e| format!("can't open ({e})"))?;
+    let input = crate::media::video::open_input(path).map_err(|e| format!("can't open ({e})"))?;
     let video = input.streams().best(ff::media::Type::Video).ok_or("no video in this file")?;
     let params = video.parameters();
     // SAFETY: plain fields of the stream's codec parameters.

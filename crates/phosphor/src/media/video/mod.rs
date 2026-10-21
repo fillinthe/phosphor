@@ -225,6 +225,18 @@ impl Shared {
     }
 }
 
+/// Opens a media file for FFmpeg: a plain file, or an image sequence's pattern ("…/frame_%04d.png") with its first
+/// frame number and frame rate (FFmpeg alone only looks for frames 0–4). Every file open goes through here.
+pub fn open_input(path: &str) -> Result<ff::format::context::Input, ff::Error> {
+    if !crate::media::sequence::is_sequence(path) {
+        return ff::format::input(&path);
+    }
+    let mut options = ff::Dictionary::new();
+    options.set("start_number", &crate::media::sequence::first_number(path).unwrap_or(0).to_string());
+    options.set("framerate", crate::media::sequence::RATE);
+    ff::format::input_with_dictionary(&path, options)
+}
+
 impl VideoPlayer {
     /// Opens the file and starts decoding in the background. Errors are human-readable (shown in the UI).
     pub fn open(path: &str) -> Result<Self, String> {
@@ -317,7 +329,7 @@ impl VideoPlayer {
     /// A file with sound but no picture (mp3, wav, …): plays as a clip (loop, in/out, speed, beat sync, the
     /// scrub bar) whose picture is empty; its sound drives the "Clip sound" analyser like any movie's.
     fn open_audio_only(path: &str, name: &str) -> Result<Self, String> {
-        let input = ff::format::input(&path).map_err(|e| format!("{name}: can't open ({e})"))?;
+        let input = open_input(path).map_err(|e| format!("{name}: can't open ({e})"))?;
         let st = input.streams().best(ff::media::Type::Audio).ok_or_else(|| format!("{name}: no video or audio stream"))?;
         let tb = f64::from(st.time_base());
         let duration = if input.duration() > 0 {

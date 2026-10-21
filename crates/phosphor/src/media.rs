@@ -8,6 +8,7 @@ use phosphor_engine::{Composition, Engine, SourceSpec};
 pub mod live;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod rhythm;
+pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod video;
 
@@ -35,7 +36,11 @@ fn file_name(path: &str) -> String {
 }
 
 pub fn is_movie(name: &str) -> bool {
-    MOVIE_EXTS.contains(&extension(name).as_str())
+    MOVIE_EXTS.contains(&extension(name).as_str()) || sequence::is_sequence(name)
+}
+
+pub fn is_picture(name: &str) -> bool {
+    IMAGE_EXTS.contains(&extension(name).as_str())
 }
 
 pub fn is_supported(name: &str) -> bool {
@@ -50,6 +55,9 @@ pub fn is_supported(name: &str) -> bool {
 
 /// A clip's label for a file: its name without the extension.
 pub fn clip_name(file: &str) -> String {
+    if sequence::is_sequence(file) {
+        return sequence::label(file);
+    }
     std::path::Path::new(file).file_stem().map_or_else(|| file.to_string(), |s| s.to_string_lossy().into_owned())
 }
 
@@ -58,7 +66,7 @@ pub fn spec_for_path(path: &str) -> SourceSpec {
 }
 
 pub fn spec_for(name: &str, path: Option<String>) -> SourceSpec {
-    if MOVIE_EXTS.contains(&extension(name).as_str()) || is_sound_file(name) {
+    if is_movie(name) || is_sound_file(name) {
         SourceSpec::Movie { name: name.to_string(), path }
     } else {
         SourceSpec::Image { name: name.to_string(), path }

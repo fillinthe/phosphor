@@ -178,7 +178,7 @@ struct Track {
 
 impl Track {
     fn open(path: &str) -> Option<Self> {
-        let input = ff::format::input(&path).ok()?;
+        let input = super::open_input(path).ok()?;
         let st = input.streams().best(ff::media::Type::Audio)?;
         let stream = st.index();
         let tb = f64::from(st.time_base());
@@ -334,7 +334,7 @@ impl Track {
         // SAFETY: seeking the demuxer this thread owns.
         let ok = unsafe { ffi::av_seek_frame(self.input.as_mut_ptr(), self.stream as i32, ts, ffi::AVSEEK_FLAG_BACKWARD) >= 0 };
         if !ok {
-            self.input = ff::format::input(&self.path).map_err(|e| e.to_string())?;
+            self.input = super::open_input(&self.path).map_err(|e| e.to_string())?;
         }
         self.dec.flush();
         Ok(())
