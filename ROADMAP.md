@@ -108,7 +108,7 @@ app that's much smaller and lighter on the CPU.
     - [x] Always visible: status line shows "N can control" / "<name> is controlling" (orange) / "Web control off";
           the preview shows "<name> is controlling from the web · Take over" while someone does
     - [x] OSC out from the Control Surface: each widget's Send OSC address → the surface's OSC out host (2026-10-20)
-    - [ ] Per-person limits: which controls each guest page may touch (today: one Surface page + columns + Surprise)
+    - [x] Per-person limits: which controls each guest page may touch: a page per player place, per-control "Guests can use it" and a guest range (0.2.90)
     - [x] A log of who changed what (Devices panel, last 100, drags merged) (2026-10-20)
 
 15. **Master → comp → layer, slices → outputs** (asked 2026-10-20; the owner's model of the app). Decided 2026-10-20:

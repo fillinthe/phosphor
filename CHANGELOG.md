@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.90 (2026-10-21)
+
+- **Audience play: limits per control and per player.** In the Control Surface editor each control has
+  **Guests can use it** (off hides it from guests' phones) and a guest range, so guests can push a strobe only up
+  to 30%, say. With several players at once, each place can have its own page (Network › Audience play). The
+  limits are checked on the Mac, not just on the phone.
+
 ## 0.2.89 (2026-10-21)
 
 - **Clips start the moment you trigger them.** Movies now open in the background instead of holding up the app,

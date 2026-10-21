@@ -302,7 +302,8 @@ function renderSurface() {
       tabs.appendChild(b);
     });
   }
-  const sf = { ...all, widgets: all.widgets.filter(w => (w.page || 0) === surfPage) };
+  // Guests see only what they may use.
+  const sf = { ...all, widgets: all.widgets.filter(w => (w.page || 0) === surfPage && (!guest || w.guests !== false)) };
   const box = $('#surface');
   const sig = surfPage + '#' + sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color].join(',')).join('|');
   if (box.dataset.sig !== sig) {
@@ -317,6 +318,8 @@ function renderSurface() {
         el = fader('sf' + w.id, 0, 1, w.value, v => setTarget(X, v), w.kind === 'Fader');
         el.querySelector('.fill').style.background = w.color;
         const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = w.label; el.appendChild(cap);
+        // A guest's reach: e.g. "up to 30%".
+        if (guest && (w.lo > 0 || w.hi < 1)) cap.textContent += w.lo > 0 ? ` (${Math.round(w.lo * 100)}–${Math.round(w.hi * 100)}%)` : ` (up to ${Math.round(w.hi * 100)}%)`;
       } else {
         el = document.createElement('div'); el.dataset.key = 'sf' + w.id;
         if (w.kind === 'Label') { el.className = 'w lbl'; el.style.color = w.color; el.textContent = w.label; }

@@ -398,6 +398,16 @@ fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(Control
             ui.add(egui::TextEdit::singleline(&mut w.osc_out).hint_text("/address (to the OSC out app)").desired_width(170.0))
                 .on_hover_text("Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.");
         });
+        // Audience play: whether guests get it, and how far they can push it.
+        ui.horizontal(|ui| {
+            toggle(ui, &mut w.guests, "Guests can use it").on_hover_text("Audience play: off hides it from guests' phones (only you and remotes use it)");
+            if w.guests && matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider | WidgetKind::XyPad) {
+                let [mut lo, mut hi] = w.guest_range;
+                Level::percent(&mut lo, "Guests from").default(0.0).width(110.0).show(ui);
+                Level::percent(&mut hi, "up to").default(1.0).width(110.0).show(ui);
+                w.guest_range = [lo.min(hi), hi.max(lo)];
+            }
+        });
     }
     ui.add_space(6.0);
     ui.horizontal(|ui| {

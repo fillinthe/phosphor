@@ -78,15 +78,28 @@ pub struct SurfaceWidget {
     pub page: usize,
     /// Also send its value as OSC to `ControlSurface::osc_host` at this address ("" = don't).
     pub osc_out: String,
+    /// Audience play: guests can use it (off = it's hidden from them).
+    pub guests: bool,
+    /// Audience play: the part of its range guests can reach (low, high; 0..1), e.g. a strobe up to 30%.
+    pub guest_range: [f32; 2],
 }
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new() }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0] }
     }
 }
 
 impl SurfaceWidget {
+    /// A value a guest sent, kept inside their range (-1 = a toggle's flip, left alone).
+    pub fn guest_value(&self, v: f32) -> f32 {
+        if v < 0.0 {
+            return v;
+        }
+        let [lo, hi] = self.guest_range;
+        v.clamp(lo.min(hi), hi.max(lo))
+    }
+
     /// A colour widget's colour, red / green / blue 0..1 (hue, saturation, brightness → RGB).
     pub fn rgb(&self) -> [f32; 3] {
         let (h, s, v) = (self.value.rem_euclid(1.0) * 6.0, self.value_y.clamp(0.0, 1.0), self.value_z.clamp(0.0, 1.0));
