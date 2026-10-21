@@ -15,6 +15,8 @@ pub struct Snapshot {
     pub audio_level: f64,
     /// GPU time per frame (0 when the adapter has no timestamps).
     pub gpu_ms: f64,
+    /// The longest wait between two rendered frames (what a projector shows as a stutter).
+    pub worst_ms: f64,
 }
 
 impl Snapshot {
@@ -24,6 +26,7 @@ impl Snapshot {
             "frame_ms": round(self.frame_ms),
             "render_ms": round(self.render_ms),
             "gpu_ms": round(self.gpu_ms),
+            "worst_ms": round(self.worst_ms),
             "cpu_percent": round(self.cpu_percent),
             "memory_mb": round(self.memory_mb),
             "passes": self.passes,
@@ -42,18 +45,26 @@ pub struct Stats {
     frames: u32,
     render_total: f64,
     last_cpu: Option<f64>,
+    /// Wall-clock time of the last frame, and the longest gap in this second.
+    last_frame: Option<web_time::Instant>,
+    worst: f64,
     pub latest: Snapshot,
 }
 
 impl Stats {
     pub fn new(now: f64) -> Self {
-        Self { window_start: now, frames: 0, render_total: 0.0, last_cpu: process_cpu_seconds(), latest: Snapshot::default() }
+        Self { window_start: now, frames: 0, render_total: 0.0, last_cpu: process_cpu_seconds(), last_frame: None, worst: 0.0, latest: Snapshot::default() }
     }
 
     /// Records one frame; returns a fresh snapshot once per second.
     pub fn record(&mut self, now: f64, render_secs: f64, passes: usize, audio_level: f64, gpu_ms: f64) -> Option<Snapshot> {
         self.frames += 1;
         self.render_total += render_secs;
+        let t = web_time::Instant::now();
+        if let Some(last) = self.last_frame {
+            self.worst = self.worst.max(t.duration_since(last).as_secs_f64());
+        }
+        self.last_frame = Some(t);
         let elapsed = now - self.window_start;
         if elapsed < 1.0 {
             return None;
@@ -73,7 +84,9 @@ impl Stats {
             passes,
             audio_level,
             gpu_ms,
+            worst_ms: self.worst * 1000.0,
         };
+        self.worst = 0.0;
         self.window_start = now;
         self.frames = 0;
         self.render_total = 0.0;
