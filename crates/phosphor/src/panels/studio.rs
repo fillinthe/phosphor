@@ -258,6 +258,10 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             vs.zoom_to = Some([(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5]);
         }
         hint(ui, format!("{:.0}%", vs.zoom * 100.0));
+        // Show only the selected slices on the output (and projector) while this is on.
+        let mut solo = !o.mapping.solo.is_empty();
+        toggle(ui, &mut solo, label(icon::CROSSHAIR, "Only selected")).on_hover_text("The output shows only the selected slice(s), so you can see which is which on the real object");
+        o.mapping.solo = if solo { if many.is_empty() { o.mapping.solo.clone() } else { many.clone() } } else { Vec::new() };
         toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("Dragged points land on other slices' points nearby, otherwise on a 1/64 grid");
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");

@@ -602,7 +602,7 @@ impl Engine {
             // Black, then each enabled surface blended on top.
             u.opacity = 0.0;
             passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
-            for s in o.mapping.surfaces.iter().filter(|s| s.enabled) {
+            for s in o.mapping.shown() {
                 // A layer's own picture (black while that layer is off); the mix if the layer is gone.
                 let src = match s.layer {
                     Some(id) if comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() => feeds.get(&id).cloned().unwrap_or_else(|| self.gpu.blank.clone()),

@@ -40,7 +40,7 @@ The biggest gaps are about speed and safety when aligning on a real stage:
 | Nudge keys | Arrow keys; Tab to next handle | Has nudge (1 px, Shift = 10, `studio.rs:301`). Tab-to-next-handle missing | small |
 | Snapping | Toggle snap near other objects | Partial: snap to 1/64 grid only; no snap to other surfaces' corners/edges | small |
 | Zoom/pan, fit, zoom to selection | | Has zoom/pan; fit/zoom-to-selection (?) not confirmed | small |
-| Show only selected / preview groups | Filters the preview | Missing | small |
+| Show only selected / preview groups | Filters the preview | Done (0.2.85: Only selected) | small |
 | Lock affine transforms (for mesh editing) | Stop whole-surface moves | Missing | small |
 | Multi-select, common inspector | Shift-select, edit shared fields | Missing (one surface at a time) | medium |
 | Undo / redo | Toolbar | Has (Undo mentioned in venue load, `mapping.rs:756`); granularity for point drags not checked (?) | - |

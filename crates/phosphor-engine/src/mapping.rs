@@ -1243,6 +1243,9 @@ pub struct Mapping {
     pub test_pattern: bool,
     /// Named groups of slices (they can sit inside each other); a slice says which one it's in.
     pub groups: Vec<SliceGroup>,
+    /// While lining up: only these slices are drawn (MadMapper's "show only selected"). Not saved.
+    #[serde(skip)]
+    pub solo: Vec<u64>,
 }
 
 impl Mapping {
@@ -1254,7 +1257,12 @@ impl Mapping {
 
     /// Layers that enabled surfaces show on their own (they need a full-size picture rendered).
     pub fn layer_feeds(&self) -> impl Iterator<Item = u64> + '_ {
-        self.surfaces.iter().filter(|s| self.enabled && s.enabled).filter_map(|s| s.layer)
+        self.shown().filter_map(|s| s.layer)
+    }
+
+    /// The slices drawn now: enabled ones (only the solo ones while "show only selected" is on).
+    pub fn shown(&self) -> impl Iterator<Item = &Surface> + '_ {
+        self.surfaces.iter().filter(|s| self.enabled && s.enabled && (self.solo.is_empty() || self.solo.contains(&s.id)))
     }
 
     /// Surfaces are drawn when mapping is on and there is at least one enabled.
