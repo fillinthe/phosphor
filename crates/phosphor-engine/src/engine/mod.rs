@@ -734,16 +734,25 @@ impl Engine {
     }
 }
 
-/// A layer's transform as `fs_composite` uniforms (p[9], p[10]); None when it sits as it is.
-/// A layer's placement for the composite shader: p[9], p[10] (move / scale / rotate; p[10].w = on) and p[11] (crop).
-fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModInputs) -> Option<[[f32; 4]; 3]> {
-    let crop = t.crop.map(|c| c.clamp(0.0, 0.5));
+/// A layer's placement for the composite shader, `u.p[9..15]`: p[9], p[10] (move / scale / rotate; p[10].w = on),
+/// p[11] (crop), p[12..14] (corner pin: inverse homography, p[14].w = on). None when it sits as it is.
+fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModInputs) -> Option<[[f32; 4]; 6]> {
     if t.is_identity() {
         return None;
     }
-    if (crate::LayerTransform { crop: [0.0; 4], ..t.clone() }).is_identity() {
+    let mut p = [[0.0f32; 4]; 6];
+    p[0] = [0.0, 0.0, 1.0, 1.0];
+    p[1] = [1.0, 0.0, 1.0, 0.0];
+    p[2] = t.crop.map(|c| c.clamp(0.0, 0.5));
+    if let Some(inv) = t.corners.as_ref().and_then(crate::mapping::quad_to_square) {
+        p[3] = [inv[0], inv[1], inv[2], inv[3]];
+        p[4] = [inv[4], inv[5], inv[6], inv[7]];
+        p[5] = [inv[8], 0.0, 0.0, 1.0];
+        return Some(p);
+    }
+    if (crate::LayerTransform { crop: [0.0; 4], corners: None, ..t.clone() }).is_identity() {
         // Only cropped: the transform stays off.
-        return Some([[0.0, 0.0, 1.0, 1.0], [1.0, 0.0, 1.0, 0.0], crop]);
+        return Some(p);
     }
     let scale = modulate(t.scale, 0.01, 8.0, t.scale_mod.as_ref(), mods);
     let rotation = modulate(t.rotation, -180.0, 180.0, t.rotation_mod.as_ref(), mods);
@@ -753,7 +762,9 @@ fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModI
     let a = rotation.to_radians();
     let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
     // y is up for people, down in texture space.
-    Some([[t.x, -t.y, sx, sy], [a.cos(), a.sin(), aspect, 1.0], crop])
+    p[0] = [t.x, -t.y, sx, sy];
+    p[1] = [a.cos(), a.sin(), aspect, 1.0];
+    Some(p)
 }
 
 /// What mixing a stack needs besides the engine (so helpers don't take ten arguments).
@@ -772,7 +783,7 @@ struct MixCtx<'a> {
 impl Engine {
     /// Blends `frame` onto a stack (accum `base`/`base + 1`, ping-ponged; `current` = which holds it so far).
     #[allow(clippy::too_many_arguments)]
-    fn push_blend(&self, frame: Frame, fit: FitMode, opacity: f32, blend: BlendMode, place: Option<[[f32; 4]; 3]>, base: usize, current: &mut Option<usize>, canvas: (u32, u32), time: f32, passes: &mut Vec<Pass>) {
+    fn push_blend(&self, frame: Frame, fit: FitMode, opacity: f32, blend: BlendMode, place: Option<[[f32; 4]; 6]>, base: usize, current: &mut Option<usize>, canvas: (u32, u32), time: f32, passes: &mut Vec<Pass>) {
         let next = current.map_or(0, |c| 1 - c);
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [canvas.0 as f32, canvas.1 as f32];
@@ -780,10 +791,8 @@ impl Engine {
         u.opacity = opacity;
         u.mode = blend.shader_index();
         u.uv_xform = fit_transform(frame.size(), canvas, fit);
-        if let Some([a, b, c]) = place {
-            u.p[9] = a;
-            u.p[10] = b;
-            u.p[11] = c;
+        if let Some(p) = place {
+            u.p[9..15].copy_from_slice(&p);
         }
         let (tex0, tex2, yuv) = frame.bind();
         u.yuv = yuv;
