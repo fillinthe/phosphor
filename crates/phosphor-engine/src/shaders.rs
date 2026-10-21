@@ -453,6 +453,8 @@ pub const ISF_TRANSITION: &str = "isftr:";
 /// FFGL plugins (Mac): effects and sources drawn by the app (`ext:` entries, see `is_external`).
 pub const FFGL_EFFECT: &str = "ffgl:";
 pub const FFGL_GENERATOR: &str = "ffglgen:";
+/// FFGL mixer plugins: blend a layer onto what's below (`LayerState::mixer`).
+pub const FFGL_MIXER: &str = "ffglmix:";
 
 /// An effect / generator drawn outside the engine (its entry starts with `ext:`; the engine's `external` module).
 pub fn is_external(entry: &str) -> bool {
@@ -578,6 +580,18 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
 
 pub fn effect(id: &str) -> Option<&'static ShaderDesc> {
     EFFECTS.iter().find(|d| d.id == id).or_else(|| if is_custom_effect(id) { custom(id) } else { None })
+}
+
+/// A mixer plugin (blends a layer onto the stack below).
+pub fn mixer(id: &str) -> Option<&'static ShaderDesc> {
+    if id.starts_with(FFGL_MIXER) { custom(id) } else { None }
+}
+
+/// Every mixer plugin, by name.
+pub fn all_mixers() -> Vec<&'static ShaderDesc> {
+    let mut list: Vec<_> = CUSTOM.read().unwrap().iter().copied().filter(|d| d.id.starts_with(FFGL_MIXER)).collect();
+    list.sort_by_key(|d| d.name.to_lowercase());
+    list
 }
 
 pub fn generator(id: &str) -> Option<&'static ShaderDesc> {

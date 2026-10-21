@@ -267,8 +267,46 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             ui.separator();
         }
     transform_editor(ui, layer);
+    mixer_editor(ui, layer);
     ui.separator();
     (effects_editor(ui, &mut layer.effects, clipboard_len), seek_to)
+}
+
+/// "Mixer plugin": blend the layer onto the layers below with an FFGL mixer instead of its blend mode, and the
+/// mixer's settings. Only shown when mixer plugins are installed.
+fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
+    let mixers = shaders::all_mixers();
+    if mixers.is_empty() {
+        return;
+    }
+    let current = layer.mixer.as_deref().and_then(shaders::mixer);
+    let title = match current {
+        Some(d) => label(icon::INTERSECT, &format!("Mixer plugin: {}", d.name)),
+        None => label(icon::INTERSECT, "Mixer plugin"),
+    };
+    egui::CollapsingHeader::new(title).id_salt(("mixer", layer.id)).show(ui, |ui| {
+        hint(ui, "An FFGL mixer blends this layer onto the layers below instead of its blend mode (its Opacity follows the layer's).");
+        let mut pick = layer.mixer.clone();
+        ComboBox::from_id_salt(("mixer_pick", layer.id)).width(200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
+            ui.selectable_value(&mut pick, None, "None (blend mode)");
+            for d in &mixers {
+                ui.selectable_value(&mut pick, Some(d.id.to_string()), d.name);
+            }
+        });
+        if pick != layer.mixer {
+            layer.mixer_values = pick.as_deref().and_then(shaders::mixer).map(|d| d.defaults()).unwrap_or_default();
+            layer.mixer = pick;
+        }
+        if let Some(d) = layer.mixer.as_deref().and_then(shaders::mixer) {
+            layer.mixer_values.resize(d.params.len(), 0.0);
+            for (p, v) in d.params.iter().zip(layer.mixer_values.iter_mut()) {
+                if p.name.eq_ignore_ascii_case("opacity") {
+                    continue;
+                }
+                ui.horizontal(|ui| Level::range(v, p.min, p.max, p.name).default(p.default).show(ui));
+            }
+        }
+    });
 }
 
 /// Position, scale, rotation and flips of a layer (all mappable; scale and rotation can be modulated).

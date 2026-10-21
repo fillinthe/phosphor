@@ -277,7 +277,15 @@ pub(crate) fn layer_card(
                 }
                 opacity_row(ui, layer);
                 ui.horizontal(|ui| {
-                    choice_combo(ui, ("blend", layer.id), &mut layer.blend, 104.0, false);
+                    // A mixer plugin blends it instead of its blend mode (Inspector › Mixer plugin).
+                    match layer.mixer.as_deref().and_then(shaders::mixer) {
+                        Some(d) => {
+                            hint(ui, format!("{} {}", icon::INTERSECT, d.name)).on_hover_text("Blended by this FFGL mixer (Inspector › Mixer plugin)");
+                        }
+                        None => {
+                            choice_combo(ui, ("blend", layer.id), &mut layer.blend, 104.0, false);
+                        }
+                    }
                     choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
                     if let Some(r) = fx_badge(ui, &layer.effects, &mut layer.fx_bypass) {
                         map_menu(ui, &r, ControlTarget::LayerFxBypass(layer.id));

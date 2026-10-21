@@ -92,7 +92,8 @@ app that's much smaller and lighter on the CPU.
           Interactive Shader Format community), test each with `isf_corpus`, ship the ones that work
     - [ ] The last MadMapper materials/Surface FX that fail; MadMapper 3D particle generators
     - [x] FFGL plugins (Resolume / VDMX effect plugins): load .bundle FFGL 2 effects and generators (0.2.89, Mac)
-    - [ ] FFGL: mixer plugins (two inputs), text/file parameters, Windows (GL ↔ DX12 interop), plugins in their own process
+    - [x] FFGL mixer plugins as a layer's blend (0.2.92)
+    - [ ] FFGL: text/file parameters, Windows (GL ↔ DX12 interop), plugins in their own process
 13. **Make your own effects** (asked 2026-10-20; could be its own project): the Shader Editor already writes ISF
     effects with live preview. Next:
     - [x] "New from template…" in the Shader Editor: 8 starters, every line explained (2026-10-20)

@@ -55,7 +55,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Your own shaders: editor, templates, feedback, several passes | VDMX, Resolume (Wire) | ✅ |
 | Image sequences as clips | VDMX, Resolume | ✅ |
 | Scopes (waveform, parade, vectorscope, histogram) | VDMX | ✅ |
-| FFGL plugins | Resolume, VDMX | ✅ Mac: effects and sources (0.2.89); not mixers yet |
+| FFGL plugins | Resolume, VDMX | ✅ Mac: effects, sources (0.2.89) and mixers as layer blends (0.2.92) |
 
 ## Control (VDMX's core)
 | Feature | Who has it | Phosphor |

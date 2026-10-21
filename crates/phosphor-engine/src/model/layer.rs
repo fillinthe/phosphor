@@ -179,6 +179,9 @@ pub struct LayerState {
     pub parent: Option<u64>,
     /// The comp it's in (`Composition::comps`); None or a gone comp = the first comp.
     pub comp: Option<u64>,
+    /// Blended by a mixer plugin instead of `blend` (`shaders::mixer` id, FFGL), and its settings.
+    pub mixer: Option<String>,
+    pub mixer_values: Vec<f32>,
     /// Loop region as fractions of the movie (0..1), so it survives switching clips and maps like any slider.
     pub loop_in: f32,
     pub loop_out: f32,
@@ -278,6 +281,8 @@ impl Default for LayerState {
             group: CrossGroup::None,
             parent: None,
             comp: None,
+            mixer: None,
+            mixer_values: Vec::new(),
             loop_in: 0.0,
             loop_out: 1.0,
             loop_beats: 0.0,

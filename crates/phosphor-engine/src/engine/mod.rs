@@ -848,9 +848,29 @@ impl Engine {
             }
             let place = transform_uniforms(&layer.transform, (w, h), mods);
             if open_group.is_some() {
-                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 2, &mut group_current, (w, h), time, passes);
+                // A mixer plugin blends it its own way (normally until its first result is ready).
+                let mixed = match layer.mixer.as_deref().and_then(crate::shaders::mixer) {
+                    Some(d) => {
+                        let params = resolve_params(d, &layer.mixer_values, &[], mods);
+                        self.external_mix(layer.id, d, params, &frame, layer.fit, opacity, 2, &mut group_current, (w, h), passes)
+                    }
+                    None => false,
+                };
+                if !mixed {
+                    self.push_blend(frame, layer.fit, opacity, layer.blend, place, 2, &mut group_current, (w, h), time, passes);
+                }
             } else {
-                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 0, &mut current, (w, h), time, passes);
+                // A mixer plugin blends it its own way (normally until its first result is ready).
+                let mixed = match layer.mixer.as_deref().and_then(crate::shaders::mixer) {
+                    Some(d) => {
+                        let params = resolve_params(d, &layer.mixer_values, &[], mods);
+                        self.external_mix(layer.id, d, params, &frame, layer.fit, opacity, 0, &mut current, (w, h), passes)
+                    }
+                    None => false,
+                };
+                if !mixed {
+                    self.push_blend(frame, layer.fit, opacity, layer.blend, place, 0, &mut current, (w, h), time, passes);
+                }
             }
             layers_drawn += 1;
         }
