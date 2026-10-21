@@ -334,7 +334,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Session page: QR code, viewer list (Devices panel)
 - [x] Per-viewer audio level meters (Devices panel, one meter per audio sender) ✔ 0.2.29
 - [x] Bonjour: phosphor.local + "Phosphor Session" service while a session runs ✔ 2026-10-17 · discovery of other players ✔ 2026-10-19 (Devices panel)
-- [ ] Multiple players in sync (shared timecode), each with its own output mapping (Phase 4)
+- [x] Multiple players in sync (shared timecode), each with its own output mapping (0.2.90: Follow another Phosphor)
 
 ### Phase 6: Accounts & sync
 - [x] Project format: versioned JSON ✔ 2026-10-19 (`FORMAT`, `migrate` steps, warning when a newer Phosphor saved it)
