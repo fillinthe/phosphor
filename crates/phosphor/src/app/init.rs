@@ -112,6 +112,7 @@ impl PhosphorApp {
         let mut app = Self {
             state: State {
                 selected: comp.layers.last().map(|l| l.id),
+                selected_clip: None,
                 selected_surface: None,
                 comp,
                 engine,
