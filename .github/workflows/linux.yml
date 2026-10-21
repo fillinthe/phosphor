@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q pkg-config clang libasound2-dev libudev-dev libx11-dev libxkbcommon-dev \
             libwayland-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb mesa-vulkan-drivers \
-            libvulkan1 libssl-dev
+            libvulkan1 libssl-dev libxkbcommon-x11-0 libxcb1
 
       - name: FFmpeg (BtbN n9.0 shared, arm64)
         run: |
@@ -60,6 +60,7 @@ jobs:
           cp -r assets/gl-transitions dist/Phosphor/gl-transitions
           printf '#!/bin/sh\nD=$(dirname "$(readlink -f "$0")")\nLD_LIBRARY_PATH="$D/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$D/phosphor" "$@"\n' > dist/Phosphor/Phosphor.sh
           chmod +x dist/Phosphor/Phosphor.sh
+          cp scripts/linux/README-player.md dist/Phosphor/README.md
           tar czf dist/Phosphor-linux-arm64.tar.gz -C dist Phosphor
 
       - uses: actions/upload-artifact@v4
