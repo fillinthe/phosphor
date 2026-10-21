@@ -49,6 +49,10 @@ if [ -n "$WIN_RUN" ]; then
   rm -rf dist/win && mkdir -p dist/win
   if gh run download "$WIN_RUN" -R fillinthe/phosphor -n Phosphor-windows -D dist/win; then
     ASSETS="$ASSETS dist/win/Phosphor-windows.zip"
+    # The installer, when this run made one (runs from before it existed only have the zip).
+    if gh run download "$WIN_RUN" -R fillinthe/phosphor -n Phosphor-windows-setup -D dist/win 2>/dev/null; then
+      ASSETS="$ASSETS dist/win/Phosphor-windows-setup.exe"
+    fi
     echo "Adding the Windows build from run $WIN_RUN"
   fi
 fi

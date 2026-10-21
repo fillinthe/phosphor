@@ -325,6 +325,12 @@ impl PhosphorApp {
         if app.bench.is_none() && !library_default_done && !super::areas::library_open(&app.dock) {
             app.toggle_library();
         }
+        // A project double-clicked in Explorer (Windows installs associate .phosphor) or given on the command line.
+        if app.bench.is_none()
+            && let Some(path) = std::env::args().nth(1).filter(|a| !a.starts_with("--") && a.to_lowercase().ends_with(".phosphor"))
+        {
+            app.state.open_project_file(&path);
+        }
         if app.bench.is_none() {
             app.state.outputs_on_open();
         }
