@@ -49,11 +49,17 @@ pub struct Cue {
     pub follow: f32,
     /// Fire at this timecode (seconds), when the cue list follows a timecode.
     pub at: Option<f32>,
+    /// Fire every day at this local time (seconds since midnight), for installations: lights up at 18:00, off at 02:00.
+    #[serde(default)]
+    pub daily: Option<u32>,
+    /// Which days `daily` fires on: bit 0 = Sunday … bit 6 = Saturday (0 = every day).
+    #[serde(default)]
+    pub days: u8,
 }
 
 impl Default for Cue {
     fn default() -> Self {
-        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None }
+        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None, daily: None, days: 0 }
     }
 }
 
@@ -249,6 +255,20 @@ impl Composition {
 
     /// With a timecode at `tc` seconds (after `prev`): the cue that should fire now, if any. A jump back
     /// (or forward past several cues) lands on the last cue at or before `tc`.
+    /// The scheduled cue whose time of day came between `prev` and `now` (local seconds since midnight; the window
+    /// wraps at midnight) on `weekday` (0 = Sunday). The latest one wins.
+    pub fn scheduled_cue(&self, prev: u32, now: u32, weekday: u8) -> Option<usize> {
+        let passed = |t: u32| if prev <= now { t > prev && t <= now } else { t > prev || t <= now };
+        self.cues
+            .cues
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.days == 0 || c.days & (1 << weekday.min(6)) != 0)
+            .filter_map(|(i, c)| c.daily.filter(|t| passed(*t)).map(|t| (i, t)))
+            .max_by_key(|(_, t)| if *t > now { *t as i64 - 86_400 } else { *t as i64 })
+            .map(|(i, _)| i)
+    }
+
     pub fn timecoded_cue(&self, prev: f32, tc: f32, current: Option<usize>) -> Option<usize> {
         let last_at = |t: f32| self.cues.cues.iter().enumerate().filter(|(_, c)| c.at.is_some_and(|a| a <= t)).max_by(|a, b| a.1.at.partial_cmp(&b.1.at).unwrap()).map(|(i, _)| i);
         let now = last_at(tc)?;
@@ -262,6 +282,19 @@ impl Composition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scheduled_cues_fire_once_at_their_time() {
+        let mut comp = Composition::default();
+        comp.cues.cues = vec![
+            Cue { daily: Some(18 * 3600), ..Default::default() },
+            Cue { daily: Some(2 * 3600), days: 0b011_1110, ..Default::default() }, // weekdays only
+        ];
+        assert_eq!(comp.scheduled_cue(18 * 3600 - 1, 18 * 3600, 3), Some(0));
+        assert_eq!(comp.scheduled_cue(18 * 3600, 18 * 3600 + 1, 3), None, "once");
+        assert_eq!(comp.scheduled_cue(86_399, 2 * 3600 + 5, 1), Some(1), "across midnight (asleep a while)");
+        assert_eq!(comp.scheduled_cue(2 * 3600 - 1, 2 * 3600, 0), None, "not on Sunday");
+    }
 
     #[test]
     fn cues_glide_and_switch() {

@@ -103,40 +103,10 @@ impl State {
 }
 
 /// Local wall-clock time "21:04:17" for the log.
-#[cfg(windows)]
-fn chrono_now() -> String {
-    // SAFETY: GetLocalTime only fills the struct we pass.
-    let t = unsafe {
-        let mut t: windows_sys::Win32::Foundation::SYSTEMTIME = std::mem::zeroed();
-        windows_sys::Win32::System::SystemInformation::GetLocalTime(&mut t);
-        t
-    };
-    format!("{:02}:{:02}:{:02}", t.wHour, t.wMinute, t.wSecond)
-}
-
 /// Local wall-clock time "21:04:17" for the log.
-#[cfg(not(windows))]
 fn chrono_now() -> String {
-    let secs = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
-    let local = secs + local_offset_secs();
-    format!("{:02}:{:02}:{:02}", (local / 3600).rem_euclid(24), (local / 60).rem_euclid(60), local.rem_euclid(60))
-}
-
-/// This computer's offset from UTC in seconds (0 if unknown).
-#[cfg(not(windows))]
-fn local_offset_secs() -> i64 {
-    #[cfg(unix)]
-    {
-        // SAFETY: localtime_r fills the struct we own.
-        unsafe {
-            let t = libc::time(std::ptr::null_mut());
-            let mut tm: libc::tm = std::mem::zeroed();
-            if !libc::localtime_r(&t, &mut tm).is_null() {
-                return tm.tm_gmtoff;
-            }
-        }
-    }
-    0
+    let (s, _) = crate::clock::local_time();
+    format!("{:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
 }
 
 /// The web control badge: nothing while no session runs; "Web control off" (click: hand back), "N can control",

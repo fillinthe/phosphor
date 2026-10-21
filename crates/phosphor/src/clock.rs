@@ -351,3 +351,39 @@ mod downbeat_tests {
         assert!((0..32).all(|i| d.observe(i, 0.5).is_none()));
     }
 }
+
+/// This computer's wall clock: (seconds since local midnight, weekday 0 = Sunday … 6 = Saturday). The browser build
+/// (and anything unknown) uses UTC.
+pub fn local_time() -> (u32, u8) {
+    #[cfg(windows)]
+    {
+        // SAFETY: GetLocalTime only fills the struct we pass.
+        let t = unsafe {
+            let mut t: windows_sys::Win32::Foundation::SYSTEMTIME = std::mem::zeroed();
+            windows_sys::Win32::System::SystemInformation::GetLocalTime(&mut t);
+            t
+        };
+        (t.wHour as u32 * 3600 + t.wMinute as u32 * 60 + t.wSecond as u32, t.wDayOfWeek as u8)
+    }
+    #[cfg(all(unix, not(target_arch = "wasm32")))]
+    {
+        // SAFETY: localtime_r fills the struct we own.
+        unsafe {
+            let t = libc::time(std::ptr::null_mut());
+            let mut tm: libc::tm = std::mem::zeroed();
+            if !libc::localtime_r(&t, &mut tm).is_null() {
+                return ((tm.tm_hour * 3600 + tm.tm_min * 60 + tm.tm_sec) as u32, tm.tm_wday as u8);
+            }
+        }
+        utc_time()
+    }
+    #[cfg(target_arch = "wasm32")]
+    utc_time()
+}
+
+#[allow(dead_code)]
+fn utc_time() -> (u32, u8) {
+    let secs = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    // 1 January 1970 was a Thursday.
+    ((secs % 86_400) as u32, ((secs / 86_400 + 4) % 7) as u8)
+}
