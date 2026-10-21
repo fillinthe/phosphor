@@ -224,6 +224,14 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "cornerpin" {
+                // The top layer pinned into a trapezoid (narrow at the top).
+                if let Some(l) = self.state.comp.layers.last_mut() {
+                    l.transform.corners = Some([[0.4, 0.1], [0.6, 0.1], [0.9, 0.9], [0.1, 0.9]]);
+                    println!("QUICK cornerpin: {}", l.name);
+                }
+                continue;
+            }
             if name == "slicefx" {
                 // Output 1: the left half of the picture on the left, and the same half again on the right through
                 // Invert (a slice effect), mirrored. Compare the -out1.png halves.

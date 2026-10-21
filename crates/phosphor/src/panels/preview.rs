@@ -21,6 +21,23 @@ pub(crate) fn thumbnail(ui: &mut egui::Ui, tex: Option<egui::TextureId>, size: e
     resp
 }
 
+/// The selected layer's corner pin on the preview: drag its four corners (the same handles as the mapping canvas).
+fn corner_pin_handles(ui: &mut egui::Ui, st: &mut State, frame: egui::Rect) {
+    let Some(layer) = st.selected.and_then(|id| st.comp.layer_mut(id)) else { return };
+    let id = layer.id;
+    let Some(corners) = &mut layer.transform.corners else { return };
+    let at = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
+    let pts: Vec<egui::Pos2> = corners.iter().map(|c| at(*c)).collect();
+    ui.painter().add(egui::Shape::closed_line(pts.clone(), Stroke::new(1.0, accent())));
+    for (k, c) in corners.iter_mut().enumerate() {
+        let mut d = [0.0, 0.0];
+        let r = super::mapping::point_handle(ui, egui::Id::new(("corner_pin", id, k)), pts[k], frame, accent(), false, &mut d);
+        c[0] += d[0];
+        c[1] += d[1];
+        r.on_hover_text(["Top left", "Top right", "Bottom right", "Bottom left"][k]);
+    }
+}
+
 pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     egui::Panel::bottom("preview_bar").show_separator_line(false).show(ui, |ui| {
         ui.horizontal(|ui| {
@@ -40,13 +57,15 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     });
     let rect = ui.available_rect_before_wrap();
     ui.painter().rect_filled(rect, 4.0, Color32::from_gray(6));
+    let frame = fit_rect(rect.shrink(6.0), st.aspect());
     match st.texture {
-        Some(tex) => paint_texture(ui.painter(), tex, fit_rect(rect.shrink(6.0), st.aspect())),
+        Some(tex) => paint_texture(ui.painter(), tex, frame),
         None => {
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "GPU unavailable", egui::FontId::proportional(16.0), Color32::GRAY);
         }
     }
     let resp = ui.interact(rect, egui::Id::new("preview_area"), Sense::click());
+    corner_pin_handles(ui, st, frame);
     resp.right_menu(|ui| {
         let open = st.output_open();
         if ui.button(label(if open { icon::STOP } else { icon::PLAY }, if open { "Close output" } else { "Open output" })).clicked() {

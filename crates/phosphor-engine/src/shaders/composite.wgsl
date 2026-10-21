@@ -50,16 +50,27 @@ fn blend(b: vec3f, s: vec3f, mode: u32) -> vec3f {
 @fragment
 fn fs_composite(in: VOut) -> @location(0) vec4f {
     let dst = textureSampleLevel(tex1, samp, in.uv, 0.0);
-    // Layer transform (u.p[10].w = on): p[9] = (x, y offset, x scale, y scale), p[10] = (cos, sin, aspect).
+    // Corner pin (u.p[14].w = on): the inverse homography in p[12..14] takes this pixel back into the picture,
+    // which fills the quad. Otherwise the layer transform (u.p[10].w = on): p[9] = (x, y offset, x scale, y scale),
+    // p[10] = (cos, sin, aspect).
     var uv = in.uv;
-    if (u.p[10].w > 0.5) {
+    let pinned = u.p[14].w > 0.5;
+    if (pinned) {
+        let h = mat3x3f(
+            vec3f(u.p[12].x, u.p[12].w, u.p[13].z),
+            vec3f(u.p[12].y, u.p[13].x, u.p[13].w),
+            vec3f(u.p[12].z, u.p[13].y, u.p[14].x),
+        );
+        let r = h * vec3f(in.pos.xy / u.resolution, 1.0);
+        uv = r.xy / r.z;
+    } else if (u.p[10].w > 0.5) {
         var q = uv - vec2f(0.5) - u.p[9].xy;
         q.x = q.x * u.p[10].z;
         q = vec2f(u.p[10].x * q.x + u.p[10].y * q.y, -u.p[10].y * q.x + u.p[10].x * q.y);
         q.x = q.x / u.p[10].z;
         uv = q / u.p[9].zw + vec2f(0.5);
     }
-    let st = uv * u.uv_xform.xy + u.uv_xform.zw;
+    let st = select(uv * u.uv_xform.xy + u.uv_xform.zw, uv, pinned);
     var s = sample_source(st);
     // Outside the picture, or cropped off (p[11] = left, right, top, bottom).
     let c = u.p[11];

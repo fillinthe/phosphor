@@ -288,6 +288,20 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), None, false, 0.0);
         row(ui, &mut t.scale, 0.05..=4.0, "Scale", ControlTarget::LayerScale(id), Some(&mut t.scale_mod), true, 1.0);
         row(ui, &mut t.rotation, -180.0..=180.0, "Rotation °", ControlTarget::LayerRotation(id), Some(&mut t.rotation_mod), false, 0.0);
+        // Corner pin: the picture into any four points (drag them on the preview, or type them here).
+        let mut pinned = t.corners.is_some();
+        if toggle(ui, &mut pinned, label(icon::PERSPECTIVE, "Corner pin")).on_hover_text("Stretch the picture into four corners you drag on the preview (perspective); replaces move / scale / rotate").changed() {
+            t.corners = pinned.then_some([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+        }
+        if let Some(c) = &mut t.corners {
+            for (k, name) in ["Top left", "Top right", "Bottom right", "Bottom left"].into_iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(name).small());
+                    guarded!(ui, c[k][0], egui::DragValue::new(&mut c[k][0]).speed(0.002).range(-1.0..=2.0).fixed_decimals(3).prefix("x "));
+                    guarded!(ui, c[k][1], egui::DragValue::new(&mut c[k][1]).speed(0.002).range(-1.0..=2.0).fixed_decimals(3).prefix("y "));
+                });
+            }
+        }
         // Crop: one bar per edge.
         for (k, side) in ["Crop left", "Crop right", "Crop top", "Crop bottom"].into_iter().enumerate() {
             ui.horizontal(|ui| {

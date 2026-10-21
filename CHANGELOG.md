@@ -9,6 +9,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Effects on one slice** (MadMapper's surface FX): select a slice in the Mapping Studio; under its settings,
   Effects › Add effect works as on a layer. The effects run on that slice's part of the picture only: pixelate one
   window of a building, invert one panel. Their settings can be mapped and modulated like any effect.
+- **Corner pin a layer** (VDMX's quad mode): Inspector › Transform › Corner pin, then drag the layer's four
+  corners right on the preview (or type them). The picture stretches into them with perspective, inside the mix,
+  before any output mapping.
 - **Your own shaders with several passes:** in the Shader Editor, `// @pass name 0.5` lines add steps drawn before
   the main one (at a size you choose), each read by the next with `read_name(uv)`, for blurs, glows and bloom.
   New template: "Passes: soft glow".
