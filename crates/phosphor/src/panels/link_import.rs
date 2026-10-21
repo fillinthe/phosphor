@@ -19,6 +19,20 @@ pub struct LinkImport {
     live: bool,
 }
 
+impl LinkImport {
+    /// Bench `--quick link` (PHOSPHOR_LINK_URL): downloads that link onto the top layer, like the window does.
+    pub fn bench_download(&mut self, url: &str) {
+        self.url = url.to_string();
+        self.onto_layer = true;
+        self.job = Some(if std::env::var_os("PHOSPHOR_LINK_LIVE").is_some() { Job::stream(url, None) } else { Job::download(url, None) });
+    }
+
+    /// What the last job did (bench LINK line).
+    pub fn status(&self) -> Option<&Status> {
+        self.job.as_ref().map(|j| &j.status)
+    }
+}
+
 /// The window, while open; also finishes a job that's running (call every frame).
 pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
     let now = ctx.input(|i| i.time);
@@ -42,11 +56,9 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
                 st.notice = Some(format!("Downloaded {} video{} into the media bin", files.len(), if files.len() == 1 { "" } else { "s" }));
             }
             Status::Playable { url, name } => {
+                // A movie read straight from the site (FFmpeg opens web addresses): it loops like any clip.
                 if let Some(layer) = target {
-                    let mut spec = crate::media::live::stream_source(&url);
-                    if let SourceSpec::Live { name: n, .. } = &mut spec {
-                        *n = format!("{name} (from the link)");
-                    }
+                    let spec = SourceSpec::Movie { name: format!("{name} (from the link)"), path: Some(url) };
                     st.launch_source(layer, spec, Vec::new(), name, now);
                 }
             }
