@@ -716,11 +716,15 @@ pub struct Mask {
     /// Attached to this slice: the points are in the slice's own square (0..1) and follow it when it moves or warps.
     #[serde(default)]
     pub attached: Option<u64>,
+    /// Per point: a bezier handle, the offset from the point to the curve's pull after it (the pull before it is the
+    /// mirror image). Missing = automatic (straight sides, or smooth with Smooth on).
+    #[serde(default)]
+    pub handles: Vec<Option<[f32; 2]>>,
 }
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new() }
     }
 }
 
@@ -813,10 +817,31 @@ impl Mask {
         self.corners[i] = on;
     }
 
-    /// Adds a point before index `i` (corner flags stay with their points).
+    pub fn handle(&self, i: usize) -> Option<[f32; 2]> {
+        self.handles.get(i).copied().flatten()
+    }
+
+    pub fn set_handle(&mut self, i: usize, h: Option<[f32; 2]>) {
+        if self.handles.len() <= i {
+            self.handles.resize(i + 1, None);
+        }
+        self.handles[i] = h;
+    }
+
+    /// The handle point `i` would get if you turned its handles on: the smooth curve's direction through it.
+    pub fn auto_handle(&self, i: usize) -> [f32; 2] {
+        let n = self.points.len();
+        let (a, b) = (self.points[(i + n - 1) % n], self.points[(i + 1) % n]);
+        [(b[0] - a[0]) / 6.0, (b[1] - a[1]) / 6.0]
+    }
+
+    /// Adds a point before index `i` (corner flags and handles stay with their points).
     pub fn insert_point(&mut self, i: usize, p: [f32; 2]) {
         if self.corners.len() >= i {
             self.corners.insert(i, false);
+        }
+        if self.handles.len() >= i {
+            self.handles.insert(i, None);
         }
         self.points.insert(i, p);
     }
@@ -825,13 +850,40 @@ impl Mask {
         if i < self.corners.len() {
             self.corners.remove(i);
         }
+        if i < self.handles.len() {
+            self.handles.remove(i);
+        }
         self.points.remove(i);
     }
 
-    /// The outline as drawn: the points, or a smooth closed curve through them (12 steps per side).
+    /// This mask with its points (and handles) where they land on the output (attached masks follow their slice).
+    pub fn placed(&self, surfaces: &[Surface]) -> Mask {
+        if self.attached.is_none() {
+            return self.clone();
+        }
+        let points: Vec<[f32; 2]> = self.points.iter().map(|p| mask_to_output(surfaces, self, *p)).collect();
+        let handles = (0..self.points.len())
+            .map(|i| {
+                self.handle(i).map(|h| {
+                    let tip = mask_to_output(surfaces, self, [self.points[i][0] + h[0], self.points[i][1] + h[1]]);
+                    [tip[0] - points[i][0], tip[1] - points[i][1]]
+                })
+            })
+            .collect();
+        Mask { points, handles, attached: None, ..self.clone() }
+    }
+
+    /// The outline as drawn: the points, or a curve through them (12 steps per side) when Smooth is on or a point
+    /// has bezier handles.
     pub fn outline(&self) -> Vec<[f32; 2]> {
         let n = self.points.len();
-        if !self.smooth || n < 3 {
+        if n < 3 {
+            return self.points.clone();
+        }
+        if self.handles.iter().any(Option::is_some) {
+            return self.bezier_outline();
+        }
+        if !self.smooth {
             return self.points.clone();
         }
         const STEPS: usize = 12;
@@ -851,6 +903,42 @@ impl Mask {
             for k in 0..STEPS {
                 let t = k as f32 / STEPS as f32;
                 out.push([catmull(p0[0], p1[0], p2[0], p3[0], t), catmull(p0[1], p1[1], p2[1], p3[1], t)]);
+            }
+        }
+        out
+    }
+
+    /// The outline as cubic bezier sides: a point with a handle pulls by it; others pull like the smooth curve
+    /// (Smooth on, not a corner) or straight at their neighbours.
+    fn bezier_outline(&self) -> Vec<[f32; 2]> {
+        const STEPS: usize = 12;
+        let n = self.points.len();
+        let p = |i: usize| self.points[i % n];
+        let third = |a: [f32; 2], b: [f32; 2]| [(b[0] - a[0]) / 3.0, (b[1] - a[1]) / 3.0];
+        // The pull after point i (towards i + 1) and before it (towards i - 1).
+        let after = |i: usize| match self.handle(i) {
+            Some(h) => h,
+            None if self.smooth && !self.is_corner(i) => self.auto_handle(i),
+            None => third(p(i), p(i + 1)),
+        };
+        let before = |i: usize| match self.handle(i) {
+            Some(h) => [-h[0], -h[1]],
+            None if self.smooth && !self.is_corner(i) => {
+                let h = self.auto_handle(i);
+                [-h[0], -h[1]]
+            }
+            None => third(p(i), p(i + n - 1)),
+        };
+        let mut out = Vec::with_capacity(n * STEPS);
+        for i in 0..n {
+            let (a, d) = (p(i), p(i + 1));
+            let (h1, h2) = (after(i), before((i + 1) % n));
+            let (b, c) = ([a[0] + h1[0], a[1] + h1[1]], [d[0] + h2[0], d[1] + h2[1]]);
+            for k in 0..STEPS {
+                let t = k as f32 / STEPS as f32;
+                let u = 1.0 - t;
+                let w = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+                out.push([w[0] * a[0] + w[1] * b[0] + w[2] * c[0] + w[3] * d[0], w[0] * a[1] + w[1] * b[1] + w[2] * c[1] + w[3] * d[1]]);
             }
         }
         out
@@ -885,6 +973,39 @@ impl Mask {
 #[cfg(test)]
 mod mask_corner_tests {
     use super::*;
+
+    #[test]
+    fn a_handle_set_to_the_automatic_one_changes_nothing() {
+        let mut m = Mask { smooth: true, ..Default::default() };
+        m.points[1] = [0.65, 0.35];
+        let before = m.outline();
+        let h = m.auto_handle(1);
+        m.set_handle(1, Some(h));
+        let after = m.outline();
+        assert_eq!(before.len(), after.len());
+        for (a, b) in before.iter().zip(&after) {
+            assert!((a[0] - b[0]).abs() < 1e-5 && (a[1] - b[1]).abs() < 1e-5, "{a:?} vs {b:?}");
+        }
+    }
+
+    #[test]
+    fn a_handle_bends_a_straight_side() {
+        let mut m = Mask::default();
+        assert_eq!(m.outline().len(), 4, "plain polygon");
+        m.set_handle(0, Some([0.0, -0.1]));
+        let o = m.outline();
+        assert_eq!(o.len(), 48);
+        // Side 0 -> 1 runs along y = 0.4; the handle pulls it upwards (smaller y), side 2 -> 3 stays straight.
+        assert!(o[1..12].iter().any(|p| p[1] < 0.39), "{:?}", &o[..12]);
+        assert!(o[24..36].iter().all(|p| (p[1] - 0.6).abs() < 1e-5));
+        // Handles stay with their points.
+        m.insert_point(0, [0.5, 0.3]);
+        assert_eq!(m.handle(1), Some([0.0, -0.1]));
+        m.remove_point(0);
+        assert_eq!(m.handle(0), Some([0.0, -0.1]));
+        // Not attached: placing it changes nothing.
+        assert_eq!(m.placed(&[]).handles, m.handles);
+    }
 
     #[test]
     fn two_corners_in_a_row_make_a_straight_side() {
@@ -1083,7 +1204,7 @@ impl Mapping {
         self.masks
             .iter()
             .filter(|m| m.enabled)
-            .map(|m| Mask { points: m.points.iter().map(|p| mask_to_output(&self.surfaces, m, *p)).collect(), attached: None, ..m.clone() })
+            .map(|m| m.placed(&self.surfaces))
             .collect()
     }
 

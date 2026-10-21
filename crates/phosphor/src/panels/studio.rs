@@ -719,7 +719,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
                 toggle(ui, &mut m.enabled, "ON");
                 ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(f32::INFINITY));
             });
-            hint(ui, format!("{} points · drag them on the canvas; double-click an edge to add one, right-click a point to remove it", m.points.len()));
+            hint(ui, format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
             mask_settings(ui, m);
             let mid = m.id;
             super::mapping::mask_attach_row(ui, &mut o.mapping, mid);
