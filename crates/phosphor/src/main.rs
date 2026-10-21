@@ -61,6 +61,8 @@ mod syphon;
 mod screen_capture;
 #[cfg(target_os = "macos")]
 mod ffgl;
+#[cfg(target_os = "macos")]
+mod menu_test;
 #[cfg(not(target_arch = "wasm32"))]
 mod tracking;
 #[cfg(not(target_arch = "wasm32"))]

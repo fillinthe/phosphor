@@ -7,8 +7,15 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [~] **Crash reports sent automatically** (#5): the app side is done (below); **needs you:** a private endpoint
       on your server. Spec: accept `POST` with JSON `{"version", "os", "arch", "report"}` (all strings), answer
       2xx, keep it private. Then put its address in `ENDPOINT` (crates/phosphor/src/crash_report.rs), or tell me.
-- [ ] **Render thread** (#6): rendering on its own thread, so the UI never slows the outputs (and costs less when
-      idle).
+- [?] **Render thread** (#6): **measured first, and the reasons for it don't show up.** Holding off unless you
+      see a stall in real use (tell me when and what you were doing).
+      - Menus: a new bench test (`--quick menutest`) opens a real macOS menu. Rendering went on at ~57 fps the
+        whole time it was open, so menus don't freeze the outputs.
+      - File dialogs are already non-blocking.
+      - The idle cost (26% of a core) is mostly the system's GPU work; Phosphor's own code is a few percent of it.
+      - Doing it means moving the engine (346 call sites) and the output windows off egui: the biggest, riskiest
+        change in the app, for no measured gain today.
+
 - [ ] **Virtual camera** (#2): Phosphor as a webcam in Zoom / OBS / Teams. The camera extension can be built here,
       but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
 
