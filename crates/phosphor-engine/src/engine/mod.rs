@@ -153,6 +153,7 @@ struct Pass {
     bufs: Vec<wgpu::TextureView>,
 }
 
+mod cutout;
 mod encode;
 mod fit;
 mod media;
@@ -207,6 +208,8 @@ pub struct Engine {
     /// Monitor slots to read back to the CPU after this frame (video tracking), and the ring they come back in.
     monitor_reads: Vec<usize>,
     monitor_capture: crate::capture::Capture,
+    /// Remove background mattes and the pictures read back to make them.
+    cutouts: cutout::Cutouts,
     preview_source: u64,
     preview_src: Option<Target>,
     preview_targets: Vec<Option<Target>>,
@@ -258,6 +261,7 @@ impl Engine {
             monitor_sources: Vec::new(),
             monitor_reads: Vec::new(),
             monitor_capture: Default::default(),
+            cutouts: Default::default(),
             preview_source: MASTER_ID,
             preview_src: None,
             preview_targets: Vec::new(),
@@ -698,6 +702,7 @@ impl Engine {
 
         self.encode(&passes);
         self.read_samples();
+        self.finish_cutouts();
         for i in std::mem::take(&mut self.monitor_reads) {
             if let Some(t) = self.monitor_targets.get(i).and_then(|t| t.as_ref()) {
                 self.monitor_capture.enqueue_tagged(&self.gpu.device, &self.gpu.queue, t, i as u64);

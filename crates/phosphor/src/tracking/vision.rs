@@ -6,17 +6,19 @@ use objc2::AllocAnyThread;
 use objc2::rc::{Retained, autoreleasepool};
 use objc2_core_foundation::CFRetained;
 use objc2_core_video::{
-    CVPixelBuffer, CVPixelBufferCreate, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow, CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags,
-    CVPixelBufferUnlockBaseAddress, kCVPixelFormatType_32BGRA, kCVReturnSuccess,
+    CVPixelBuffer, CVPixelBufferCreate, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow, CVPixelBufferGetHeight, CVPixelBufferGetWidth,
+    CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags, CVPixelBufferUnlockBaseAddress, kCVPixelFormatType_32BGRA, kCVPixelFormatType_OneComponent8,
+    kCVReturnSuccess,
 };
 use objc2_foundation::{NSArray, NSDictionary};
 use objc2_vision::{
-    VNDetectFaceRectanglesRequest, VNDetectHumanBodyPoseRequest, VNDetectHumanHandPoseRequest, VNHumanBodyPoseObservationJointNameLeftWrist,
+    VNDetectFaceRectanglesRequest, VNDetectHumanBodyPoseRequest, VNDetectHumanHandPoseRequest, VNGeneratePersonSegmentationRequest,
+    VNGeneratePersonSegmentationRequestQualityLevel, VNHumanBodyPoseObservationJointNameLeftWrist,
     VNHumanBodyPoseObservationJointNameRightWrist, VNHumanBodyPoseObservationJointNameRoot, VNHumanHandPoseObservationJointNameIndexTip,
     VNHumanHandPoseObservationJointNameThumbTip, VNImageRequestHandler, VNRecognizedPoint, VNRequest,
 };
 
-use super::Found;
+use super::{Found, Matte};
 
 /// Points Vision is less sure of than this don't count.
 const SURE: f32 = 0.3;
@@ -89,6 +91,38 @@ pub fn look(rgba: &[u8], width: u32, height: u32, cfg: &phosphor_engine::Trackin
             }
         }
         Ok(found)
+    })
+}
+
+/// Where the people are in an RGBA picture (Vision person segmentation, balanced quality).
+pub fn person_matte(rgba: &[u8], width: u32, height: u32) -> Result<Matte, String> {
+    if rgba.len() < (width * height * 4) as usize {
+        return Err("Remove background: picture too small".into());
+    }
+    autoreleasepool(|_| unsafe {
+        let pixels = pixel_buffer(rgba, width, height).ok_or("Remove background: no picture buffer")?;
+        let handler = VNImageRequestHandler::initWithCVPixelBuffer_options(VNImageRequestHandler::alloc(), &pixels, &NSDictionary::new());
+        let request = VNGeneratePersonSegmentationRequest::new();
+        request.setQualityLevel(VNGeneratePersonSegmentationRequestQualityLevel::Balanced);
+        request.setOutputPixelFormat(kCVPixelFormatType_OneComponent8);
+        let requests: [&VNRequest; 1] = [&request];
+        handler.performRequests_error(&NSArray::from_slice(&requests)).map_err(|e| format!("Remove background: {}", e.localizedDescription()))?;
+        let Some(result) = request.results().and_then(|r| r.firstObject()) else { return Ok((1, 1, vec![0])) };
+        let mask = result.pixelBuffer();
+        let lock = CVPixelBufferLockFlags::ReadOnly;
+        CVPixelBufferLockBaseAddress(&mask, lock);
+        let (w, h, stride) = (CVPixelBufferGetWidth(&mask), CVPixelBufferGetHeight(&mask), CVPixelBufferGetBytesPerRow(&mask));
+        let base = CVPixelBufferGetBaseAddress(&mask) as *const u8;
+        let out = if base.is_null() {
+            Vec::new()
+        } else {
+            (0..h).flat_map(|y| std::slice::from_raw_parts(base.add(y * stride), w).to_vec()).collect()
+        };
+        CVPixelBufferUnlockBaseAddress(&mask, lock);
+        if out.is_empty() {
+            return Err("Remove background: empty matte".into());
+        }
+        Ok((w as u32, h as u32, out))
     })
 }
 

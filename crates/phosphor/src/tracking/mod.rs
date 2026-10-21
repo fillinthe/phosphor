@@ -2,6 +2,9 @@
 //! times a second (a monitor slot, `Engine::read_monitor`), Apple Vision looks for faces, hands and a body on a
 //! worker thread, and what it finds lands in `Track …` Hand modulators (`Composition::set_hand`) that any control
 //! can follow. Costs nothing while tracking is off; one picture in flight at a time.
+//!
+//! The same worker makes Remove background mattes: the engine reads back each cut-out effect's input
+//! (`request_cutout_frames`), Vision's person segmentation turns it into a matte, `Engine::set_matte` takes it.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -16,24 +19,43 @@ pub const MONITOR_KEY: u8 = 250;
 const WIDTH: u32 = 480;
 /// Looks per second at most.
 const RATE: f64 = 15.0;
+/// Remove background mattes per second at most.
+const CUTOUT_RATE: f64 = 30.0;
 
 /// What one look found: modulator name → value (0..1). Missing names = not seen this time.
 pub type Found = Vec<(&'static str, f32)>;
 
-struct Job {
+struct Picture {
     rgba: Vec<u8>,
     width: u32,
     height: u32,
-    cfg: Tracking,
 }
+
+enum Job {
+    Track(Picture, Tracking),
+    /// A matte for the Remove background effect on this layer / group.
+    Cutout(Picture, u64),
+}
+
+enum Done {
+    Track(Result<Found, String>),
+    Matte(u64, Result<Matte, String>),
+}
+
+/// A person matte: width, height, one byte per pixel (255 = person).
+pub type Matte = (u32, u32, Vec<u8>);
 
 #[derive(Default)]
 pub struct Tracker {
     jobs: Option<Sender<Job>>,
-    results: Option<Receiver<Result<Found, String>>>,
+    results: Option<Receiver<Done>>,
     /// A picture was asked for (or is being looked at) since this time.
     busy_since: Option<f64>,
     next_at: f64,
+    cutout_busy_since: Option<f64>,
+    cutout_next_at: f64,
+    /// Mattes ready for the engine.
+    mattes: Vec<(u64, Matte)>,
     /// What the last look found, for the panel ("1 face · 2 hands"), or why it can't look.
     pub status: String,
 }
@@ -64,21 +86,52 @@ impl Tracker {
         true
     }
 
-    /// The picture came back: hand it to the worker.
+    /// Should the engine read back the Remove background effects' pictures this frame? (Paced, one batch at a time.)
+    pub fn cutout_due(&mut self, now: f64) -> bool {
+        if self.cutout_busy_since.is_some_and(|t| now - t > 1.0) {
+            self.cutout_busy_since = None;
+        }
+        if self.cutout_busy_since.is_some() || now < self.cutout_next_at {
+            return false;
+        }
+        self.cutout_busy_since = Some(now);
+        self.cutout_next_at = now + 1.0 / CUTOUT_RATE;
+        true
+    }
+
+    /// The tracking picture came back: hand it to the worker.
     pub fn give(&mut self, rgba: Vec<u8>, width: u32, height: u32, cfg: &Tracking) {
+        self.send(Job::Track(Picture { rgba, width, height }, cfg.clone()));
+    }
+
+    /// A Remove background effect's picture (on layer / group `res`) came back.
+    pub fn give_cutout(&mut self, res: u64, rgba: Vec<u8>, width: u32, height: u32) {
+        self.send(Job::Cutout(Picture { rgba, width, height }, res));
+    }
+
+    /// Mattes made since last asked, for `Engine::set_matte`.
+    pub fn take_mattes(&mut self) -> Vec<(u64, Matte)> {
+        std::mem::take(&mut self.mattes)
+    }
+
+    fn send(&mut self, job: Job) {
         let jobs = self.jobs.get_or_insert_with(|| {
             let (tx, rx) = channel::<Job>();
             let (rtx, rrx) = channel();
             std::thread::Builder::new()
                 .name("tracking".into())
                 .spawn(move || {
-                    while let Ok(mut job) = rx.recv() {
-                        // Only the newest picture matters.
+                    while let Ok(first) = rx.recv() {
+                        // Only the newest picture of each kind (and each cut-out effect) matters.
+                        let mut pending = vec![first];
                         while let Ok(newer) = rx.try_recv() {
-                            job = newer;
+                            pending.retain(|j| !same_kind(j, &newer));
+                            pending.push(newer);
                         }
-                        if rtx.send(look(&job)).is_err() {
-                            break;
+                        for job in pending {
+                            if rtx.send(work(job)).is_err() {
+                                return;
+                            }
                         }
                     }
                 })
@@ -86,16 +139,28 @@ impl Tracker {
             self.results = Some(rrx);
             tx
         });
-        if jobs.send(Job { rgba, width, height, cfg: cfg.clone() }).is_err() {
+        if jobs.send(job).is_err() {
             self.jobs = None;
             self.busy_since = None;
+            self.cutout_busy_since = None;
         }
     }
 
     /// Writes finished looks into the `Track …` modulators (smoothed); not-found values hold, Found drops to 0.
     pub fn apply(&mut self, comp: &mut phosphor_engine::Composition) {
         let Some(rx) = &self.results else { return };
-        while let Ok(r) = rx.try_recv() {
+        while let Ok(done) = rx.try_recv() {
+            let r = match done {
+                Done::Track(r) => r,
+                Done::Matte(res, m) => {
+                    self.cutout_busy_since = None;
+                    match m {
+                        Ok(m) => self.mattes.push((res, m)),
+                        Err(e) => self.status = e,
+                    }
+                    continue;
+                }
+            };
             self.busy_since = None;
             match r {
                 Ok(found) => {
@@ -134,14 +199,29 @@ fn summary(found: &Found) -> String {
     if parts.is_empty() { "Nothing seen right now".into() } else { format!("Seeing: {}", parts.join(", ")) }
 }
 
+fn same_kind(a: &Job, b: &Job) -> bool {
+    match (a, b) {
+        (Job::Track(..), Job::Track(..)) => true,
+        (Job::Cutout(_, x), Job::Cutout(_, y)) => x == y,
+        _ => false,
+    }
+}
+
 #[cfg(target_os = "macos")]
-fn look(job: &Job) -> Result<Found, String> {
-    vision::look(&job.rgba, job.width, job.height, &job.cfg)
+fn work(job: Job) -> Done {
+    match job {
+        Job::Track(p, cfg) => Done::Track(vision::look(&p.rgba, p.width, p.height, &cfg)),
+        Job::Cutout(p, res) => Done::Matte(res, vision::person_matte(&p.rgba, p.width, p.height)),
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn look(_job: &Job) -> Result<Found, String> {
-    Err("Video tracking needs macOS (Apple Vision) for now.".into())
+fn work(job: Job) -> Done {
+    const NOT_HERE: &str = "Video tracking and Remove background need macOS (Apple Vision) for now.";
+    match job {
+        Job::Track(..) => Done::Track(Err(NOT_HERE.into())),
+        Job::Cutout(_, res) => Done::Matte(res, Err(NOT_HERE.into())),
+    }
 }
 
 #[cfg(test)]
@@ -151,7 +231,7 @@ mod tests {
     fn tracker_with(results: Vec<Result<Found, String>>) -> Tracker {
         let (tx, rx) = channel();
         for r in results {
-            tx.send(r).unwrap();
+            tx.send(Done::Track(r)).unwrap();
         }
         Tracker { results: Some(rx), busy_since: Some(0.0), ..Default::default() }
     }

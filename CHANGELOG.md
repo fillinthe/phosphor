@@ -11,6 +11,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
   index fingertip and a thumb-to-finger pinch, the hips and both wrists. Each one is a modulator ("Track Face X",
   "Track Pinch"…) that any slider can follow: right-click it › Modulate. A small picture shows what it sees, with a
   dot on each find; Smoothing takes out the jitter. Nothing runs while it's off.
+- **Remove Background** (Mac): a new effect (Key) that keeps the people in a picture and drops everything else,
+  using Apple Vision. Put it on a camera layer and the person stands on whatever is underneath. Edge and Softness
+  tune the outline; Invert keeps the background and cuts the people out instead.
 - **Bezier handles on mask points** (as in MadMapper): right-click a mask point › Bezier handles, then drag either
   handle to bend the outline there (the other side mirrors it).
 - Masks now redraw on the output straight away when you switch Smooth or a sharp corner.
