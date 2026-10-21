@@ -144,7 +144,7 @@ impl PhosphorApp {
                 bug: crate::support::BugReport::new(),
                 #[cfg(not(target_arch = "wasm32"))]
                 rhythm: Default::default(),
-                updater: crate::update::Updater::with_skipped(stored(KEY_UPDATE_SKIP).unwrap_or_default()),
+                updater: crate::update::Updater::with_settings(stored(KEY_UPDATE_SKIP).unwrap_or_default(), stored(KEY_UPDATE_AUTO).is_none_or(|v| v != "0")),
                 remote_password: stored(KEY_REMOTE_PASSWORD).unwrap_or_default(),
                 render_rate: stored(KEY_RENDER_RATE).and_then(|t| layout::from_text(&t)).unwrap_or_default(),
                 render_pacer: Default::default(),

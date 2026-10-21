@@ -4,14 +4,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## 0.2.93 (2026-10-21)
+## 0.2.92 (2026-10-21)
 
+- **Phosphor keeps itself up to date.** It checks for a new version as soon as it opens (and every hour), downloads
+  and installs it in the background, and then asks to relaunch. Choose Later and the new version opens next time.
+  Turn it off in Help › Check for Updates (Install updates by themselves).
 - **From a link:** Media › From a link… brings in the video or GIF from a post on X, Instagram, TikTok, YouTube,
   Vimeo and more: download it into the media bin (a clip that loops and works offline) or play it live from the
   link. Instagram may need "Sign-in from <your browser>". Needs yt-dlp (free; the window says how to get it).
-
-## 0.2.92 (2026-10-21)
-
 - **FFGL mixer plugins (Mac).** Mixer plugins (the kind Resolume uses to blend layers) now work: Inspector ›
   **Mixer plugin** picks one for a layer, and it blends that layer onto the layers below instead of its blend
   mode. The layer's opacity goes to the mixer's Opacity setting, like in Resolume, and its other settings are
