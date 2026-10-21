@@ -44,6 +44,8 @@ pub struct BenchConfig {
     pub audio: bool,
     /// Play movie sound (bench runs are silent otherwise).
     pub sound: bool,
+    /// `--movie-sound`: movie sound mixed into `--record` / `--stream` (silent here unless `--sound`).
+    pub movie_sound: bool,
     /// Start the cue list's show clock at launch (timecoded cues).
     pub show_clock: bool,
     /// `--record` writes Hap instead of H.264 / ProRes.
@@ -144,6 +146,12 @@ impl BenchConfig {
                 }
                 ("--show-clock", _) => {
                     cfg.show_clock = true;
+                    i += 1;
+                    continue;
+                }
+                ("--movie-sound", _) => {
+                    // Movie sound into --record / --stream, silent on this Mac.
+                    cfg.movie_sound = true;
                     i += 1;
                     continue;
                 }

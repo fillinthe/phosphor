@@ -92,7 +92,10 @@ impl PhosphorApp {
         #[cfg(target_os = "macos")]
         crate::media::video::surface::set_sixteen_bit(engine.as_ref().is_some_and(|e| e.device().features().contains(wgpu::Features::TEXTURE_FORMAT_16BIT_NORM)));
         #[cfg(not(target_arch = "wasm32"))]
-        crate::media::video::sound::set_enabled(bench.as_ref().is_none_or(|b| b.sound));
+        crate::media::video::sound::set_enabled(bench.as_ref().is_none_or(|b| b.sound || b.movie_sound));
+        if bench.as_ref().is_some_and(|b| b.movie_sound && !b.sound) {
+            crate::media::video::sound::set_local(false);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         crate::media::video::set_gpu_hap(engine.as_ref().is_some_and(|e| e.compressed_supported()) && std::env::var_os("PHOSPHOR_CPU_HAP").is_none());
         let now = cc.egui_ctx.input(|i| i.time);
@@ -371,6 +374,7 @@ impl PhosphorApp {
             s.stream_key = String::new();
             s.height = 0;
             s.fps = 30;
+            s.program_sound = app.bench.as_ref().is_some_and(|b| b.cfg.movie_sound);
             if let Some(u2) = app.bench.as_ref().and_then(|b| b.cfg.stream2.clone()) {
                 s.second_enabled = true;
                 s.second_destination = crate::stream::Destination::CustomRtmp;
@@ -390,6 +394,7 @@ impl PhosphorApp {
             app.state.stream.settings.destination = crate::stream::Destination::File;
             app.state.stream.settings.file_path = path;
             app.state.stream.settings.height = 0;
+            app.state.stream.settings.program_sound = app.bench.as_ref().is_some_and(|b| b.cfg.movie_sound);
             if app.bench.as_ref().is_some_and(|b| b.cfg.hap) {
                 app.state.stream.settings.file_format = crate::stream::FileFormat::Hap;
             }

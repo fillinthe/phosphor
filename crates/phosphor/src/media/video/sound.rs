@@ -18,6 +18,8 @@ const AHEAD: f64 = 0.12;
 const DRIFT: f64 = 0.15;
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
+/// Played on this Mac's output (off = mixed for streams only, silent here).
+static LOCAL: AtomicBool = AtomicBool::new(true);
 /// Even out the clips' loudness (the project's "Even out volume levels").
 static AUTO_LEVEL: AtomicBool = AtomicBool::new(false);
 /// The level every clip is brought towards (RMS, about -20 dBFS).
@@ -34,23 +36,71 @@ static OUTPUT_RUNNING: AtomicBool = AtomicBool::new(false);
 static CLIPS: Mutex<Vec<Weak<Clip>>> = Mutex::new(Vec::new());
 /// Sample frames the output has taken from clips (diagnostics: bench prints it).
 static PLAYED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-/// The mix, mono at the output rate, kept for the audio analyser while "Clip sound" is its source.
-static TAP_ON: AtomicBool = AtomicBool::new(false);
-static TAP: Mutex<VecDeque<f32>> = Mutex::new(VecDeque::new());
-const TAP_MAX: usize = 48_000;
+/// A copy of the mix for someone else (only kept while they want it, at most `max` samples, oldest dropped).
+struct Tap {
+    on: AtomicBool,
+    buf: Mutex<VecDeque<f32>>,
+    max: usize,
+}
+
+impl Tap {
+    const fn new(max: usize) -> Self {
+        Tap { on: AtomicBool::new(false), buf: Mutex::new(VecDeque::new()), max }
+    }
+
+    fn set(&self, on: bool) {
+        if self.on.swap(on, Ordering::Relaxed) && !on
+            && let Ok(mut t) = self.buf.lock()
+        {
+            t.clear();
+        }
+    }
+
+    fn take(&self) -> Vec<f32> {
+        self.buf.lock().map(|mut t| t.drain(..).collect()).unwrap_or_default()
+    }
+
+    /// From the sound thread: never waits for the lock (a missed block is better than a glitch).
+    fn push(&self, samples: impl Iterator<Item = f32>) {
+        if self.on.load(Ordering::Relaxed)
+            && let Ok(mut t) = self.buf.try_lock()
+        {
+            t.extend(samples);
+            while t.len() > self.max {
+                t.pop_front();
+            }
+        }
+    }
+}
+
+/// The mix, mono, for the audio analyser while "Clip sound" is its source.
+static TAP: Tap = Tap::new(48_000);
+/// The mix, stereo, for streams and recordings ("Movie sound" in the Stream panel).
+static PROGRAM: Tap = Tap::new(2 * 48_000);
 
 /// Keep (or stop keeping) the mix for the analyser.
 pub fn set_tap(on: bool) {
-    if TAP_ON.swap(on, Ordering::Relaxed) && !on
-        && let Ok(mut t) = TAP.lock()
-    {
-        t.clear();
-    }
+    TAP.set(on);
 }
 
 /// Everything mixed since the last call (mono, at `stats().0` Hz).
 pub fn take_tap() -> Vec<f32> {
-    TAP.lock().map(|mut t| t.drain(..).collect()).unwrap_or_default()
+    TAP.take()
+}
+
+/// Play the mix on this Mac (on) or only feed it to streams and the analyser (off, silent here).
+pub fn set_local(on: bool) {
+    LOCAL.store(on, Ordering::Relaxed);
+}
+
+/// Keep (or stop keeping) the stereo mix for a stream or recording.
+pub fn set_program_tap(on: bool) {
+    PROGRAM.set(on);
+}
+
+/// The stereo mix since the last call (interleaved L R, at `stats().0` Hz).
+pub fn take_program() -> Vec<f32> {
+    PROGRAM.take()
 }
 
 /// (output sample rate, 0 = closed; sample frames played from clips so far).
@@ -500,13 +550,10 @@ fn run_output() -> Result<(), String> {
         scratch.clear();
         scratch.resize(frames * 2, 0.0);
         mix_clips(&mut scratch);
-        if TAP_ON.load(Ordering::Relaxed)
-            && let Ok(mut t) = TAP.try_lock()
-        {
-            t.extend(scratch.chunks_exact(2).map(|lr| 0.5 * (lr[0] + lr[1])));
-            while t.len() > TAP_MAX {
-                t.pop_front();
-            }
+        TAP.push(scratch.chunks_exact(2).map(|lr| 0.5 * (lr[0] + lr[1])));
+        PROGRAM.push(scratch.iter().copied());
+        if !LOCAL.load(Ordering::Relaxed) {
+            scratch.iter_mut().for_each(|s| *s = 0.0);
         }
         for (i, frame) in out.chunks_mut(channels).enumerate() {
             let (l, r) = (scratch[i * 2], scratch[i * 2 + 1]);
