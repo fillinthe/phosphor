@@ -214,6 +214,10 @@ impl PhosphorApp {
                 #[cfg(target_os = "macos")]
                 ffgl: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
+                following: None,
+                #[cfg(not(target_arch = "wasm32"))]
+                leader: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 projectors: Default::default(),
                 scopes: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
@@ -333,6 +337,10 @@ impl PhosphorApp {
             #[cfg(any(target_os = "macos", windows))]
             crate::ndi::sources();
             app.state.comp.ndi.enabled = true;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(addr) = app.bench.as_ref().and_then(|b| b.cfg.follow.clone()) {
+            app.state.following = Some(crate::follow::Link::connect(&addr));
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.net) {
             if let Err(e) = app.state.net.start() {

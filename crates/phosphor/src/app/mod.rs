@@ -149,6 +149,11 @@ pub struct State {
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,
+    /// Following another Phosphor (`crate::follow`): the link to the leader, and what this one sends when it leads.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub following: Option<crate::follow::Link>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub leader: crate::follow::Leader,
     /// FFGL plugins: the list found, and the instances drawing for effects and sources.
     #[cfg(target_os = "macos")]
     pub ffgl: crate::ffgl::Ffgl,
@@ -717,6 +722,10 @@ impl eframe::App for PhosphorApp {
             let now = time + idle;
             if self.hidden_pacer.due(now, self.state.render_rate.fps().unwrap_or(60).min(60)) {
                 self.render(now);
+                // A bench whose window is covered gets no UI frames: it still has to finish.
+                if self.bench.is_some() {
+                    self.finish_bench(ctx, now);
+                }
             }
             ctx.request_repaint();
         }

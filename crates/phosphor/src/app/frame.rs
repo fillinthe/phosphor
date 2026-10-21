@@ -106,15 +106,24 @@ impl PhosphorApp {
                     st.fire(t, now as f32);
                 }
             }
-            st.comp.expire_transitions(now as f32);
+            // A follower's clips, fades and cues come from the leader (in the leader's time).
+            #[cfg(not(target_arch = "wasm32"))]
+            let leading = st.following.is_none();
+            #[cfg(target_arch = "wasm32")]
+            let leading = true;
+            if leading {
+                st.comp.expire_transitions(now as f32);
+            }
             // Movies remember how they last played (twice a second is plenty).
             if now >= st.media_memory_at {
                 st.media_memory_at = now + 0.5;
                 st.comp.remember_media_settings();
             }
-            st.run_autopilot(now);
-            st.run_auto_show(now);
-            st.run_cues(now);
+            if leading {
+                st.run_autopilot(now);
+                st.run_auto_show(now);
+                st.run_cues(now);
+            }
             #[cfg(not(target_arch = "wasm32"))]
             st.poll_rhythm();
             #[cfg(not(target_arch = "wasm32"))]

@@ -19,6 +19,11 @@ impl PhosphorApp {
         if !self.bench_session {
             self.heartbeat.beat(now);
         }
+        // Following another Phosphor: its project and beat; the show runs at its time. Leading: tell followers.
+        #[cfg(not(target_arch = "wasm32"))]
+        let show = self.state.follow_frame(now);
+        #[cfg(target_arch = "wasm32")]
+        let show = now;
         let State {
             clip_page,
             comp,
@@ -104,7 +109,7 @@ impl PhosphorApp {
             beats: clock.beats(now) as f32,
             audio_beat: an.beat_env,
             beat_phase,
-            time: now as f32,
+            time: show as f32,
             audio_level: an.level,
             audio_low: an.low,
             audio_mid: an.mid,
@@ -195,10 +200,10 @@ impl PhosphorApp {
         {
             ffgl.poll();
             let beats = clock.beats(now);
-            ffgl.run(engine, now, clock.bpm, (beats.rem_euclid(4.0) / 4.0) as f32);
+            ffgl.run(engine, show, clock.bpm, (beats.rem_euclid(4.0) / 4.0) as f32);
         }
         let t0 = web_time::Instant::now();
-        let info = engine.render(comp, now as f32, mod_inputs);
+        let info = engine.render(comp, show as f32, mod_inputs);
         #[cfg(target_os = "macos")]
         ffgl.take_jobs(engine);
         #[cfg(not(target_arch = "wasm32"))]

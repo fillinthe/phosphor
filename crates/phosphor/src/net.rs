@@ -20,6 +20,8 @@ pub enum PeerKind {
     Audio,
     /// Audience member on the play page (takes turns; see `app::play`).
     Guest,
+    /// Another Phosphor playing this show on its own outputs (`crate::follow`).
+    Follower,
 }
 
 /// A phone/tablet/browser connected to the session.
@@ -172,6 +174,10 @@ pub struct NetSession {
     thumb_encoder: Option<SyncSender<(u64, u32, u32, Vec<u8>)>>,
     thumb_pacer: crate::pacing::FramePacer,
     thumb_next: usize,
+    /// What following Phosphors get (`crate::follow`), and how many follow.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub follow: crate::follow::SharedFeed,
+    pub followers: Arc<AtomicUsize>,
     /// The secure listener (port + 1) is up.
     pub https: bool,
     pub status: String,
@@ -200,6 +206,9 @@ impl NetSession {
             thumb_encoder: None,
             thumb_pacer: Default::default(),
             thumb_next: 0,
+            #[cfg(not(target_arch = "wasm32"))]
+            follow: Default::default(),
+            followers: Arc::new(AtomicUsize::new(0)),
             https: false,
             status: String::new(),
         }
@@ -308,15 +317,16 @@ impl NetSession {
         let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone(), self.password.clone());
         let registry = self.registry.clone();
         let thumbs = self.thumbs.clone();
+        let follow = (self.follow.clone(), self.followers.clone());
         std::thread::Builder::new()
             .name("phosphor-net".into())
             .spawn(move || {
                 while running.load(Ordering::Relaxed) {
                     let mut idle = true;
                     let take = |stream: std::net::TcpStream, cfg: Option<Arc<rustls::ServerConfig>>| {
-                        let (running, latest, viewers, peers, ring, remote, registry, thumbs) =
-                            (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone());
-                        std::thread::spawn(move || native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs));
+                        let (running, latest, viewers, peers, ring, remote, registry, thumbs, follow) =
+                            (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone(), follow.clone());
+                        std::thread::spawn(move || native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, follow));
                     };
                     match listener.accept() {
                         Ok((stream, _)) => {
@@ -492,6 +502,7 @@ mod native {
         remote: super::RemoteHub,
         registry: super::Reg,
         thumbs: Thumbs,
+        follow: (crate::follow::SharedFeed, Arc<AtomicUsize>),
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
@@ -527,6 +538,17 @@ mod native {
         if path.starts_with("/guest") {
             let seat = super::Seat::join(&registry, super::PeerKind::Guest, &ip, &device);
             control_socket(stream, tcp, running, remote, seat, true);
+            return;
+        }
+        // Another Phosphor following this show.
+        if path.starts_with("/follow") {
+            let seat = super::Seat::join(&registry, super::PeerKind::Follower, &ip, "Phosphor (following)");
+            let _ = tcp.set_nodelay(true);
+            let Ok(ws) = tungstenite::accept(stream) else { return };
+            let _ = tcp.set_read_timeout(Some(Duration::from_millis(15)));
+            follow.1.fetch_add(1, Ordering::Relaxed);
+            crate::follow::serve(ws, follow.0, || running.load(Ordering::Relaxed) && !seat.kicked());
+            follow.1.fetch_sub(1, Ordering::Relaxed);
             return;
         }
         if path.starts_with("/audio") {
