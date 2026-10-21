@@ -138,6 +138,14 @@ pub fn plan_for(header: &Header) -> Option<shaders::PassPlan> {
     Some(shaders::PassPlan { passes, buffers, vars: Vec::new(), images: Vec::new() })
 }
 
+/// Checks a user shader the way the engine compiles it, without a GPU (any thread): its header, then the WGSL.
+pub fn check(source: &str) -> Result<Header, CompileError> {
+    let header = parse_header(source)?;
+    let (full, prelude_lines) = module_source(source, "custom_check")?;
+    validate(&full, prelude_lines)?;
+    Ok(header)
+}
+
 /// Builds the module source for a user shader, renaming `fn main(` to `entry`.
 /// Returns the full module text and the number of prelude lines before the user's code.
 pub(crate) fn module_source(source: &str, entry: &str) -> Result<(String, u32), CompileError> {

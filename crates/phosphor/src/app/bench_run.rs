@@ -85,6 +85,11 @@ impl PhosphorApp {
             println!("LINK {s:?} layer_source={layer} media_bin={}", self.state.comp.media_bin.len());
         }
         #[cfg(not(target_arch = "wasm32"))]
+        if let Some(s) = self.state.ai_shader.status() {
+            let last = self.state.editor.shaders.last().map(|s| (s.slug.clone(), s.error.is_none())).unwrap_or_default();
+            println!("AI {s:?} newest_shader={} compiles={}", last.0, last.1);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(l) = &self.state.following {
             let show = l.show_time().unwrap_or(f64::NAN);
             println!(
@@ -583,6 +588,15 @@ impl PhosphorApp {
                 }
                 self.state.link_import.bench_download(&url);
                 println!("QUICK link: {url}");
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "ai" {
+                // Describe a shader: PHOSPHOR_AI_PROMPT asked of PHOSPHOR_AI_URL (a local test server) or the AI.
+                let prompt = std::env::var("PHOSPHOR_AI_PROMPT").unwrap_or_else(|_| "slow purple plasma".into());
+                crate::explorer::load_user_shaders(&mut self.state);
+                self.state.ai_shader.bench_ask(&prompt);
+                println!("QUICK ai: {prompt}");
                 continue;
             }
             if name == "patch" {

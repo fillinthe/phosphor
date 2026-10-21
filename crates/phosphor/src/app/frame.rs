@@ -62,14 +62,18 @@ impl PhosphorApp {
         if let Some(sid) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(crate::panels::PICK_MODEL))) {
             self.state.dialogs.pick_file(crate::dialogs::Purpose::Model3d(sid), Some(("3D model (OBJ)", &["obj"])));
         }
-        // An output asked for a stage photo.
-        #[cfg(not(target_arch = "wasm32"))]
         #[cfg(not(target_arch = "wasm32"))]
         crate::panels::link_window(&ctx, &mut self.state);
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::panels::ai_shader_window(&ctx, &mut self.state);
+        // A slice asked for a picture or movie of its own.
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(sid) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(crate::panels::PICK_SLICE_FILE))) {
             let exts = crate::media::dialog_extensions();
             self.state.dialogs.pick_file(crate::dialogs::Purpose::SliceFile(sid), Some(("Picture or movie", &exts)));
         }
+        // An output asked for a stage photo.
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(oid) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(crate::panels::PICK_STAGE_PHOTO))) {
             self.state.dialogs.pick_file(crate::dialogs::Purpose::StagePhoto(oid), Some(("Photo", &["jpg", "jpeg", "png", "heic", "tif", "tiff", "webp"])));
         }

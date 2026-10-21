@@ -6,6 +6,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.92 (2026-10-21)
 
+- **Describe a shader (AI):** in the Shader Editor, Describe it… — say what it should look like and the AI writes it
+  (a new effect or source, or a change to the open shader), with sliders for its settings. Shaders that don't compile
+  are fixed automatically. Needs your own Anthropic API key, kept in the macOS Keychain.
+
 - **Phosphor keeps itself up to date.** It checks for a new version as soon as it opens (and every hour), downloads
   and installs it in the background, and then asks to relaunch. Choose Later and the new version opens next time.
   Turn it off in Help › Check for Updates (Install updates by themselves).
