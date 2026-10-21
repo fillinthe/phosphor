@@ -257,6 +257,9 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
                     Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                 } else if rutt {
                     Some(wgpu::BlendState { color: additive, alpha: additive })
+                } else if shaders::instances(entry).is_some() {
+                    // Instanced copies (particles) land over each other, straight alpha like every source.
+                    Some(wgpu::BlendState::ALPHA_BLENDING)
                 } else {
                     None
                 },

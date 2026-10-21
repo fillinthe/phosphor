@@ -36,6 +36,8 @@ pub(crate) struct Header {
     pub imported: Vec<(String, String)>,
     /// MadMapper `GENERATORS` of type `time_base`: (name, speed expression).
     pub time_bases: Vec<(String, String)>,
+    /// MadMapper `RENDER_SETTINGS.INSTANCE_COUNT`: a number, or the name of the input that sets it.
+    pub instance_count: Option<String>,
     /// Input types we cannot represent (first one wins).
     pub unsupported: Option<String>,
 }
@@ -318,6 +320,10 @@ pub(crate) fn parse_header(json: &str) -> Result<Header, IsfError> {
             .collect(),
         _ => Vec::new(),
     };
+    h.instance_count = obj.get("RENDER_SETTINGS").and_then(|r| r.get("INSTANCE_COUNT")).map(|v| match v {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    });
     if let Some(Value::Array(gens)) = obj.get("GENERATORS") {
         for g in gens {
             let name = g.get("NAME").map(str_of).unwrap_or_default();

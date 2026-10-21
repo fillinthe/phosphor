@@ -22,6 +22,8 @@ pub struct Loaded {
     audio_slots: Vec<(usize, bool)>,
     /// A real vertex stage (ISF vertex shaders that move the quad).
     vertex_entry: Option<String>,
+    /// Instanced: how many copies of its quad it draws.
+    instances: Option<phosphor_isf::Instances>,
     /// Explorer category.
     category: &'static str,
 }
@@ -109,6 +111,7 @@ fn lut_effect(slug: &str, stem: &str, lut: &crate::lut::Lut) -> Loaded {
         images: vec![(0, w, h, rgba)],
         audio_slots: Vec::new(),
         vertex_entry: None,
+        instances: None,
         category: "LUT",
     }
 }
@@ -137,6 +140,7 @@ fn lut_mix_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
         images: vec![(0, w, h, rgba)],
         audio_slots: Vec::new(),
         vertex_entry: None,
+        instances: None,
         category: "LUT",
     }
 }
@@ -342,7 +346,7 @@ impl IsfLibrary {
                                     about = format!("{about}\nby {}", sh.credit);
                                 }
                                 let images = load_images(&path, &sh.images);
-                                Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(&stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), wgsl: sh.wgsl, category: "ISF" })
+                                Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(&stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), instances: sh.instances, wgsl: sh.wgsl, category: "ISF" })
                             }
                             Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
                             Err(e) => Err(format!("{e:?}")),
@@ -383,6 +387,12 @@ impl IsfLibrary {
                     shaders::set_audio_slots(desc.entry, l.audio_slots.into_iter().map(|(s, fft)| (s, if fft { shaders::AudioTexture::Fft } else { shaders::AudioTexture::Wave })).collect());
                     if let Some(v) = l.vertex_entry {
                         shaders::set_vertex_entry(desc.entry, leak(v));
+                    }
+                    if let Some(n) = l.instances {
+                        shaders::set_instances(desc.entry, match n {
+                            phosphor_isf::Instances::Fixed(n) => shaders::Instances::Fixed(n),
+                            phosphor_isf::Instances::Param(i) => shaders::Instances::Param(i),
+                        });
                     }
                     engine.register_lazy(desc, l.wgsl);
                     self.loaded += 1;

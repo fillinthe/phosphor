@@ -256,25 +256,31 @@ pub(crate) fn finalize(naga_wgsl: &str, entry: &str) -> Result<String, IsfError>
         drop_structs.push(ret.to_string());
     }
 
-    // Parameter name -> Phosphor expression, by attribute.
+    // Parameter name -> Phosphor expression, by attribute. Values from a vertex stage of the shader's own
+    // (`@location(1..)`) arrive in its own input struct (`<entry>_VOut`, `varying_struct`).
     let mut param_src: HashMap<String, String> = HashMap::new();
+    let mut extra: Vec<(u32, String)> = Vec::new();
     for p in fn_params(sig).split(',') {
         let p = p.trim();
         if p.is_empty() {
             continue;
         }
-        let Some((decl, _ty)) = p.rsplit_once(':') else { continue };
+        let Some((decl, ty)) = p.rsplit_once(':') else { continue };
         let name = decl.split_whitespace().last().unwrap_or("").to_string();
+        let location = decl.split("@location(").nth(1).and_then(|r| r.split(')').next()).and_then(|n| n.trim().parse::<u32>().ok());
         let expr = if decl.contains("@builtin(position)") {
-            "in.pos"
-        } else if decl.contains("@location(0)") {
-            "in.uv"
+            "in.pos".to_string()
+        } else if location == Some(0) {
+            "in.uv".to_string()
+        } else if let Some(k) = location {
+            extra.push((k, ty.trim().to_string()));
+            format!("in.v{k}")
         } else if decl.contains("@builtin(front_facing)") {
-            "true"
+            "true".to_string()
         } else {
             return Err(IsfError::Wgsl(format!("unsupported entry parameter `{p}`")));
         };
-        param_src.insert(name, expr.to_string());
+        param_src.insert(name, expr);
     }
 
     // Walk the wrapper body: `global = param;`, `main_1();`, `let _e = out; return S(_e);`
@@ -318,7 +324,15 @@ pub(crate) fn finalize(naga_wgsl: &str, entry: &str) -> Result<String, IsfError>
         out.push_str(&rename_tokens(it.text, &map, it.kind == Kind::Struct));
         out.push_str("\n\n");
     }
-    out.push_str(&format!("@fragment\nfn {entry}(in: VOut) -> @location(0) vec4f {{\n"));
+    let input = if extra.is_empty() {
+        "VOut".to_string()
+    } else {
+        extra.sort();
+        let fields: String = extra.iter().map(|(k, ty)| format!("    @location({k}) v{k}: {ty},\n")).collect();
+        out.push_str(&format!("struct {} {{\n    @builtin(position) pos: vec4f,\n    @location(0) uv: vec2f,\n{fields}}}\n\n", varying_struct(entry)));
+        varying_struct(entry)
+    };
+    out.push_str(&format!("@fragment\nfn {entry}(in: {input}) -> @location(0) vec4f {{\n"));
     for (l, r) in &assigns {
         let src = param_src
             .get(r)
@@ -333,9 +347,16 @@ pub(crate) fn finalize(naga_wgsl: &str, entry: &str) -> Result<String, IsfError>
     Ok(out)
 }
 
+/// The struct a shader's vertex and fragment stages pass between them when they share values of their own.
+pub(crate) fn varying_struct(entry: &str) -> String {
+    format!("{entry}_VOut")
+}
+
 /// Rewrites naga's vertex-stage output into `@vertex fn <vs_entry>(@builtin(vertex_index) vi: u32) -> VOut`,
 /// with the same binding renames as `finalize` and every other name prefixed by `vs_entry`.
-pub(crate) fn finalize_vertex(naga_wgsl: &str, vs_entry: &str) -> Result<String, IsfError> {
+/// `out_struct`: `VOut`, or the fragment's `varying_struct` when the stages share values of their own (`@location(1..)`
+/// outputs). `@builtin(instance_index)` (GLSL `gl_InstanceID`) is the copy number of an instanced draw.
+pub(crate) fn finalize_vertex(naga_wgsl: &str, vs_entry: &str, out_struct: &str) -> Result<String, IsfError> {
     let items = scan_items(naga_wgsl);
     let mut map: HashMap<String, String> = HashMap::new();
     let mut drop_structs: Vec<String> = Vec::new();
@@ -381,6 +402,8 @@ pub(crate) fn finalize_vertex(naga_wgsl: &str, vs_entry: &str) -> Result<String,
         let name = decl.split_whitespace().last().unwrap_or("").to_string();
         if decl.contains("@builtin(vertex_index)") {
             param_src.insert(name, "vi".to_string());
+        } else if decl.contains("@builtin(instance_index)") {
+            param_src.insert(name, "ii".to_string());
         } else {
             return Err(IsfError::Wgsl(format!("unsupported vertex entry parameter `{p}`")));
         }
@@ -425,7 +448,7 @@ pub(crate) fn finalize_vertex(naga_wgsl: &str, vs_entry: &str) -> Result<String,
         out.push_str(&rename_tokens(it.text, &map, it.kind == Kind::Struct));
         out.push_str("\n\n");
     }
-    out.push_str(&format!("@vertex\nfn {vs_entry}(@builtin(vertex_index) vi: u32) -> VOut {{\n"));
+    out.push_str(&format!("@vertex\nfn {vs_entry}(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> {out_struct} {{\n"));
     for (l, r) in &assigns {
         let src = param_src.get(r).cloned().ok_or_else(|| IsfError::Wgsl(format!("unexpected vertex wrapper assignment `{l} = {r}`")))?;
         out.push_str(&format!("    {} = {src};\n", map.get(l).unwrap_or(l)));
@@ -433,6 +456,16 @@ pub(crate) fn finalize_vertex(naga_wgsl: &str, vs_entry: &str) -> Result<String,
     for c in &calls {
         out.push_str(&format!("    {};\n", rename_tokens(c, &map, false)));
     }
-    out.push_str(&format!("    return VOut({}, {});\n}}\n", rename_tokens(&pos_expr, &map, false), rename_tokens(&uv_expr, &map, false)));
+    // The shader's own values, by location (1, 2…), after the position and the picture coordinate.
+    let mut extras: Vec<(u32, String)> = Vec::new();
+    for (i, f) in fields.iter().enumerate() {
+        if let Some(k) = f.split("@location(").nth(1).and_then(|r| r.split(')').next()).and_then(|n| n.trim().parse::<u32>().ok()).filter(|k| *k > 0) {
+            let arg = ret_args.get(i).ok_or_else(|| IsfError::Wgsl("vertex wrapper return doesn't match its struct".into()))?;
+            extras.push((k, rename_tokens(arg, &map, false)));
+        }
+    }
+    extras.sort();
+    let tail: String = extras.iter().map(|(_, e)| format!(", {e}")).collect();
+    out.push_str(&format!("    return {out_struct}({}, {}{tail});\n}}\n", rename_tokens(&pos_expr, &map, false), rename_tokens(&uv_expr, &map, false)));
     Ok(out)
 }

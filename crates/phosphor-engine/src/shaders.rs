@@ -433,6 +433,38 @@ pub fn vertex_entry(entry: &str) -> Option<&'static str> {
     VERTEX_ENTRIES.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, v)| *v)
 }
 
+/// How many copies an instanced shader draws: a fixed number, or the value of one of its parameters (float offset).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Instances {
+    Fixed(u32),
+    Param(usize),
+}
+
+impl Instances {
+    /// The count for a pass with these parameter values (at least 1, at most 4096).
+    pub fn count(self, p: &[[f32; 4]; 16]) -> u32 {
+        let n = match self {
+            Instances::Fixed(n) => n as f32,
+            Instances::Param(i) => p.get(i / 4).map_or(1.0, |v| v[i % 4]),
+        };
+        (n.round() as u32).clamp(1, 4096)
+    }
+}
+
+static INSTANCES: std::sync::RwLock<Vec<(&'static str, Instances)>> = std::sync::RwLock::new(Vec::new());
+
+/// Shader `entry` draws its quad several times (a vertex stage that places each copy by its instance number).
+pub fn set_instances(entry: &'static str, instances: Instances) {
+    if let Ok(mut v) = INSTANCES.write() {
+        v.retain(|(e, _)| *e != entry);
+        v.push((entry, instances));
+    }
+}
+
+pub fn instances(entry: &str) -> Option<Instances> {
+    INSTANCES.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, i)| *i)
+}
+
 /// Any shader at all wants audio pictures (the app refreshes them each frame only then).
 pub fn any_audio_slots() -> bool {
     AUDIO_SLOTS.read().is_ok_and(|a| !a.is_empty())

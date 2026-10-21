@@ -119,6 +119,7 @@ impl Engine {
                 e if crate::shaders::vertex_entry(e).is_some() => 6,
                 _ => 3,
             };
+            let instances = crate::shaders::instances(pass.entry);
             let pipeline = self.gpu.pipeline_for(pass.entry, pass.target.texture().format()).clone();
             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(pass.entry),
@@ -127,7 +128,14 @@ impl Engine {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: if surface { wgpu::LoadOp::Load } else { wgpu::LoadOp::Clear(wgpu::Color::BLACK) },
+                        // Instanced shaders blend their copies over a clear (transparent) picture.
+                        load: if surface {
+                            wgpu::LoadOp::Load
+                        } else if instances.is_some() {
+                            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                        } else {
+                            wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -141,7 +149,7 @@ impl Engine {
             if let Some(m) = &pass.mesh {
                 rp.set_vertex_buffer(0, m.buffer.slice(..));
             }
-            rp.draw(0..vertices, 0..1);
+            rp.draw(0..vertices, 0..instances.map_or(1, |n| n.count(&pass.uniforms.p)));
         }
         if let Some(t) = &mut self.gpu_timer
             && !passes.is_empty()
