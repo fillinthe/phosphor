@@ -134,6 +134,8 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 *stream_audio_devices = crate::stream::list_audio_devices();
             }
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        toggle(ui, &mut s.program_sound, label(icon::FILM_STRIP, "Movie sound")).on_hover_text("Phosphor's own sound (the movies playing) in the stream or recording, mixed with the audio device above when one is chosen");
     });
     ui.add_space(4.0);
     ui.horizontal(|ui| {
@@ -167,7 +169,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         ui.colored_label(WARN, msg.as_str());
     }
     ui.add_space(6.0);
-    hint(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio.");
+    hint(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio. Movie sound adds the sound of the movies playing in Phosphor (both mix together).");
     #[cfg(not(target_arch = "wasm32"))]
     if choose_file {
         st.dialogs.save_file(crate::dialogs::Purpose::StreamFile, ("Video", &["mp4", "mov"]), "Phosphor recording.mp4");

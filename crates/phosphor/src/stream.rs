@@ -88,6 +88,8 @@ pub struct StreamSettings {
     pub kbps: u32,
     /// AVFoundation audio device index to include (-1 = no audio).
     pub audio_device: i32,
+    /// Phosphor's own sound (movie sound) in the stream / recording, mixed with the device when both are on.
+    pub program_sound: bool,
     /// A second live destination at the same time (one encode, FFmpeg's tee): YouTube, Twitch or custom RTMP.
     pub second_enabled: bool,
     pub second_destination: Destination,
@@ -114,6 +116,7 @@ impl Default for StreamSettings {
             fps: 30,
             kbps: 6000,
             audio_device: -1,
+            program_sound: false,
             second_enabled: false,
             second_destination: Destination::Twitch,
             second_key: String::new(),
@@ -276,6 +279,9 @@ pub struct Streamer {
     retries: u32,
     /// Mute all sound is on: streams and recordings start without the audio device.
     pub mute_audio: bool,
+    /// Feeding Phosphor's own sound to FFmpeg (dropped = stopped).
+    #[cfg(not(target_arch = "wasm32"))]
+    program_feed: Option<crate::stream_audio::ProgramFeed>,
 }
 
 /// Seconds before reconnect attempt `n` (1, 2, 3…): 2, 4, 8, then every 15.
@@ -335,6 +341,8 @@ impl Streamer {
             retry_at: None,
             retries: 0,
             mute_audio: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            program_feed: None,
         }
     }
 
@@ -485,9 +493,25 @@ impl Streamer {
         .collect();
         let whip = s.destination == Destination::Whip;
         let audio_device = if self.mute_audio { -1 } else { s.audio_device };
+        let program = s.program_sound && !self.mute_audio;
+        let has_audio = audio_device >= 0 || program;
         if audio_device >= 0 {
             // Program audio from a capture device (a mic, or a loopback like BlackHole for the DJ feed).
-            args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{audio_device}"), "-map", "0:v", "-map", "1:a"].map(String::from));
+            args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{audio_device}")].map(String::from));
+        }
+        if program {
+            // Phosphor's own sound (the movie-sound mix), fed on the clock from a local socket.
+            // Two frames: measured, the picture reaches FFmpeg that much after the sound is mixed.
+            let (feed, port) = crate::stream_audio::ProgramFeed::start(2.0 / fps as f64).map_err(|e| format!("Couldn't start the movie sound feed: {e}"))?;
+            args.extend(crate::stream_audio::input_args(port));
+            self.program_feed = Some(feed);
+        }
+        if audio_device >= 0 && program {
+            args.extend(["-filter_complex", "[1:a][2:a]amix=inputs=2:duration=longest:normalize=0[a]", "-map", "0:v", "-map", "[a]"].map(String::from));
+        } else if has_audio {
+            args.extend(["-map", "0:v", "-map", "1:a"].map(String::from));
+        }
+        if has_audio {
             // WebRTC carries Opus (FFmpeg's own encoder, marked experimental); everything else AAC.
             let codec: &[&str] = if whip { &["-c:a", "opus", "-strict", "-2", "-b:a", "128k", "-ac", "2"] } else { &["-c:a", "aac", "-b:a", "160k"] };
             args.extend(codec.iter().map(|a| a.to_string()));
@@ -532,8 +556,8 @@ impl Streamer {
             for (f, url) in &extra {
                 slaves.push(format!("[f={f}:onfail=ignore]{url}"));
             }
-            // tee picks no streams by itself: name them (audio was mapped above when a device is on).
-            if audio_device < 0 {
+            // tee picks no streams by itself: name them (audio was mapped above when there is some).
+            if !has_audio {
                 args.extend(["-map", "0:v"].map(String::from));
             }
             args.extend(["-f", "tee", "-flags", "+global_header"].map(String::from));
@@ -630,6 +654,10 @@ impl Streamer {
     /// Closes the pipe and reaps FFmpeg in the background.
     fn close(&mut self) {
         self.tx = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.program_feed = None;
+        }
         self.started = None;
         #[cfg(not(target_arch = "wasm32"))]
         let child = self.child.clone();
@@ -645,6 +673,10 @@ impl Streamer {
     pub fn stop_and_wait(&mut self) {
         self.wanted = None;
         self.tx = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.program_feed = None;
+        }
         self.started = None;
         std::thread::sleep(std::time::Duration::from_millis(50));
         if let Some(mut c) = self.child.lock().unwrap().take() {

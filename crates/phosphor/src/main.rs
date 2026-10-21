@@ -46,6 +46,8 @@ mod support;
 mod login_item;
 mod stream;
 #[cfg(not(target_arch = "wasm32"))]
+mod stream_audio;
+#[cfg(not(target_arch = "wasm32"))]
 mod show;
 #[cfg(not(target_arch = "wasm32"))]
 mod export;
