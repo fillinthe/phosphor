@@ -111,6 +111,8 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         }
         super::mapping::outputs_actions(ui, st);
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    super::projector::all_projectors_row(ui, &st.comp.outputs, &mut st.projectors);
     if st.comp.outputs.iter().any(|o| !o.screen.is_empty()) {
         #[cfg(any(target_os = "macos", windows))]
         {

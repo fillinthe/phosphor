@@ -48,7 +48,7 @@ The biggest gaps are about speed and safety when aligning on a real stage:
 | Presets | Projects only (?) | Has: venues (outputs + mapping) | - |
 | Scenes and Cues | Grid of cues storing any parameter incl. geometry, per-parameter fades, auto-play, schedulers | Partial: Phosphor has cues (`model/cues.rs`) but they do not store mapping geometry | medium-large |
 | OSC/MIDI control of surfaces | Every parameter has an address, e.g. `/surfaces/Quad-1/opacity`, output handles x/y, input scale/rot; Controls list; OSC Query | Missing: `ControlTarget` (model/control.rs:27) has no surface/mapping targets | medium |
-| Projector control (PJLink) | Power/mute projectors over network | Missing | medium |
+| Projector control (PJLink) | Power/mute projectors over network | Done (0.2.84) | medium |
 | Light mapping (DMX/Art-Net/sACN), laser | Fixtures | Has DMX/LED (`panels::leds`); no laser | out of scope |
 | Modules (audio player, schedulers, MIDI) | | Not mapping related | - |
 | MiniMad hardware | Export to a small player | Partial: Export Show app | - |

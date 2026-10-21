@@ -686,7 +686,13 @@ fn input_view(
 /// The selected slice or mask, or the output's own settings.
 fn properties(ui: &mut egui::Ui, st: &mut State) {
     let oid = st.mapping_output;
-    let State { comp, selected_surface, .. } = st;
+    let State {
+        comp,
+        selected_surface,
+        #[cfg(not(target_arch = "wasm32"))]
+        projectors,
+        ..
+    } = st;
     let others: Vec<(u64, String)> = comp.outputs.iter().filter(|o| o.id != oid).map(|o| (o.id, o.name.clone())).collect();
     let (layers, groups) = (&mut comp.layers, &mut comp.groups);
     let canvas = (comp.width, comp.height);
@@ -736,6 +742,8 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, "0 = canvas size");
             });
             color_grade_editor(ui, o.id, &mut o.color);
+            #[cfg(not(target_arch = "wasm32"))]
+            super::projector::projector_settings(ui, o, projectors);
             ui.separator();
             hint(ui, format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
         }

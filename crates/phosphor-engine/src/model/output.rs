@@ -79,6 +79,17 @@ pub struct OutputConfig {
     pub stage_photo: String,
     /// How strongly the stage photo shows over the output in the editor (0..1).
     pub stage_photo_opacity: f32,
+    /// The projector on this output, switched on/off and shuttered over PJLink.
+    #[serde(default)]
+    pub projector: Option<Projector>,
+}
+
+/// A network projector (PJLink): its address (IP or name, `:port` optional) and PJLink password (often empty).
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Projector {
+    pub host: String,
+    pub password: String,
 }
 
 /// A test grid over an output: cells across, a centre crosshair and circle, in one colour.
@@ -145,7 +156,7 @@ impl GridOverlay {
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5 }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None }
     }
 }
 
