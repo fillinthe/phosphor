@@ -93,6 +93,12 @@ impl PhosphorApp {
         crate::media::video::surface::set_sixteen_bit(engine.as_ref().is_some_and(|e| e.device().features().contains(wgpu::Features::TEXTURE_FORMAT_16BIT_NORM)));
         #[cfg(not(target_arch = "wasm32"))]
         crate::media::video::sound::set_enabled(bench.as_ref().is_none_or(|b| b.sound || b.movie_sound));
+        #[cfg(not(target_arch = "wasm32"))]
+        if bench.is_none() {
+            crate::media::video::sound::set_output_device(stored(KEY_SOUND_OUT));
+        } else if let Ok(name) = std::env::var("PHOSPHOR_SOUND_OUT") {
+            crate::media::video::sound::set_output_device(Some(name));
+        }
         if bench.as_ref().is_some_and(|b| b.movie_sound && !b.sound) {
             crate::media::video::sound::set_local(false);
         }

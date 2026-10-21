@@ -18,6 +18,9 @@ const AHEAD: f64 = 0.12;
 const DRIFT: f64 = 0.15;
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
+/// The output device by name (`None` = the Mac's default) and a counter that moves when it changes.
+static OUT_DEVICE: Mutex<Option<String>> = Mutex::new(None);
+static OUT_CHANGED: AtomicU32 = AtomicU32::new(0);
 /// Played on this Mac's output (off = mixed for streams only, silent here).
 static LOCAL: AtomicBool = AtomicBool::new(true);
 /// Even out the clips' loudness (the project's "Even out volume levels").
@@ -86,6 +89,24 @@ pub fn set_tap(on: bool) {
 /// Everything mixed since the last call (mono, at `stats().0` Hz).
 pub fn take_tap() -> Vec<f32> {
     TAP.take()
+}
+
+/// Plays movie sound on this output (by name; `None` = the default). A running output moves over at once.
+pub fn set_output_device(name: Option<String>) {
+    if let Ok(mut d) = OUT_DEVICE.lock() {
+        *d = name.filter(|n| !n.is_empty());
+    }
+    OUT_CHANGED.fetch_add(1, Ordering::SeqCst);
+}
+
+pub fn output_device() -> Option<String> {
+    OUT_DEVICE.lock().ok().and_then(|d| d.clone())
+}
+
+/// The outputs that can play sound (asks the system: call when a menu opens, not every frame).
+pub fn output_devices() -> Vec<String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    cpal::default_host().output_devices().map(|ds| ds.filter_map(|d| d.description().ok().map(|n| n.name().to_string())).collect()).unwrap_or_default()
 }
 
 /// Play the mix on this Mac (on) or only feed it to streams and the analyser (off, silent here).
@@ -525,8 +546,16 @@ fn ensure_output() {
         return;
     }
     let started = std::thread::Builder::new().name("sound out".into()).spawn(|| {
-        if let Err(e) = run_output() {
-            log::warn!("sound output: {e}");
+        // Runs until no clip has sound; starts again on the new device when the output is changed.
+        loop {
+            match run_output() {
+                Ok(true) => continue,
+                Ok(false) => break,
+                Err(e) => {
+                    log::warn!("sound output: {e}");
+                    break;
+                }
+            }
         }
         OUT_RATE.store(0, Ordering::Relaxed);
         OUTPUT_RUNNING.store(false, Ordering::SeqCst);
@@ -536,10 +565,14 @@ fn ensure_output() {
     }
 }
 
-fn run_output() -> Result<(), String> {
+/// Plays until no clip has sound (false) or the output device is changed (true = start again).
+fn run_output() -> Result<bool, String> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     let host = cpal::default_host();
-    let device = host.default_output_device().ok_or("no sound output device")?;
+    let changed_at = OUT_CHANGED.load(Ordering::SeqCst);
+    let wanted = output_device();
+    let named = wanted.as_ref().and_then(|w| host.output_devices().ok()?.find(|d| d.description().ok().is_some_and(|n| n.name() == w.as_str())));
+    let device = named.or_else(|| host.default_output_device()).ok_or("no sound output device")?;
     let supported = device.default_output_config().map_err(|e| e.to_string())?;
     let channels = supported.channels().max(1) as usize;
     let rate = supported.sample_rate();
@@ -590,6 +623,7 @@ fn run_output() -> Result<(), String> {
     .map_err(|e| e.to_string())?;
     stream.play().map_err(|e| e.to_string())?;
     OUT_RATE.store(rate, Ordering::Relaxed);
+    log::info!("sound output: {} at {rate} Hz", device.description().map(|d| d.name().to_string()).unwrap_or_default());
     let mut idle = 0;
     loop {
         std::thread::sleep(Duration::from_millis(250));
@@ -599,7 +633,10 @@ fn run_output() -> Result<(), String> {
         });
         idle = if alive == 0 { idle + 1 } else { 0 };
         if idle >= 8 {
-            return Ok(());
+            return Ok(false);
+        }
+        if OUT_CHANGED.load(Ordering::SeqCst) != changed_at {
+            return Ok(true);
         }
     }
 }
