@@ -39,13 +39,22 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 |---|---|---|
 | Layers with opacity, 10 blend modes + 3 masks, solo, bypass | all | ✅ |
 | Layer transform (position, scale, rotation, stretch, flip; modulatable) | all | ✅ |
+| Layer corner pin (quad), corners mappable | VDMX | ✅ |
+| Crop per layer | VDMX | ✅ |
 | Layer groups (mixed first, own effects/opacity) | Resolume | ✅ |
 | A/B crossfader | Resolume, VDMX | ✅ |
+| Crossfader auto-fade | VDMX | ✅ |
 | Layer as mask / track matte (brightness, inverted, alpha) | Resolume, VDMX | ✅ |
 | Layer source = another layer / group / the program (feedback, re-routing) | VDMX | ✅ |
 | Text layers | all | ✅ |
 | Generators (shaders), ISF import (341/406 shaders) | all | ✅ |
 | Effects: 34 built in + ISF, multi-pass, modulation on every parameter | all | ✅ |
+| LUTs (.cube) and LUT Mix | VDMX | ✅ |
+| Remove background (people cut out), video tracking (face / hands / body as data) | VDMX | ✅ Mac (Apple Vision) |
+| Your own shaders: editor, templates, feedback, several passes | VDMX, Resolume (Wire) | ✅ |
+| Image sequences as clips | VDMX, Resolume | ✅ |
+| Scopes (waveform, parade, vectorscope, histogram) | VDMX | ✅ |
+| FFGL plugins | Resolume, VDMX | ⬜ |
 
 ## Control (VDMX's core)
 | Feature | Who has it | Phosphor |
@@ -54,9 +63,13 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Control surfaces you build (buttons, faders, XY, colour, pages) | VDMX | ✅ |
 | LFO / audio / step sequencer / random / envelope → any parameter | VDMX | ✅ |
 | MIDI + OSC learn, feedback, MIDI out, keyboard | all | ✅ |
+| Gamepads, DMX in (lighting desk), soft takeover, value effects (smooth, steps, curve, formula, delay) | VDMX | ✅ |
+| Data looper, step sequencer tracks, preview windows as XY pads | VDMX | ✅ |
+| Lock a control, snap points on sliders | VDMX | ✅ |
 | Phone / tablet remote with no setup | — | ✅ (beyond the others) |
 | OSC Query, TouchOSC layout export | VDMX | ✅ |
 | Presets: looks, layers, chains, venues | all | ✅ |
+| Cues with fades, follow-ons, timecode (MTC / LTC / show clock), daily schedules | MadMapper, VDMX | ✅ |
 
 ## Mapping (MadMapper's core)
 | Feature | Who has it | Phosphor |
@@ -72,16 +85,23 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Ellipse / triangle / line slices (follow perspective and mesh) | MadMapper | ✅ |
 | Slice input from another output | Resolume | ✅ |
 | 3D projection mapping onto models | MadMapper | ✅ OBJ + virtual projector, point calibration |
+| Slice groups (nested), multi-select, typed points, snap to other slices, lock, zoom to slice, only selected | MadMapper | ✅ |
+| Effects on one slice (surface FX), per-slice blend modes, flip, copy look | MadMapper | ✅ |
+| Masks: freehand, bezier handles, attached to a slice, soft edge centred / inside / outside | MadMapper | ✅ |
+| Test patterns, stage photo, per-side soft edges | MadMapper | ✅ |
+| Projector control (PJLink) | MadMapper | ✅ |
+| Spatial scanner (camera sees the stage) | MadMapper | ⬜ |
 | Lasers | MadMapper | ➖ |
 
 ## I/O
 | Feature | Who has it | Phosphor |
 |---|---|---|
 | Syphon in/out, NDI out, cameras, capture cards, network streams | all | ✅ |
+| Screen / window capture as a layer | VDMX, Resolume | ✅ Mac |
 | NDI in | all | ✅ |
 | Record the output (H.264, ProRes, Hap, Hap Alpha) | Resolume, VDMX | ✅ |
 | Stream to Twitch/YouTube, network viewers | — | ✅ |
-| Spout | Windows apps | ➖ (Mac first) |
+| Spout | Windows apps | ✅ Windows |
 
 ## Projects
 | Feature | Who has it | Phosphor |
