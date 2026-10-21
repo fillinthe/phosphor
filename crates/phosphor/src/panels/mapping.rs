@@ -761,25 +761,25 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().slider_width = 110.0;
             ui.horizontal(|ui| {
-                Level::range(&mut m.yaw, -0.5, 0.5, "Turn").default(0.08).show(ui);
+                Level::range(&mut m.yaw, -0.5, 0.5, "Turn").default(0.08).width(150.0).show(ui);
             });
             ui.horizontal(|ui| {
-                Level::range(&mut m.pitch, -0.25, 0.25, "Tilt").default(0.05).show(ui);
+                Level::range(&mut m.pitch, -0.25, 0.25, "Tilt").default(0.05).width(150.0).show(ui);
             });
             ui.horizontal(|ui| {
-                Level::range(&mut m.roll, -0.25, 0.25, "Roll").default(0.0).show(ui);
+                Level::range(&mut m.roll, -0.25, 0.25, "Roll").default(0.0).width(150.0).show(ui);
             });
         });
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().slider_width = 110.0;
             ui.horizontal(|ui| {
-                Level::range(&mut m.distance, 0.8, 12.0, "Distance").default(3.0).log().show(ui);
+                Level::range(&mut m.distance, 0.8, 12.0, "Distance").default(3.0).log().width(150.0).show(ui);
             });
             ui.horizontal(|ui| {
-                Level::range(&mut m.fov, 10.0, 90.0, "Lens °").default(30.0).tip("The projector's vertical throw angle; a long-throw lens is narrow").show(ui);
+                Level::range(&mut m.fov, 10.0, 90.0, "Lens °").default(30.0).width(150.0).tip("The projector's vertical throw angle; a long-throw lens is narrow").show(ui);
             });
             ui.horizontal(|ui| {
-                Level::range(&mut m.scale, 0.1, 4.0, "Size").default(1.0).log().show(ui);
+                Level::range(&mut m.scale, 0.1, 4.0, "Size").default(1.0).log().width(150.0).show(ui);
             });
             crate::ui::toggle(ui, &mut m.cull, "Hide back faces");
         });
