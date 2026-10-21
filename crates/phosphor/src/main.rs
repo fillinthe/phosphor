@@ -58,6 +58,8 @@ mod screen_capture;
 #[cfg(not(target_arch = "wasm32"))]
 mod tracking;
 #[cfg(not(target_arch = "wasm32"))]
+mod pjlink;
+#[cfg(not(target_arch = "wasm32"))]
 mod dylib;
 #[cfg(any(target_os = "macos", windows))]
 mod ndi;

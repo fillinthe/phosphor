@@ -38,6 +38,8 @@ mod network;
 mod output;
 mod preset_list;
 mod preview;
+#[cfg(not(target_arch = "wasm32"))]
+mod projector;
 mod stream;
 mod stage;
 mod slice_tree;

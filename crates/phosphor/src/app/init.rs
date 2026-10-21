@@ -211,6 +211,8 @@ impl PhosphorApp {
                 dmx: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 tracker: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
+                projectors: Default::default(),
                 clip_page: 0,
                 media_memory_at: 0.0,
                 #[cfg(not(target_arch = "wasm32"))]

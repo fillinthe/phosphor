@@ -117,6 +117,8 @@ impl PhosphorApp {
             st.run_cues(now);
             #[cfg(not(target_arch = "wasm32"))]
             st.poll_rhythm();
+            #[cfg(not(target_arch = "wasm32"))]
+            st.projectors.poll();
             st.run_play(now);
             st.update_now_playing(now);
         }

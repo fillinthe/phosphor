@@ -138,6 +138,9 @@ pub struct State {
     /// LED / DMX sender (Art-Net, sACN).
     #[cfg(not(target_arch = "wasm32"))]
     pub dmx: crate::dmx::DmxOut,
+    /// Projector control (PJLink) per output.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub projectors: crate::pjlink::Projectors,
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,
@@ -462,6 +465,15 @@ impl State {
             A::Surprise if press => self.quick(Quick::Surprise, now),
             A::Shuffle if press => self.quick(Quick::Shuffle, now),
             A::CueBack if press => self.cue_back(now),
+            #[cfg(not(target_arch = "wasm32"))]
+            A::ProjectorsOn if press => self.projectors.ask_all(&self.comp.outputs, crate::pjlink::Ask::PowerOn),
+            #[cfg(not(target_arch = "wasm32"))]
+            A::ProjectorsOff if press => self.projectors.ask_all(&self.comp.outputs, crate::pjlink::Ask::PowerOff),
+            #[cfg(not(target_arch = "wasm32"))]
+            A::ProjectorsShutter => {
+                let closed = if v == FLIP { !self.projectors.shutter_closed } else { press };
+                self.projectors.ask_all(&self.comp.outputs, crate::pjlink::Ask::Shutter(closed));
+            }
             #[cfg(not(target_arch = "wasm32"))]
             A::Link => {
                 let on = if v == FLIP { self.link.is_none() } else { press };

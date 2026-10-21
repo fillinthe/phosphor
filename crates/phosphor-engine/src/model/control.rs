@@ -113,10 +113,14 @@ pub enum AppControl {
     AutoLevel,
     /// Phones / web may control the visuals (off = you take over).
     WebControl,
+    /// Every output's projector (PJLink): switch on / switch off / shutter closed or open.
+    ProjectorsOn,
+    ProjectorsOff,
+    ProjectorsShutter,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 25] = [
+    pub const ALL: [AppControl; 28] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -142,6 +146,9 @@ impl AppControl {
         AppControl::MuteSound,
         AppControl::AutoLevel,
         AppControl::WebControl,
+        AppControl::ProjectorsOn,
+        AppControl::ProjectorsOff,
+        AppControl::ProjectorsShutter,
     ];
 
     pub fn name(self) -> &'static str {
@@ -171,6 +178,9 @@ impl AppControl {
             AppControl::MuteSound => "Mute all sound",
             AppControl::AutoLevel => "Even out volume levels on/off",
             AppControl::WebControl => "Web control on/off (take over)",
+            AppControl::ProjectorsOn => "Projectors: switch on (PJLink)",
+            AppControl::ProjectorsOff => "Projectors: switch off (PJLink)",
+            AppControl::ProjectorsShutter => "Projectors: shutter closed/open (PJLink)",
         }
     }
 
@@ -202,12 +212,15 @@ impl AppControl {
             AppControl::MuteSound => "mute",
             AppControl::AutoLevel => "autolevel",
             AppControl::WebControl => "webcontrol",
+            AppControl::ProjectorsOn => "projectors/on",
+            AppControl::ProjectorsOff => "projectors/off",
+            AppControl::ProjectorsShutter => "projectors/shutter",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel | AppControl::WebControl)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel | AppControl::WebControl | AppControl::ProjectorsShutter)
     }
 }
 
