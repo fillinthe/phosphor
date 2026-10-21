@@ -4,6 +4,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.95 (2026-10-21)
+
+- **ProRes plays far more lightly:** ProRes 422 now goes straight from the Mac's video decoder to the graphics card
+  (about half the CPU), and **ProRes 4444 with transparency** is decoded by the Mac's hardware too: four 1080p layers
+  went from nearly five CPU cores to under half of one, with truer colours.
+- **Record and convert to Hap Q and Hap Q Alpha:** much better colour than Hap (smooth gradients, skin, logos), still
+  decoded by the graphics card.
+- **Fixed:** Hap Q Alpha clips had dark fringes on their soft edges.
+
 ## 0.2.94 (2026-10-21)
 
 - **Library › Inputs:** every camera, capture card, screen, window, Syphon and NDI source in one list, plus a stream
