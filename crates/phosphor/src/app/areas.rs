@@ -10,7 +10,7 @@ use super::PhosphorApp;
 use crate::panels::Tab;
 
 /// The Library's panels (opened together by the Library button).
-pub(crate) const LIBRARY: &[Tab] = &[Tab::Media, Tab::Library, Tab::Presets];
+pub(crate) const LIBRARY: &[Tab] = &[Tab::Media, Tab::Inputs, Tab::Library, Tab::Presets];
 
 /// The area a panel belongs to by default (None: any area, e.g. the Library or rarely used panels).
 pub(crate) fn area_of(tab: Tab) -> Option<usize> {

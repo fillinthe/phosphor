@@ -42,6 +42,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let mut drop: Option<(u64, u64)> = None;
     let mut media_drop: Option<(usize, usize)> = None;
     let mut palette_drop: Option<(u64, crate::explorer::PaletteDrag)> = None;
+    let mut source_drop: Option<(u64, SourceDrag)> = None;
     let mut group_action: Option<(u64, GroupAction)> = None;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass);
@@ -110,6 +111,9 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             if let Some(d) = out.dropped_palette {
                 palette_drop = Some((layer.id, d));
             }
+            if let Some(d) = out.dropped_source {
+                source_drop = Some((layer.id, d));
+            }
             ui.add_space(4.0);
         }
     });
@@ -132,6 +136,10 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     if let Some((layer, item)) = media_launch {
         let now = ui.ctx().input(|i| i.time);
         st.launch_source(layer, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
+    }
+    if let Some((layer, d)) = source_drop {
+        let now = ui.ctx().input(|i| i.time);
+        st.launch_source(layer, d.source, Vec::new(), d.name, now);
     }
 }
 
@@ -161,11 +169,20 @@ pub(crate) struct CardOut {
     dropped_media: Option<usize>,
     /// Effect or generator dragged from the Effects explorer.
     dropped_palette: Option<crate::explorer::PaletteDrag>,
+    /// A live input (or any ready-made source) dropped onto this card.
+    dropped_source: Option<SourceDrag>,
 }
 
 /// Drag payload from the media bin.
 #[derive(Clone, Copy)]
 pub struct MediaDrag(pub usize);
+
+/// Drag payload: a ready-made source (a live input from the Inputs panel) for a layer or a clip cell.
+#[derive(Clone)]
+pub struct SourceDrag {
+    pub name: String,
+    pub source: SourceSpec,
+}
 
 /// The pinned card for the whole mix: shows the output and the master effect count.
 pub(crate) fn master_card(
@@ -361,13 +378,15 @@ pub(crate) fn layer_card(
     let dropped = frame.response.dnd_release_payload::<u64>().map(|p| *p);
     let dropped_media = frame.response.dnd_release_payload::<MediaDrag>().map(|p| p.0);
     let dropped_palette = frame.response.dnd_release_payload::<crate::explorer::PaletteDrag>().map(|p| *p);
+    let dropped_source = frame.response.dnd_release_payload::<SourceDrag>().map(|p| (*p).clone());
     let hovering = frame.response.dnd_hover_payload::<u64>().is_some_and(|p| *p != layer.id)
+        || frame.response.dnd_hover_payload::<SourceDrag>().is_some()
         || frame.response.dnd_hover_payload::<MediaDrag>().is_some()
         || frame.response.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some();
     if hovering {
         ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
-    CardOut { select, action, dropped, dropped_media, dropped_palette }
+    CardOut { select, action, dropped, dropped_media, dropped_palette, dropped_source }
 }
 
 /// Source menu for a layer card; returns a request for the browser or the Open dialog.
@@ -430,93 +449,70 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
     action
 }
 
+/// A long input name cut to fit a menu (the full name shows on hover).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn short(name: &str) -> String {
+    if name.chars().count() > 60 { format!("{}…", name.chars().take(59).collect::<String>()) } else { name.to_string() }
+}
+
+/// The icon for a kind of live input.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn input_icon(kind: crate::media::live::InputKind) -> &'static str {
+    use crate::media::live::InputKind;
+    match kind {
+        InputKind::Camera => icon::VIDEO_CAMERA,
+        InputKind::Syphon => icon::SHARE_NETWORK,
+        InputKind::Screen => icon::MONITOR,
+        InputKind::Window => icon::APP_WINDOW,
+        InputKind::Ndi => icon::BROADCAST,
+    }
+}
+
 /// Live inputs for a layer: cameras / capture cards on this Mac, or a stream address.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
     let mut picked = None;
     let r = ui.menu_button(icon::VIDEO_CAMERA, |ui| {
         ui.set_min_width(260.0);
-        let cams_id = egui::Id::new("live_cameras");
-        let mut cams: Option<Vec<String>> = ui.ctx().data(|d| d.get_temp(cams_id));
-        if cams.is_none() {
-            cams = Some(crate::media::live::cameras().into_iter().map(|c| c.name).collect());
-        }
-        let list = cams.clone().unwrap_or_default();
-        ui.label(RichText::new("Cameras & capture cards").small().color(Color32::GRAY));
-        if list.is_empty() {
-            hint(ui, "None found.");
-        }
-        for name in &list {
-            if ui.button(label(icon::VIDEO_CAMERA, name)).clicked() {
-                picked = Some(crate::media::live::camera_source(&crate::media::live::Camera { name: name.clone() }));
-                ui.close();
+        let refresh = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("live_rescan"))).unwrap_or(false);
+        let cams = crate::media::live::cameras_cached(ui.ctx(), refresh);
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("live_rescan"), false));
+        let (inputs, notes) = crate::media::live::inputs(&cams);
+        for kind in crate::media::live::InputKind::ALL {
+            let mine: Vec<_> = inputs.iter().filter(|i| i.kind == kind).collect();
+            let note = notes.iter().find(|(k, _)| *k == kind);
+            if mine.is_empty() && note.is_none() {
+                continue;
             }
-        }
-        if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
-            cams = None;
-        }
-        ui.ctx().data_mut(|d| match &cams {
-            Some(c) => {
-                d.insert_temp(cams_id, c.clone());
+            if kind != crate::media::live::InputKind::Camera {
+                ui.separator();
             }
-            None => d.remove::<Vec<String>>(cams_id),
-        });
-        #[cfg(target_os = "macos")]
-        {
-            ui.separator();
-            ui.label(RichText::new("Syphon (other apps)").small().color(Color32::GRAY));
-            let servers = crate::syphon::servers();
-            if servers.is_empty() {
-                hint(ui, "No app is publishing Syphon right now.");
+            ui.label(RichText::new(kind.title()).small().color(Color32::GRAY));
+            if let Some((_, n)) = note {
+                hint(ui, n.as_str());
             }
-            for s in servers {
-                if ui.button(label(icon::SHARE_NETWORK, &s.label())).clicked() {
-                    picked = Some(crate::media::live::syphon_source(&s.label()));
-                    ui.close();
-                }
-            }
-            ui.separator();
-            ui.label(RichText::new("Screens and windows").small().color(Color32::GRAY));
-            let (targets, error) = crate::screen_capture::targets();
-            if let Some(e) = error {
-                hint(ui, &e);
-            } else if targets.is_empty() {
-                hint(ui, "Looking…");
-            }
-            let (displays, windows): (Vec<_>, Vec<_>) = targets.iter().partition(|t| t.url.starts_with("display:"));
-            for t in displays {
-                if ui.button(label(icon::MONITOR, &t.label)).clicked() {
-                    picked = Some(crate::media::live::screen_source(&t.label, &t.url));
-                    ui.close();
-                }
-            }
-            if !windows.is_empty() {
-                ui.menu_button(label(icon::APP_WINDOW, &format!("A window ({})", windows.len())), |ui| {
+            // Many windows: their own submenu.
+            if kind == crate::media::live::InputKind::Window && mine.len() > 4 {
+                ui.menu_button(label(icon::APP_WINDOW, &format!("A window ({})", mine.len())), |ui| {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                        for t in windows {
-                            let text = if t.label.chars().count() > 60 { format!("{}…", t.label.chars().take(59).collect::<String>()) } else { t.label.clone() };
-                            if ui.button(text).on_hover_text(&t.label).clicked() {
-                                picked = Some(crate::media::live::screen_source(&t.label, &t.url));
+                        for i in &mine {
+                            if ui.button(short(&i.label)).on_hover_text(&i.label).clicked() {
+                                picked = Some(i.source.clone());
                                 ui.close();
                             }
                         }
                     });
                 });
+                continue;
             }
-        }
-        #[cfg(any(target_os = "macos", windows))]
-        {
-            ui.separator();
-            ui.label(RichText::new("NDI (network)").small().color(Color32::GRAY));
-            let sources = crate::ndi::sources();
-            if sources.is_empty() {
-                hint(ui, if crate::ndi::Ndi::library().is_some() { "No NDI sources found yet (they appear within a second or two)." } else { "Install the free NDI Tools (ndi.video) to receive NDI." });
-            }
-            for s in sources {
-                if ui.button(label(icon::BROADCAST, &s)).clicked() {
-                    picked = Some(crate::media::live::ndi_source(&s));
+            for i in mine {
+                if ui.button(label(input_icon(kind), &short(&i.label))).on_hover_text(&i.label).clicked() {
+                    picked = Some(i.source.clone());
                     ui.close();
                 }
+            }
+            if kind == crate::media::live::InputKind::Camera && ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("live_rescan"), true));
             }
         }
         ui.separator();

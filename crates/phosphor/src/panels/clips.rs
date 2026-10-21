@@ -159,6 +159,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         ui.ctx().data_mut(|d| d.remove::<(u64, usize)>(held_id));
     }
     let mut set_cell: Option<(usize, usize, usize)> = None; // (layer idx, slot, media idx)
+    let mut set_source: Option<(usize, usize, super::SourceDrag)> = None; // (layer idx, slot, a live input…)
     let mut use_current: Option<(usize, usize)> = None;
     let mut clear: Option<(usize, usize)> = None;
     let mut beat: Option<(u64, usize)> = None;
@@ -274,7 +275,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                             Stroke::new(2.5, Color32::from_rgb(255, 196, 70))
                         } else if active {
                             Stroke::new(2.0, accent())
-                        } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() {
+                        } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() || resp.dnd_hover_payload::<super::SourceDrag>().is_some() {
                             Stroke::new(1.0, accent().gamma_multiply(0.7))
                         } else {
                             ui.visuals().widgets.noninteractive.bg_stroke
@@ -287,6 +288,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                         }
                         if let Some(m) = resp.dnd_release_payload::<MediaDrag>() {
                             set_cell = Some((idx, c, m.0));
+                        }
+                        if let Some(d) = resp.dnd_release_payload::<super::SourceDrag>() {
+                            set_source = Some((idx, c, (*d).clone()));
                         }
                         // Flash / piano clips play from the moment the button goes down until it comes up.
                         let momentary = clip.is_some_and(|k| !k.is_empty() && matches!(k.trigger, TriggerMode::Flash | TriggerMode::Piano));
@@ -355,19 +359,14 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     }
-    if let Some((idx, c, m)) = set_cell
-        && let Some(item) = st.comp.media_bin.get(m).cloned()
-        && let Some(layer) = st.comp.layers.get_mut(idx)
+    // A media bin item or a live input dropped on a cell: that cell's clip (the way any clips are placed).
+    let dropped = set_cell
+        .and_then(|(idx, c, m)| st.comp.media_bin.get(m).map(|item| (idx, c, item.name.clone(), crate::media::spec_for_path(&item.path))))
+        .or(set_source.map(|(idx, c, d)| (idx, c, d.name, d.source)));
+    if let Some((idx, c, name, source)) = dropped
+        && let Some(id) = st.comp.layers.get(idx).map(|l| l.id)
     {
-        let id = layer.id;
-        let slot = layer.clip_slot_mut(c);
-        slot.source = crate::media::spec_for_path(&item.path);
-        slot.name = item.name;
-        slot.generator_values.clear();
-        slot.mods.clear();
-        if slot.id == 0 {
-            slot.id = id * 1000 + c as u64 + 1;
-        }
+        st.comp.place_clips(id, c, vec![(name, source)]);
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
