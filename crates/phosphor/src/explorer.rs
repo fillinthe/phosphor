@@ -4,6 +4,7 @@
 use crate::panels::RightMenu;
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use egui_phosphor::regular as icon;
+use phosphor_engine::patch::Patch;
 use phosphor_engine::{CompileError, EffectState, MASTER_ID, PreviewItem, custom, shaders};
 
 use crate::app::State;
@@ -301,6 +302,16 @@ pub struct UserShader {
     pub source: String,
     pub error: Option<CompileError>,
     pub compiled: bool,
+    /// Made with + Patch: the blocks (the source is compiled from them; see `phosphor_engine::patch`).
+    pub patch: Option<Patch>,
+    /// A patch that doesn't compile yet (no shader is made until it does).
+    pub patch_error: Option<String>,
+}
+
+impl UserShader {
+    fn new(slug: String, source: String) -> UserShader {
+        UserShader { id: id_for(&slug, &source), patch: Patch::from_source(&source), patch_error: None, slug, source, error: None, compiled: false }
+    }
 }
 
 #[derive(Default)]
@@ -408,7 +419,7 @@ pub fn load_user_shaders(st: &mut State) {
         for path in files {
             let (Some(stem), Ok(source)) = (path.file_stem(), std::fs::read_to_string(&path)) else { continue };
             let slug = stem.to_string_lossy().to_string();
-            st.editor.shaders.push(UserShader { id: id_for(&slug, &source), slug, source, error: None, compiled: false });
+            st.editor.shaders.push(UserShader::new(slug, source));
             let i = st.editor.shaders.len() - 1;
             compile(st, i, false);
         }
@@ -445,18 +456,42 @@ fn compile(st: &mut State, index: usize, save: bool) {
 /// layer (a generator replaces its source; an effect is added). Returns its name.
 pub fn bench_template(st: &mut State, n: usize) -> Option<String> {
     let t = custom::TEMPLATES.get(n)?;
-    let slug = format!("bench_template_{n}");
-    st.editor.shaders.push(UserShader { id: id_for(&slug, t.source), slug, source: t.source.to_string(), error: None, compiled: false });
+    bench_shader(st, format!("bench_template_{n}"), t.source.to_string(), t.name)
+}
+
+/// Bench `--quick patch`: a patch (Input, Kaleidoscope, Glow, mixed with its own Last frame for trails) on the
+/// top layer and open in the Shader Editor.
+pub fn bench_patch(st: &mut State) -> Option<String> {
+    let mut p = Patch::new("Bench Patch", false);
+    let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+    p.nodes[1].pos = [760.0, 60.0];
+    let k = p.add("kaleido", [200.0, 20.0]);
+    let g = p.add("glow", [200.0, 120.0]);
+    let last = p.add("last", [200.0, 230.0]);
+    let mix = p.add("mix", [500.0, 80.0]);
+    p.connect(input, k, 0);
+    p.connect(k, g, 0);
+    p.connect(g, mix, 0);
+    p.connect(last, mix, 1);
+    p.connect(mix, out, 0);
+    let src = p.compile().ok()?;
+    let name = bench_shader(st, "bench_patch".into(), src, "patch");
+    st.editor.current = Some(st.editor.shaders.len() - 1);
+    name
+}
+
+fn bench_shader(st: &mut State, slug: String, source: String, name: &str) -> Option<String> {
+    st.editor.shaders.push(UserShader::new(slug, source));
     let i = st.editor.shaders.len() - 1;
     compile(st, i, false);
     let sh = &st.editor.shaders[i];
     if let Some(e) = &sh.error {
-        return Some(format!("{}: ERROR {e}", t.name));
+        return Some(format!("{name}: ERROR {e}"));
     }
     let id: &'static str = shaders::effect(&sh.id).or_else(|| shaders::generator(&sh.id)).map(|d| d.id)?;
     let layer = st.comp.layers.last().map(|l| l.id)?;
     apply_palette(st, PaletteDrag { effect: shaders::effect(id).map(|d| d.id), generator: shaders::generator(id).map(|d| d.id) }, Some(layer));
-    Some(t.name.to_string())
+    Some(name.to_string())
 }
 
 pub fn new_shader(st: &mut State, source: String) {
@@ -469,7 +504,7 @@ pub fn new_shader(st: &mut State, source: String) {
         slug = format!("{}_{n}", slug.trim_end_matches(|c: char| c.is_ascii_digit() || c == '_'));
         n += 1;
     }
-    st.editor.shaders.push(UserShader { id: id_for(&slug, &source), slug, source, error: None, compiled: false });
+    st.editor.shaders.push(UserShader::new(slug, source));
     let i = st.editor.shaders.len() - 1;
     st.editor.current = Some(i);
     compile(st, i, true);
@@ -489,6 +524,16 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             if ui.button(label(icon::PLUS, "Generator")).on_hover_text("New generator (makes its own picture)").clicked() {
                 create = Some(custom::template(true));
             }
+            ui.menu_button(label(icon::GRAPH, "Patch"), |ui| {
+                for (text, generator) in [("Effect patch", false), ("Generator patch", true)] {
+                    if ui.button(text).clicked() {
+                        create = Patch::new(if generator { "My Patch Generator" } else { "My Patch" }, generator).compile().ok();
+                        ui.close();
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Build an effect from blocks wired together (blur, warp, colour, mix, trails): no code");
         });
         #[cfg(not(target_arch = "wasm32"))]
         if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy…")).on_hover_text("Paste a shader from shadertoy.com").clicked() {
@@ -564,7 +609,12 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         let item = if is_generator {
             PreviewItem::Generator(id.clone())
         } else if let Some(d) = shaders::effect(&id) {
-            PreviewItem::Effect(preview_fx(d, 50_000 + idx))
+            let mut fx = preview_fx(d, 50_000 + idx);
+            // A patch's preview follows its sliders at once (the shader is rebuilt a moment later).
+            if let Some(p) = &st.editor.shaders[idx].patch {
+                fx.values = p.param_slots().iter().map(|(n, i)| p.node(*n).and_then(|n| n.values.get(*i)).copied().unwrap_or(0.0)).collect();
+            }
+            PreviewItem::Effect(fx)
         } else {
             PreviewItem::Generator(String::new())
         };
@@ -601,7 +651,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.add_space(8.0);
         ui.collapsing("Cheat sheet", |ui| {
             ui.monospace("src(uv) -> vec4f     input picture");
-            ui.monospace("P(0u)…P(15u)          your @params");
+            ui.monospace("P(0u), P(1u)…         your @params");
             ui.monospace("u.time  u.resolution");
             ui.monospace("in.uv (0..1, y down)");
             ui.monospace("luma rgb2hsv hsv2rgb");
@@ -615,6 +665,76 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
     });
 
     let sh = &mut st.editor.shaders[idx];
+    if sh.patch.is_some() {
+        patch_view(ui, sh, &mut st.editor.dirty_at, now);
+    } else {
+        code_view(ui, sh, &mut st.editor.dirty_at, now, is_generator);
+    }
+    if st.editor.dirty_at.is_some_and(|t| now - t > 0.35) {
+        st.editor.dirty_at = None;
+        compile(st, idx, true);
+    }
+    if let Some(i) = delete {
+        let sh = st.editor.shaders.remove(i);
+        shaders::unregister_custom(&sh.id);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(dir) = effects_dir() {
+            let _ = std::fs::remove_file(dir.join(format!("{}.wgsl", sh.slug)));
+        }
+        st.editor.current = None;
+    }
+}
+
+/// A shader made with + Patch: its name, the block canvas, and the code it makes (read-only).
+fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>, now: f64) {
+    let Some(patch) = sh.patch.as_mut() else { return };
+    let code_id = egui::Id::new(("patch_code", &sh.slug));
+    let mut show_code: bool = ui.ctx().data(|d| d.get_temp(code_id)).unwrap_or(false);
+    let mut changed = false;
+    let mut to_code = false;
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(if patch.generator { "Generator patch" } else { "Effect patch" }).strong());
+        changed |= crate::ui::text_field(ui, &mut patch.name, "Name", Some(160.0)).changed();
+        crate::ui::toggle(ui, &mut show_code, label(icon::CODE, "Code")).on_hover_text("The shader these blocks make");
+        if ui.button(label(icon::CODE, "Turn into code")).on_hover_text("Keep editing it as code from here on (the blocks are dropped)").clicked() {
+            to_code = true;
+        }
+        match (&sh.patch_error, &sh.error) {
+            (Some(e), _) => ui.colored_label(WARN, format!("{} {e}", icon::RECORD)),
+            (None, Some(e)) => ui.colored_label(WARN, format!("{} {e}", icon::RECORD)),
+            (None, None) if sh.compiled => ui.colored_label(accent(), format!("{} compiled · saved", icon::RECORD)),
+            _ => crate::ui::hint(ui, "not compiled"),
+        };
+    });
+    ui.ctx().data_mut(|d| d.insert_temp(code_id, show_code));
+    crate::ui::hint(ui, "Right-click the canvas to add a block · drag from a block's right dot to another's left dot to wire it · drag a wire's end away to unplug it · every slider becomes a parameter of the effect (MIDI, modulation)");
+    if show_code {
+        egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+            ui.add(egui::TextEdit::multiline(&mut sh.source.as_str()).code_editor().font(egui::FontId::monospace(12.0)).desired_width(f32::INFINITY));
+        });
+    } else {
+        changed |= panels::patch_canvas(ui, patch, &sh.slug);
+    }
+    if to_code {
+        sh.source = sh.source.lines().filter(|l| !l.starts_with("// @patch ") && !l.starts_with("// Made in the patch editor")).collect::<Vec<_>>().join("\n") + "\n";
+        sh.patch = None;
+        *dirty_at = Some(now);
+        return;
+    }
+    if changed {
+        match patch.compile() {
+            Ok(src) => {
+                sh.source = src;
+                sh.patch_error = None;
+                *dirty_at = Some(now);
+            }
+            Err(e) => sh.patch_error = Some(e),
+        }
+    }
+}
+
+/// A shader written as code: the text editor with line numbers and its compile state.
+fn code_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>, now: f64, is_generator: bool) {
     ui.horizontal(|ui| {
         ui.label(RichText::new(if is_generator { "Generator" } else { "Effect" }).strong());
         ui.monospace(&sh.slug);
@@ -648,23 +768,10 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
                 .desired_rows(28)
                 .lock_focus(true);
             if ui.add(edit).changed() {
-                st.editor.dirty_at = Some(now);
+                *dirty_at = Some(now);
             }
         });
     });
-    if st.editor.dirty_at.is_some_and(|t| now - t > 0.35) {
-        st.editor.dirty_at = None;
-        compile(st, idx, true);
-    }
-    if let Some(i) = delete {
-        let sh = st.editor.shaders.remove(i);
-        shaders::unregister_custom(&sh.id);
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Some(dir) = effects_dir() {
-            let _ = std::fs::remove_file(dir.join(format!("{}.wgsl", sh.slug)));
-        }
-        st.editor.current = None;
-    }
 }
 
 // -------------------------------------------------------------------------------------------

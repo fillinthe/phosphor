@@ -36,6 +36,7 @@ mod mixer;
 mod monitor;
 mod network;
 mod output;
+mod patch;
 mod preset_list;
 mod preview;
 #[cfg(not(target_arch = "wasm32"))]
@@ -67,6 +68,7 @@ pub(crate) use mixer::*;
 pub(crate) use monitor::*;
 pub(crate) use network::*;
 pub(crate) use output::*;
+pub(crate) use patch::*;
 pub(crate) use preset_list::*;
 pub(crate) use preview::*;
 pub(crate) use stream::*;

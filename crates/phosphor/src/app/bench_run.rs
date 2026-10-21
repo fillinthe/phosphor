@@ -518,6 +518,11 @@ impl PhosphorApp {
                 println!("QUICK template{n}: {:?}", crate::explorer::bench_template(&mut self.state, n));
                 continue;
             }
+            if name == "patch" {
+                crate::explorer::load_user_shaders(&mut self.state);
+                println!("QUICK patch: {:?}", crate::explorer::bench_patch(&mut self.state));
+                continue;
+            }
             if name == "shadertoy" {
                 crate::explorer::open_shadertoy(&mut self.state);
                 println!("QUICK shadertoy: import window open");
