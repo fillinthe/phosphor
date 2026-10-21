@@ -5,6 +5,11 @@ use crate::{Composition, LayerState, ModInputs, SourceSpec};
 
 /// An engine on the default GPU with the features the app asks for, or None (no GPU here).
 pub(crate) fn test_engine() -> Option<Engine> {
+    // No GPU backend compiled into this test build (the engine crate leaves that to the app; Metal is added for
+    // tests on the Mac only): skip rather than panic.
+    if wgpu::Instance::enabled_backend_features().is_empty() {
+        return None;
+    }
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
     let required_features = adapter.features() & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM);

@@ -11,6 +11,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   went from nearly five CPU cores to under half of one, with truer colours.
 - **Record and convert to Hap Q and Hap Q Alpha:** much better colour than Hap (smooth gradients, skin, logos), still
   decoded by the graphics card.
+- **More MadMapper Surface FX work:** Extend, Vertex Noise and the FX template now load (their settings live in
+  the vertex part, which also moves the picture).
 - **Fixed:** Hap Q Alpha clips had dark fringes on their soft edges.
 
 ## 0.2.94 (2026-10-21)
