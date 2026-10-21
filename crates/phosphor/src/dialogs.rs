@@ -22,6 +22,8 @@ pub enum Purpose {
     Model3d(u64),
     /// A stage photo for this output (mapping editor background).
     StagePhoto(u64),
+    /// A picture or movie for this mapping slice to show (`Composition::show_file_on_slice`).
+    SliceFile(u64),
     /// A folder for this collection to watch.
     CollectionFolder(String),
 }

@@ -654,6 +654,8 @@ pub(crate) fn mask_attach_row(ui: &mut egui::Ui, mapping: &mut phosphor_engine::
 
 /// Temp-data key: an output asked for a stage photo (the app opens the dialog).
 pub(crate) const PICK_STAGE_PHOTO: &str = "phosphor_pick_stage_photo";
+/// Temp-data key: a slice asked for a file to show (the app opens the dialog).
+pub(crate) const PICK_SLICE_FILE: &str = "phosphor_pick_slice_file";
 
 pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], others: &[(u64, String)]) {
     surface_source(ui, s, layers, groups, others);
@@ -864,6 +866,10 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
         });
         egui::ComboBox::from_id_salt(("surface_source", s.id)).width(170.0).selected_text(current).show_ui(ui, |ui| {
             ui.selectable_value(&mut s.layer, None, "Whole composition");
+            if ui.button(label(icon::FILE_VIDEO, "A file…")).on_hover_text("A picture or movie of its own on this slice (a layer that stays out of the mix)").clicked() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(PICK_SLICE_FILE), s.id));
+                ui.close();
+            }
             ui.separator();
             for g in groups.iter() {
                 ui.selectable_value(&mut s.layer, Some(g.id), format!("Group: {}", g.name));

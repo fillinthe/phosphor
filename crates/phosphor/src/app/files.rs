@@ -133,6 +133,13 @@ impl PhosphorApp {
                         st.begin_resolume_import(&p.to_string_lossy());
                     }
                 }
+                Purpose::SliceFile(sid) => {
+                    if let Some(p) = paths.first() {
+                        let path = p.to_string_lossy().to_string();
+                        let name = p.file_name().map_or_else(|| path.clone(), |n| n.to_string_lossy().to_string());
+                        st.comp.show_file_on_slice(sid, &name, crate::media::spec_for_path(&path));
+                    }
+                }
                 Purpose::StagePhoto(oid) => {
                     if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter_mut().find(|o| o.id == oid)) {
                         o.stage_photo = p.to_string_lossy().to_string();

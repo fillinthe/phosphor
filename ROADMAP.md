@@ -120,7 +120,7 @@ app that's much smaller and lighter on the CPU.
     - [x] Effects chains on layers, comps (groups) and MASTER; layers play clip rows or a media collection
     - [x] "Shows on": send a layer / comp to any outputs as a slice of its own (Inspector; 0.2.67)
     - [x] Comps as first-class: a Comp has its own layers, effects, size; several comps; a comp can feed other comps (0.2.89)
-    - [ ] Projection mapping: a mapping layer takes any input (comp, layer, output, file), is cut into slices, each
+    - [x] Projection mapping: a mapping layer takes any input (comp, layer, output, file: 0.2.92), is cut into slices, each
           slice routed to outputs; slices listed/duplicated/modified in one place (Studio)
     - [x] Alignment grid overlay per output (GRID: cells, crosshair, circle, diagonals, border; 0.2.68)
     - [x] Corners by number (0.2.68)
