@@ -74,6 +74,7 @@ impl PhosphorApp {
             passes: steady.last().map_or(0, |s| s.passes),
             audio_level: avg(|s| s.audio_level),
             gpu_ms: avg(|s| s.gpu_ms),
+            worst_ms: steady.iter().map(|s| s.worst_ms).fold(0.0, f64::max),
         };
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
