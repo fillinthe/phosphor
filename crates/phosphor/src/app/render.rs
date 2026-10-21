@@ -55,6 +55,8 @@ impl PhosphorApp {
             output_textures,
             #[cfg(target_os = "macos")]
             syphon,
+            #[cfg(target_os = "macos")]
+            vcam,
             #[cfg(any(target_os = "macos", windows))]
             ndi,
             #[cfg(windows)]
@@ -272,7 +274,12 @@ impl PhosphorApp {
         };
         #[cfg(not(windows))]
         let spout_due = false;
-        if (stream_due || net_due || ndi_due || spout_due) && !engine.capture_frame() && stream_due {
+        // The virtual camera (macOS): only while it's on and the camera is there.
+        #[cfg(target_os = "macos")]
+        let vcam_due = vcam.frame_due(now);
+        #[cfg(not(target_os = "macos"))]
+        let vcam_due = false;
+        if (stream_due || net_due || ndi_due || spout_due || vcam_due) && !engine.capture_frame() && stream_due {
             stream.repeat_last();
         }
         for f in engine.poll_captures() {
@@ -283,6 +290,10 @@ impl PhosphorApp {
             #[cfg(windows)]
             if spout.running() {
                 spout.push(f.width, f.height, f.rgba.clone());
+            }
+            #[cfg(target_os = "macos")]
+            if vcam.connected() {
+                vcam.push(f.width, f.height, &f.rgba);
             }
             if net.running() {
                 net.push_frame(f.width, f.height, f.rgba.clone());

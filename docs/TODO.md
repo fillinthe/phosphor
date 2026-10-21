@@ -16,8 +16,16 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       - Doing it means moving the engine (346 call sites) and the output windows off egui: the biggest, riskiest
         change in the app, for no measured gain today.
 
-- [ ] **Virtual camera** (#2): Phosphor as a webcam in Zoom / OBS / Teams. The camera extension can be built here,
-      but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
+- [~] **Virtual camera** (#2): **built; needs your Apple Developer account to switch on.**
+      - Output › Virtual camera turns it on: the composition as a camera called "Phosphor" (1920×1080, 30 fps).
+      - The camera is a Core Media I/O camera extension (`macos/PhosphorCamera`, built by
+        `scripts/build-camera-extension.sh`, packed into the app by `bundle-mac.sh`). Phosphor installs it and
+        feeds it frames.
+      - Checked: both chips build; the bundle carries the extension; Phosphor asked macOS to install it, and macOS
+        answered "Missing entitlement com.apple.developer.system-extension.install", shown in the panel. That's
+        the step only your account can pass.
+      - **Needs you:** the steps at the top of `scripts/build-camera-extension.sh` (team ID, two App IDs, two
+        Developer ID provisioning profiles, sign, notarize). The frame sending can't be tried until then.
 
 ## Done
 
