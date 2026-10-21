@@ -4,7 +4,7 @@ use super::*;
 
 pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
-    let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id) || st.comp.group(*id).is_some()) else {
+    let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id) || st.comp.group(*id).is_some() || st.comp.comp(*id).is_some()) else {
         hint(ui, "Select a layer (or MASTER) to edit its source and effects.");
         return;
     };
@@ -19,6 +19,11 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     if let Some(g) = st.comp.groups.iter_mut().find(|g| g.id == sel) {
         let thumb = st.layer_textures.get(&sel).map(|(t, _)| *t);
         (fx_action, send) = group_inspector(ui, g, thumb, aspect, clipboard_len, &outs);
+    } else if st.comp.comp(sel).is_some() {
+        let thumb = st.layer_textures.get(&sel).map(|(t, _)| *t);
+        let master = (st.comp.width, st.comp.height);
+        let c = st.comp.comp_mut(sel).unwrap();
+        (fx_action, send) = comp_inspector(ui, c, thumb, master, clipboard_len, &outs);
     } else if sel == MASTER_ID {
         let tex = st.texture;
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {

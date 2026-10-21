@@ -140,6 +140,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         }
         hint(ui, "Keys 1–9 trigger the lit bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
     });
+    comp_tabs(ui, st);
     ui.add_space(4.0);
     // Every column is in the grid (scroll sideways); the bank says which nine the keys 1–9 hit.
     let cols = st.comp.clip_columns.max(1);
@@ -189,6 +190,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             });
             let n = comp.layers.len();
             for idx in (0..n).rev() {
+                if !comp.in_open_comp(&comp.layers[idx]) {
+                    continue;
+                }
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
                     let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);

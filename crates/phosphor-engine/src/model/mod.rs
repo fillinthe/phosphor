@@ -4,6 +4,7 @@
 #[macro_use]
 mod choice;
 mod composition;
+mod comps;
 mod control;
 mod control_prefs;
 mod clip_play;
@@ -29,6 +30,7 @@ pub use collections::*;
 pub use cues::*;
 pub use dmx::*;
 pub use composition::*;
+pub use comps::*;
 pub use control::*;
 pub use control_prefs::*;
 pub use group::*;

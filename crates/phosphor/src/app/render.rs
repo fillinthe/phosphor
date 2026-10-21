@@ -272,8 +272,8 @@ impl PhosphorApp {
                 }
                 *texture_generation = engine.output_generation();
             }
-            // Layers and groups both have thumbnails.
-            for lid in comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)) {
+            // Layers, groups and comps all have thumbnails.
+            for lid in comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).chain(comp.comps.iter().map(|c| c.id)) {
                 let Some(t) = engine.layer_thumbnail(lid) else { continue };
                 let key = (t.width, t.height);
                 match layer_textures.get_mut(&lid) {

@@ -177,6 +177,8 @@ pub struct LayerState {
     pub group: CrossGroup,
     /// The layer group it belongs to (`Composition::groups`); members sit next to each other in the stack.
     pub parent: Option<u64>,
+    /// The comp it's in (`Composition::comps`); None or a gone comp = the first comp.
+    pub comp: Option<u64>,
     /// Loop region as fractions of the movie (0..1), so it survives switching clips and maps like any slider.
     pub loop_in: f32,
     pub loop_out: f32,
@@ -275,6 +277,7 @@ impl Default for LayerState {
             direction: PlayDirection::Forward,
             group: CrossGroup::None,
             parent: None,
+            comp: None,
             loop_in: 0.0,
             loop_out: 1.0,
             loop_beats: 0.0,

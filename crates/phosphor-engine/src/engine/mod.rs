@@ -182,6 +182,8 @@ pub struct Engine {
     layers: HashMap<u64, LayerResources>,
     /// Mixing targets, ping-ponged: 0–1 the main stack, 2–3 the layer group being mixed (only while groups exist).
     accum: [Option<Target>; 4],
+    /// Each comp's own stack (at its size) when comps are drawn apart; swapped into `accum` while it's mixed.
+    comp_accum: HashMap<u64, [Option<Target>; 4]>,
     output: Option<Target>,
     output_generation: u64,
     uniform_buffer: Option<wgpu::Buffer>,
@@ -246,6 +248,7 @@ impl Engine {
             gpu,
             layers: HashMap::new(),
             accum: [None, None, None, None],
+            comp_accum: HashMap::new(),
             output: None,
             output_generation: 0,
             uniform_buffer: None,
@@ -439,7 +442,7 @@ impl Engine {
         // Drop GPU resources for layers that no longer exist.
         // (Slices with effects keep theirs too.)
         let slice_fx = comp.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).filter(|s| s.effects.iter().any(|e| e.enabled)).map(|s| s.id);
-        let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).chain(slice_fx).collect();
+        let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).chain(comp.comps.iter().map(|c| c.id)).chain(slice_fx).collect();
         self.layers.retain(|id, _| *id >= RESERVED_IDS || live.contains(id));
 
         for (i, slot) in self.accum.iter_mut().enumerate() {
@@ -475,97 +478,49 @@ impl Engine {
         // Full-size pictures kept for mapping surfaces and for layers that use another layer as their source.
         let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.mapping.layer_feeds()).chain(comp.feed_sources()).collect();
         let mut feeds: HashMap<u64, wgpu::TextureView> = HashMap::new();
-        // The layer group being mixed (into accum 2–3) and which of those holds it so far.
-        let mut open_group: Option<u64> = None;
-        let mut group_current: Option<usize> = None;
-        let mut ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, layers: &comp.layers, monitors: &monitors };
-        for layer in &comp.layers {
-            // Leaving a group's members: finish its picture and mix it in like one layer.
-            let gid = layer.parent.filter(|p| comp.group(*p).is_some());
-            if open_group.is_some() && open_group != gid {
-                let g = comp.group(open_group.take().unwrap()).unwrap();
-                self.finish_group(g, group_current.take(), &mut current, &mut feeds, &mut ctx, &mut passes);
+        let ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, layers: &comp.layers, monitors: &monitors };
+        // Comps: one that mixes in plainly is drawn straight into the master's stack (as with no comps); otherwise
+        // each comp is drawn at its own size, through its effects, then mixed into the master like a layer.
+        let plain = comp.comps.len() <= 1 && comp.comps.first().is_none_or(|c| c.is_plain());
+        if plain {
+            let only = comp.comps.first().map(|c| c.id);
+            let (cur, drawn) = self.mix_stack(comp, only, any_solo, &mut feeds, &ctx, &mut passes);
+            current = cur;
+            layers_drawn += drawn;
+            if let (Some(id), Some(c)) = (only, cur) {
+                let frame = Frame::Rgb { view: self.accum[c].as_ref().unwrap().view.clone(), w, h };
+                self.comp_extras(id, &frame, &mut feeds, &ctx, &mut passes);
             }
-            if open_group.is_none() && gid.is_some() {
-                open_group = gid;
-            }
-            // Faded-out layers still render (into their thumbnail) so they can be cued before going live.
-            if !layer.enabled {
-                continue;
-            }
-            let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, w, h, time, mods, &mut passes);
-            // A stopped clip fades out to nothing over its transition.
-            let fading_out = incoming.is_none() && layer.transition.as_ref().is_some_and(|t| t.progress(time) < 1.0);
-            let Some(mut frame) = incoming.or_else(|| fading_out.then(|| Frame::Rgb { view: self.gpu.blank.clone(), w: 1, h: 1 })) else {
-                continue;
-            };
-            match &layer.transition {
-                Some(t) if t.progress(time) < 1.0 => {
-                    if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, &mut passes) {
-                        // A shader transition (ISF): old → new in one pass, once it's compiled (crossfade until then).
-                        let shader = (t.kind == crate::model::TransitionKind::Shader)
-                            .then(|| crate::shaders::transition(&t.effect))
-                            .flatten()
-                            .filter(|d| crate::shaders::pass_plan(d.entry).is_none() && self.ensure_module(d.entry));
-                        if let Some(d) = shader {
-                            frame = self.shader_transition(layer.id, frame, out, t, d, time, layer.fit, (w, h), &mut passes);
-                        } else {
-                        // "Through an effect": both pictures run through the effect, strongest half-way.
-                        if t.kind == crate::model::TransitionKind::Effect
-                            && let Some(d) = crate::shaders::effect(&t.effect)
-                        {
-                            let p = t.progress(time);
-                            let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new() };
-                            frame = self.apply_effects(layer.id ^ TRANSITION_IN, std::slice::from_ref(&fx), frame, time, mods, &comp.layers, &mut passes);
-                            out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, &mut passes);
-                        }
-                        frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), &mut passes);
-                        }
+            self.comp_accum.clear();
+        } else {
+            for c in &comp.comps {
+                let size = c.size((w, h));
+                let mut set = self.comp_accum.remove(&c.id).unwrap_or_default();
+                std::mem::swap(&mut self.accum, &mut set);
+                for (i, slot) in self.accum.iter_mut().enumerate() {
+                    if i < 2 || !comp.groups.is_empty() {
+                        Target::ensure(slot, &device, "comp accum", size.0, size.1);
+                    } else {
+                        *slot = None;
                     }
                 }
-                _ => {
-                    if let Some(res) = self.layers.get_mut(&layer.id) {
-                        res.generator_out = None;
-                        res.media_out = None;
-                    }
+                let cctx = MixCtx { canvas: size, thumb_h: (THUMBNAIL_WIDTH * size.1 / size.0.max(1)).max(1), ..ctx };
+                let (cur, drawn) = self.mix_stack(comp, Some(c.id), any_solo, &mut feeds, &cctx, &mut passes);
+                layers_drawn += drawn;
+                let view = cur.map(|i| self.accum[i].as_ref().unwrap().view.clone());
+                std::mem::swap(&mut self.accum, &mut set);
+                self.comp_accum.insert(c.id, set);
+                let Some(view) = view else { continue };
+                let frame = Frame::Rgb { view, w: size.0, h: size.1 };
+                let frame = if c.fx_bypass { frame } else { self.apply_effects(c.id, &c.effects, frame, time, mods, &comp.layers, &mut passes) };
+                self.comp_extras(c.id, &frame, &mut feeds, &cctx, &mut passes);
+                let opacity = modulate(c.opacity, 0.0, 1.0, c.opacity_mod.as_ref(), mods);
+                if c.enabled && c.in_mix && opacity > 0.001 {
+                    self.push_blend(frame, c.fit, opacity, c.blend, None, 0, &mut current, (w, h), time, &mut passes);
                 }
             }
-            let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &comp.layers, &mut passes) };
-            self.push_thumbnail(layer.id, layer.fit, &frame, (w, h), thumb_h, &mut passes);
-            if wanted.contains(&layer.id) {
-                let res = self.layers.entry(layer.id).or_default();
-                Target::ensure(&mut res.feed, &device, "layer feed", w, h);
-                let view = res.feed.as_ref().unwrap().view.clone();
-                push_fit_copy(view.clone(), &frame, (w, h), layer.fit, (w, h), &mut passes);
-                feeds.insert(layer.id, view);
-            } else if let Some(res) = self.layers.get_mut(&layer.id) {
-                res.feed = None;
-            }
-            for i in 0..monitors.len() {
-                let (src, mw, mh) = monitors[i];
-                if src == layer.id {
-                    Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);
-                    let view = self.monitor_targets[i].as_ref().unwrap().view.clone();
-                    push_fit_copy(view, &frame, (w, h), layer.fit, (mw, mh), &mut passes);
-                }
-            }
-            let muted = (any_solo && !layer.solo) || !layer.in_mix;
-            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader) };
-            if opacity <= 0.001 {
-                continue;
-            }
-            let place = transform_uniforms(&layer.transform, (w, h), mods);
-            if open_group.is_some() {
-                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 2, &mut group_current, (w, h), time, &mut passes);
-            } else {
-                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 0, &mut current, (w, h), time, &mut passes);
-            }
-            layers_drawn += 1;
+            self.comp_accum.retain(|id, _| comp.comp(*id).is_some());
         }
-        if let Some(g) = open_group.and_then(|id| comp.group(id)) {
-            self.finish_group(g, group_current.take(), &mut current, &mut feeds, &mut ctx, &mut passes);
-        }
-        let _ = &mut ctx;
 
         let output_view = self.output.as_ref().unwrap().view.clone();
         let mut master = current.map_or(self.gpu.blank.clone(), |c| self.accum[c].as_ref().unwrap().view.clone());
@@ -616,9 +571,9 @@ impl Engine {
             u.opacity = 0.0;
             passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             for s in o.mapping.shown() {
-                // A layer's own picture (black while that layer is off); the mix if the layer is gone.
+                // A layer's, group's or comp's own picture (black while it's off); the mix if it's gone.
                 let src = match s.layer {
-                    Some(id) if comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() => feeds.get(&id).cloned().unwrap_or_else(|| self.gpu.blank.clone()),
+                    Some(id) if comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() || comp.comp(id).is_some() => feeds.get(&id).cloned().unwrap_or_else(|| self.gpu.blank.clone()),
                     // Another output's finished picture (this frame's if drawn already, else the last one).
                     Some(id) if id != o.id && comp.outputs.iter().any(|x| x.id == id) => {
                         self.output_targets.get(&id).and_then(|t| t.as_ref()).map_or_else(|| self.gpu.blank.clone(), |t| t.view.clone())
@@ -782,6 +737,7 @@ fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModI
 }
 
 /// What mixing a stack needs besides the engine (so helpers don't take ten arguments).
+#[derive(Clone, Copy)]
 struct MixCtx<'a> {
     canvas: (u32, u32),
     pub time: f32,
@@ -795,6 +751,128 @@ struct MixCtx<'a> {
 }
 
 impl Engine {
+    /// Mixes the layers of comp `only` (None = every layer) at `ctx.canvas` into accum 0–1 (groups via 2–3).
+    /// Returns which accum holds the result, and how many layers were drawn.
+    fn mix_stack(&mut self, comp: &Composition, only: Option<u64>, any_solo: bool, feeds: &mut HashMap<u64, wgpu::TextureView>, ctx: &MixCtx, passes: &mut Vec<Pass>) -> (Option<usize>, usize) {
+        let (w, h) = ctx.canvas;
+        let (time, mods, thumb_h, wanted, monitors) = (ctx.time, ctx.mods, ctx.thumb_h, ctx.wanted, ctx.monitors);
+        let device = self.gpu.device.clone();
+        let mut current: Option<usize> = None;
+        let mut layers_drawn = 0;
+        // The layer group being mixed (into accum 2–3) and which of those holds it so far.
+        let mut open_group: Option<u64> = None;
+        let mut group_current: Option<usize> = None;
+        for layer in comp.layers.iter().filter(|l| only.is_none() || comp.comp_of(l) == only) {
+            // Leaving a group's members: finish its picture and mix it in like one layer.
+            let gid = layer.parent.filter(|p| comp.group(*p).is_some());
+            if open_group.is_some() && open_group != gid {
+                let g = comp.group(open_group.take().unwrap()).unwrap();
+                self.finish_group(g, group_current.take(), &mut current, feeds, ctx, passes);
+            }
+            if open_group.is_none() && gid.is_some() {
+                open_group = gid;
+            }
+            // Faded-out layers still render (into their thumbnail) so they can be cued before going live.
+            if !layer.enabled {
+                continue;
+            }
+            let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, w, h, time, mods, passes);
+            // A stopped clip fades out to nothing over its transition.
+            let fading_out = incoming.is_none() && layer.transition.as_ref().is_some_and(|t| t.progress(time) < 1.0);
+            let Some(mut frame) = incoming.or_else(|| fading_out.then(|| Frame::Rgb { view: self.gpu.blank.clone(), w: 1, h: 1 })) else {
+                continue;
+            };
+            match &layer.transition {
+                Some(t) if t.progress(time) < 1.0 => {
+                    if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, passes) {
+                        // A shader transition (ISF): old → new in one pass, once it's compiled (crossfade until then).
+                        let shader = (t.kind == crate::model::TransitionKind::Shader)
+                            .then(|| crate::shaders::transition(&t.effect))
+                            .flatten()
+                            .filter(|d| crate::shaders::pass_plan(d.entry).is_none() && self.ensure_module(d.entry));
+                        if let Some(d) = shader {
+                            frame = self.shader_transition(layer.id, frame, out, t, d, time, layer.fit, (w, h), passes);
+                        } else {
+                        // "Through an effect": both pictures run through the effect, strongest half-way.
+                        if t.kind == crate::model::TransitionKind::Effect
+                            && let Some(d) = crate::shaders::effect(&t.effect)
+                        {
+                            let p = t.progress(time);
+                            let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new() };
+                            frame = self.apply_effects(layer.id ^ TRANSITION_IN, std::slice::from_ref(&fx), frame, time, mods, &comp.layers, passes);
+                            out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, passes);
+                        }
+                        frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), passes);
+                        }
+                    }
+                }
+                _ => {
+                    if let Some(res) = self.layers.get_mut(&layer.id) {
+                        res.generator_out = None;
+                        res.media_out = None;
+                    }
+                }
+            }
+            let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &comp.layers, passes) };
+            self.push_thumbnail(layer.id, layer.fit, &frame, (w, h), thumb_h, passes);
+            if wanted.contains(&layer.id) {
+                let res = self.layers.entry(layer.id).or_default();
+                Target::ensure(&mut res.feed, &device, "layer feed", w, h);
+                let view = res.feed.as_ref().unwrap().view.clone();
+                push_fit_copy(view.clone(), &frame, (w, h), layer.fit, (w, h), passes);
+                feeds.insert(layer.id, view);
+            } else if let Some(res) = self.layers.get_mut(&layer.id) {
+                res.feed = None;
+            }
+            for i in 0..monitors.len() {
+                let (src, mw, mh) = monitors[i];
+                if src == layer.id {
+                    Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);
+                    let view = self.monitor_targets[i].as_ref().unwrap().view.clone();
+                    push_fit_copy(view, &frame, (w, h), layer.fit, (mw, mh), passes);
+                }
+            }
+            let muted = (any_solo && !layer.solo) || !layer.in_mix;
+            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader) };
+            if opacity <= 0.001 {
+                continue;
+            }
+            let place = transform_uniforms(&layer.transform, (w, h), mods);
+            if open_group.is_some() {
+                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 2, &mut group_current, (w, h), time, passes);
+            } else {
+                self.push_blend(frame, layer.fit, opacity, layer.blend, place, 0, &mut current, (w, h), time, passes);
+            }
+            layers_drawn += 1;
+        }
+        if let Some(g) = open_group.and_then(|id| comp.group(id)) {
+            self.finish_group(g, group_current.take(), &mut current, feeds, ctx, passes);
+        }
+        (current, layers_drawn)
+    }
+
+    /// A comp's finished picture: its thumbnail, preview windows showing it, and its feed (slices, Feed sources).
+    fn comp_extras(&mut self, id: u64, frame: &Frame, feeds: &mut HashMap<u64, wgpu::TextureView>, ctx: &MixCtx, passes: &mut Vec<Pass>) {
+        let size = frame.size();
+        self.push_thumbnail(id, FitMode::Stretch, frame, size, ctx.thumb_h, passes);
+        for (i, &(src, mw, mh)) in ctx.monitors.iter().enumerate() {
+            if src == id {
+                Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);
+                let view = self.monitor_targets[i].as_ref().unwrap().view.clone();
+                push_fit_copy(view, frame, size, FitMode::Stretch, (mw, mh), passes);
+            }
+        }
+        let res = self.layers.entry(id).or_default();
+        if ctx.wanted.contains(&id) {
+            Target::ensure(&mut res.feed, &self.gpu.device, "comp feed", size.0, size.1);
+            let view = res.feed.as_ref().unwrap().view.clone();
+            push_fit_copy(view.clone(), frame, size, FitMode::Stretch, size, passes);
+            feeds.insert(id, view);
+        } else {
+            res.feed = None;
+        }
+    }
+
     /// Blends `frame` onto a stack (accum `base`/`base + 1`, ping-ponged; `current` = which holds it so far).
     #[allow(clippy::too_many_arguments)]
     fn push_blend(&self, frame: Frame, fit: FitMode, opacity: f32, blend: BlendMode, place: Option<[[f32; 4]; 6]>, base: usize, current: &mut Option<usize>, canvas: (u32, u32), time: f32, passes: &mut Vec<Pass>) {
@@ -825,7 +903,7 @@ impl Engine {
 
     /// A layer group's members are mixed (in accum 2–3): run the group's effects, update its thumbnail and
     /// surface feed, and blend it onto the main stack like one layer.
-    fn finish_group(&mut self, g: &LayerGroup, mixed: Option<usize>, current: &mut Option<usize>, feeds: &mut HashMap<u64, wgpu::TextureView>, ctx: &mut MixCtx, passes: &mut Vec<Pass>) {
+    fn finish_group(&mut self, g: &LayerGroup, mixed: Option<usize>, current: &mut Option<usize>, feeds: &mut HashMap<u64, wgpu::TextureView>, ctx: &MixCtx, passes: &mut Vec<Pass>) {
         let Some(c) = mixed else { return };
         let (w, h) = ctx.canvas;
         let frame = Frame::Rgb { view: self.accum[2 + c].as_ref().unwrap().view.clone(), w, h };

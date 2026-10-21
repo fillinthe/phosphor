@@ -188,7 +188,7 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
             send = outputs_menu(ui, outs).or(send);
             ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(f32::INFINITY));
         });
-        hint(ui, "A comp: its layers mix together first; its opacity, blend and effects then apply to that mix. The screen button sends it to outputs of its own.");
+        hint(ui, "A group: its layers mix together first; its opacity, blend and effects then apply to that mix. The screen button sends it to outputs of its own.");
         ui.horizontal(|ui| {
             Level::percent(&mut g.opacity, "Opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
         });

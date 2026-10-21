@@ -696,7 +696,7 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
         projectors,
         ..
     } = st;
-    let others: Vec<(u64, String)> = comp.outputs.iter().filter(|o| o.id != oid).map(|o| (o.id, o.name.clone())).collect();
+    let others = super::mapping::picture_sources(comp, oid);
     let (layers, groups) = (&mut comp.layers, &mut comp.groups);
     let canvas = (comp.width, comp.height);
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };

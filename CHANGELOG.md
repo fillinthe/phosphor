@@ -4,6 +4,19 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.90 (2026-10-21)
+
+- **Comps: canvases of their own.** **+ Comp** (above Clips, Layers and the Mixer) makes another comp. A comp has
+  its own layers, its own size, its own effects, opacity and blend, and the master mixes the comps in order.
+  - The tabs pick which comp the Clips, Layers and Mixer panels show. Right-click a tab to rename it, open its
+    settings, preview it in a window, change the order or delete it (its layers move to the first comp).
+  - In the Inspector a comp can have its own size (fit, fill or stretch into the master), its own effects, and
+    can stay out of the master mix to go only to outputs of its own (the screen button, as for layers).
+  - A layer can show a comp (source: Feed › Comp), a mapping slice can show a comp, and a layer's right-click
+    menu has **Move to comp**.
+  - Comps share one tempo. Column triggers (keys 1–9) and Surprise act on the comp you have open.
+  - Projects from earlier versions open as one comp, "Main", and look the same.
+
 ## 0.2.89 (2026-10-21)
 
 - **FFGL plugins (Mac).** Phosphor now loads FFGL effect and source plugins, the kind Resolume and VDMX use.

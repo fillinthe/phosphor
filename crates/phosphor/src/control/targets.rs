@@ -321,6 +321,12 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
             out.push((ControlTarget::SliceEnabled(g.id), format!("{} · {} (group) · on/off", o.name, g.name)));
         }
     }
+    for c in comp.comps.iter().filter(|_| comp.comps.len() > 1) {
+        out.push((ControlTarget::LayerOpacity(c.id), format!("Comp {} · opacity", c.name)));
+        out.push((ControlTarget::LayerEnabled(c.id), format!("Comp {} · on/off", c.name)));
+        out.push((ControlTarget::LayerFxBypass(c.id), format!("Comp {} · effects bypass", c.name)));
+        effects(&c.name, &c.effects, &mut out);
+    }
     for g in &comp.groups {
         out.push((ControlTarget::LayerOpacity(g.id), format!("{} · opacity", g.name)));
         out.push((ControlTarget::LayerEnabled(g.id), format!("{} · on/off", g.name)));
