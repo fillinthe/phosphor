@@ -644,10 +644,12 @@ impl Engine {
                     passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
-                // Mesh warp: one pass drawing the cached, finely subdivided mesh.
-                if let Some(m) = &s.mesh {
-                    let hash = hash_points(&m.points, &[m.cols, m.rows]);
-                    let Some(draw) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id), hash, || m.triangles()) else { continue };
+                // Mesh warp or curved edges: one pass drawing the cached, finely subdivided mesh.
+                if s.mesh.is_some() || s.bend.is_some() {
+                    let grid = s.mesh.as_ref().map_or([0, 0], |m| [m.cols, m.rows]);
+                    let points = s.mesh.iter().flat_map(|m| m.points.iter()).chain(s.corners.iter()).chain(s.bend.iter().flat_map(|b| b.handles.iter().flatten()));
+                    let hash = hash_points(points, &[grid[0], grid[1], s.bend.is_some() as u32]);
+                    let Some(draw) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id), hash, || s.warp_triangles().unwrap_or_default()) else { continue };
                     let mut u = Uniforms::with_params(&[]);
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;

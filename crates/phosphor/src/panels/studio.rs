@@ -536,6 +536,11 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
                 ui.close();
             }
         });
+        let mut bend = s.bend.is_some();
+        if flat && crate::ui::toggle(ui, &mut bend, "Curved edges").on_hover_text("Two handles on each edge bend it; the picture follows").changed() {
+            s.set_bend(bend);
+            ui.close();
+        }
         let mut line = s.line.is_some();
         if crate::ui::toggle(ui, &mut line, "Line slice").on_hover_text("The picture runs along a line with a width").changed() {
             s.set_line(line);

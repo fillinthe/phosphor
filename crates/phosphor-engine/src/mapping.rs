@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
+mod bend;
 mod groups;
+pub use bend::{Bend, inside};
 pub use groups::SliceGroup;
 
 /// A corner-pinned quad. Coordinates are output-space 0..1 with the origin at the top-left.
@@ -60,6 +62,9 @@ pub struct Surface {
     /// Effects on this slice alone (MadMapper's surface FX), run on its part of the picture.
     #[serde(default)]
     pub effects: Vec<crate::EffectState>,
+    /// Curved edges: handles that bend each edge (and the picture inside), on the quad or the mesh.
+    #[serde(default)]
+    pub bend: Option<Bend>,
 }
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
@@ -1165,6 +1170,7 @@ impl Default for Surface {
             group: None,
             flip: [false; 2],
             effects: Vec::new(),
+            bend: None,
         }
     }
 }
@@ -1269,6 +1275,9 @@ impl Surface {
 
     /// True if an output-space point lies inside the quad.
     pub fn contains(&self, p: [f32; 2]) -> bool {
+        if self.bend.is_some() {
+            return inside(&self.outline(16), p);
+        }
         output_to_surface(&self.corners, p).is_some_and(|st| (0.0..=1.0).contains(&st[0]) && (0.0..=1.0).contains(&st[1]))
     }
 }
