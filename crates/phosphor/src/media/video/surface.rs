@@ -1,6 +1,6 @@
 //! Zero-copy hardware video (macOS): a VideoToolbox frame is a CVPixelBuffer backed by an IOSurface. Its two
 //! planes (luma R8, chroma RG8) become Metal textures on that IOSurface and then wgpu textures: no CPU copy,
-//! no upload. 4:2:0 in 8 or 10 bits, TV or full range; anything else takes the copying path.
+//! no upload. 4:2:0 and 4:2:2 (ProRes 422) in 8 or 10 bits, TV or full range; anything else takes the copying path.
 
 use std::ffi::c_void;
 
@@ -14,6 +14,8 @@ unsafe extern "C" {
     fn CVPixelBufferGetPixelFormatType(pb: *mut c_void) -> u32;
     fn CVPixelBufferGetWidth(pb: *mut c_void) -> usize;
     fn CVPixelBufferGetHeight(pb: *mut c_void) -> usize;
+    fn CVPixelBufferGetWidthOfPlane(pb: *mut c_void, plane: usize) -> usize;
+    fn CVPixelBufferGetHeightOfPlane(pb: *mut c_void, plane: usize) -> usize;
     fn CVPixelBufferGetIOSurface(pb: *mut c_void) -> *mut c_void;
 }
 
@@ -23,8 +25,18 @@ unsafe extern "C" {
     fn CFRelease(cf: *const c_void);
 }
 
-/// Bi-planar 4:2:0 layouts VideoToolbox hands out: (code, 10-bit, full range).
-const LAYOUTS: [(&[u8; 4], bool, bool); 4] = [(b"420v", false, false), (b"420f", false, true), (b"x420", true, false), (b"xf20", true, true)];
+/// Bi-planar layouts VideoToolbox hands out: (code, 10-bit, full range). 4:2:0 (H.264, HEVC…) and 4:2:2 (ProRes 422:
+/// its chroma plane is full height; the shader samples it by 0..1 coordinates, so both draw the same way).
+const LAYOUTS: [(&[u8; 4], bool, bool); 8] = [
+    (b"420v", false, false),
+    (b"420f", false, true),
+    (b"x420", true, false),
+    (b"xf20", true, true),
+    (b"422v", false, false),
+    (b"422f", false, true),
+    (b"x422", true, false),
+    (b"xf22", true, true),
+];
 
 /// 10-bit frames need 16-bit textures (set once the GPU is known).
 static SIXTEEN_BIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -102,7 +114,10 @@ impl PixelBuffer {
         };
         // SAFETY: the pixel buffer (and so its IOSurface) is retained by `self` while the textures are in use.
         let luma = unsafe { iosurface_texture(device, surface, 0, (lf, lm), (w, h), false) }?;
-        let chroma = unsafe { iosurface_texture(device, surface, 1, (cf, cm), (w.div_ceil(2), h.div_ceil(2)), false) }?;
+        // The chroma plane's own size: half height for 4:2:0, full height for 4:2:2.
+        // SAFETY: valid, retained pixel buffer with two planes (`retain_nv12` checked its layout).
+        let (cw, ch) = unsafe { (CVPixelBufferGetWidthOfPlane(self.0, 1) as u32, CVPixelBufferGetHeightOfPlane(self.0, 1) as u32) };
+        let chroma = unsafe { iosurface_texture(device, surface, 1, (cf, cm), (cw.max(1), ch.max(1)), false) }?;
         Some((luma, chroma))
     }
 }
