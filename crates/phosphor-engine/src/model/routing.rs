@@ -36,6 +36,11 @@ impl Composition {
         self.outputs.iter_mut().flat_map(|o| o.mapping.surfaces.iter_mut()).find(|s| s.id == id)
     }
 
+    /// The slices a slice control reaches: slice `id`, or every slice in slice group `id` (and the groups inside it).
+    pub fn slices_reached(&self, id: u64) -> Vec<u64> {
+        self.outputs.iter().flat_map(|o| o.mapping.group_members(id)).collect()
+    }
+
     /// Ids of the outputs with an enabled slice showing `source`.
     pub fn outputs_showing(&self, source: u64) -> Vec<u64> {
         self.outputs

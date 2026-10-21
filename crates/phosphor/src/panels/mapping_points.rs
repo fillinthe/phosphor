@@ -38,6 +38,12 @@ pub(crate) fn click_slice(ctx: &egui::Context, primary: &mut Option<u64>, id: u6
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(MULTI), set));
 }
 
+/// Selects exactly `ids` (a slice group): the last one becomes the primary.
+pub(crate) fn select_slices(ctx: &egui::Context, primary: &mut Option<u64>, ids: Vec<u64>) {
+    *primary = ids.last().copied();
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(MULTI), ids));
+}
+
 /// Moves every selected slice (but locked ones) by `d`.
 pub(crate) fn move_slices(mapping: &mut Mapping, ids: &[u64], d: [f32; 2]) {
     for s in mapping.surfaces.iter_mut().filter(|s| ids.contains(&s.id) && !s.locked) {

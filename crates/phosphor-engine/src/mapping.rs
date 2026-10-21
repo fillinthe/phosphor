@@ -3,6 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
+mod groups;
+pub use groups::SliceGroup;
+
 /// A corner-pinned quad. Coordinates are output-space 0..1 with the origin at the top-left.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -48,6 +51,9 @@ pub struct Surface {
     /// How it lands on the slices under it.
     #[serde(default)]
     pub blend: SliceBlend,
+    /// The slice group it's in (`Mapping::groups`), if any.
+    #[serde(default)]
+    pub group: Option<u64>,
 }
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
@@ -918,6 +924,7 @@ impl Default for Surface {
             edges: None,
             locked: false,
             blend: SliceBlend::Normal,
+            group: None,
         }
     }
 }
@@ -1027,6 +1034,8 @@ pub struct Mapping {
     pub masks: Vec<Mask>,
     /// Show an alignment grid on every surface instead of the content.
     pub test_pattern: bool,
+    /// Named groups of slices (they can sit inside each other); a slice says which one it's in.
+    pub groups: Vec<SliceGroup>,
 }
 
 impl Mapping {
@@ -1086,6 +1095,7 @@ impl Mapping {
             self.attach_mask(m, None);
         }
         self.surfaces.retain(|s| !ids.contains(&s.id));
+        self.prune_groups();
     }
 
     /// Attaches mask `mask` to slice `slice` (or detaches it with None), keeping it where it is on the output.

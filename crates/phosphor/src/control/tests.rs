@@ -357,3 +357,22 @@ fn slices_are_controls() {
     set_target(&mut comp, &ControlTarget::SliceOpacity(sid), 1.0, &mut deferred);
     assert_eq!(comp.slice(sid).unwrap().opacity, 0.25, "locked");
 }
+
+#[test]
+fn a_slice_group_is_one_control() {
+    let mut comp = Composition::default();
+    let out = comp.add_output();
+    let (a, b, g) = (comp.new_id(), comp.new_id(), comp.new_id());
+    let mapping = &mut comp.outputs.iter_mut().find(|o| o.id == out).unwrap().mapping;
+    mapping.add_surface(a);
+    mapping.add_surface(b);
+    mapping.group_slices(g, &[a, b]);
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &ControlTarget::SliceOpacity(g), 0.4, &mut deferred);
+    assert_eq!(comp.slice(a).unwrap().opacity, 0.4);
+    assert_eq!(comp.slice(b).unwrap().opacity, 0.4);
+    comp.slice_mut(b).unwrap().enabled = false;
+    set_target(&mut comp, &ControlTarget::SliceEnabled(g), FLIP, &mut deferred);
+    assert!(!comp.slice(a).unwrap().enabled && !comp.slice(b).unwrap().enabled, "flips from the first one, all follow");
+    assert!(all_targets(&comp).iter().any(|(t, _)| *t == ControlTarget::SliceOpacity(g)));
+}

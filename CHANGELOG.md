@@ -4,6 +4,15 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.83 (2026-10-20)
+
+- **Slice groups** (as in MadMapper): in the Mapping Studio, right-click slices › Group these slices (or right-click
+  the canvas with several selected). Groups are saved with the project, fold open and shut, and can sit inside other
+  groups. Click a group to select all its slices; its eye shows or hides them all. Right-click a group to rename it,
+  move it into another group, ungroup it, or delete it with its slices. Right-click a slice › Move to group.
+- **Groups are controls:** a group's on/off and opacity can be mapped to MIDI, OSC, keys or a Control Surface
+  button like a single slice (right-click the group › Learn, or pick "(group)" in any target list).
+
 ## 0.2.82 (2026-10-20)
 
 - **LUT Mix** (as in VDMX): with two or more LUTs in your LUT folder, a LUT Mix effect blends between any two of

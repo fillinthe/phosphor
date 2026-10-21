@@ -258,8 +258,11 @@ impl PhosphorApp {
         if app.ui_brightness != theme::DEFAULT_BRIGHTNESS {
             theme::set_brightness(&cc.egui_ctx, app.ui_brightness);
         }
-        if let Some(i) = app.bench.as_ref().and_then(|b| b.cfg.layout.as_deref()).and_then(|n| super::layout::LAYOUTS.iter().position(|(l, _)| *l == n)) {
-            app.switch_workspace(i);
+        if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.layout.clone()) {
+            match super::layout::LAYOUTS.iter().position(|(l, _)| l.eq_ignore_ascii_case(&name)) {
+                Some(i) => app.switch_workspace(i),
+                None => println!("LAYOUT_ERROR no workspace \"{name}\" (there are: {})", super::layout::LAYOUTS.iter().map(|(l, _)| *l).collect::<Vec<_>>().join(", ")),
+            }
         }
         if let Some(rate) = app.bench.as_ref().and_then(|b| b.cfg.rate.clone()) {
             app.state.render_rate = match rate.as_str() {

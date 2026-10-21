@@ -35,8 +35,9 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         // Opacity, on/off and bypass also drive groups (same id space as layers).
         ControlTarget::LayerOpacity(id) => comp.mix_controls(*id)?.0,
         ControlTarget::LayerEnabled(id) => on(comp.mix_controls(*id)?.1),
-        ControlTarget::SliceOpacity(id) => comp.slice(*id)?.opacity,
-        ControlTarget::SliceEnabled(id) => on(comp.slice(*id)?.enabled),
+        // A slice group's id reaches all its slices (the first one's value is shown).
+        ControlTarget::SliceOpacity(id) => comp.slice(*comp.slices_reached(*id).first()?)?.opacity,
+        ControlTarget::SliceEnabled(id) => on(comp.slice(*comp.slices_reached(*id).first()?)?.enabled),
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
         ControlTarget::LayerVolume(id) => layer(id)?.volume / 2.0,
@@ -221,13 +222,20 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             }
         }
         ControlTarget::SliceOpacity(id) => {
-            if let Some(s) = comp.slice_mut(*id) {
-                s.opacity = v.clamp(0.0, 1.0);
+            for sid in comp.slices_reached(*id) {
+                if let Some(s) = comp.slice_mut(sid) {
+                    s.opacity = v.clamp(0.0, 1.0);
+                }
             }
         }
         ControlTarget::SliceEnabled(id) => {
-            if let Some(s) = comp.slice_mut(*id) {
-                s.enabled = toggled(s.enabled, v);
+            let ids = comp.slices_reached(*id);
+            if let Some(on) = ids.first().and_then(|f| comp.slice(*f)).map(|s| toggled(s.enabled, v)) {
+                for sid in ids {
+                    if let Some(s) = comp.slice_mut(sid) {
+                        s.enabled = on;
+                    }
+                }
             }
         }
         ControlTarget::GeneratorParam { layer, index } => {
@@ -300,6 +308,10 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         for s in &o.mapping.surfaces {
             out.push((ControlTarget::SliceOpacity(s.id), format!("{} · {} · opacity", o.name, s.name)));
             out.push((ControlTarget::SliceEnabled(s.id), format!("{} · {} · on/off", o.name, s.name)));
+        }
+        for g in &o.mapping.groups {
+            out.push((ControlTarget::SliceOpacity(g.id), format!("{} · {} (group) · opacity", o.name, g.name)));
+            out.push((ControlTarget::SliceEnabled(g.id), format!("{} · {} (group) · on/off", o.name, g.name)));
         }
     }
     for g in &comp.groups {

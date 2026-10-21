@@ -219,6 +219,23 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "slicegroups" {
+                // Four slices on the first output: two in "Wall", one of them also in "Window" inside it.
+                self.state.comp.ensure_outputs();
+                let ids: Vec<u64> = (0..4).map(|_| self.state.comp.new_id()).collect();
+                let (outer, inner) = (self.state.comp.new_id(), self.state.comp.new_id());
+                if let Some(o) = self.state.comp.outputs.first_mut() {
+                    for id in &ids {
+                        o.mapping.add_surface(*id);
+                    }
+                    o.mapping.enabled = true;
+                    o.mapping.group_slices(outer, &ids[..2]);
+                    o.mapping.group_slices(inner, &ids[1..2]);
+                    o.mapping.groups.iter_mut().for_each(|g| g.name = if g.id == outer { "Wall".into() } else { "Window".into() });
+                    println!("QUICK slicegroups: {} groups, Wall has {:?}", o.mapping.groups.len(), o.mapping.group_members(outer));
+                }
+                continue;
+            }
             if let Some(b) = name.strip_prefix("sliceblend=") {
                 use phosphor_engine::mapping::SliceBlend;
                 if let (Some(blend), Some(o)) = (SliceBlend::ALL.into_iter().find(|x| x.name().eq_ignore_ascii_case(b)), self.state.comp.outputs.first_mut()) {

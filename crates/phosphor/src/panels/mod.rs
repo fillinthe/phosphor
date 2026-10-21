@@ -40,6 +40,7 @@ mod preset_list;
 mod preview;
 mod stream;
 mod stage;
+mod slice_tree;
 mod studio;
 mod surface;
 
