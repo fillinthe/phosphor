@@ -120,8 +120,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             for m in &mut o.mapping.masks {
                 ui.horizontal(|ui| {
                     ui.add_space(14.0);
-                    let glyph = if m.enabled { icon::EYE } else { icon::EYE_SLASH };
-                    ui.toggle_value(&mut m.enabled, RichText::new(glyph).small());
+                    crate::ui::eye_toggle(ui, &mut m.enabled);
                     let r = ui.selectable_label(*selected_surface == Some(m.id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR));
                     if r.clicked() {
                         *selected_surface = Some(m.id);

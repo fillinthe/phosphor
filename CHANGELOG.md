@@ -9,6 +9,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Effects on one slice** (MadMapper's surface FX): select a slice in the Mapping Studio; under its settings,
   Effects › Add effect works as on a layer. The effects run on that slice's part of the picture only: pixelate one
   window of a building, invert one panel. Their settings can be mapped and modulated like any effect.
+- **One look for small switches:** solo "S", the "3 fx" bypass badges, the show/hide eyes on masks and slices and the
+  invert arrow in mappings now share the same two small switch styles.
 - **Daily cues** (for installations): a cue can fire every day at a set time on the computer's clock ("daily"), on
   the days you pick: lights up at 18:00, off at 02:00, weekdays only.
 - **Corner pin a layer** (VDMX's quad mode): Inspector › Transform › Corner pin, then drag the layer's four

@@ -126,7 +126,7 @@ pub(crate) fn fx_badge(ui: &mut egui::Ui, effects: &[EffectState], bypass: &mut 
     }
     let mut active = !*bypass;
     let color = if active { accent() } else { Color32::GRAY };
-    let r = ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass these effects · right-click to map");
+    let r = crate::ui::icon_toggle(ui, &mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass these effects · right-click to map");
     if r.changed() {
         *bypass = !active;
     }

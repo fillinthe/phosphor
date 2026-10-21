@@ -62,9 +62,9 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             if ui.small_button(caret).on_hover_text(if g.collapsed { "Open the group" } else { "Fold the group" }).clicked() {
                 edits.push(Edit::Fold(g.id));
             }
-            let on = members.iter().any(|id| mapping.surfaces.iter().any(|s| s.id == *id && s.enabled));
-            if show_glyph(ui, on).on_hover_text("Show or hide every slice in the group").clicked() {
-                edits.push(Edit::Show(members.clone(), !on));
+            let mut on = members.iter().any(|id| mapping.surfaces.iter().any(|s| s.id == *id && s.enabled));
+            if crate::ui::eye_toggle(ui, &mut on).on_hover_text("Show or hide every slice in the group").changed() {
+                edits.push(Edit::Show(members.clone(), on));
             }
             let all_picked = !members.is_empty() && members.iter().all(|m| picked.contains(m));
             let text = RichText::new(format!("{} {}  ({})", icon::FOLDER, g.name, members.len())).strong();
@@ -105,9 +105,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
         ui.horizontal(|ui| {
             ui.add_space(indent);
             let s = &mut mapping.surfaces[i];
-            if show_glyph(ui, s.enabled).clicked() {
-                s.enabled = !s.enabled;
-            }
+            crate::ui::eye_toggle(ui, &mut s.enabled);
             let r = ui.selectable_label(picked.contains(&s.id), format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several");
             if r.clicked() {
                 let shift = ui.input(|i| i.modifiers.shift);
@@ -161,9 +159,4 @@ fn move_menu(ui: &mut egui::Ui, mapping: &Mapping, moving: Option<u64>, now: Opt
             }
         }
     });
-}
-
-fn show_glyph(ui: &mut egui::Ui, on: bool) -> egui::Response {
-    let glyph = if on { icon::EYE } else { icon::EYE_SLASH };
-    ui.add(egui::Button::new(RichText::new(glyph).small()).frame(false)).on_hover_text(if on { "Showing (click to hide)" } else { "Hidden (click to show)" })
 }
