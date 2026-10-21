@@ -63,6 +63,8 @@ mod tracking;
 mod pjlink;
 mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
+mod scanner;
+#[cfg(not(target_arch = "wasm32"))]
 mod dylib;
 #[cfg(any(target_os = "macos", windows))]
 mod ndi;

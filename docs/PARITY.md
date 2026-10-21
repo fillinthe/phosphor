@@ -42,7 +42,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Layer corner pin (quad), corners mappable | VDMX | ✅ |
 | Crop per layer | VDMX | ✅ |
 | Layer groups (mixed first, own effects/opacity) | Resolume | ✅ |
-| Comps: several canvases, own size/layers/effects, mixed by the master, sent to their own outputs, fed into other comps | VDMX, Resolume | ✅ (0.2.90) |
+| Comps: several canvases, own size/layers/effects, mixed by the master, sent to their own outputs, fed into other comps | VDMX, Resolume | ✅ (0.2.89) |
 | A/B crossfader | Resolume, VDMX | ✅ |
 | Crossfader auto-fade | VDMX | ✅ |
 | Layer as mask / track matte (brightness, inverted, alpha) | Resolume, VDMX | ✅ |
@@ -91,7 +91,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Masks: freehand, bezier handles, attached to a slice, soft edge centred / inside / outside | MadMapper | ✅ |
 | Test patterns, stage photo, per-side soft edges | MadMapper | ✅ |
 | Projector control (PJLink) | MadMapper | ✅ |
-| Spatial scanner (camera sees the stage) | MadMapper | ⬜ |
+| Spatial scanner (camera sees the stage) | MadMapper | ✅ (0.2.89): stage photo from projector patterns + camera |
 | Lasers | MadMapper | ➖ |
 
 ## I/O

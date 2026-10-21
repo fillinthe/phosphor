@@ -216,6 +216,8 @@ pub struct Engine {
     monitor_capture: crate::capture::Capture,
     /// Remove background mattes and the pictures read back to make them.
     cutouts: cutout::Cutouts,
+    /// Stage scanner: the output showing a pattern instead of its picture, and the pattern (`fs_scan` p[0]).
+    scan: Option<(u64, [f32; 4])>,
     /// External effects / sources (FFGL): their textures from the app and this frame's jobs.
     externals: external::Externals,
     preview_source: u64,
@@ -271,6 +273,7 @@ impl Engine {
             monitor_reads: Vec::new(),
             monitor_capture: Default::default(),
             cutouts: Default::default(),
+            scan: None,
             externals: Default::default(),
             preview_source: MASTER_ID,
             preview_src: None,
@@ -406,6 +409,12 @@ impl Engine {
 
     pub fn device(&self) -> &wgpu::Device {
         &self.gpu.device
+    }
+
+    /// Shows a stage-scanner pattern on output `output` instead of its picture (None = back to normal).
+    /// `pattern` = (kind 0 black / 1 white / 2 Gray-code bit, bit, axis 0 columns / 1 rows, inverse).
+    pub fn set_scan(&mut self, scan: Option<(u64, [f32; 4])>) {
+        self.scan = scan;
     }
 
     /// Waits until the GPU has done everything submitted so far (before another API reads what it drew).
@@ -565,6 +574,8 @@ impl Engine {
                 passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
                 self.push_masks(o.id, &o.mapping, &view, (ow, oh), &mut passes);
                 self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
+            self.push_scan(o.id, &view, (ow, oh), &mut passes);
+                self.push_scan(o.id, &view, (ow, oh), &mut passes);
                 continue;
             }
             // Black, then each enabled surface blended on top.

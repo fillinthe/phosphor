@@ -4,8 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## 0.2.90 (2026-10-21)
+## 0.2.89 (2026-10-21)
 
+- **Scan the stage with a camera.** In the Mapping Studio, **Stage photo › Scan the stage with a camera…**: the
+  projector shows black, white and striped pictures while a camera watches, and Phosphor draws the stage as the
+  projector sees it. That becomes the output's stage photo, so you can draw slices straight onto the real objects
+  (MadMapper's spatial scanner). Any layer showing a camera works; it can stay hidden. "The output itself" runs a
+  test without a camera.
 - **Comps: canvases of their own.** **+ Comp** (above Clips, Layers and the Mixer) makes another comp. A comp has
   its own layers, its own size, its own effects, opacity and blend, and the master mixes the comps in order.
   - The tabs pick which comp the Clips, Layers and Mixer panels show. Right-click a tab to rename it, open its
@@ -16,9 +21,6 @@ What changed in each Phosphor release, newest first. Downloads are on the
     menu has **Move to comp**.
   - Comps share one tempo. Column triggers (keys 1–9) and Surprise act on the comp you have open.
   - Projects from earlier versions open as one comp, "Main", and look the same.
-
-## 0.2.89 (2026-10-21)
-
 - **FFGL plugins (Mac).** Phosphor now loads FFGL effect and source plugins, the kind Resolume and VDMX use.
   It looks in ~/Library/Graphics/FreeFrame Plug-Ins, /Library/Graphics/FreeFrame Plug-Ins, Resolume's Extra
   Effects folders and Phosphor's own FFGL folder (right-click "FFGL: …" under the Effects list to open it).

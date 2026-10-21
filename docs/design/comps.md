@@ -1,6 +1,6 @@
-# Comps as separate canvases: design (draft for the owner, 2026-10-20; built in 0.2.90)
+# Comps as separate canvases: design (draft for the owner, 2026-10-20; built in 0.2.89)
 
-**As built (0.2.90):** layers stay in one list with `LayerState::comp` naming their comp (not moved into each
+**As built (0.2.89):** layers stay in one list with `LayerState::comp` naming their comp (not moved into each
 comp), so ids, controls, cues, slices and collections needed no changes; a comp's layers are kept together in
 comp order (`normalize_comps`). A project without comps has one implicit "Main"; `+ Comp` makes "Main" real and
 adds the new one. The three questions below were answered with the defaults (owner asked to go ahead,

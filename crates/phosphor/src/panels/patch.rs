@@ -251,7 +251,7 @@ mod tests {
         let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 600.0))), events, ..Default::default() };
         let mut changed = false;
         let mut out = ctx.run_ui(input, |ui| {
-            egui::CentralPanel::default().frame(egui::Frame::NONE).show_inside(ui, |ui| changed = patch_canvas(ui, patch, "test"));
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| changed = patch_canvas(ui, patch, "test"));
         });
         out.textures_delta.clear();
         changed

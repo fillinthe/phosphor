@@ -58,6 +58,8 @@ impl PhosphorApp {
             #[cfg(target_os = "macos")]
             ffgl,
             scopes,
+            #[cfg(not(target_arch = "wasm32"))]
+            scanner,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -156,6 +158,24 @@ impl PhosphorApp {
                 engine.request_cutout_frames();
             }
         }
+        // Stage scanner: its pattern on the output, the camera read once per pattern, the finished photo set.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            scanner.poll();
+            if let Some((o, path)) = scanner.finished.take()
+                && let Some(out) = comp.output_mut(o)
+            {
+                out.stage_photo = path;
+                out.stage_photo_opacity = out.stage_photo_opacity.max(0.6);
+            }
+            engine.set_scan(scanner.pattern());
+            if let Some((src, w, h)) = scanner.picture() {
+                mwants.push((crate::scanner::MONITOR_KEY, src, w, h));
+                if scanner.due(now) {
+                    engine.read_monitor(mwants.len() - 1, crate::scanner::MONITOR_KEY as u64);
+                }
+            }
+        }
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
         // LED / DMX: sample the fixtures' pixels from this frame when the lights want one.
@@ -190,6 +210,8 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::tracking::MONITOR_KEY => tracker.give(f.rgba, f.width, f.height, &comp.tracking),
                 crate::scopes::MONITOR_KEY => scopes.give(&f.rgba, f.width, f.height),
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::scanner::MONITOR_KEY => scanner.give(f.rgba, f.width, f.height),
                 _ => {}
             }
         }
