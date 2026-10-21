@@ -51,12 +51,14 @@ pub enum FileFormat {
     HapQ,
     /// Hap Q with a separate alpha image.
     HapQAlpha,
+    /// Hap R (BC7): Hap's best colour, with transparency; the size of Hap Q, slower to record.
+    HapR,
     /// HEVC (H.265) through the Mac's encoder: about half the size of H.264 at the same quality.
     Hevc,
 }
 
 impl FileFormat {
-    pub const ALL: [FileFormat; 6] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha, FileFormat::HapQ, FileFormat::HapQAlpha, FileFormat::Hevc];
+    pub const ALL: [FileFormat; 7] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha, FileFormat::HapQ, FileFormat::HapQAlpha, FileFormat::HapR, FileFormat::Hevc];
 
     /// The Hap flavour this records, if it's one.
     pub fn hap(self) -> Option<crate::media::video::hap_encode::HapKind> {
@@ -66,6 +68,7 @@ impl FileFormat {
             FileFormat::HapAlpha => Some(HapKind::HapAlpha),
             FileFormat::HapQ => Some(HapKind::HapQ),
             FileFormat::HapQAlpha => Some(HapKind::HapQAlpha),
+            FileFormat::HapR => Some(HapKind::HapR),
             _ => None,
         }
     }
@@ -77,6 +80,7 @@ impl FileFormat {
             FileFormat::HapAlpha => "Hap Alpha (.mov)",
             FileFormat::HapQ => "Hap Q (.mov, better colour)",
             FileFormat::HapQAlpha => "Hap Q Alpha (.mov)",
+            FileFormat::HapR => "Hap R (.mov, best colour + alpha)",
             FileFormat::Hevc => "HEVC (.mp4, smaller files)",
         }
     }

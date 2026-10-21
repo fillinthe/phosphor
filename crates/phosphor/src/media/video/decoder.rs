@@ -128,6 +128,9 @@ impl Decoder {
         };
         // Hap goes to the GPU as it is stored (blocks), skipping FFmpeg's CPU texture decoder.
         let hap = (gpu_hap() && st_is_hap(&input, stream)).then(Vec::new);
+        if hap.is_none() && input.stream(stream).is_some_and(|s| unsafe { (*s.parameters().as_ptr()).codec_tag } == u32::from_le_bytes(super::HAP_R)) {
+            return Err("Hap R plays only on the graphics card (PHOSPHOR_CPU_HAP is set, or the GPU has no BC7)".into());
+        }
         Ok(Self {
             hap,
             hap_format: phosphor_engine::CompressedFormat::Bc1,
@@ -822,6 +825,11 @@ fn open_decoder(
     .ok_or_else(|| format!("unsupported codec ({id:?})"))?;
 
     let mut ctx = ff::codec::Context::from_parameters(params).map_err(err)?;
+    // FFmpeg's Hap decoder refuses Hap R's tag; its frames never reach it (they go to the GPU as they are), so open it
+    // as plain Hap.
+    if id == Id::HAP && unsafe { (*ctx.as_ptr()).codec_tag } == u32::from_le_bytes(super::HAP_R) {
+        unsafe { (*ctx.as_mut_ptr()).codec_tag = u32::from_le_bytes(*b"Hap1") };
+    }
     let hw = try_hw && unsafe { attach_videotoolbox(ctx.as_mut_ptr(), codec.as_ptr()) };
     unsafe { (*ctx.as_mut_ptr()).pkt_timebase = (*st.as_ptr()).time_base };
     if !hw {

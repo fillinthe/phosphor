@@ -417,6 +417,7 @@ impl PhosphorApp {
                     Some("alpha") => F::HapAlpha,
                     Some("q") => F::HapQ,
                     Some("qalpha") => F::HapQAlpha,
+                    Some("r") => F::HapR,
                     _ => F::Hap,
                 };
             }
