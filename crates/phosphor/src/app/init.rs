@@ -223,6 +223,8 @@ impl PhosphorApp {
                 scopes: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 scanner: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
+                link_import: Default::default(),
                 clip_page: 0,
                 media_memory_at: 0.0,
                 #[cfg(not(target_arch = "wasm32"))]

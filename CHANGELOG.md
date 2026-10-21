@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.93 (2026-10-21)
+
+- **From a link:** Media › From a link… brings in the video or GIF from a post on X, Instagram, TikTok, YouTube,
+  Vimeo and more: download it into the media bin (a clip that loops and works offline) or play it live from the
+  link. Instagram may need "Sign-in from <your browser>". Needs yt-dlp (free; the window says how to get it).
+
 ## 0.2.92 (2026-10-21)
 
 - **FFGL mixer plugins (Mac).** Mixer plugins (the kind Resolume uses to blend layers) now work: Inspector ›
