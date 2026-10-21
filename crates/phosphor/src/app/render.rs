@@ -55,6 +55,7 @@ impl PhosphorApp {
             dmx,
             #[cfg(not(target_arch = "wasm32"))]
             tracker,
+            scopes,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -134,7 +135,13 @@ impl PhosphorApp {
         if let Some((src, w, h)) = tracker.picture(&comp.tracking, (comp.width, comp.height)) {
             mwants.push((crate::tracking::MONITOR_KEY, src, w, h));
             if tracker.due(now) {
-                engine.read_monitor(mwants.len() - 1);
+                engine.read_monitor(mwants.len() - 1, crate::tracking::MONITOR_KEY as u64);
+            }
+        }
+        if let Some((src, w, h)) = scopes.picture(now, (comp.width, comp.height)) {
+            mwants.push((crate::scopes::MONITOR_KEY, src, w, h));
+            if scopes.due(now) {
+                engine.read_monitor(mwants.len() - 1, crate::scopes::MONITOR_KEY as u64);
             }
         }
         // Remove background: fresh mattes in, and the effects' pictures out when the worker is free.
@@ -167,9 +174,13 @@ impl PhosphorApp {
             let universes = comp.dmx.universes(&colors, mod_inputs.beats as f64);
             dmx.send(&comp.dmx, &universes);
         }
-        #[cfg(not(target_arch = "wasm32"))]
         for f in engine.take_monitor_reads() {
-            tracker.give(f.rgba, f.width, f.height, &comp.tracking);
+            match f.tag as u8 {
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::tracking::MONITOR_KEY => tracker.give(f.rgba, f.width, f.height, &comp.tracking),
+                crate::scopes::MONITOR_KEY => scopes.give(&f.rgba, f.width, f.height),
+                _ => {}
+            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         for f in engine.take_cutout_frames() {

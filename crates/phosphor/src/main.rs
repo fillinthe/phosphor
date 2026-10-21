@@ -59,6 +59,7 @@ mod screen_capture;
 mod tracking;
 #[cfg(not(target_arch = "wasm32"))]
 mod pjlink;
+mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
 mod dylib;
 #[cfg(any(target_os = "macos", windows))]
