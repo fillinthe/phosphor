@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.86 (2026-10-21)
+
+- **Scopes** (as in VDMX): a new Scopes panel (View › Panels, or the Outputs area) shows a waveform, RGB parade,
+  vectorscope or histogram of the mix or any layer, for matching colours between cameras, clips and projectors.
+  It only measures while it's on screen.
+
 ## 0.2.85 (2026-10-21)
 
 - **Effects on one slice** (MadMapper's surface FX): select a slice in the Mapping Studio; under its settings,

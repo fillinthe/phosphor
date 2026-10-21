@@ -42,6 +42,7 @@ mod preview;
 mod projector;
 mod stream;
 mod stage;
+mod scopes;
 mod slice_tree;
 mod studio;
 mod surface;
@@ -102,10 +103,12 @@ pub enum Tab {
     Cues,
     LayerWindows,
     Studio,
+    /// Waveform / parade / vectorscope / histogram.
+    Scopes,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 24] = [
+    pub const ALL: [Tab; 25] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -130,6 +133,7 @@ impl Tab {
         Tab::Cues,
         Tab::LayerWindows,
         Tab::Studio,
+        Tab::Scopes,
     ];
 
     pub fn title(self) -> String {
@@ -158,6 +162,7 @@ impl Tab {
             Tab::Surface => "Control Surface",
             Tab::Account => "Account",
             Tab::Leds => "LED / DMX",
+            Tab::Scopes => "Scopes",
             Tab::Cues => "Cues",
             Tab::LayerWindows => "Layer Windows",
             Tab::Studio => "Mapping Studio",
@@ -234,6 +239,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Surface => surface(ui, st),
         Tab::Account => account(ui, st),
         Tab::Leds => leds(ui, st),
+        Tab::Scopes => scopes::scopes(ui, st),
         Tab::Cues => cues(ui, st),
         Tab::LayerWindows => layer_windows(ui, st),
         Tab::Studio => studio(ui, st),
