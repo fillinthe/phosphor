@@ -4,6 +4,21 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.96 (2026-10-21)
+
+- **Runs on macOS 13 Ventura** (was 14 and newer).
+- **Windows installer:** `Phosphor-windows-setup.exe` installs Phosphor with a Start menu shortcut, opens `.phosphor`
+  projects with a double-click, and uninstalls cleanly. The zip is still there for people who prefer it.
+- **Raspberry Pi 5 / Linux ARM (preview):** `Phosphor-linux-arm64.tar.gz`. Use it as a player that follows a Mac's
+  show (Session › Follow another Phosphor › Every time Phosphor starts). See its README.
+- **Masters:** an output can show a whole comp as its picture (Outputs › Shows), so each output can have its own mix.
+- **One Inspector:** it now shows whatever you selected last, a layer, a clip, a mapping slice or a Control Surface
+  widget, with a switch on top.
+- **Crash reports sent by themselves (optional):** Report a Bug › "Send crash reports by themselves". Off unless you
+  turn it on; available once the crash server is set up.
+- More older ISF shaders load (ones using words like `sample` or `filter` as names), and a new audio visualizer,
+  Glitch Wave (px-stream by darosh).
+
 ## 0.2.95 (2026-10-21)
 
 - **ProRes plays far more lightly:** ProRes 422 now goes straight from the Mac's video decoder to the graphics card
