@@ -52,6 +52,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         };
         #[cfg(target_arch = "wasm32")]
         let (beat_pending, beat): (bool, Option<(f32, f32)>) = (false, None);
+        // The clip picked in the grid, when it's on this layer.
+        let clip_slot = st.selected_clip.filter(|(l, _)| *l == sel).map(|(_, c)| c);
+        let mut clip_act: Option<(usize, super::ClipAct)> = None;
         let layer = st.comp.layer_mut(sel).unwrap();
         egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
@@ -63,6 +66,16 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
             });
             quick = crate::app::quick_row(ui);
+            if let Some(c) = clip_slot.filter(|c| layer.clips.get(*c).is_some_and(|k| !k.is_empty())) {
+                let k = &layer.clips[c];
+                let is_movie = matches!(k.source, SourceSpec::Movie { path: Some(_), .. });
+                let title = format!("{} Clip {} · column {}", icon::SQUARES_FOUR, k.name, c + 1);
+                egui::CollapsingHeader::new(title).id_salt("inspector_clip").default_open(true).show(ui, |ui| {
+                    if let Some(a) = super::clip_editor(ui, layer, c, true, is_movie) {
+                        clip_act = Some((c, a));
+                    }
+                });
+            }
             ui.separator();
             let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, match_beat: Default::default() };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
@@ -72,6 +85,10 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 match_beat = Some(layer.id);
             }
         });
+        if let Some((c, a)) = clip_act {
+            let now = ui.ctx().input(|i| i.time);
+            super::apply_clip_act(st, sel, c, a, now);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(id) = match_beat {
             st.match_beat(crate::media::rhythm::MatchTarget::Layer(id));

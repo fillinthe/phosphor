@@ -53,6 +53,98 @@ pub fn launch_controls(ui: &mut egui::Ui, comp: &mut phosphor_engine::Compositio
     }
 }
 
+/// What `clip_editor` asks for (the rest it changes on the clip directly).
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum ClipAct {
+    Trigger,
+    MatchBeat,
+    StoreCurrent,
+    Clear,
+}
+
+/// One clip's settings: name, trigger (and its MIDI / key mapping), how a press plays it, sound, its own settings,
+/// and store / clear. The clip cell's right-click menu and the Inspector both show this.
+pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, filled: bool, is_movie: bool) -> Option<ClipAct> {
+    let mut act = None;
+    if filled {
+        crate::ui::text_field(ui, &mut layer.clip_slot_mut(c).name, "clip name", None);
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(label(icon::PLAY, "Trigger")).clicked() {
+                act = Some(ClipAct::Trigger);
+            }
+            let target = ControlTarget::TriggerClip { layer: layer.id, slot: c };
+            ui.menu_button(label(icon::PLUG, "Map…"), |ui| learn_items(ui, &target)).response.on_hover_text("Trigger it from a MIDI pad, a key or OSC");
+            if is_movie
+                && ui.button(label(icon::MAGIC_WAND, "Match the beat")).on_hover_text("Scan this movie's motion for its rhythm; the clip then starts on its first hit and is stretched so every hit lands on a beat").clicked()
+            {
+                act = Some(ClipAct::MatchBeat);
+            }
+        });
+        let current = layer.clip_settings();
+        let lid = layer.id;
+        let k = layer.clip_slot_mut(c);
+        ui.horizontal(|ui| {
+            ui.label("When pressed");
+            choice_combo(ui, ("clip_trigger", lid, c), &mut k.trigger, 150.0, false);
+        });
+        if is_movie {
+            crate::ui::toggle(ui, &mut k.muted, "Mute sound").on_hover_text("This clip plays without sound, wherever it's triggered");
+        }
+        let mut own = k.own.is_some();
+        if crate::ui::toggle(ui, &mut own, "Keeps its own settings")
+            .on_hover_text("Speed, direction, loop, BPM sync and effects are saved with this clip and come back when it's triggered (starts from the layer's current settings)")
+            .changed()
+        {
+            k.own = own.then_some(current);
+        }
+        ui.separator();
+    }
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("Store the layer's current source here").clicked() {
+            act = Some(ClipAct::StoreCurrent);
+        }
+        if filled && crate::ui::danger_button(ui, "Clear slot").clicked() {
+            act = Some(ClipAct::Clear);
+        }
+    });
+    act
+}
+
+/// Carries out a `clip_editor` request for clip `c` of layer `layer` (grid menu and Inspector alike).
+pub(crate) fn apply_clip_act(st: &mut State, layer: u64, c: usize, act: ClipAct, now: f64) {
+    match act {
+        ClipAct::Trigger => st.trigger(Trigger::Clip { layer, slot: c }, now),
+        ClipAct::MatchBeat => {
+            #[cfg(not(target_arch = "wasm32"))]
+            st.match_beat(crate::media::rhythm::MatchTarget::Clip(layer, c));
+        }
+        // The layer's source, values and modulation as this clip (and it's the playing one now).
+        ClipAct::StoreCurrent => {
+            let Some(l) = st.comp.layer_mut(layer) else { return };
+            let (src, vals, mods, name, id) = (l.source.clone(), l.generator_values.clone(), l.generator_mods.clone(), l.name.clone(), l.id);
+            if src != SourceSpec::None {
+                let slot = l.clip_slot_mut(c);
+                slot.source = src;
+                slot.generator_values = vals;
+                slot.mods = mods;
+                slot.name = name;
+                slot.id = id * 1000 + c as u64 + 1;
+                l.active_clip = Some(slot.id);
+            }
+        }
+        ClipAct::Clear => {
+            if let Some(l) = st.comp.layer_mut(layer)
+                && c < l.clips.len()
+            {
+                l.clips[c] = Default::default();
+            }
+            if st.selected_clip == Some((layer, c)) {
+                st.selected_clip = None;
+            }
+        }
+    }
+}
+
 pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let aspect = st.aspect();
@@ -161,6 +253,8 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut set_cell: Option<(usize, usize, usize)> = None; // (layer idx, slot, media idx)
     let mut set_source: Option<(usize, usize, super::SourceDrag)> = None; // (layer idx, slot, a live input…)
     let mut use_current: Option<(usize, usize)> = None;
+    // A clip clicked: it plays and is selected (its layer too), so the Inspector shows its settings.
+    let mut picked: Option<(u64, usize)> = None;
     let mut clear: Option<(usize, usize)> = None;
     let mut beat: Option<(u64, usize)> = None;
     let mut beat_row: Option<u64> = None;
@@ -297,11 +391,15 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                         if momentary {
                             if pressed && resp.hovered() {
                                 triggers.push(Trigger::Clip { layer: layer.id, slot: c });
+                                picked = Some((layer.id, c));
                                 ui.ctx().data_mut(|d| d.insert_temp(held_id, (layer.id, c)));
                             }
                         } else if resp.clicked() {
                             match clip {
-                                Some(k) if !k.is_empty() => triggers.push(Trigger::Clip { layer: layer.id, slot: c }),
+                                Some(k) if !k.is_empty() => {
+                                    triggers.push(Trigger::Clip { layer: layer.id, slot: c });
+                                    picked = Some((layer.id, c));
+                                }
                                 _ => use_current = Some((idx, c)),
                             }
                         }
@@ -309,45 +407,13 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                         let filled = clip.is_some_and(|k| !k.is_empty());
                         let is_movie = clip.is_some_and(|k| matches!(k.source, SourceSpec::Movie { path: Some(_), .. }));
                         resp.right_menu(|ui| {
-                            if filled {
-                                if ui.button(label(icon::PLAY, "Trigger")).clicked() {
-                                    triggers.push(Trigger::Clip { layer: layer.id, slot: c });
-                                    ui.close();
+                            if let Some(act) = clip_editor(ui, layer, c, filled, is_movie) {
+                                match act {
+                                    ClipAct::Trigger => triggers.push(Trigger::Clip { layer: layer.id, slot: c }),
+                                    ClipAct::MatchBeat => beat = Some((layer.id, c)),
+                                    ClipAct::StoreCurrent => use_current = Some((idx, c)),
+                                    ClipAct::Clear => clear = Some((idx, c)),
                                 }
-                                learn_items(ui, &ControlTarget::TriggerClip { layer: layer.id, slot: c });
-                                if is_movie
-                                    && ui.button(label(icon::MAGIC_WAND, "Match the beat")).on_hover_text("Scan this movie's motion for its rhythm; the clip then starts on its first hit and is stretched so every hit lands on a beat").clicked()
-                                {
-                                    beat = Some((layer.id, c));
-                                    ui.close();
-                                }
-                                ui.separator();
-                                ui.label(RichText::new("When pressed").small().strong());
-                                let current = layer.clip_settings();
-                                let k = layer.clip_slot_mut(c);
-                                for m in TriggerMode::ALL {
-                                    ui.radio_value(&mut k.trigger, m, m.name());
-                                }
-                                ui.separator();
-                                if is_movie {
-                                    crate::ui::toggle(ui, &mut k.muted, "Mute sound").on_hover_text("This clip plays without sound, wherever it's triggered");
-                                }
-                                let mut own = k.own.is_some();
-                                if ui
-                                    .checkbox(&mut own, "Keeps its own settings")
-                                    .on_hover_text("Speed, direction, loop, BPM sync and effects are saved with this clip and come back when it's triggered (starts from the layer's current settings)")
-                                    .changed()
-                                {
-                                    k.own = own.then_some(current);
-                                }
-                                ui.separator();
-                            }
-                            if ui.button("Store the layer's current source here").clicked() {
-                                use_current = Some((idx, c));
-                                ui.close();
-                            }
-                            if ui.button("Clear slot").clicked() {
-                                clear = Some((idx, c));
                                 ui.close();
                             }
                         });
@@ -379,28 +445,22 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (beat, beat_row);
+    if let Some((layer, c)) = picked {
+        st.selected = Some(layer);
+        st.selected_clip = Some((layer, c));
+    }
     if let Some((idx, c)) = use_current
-        && let Some(layer) = st.comp.layers.get_mut(idx)
+        && let Some(id) = st.comp.layers.get(idx).map(|l| l.id)
     {
-        let (src, vals, mods, name, id) = (layer.source.clone(), layer.generator_values.clone(), layer.generator_mods.clone(), layer.name.clone(), layer.id);
-        if src != SourceSpec::None {
-            let slot = layer.clip_slot_mut(c);
-            slot.source = src;
-            slot.generator_values = vals;
-            slot.mods = mods;
-            slot.name = name;
-            slot.id = id * 1000 + c as u64 + 1;
-            layer.active_clip = Some(slot.id);
-        }
+        apply_clip_act(st, id, c, ClipAct::StoreCurrent, now);
     }
     if let Some(id) = fill_row {
         st.quick_on(crate::app::Quick::Fill, Some(id), now);
     }
     if let Some((idx, c)) = clear
-        && let Some(layer) = st.comp.layers.get_mut(idx)
-        && c < layer.clips.len()
+        && let Some(id) = st.comp.layers.get(idx).map(|l| l.id)
     {
-        layer.clips[c] = Default::default();
+        apply_clip_act(st, id, c, ClipAct::Clear, now);
     }
     for t in triggers {
         st.trigger(t, now);
@@ -410,9 +470,6 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
-/// The layer's name at the start of its clip row; click for autopilot (plays the next / a random clip by itself).
-/// The layer name at the start of a clip row: click for autopilot and "fill with variations" (returns true for that).
-/// The layer's name at the start of its clip row, with its menu. Returns (fill the row, match every clip's beat).
 /// Width of the layer strip at the start of each clip row.
 const ROW_HEADER_W: f32 = 176.0;
 

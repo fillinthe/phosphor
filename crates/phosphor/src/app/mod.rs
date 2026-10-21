@@ -195,6 +195,8 @@ pub struct State {
     pub media: MediaManager,
     pub stats: Stats,
     pub selected: Option<u64>,
+    /// The clip last clicked in the grid (layer, slot): the Inspector shows its settings while that layer is selected.
+    pub selected_clip: Option<(u64, usize)>,
     pub selected_surface: Option<u64>,
     /// Output windows by output id.
     pub output: Arc<Mutex<std::collections::HashMap<u64, OutputShared>>>,
