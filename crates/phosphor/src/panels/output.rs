@@ -130,8 +130,11 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     spout_row(ui, st);
     #[cfg(any(target_os = "macos", windows))]
     ndi_row(ui, st);
+    // Only in a copy that carries the camera extension (until it's signed, release copies don't).
     #[cfg(target_os = "macos")]
-    vcam_row(ui, st);
+    if crate::virtual_camera::bundled() {
+        vcam_row(ui, st);
+    }
     let canvas = (st.comp.width, st.comp.height);
     let mut remove = None;
     let count = st.comp.outputs.len();
