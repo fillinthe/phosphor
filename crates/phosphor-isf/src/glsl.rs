@@ -753,6 +753,18 @@ void isf_vertShaderInit() {\n\
     s
 }
 
+/// MadMapper's vertex-function names on Phosphor's quad (a Surface FX's `fxVsFunc` as a vertex stage): the corner
+/// position is the vertex (clip space, -1..1), the matrices are identity, and the picture coordinate is
+/// `isf_FragNormCoord`, which becomes the varying the fragment stage reads.
+pub(crate) const MAD_VERTEX_NAMES: &str = "vec4 phosphor_mm_vertex;
+#define mm_Vertex phosphor_mm_vertex
+#define mm_ModelViewProjectionMatrix mat4(1.0)
+#define mm_TextureMatrix mat4(1.0)
+#define mm_TexCoord0 vec4(isf_FragNormCoord, 0.0, 1.0)
+#define mm_FragNormCoord isf_FragNormCoord
+#define mm_SurfaceCoord isf_FragNormCoord
+";
+
 /// `main` for the vertex stage: inputs, the shader's own main (which calls `isf_vertShaderInit`), then the
 /// varying the fragment stage expects (flipped: Phosphor's uv has y down).
 pub(crate) fn vertex_epilogue() -> &'static str {
