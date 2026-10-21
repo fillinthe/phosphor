@@ -3,7 +3,7 @@
 //! Phosphor already links. Plays in Phosphor, VDMX, Resolume, MadMapper and any Hap player.
 //!
 //! Hap = DXT1, Hap Alpha = DXT5, Hap Q = scaled YCoCg in DXT5 (better colour, twice the size), Hap Q Alpha = Hap Q
-//! plus an RGTC1 (BC4) alpha image. Format: github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md.
+//! plus an RGTC1 (BC4) alpha image, Hap R = BC7 (`bc7`: best colour and alpha, same size as Hap Q, slower to encode). Format: github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md.
 
 use ff::ffi;
 use ffmpeg_next as ff;
@@ -18,6 +18,7 @@ pub enum HapKind {
     HapAlpha,
     HapQ,
     HapQAlpha,
+    HapR,
 }
 
 impl HapKind {
@@ -27,6 +28,7 @@ impl HapKind {
             HapKind::HapAlpha => *b"Hap5",
             HapKind::HapQ => *b"HapY",
             HapKind::HapQAlpha => *b"HapM",
+            HapKind::HapR => *b"Hap7",
         }
     }
 }
@@ -207,7 +209,7 @@ fn snappy(data: &[u8]) -> Vec<u8> {
     snap::raw::Encoder::new().compress_vec(data).unwrap_or_default()
 }
 
-/// One Hap frame. Section types: Snappy (0xB_) + DXT1 0xB, DXT5 0xE, YCoCg DXT5 0xF, RGTC1 0x1; Hap Q Alpha is a
+/// One Hap frame. Section types: Snappy (0xB_) + DXT1 0xB, DXT5 0xE, YCoCg DXT5 0xF, RGTC1 0x1, BC7 0xC; Hap Q Alpha is a
 /// "multiple images" section (0x0D) holding the YCoCg image and the alpha image.
 pub fn hap_frame(rgba: &[u8], w: u32, h: u32, kind: HapKind) -> Vec<u8> {
     match kind {
@@ -219,6 +221,7 @@ pub fn hap_frame(rgba: &[u8], w: u32, h: u32, kind: HapKind) -> Vec<u8> {
             let alpha = section(0xB1, &snappy(&blocks(rgba, w, h, 8, |b, out| out.copy_from_slice(&bc4(std::array::from_fn(|i| b[i][3]))))));
             section(0x0D, &[colour, alpha].concat())
         }
+        HapKind::HapR => section(0xBC, &snappy(&blocks(rgba, w, h, 16, |b, out| out.copy_from_slice(&super::bc7::encode(b))))),
     }
 }
 
@@ -238,6 +241,9 @@ impl HapWriter {
     pub fn create(path: &str, w: u32, h: u32, fps: u32, kind: HapKind) -> Result<Self, String> {
         super::init();
         let mut octx = ff::format::output_as(&path, "mov").map_err(|e| format!("can't create {path} ({e})"))?;
+        // FFmpeg's QuickTime table has no Hap R ("Hap7"); unofficial lets the muxer store a tag it doesn't know.
+        // SAFETY: a plain field of the output context, before the header is written.
+        unsafe { (*octx.as_mut_ptr()).strict_std_compliance = ffi::FF_COMPLIANCE_UNOFFICIAL };
         let fps = fps.max(1) as i32;
         {
             let mut st = octx.add_stream(None::<ff::Codec>).map_err(|e| e.to_string())?;
@@ -296,6 +302,19 @@ mod tests {
         assert_eq!((b[0], b[1]), (255, 0));
     }
 
+    /// A Hap R frame reads back as BC7 blocks holding the picture.
+    #[test]
+    fn hap_r_frames_hold_bc7_blocks() {
+        let (w, h) = (8u32, 4u32);
+        let rgba: Vec<u8> = (0..w * h).flat_map(|i| if i % w < 4 { [200, 40, 10, 255] } else { [10, 90, 220, 128] }).collect();
+        let (mut out, mut alpha) = (Vec::new(), Vec::new());
+        let format = super::super::hap::decode(&hap_frame(&rgba, w, h, HapKind::HapR), &mut out, &mut alpha).unwrap();
+        assert_eq!(format, (phosphor_engine::CompressedFormat::Bc7, false));
+        assert_eq!(out.len(), 2 * 16);
+        let right = super::super::bc7::decode(out[16..].try_into().unwrap());
+        assert!(right.iter().all(|p| p.iter().zip([10, 90, 220, 128]).all(|(a, b)| (*a as i32 - b).abs() <= 1)), "{:?}", right[0]);
+    }
+
     /// Records a few Hap frames and plays them back through Phosphor's own player.
     #[test]
     fn records_a_hap_movie_that_plays_back() {
@@ -343,7 +362,7 @@ fn write_sample_hap() {
     }
     let dir = std::path::PathBuf::from(dir);
     std::fs::write(dir.join("source.rgba"), &frame).unwrap();
-    for (name, kind) in [("hap", HapKind::Hap), ("hap_alpha", HapKind::HapAlpha), ("hapq", HapKind::HapQ), ("hapq_alpha", HapKind::HapQAlpha)] {
+    for (name, kind) in [("hap", HapKind::Hap), ("hap_alpha", HapKind::HapAlpha), ("hapq", HapKind::HapQ), ("hapq_alpha", HapKind::HapQAlpha), ("hapr", HapKind::HapR)] {
         let mut wr = HapWriter::create(&dir.join(format!("{name}.mov")).to_string_lossy(), w, h, 30, kind).unwrap();
         for _ in 0..30 {
             wr.write(&frame).unwrap();

@@ -17,7 +17,10 @@ Released in **0.2.97** (Mac, Windows zip + installer, Linux ARM; installed here)
       "instancing" generators still don't: they draw their own 3D meshes (vertex attributes), which Phosphor's quad can't stand in for.
 - [ ] **Hand-picked lostjared effects**: render every one of the 2,700 (MIT) to a picture, sort out the blank /
       broken / near-duplicates automatically, look at the rest on contact sheets, ship the best few dozen.
-- [ ] **Hap R recording** (BC7: Hap's best quality), and with it a real check of Hap R playback.
+- [x] **Hap R recording** (BC7: Hap's best quality), and with it a real check of Hap R playback. Record and Convert
+      both offer it. Playback didn't work before: FFmpeg doesn't know the Hap R tag, so files opened as an unknown codec
+      (fixed). Checked: 1080p recording kept up at 30 fps, and the recording played back with the right picture. Not
+      tried in other VJ apps.
 
 ## First round (asked 2026-10-21)
 

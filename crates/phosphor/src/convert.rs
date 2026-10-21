@@ -17,12 +17,13 @@ pub enum Format {
     HapAlpha,
     HapQ,
     HapQAlpha,
+    HapR,
     ProRes,
     H264Keyframes,
 }
 
 impl Format {
-    pub const ALL: [Format; 6] = [Format::Hap, Format::HapAlpha, Format::HapQ, Format::HapQAlpha, Format::ProRes, Format::H264Keyframes];
+    pub const ALL: [Format; 7] = [Format::Hap, Format::HapAlpha, Format::HapQ, Format::HapQAlpha, Format::HapR, Format::ProRes, Format::H264Keyframes];
 
     /// The Hap flavour, for the Hap formats.
     fn hap(self) -> Option<crate::media::video::hap_encode::HapKind> {
@@ -32,6 +33,7 @@ impl Format {
             Format::HapAlpha => Some(HapKind::HapAlpha),
             Format::HapQ => Some(HapKind::HapQ),
             Format::HapQAlpha => Some(HapKind::HapQAlpha),
+            Format::HapR => Some(HapKind::HapR),
             _ => None,
         }
     }
@@ -42,6 +44,7 @@ impl Format {
             Format::HapAlpha => "Hap Alpha",
             Format::HapQ => "Hap Q",
             Format::HapQAlpha => "Hap Q Alpha",
+            Format::HapR => "Hap R",
             Format::ProRes => "ProRes",
             Format::H264Keyframes => "H.264, every frame a keyframe",
         }
@@ -53,6 +56,7 @@ impl Format {
             Format::HapAlpha => "Hap that keeps transparency (for overlays). Bigger than Hap; no sound.",
             Format::HapQ => "Hap with much better colour (smooth gradients, skin, logos), still decoded by the graphics card. Twice the size of Hap; no sound.",
             Format::HapQAlpha => "Hap Q that keeps transparency. The biggest Hap; no sound.",
+            Format::HapR => "Hap's best colour, and keeps transparency. The size of Hap Q, slower to convert; plays in newer Hap players. No sound.",
             Format::ProRes => "Smooth, plays backwards well, keeps the sound. Very big files.",
             Format::H264Keyframes => "Plays backwards smoothly and keeps the sound, at a fraction of the size of the others. Uses a bit more of the computer than Hap.",
         }
@@ -65,6 +69,7 @@ impl Format {
             Format::HapAlpha => "Hap Alpha",
             Format::HapQ => "Hap Q",
             Format::HapQAlpha => "Hap Q Alpha",
+            Format::HapR => "Hap R",
             Format::ProRes => "ProRes",
             Format::H264Keyframes => "keyframes",
         }
@@ -174,6 +179,8 @@ pub fn estimate(p: &Probe, format: Format, quality: Quality, size: Size) -> u64 
         // Hap: Snappy squeezes DXT anywhere from about a third to most of its size depending on the picture.
         (Format::Hap, _) => 4.0 * 0.6,
         (Format::HapAlpha | Format::HapQ, _) => 8.0 * 0.6,
+        // BC7 is busier, so Snappy saves less.
+        (Format::HapR, _) => 8.0 * 0.85,
         (Format::HapQAlpha, _) => 12.0 * 0.6,
         (Format::ProRes, Quality::Small) => 0.72,
         (Format::ProRes, Quality::Balanced) => 1.64,
@@ -279,7 +286,7 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
     let total = (job.probe.seconds * job.probe.fps).max(1.0);
     let scale = format!("scale={w}:{h}:flags=lanczos");
     match job.format {
-        Format::Hap | Format::HapAlpha | Format::HapQ | Format::HapQAlpha => {
+        Format::Hap | Format::HapAlpha | Format::HapQ | Format::HapQAlpha | Format::HapR => {
             // Decode with ffmpeg to RGBA frames, encode them with Phosphor's Hap encoder.
             let kind = job.format.hap().unwrap_or(crate::media::video::hap_encode::HapKind::Hap);
             let fps = job.probe.fps.round().max(1.0) as u32;

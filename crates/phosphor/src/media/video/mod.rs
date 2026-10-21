@@ -231,12 +231,33 @@ impl Shared {
 /// frame number and frame rate (FFmpeg alone only looks for frames 0–4). Every file open goes through here.
 pub fn open_input(path: &str) -> Result<ff::format::context::Input, ff::Error> {
     if !crate::media::sequence::is_sequence(path) {
-        return ff::format::input(&path);
+        let mut input = ff::format::input(&path)?;
+        mark_hap_r(&mut input);
+        return Ok(input);
     }
     let mut options = ff::Dictionary::new();
     options.set("start_number", &crate::media::sequence::first_number(path).unwrap_or(0).to_string());
     options.set("framerate", crate::media::sequence::RATE);
     ff::format::input_with_dictionary(&path, options)
+}
+
+/// Hap R's codec tag.
+pub(crate) const HAP_R: [u8; 4] = *b"Hap7";
+
+/// FFmpeg doesn't know Hap R's tag ("Hap7"), so its streams come in as an unknown codec: call them Hap, which sends
+/// them down Phosphor's GPU Hap path (BC7 blocks straight to the GPU).
+fn mark_hap_r(input: &mut ff::format::context::Input) {
+    // SAFETY: plain fields of the opened streams' parameters, before any decoder is made from them.
+    unsafe {
+        let ctx = input.as_mut_ptr();
+        for i in 0..(*ctx).nb_streams as usize {
+            let par = (**(*ctx).streams.add(i)).codecpar;
+            if (*par).codec_id == ff::ffi::AVCodecID::AV_CODEC_ID_NONE && (*par).codec_tag == u32::from_le_bytes(HAP_R) {
+                (*par).codec_id = ff::ffi::AVCodecID::AV_CODEC_ID_HAP;
+                (*par).codec_type = ff::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
+            }
+        }
+    }
 }
 
 impl VideoPlayer {
@@ -691,6 +712,7 @@ fn err(e: ff::Error) -> String {
 
 mod convert;
 mod decoder;
+mod bc7;
 mod hap;
 pub mod hap_encode;
 pub mod sound;

@@ -4,6 +4,11 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.98 (2026-10-21)
+
+- **Hap R:** record and convert to Hap R, Hap's best quality (better colour than Hap Q, and it keeps
+  transparency). Hap R movies from other apps now play too.
+
 ## 0.2.97 (2026-10-21)
 
 - **Mapped controls stand out:** any slider, button or clip cell mapped to MIDI, OSC or a key now has a gold outline
