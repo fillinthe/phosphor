@@ -248,7 +248,8 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
         None => {
             let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
             ui.horizontal(|ui| {
-                crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(220.0));
+                let w = (ui.available_width() - 90.0).clamp(100.0, 260.0);
+                crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(w));
                 if ui.add_enabled(!addr.trim().is_empty(), egui::Button::new(label(icon::LINK, "Follow"))).clicked() {
                     st.following = Some(crate::follow::Link::connect(&addr));
                 }
