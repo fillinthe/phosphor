@@ -242,8 +242,19 @@ fn layout_inputs(inputs: &mut [IsfInput], is_fx: bool) -> Option<String> {
 /// `main` is inlined into the fragment stage (varyings become globals), which
 /// is exact for the usual "precompute texture offsets" vertex shaders.
 pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Result<IsfShader, IsfError> {
-    let (json, body) = header::split_header(fs_source)?;
-    let header = header::parse_header(json)?;
+    // MadMapper Surface FX that move geometry keep their JSON header in the `.vs` (the `.fs` opens with notes).
+    // Both may have one (Transform Matrix): MadMapper reads them together. Neither, on a MadMapper FX or material:
+    // it has no settings.
+    let vs_json = vs_source.and_then(|vs| header::split_header(vs).ok()).map(|(json, _)| json);
+    let (json, body) = match header::split_header(fs_source) {
+        Ok((json, body)) => (vs_json.map_or_else(|| json.to_string(), |extra| header::merge_json(json, extra)), body),
+        Err(e) => match vs_json {
+            Some(json) => (json.to_string(), fs_source),
+            None if glsl::uses_ident(fs_source, "fxColorForPixel") || glsl::uses_ident(fs_source, "materialColorForPixel") => ("{}".to_string(), fs_source),
+            None => return Err(e),
+        },
+    };
+    let header = header::parse_header(&json)?;
     // ISF 1 files declare their inputs again (`uniform float amount;`) and use `vv_` names: Phosphor declares every
     // input itself, so drop those lines, and read the old names as the new ones.
     let input_names: Vec<&str> = header.inputs.iter().map(|i| i.name.as_str()).collect();
@@ -346,6 +357,22 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     // A real vertex stage, when the shader moves the quad (3d Rotate, Vertex Manipulator): the vertex source is
     // converted on its own and the fragment stage reads the varying it writes.
     let mut vertex_glsl: Option<String> = None;
+    // MadMapper Surface FX whose `fxVsFunc` moves the vertices (Extend, Vertex Noise): the same, with MadMapper's
+    // names on Phosphor's quad. Plain boilerplate (`gl_Position = MVP * vec4(mm_Vertex.xy, 0, 1)`) needs nothing.
+    if let Some(vs) = vs_source.filter(|_| dialect == Dialect::MadFx) {
+        let vs = glsl::resolve_directives(&glsl::strip_comments(vs));
+        let moves = vs.lines().map(|l| l.split_whitespace().collect::<String>()).any(|l| l.starts_with("gl_Position=") && l != "gl_Position=mm_ModelViewProjectionMatrix*vec4(mm_Vertex.xy,0,1);");
+        if glsl::uses_ident(&vs, "fxVsFunc") && moves {
+            vertex_glsl = Some(format!("{}
+{vs}
+void phosphor_vs_user() {{
+    isf_vertShaderInit();
+    phosphor_mm_vertex = gl_Position;
+    fxVsFunc();
+}}
+", glsl::MAD_VERTEX_NAMES));
+        }
+    }
     if let Some(vs) = vs_source.filter(|_| dialect == Dialect::Isf) {
         let vs = glsl::resolve_directives(&glsl::strip_comments(vs));
         let (rewritten, names) = glsl::rewrite_io_decls(&vs, &[]);
@@ -423,6 +450,9 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     if let Some(user) = vertex_glsl {
         let vs_entry = format!("phosphor_vs_{entry}");
         let mut vfull = glsl::vertex_prelude(&header, &shader.inputs);
+        if includes.iter().any(|f| f == "MadNoise.glsl") {
+            vfull.push_str(&mad_noise::shim(&user));
+        }
         vfull.push_str(&user);
         vfull.push('\n');
         vfull.push_str(glsl::vertex_epilogue());

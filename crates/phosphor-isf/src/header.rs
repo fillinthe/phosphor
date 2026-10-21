@@ -45,9 +45,14 @@ pub(crate) fn split_header(source: &str) -> Result<(&str, &str), IsfError> {
     let start = source
         .find("/*")
         .ok_or_else(|| IsfError::Header("no /*{ ... }*/ header comment".into()))?;
-    let after = &source[start + 2..];
-    if !after.trim_start().starts_with('{') {
-        return Err(IsfError::Header("first comment is not a JSON header".into()));
+    let mut after = &source[start + 2..];
+    // Notes can come first (MadMapper's templates): the header is the first comment that opens with `{`.
+    while !after.trim_start().starts_with('{') {
+        let next = after.find("*/").and_then(|e| after[e + 2..].find("/*").map(|n| e + 2 + n + 2));
+        match next {
+            Some(n) => after = &after[n..],
+            None => return Err(IsfError::Header("first comment is not a JSON header".into())),
+        }
     }
     let end = after
         .find("*/")
@@ -235,6 +240,25 @@ fn time_base_speed(params: Option<&Value>) -> String {
         Some(Value::Number(n)) => format!("{:?}", n.as_f64().unwrap_or(1.0) as f32),
         _ => "1.0".into(),
     }
+}
+
+/// One header from two (a MadMapper Surface FX may declare inputs in both its `.fs` and its `.vs`): `INPUTS` and
+/// `GENERATORS` of `extra` are added to `json`'s. Either one unreadable: `json` as it was.
+pub(crate) fn merge_json(json: &str, extra: &str) -> String {
+    let (Ok(Value::Object(mut a)), Ok(Value::Object(b))) = (serde_json::from_str::<Value>(&clean_json(json)), serde_json::from_str::<Value>(&clean_json(extra))) else {
+        return json.to_string();
+    };
+    for key in ["INPUTS", "GENERATORS"] {
+        if let Some(Value::Array(more)) = b.get(key) {
+            match a.get_mut(key) {
+                Some(Value::Array(list)) => list.extend(more.iter().cloned()),
+                _ => {
+                    a.insert(key.into(), Value::Array(more.clone()));
+                }
+            }
+        }
+    }
+    Value::Object(a).to_string()
 }
 
 pub(crate) fn parse_header(json: &str) -> Result<Header, IsfError> {

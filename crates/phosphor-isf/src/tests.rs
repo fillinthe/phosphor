@@ -208,3 +208,22 @@ fn isf1_redeclared_uniforms_and_vv_names() {
     assert!(sh.unsupported.is_none(), "{:?}", sh.unsupported);
     crate::validate_wgsl(&sh.wgsl).expect("valid WGSL");
 }
+
+/// MadMapper Surface FX: notes before the header, a header split over `.fs` and `.vs`, and a `fxVsFunc` that moves
+/// the vertices (Extend, Vertex Noise, Transform Matrix's layout).
+#[test]
+fn mad_fx_headers_and_vertex_functions() {
+    let fs = "/* Available uniforms: notes, not JSON */\n/*{ \"INPUTS\": [ {\"NAME\": \"fx_mix\", \"TYPE\": \"float\", \"DEFAULT\": 1.0} ] }*/\nvec4 fxColorForPixel(vec2 uv) { return FX_NORM_PIXEL(uv) * fx_mix * fx_zoom; }\n";
+    let vs = "/*{ \"INPUTS\": [ {\"NAME\": \"fx_zoom\", \"TYPE\": \"float\", \"DEFAULT\": 2.0, \"MIN\": 1.0, \"MAX\": 5.0} ] }*/\nvoid fxVsFunc() {\n    mm_FragNormCoord = (mm_TextureMatrix*vec4(mm_TexCoord0.xy,0,1)).xy;\n    gl_Position = mm_ModelViewProjectionMatrix * vec4(mm_Vertex.xy * fx_zoom, 0, 1);\n}\n";
+    let sh = crate::import("madfx", fs, Some(vs)).expect("converts");
+    assert!(sh.unsupported.is_none(), "{:?}", sh.unsupported);
+    let names: Vec<&str> = sh.inputs.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(names, ["fx_mix", "fx_zoom"], "both headers' inputs");
+    assert!(sh.vertex_entry.is_some(), "the vertices move: a vertex stage");
+    crate::validate_wgsl(&sh.wgsl).expect("valid WGSL");
+    // MadMapper's boilerplate vertex function needs no vertex stage; a header only in the .vs is read from there.
+    let plain_vs = "/*{ \"INPUTS\": [] }*/\nvoid fxVsFunc() {\n    mm_FragNormCoord = (mm_TextureMatrix*vec4(mm_TexCoord0.xy,0,1)).xy;\n    gl_Position = mm_ModelViewProjectionMatrix * vec4(mm_Vertex.xy,0,1);\n}\n";
+    let plain_fs = "/* notes only */\nvec4 fxColorForPixel(vec2 uv) { return FX_NORM_PIXEL(uv); }\n";
+    let sh = crate::import("madfx2", plain_fs, Some(plain_vs)).expect("converts");
+    assert!(sh.unsupported.is_none() && sh.vertex_entry.is_none(), "{:?}", sh.unsupported);
+}
