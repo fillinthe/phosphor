@@ -112,6 +112,38 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// Mute all, master volume and levelling for everything Phosphor plays (Audio panel).
+/// Which output movie sound plays on (the list is asked for when the menu opens, then kept).
+#[cfg(not(target_arch = "wasm32"))]
+fn sound_device(ui: &mut egui::Ui) {
+    use crate::media::video::sound;
+    let key = egui::Id::new("sound_out_devices");
+    ui.horizontal(|ui| {
+        ui.label("Plays on");
+        let current = sound::output_device();
+        let r = ComboBox::from_id_salt("sound_out_device").width(220.0).selected_text(current.clone().unwrap_or_else(|| "The Mac's default output".into())).show_ui(ui, |ui| {
+            let devices: Vec<String> = ui.ctx().data_mut(|d| d.get_temp(key)).unwrap_or_else(|| {
+                let list = sound::output_devices();
+                ui.ctx().data_mut(|d| d.insert_temp(key, list.clone()));
+                list
+            });
+            if ui.selectable_label(current.is_none(), "The Mac's default output").clicked() {
+                sound::set_output_device(None);
+            }
+            for name in devices {
+                if ui.selectable_label(current.as_deref() == Some(name.as_str()), &name).clicked() {
+                    sound::set_output_device(Some(name));
+                }
+            }
+        });
+        // Asked again next time it opens (headphones plugged in…).
+        if r.response.clicked() {
+            ui.ctx().data_mut(|d| d.remove_temp::<Vec<String>>(key));
+        }
+    })
+    .response
+    .on_hover_text("Where movie sound plays: headphones, an audio interface, a loopback for the DJ mixer… Streams get it from Stream & Record › Movie sound.");
+}
+
 fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     use phosphor_engine::AppControl;
     ui.horizontal(|ui| {
@@ -122,6 +154,8 @@ fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     if comp.sound_muted {
         hint(ui, "All sound is off. Streams and recordings started now have no audio; one already running keeps its audio device until it restarts.");
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    sound_device(ui);
     let r = crate::ui::toggle(ui, &mut comp.sound_auto_level, "Even out volume levels").on_hover_text("Each movie is brought towards the same loudness as it plays (up to 4× up or down; silence isn't boosted)");
     map_menu(ui, &r, ControlTarget::App(AppControl::AutoLevel));
     if comp.sound_auto_level {
