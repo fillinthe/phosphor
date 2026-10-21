@@ -6,9 +6,6 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 - [~] **Windows installer** (#7) — built and pushed; waiting for the Windows build to install / run / uninstall it.: a Setup.exe built on GitHub with every push; CI installs it silently on the
       Windows machine and checks the installed Phosphor starts. Zip stays for people who prefer it.
-- [ ] **One Inspector: effects** (#8): click an effect in a chain → its settings in the Inspector.
-- [ ] **One Inspector: mapping slices** (#8): the selected slice's settings in the Inspector too.
-- [ ] **One Inspector: Control Surface widgets** (#8): the selected widget's settings in the Inspector.
 - [ ] **Shader packs** (#5): download the free packs on the list (MIT / CC0 only, licence checked per file),
       convert them, ship the ones that work.
 - [ ] **Older macOS 11–13** (#9): build for macOS 11, check what breaks (FFmpeg build target, APIs used).
@@ -23,3 +20,8 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
 
 ## Done
+
+- [x] **One Inspector** (#8): the Inspector shows whatever you selected last: a layer (with its clip, and its
+      effects as before), a mapping slice or mask, or a Control Surface widget. A Layer / Slice / Widget switch on
+      top when more than one is selected. Checked: a click on a slice in the Studio turned the Inspector to that
+      slice's settings (screenshot). Widgets use the same path; not seen on screen yet.

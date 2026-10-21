@@ -53,6 +53,7 @@ mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
 mod scanner;
 mod slice_tree;
+mod inspect;
 mod studio;
 mod surface;
 #[cfg(not(target_arch = "wasm32"))]
@@ -89,6 +90,7 @@ pub(crate) use preset_list::*;
 pub(crate) use preview::*;
 pub(crate) use stream::*;
 pub(crate) use stage::*;
+pub(crate) use inspect::*;
 pub(crate) use studio::*;
 pub(crate) use surface::*;
 

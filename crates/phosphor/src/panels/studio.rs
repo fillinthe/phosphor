@@ -697,7 +697,8 @@ fn input_view(
 }
 
 /// The selected slice or mask, or the output's own settings.
-fn properties(ui: &mut egui::Ui, st: &mut State) {
+/// The selected slice, mask or output of the Studio's output (Studio properties pane and the Inspector).
+pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
     let oid = st.mapping_output;
     let clipboard_len = st.fx_clipboard.len();
     let mut fx_action = None;

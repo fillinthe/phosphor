@@ -3,6 +3,23 @@
 use super::*;
 
 pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
+    // A slice or a Control Surface widget selected last: its settings here (the Studio's / the surface's editors).
+    match super::focus(ui, st) {
+        super::Focus::Slice => {
+            super::properties(ui, st);
+            return;
+        }
+        super::Focus::Widget => {
+            if let Some(id) = super::selected_widget(ui.ctx()) {
+                let targets = crate::control::all_targets(&st.comp);
+                egui::ScrollArea::vertical().id_salt("inspector_widget").auto_shrink(false).show(ui, |ui| {
+                    super::widget_editor(ui, st, id, &targets);
+                });
+            }
+            return;
+        }
+        super::Focus::Layer => {}
+    }
     let aspect = st.aspect();
     let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id) || st.comp.group(*id).is_some() || st.comp.comp(*id).is_some()) else {
         hint(ui, "Select a layer (or MASTER) to edit its source and effects.");
