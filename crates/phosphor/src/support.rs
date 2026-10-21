@@ -28,13 +28,18 @@ pub struct BugReport {
     pub detached: bool,
     pub text: String,
     pub include_diagnostics: bool,
+    /// Send a report by itself after a crash (`crash_report`; off unless chosen).
+    pub send_crashes: bool,
+    /// What happened to the last automatic report, for the banner.
+    pub sent: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
     /// macOS version, read once.
     os: Option<String>,
 }
 
 impl BugReport {
-    pub fn new() -> Self {
-        Self { include_diagnostics: true, ..Default::default() }
+    /// `send_crashes`: the saved "Send crash reports by themselves" choice.
+    pub fn new(send_crashes: bool) -> Self {
+        Self { include_diagnostics: true, send_crashes, ..Default::default() }
     }
 }
 
@@ -119,6 +124,15 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
         ui.label("What happened, and what you were doing? One report per problem is perfect.");
         ui.add(egui::TextEdit::multiline(&mut st.bug.text).desired_rows(6).desired_width(f32::INFINITY).hint_text("e.g. Dragging a movie onto the Clips grid shows a black cell. Expected: the first frame."));
         crate::ui::toggle(ui, &mut st.bug.include_diagnostics, "Include diagnostics (version, macOS, project shape, end of crash.log)");
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let ready = crate::crash_report::endpoint().is_some();
+            ui.add_enabled_ui(ready, |ui| {
+                crate::ui::toggle(ui, &mut st.bug.send_crashes, "Send crash reports by themselves")
+                    .on_hover_text("After an unexpected quit, the diagnostics above (no project content, no file names) go privately to the Phosphor team")
+                    .on_disabled_hover_text("Not available yet: the crash server isn't set up");
+            });
+        }
         if st.bug.include_diagnostics {
             let diag = diagnostics(st);
             egui::CollapsingHeader::new("What gets included").id_salt("bug_diag").show(ui, |ui| {

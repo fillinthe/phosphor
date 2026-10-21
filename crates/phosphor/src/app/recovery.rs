@@ -32,6 +32,15 @@ impl PhosphorApp {
             let _ = st.audio.open(s.audio_device.as_deref());
         }
         self.recovered = Some(s.streaming);
+        // Opted in: the crash report goes by itself (once: this runs once per crash).
+        #[cfg(not(target_arch = "wasm32"))]
+        if st.bug.send_crashes {
+            let report = crate::support::diagnostics(st);
+            let sent = st.bug.sent.clone();
+            crate::crash_report::send(report, move |r| {
+                *sent.lock().unwrap() = Some(r);
+            });
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -72,6 +81,15 @@ impl PhosphorApp {
                             self.state.notice = Some(e);
                         }
                         self.recovered = None;
+                    }
+                    match self.state.bug.sent.lock().unwrap().as_ref() {
+                        Some(Ok(())) => {
+                            crate::ui::hint(ui, "a crash report was sent");
+                        }
+                        Some(Err(e)) => {
+                            crate::ui::hint(ui, format!("the crash report wasn't sent ({e})"));
+                        }
+                        None => {}
                     }
                     // Opt-in crash report: the bug window, filled in, with the end of crash.log in its diagnostics.
                     if ui.button(format!("{} Report it", icon::BUG)).on_hover_text("Opens Report a Bug with what happened filled in; nothing is sent until you send it").clicked() {

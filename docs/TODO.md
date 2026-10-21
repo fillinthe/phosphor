@@ -8,14 +8,20 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       Windows machine and checks the installed Phosphor starts. Zip stays for people who prefer it.
 - [ ] **Phosphor Player for Raspberry Pi** (#9): a Linux ARM build that follows a Mac (Follow another Phosphor) on
       a Pi, built on GitHub.
-- [ ] **Crash reports sent automatically** (#5): needs a private endpoint on a server you run;
-      I'll build the app side and say what the server needs.
+- [~] **Crash reports sent automatically** (#5): the app side is done (below); **needs you:** a private endpoint
+      on your server. Spec: accept `POST` with JSON `{"version", "os", "arch", "report"}` (all strings), answer
+      2xx, keep it private. Then put its address in `ENDPOINT` (crates/phosphor/src/crash_report.rs), or tell me.
 - [ ] **Render thread** (#6): rendering on its own thread, so the UI never slows the outputs (and costs less when
       idle).
 - [ ] **Virtual camera** (#2): Phosphor as a webcam in Zoom / OBS / Teams. The camera extension can be built here,
       but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
 
 ## Done
+
+- [x] **Crash reports, app side** (#5): Report a Bug › "Send crash reports by themselves" (off unless chosen;
+      greyed until the server exists). After a crash, the same diagnostics the bug window shows (version,
+      system, project shape as counts, end of crash.log; no project content, no file names) are posted once,
+      and the recovery banner says whether it went. Checked: a local server received the JSON POST (test).
 
 - [x] **Older macOS** (#9): Phosphor now runs from **macOS 13 Ventura** (was 14), the same floor as VDMX. One
       setting (`scripts/min-macos`) for FFmpeg, Syphon and the app; FFmpeg and Syphon rebuilt for it; a test
