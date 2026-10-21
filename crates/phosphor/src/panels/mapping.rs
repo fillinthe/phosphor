@@ -20,6 +20,18 @@ pub(crate) fn point_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, fram
     r
 }
 
+/// A bezier handle's end: a small hollow dot (points are filled), dragged like a point.
+fn bezier_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::Rect, color: Color32, delta: &mut [f32; 2]) -> egui::Response {
+    let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(14.0, 14.0)), id, Sense::drag());
+    if r.dragged() {
+        let d = r.drag_delta();
+        *delta = [d.x / frame.width(), d.y / frame.height()];
+    }
+    let c = if r.hovered() || r.dragged() { Color32::WHITE } else { color };
+    ui.painter().circle(at, 4.0, Color32::BLACK, Stroke::new(1.5, c));
+    r
+}
+
 pub(crate) const MASK_COLOR: Color32 = Color32::from_rgb(255, 130, 80);
 
 /// Draws every surface (corners or mesh grid) and mask over `frame` (the rect the output occupies
@@ -179,7 +191,8 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     if let Some(d) = group_move {
         super::mapping_points::move_slices(mapping, &many, d);
     }
-    // Masks: drag points, + between points adds one, right-click a point to delete it or make it a sharp corner.
+    // Masks: drag points, + between points adds one, right-click a point to delete it, make it a sharp corner or give
+    // it bezier handles.
     use phosphor_engine::mapping::{mask_to_output, output_to_mask};
     let surfaces = &mapping.surfaces;
     for m in mapping.masks.iter_mut() {
@@ -189,7 +202,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         // Attached masks live in their slice's square: draw and drag them where they land on the output.
         let out: Vec<[f32; 2]> = m.points.iter().map(|p| mask_to_output(surfaces, m, *p)).collect();
         let pts: Vec<egui::Pos2> = out.iter().map(|p| to_screen(*p)).collect();
-        let placed = phosphor_engine::mapping::Mask { points: out.clone(), attached: None, ..m.clone() };
+        let placed = m.placed(surfaces);
         let outline: Vec<egui::Pos2> = placed.outline().iter().map(|p| to_screen(*p)).collect();
         if outline.len() >= 2 {
             ui.painter().add(egui::Shape::closed_line(outline, Stroke::new(if is_selected { 2.0 } else { 1.0 }, color)));
@@ -224,14 +237,34 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             if m.smooth && m.is_corner(i) {
                 ui.painter().rect_stroke(egui::Rect::from_center_size(pts[i], egui::vec2(11.0, 11.0)), 0.0, Stroke::new(1.0, color), egui::StrokeKind::Middle);
             }
+            // Bezier handles (selected mask only): drag either end; the other mirrors it.
+            if is_selected && let Some(h) = placed.handles.get(i).copied().flatten() {
+                for sign in [1.0f32, -1.0] {
+                    let tip = [out[i][0] + h[0] * sign, out[i][1] + h[1] * sign];
+                    ui.painter().line_segment([pts[i], to_screen(tip)], Stroke::new(1.0, color.gamma_multiply(0.7)));
+                    let mut d = [0.0, 0.0];
+                    let hr = bezier_handle(ui, id.with(("handle", i, sign as i8)), to_screen(tip), frame, color, &mut d);
+                    if d != [0.0, 0.0] {
+                        let local = output_to_mask(surfaces, m, [tip[0] + d[0], tip[1] + d[1]]);
+                        let p = m.points[i];
+                        m.set_handle(i, Some([(local[0] - p[0]) * sign, (local[1] - p[1]) * sign]));
+                        touched = true;
+                    }
+                    hr.on_hover_text("Drag to bend the outline here (the other side mirrors it)");
+                }
+            }
             let smooth = m.smooth;
             let mut corner = m.is_corner(i);
+            let mut bezier = m.handle(i).is_some();
             r.right_menu(|ui| {
+                if crate::ui::toggle(ui, &mut bezier, "Bezier handles").on_hover_text("Two handles on this point to bend the outline by hand").changed() {
+                    ui.close();
+                }
                 if smooth && crate::ui::toggle(ui, &mut corner, "Sharp corner").on_hover_text("The smooth outline makes a point here instead of curving through it").changed() {
                     ui.close();
                 }
                 if !smooth {
-                    hint(ui, "Turn on Smooth to curve the outline; points can then be sharp corners.");
+                    hint(ui, "Turn on Smooth to curve the whole outline; points can then be sharp corners.");
                 }
                 if count > 3 && ui.button(label(icon::TRASH, "Delete point")).clicked() {
                     delete = Some(i);
@@ -240,6 +273,12 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             });
             if corner != m.is_corner(i) {
                 m.set_corner(i, corner);
+                touched = true;
+            }
+            if bezier != m.handle(i).is_some() {
+                let h = bezier.then(|| m.auto_handle(i));
+                m.set_handle(i, h);
+                *selected = Some(m.id);
                 touched = true;
             }
             // A small + halfway to the next point adds a point there.
@@ -796,7 +835,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
 pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping::Mask) {
     ui.horizontal(|ui| {
         toggle(ui, &mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
-        toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point to make it a sharp corner)");
+        toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point for a sharp corner or bezier handles)");
     });
     ui.horizontal(|ui| {
         Level::range(&mut m.feather, 0.0, 0.2, "Soft edge").default(0.0).tip("Fade the mask's edge (0 = hard); the fade is centred on the outline").show(ui);

@@ -219,6 +219,21 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "bezier" {
+                // A selected circle mask on the first output with bezier handles on two points (one pulled out).
+                self.state.comp.ensure_outputs();
+                let id = self.state.comp.new_id();
+                if let Some(o) = self.state.comp.outputs.first_mut() {
+                    let m = o.mapping.add_mask_shape(id, phosphor_engine::mapping::MaskShape::Rectangle, 16.0 / 9.0);
+                    m.set_handle(0, Some([0.0, -0.12]));
+                    let h = m.auto_handle(2);
+                    m.set_handle(2, Some(h));
+                    println!("QUICK bezier: outline {} points", m.outline().len());
+                    o.mapping.enabled = true;
+                }
+                self.state.selected_surface = Some(id);
+                continue;
+            }
             if name == "slicegroups" {
                 // Four slices on the first output: two in "Wall", one of them also in "Window" inside it.
                 self.state.comp.ensure_outputs();

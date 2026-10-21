@@ -78,7 +78,16 @@ impl Engine {
         }
         // Attached masks are placed on their slice first, so the hash follows the slice too.
         let placed = mapping.placed_masks();
-        let hash = hash_points(placed.iter().flat_map(|m| m.points.iter()), &placed.iter().flat_map(|m| [m.points.len() as u32 * 2 + m.invert as u32, m.feather.to_bits()]).collect::<Vec<_>>());
+        // Everything that changes the outline: points, handles, smooth, corners, invert, feather.
+        let handles: Vec<[f32; 2]> = placed.iter().flat_map(|m| m.handles.iter().map(|h| h.unwrap_or([f32::NAN; 2]))).collect();
+        let flags: Vec<u32> = placed
+            .iter()
+            .flat_map(|m| {
+                let corners = (0..m.points.len()).filter(|i| m.is_corner(*i)).fold(0u32, |a, i| a.rotate_left(5) ^ (i as u32 + 1));
+                [m.points.len() as u32 * 4 + m.invert as u32 + m.smooth as u32 * 2, m.feather.to_bits(), corners, m.handles.len() as u32]
+            })
+            .collect();
+        let hash = hash_points(placed.iter().flat_map(|m| m.points.iter()).chain(handles.iter()), &flags);
         let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || placed.iter().flat_map(mapping::Mask::triangles).collect()) else { return };
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [size.0 as f32, size.1 as f32];
