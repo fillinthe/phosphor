@@ -4,8 +4,6 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 ## Quickest first
 
-- [~] **Windows installer** (#7) — built and pushed; waiting for the Windows build to install / run / uninstall it.: a Setup.exe built on GitHub with every push; CI installs it silently on the
-      Windows machine and checks the installed Phosphor starts. Zip stays for people who prefer it.
 - [~] **Crash reports sent automatically** (#5): the app side is done (below); **needs you:** a private endpoint
       on your server. Spec: accept `POST` with JSON `{"version", "os", "arch", "report"}` (all strings), answer
       2xx, keep it private. Then put its address in `ENDPOINT` (crates/phosphor/src/crash_report.rs), or tell me.
@@ -15,6 +13,13 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
 
 ## Done
+
+- [x] **Windows installer** (#7): `Phosphor-windows-setup.exe` (Inno Setup), built on GitHub with every push and
+      attached to releases next to the zip. Installs for the current user (no admin prompt), Start menu shortcut,
+      optional desktop shortcut, `.phosphor` projects open in Phosphor (and Phosphor now opens a project given
+      on its command line), uninstaller; the built-in updater keeps working. Checked on GitHub's Windows machine:
+      silent install, files and file association present, the installed copy ran the test project, uninstall
+      removed it. **Not tried on a real PC by hand.**
 
 - [x] **Phosphor for Raspberry Pi / Linux ARM** (#9): built on GitHub's ARM Linux machines with every push
       (`.github/workflows/linux.yml`), packaged as `Phosphor-linux-arm64.tar.gz` (program, FFmpeg libraries,
