@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.92 (2026-10-21)
+
+- **FFGL mixer plugins (Mac).** Mixer plugins (the kind Resolume uses to blend layers) now work: Inspector ›
+  **Mixer plugin** picks one for a layer, and it blends that layer onto the layers below instead of its blend
+  mode. The layer's opacity goes to the mixer's Opacity setting, like in Resolume, and its other settings are
+  right there.
+
 ## 0.2.91 (2026-10-21)
 
 - **Sharp sliders.** Every slider now has square corners, and the last few plain sliders (crossfader, interface

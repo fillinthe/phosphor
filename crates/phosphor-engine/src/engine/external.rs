@@ -3,7 +3,8 @@
 //! (`take_external_jobs`: key, size, parameter values) and, for an effect, copies the effect's input into the
 //! key's `send` texture; the result is the key's `recv` texture, which the app filled after the last frame (one
 //! frame late). Until the app has given textures for a key, an effect passes its picture through and a source
-//! shows nothing. Costs nothing when no external effect is in use.
+//! shows nothing. A mixer (two pictures: the stack below and a layer) blends a layer in its own way
+//! (`external_mix`); until its first result it blends normally. Costs nothing when nothing external is in use.
 
 use super::*;
 
@@ -20,12 +21,13 @@ pub struct ExternalJob {
     pub size: (u32, u32),
     /// Parameter values this frame (after modulation), in the shader description's order.
     pub params: Vec<f32>,
-    /// Reads a picture (an effect; sources don't).
-    pub has_input: bool,
+    /// Pictures it reads: 0 (a source), 1 (an effect) or 2 (a mixer: the stack below, then the layer).
+    pub inputs: u32,
 }
 
 struct Pair {
-    send: Option<wgpu::TextureView>,
+    /// One per input picture.
+    send: Vec<wgpu::TextureView>,
     /// None until the app's first result is ready (the picture passes through meanwhile).
     recv: Option<wgpu::TextureView>,
     size: (u32, u32),
@@ -47,17 +49,17 @@ pub(crate) struct Externals {
 }
 
 impl Engine {
-    /// The textures for `key` (from the app; they share memory with what it draws in): `send` gets the effect's
-    /// input every frame (needs RENDER_ATTACHMENT), `recv` is shown as its result (None = not ready yet: the
-    /// picture passes through).
-    pub fn set_external_textures(&mut self, key: u64, send: Option<&wgpu::Texture>, recv: Option<&wgpu::Texture>) {
-        let Some(size) = send.or(recv).map(|t| (t.width(), t.height())) else {
+    /// The textures for `key` (from the app; they share memory with what it draws in): `send` gets the input
+    /// pictures every frame (needs RENDER_ATTACHMENT), `recv` is shown as its result (None = not ready yet: the
+    /// picture passes through, a mixer blends normally).
+    pub fn set_external_textures(&mut self, key: u64, send: &[&wgpu::Texture], recv: Option<&wgpu::Texture>) {
+        let Some(size) = send.first().copied().or(recv).map(|t| (t.width(), t.height())) else {
             self.externals.pairs.remove(&key);
             return;
         };
         let used = self.frame_index;
         let view = |t: &wgpu::Texture| t.create_view(&wgpu::TextureViewDescriptor::default());
-        self.externals.pairs.insert(key, Pair { send: send.map(view), recv: recv.map(view), size, used });
+        self.externals.pairs.insert(key, Pair { send: send.iter().map(|t| view(t)).collect(), recv: recv.map(view), size, used });
     }
 
     /// The GPU has finished every frame submitted so far (non-blocking check): another API can now read what the
@@ -95,11 +97,11 @@ impl Engine {
     /// returns the plugin's last result (None = nothing yet: pass the picture through).
     pub(super) fn external_effect(&mut self, res_id: u64, fx_id: u64, desc: &'static shaders::ShaderDesc, params: Vec<f32>, input: &wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>) -> Option<wgpu::TextureView> {
         let key = effect_key(res_id, fx_id);
-        self.externals.jobs.push(ExternalJob { key, id: desc.id, size, params, has_input: true });
+        self.externals.jobs.push(ExternalJob { key, id: desc.id, size, params, inputs: 1 });
         let frame = self.frame_index;
         let pair = self.externals.pairs.get_mut(&key).filter(|p| p.size == size)?;
         pair.used = frame;
-        if let Some(send) = pair.send.clone() {
+        if let Some(send) = pair.send.first().cloned() {
             let src = Frame::Rgb { view: input.clone(), w: size.0, h: size.1 };
             push_fit_copy(send, &src, size, crate::FitMode::Stretch, size, passes);
         }
@@ -108,10 +110,50 @@ impl Engine {
 
     /// An external source on layer `key`: queues the job and returns its last picture.
     pub(super) fn external_source(&mut self, key: u64, desc: &'static shaders::ShaderDesc, params: Vec<f32>, size: (u32, u32)) -> Option<Frame> {
-        self.externals.jobs.push(ExternalJob { key, id: desc.id, size, params, has_input: false });
+        self.externals.jobs.push(ExternalJob { key, id: desc.id, size, params, inputs: 0 });
         let frame = self.frame_index;
         let pair = self.externals.pairs.get_mut(&key).filter(|p| p.size == size)?;
         pair.used = frame;
         Some(Frame::Rgb { view: pair.recv.clone()?, w: size.0, h: size.1 })
+    }
+}
+
+/// Key salt for a layer's mixer instance (one per layer).
+const MIXER_SALT: u64 = 0x6d69_7865_7200_0000;
+
+impl Engine {
+    /// A layer blended by a mixer plugin (inside `mix_stack`): queues the job, copies the stack so far (`below`,
+    /// None = nothing yet) and the layer's picture (fitted) to its inputs, and when the plugin's last result is
+    /// there, puts it on the stack at `opacity` (`current` moves on). Returns false when there's no result yet
+    /// (blend the layer normally this frame).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn external_mix(&mut self, layer: u64, desc: &'static shaders::ShaderDesc, params: Vec<f32>, frame: &Frame, fit: FitMode, opacity: f32, base: usize, current: &mut Option<usize>, canvas: (u32, u32), passes: &mut Vec<Pass>) -> bool {
+        let key = effect_key(layer, MIXER_SALT);
+        // Like Resolume: a mixer with an "Opacity" setting gets the layer's opacity there (and isn't faded again).
+        let mut params = params;
+        let own = desc.params.iter().position(|p| p.name.eq_ignore_ascii_case("opacity"));
+        if let Some(i) = own
+            && let Some(v) = params.get_mut(i)
+        {
+            *v = opacity;
+        }
+        let opacity = if own.is_some() { 1.0 } else { opacity };
+        self.externals.jobs.push(ExternalJob { key, id: desc.id, size: canvas, params, inputs: 2 });
+        let frame_index = self.frame_index;
+        let Some(pair) = self.externals.pairs.get_mut(&key).filter(|p| p.size == canvas && p.send.len() == 2) else { return false };
+        pair.used = frame_index;
+        let (send, recv) = (pair.send.clone(), pair.recv.clone());
+        let below = current.map_or_else(|| self.gpu.blank.clone(), |c| self.accum[base + c].as_ref().unwrap().view.clone());
+        push_fit_copy(send[0].clone(), &Frame::Rgb { view: below.clone(), w: canvas.0, h: canvas.1 }, canvas, FitMode::Stretch, canvas, passes);
+        push_fit_copy(send[1].clone(), frame, canvas, fit, canvas, passes);
+        let Some(result) = recv else { return false };
+        // The plugin's picture over the stack at the layer's opacity (fs_mix: tex1 = what's below).
+        let next = current.map_or(0, |c| 1 - c);
+        let mut u = Uniforms::with_params(&[]);
+        u.resolution = [canvas.0 as f32, canvas.1 as f32];
+        u.opacity = opacity;
+        passes.push(Pass { entry: "fs_mix", target: self.accum[base + next].as_ref().unwrap().view.clone(), tex0: result, tex1: Some(below), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+        *current = Some(next);
+        true
     }
 }

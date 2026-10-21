@@ -107,15 +107,18 @@ fn probe(path: &Path) -> Entry {
             entry.kind = info.kind;
             entry.params = p.params();
             entry.error = match info.kind {
-                plugin::MIXER => Some("mixes two pictures (not supported yet)".into()),
                 plugin::EFFECT if info.inputs > 1 => Some("needs two pictures (not supported yet)".into()),
-                plugin::EFFECT | plugin::SOURCE => None,
+                plugin::EFFECT | plugin::SOURCE | plugin::MIXER => None,
                 k => Some(format!("unknown kind {k}")),
             };
         }
         Err(e) => entry.error = Some(e),
     }
-    let prefix = if entry.kind == plugin::SOURCE { shaders::FFGL_GENERATOR } else { shaders::FFGL_EFFECT };
+    let prefix = match entry.kind {
+        plugin::SOURCE => shaders::FFGL_GENERATOR,
+        plugin::MIXER => shaders::FFGL_MIXER,
+        _ => shaders::FFGL_EFFECT,
+    };
     entry.id = format!("{prefix}{}", slug(path));
     entry
 }
@@ -210,7 +213,11 @@ fn register(e: &Entry) {
     let id = leak(e.id.clone());
     let desc: &'static ShaderDesc = Box::leak(Box::new(ShaderDesc { id, name: leak(e.name.clone()), entry: leak(format!("ext:{id}")), params: Box::leak(params.into_boxed_slice()) }));
     shaders::register_custom(desc);
-    let kind = if e.kind == plugin::SOURCE { "source" } else { "effect" };
+    let kind = match e.kind {
+        plugin::SOURCE => "source",
+        plugin::MIXER => "mixer (a layer's blend: Inspector › Mixer plugin)",
+        _ => "effect",
+    };
     shaders::set_custom_info(id, "FFGL", leak(format!("FFGL {kind}: {}", e.path.file_name().unwrap_or_default().to_string_lossy())));
 }
 
@@ -226,13 +233,14 @@ struct Instance {
     id: &'static str,
     ptr: *mut std::ffi::c_void,
     size: (u32, u32),
-    send: Option<gl::Shared>,
+    /// One per input picture (none for a source; the stack below and the layer for a mixer).
+    send: Vec<gl::Shared>,
     /// Two results: the engine shows `recv[front]` while the plugin draws the other.
     recv: [gl::Shared; 2],
     front: usize,
     /// The draw into the back result, until the GPU has finished it.
     drawing: Option<gl::Fence>,
-    input: gl::Canvas,
+    input: Vec<gl::Canvas>,
     output: gl::Canvas,
     used: u64,
 }
@@ -382,9 +390,11 @@ impl Ffgl {
             };
             let device = engine.device().clone();
             let made = (|| {
-                let send = if job.has_input { Some(gl::Shared::new(glc, &device, w, h)?) } else { None };
+                let n = job.inputs.min(2) as usize;
+                let send = (0..n).map(|_| gl::Shared::new(glc, &device, w, h)).collect::<Option<Vec<_>>>()?;
+                let input = (0..n).map(|_| gl::Canvas::new(w, h)).collect::<Option<Vec<_>>>()?;
                 let recv = [gl::Shared::new(glc, &device, w, h)?, gl::Shared::new(glc, &device, w, h)?];
-                Some((send, recv, gl::Canvas::new(w, h)?, gl::Canvas::new(w, h)?))
+                Some((send, recv, input, gl::Canvas::new(w, h)?))
             })();
             let Some((send, recv, input, output)) = made else {
                 if let Some(l) = self.loaded.get(job.id) {
@@ -394,7 +404,7 @@ impl Ffgl {
                 return;
             };
             // Input only until the first result is ready (the picture passes through, no blank frame).
-            engine.set_external_textures(job.key, send.as_ref().map(|s| &s.texture), None);
+            engine.set_external_textures(job.key, &send.iter().map(|s| &s.texture).collect::<Vec<_>>(), None);
             self.instances.insert(job.key, Instance { id: job.id, ptr, size: (w, h), send, recv, front: 1, drawing: None, input, output, used: self.frame });
         }
         let (Some(inst), Some(l)) = (self.instances.get_mut(&job.key), self.loaded.get(job.id)) else { return };
@@ -406,7 +416,7 @@ impl Ffgl {
             }
             inst.drawing = None;
             inst.front = 1 - inst.front;
-            engine.set_external_textures(job.key, inst.send.as_ref().map(|s| &s.texture), Some(&inst.recv[inst.front].texture));
+            engine.set_external_textures(job.key, &inst.send.iter().map(|s| &s.texture).collect::<Vec<_>>(), Some(&inst.recv[inst.front].texture));
         }
         for ((index, options), v) in l.params.iter().zip(&job.params) {
             let value = if options.is_empty() { *v } else { options.get(v.round().max(0.0) as usize).copied().unwrap_or(0.0) };
@@ -415,14 +425,16 @@ impl Ffgl {
         l.plugin.set_time(inst.ptr, time);
         l.plugin.set_beat(inst.ptr, bpm, bar_phase);
         // Input: the shared picture, turned the right way up for GL into a plain texture.
-        if let Some(send) = &inst.send {
-            copier.read(send, &inst.input);
-            // The engine writes this input again next frame: let GL's copy of it finish first (a tiny copy).
+        for (send, input) in inst.send.iter().zip(&inst.input) {
+            copier.read(send, input);
+        }
+        if !inst.send.is_empty() {
+            // The engine writes these inputs again next frame: let GL's copies finish first (tiny copies).
             gl::Fence::new().wait(std::time::Duration::from_millis(2));
         }
         inst.output.clear(w, h);
-        let tex = plugin::GlTexture { width: w, height: h, hardware_width: w, hardware_height: h, handle: inst.input.tex };
-        let inputs: Vec<&plugin::GlTexture> = if inst.send.is_some() { vec![&tex] } else { Vec::new() };
+        let texs: Vec<plugin::GlTexture> = inst.input.iter().map(|c| plugin::GlTexture { width: w, height: h, hardware_width: w, hardware_height: h, handle: c.tex }).collect();
+        let inputs: Vec<&plugin::GlTexture> = texs.iter().collect();
         l.plugin.process(inst.ptr, &inputs, inst.output.fbo);
         copier.write(&inst.output, &inst.recv[1 - inst.front]);
         inst.drawing = Some(gl::Fence::new());
@@ -443,6 +455,13 @@ pub fn bench_apply(st: &mut crate::app::State) -> Option<String> {
     let want = std::env::var("PHOSPHOR_FFGL_PICK").ok();
     let e = st.ffgl.entries.iter().find(|e| e.error.is_none() && want.as_ref().is_none_or(|w| e.id.contains(w.as_str())))?.clone();
     let layer = st.comp.layers.last().map(|l| l.id)?;
+    // A mixer blends the top layer onto the ones below.
+    if let Some(d) = shaders::mixer(&e.id) {
+        let l = st.comp.layer_mut(layer)?;
+        l.mixer = Some(d.id.to_string());
+        l.mixer_values = d.defaults();
+        return Some(format!("{} blends layer {layer}", e.name));
+    }
     let id: &'static str = shaders::effect(&e.id).or_else(|| shaders::generator(&e.id)).map(|d| d.id)?;
     crate::explorer::apply_palette(st, crate::explorer::PaletteDrag { effect: shaders::effect(id).map(|d| d.id), generator: shaders::generator(id).map(|d| d.id) }, Some(layer));
     // PHOSPHOR_FFGL_VALUES="1,0.5": the effect's settings (checks they reach the plugin).
