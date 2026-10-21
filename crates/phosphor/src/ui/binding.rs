@@ -99,7 +99,7 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
 pub(crate) fn range_editor(ui: &mut egui::Ui, range: &mut ValueRange) {
     guarded!(ui, range.min, egui::DragValue::new(&mut range.min).range(0.0..=1.0).speed(0.005).fixed_decimals(2).prefix("from "));
     guarded!(ui, range.max, egui::DragValue::new(&mut range.max).range(0.0..=1.0).speed(0.005).fixed_decimals(2).prefix("to "));
-    ui.toggle_value(&mut range.invert, icon::ARROWS_DOWN_UP).on_hover_text("Invert (up = down)");
+    crate::ui::icon_toggle(ui, &mut range.invert, icon::ARROWS_DOWN_UP).on_hover_text("Invert (up = down)");
 }
 
 /// The targets one control drives, each with its own range: pick, adjust, remove, add more.

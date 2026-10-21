@@ -7,8 +7,31 @@
 //! - `segmented`: pick one of a few (Forward / Reverse / Ping-pong, Now / Beat / Bar, filters): joined segments,
 //!   the picked one raised.
 //! - plain `ui.button` = a command (Import…, Rename, Add folder…); `danger_button` = Delete and the like.
+//! - `icon_toggle`: an on/off state in a tight row (solo S, "3 fx" bypass, invert arrow): a small square, filled when
+//!   on. `eye_toggle`: show / hide (an eye, crossed out in orange when hidden).
 
 use super::*;
+
+/// A compact on/off button for tight rows (an icon or a letter): filled when on. Marks the response changed.
+pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let mut r = ui.add(egui::Button::new(text).selected(*on).min_size(egui::vec2(20.0, 18.0)));
+    if r.clicked() {
+        *on = !*on;
+        r.mark_changed();
+    }
+    r
+}
+
+/// Show / hide: an eye, crossed out in orange when hidden. Marks the response changed.
+pub(crate) fn eye_toggle(ui: &mut egui::Ui, shown: &mut bool) -> egui::Response {
+    let (glyph, color, tip) = if *shown { (icon::EYE, ui.visuals().text_color(), "Showing: click to hide") } else { (icon::EYE_SLASH, crate::theme::WARN, "Hidden: click to show") };
+    let mut r = ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false).min_size(egui::vec2(22.0, 18.0))).on_hover_text(tip);
+    if r.clicked() {
+        *shown = !*shown;
+        r.mark_changed();
+    }
+    r
+}
 
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
 pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: Option<f32>) -> egui::Response {

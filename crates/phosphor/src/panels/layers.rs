@@ -183,15 +183,8 @@ pub(crate) fn master_card(
                     select = true;
                 }
                 hint(ui, "Effects here run over all layers");
-                let fx = effects.iter().filter(|e| e.enabled).count();
-                if fx > 0 {
-                    let mut active = !*bypass;
-                    let color = if active { accent() } else { Color32::GRAY };
-                    let r = ui.toggle_value(&mut active, RichText::new(format!("{fx} fx")).small().color(color)).on_hover_text("Click to bypass the master effects · right-click to map");
-                    map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MasterFxBypass));
-                    if r.changed() {
-                        *bypass = !active;
-                    }
+                if let Some(r) = super::groups::fx_badge(ui, effects, bypass) {
+                    map_menu(ui, &r.on_hover_text("Click to bypass the master effects · right-click to map"), ControlTarget::App(phosphor_engine::AppControl::MasterFxBypass));
                 }
             });
         });
@@ -240,9 +233,7 @@ pub(crate) fn layer_card(
                     let on = toggle(ui, &mut layer.enabled, "ON").on_hover_text("Layer on/off (Space) · right-click to Learn");
                     mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
-                    let solo_color = if layer.solo { WARN } else { Color32::GRAY };
-                    ui.toggle_value(&mut layer.solo, RichText::new("S").small().strong().color(solo_color))
-                        .on_hover_text("Solo: only soloed layers reach the mix");
+                    solo_button(ui, &mut layer.solo);
                     let name = RichText::new(&layer.name).strong().size(12.5);
                     let name = if muted { name.color(Color32::GRAY) } else { name };
                     // The name shrinks (full name on hover) so it never runs under the buttons on the right.
@@ -571,11 +562,13 @@ pub(crate) fn opacity_row(ui: &mut egui::Ui, layer: &mut LayerState) {
 
 /// The eye next to a layer's opacity: show / hide the layer in one click (Learn on right-click).
 pub(crate) fn show_button(ui: &mut egui::Ui, layer: &mut LayerState) {
-    let (glyph, color, tip) = if layer.enabled { (icon::EYE, ui.visuals().text_color(), "Showing: click to hide this layer") } else { (icon::EYE_SLASH, WARN, "Hidden: click to show this layer") };
-    let r = ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false).min_size(egui::vec2(22.0, 18.0))).on_hover_text(tip);
-    if r.clicked() {
-        layer.enabled = !layer.enabled;
-    }
+    let r = crate::ui::eye_toggle(ui, &mut layer.enabled);
     mapped_badge(ui, &r, &ControlTarget::LayerEnabled(layer.id));
     r.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
+}
+
+/// Solo: only soloed layers reach the mix (an orange S).
+pub(crate) fn solo_button(ui: &mut egui::Ui, solo: &mut bool) -> egui::Response {
+    let color = if *solo { WARN } else { Color32::GRAY };
+    crate::ui::icon_toggle(ui, solo, RichText::new("S").small().strong().color(color)).on_hover_text("Solo: only soloed layers reach the mix")
 }
