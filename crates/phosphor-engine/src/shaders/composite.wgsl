@@ -16,6 +16,18 @@ fn sample_source(st: vec2f) -> vec4f {
         );
         return vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)), 1.0);
     }
+    if (u.yuv == 5u) {
+        // A, Y, Cb, Cr (VideoToolbox 'y416', ProRes 4444): BT.709 TV range, full-range alpha, straight like RGBA.
+        let v = textureSampleLevel(tex0, samp, st, 0.0);
+        let y = (v.g - 16.0 / 255.0) * (255.0 / 219.0);
+        let c = (vec2f(v.b, v.a) - vec2f(128.0 / 255.0)) * (255.0 / 224.0);
+        let rgb = vec3f(
+            y + 1.5748 * c.y,
+            y - 0.1873 * c.x - 0.4681 * c.y,
+            y + 1.8556 * c.x,
+        );
+        return vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)), v.r);
+    }
     if (u.yuv == 2u || u.yuv == 4u) {
         // Hap Q: scaled YCoCg in DXT5 (r = Co, g = Cg, b = scale, a = Y), per the Hap reference shader.
         // Hap Q Alpha (4): the alpha plane is a BC4 texture on tex2.

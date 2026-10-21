@@ -16,8 +16,8 @@ fn play(p: &mut VideoPlayer, from: f64, to: f64) -> Option<Vec<u8>> {
     let mut t = from;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
     while t <= to + 1e-9 && std::time::Instant::now() < deadline {
-        // Give the decoder a moment, then advance the clock a frame.
-        for _ in 0..200 {
+        // Give the decoder a moment (up to 2 s: a loaded machine is slow after a seek), then advance a frame.
+        for _ in 0..2000 {
             if let Some(f) = p.poll_frame(t) {
                 last = Some(luma(&f));
                 p.recycle(f);

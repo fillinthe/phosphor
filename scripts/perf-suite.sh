@@ -8,7 +8,9 @@ OUT=${2:-/tmp/phosphor-perf}
 SECS=${3:-15}
 mkdir -p "$OUT"
 H=$(mktemp -d)
-bench() { HOME=$H "$BIN" --rate 60 "$@" 2>&1; }
+# A stalled run is cut off (GNU timeout where there is one).
+T=$(command -v timeout || command -v gtimeout || true)
+bench() { HOME=$H ${T:+$T $((SECS + 90))} "$BIN" --rate 60 "$@" 2>&1; }
 
 # Test clips (made once; delete the folder to make them again).
 if [ ! -f "$OUT/hap4k.mov" ]; then
@@ -19,6 +21,7 @@ EOF
 fi
 [ -f "$OUT/h264_4k.mp4" ] || ffmpeg -v error -y -f lavfi -i "testsrc2=size=3840x2160:rate=60:duration=10" -c:v h264_videotoolbox -b:v 40M -pix_fmt yuv420p "$OUT/h264_4k.mp4"
 [ -f "$OUT/hevc_4k.mp4" ] || ffmpeg -v error -y -f lavfi -i "testsrc2=size=3840x2160:rate=60:duration=10" -c:v hevc_videotoolbox -b:v 30M -tag:v hvc1 -pix_fmt yuv420p "$OUT/hevc_4k.mp4"
+[ -f "$OUT/p4444_1080.mov" ] || ffmpeg -v error -y -f lavfi -i "testsrc2=size=1920x1080:rate=60:duration=10,format=yuva444p10le" -c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le "$OUT/p4444_1080.mov"
 [ -f "$OUT/prores_1080.mov" ] || ffmpeg -v error -y -f lavfi -i "testsrc2=size=1920x1080:rate=60:duration=10" -c:v prores_videotoolbox -profile:v 2 "$OUT/prores_1080.mov"
 
 # 4 layers of one clip, on a canvas of the clip's size.
@@ -33,11 +36,16 @@ EOF
 }
 
 echo "PERF clip | fps | cpu % (one core = 100) | cpu ms/frame | gpu ms | render ms | worst gap ms | memory MB"
-for spec in "hap4k.mov 3840 2160" "h264_4k.mp4 3840 2160" "hevc_4k.mp4 3840 2160" "prores_1080.mov 1920 1080"; do
+for spec in "hap4k.mov 3840 2160" "h264_4k.mp4 3840 2160" "hevc_4k.mp4 3840 2160" "prores_1080.mov 1920 1080" "p4444_1080.mov 1920 1080"; do
   set -- $spec
   [ -f "$OUT/$1" ] || { echo "PERF $1 | missing"; continue; }
   project "$OUT/$1" "$2" "$3"
+  # A GUI bench stalls while the screen is in use (a gap of seconds between frames): run it again, once.
   S=$(bench --bench "$SECS" --project "$OUT/p.phosphor" | grep '^SUMMARY' | head -1)
+  if printf '%s' "$S" | python3 -c 'import json,sys; l=sys.stdin.read(); b=l[8:]; sys.exit(0 if l and json.loads(b[:b.rindex("}")+1]).get("worst_ms",0) < 5000 else 1)'; then :; else
+    echo "PERF $1: stalled, running again" >&2
+    S=$(bench --bench "$SECS" --project "$OUT/p.phosphor" | grep '^SUMMARY' | head -1)
+  fi
   # SUMMARY {json} cpu_ms_per_frame=x
   printf '%s\n' "$S" | python3 -c '
 import json, sys

@@ -166,16 +166,19 @@ fn show_surface(engine: &mut Engine, held: &mut Held, id: u64, outgoing: bool, p
         let zc = held.entry((id, outgoing)).or_default();
         let key = pb.surface_id();
         let cached = zc.planes.iter().find(|(k, l, _)| *k == key && (l.width(), l.height()) == pb.size()).map(|(_, l, c)| (l.clone(), c.clone()));
+        // An AYUV frame is one texture (kept in both slots of the cache entry).
         let planes = cached.or_else(|| {
-            let (l, c) = pb.planes(engine.device())?;
+            let (l, c) = if pb.is_ayuv() { pb.ayuv_texture(engine.device()).map(|t| (t.clone(), t))? } else { pb.planes(engine.device())? };
             if zc.planes.len() >= 12 {
                 zc.planes.remove(0);
             }
             zc.planes.push((key, l.clone(), c.clone()));
             Some((l, c))
         });
-        if let Some((luma, chroma)) = planes {
-            engine.set_layer_nv12_textures(id, outgoing, luma, chroma, pb.full_range());
+        match planes {
+            Some((tex, _)) if pb.is_ayuv() => engine.set_layer_ayuv_texture(id, outgoing, tex),
+            Some((luma, chroma)) => engine.set_layer_nv12_textures(id, outgoing, luma, chroma, pb.full_range()),
+            None => {}
         }
         zc.recent.push_back(pb);
         while zc.recent.len() > 3 {

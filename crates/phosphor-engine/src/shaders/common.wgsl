@@ -6,7 +6,7 @@ struct U {
     opacity: f32,
     uv_xform: vec4f,      // source uv = uv * xy + zw
     mode: u32,            // blend mode
-    yuv: u32,             // 1 = tex0 is luma (R8), tex2 is chroma (RG8), BT.709 video range
+    yuv: u32,             // how tex0 (and tex2) hold the picture: see Frame::bind (1/3 NV12, 2/4 Hap Q, 5 AYUV)
     _pad0: u32,
     _pad1: u32,
     _pad2: u32,

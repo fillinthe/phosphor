@@ -806,7 +806,8 @@ fn open_decoder(
     // a hwaccel, would give no frames: libdav1d decodes AV1 there).
     let try_hw = try_hw
         && cfg!(target_os = "macos")
-        && !has_alpha
+        // Alpha survives VideoToolbox for ProRes 4444 (only); other codecs with alpha decode in software.
+        && (!has_alpha || (id == Id::PRORES && std::env::var_os("PHOSPHOR_SW_PRORES_ALPHA").is_none()))
         && matches!(id, Id::H264 | Id::HEVC | Id::PRORES | Id::VP9 | Id::AV1);
 
     let codec = match id {
