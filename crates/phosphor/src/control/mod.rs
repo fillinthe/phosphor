@@ -464,6 +464,16 @@ impl ControlHub {
 }
 
 impl ControlHub {
+    /// Glides `target` from `from` to `to` over `secs` (eased; replaces a glide already moving it).
+    pub fn glide_to(&mut self, target: ControlTarget, from: f32, to: f32, now: f32, secs: f32) {
+        self.glides.insert(format!("{target:?}"), Glide { target, from, to, start: now, secs: secs.max(0.0) });
+    }
+
+    /// Where `target` is gliding to, while it is.
+    pub fn glide_target(&self, target: &ControlTarget) -> Option<f32> {
+        self.glides.get(&format!("{target:?}")).map(|g| g.to)
+    }
+
     /// Moves smoothed mappings along (ease out), and drops the ones that arrived.
     fn glide(&mut self, comp: &mut Composition, now: f32) {
         if self.glides.is_empty() {

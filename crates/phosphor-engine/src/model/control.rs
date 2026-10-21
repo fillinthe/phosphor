@@ -117,10 +117,12 @@ pub enum AppControl {
     ProjectorsOn,
     ProjectorsOff,
     ProjectorsShutter,
+    /// The crossfader glides to the other side (A ↔ B) over the auto-fade time.
+    AutoFade,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 28] = [
+    pub const ALL: [AppControl; 29] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -149,6 +151,7 @@ impl AppControl {
         AppControl::ProjectorsOn,
         AppControl::ProjectorsOff,
         AppControl::ProjectorsShutter,
+        AppControl::AutoFade,
     ];
 
     pub fn name(self) -> &'static str {
@@ -181,6 +184,7 @@ impl AppControl {
             AppControl::ProjectorsOn => "Projectors: switch on (PJLink)",
             AppControl::ProjectorsOff => "Projectors: switch off (PJLink)",
             AppControl::ProjectorsShutter => "Projectors: shutter closed/open (PJLink)",
+            AppControl::AutoFade => "Crossfader: auto-fade to the other side",
         }
     }
 
@@ -215,6 +219,7 @@ impl AppControl {
             AppControl::ProjectorsOn => "projectors/on",
             AppControl::ProjectorsOff => "projectors/off",
             AppControl::ProjectorsShutter => "projectors/shutter",
+            AppControl::AutoFade => "crossfader/auto",
         }
     }
 

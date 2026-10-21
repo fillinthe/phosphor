@@ -465,6 +465,7 @@ impl State {
             A::Surprise if press => self.quick(Quick::Surprise, now),
             A::Shuffle if press => self.quick(Quick::Shuffle, now),
             A::CueBack if press => self.cue_back(now),
+            A::AutoFade if press => self.auto_fade(now),
             #[cfg(not(target_arch = "wasm32"))]
             A::ProjectorsOn if press => self.projectors.ask_all(&self.comp.outputs, crate::pjlink::Ask::PowerOn),
             #[cfg(not(target_arch = "wasm32"))]
@@ -483,6 +484,19 @@ impl State {
             }
             _ => {}
         }
+    }
+
+    /// The crossfader glides to the side it's further from (A ↔ B) over the auto-fade time.
+    pub fn auto_fade(&mut self, now: f64) {
+        let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Crossfader);
+        let from = self.comp.crossfader;
+        // Pressed on the way: turn back. Otherwise go to the far side.
+        let to = match self.control.glide_target(&target) {
+            Some(going) => 1.0 - going.round(),
+            None if from < 0.5 => 1.0,
+            None => 0.0,
+        };
+        self.control.glide_to(target, from, to, now as f32, self.comp.auto_fade_secs);
     }
 
     /// A clip button was let go: flash clips go back, piano clips stop (right away, never quantized).
