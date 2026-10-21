@@ -126,6 +126,8 @@ pub struct ControlHub {
     pickups: HashMap<String, Pickup>,
     /// Smoothed mappings on their way to a new value.
     glides: HashMap<String, Glide>,
+    /// Moves waiting for their Delay: (when, target, value, smoothing seconds).
+    delayed: Vec<(f32, ControlTarget, f32, f32)>,
     fresh: HashMap<ControlSource, f32>,
     /// Last value sent to (or received from) each controller input: only changes go out, nothing echoes back.
     sent: HashMap<ControlSource, f32>,
@@ -267,6 +269,7 @@ impl ControlHub {
             monitor_paused: false,
             pickups: HashMap::new(),
             glides: HashMap::new(),
+            delayed: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             dmx_listener: None,
             fresh: HashMap::new(),
@@ -446,6 +449,7 @@ impl ControlHub {
     /// until the controller moves again.
     pub fn apply(&mut self, comp: &mut Composition, now: f32) {
         self.glide(comp, now);
+        self.land_delayed(comp, now);
         if self.fresh.is_empty() {
             return;
         }
@@ -464,6 +468,10 @@ impl ControlHub {
             };
             // (A smoothed mapping glides instead of jumping, so it doesn't need soft takeover.)
             if self.soft_takeover && v != FLIP && map.smoothing() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+                continue;
+            }
+            if map.delay() > 0.0 {
+                self.delayed.push((now + map.delay(), map.target.clone(), v, map.smoothing()));
                 continue;
             }
             let secs = map.smoothing();
@@ -497,6 +505,23 @@ impl ControlHub {
 }
 
 impl ControlHub {
+    /// Delayed moves whose time has come land now (gliding when their mapping is smoothed).
+    fn land_delayed(&mut self, comp: &mut Composition, now: f32) {
+        if self.delayed.is_empty() {
+            return;
+        }
+        let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut self.delayed).into_iter().partition(|d| d.0 <= now);
+        self.delayed = later;
+        for (_, target, v, secs) in due {
+            if secs > 0.0 && v != FLIP {
+                let from = get_target(comp, &target).unwrap_or(v);
+                self.glide_to(target, from, v, now, secs);
+            } else {
+                set_target(comp, &target, v, &mut self.triggers);
+            }
+        }
+    }
+
     /// Glides `target` from `from` to `to` over `secs` (eased; replaces a glide already moving it).
     pub fn glide_to(&mut self, target: ControlTarget, from: f32, to: f32, now: f32, secs: f32) {
         self.glides.insert(format!("{target:?}"), Glide { target, from, to, start: now, secs: secs.max(0.0) });

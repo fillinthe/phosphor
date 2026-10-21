@@ -391,3 +391,21 @@ fn a_glide_moves_a_target_over_time() {
     assert_eq!(comp.crossfader, 1.0);
     assert_eq!(hub.glide_target(&xf), None, "arrived");
 }
+
+#[test]
+fn delayed_moves_land_later() {
+    let mut hub = ControlHub::new();
+    let mut comp = Composition::starter();
+    comp.master_fade = 0.0;
+    let source = ControlSource::MidiCc { channel: 0, cc: 10 };
+    let mut map = phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade);
+    map.fx.push(phosphor_engine::ValueFx::Delay(0.5));
+    comp.control_maps.push(map);
+    hub.inject(&mut comp, Incoming { source, value: 0.8 });
+    hub.apply(&mut comp, 10.0);
+    assert_eq!(comp.master_fade, 0.0, "not yet");
+    hub.apply(&mut comp, 10.4);
+    assert_eq!(comp.master_fade, 0.0);
+    hub.apply(&mut comp, 10.51);
+    assert!((comp.master_fade - 0.8).abs() < 1e-6, "half a second later");
+}

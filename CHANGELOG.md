@@ -24,6 +24,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **DMX in from a lighting desk** (as in VDMX): Controllers › DMX in. Phosphor listens for Art-Net and sACN, and
   any channel can drive any control like a MIDI fader: right-click a slider › Learn, then move the desk's fader.
   Phosphor's own LED output is never mistaken for a desk.
+- **Delay on controller mappings:** Controllers › a mapping › On the way in › + Delay: each move of that knob or
+  fader lands a set time later (with Smooth, it glides there).
 - **Bezier handles on mask points** (as in MadMapper): right-click a mask point › Bezier handles, then drag either
   handle to bend the outline there (the other side mirrors it).
 - Masks now redraw on the output straight away when you switch Smooth or a sharp corner.

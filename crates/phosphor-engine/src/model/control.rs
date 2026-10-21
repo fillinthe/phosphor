@@ -307,6 +307,11 @@ impl ControlMap {
     pub fn smoothing(&self) -> f32 {
         self.fx.iter().map(|f| if let ValueFx::Smooth(s) = f { *s } else { 0.0 }).fold(0.0, f32::max)
     }
+
+    /// Seconds each move waits before it lands (0 = straight away).
+    pub fn delay(&self) -> f32 {
+        self.fx.iter().map(|f| if let ValueFx::Delay(s) = f { *s } else { 0.0 }).sum()
+    }
 }
 
 /// One step a controller's value goes through (0..1 in, 0..1 out).
@@ -320,6 +325,8 @@ pub enum ValueFx {
     Curve(f32),
     /// A formula of `$VAL` (0..1), e.g. `1 - $VAL`, `$VAL * $VAL`, `sin($VAL * 3.14)`; the result is kept in 0..1.
     Formula(String),
+    /// Each move lands this many seconds later (an echo of the hand).
+    Delay(f32),
 }
 
 impl ValueFx {
@@ -329,13 +336,14 @@ impl ValueFx {
             ValueFx::Steps(_) => "Steps",
             ValueFx::Curve(_) => "Curve",
             ValueFx::Formula(_) => "Formula",
+            ValueFx::Delay(_) => "Delay",
         }
     }
 
-    /// The instant ones; Smooth passes through here (it works over time).
+    /// The instant ones; Smooth and Delay pass through here (they work over time).
     pub fn apply(&self, v: f32) -> f32 {
         match self {
-            ValueFx::Smooth(_) => v,
+            ValueFx::Smooth(_) | ValueFx::Delay(_) => v,
             ValueFx::Steps(n) => {
                 let n = (*n).max(2) as f32 - 1.0;
                 (v * n).round() / n
