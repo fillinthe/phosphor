@@ -37,8 +37,8 @@ fn on_toggle(ui: &mut egui::Ui, enabled: &mut bool, target: ControlTarget) {
 pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
     let height = (ui.available_height() - 210.0).clamp(80.0, 600.0);
+    crossfader(ui, st);
     let State { comp, selected, layer_textures, texture, .. } = st;
-    crossfader(ui, comp);
     let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
     let tex = |id: u64| layer_textures.get(&id).map(|(t, _)| *t);
     let phosphor_engine::Composition { layers, groups, master_fade, master_fade_mod, .. } = comp;
@@ -95,8 +95,14 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     });
 }
 
-/// The A ↔ B crossfader across the top of the Mixer; double-click centres it.
-fn crossfader(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
+/// The A ↔ B crossfader across the top of the Mixer (double-click centres it), and Auto-fade: one press glides it to
+/// the other side over the time beside it.
+fn crossfader(ui: &mut egui::Ui, st: &mut State) {
+    let now = ui.input(|i| i.time);
+    let auto_target = ControlTarget::App(phosphor_engine::AppControl::AutoFade);
+    let gliding = st.control.glide_target(&ControlTarget::App(phosphor_engine::AppControl::Crossfader)).is_some();
+    let mut fade = false;
+    let comp = &mut st.comp;
     let target = ControlTarget::App(phosphor_engine::AppControl::Crossfader);
     let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
     ui.horizontal(|ui| {
@@ -115,5 +121,14 @@ fn crossfader(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
         mapped_badge(ui, &r, &target);
         map_menu(ui, &r, target);
         ui.label(RichText::new("B").strong());
+        let towards = if comp.crossfader < 0.5 { "B" } else { "A" };
+        let auto = action_button(ui, Act::Go, label(if gliding { icon::HOURGLASS } else { icon::ARROWS_LEFT_RIGHT }, "Auto"))
+            .on_hover_text(format!("Glide to {towards} over the time beside it (press again on the way to turn back)"));
+        fade = auto.clicked();
+        map_menu(ui, &auto, auto_target);
+        guarded!(ui, comp.auto_fade_secs, egui::DragValue::new(&mut comp.auto_fade_secs).range(0.0..=60.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Auto-fade time");
     });
+    if fade {
+        st.auto_fade(now);
+    }
 }

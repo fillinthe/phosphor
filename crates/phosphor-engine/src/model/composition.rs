@@ -81,6 +81,8 @@ pub struct Composition {
     pub collection_folders: Vec<CollectionFolder>,
     /// Mixer crossfader: 0 = only A layers, 0.5 = both, 1 = only B (layers without a side ignore it).
     pub crossfader: f32,
+    /// Auto-fade: seconds the crossfader takes to glide across.
+    pub auto_fade_secs: f32,
     pub bpm: f32,
     /// Send outputs to their saved screens when this project opens (venue setups).
     pub outputs_on_open: bool,
@@ -104,7 +106,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 

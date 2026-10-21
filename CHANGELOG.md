@@ -19,6 +19,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   open the Shutter, or Check how it is (on, warming up, cooling down, its name). Outputs › Projectors has All on /
   All off / Shutter for every projector at once, and each of those can be mapped to a pad or key. Works with most
   Epson, Panasonic, NEC, Sony, Optoma, Christie and Barco projectors.
+- **Crossfader Auto-fade** (as in VDMX): Mixer › Auto glides the crossfader to the other side over the time beside
+  it (2 s to start with); press again on the way to turn back. Auto can be mapped to a pad or key.
 - **Bezier handles on mask points** (as in MadMapper): right-click a mask point › Bezier handles, then drag either
   handle to bend the outline there (the other side mirrors it).
 - Masks now redraw on the output straight away when you switch Smooth or a sharp corner.

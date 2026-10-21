@@ -376,3 +376,18 @@ fn a_slice_group_is_one_control() {
     assert!(!comp.slice(a).unwrap().enabled && !comp.slice(b).unwrap().enabled, "flips from the first one, all follow");
     assert!(all_targets(&comp).iter().any(|(t, _)| *t == ControlTarget::SliceOpacity(g)));
 }
+
+#[test]
+fn a_glide_moves_a_target_over_time() {
+    let mut comp = Composition::default();
+    let mut hub = ControlHub::new();
+    let xf = ControlTarget::App(AppControl::Crossfader);
+    comp.crossfader = 0.0;
+    hub.glide_to(xf.clone(), 0.0, 1.0, 10.0, 2.0);
+    assert_eq!(hub.glide_target(&xf), Some(1.0));
+    hub.apply(&mut comp, 11.0);
+    assert!(comp.crossfader > 0.5 && comp.crossfader < 1.0, "half-way in time, eased past half: {}", comp.crossfader);
+    hub.apply(&mut comp, 12.5);
+    assert_eq!(comp.crossfader, 1.0);
+    assert_eq!(hub.glide_target(&xf), None, "arrived");
+}
