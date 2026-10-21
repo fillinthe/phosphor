@@ -828,6 +828,10 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         ui.horizontal(|ui| {
             Level::range(&mut s.input[3], 0.05, 1.0, "Height").default(1.0).show(ui);
         });
+        ui.horizontal(|ui| {
+            toggle(ui, &mut s.flip[0], label(icon::ARROWS_LEFT_RIGHT, "Flip")).on_hover_text("Mirror the picture left to right (rear projection)");
+            toggle(ui, &mut s.flip[1], label(icon::ARROWS_DOWN_UP, "Flip")).on_hover_text("Turn the picture upside down (both flips = a ceiling-hung projector)");
+        });
     });
 }
 

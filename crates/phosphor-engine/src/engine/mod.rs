@@ -620,7 +620,7 @@ impl Engine {
                     let mut u = Uniforms::with_params(&[]);
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
-                    u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
+                    u.uv_xform = s.input_xform();
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
@@ -638,7 +638,7 @@ impl Engine {
                     let mut u = Uniforms::with_params(&[]);
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
-                    u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
+                    u.uv_xform = s.input_xform();
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
@@ -655,7 +655,7 @@ impl Engine {
                     let mut u = Uniforms::with_params(&[]);
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
-                    u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
+                    u.uv_xform = s.input_xform();
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, s.shape as u32 as f32];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
@@ -670,7 +670,7 @@ impl Engine {
                 let mut u = Uniforms::with_params(&[]);
                 u.resolution = [ow as f32, oh as f32];
                 u.opacity = s.opacity * fade;
-                u.uv_xform = [s.input[2], s.input[3], s.input[0], s.input[1]];
+                u.uv_xform = s.input_xform();
                 u.mode = o.mapping.test_pattern as u32;
                 u.p[0] = [c[0][0], c[0][1], c[1][0], c[1][1]];
                 u.p[1] = [c[2][0], c[2][1], c[3][0], c[3][1]];
