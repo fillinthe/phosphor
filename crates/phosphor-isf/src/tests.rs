@@ -179,10 +179,15 @@ void main() { gl_FragColor = IMG_NORM_PIXEL(inputImage, off); }\n";
     assert!(s.unsupported.is_none(), "{:?}", s.unsupported);
     validate_wgsl(&s.wgsl).unwrap();
     let v = s.vertex_entry.as_deref().expect("vertex entry");
-    assert!(s.wgsl.contains(&format!("@vertex\nfn {v}(@builtin(vertex_index) vi: u32) -> VOut")), "{}", s.wgsl);
-    // With its own varyings it isn't supported yet.
-    let own = "varying vec2 off;\nvoid main() { isf_vertShaderInit(); off = isf_FragNormCoord; gl_Position = gl_Position * 0.5; }";
-    assert!(import("vs3", fs, Some(own)).unwrap().unsupported.is_some());
+    assert!(s.wgsl.contains(&format!("@vertex\nfn {v}(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VOut")), "{}", s.wgsl);
+    // Its own varyings reach the fragment stage by location; copies drawn by `RENDER_SETTINGS.INSTANCE_COUNT`.
+    let own = "varying vec2 off;\nvoid main() { isf_vertShaderInit(); off = vec2(float(gl_InstanceID), 0.0); gl_Position = gl_Position * 0.5; }";
+    let fs_off = "/*{\"INPUTS\":[{\"NAME\":\"count\",\"TYPE\":\"float\",\"DEFAULT\":4}],\"RENDER_SETTINGS\":{\"INSTANCE_COUNT\":\"count\"}}*/\nvarying vec2 off;\nvoid main() { gl_FragColor = vec4(off, 0.0, 1.0); }";
+    let s = import("vs3", fs_off, Some(own)).unwrap();
+    assert!(s.unsupported.is_none(), "{:?}", s.unsupported);
+    validate_wgsl(&s.wgsl).unwrap();
+    assert!(s.wgsl.contains("@location(1) v1: vec2<f32>") && s.wgsl.contains("in.v1"), "{}", s.wgsl);
+    assert_eq!(s.instances, Some(crate::Instances::Param(0)));
 }
 
 

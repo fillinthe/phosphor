@@ -140,6 +140,9 @@ pub struct IsfShader {
     pub wgsl: String,
     /// A real vertex stage (ISF vertex shaders that move the quad): the engine draws six vertices through it.
     pub vertex_entry: Option<String>,
+    /// Instanced: the quad drawn this many times (MadMapper `RENDER_SETTINGS.INSTANCE_COUNT`), each copy knowing
+    /// its number (`gl_InstanceID`), blended over each other.
+    pub instances: Option<Instances>,
     /// Name of the fragment entry function.
     pub entry: String,
     /// Reason the shader cannot run in Phosphor yet (inputs are still reported).
@@ -237,6 +240,14 @@ fn layout_inputs(inputs: &mut [IsfInput], is_fx: bool) -> Option<String> {
     None
 }
 
+/// How many copies an instanced shader draws.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Instances {
+    Fixed(u32),
+    /// A setting's value: its float offset in the parameters (like `IsfInput::offset`).
+    Param(usize),
+}
+
 /// Imports an ISF shader. `name_slug` names the WGSL entry (`isf_<slug>`) and
 /// prefixes every helper. `vs_source` is the optional companion `.vs`; its
 /// `main` is inlined into the fragment stage (varyings become globals), which
@@ -303,6 +314,7 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
         images: Vec::new(),
         audio_slots: Vec::new(),
         vertex_entry: None,
+        instances: None,
         wgsl: String::new(),
         entry: entry.clone(),
         unsupported: None,
@@ -359,8 +371,16 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     let mut vertex_glsl: Option<String> = None;
     // MadMapper Surface FX whose `fxVsFunc` moves the vertices (Extend, Vertex Noise): the same, with MadMapper's
     // names on Phosphor's quad. Plain boilerplate (`gl_Position = MVP * vec4(mm_Vertex.xy, 0, 1)`) needs nothing.
+    // Values the vertex stage hands the fragment stage (`out float a;` / `in float a;`), linked by location.
+    let mut linked_fs: Option<String> = None;
+    let mut shared: Vec<(String, String)> = Vec::new();
     if let Some(vs) = vs_source.filter(|_| dialect == Dialect::MadFx) {
-        let vs = glsl::resolve_directives(&glsl::strip_comments(vs));
+        let mut vs = glsl::resolve_directives(&glsl::strip_comments(vs));
+        if let Some((v, f, list)) = glsl::link_varyings(&vs, &body) {
+            vs = v;
+            linked_fs = Some(f);
+            shared = list;
+        }
         let moves = vs.lines().map(|l| l.split_whitespace().collect::<String>()).any(|l| l.starts_with("gl_Position=") && l != "gl_Position=mm_ModelViewProjectionMatrix*vec4(mm_Vertex.xy,0,1);");
         if glsl::uses_ident(&vs, "fxVsFunc") && moves {
             vertex_glsl = Some(format!("{}
@@ -377,9 +397,20 @@ void phosphor_vs_user() {{
         let vs = glsl::resolve_directives(&glsl::strip_comments(vs));
         let (rewritten, names) = glsl::rewrite_io_decls(&vs, &[]);
         if glsl::uses_ident(&vs, "gl_Position") {
-            if !names.is_empty() {
-                unsupported.get_or_insert("vertex shader with its own varyings or attributes".into());
+            // Its own outputs are handed on by location; its own attribute inputs can't be (Phosphor draws a plain quad).
+            let linked = glsl::link_varyings(&vs, &body);
+            let attributes = names.iter().any(|n| !linked.as_ref().is_some_and(|(_, _, list)| list.iter().any(|(_, l)| l == n)));
+            if attributes {
+                unsupported.get_or_insert("vertex shader with its own attributes".into());
             } else {
+                let vs = match linked {
+                    Some((v, f, list)) => {
+                        linked_fs = Some(f);
+                        shared = list;
+                        v
+                    }
+                    None => vs.clone(),
+                };
                 match glsl::rename_main(&vs, "phosphor_vs_user") {
                     Some(user) => vertex_glsl = Some(user),
                     None => {
@@ -402,6 +433,11 @@ void phosphor_vs_user() {{
         return Ok(shader);
     }
 
+    // With values from its own vertex stage, the fragment source with their `in` declarations linked.
+    let body = linked_fs.unwrap_or(body);
+    shader.instances = header.instance_count.as_deref().and_then(|c| {
+        c.trim().parse::<f32>().ok().map(|n| Instances::Fixed(n.max(1.0) as u32)).or_else(|| shader.inputs.iter().find(|i| i.name == c.trim()).and_then(|i| i.offset).map(Instances::Param))
+    });
     let (body, global_inits) = glsl::hoist_global_inits(&body);
     // Curves are functions now: `IMG_NORM_PIXEL(curve, uv)` → `phosphor_curve_<curve>(uv)`.
     let mut body = body;
@@ -450,6 +486,9 @@ void phosphor_vs_user() {{
     if let Some(user) = vertex_glsl {
         let vs_entry = format!("phosphor_vs_{entry}");
         let mut vfull = glsl::vertex_prelude(&header, &shader.inputs);
+        if includes.iter().any(|f| f == "MadCommon.glsl") {
+            vfull.push_str(&glsl::mad_common_shim(&user));
+        }
         if includes.iter().any(|f| f == "MadNoise.glsl") {
             vfull.push_str(&mad_noise::shim(&user));
         }
@@ -458,7 +497,8 @@ void phosphor_vs_user() {{
         vfull.push_str(glsl::vertex_epilogue());
         let vnaga = glsl_to_wgsl(&vfull, naga::ShaderStage::Vertex)?;
         shader.wgsl.push('\n');
-        shader.wgsl.push_str(&wgsl::finalize_vertex(&vnaga, &vs_entry)?);
+        let out_struct = if shared.is_empty() { "VOut".to_string() } else { wgsl::varying_struct(&entry) };
+        shader.wgsl.push_str(&wgsl::finalize_vertex(&vnaga, &vs_entry, &out_struct)?);
         shader.vertex_entry = Some(vs_entry);
     }
     Ok(shader)

@@ -232,6 +232,53 @@ pub(crate) fn rewrite_io_decls(src: &str, drop: &[String]) -> (String, Vec<Strin
     (out, names)
 }
 
+/// Values a real vertex stage hands the fragment stage (`out float a;` in the vertex shader, `in float a;` in the
+/// fragment shader; `varying` in both for ISF 1): each gets a location from 1 up (0 is the picture coordinate), and
+/// both declarations are rewritten as `layout(location=N) out/in TYPE NAME;`. Returns the two sources and the
+/// (type, name) list; None when the vertex shader hands nothing on.
+pub(crate) fn link_varyings(vs: &str, fs: &str) -> Option<(String, String, Vec<(String, String)>)> {
+    // `[flat] (out|varying) TYPE NAME;` at the top level, as (type, name).
+    fn decl(line: &str, words: &[&str]) -> Option<(String, String)> {
+        let mut t = line.trim();
+        for q in ["flat ", "smooth ", "noperspective ", "highp ", "mediump ", "lowp "] {
+            t = t.strip_prefix(q).unwrap_or(t).trim_start();
+        }
+        let rest = words.iter().find_map(|w| t.strip_prefix(w).filter(|r| r.starts_with(char::is_whitespace)))?;
+        let body = rest.trim().strip_suffix(';')?.trim();
+        let mut parts = body.split_whitespace();
+        let (ty, name) = (parts.next()?, parts.next()?);
+        (parts.next().is_none() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')).then(|| (ty.to_string(), name.to_string()))
+    }
+    let mut list: Vec<(String, String)> = Vec::new();
+    let mut vs_out = String::with_capacity(vs.len());
+    for line in vs.lines() {
+        match decl(line, &["out", "varying"]) {
+            Some((ty, name)) if name != "phosphor_uv" => {
+                list.push((ty.clone(), name.clone()));
+                vs_out.push_str(&format!("layout(location={}) out {ty} {name};\n", list.len()));
+            }
+            _ => {
+                vs_out.push_str(line);
+                vs_out.push('\n');
+            }
+        }
+    }
+    if list.is_empty() {
+        return None;
+    }
+    let mut fs_out = String::with_capacity(fs.len());
+    for line in fs.lines() {
+        match decl(line, &["in", "varying"]).and_then(|(ty, name)| list.iter().position(|(_, n)| *n == name).map(|k| (ty, name, k + 1))) {
+            Some((ty, name, k)) => fs_out.push_str(&format!("layout(location={k}) in {ty} {name};\n")),
+            None => {
+                fs_out.push_str(line);
+                fs_out.push('\n');
+            }
+        }
+    }
+    Some((vs_out, fs_out, list))
+}
+
 /// Replaces `void main(void)` with `void <name>()`. Returns `None` if there is no main.
 pub(crate) fn rename_main(src: &str, name: &str) -> Option<String> {
     let b = src.as_bytes();
@@ -753,6 +800,7 @@ vec2 vv_FragNormCoord;\n\
 #define FRAMEINDEX (int(phosphor_u.p[15].y))\n\
 #define PASSINDEX (int(phosphor_u.p[15].x))\n\
 #define DATE vec4(2026.0, 1.0, 1.0, phosphor_u.time)\n\
+#define gl_InstanceID gl_InstanceIndex\n\
 void isf_vertShaderInit() {\n\
     vec2 corners[6] = vec2[6](vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0));\n\
     vec2 c = corners[gl_VertexIndex];\n\

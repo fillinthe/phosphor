@@ -6,8 +6,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 - [ ] **Stereo audio pictures**: shaders' audio inputs get left and right (today mono), so XY scopes and stereo
       visualizers work; then ship px-stream's XY scopes.
-- [ ] **Instanced vertex shaders**: draw a shape many times (`gl_InstanceID`), which unlocks MadMapper's particle and
-      instancing effects (Transform Particles, instancing, particles).
+- [x] **Instanced vertex shaders**: a shader can draw its quad many times (`gl_InstanceID`, MadMapper
+      `INSTANCE_COUNT`, a fixed number or a setting), and its vertex stage can hand its own values to the pixel stage
+      (`out`/`varying`). MadMapper's **Transform Particles** now works (checked: copies of the test card fly out and
+      blend over each other). The 406-shader corpus went from 396 to 397. MadMapper's "3D Particles" and
+      "instancing" generators still don't: they draw their own 3D meshes (vertex attributes), which Phosphor's quad can't stand in for.
 - [ ] **Hand-picked lostjared effects**: render every one of the 2,700 (MIT) to a picture, sort out the blank /
       broken / near-duplicates automatically, look at the rest on contact sheets, ship the best few dozen.
 - [ ] **Hap R recording** (BC7: Hap's best quality), and with it a real check of Hap R playback.
