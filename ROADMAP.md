@@ -131,7 +131,7 @@ app that's much smaller and lighter on the CPU.
     - [x] OSC/MIDI targets for slices; cues store slice geometry (0.2.80)
     - [x] Copy a slice's look to other slices (0.2.80)
     - [x] Multi-select slices (0.2.81)
-    - [ ] Slice groups (saved, nested)
+    - [x] Slice groups (saved, nested; on/off and opacity mappable) (0.2.83)
     - [x] Add / remove mesh rows and columns at a point (0.2.80)
     - [x] Freehand masks (0.2.81)
     - [x] Mask attached to a slice (0.2.81)

@@ -40,6 +40,9 @@ enum TreeAction {
     DrawnMask(u64, Vec<[f32; 2]>),
     Duplicate(u64, u64),
     Delete(u64, u64),
+    DeleteMany(u64, Vec<u64>),
+    /// Put these slices of output `.0` into a new group.
+    Group(u64, Vec<u64>),
 }
 
 pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
@@ -104,28 +107,15 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(RichText::new(format!("{} {}", icon::PROJECTOR_SCREEN, o.name)).strong());
                 toggle(ui, &mut o.mapping.enabled, "MAPPING").on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
             });
-            for s in &mut o.mapping.surfaces {
-                ui.horizontal(|ui| {
-                    ui.add_space(14.0);
-                    let glyph = if s.enabled { icon::EYE } else { icon::EYE_SLASH };
-                    ui.toggle_value(&mut s.enabled, RichText::new(glyph).small());
-                    let picked = super::mapping_points::selected_slices(ui.ctx(), *selected_surface).contains(&s.id);
-                    let r = ui.selectable_label(picked, format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several");
-                    if r.clicked() {
-                        let shift = ui.input(|i| i.modifiers.shift);
-                        super::mapping_points::click_slice(ui.ctx(), selected_surface, s.id, shift);
-                    }
-                    r.right_menu(|ui| {
-                        if ui.button(label(icon::COPY, "Duplicate")).clicked() {
-                            action = Some(TreeAction::Duplicate(o.id, s.id));
-                            ui.close();
-                        }
-                        if ui.button(label(icon::TRASH, "Delete")).clicked() {
-                            action = Some(TreeAction::Delete(o.id, s.id));
-                            ui.close();
-                        }
-                    });
-                });
+            let mut acts = Vec::new();
+            super::slice_tree::slice_rows(ui, &mut o.mapping, selected_surface, &mut acts);
+            for a in acts {
+                use super::slice_tree::SliceAct;
+                match a {
+                    SliceAct::Group(ids) => action = Some(TreeAction::Group(o.id, ids)),
+                    SliceAct::Duplicate(id) => action = Some(TreeAction::Duplicate(o.id, id)),
+                    SliceAct::Delete(ids) => action = Some(TreeAction::DeleteMany(o.id, ids)),
+                }
             }
             for m in &mut o.mapping.masks {
                 ui.horizontal(|ui| {
@@ -217,13 +207,20 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
                 st.selected_surface = Some(id);
             }
         }
-        Some(TreeAction::Delete(oid, id)) => {
+        Some(TreeAction::Delete(oid, id)) => apply_action(st, Some(TreeAction::DeleteMany(oid, vec![id]))),
+        Some(TreeAction::DeleteMany(oid, ids)) => {
             if let Some(o) = st.comp.output_mut(oid) {
-                o.mapping.remove_slices(|s| s.id == id);
-                o.mapping.masks.retain(|m| m.id != id);
+                o.mapping.remove_slices(|s| ids.contains(&s.id));
+                o.mapping.masks.retain(|m| !ids.contains(&m.id));
             }
-            if st.selected_surface == Some(id) {
+            if st.selected_surface.is_some_and(|s| ids.contains(&s)) {
                 st.selected_surface = None;
+            }
+        }
+        Some(TreeAction::Group(oid, ids)) => {
+            let id = st.comp.new_id();
+            if let Some(o) = st.comp.output_mut(oid) {
+                o.mapping.group_slices(id, &ids);
             }
         }
         None => {}
@@ -566,6 +563,11 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         }
         let id = s.id;
         ui.separator();
+        let picked = super::mapping_points::selected_slices(ui.ctx(), selected);
+        if picked.len() > 1 && ui.button(label(icon::FOLDER_PLUS, &format!("Group the {} selected slices", picked.len()))).clicked() {
+            *action = Some(TreeAction::Group(oid, picked));
+            ui.close();
+        }
         if ui.button(label(icon::COPY, "Duplicate")).clicked() {
             *action = Some(TreeAction::Duplicate(oid, id));
             ui.close();
