@@ -38,6 +38,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         // A slice group's id reaches all its slices (the first one's value is shown).
         ControlTarget::SliceOpacity(id) => comp.slice(*comp.slices_reached(*id).first()?)?.opacity,
         ControlTarget::SliceEnabled(id) => on(comp.slice(*comp.slices_reached(*id).first()?)?.enabled),
+        ControlTarget::Fixture { fixture, param } => comp.dmx.fixtures.iter().find(|f| f.id == *fixture)?.param(*param)?,
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
         ControlTarget::LayerVolume(id) => layer(id)?.volume / 2.0,
@@ -227,6 +228,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 *m.enabled = toggled(*m.enabled, v);
             }
         }
+        ControlTarget::Fixture { fixture, param } => {
+            if let Some(x) = comp.dmx.fixtures.iter_mut().find(|f| f.id == *fixture).and_then(|f| f.param_mut(*param)) {
+                *x = v.clamp(0.0, 1.0);
+            }
+        }
         ControlTarget::SliceOpacity(id) => {
             for sid in comp.slices_reached(*id) {
                 if let Some(s) = comp.slice_mut(sid) {
@@ -321,6 +327,11 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
             out.push((ControlTarget::SliceEnabled(g.id), format!("{} · {} (group) · on/off", o.name, g.name)));
         }
     }
+    for f in &comp.dmx.fixtures {
+        for p in f.params() {
+            out.push((ControlTarget::Fixture { fixture: f.id, param: p }, format!("Light {} · {}", f.name, phosphor_engine::Fixture::PARAMS[p as usize])));
+        }
+    }
     for c in comp.comps.iter().filter(|_| comp.comps.len() > 1) {
         out.push((ControlTarget::LayerOpacity(c.id), format!("Comp {} · opacity", c.name)));
         out.push((ControlTarget::LayerEnabled(c.id), format!("Comp {} · on/off", c.name)));
@@ -379,6 +390,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerEnabled(id) => format!("/phosphor/layer/{id}/on"),
         ControlTarget::SliceOpacity(id) => format!("/phosphor/slice/{id}/opacity"),
         ControlTarget::SliceEnabled(id) => format!("/phosphor/slice/{id}/on"),
+        ControlTarget::Fixture { fixture, param } => format!("/phosphor/light/{fixture}/{}", phosphor_engine::Fixture::PARAMS.get(*param as usize).unwrap_or(&"value").replace(' ', "_")),
         ControlTarget::GeneratorParam { layer, index } => format!("/phosphor/layer/{layer}/source/{}", index + 1),
         ControlTarget::EffectParam { effect, index } => format!("/phosphor/fx/{effect}/{}", index + 1),
         ControlTarget::EffectMix(id) => format!("/phosphor/fx/{id}/mix"),

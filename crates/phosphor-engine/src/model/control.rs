@@ -79,6 +79,8 @@ pub enum ControlTarget {
     /// A mapping slice's opacity and on/off (MadMapper-style surface control; ids are unique across outputs).
     SliceOpacity(u64),
     SliceEnabled(u64),
+    /// A light (LED / DMX fixture): `param` indexes `Fixture::PARAMS` (pan, tilt, dimmer, motion size, brightness).
+    Fixture { fixture: u64, param: u8 },
 }
 
 /// App-wide mappable controls.
