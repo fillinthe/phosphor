@@ -25,6 +25,8 @@ mod groups;
 mod inspector;
 mod layer_windows;
 mod layers;
+#[cfg(not(target_arch = "wasm32"))]
+mod link_import;
 mod modulators;
 mod sequencer;
 mod leds;
@@ -65,6 +67,8 @@ pub(crate) use groups::*;
 pub(crate) use inspector::*;
 pub(crate) use layer_windows::*;
 pub(crate) use layers::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use link_import::*;
 pub(crate) use leds::*;
 pub(crate) use mapping::*;
 pub(crate) use media::*;

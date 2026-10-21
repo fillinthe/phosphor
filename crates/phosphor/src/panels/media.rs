@@ -79,6 +79,9 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 let exts = crate::media::dialog_extensions();
                 st.dialogs.pick_files(crate::dialogs::Purpose::ImportFiles, Some(("Media", &exts)));
             }
+            if ui.button(label(icon::LINK, "From a link…")).on_hover_text("The video or GIF in a post on X, Instagram, TikTok, YouTube…").clicked() {
+                st.link_import.open = true;
+            }
             if ui.button(label(icon::EYE, "Watch folder…")).on_hover_text("A collection of every clip in a folder (and its subfolders); new files join as they arrive").clicked() {
                 st.dialogs.pick_folder(crate::dialogs::Purpose::WatchFolder);
             }

@@ -145,6 +145,9 @@ pub struct State {
     pub projectors: crate::pjlink::Projectors,
     /// The Scopes panel's measuring (only while it's on screen).
     pub scopes: crate::scopes::Scopes,
+    /// "From a link…" (posts on X, Instagram…): the window and its download.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub link_import: crate::panels::LinkImport,
     /// Stage scanner (patterns on an output, a camera watching): makes stage photos.
     #[cfg(not(target_arch = "wasm32"))]
     pub scanner: crate::scanner::Scanner,
