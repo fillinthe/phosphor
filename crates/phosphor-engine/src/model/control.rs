@@ -73,6 +73,9 @@ pub enum ControlTarget {
     LayerY(u64),
     LayerScale(u64),
     LayerRotation(u64),
+    /// One coordinate of a corner-pinned layer's corner: `point` 0–7 = (top-left x, y, top-right x, y, bottom-right
+    /// x, y, bottom-left x, y), 0..1 across the canvas.
+    LayerCorner { layer: u64, point: u8 },
     /// A mapping slice's opacity and on/off (MadMapper-style surface control; ids are unique across outputs).
     SliceOpacity(u64),
     SliceEnabled(u64),

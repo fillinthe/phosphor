@@ -297,8 +297,10 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
             for (k, name) in ["Top left", "Top right", "Bottom right", "Bottom left"].into_iter().enumerate() {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(name).small());
-                    guarded!(ui, c[k][0], egui::DragValue::new(&mut c[k][0]).speed(0.002).range(-1.0..=2.0).fixed_decimals(3).prefix("x "));
-                    guarded!(ui, c[k][1], egui::DragValue::new(&mut c[k][1]).speed(0.002).range(-1.0..=2.0).fixed_decimals(3).prefix("y "));
+                    for axis in 0..2 {
+                        let r = guarded!(ui, c[k][axis], egui::DragValue::new(&mut c[k][axis]).speed(0.002).range(-1.0..=2.0).fixed_decimals(3).prefix(if axis == 0 { "x " } else { "y " }));
+                        map_menu(ui, &r, ControlTarget::LayerCorner { layer: id, point: (k * 2 + axis) as u8 });
+                    }
                 });
             }
         }
