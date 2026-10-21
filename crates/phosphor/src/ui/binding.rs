@@ -28,7 +28,7 @@ pub(crate) fn target_picker(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
     picked
 }
 
-const SOURCE_KINDS: [&str; 5] = ["MIDI CC", "MIDI Note", "OSC", "Key", "Gamepad"];
+const SOURCE_KINDS: [&str; 6] = ["MIDI CC", "MIDI Note", "OSC", "Key", "Gamepad", "DMX"];
 
 fn source_kind(s: &ControlSource) -> usize {
     match s {
@@ -37,6 +37,7 @@ fn source_kind(s: &ControlSource) -> usize {
         ControlSource::Osc { .. } => 2,
         ControlSource::Key { .. } => 3,
         ControlSource::Gamepad { .. } => 4,
+        ControlSource::Dmx { .. } => 5,
     }
 }
 
@@ -62,7 +63,8 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             1 => ControlSource::MidiNote { channel: ch, note: num },
             2 => ControlSource::Osc { address: "/".into() },
             3 => ControlSource::Key { key: "Q".into() },
-            _ => ControlSource::Gamepad { input: "South".into() },
+            4 => ControlSource::Gamepad { input: "South".into() },
+            _ => ControlSource::Dmx { universe: 1, channel: 1 },
         };
     }
     match source {
@@ -83,6 +85,11 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
         ControlSource::Gamepad { input } => {
             ui.add(egui::TextEdit::singleline(input).hint_text("South").desired_width(110.0))
                 .on_hover_text("Button or stick name (South, East, LeftStickX, RightTrigger2…); easiest: press Listen and move it");
+        }
+        ControlSource::Dmx { universe, channel } => {
+            guarded!(ui, *universe, egui::DragValue::new(universe).range(0..=32767).prefix("universe "))
+                .on_hover_text("The universe number your desk sends (Art-Net counts from 0, sACN from 1)");
+            guarded!(ui, *channel, egui::DragValue::new(channel).range(1..=512).prefix("ch "));
         }
     }
     *source != before

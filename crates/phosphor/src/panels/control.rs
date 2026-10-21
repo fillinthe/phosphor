@@ -40,6 +40,22 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 .on_hover_text("The port your OSC controller listens on (TouchOSC: the connection's receive port, 9000 by default)");
         });
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let control = &mut st.control;
+        ui.horizontal(|ui| {
+            let mut on = control.dmx_in();
+            if crate::ui::toggle(ui, &mut on, "DMX in")
+                .on_hover_text("A lighting desk drives Phosphor: listen for Art-Net and sACN, then map any channel like a MIDI fader (right-click a control › Learn, move the desk's fader)")
+                .changed()
+            {
+                control.set_dmx_in(on);
+            }
+            if on {
+                hint(ui, control.dmx_status());
+            }
+        });
+    }
     monitor(ui, st);
     ui.separator();
 

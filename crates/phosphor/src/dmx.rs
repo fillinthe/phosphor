@@ -42,7 +42,10 @@ impl DmxOut {
                 sock.set_nonblocking(true)?;
                 Ok(sock)
             }) {
-                Ok(sock) => self.socket = Some(sock),
+                Ok(sock) => {
+                    OWN_PORT.store(sock.local_addr().map_or(0, |a| a.port()), std::sync::atomic::Ordering::Relaxed);
+                    self.socket = Some(sock)
+                }
                 Err(e) => {
                     self.error = Some(format!("can't open a network socket ({e})"));
                     return;
@@ -83,6 +86,98 @@ impl DmxOut {
 }
 
 /// Art-Net ArtDmx: one universe (15-bit port address: net, sub-net, universe).
+/// The universe and DMX slots (channel 1 first) in an Art-Net ArtDmx or sACN data packet; None for anything else.
+pub fn parse_dmx(p: &[u8]) -> Option<(u16, &[u8])> {
+    if p.len() >= 18 && p.starts_with(b"Art-Net\0") && u16::from_le_bytes([p[8], p[9]]) == 0x5000 {
+        let universe = u16::from(p[14]) | (u16::from(p[15] & 0x7f) << 8);
+        let len = (u16::from_be_bytes([p[16], p[17]]) as usize).min(512).min(p.len() - 18);
+        return Some((universe, &p[18..18 + len]));
+    }
+    if p.len() >= 126 && &p[4..16] == b"ASC-E1.17\0\0\0" && u32::from_be_bytes([p[18], p[19], p[20], p[21]]) == 4 && p[125] == 0 {
+        let universe = u16::from_be_bytes([p[113], p[114]]);
+        let count = (u16::from_be_bytes([p[123], p[124]]) as usize).saturating_sub(1).min(512).min(p.len() - 126);
+        return Some((universe, &p[126..126 + count]));
+    }
+    None
+}
+
+/// The source port Phosphor's own DMX output sends from (its packets aren't controller input).
+static OWN_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
+
+/// DMX in: listens for Art-Net (udp/6454) and sACN (udp/5568, universes 1–16 by multicast) and sends each channel
+/// that changes as controller input (`ControlSource::Dmx`, 0..1). Stops when dropped.
+pub struct DmxListener {
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    status: std::sync::Arc<std::sync::Mutex<String>>,
+}
+
+impl DmxListener {
+    pub fn start(tx: std::sync::mpsc::Sender<crate::control::Incoming>) -> Self {
+        use std::sync::atomic::Ordering;
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let status = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let mut sockets = Vec::new();
+        let mut open = Vec::new();
+        for (port, name) in [(6454u16, "Art-Net"), (5568, "sACN")] {
+            match UdpSocket::bind(("0.0.0.0", port)) {
+                Ok(s) => {
+                    if port == 5568 {
+                        for u in 1..=16u16 {
+                            let _ = s.join_multicast_v4(&Ipv4Addr::new(239, 255, (u >> 8) as u8, u as u8), &Ipv4Addr::UNSPECIFIED);
+                        }
+                    }
+                    let _ = s.set_read_timeout(Some(std::time::Duration::from_millis(200)));
+                    open.push(format!("{name} on udp/{port}"));
+                    sockets.push(s);
+                }
+                Err(e) => open.push(format!("{name} port {port} busy ({e})")),
+            }
+        }
+        *status.lock().unwrap() = open.join(" · ");
+        for sock in sockets {
+            let (stop, tx, status) = (stop.clone(), tx.clone(), status.clone());
+            let _ = std::thread::Builder::new().name("phosphor-dmx-in".into()).spawn(move || {
+                let mut last: BTreeMap<u16, [u8; 512]> = BTreeMap::new();
+                let mut buf = [0u8; 700];
+                while !stop.load(Ordering::Relaxed) {
+                    let Ok((n, from)) = sock.recv_from(&mut buf) else { continue };
+                    if from.port() == OWN_PORT.load(Ordering::Relaxed) {
+                        continue;
+                    }
+                    let Some((universe, slots)) = parse_dmx(&buf[..n]) else { continue };
+                    let fresh = !last.contains_key(&universe);
+                    let prev = last.entry(universe).or_insert([0; 512]);
+                    for (i, v) in slots.iter().enumerate() {
+                        // The first packet of a universe only sets where things are; changes after that are input.
+                        if *v != prev[i] && !fresh {
+                            let source = phosphor_engine::ControlSource::Dmx { universe, channel: i as u16 + 1 };
+                            if tx.send(crate::control::Incoming { source, value: f32::from(*v) / 255.0 }).is_err() {
+                                return;
+                            }
+                        }
+                        prev[i] = *v;
+                    }
+                    if fresh && let Ok(mut s) = status.lock() {
+                        let base = s.split(" · hearing").next().unwrap_or_default().to_string();
+                        *s = format!("{base} · hearing {} universe(s)", last.len());
+                    }
+                }
+            });
+        }
+        Self { stop, status }
+    }
+
+    pub fn status(&self) -> String {
+        self.status.lock().map(|s| s.clone()).unwrap_or_default()
+    }
+}
+
+impl Drop for DmxListener {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 pub fn artnet_packet(universe: u16, seq: u8, data: &[u8; 512]) -> Vec<u8> {
     let mut p = Vec::with_capacity(18 + 512);
     p.extend_from_slice(b"Art-Net\0");
@@ -133,6 +228,44 @@ pub fn sacn_packet(cid: &[u8; 16], universe: u16, seq: u8, data: &[u8; 512]) -> 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reads_back_what_it_sends() {
+        let mut data = [0u8; 512];
+        data[0] = 255;
+        data[511] = 7;
+        let art = artnet_packet(0x123, 1, &data);
+        let (u, slots) = parse_dmx(&art).unwrap();
+        assert_eq!((u, slots.len(), slots[0], slots[511]), (0x123, 512, 255, 7));
+        let sacn = sacn_packet(&[9; 16], 3, 1, &data);
+        let (u, slots) = parse_dmx(&sacn).unwrap();
+        assert_eq!((u, slots.len(), slots[0], slots[511]), (3, 512, 255, 7));
+        assert!(parse_dmx(b"Art-Net\0junk").is_none());
+    }
+
+    #[test]
+    fn a_desk_fader_becomes_controller_input() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let listener = DmxListener::start(tx);
+        if !listener.status().contains("Art-Net on") {
+            return; // port 6454 taken by another app on this machine
+        }
+        let send = |data: &[u8; 512]| {
+            let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+            s.send_to(&artnet_packet(2, 1, data), ("127.0.0.1", ARTNET_PORT)).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(80));
+        };
+        let mut data = [0u8; 512];
+        data[4] = 10;
+        send(&data);
+        assert!(rx.try_recv().is_err(), "the first packet only says where the faders are");
+        data[4] = 255;
+        send(&data);
+        let got = rx.recv_timeout(std::time::Duration::from_secs(1)).unwrap();
+        assert_eq!(got.source, phosphor_engine::ControlSource::Dmx { universe: 2, channel: 5 });
+        assert_eq!(got.value, 1.0);
+        assert!(listener.status().contains("hearing 1 universe"));
+    }
+
     use super::*;
 
     #[test]
