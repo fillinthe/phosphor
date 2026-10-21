@@ -23,6 +23,11 @@ impl Engine {
             SourceSpec::None => None,
             SourceSpec::Generator(id) => {
                 let desc = shaders::generator(id)?;
+                if shaders::is_external(desc.entry) {
+                    // A plugin source: one instance per layer (the outgoing side of a transition gets its own).
+                    let key = if outgoing { layer_id | EXTERNAL_OUTGOING } else { layer_id };
+                    return self.external_source(key, desc, resolve_params(desc, values, value_mods, mods), (w, h));
+                }
                 if !self.ensure_module(desc.entry) {
                     return None;
                 }
@@ -315,13 +320,20 @@ impl Engine {
         };
         let parity = (self.frame_index % 2) as usize;
         for (desc, fx_id, values, param_mods, mix) in chain {
-            if !self.ensure_module(desc.entry) {
+            let external = shaders::is_external(desc.entry);
+            if !external && !self.ensure_module(desc.entry) {
                 continue;
             }
             let dry = input.clone();
             let dry_idx = input_idx;
             let params = resolve_params(desc, values, param_mods, mods);
-            if let Some(plan) = shaders::pass_plan(desc.entry) {
+            if external {
+                // A plugin (FFGL): the app draws it; its last result comes back (the picture passes until then).
+                if let Some(out) = self.external_effect(fx_id, desc, params, &input, (w, h), passes) {
+                    input = out;
+                    input_idx = None;
+                }
+            } else if let Some(plan) = shaders::pass_plan(desc.entry) {
                 // Multi-pass shader (ISF PASSES): its own buffers, output into a free chain view.
                 let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
                 let result = self.run_plan(res_id, fx_id, desc.entry, &plan, &params, input.clone(), views[i].clone(), (w, h), time, passes);

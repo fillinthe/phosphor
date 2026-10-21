@@ -518,6 +518,11 @@ impl PhosphorApp {
                 println!("QUICK template{n}: {:?}", crate::explorer::bench_template(&mut self.state, n));
                 continue;
             }
+            #[cfg(target_os = "macos")]
+            if name == "ffgl" {
+                println!("QUICK ffgl: {:?}", crate::ffgl::bench_apply(&mut self.state));
+                continue;
+            }
             if name == "patch" {
                 crate::explorer::load_user_shaders(&mut self.state);
                 println!("QUICK patch: {:?}", crate::explorer::bench_patch(&mut self.state));

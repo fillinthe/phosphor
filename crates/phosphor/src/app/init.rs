@@ -211,6 +211,8 @@ impl PhosphorApp {
                 dmx: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 tracker: Default::default(),
+                #[cfg(target_os = "macos")]
+                ffgl: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 projectors: Default::default(),
                 scopes: Default::default(),
@@ -276,6 +278,9 @@ impl PhosphorApp {
                 _ => phosphor_engine::RenderRate::Fps60,
             };
         }
+        // FFGL plugins: found and checked in the background; they appear in Effects / Sources when ready.
+        #[cfg(target_os = "macos")]
+        app.state.ffgl.start_scan();
         if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.area_tab.clone())
             && let Some(tab) = Tab::ALL.iter().find(|t| t.title() == name)
         {

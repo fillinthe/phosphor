@@ -450,6 +450,14 @@ pub const ISF_EFFECT: &str = "isf:";
 pub const ISF_GENERATOR: &str = "isfgen:";
 /// Imported ISF transitions (old picture → new picture as `progress` goes 0 → 1): clip transition styles.
 pub const ISF_TRANSITION: &str = "isftr:";
+/// FFGL plugins (Mac): effects and sources drawn by the app (`ext:` entries, see `is_external`).
+pub const FFGL_EFFECT: &str = "ffgl:";
+pub const FFGL_GENERATOR: &str = "ffglgen:";
+
+/// An effect / generator drawn outside the engine (its entry starts with `ext:`; the engine's `external` module).
+pub fn is_external(entry: &str) -> bool {
+    entry.starts_with("ext:")
+}
 
 static CUSTOM_INFO: std::sync::RwLock<Vec<(&'static str, &'static str, &'static str)>> = std::sync::RwLock::new(Vec::new());
 
@@ -461,11 +469,11 @@ pub fn set_custom_info(id: &'static str, category: &'static str, about: &'static
 }
 
 fn is_custom_effect(id: &str) -> bool {
-    id.starts_with(CUSTOM_EFFECT) || id.starts_with(ISF_EFFECT)
+    id.starts_with(CUSTOM_EFFECT) || id.starts_with(ISF_EFFECT) || id.starts_with(FFGL_EFFECT)
 }
 
 fn is_custom_generator(id: &str) -> bool {
-    id.starts_with(CUSTOM_GENERATOR) || id.starts_with(ISF_GENERATOR)
+    id.starts_with(CUSTOM_GENERATOR) || id.starts_with(ISF_GENERATOR) || id.starts_with(FFGL_GENERATOR)
 }
 
 /// Adds or replaces a user shader (by id).
@@ -520,6 +528,9 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
     }
     if id.starts_with(ISF_EFFECT) || id.starts_with(ISF_GENERATOR) {
         return ("ISF", "Imported ISF shader");
+    }
+    if id.starts_with(FFGL_EFFECT) || id.starts_with(FFGL_GENERATOR) {
+        return ("FFGL", "FFGL plugin");
     }
     match id {
         "invert" => ("Color", "Negative image"),

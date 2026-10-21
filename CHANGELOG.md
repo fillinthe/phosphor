@@ -4,6 +4,17 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.89 (2026-10-21)
+
+- **FFGL plugins (Mac).** Phosphor now loads FFGL effect and source plugins, the kind Resolume and VDMX use.
+  It looks in ~/Library/Graphics/FreeFrame Plug-Ins, /Library/Graphics/FreeFrame Plug-Ins, Resolume's Extra
+  Effects folders and Phosphor's own FFGL folder (right-click "FFGL: …" under the Effects list to open it).
+  Plugins show in Effects and Sources under **FFGL**, and their settings work like any other: MIDI, modulation,
+  cues. Each new plugin is tried out in a separate process first, so a broken one can't take Phosphor down when
+  it loads. A slow plugin updates less often instead of slowing the show. Not yet: plugins that mix two pictures,
+  text and file settings, and Windows.
+- Fixed a crash in development builds when showing hardware-decoded video.
+
 ## 0.2.88 (2026-10-21)
 
 - **Patches: build an effect from blocks, no code.** In the Shader Editor, **+ Patch** opens a canvas: right-click

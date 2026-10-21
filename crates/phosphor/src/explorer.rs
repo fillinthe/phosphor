@@ -19,7 +19,7 @@ pub struct PaletteDrag {
 }
 
 const CATEGORY_ORDER: &[&str] =
-    &["Color", "Film", "Blur", "Light", "Distort", "Stylize", "Retro", "Time", "3D", "Key", "Patterns", "Motion", "Utility", "Yours", "ISF", "Other"];
+    &["Color", "Film", "Blur", "Light", "Distort", "Stylize", "Retro", "Time", "3D", "Key", "Patterns", "Motion", "Utility", "Yours", "ISF", "FFGL", "Other"];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PreviewMode {
@@ -138,6 +138,8 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
         crate::ui::hint(ui, status).on_hover_text("ISF shaders from /Library/Graphics/ISF and ~/Library/Graphics/ISF. Skipped ones need multi-pass or feedback support.");
+        #[cfg(target_os = "macos")]
+        ffgl_status(ui, &st.ffgl);
     });
     ui.add_space(2.0);
 
@@ -270,6 +272,38 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// Applies an explorer item to `target` (a layer id or MASTER), or to the selection.
+/// "FFGL: N plugins": how many were found, which can't be used and why, and where they're looked for.
+#[cfg(target_os = "macos")]
+fn ffgl_status(ui: &mut egui::Ui, ffgl: &crate::ffgl::Ffgl) {
+    let bad: Vec<&crate::ffgl::Entry> = ffgl.entries.iter().filter(|e| e.error.is_some()).collect();
+    let text = match (ffgl.entries.len(), bad.len()) {
+        (0, _) => "FFGL: no plugins".to_string(),
+        (n, 0) => format!("FFGL: {n} plugins"),
+        (n, b) => format!("FFGL: {} plugins, {b} can't be used", n - b),
+    };
+    let r = crate::ui::hint(ui, text).on_hover_ui(|ui| {
+        ui.label("FFGL effect and source plugins (.bundle), from:");
+        for d in crate::ffgl::folders() {
+            ui.monospace(d.to_string_lossy());
+        }
+        if let Some(d) = crate::show::storage_dir() {
+            ui.label(format!("Put your own in {} (right-click: open it).", d.join("ffgl").to_string_lossy()));
+        }
+        for e in bad {
+            ui.colored_label(WARN, format!("{}: {}", e.name, e.error.clone().unwrap_or_default()));
+        }
+    });
+    r.context_menu(|ui| {
+        if ui.button(label(icon::FOLDER_OPEN, "Open the FFGL folder")).clicked()
+            && let Some(d) = crate::show::storage_dir().map(|d| d.join("ffgl"))
+        {
+            let _ = std::fs::create_dir_all(&d);
+            crate::os::open(&d);
+            ui.close();
+        }
+    });
+}
+
 pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
     let target = target.or(st.selected).filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id));
     if let Some(fx) = drag.effect {
