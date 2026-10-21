@@ -6,7 +6,6 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 - [~] **Windows installer** (#7) — built and pushed; waiting for the Windows build to install / run / uninstall it.: a Setup.exe built on GitHub with every push; CI installs it silently on the
       Windows machine and checks the installed Phosphor starts. Zip stays for people who prefer it.
-- [ ] **Older macOS 11–13** (#9): build for macOS 11, check what breaks (FFmpeg build target, APIs used).
 - [ ] **Phosphor Player for Raspberry Pi** (#9): a Linux ARM build that follows a Mac (Follow another Phosphor) on
       a Pi, built on GitHub.
 - [ ] **Crash reports sent automatically** (#5): needs a private endpoint on a server you run;
@@ -17,6 +16,13 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
 
 ## Done
+
+- [x] **Older macOS** (#9): Phosphor now runs from **macOS 13 Ventura** (was 14), the same floor as VDMX. One
+      setting (`scripts/min-macos`) for FFmpeg, Syphon and the app; FFmpeg and Syphon rebuilt for it; a test
+      bundle has every binary marked 13.0, its "too new" check and the panel check pass, and the linker gave
+      no "built for newer macOS" warnings. 11–12 aren't possible: the screen-capture library calls macOS 13
+      functions (it would mean a build without screen and window capture). **Not run on a real macOS 13 Mac** (none
+      here).
 
 - [x] **Masters** (#5): an output can show a whole comp as its program (Outputs list and Studio › output:
       "Shows: Main mix / Comp …"). Make one comp per master, switch its "In the master mix" off, and pick it on the
