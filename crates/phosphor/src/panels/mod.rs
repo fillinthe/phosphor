@@ -27,6 +27,7 @@ mod layer_windows;
 mod layers;
 #[cfg(not(target_arch = "wasm32"))]
 mod link_import;
+mod inputs;
 #[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;
 mod modulators;
@@ -71,6 +72,7 @@ pub(crate) use layer_windows::*;
 pub(crate) use layers::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use link_import::*;
+pub(crate) use inputs::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use ai_shader::*;
 pub(crate) use leds::*;
@@ -121,10 +123,12 @@ pub enum Tab {
     Studio,
     /// Waveform / parade / vectorscope / histogram.
     Scopes,
+    /// Live inputs (Library): cameras, screens, Syphon, NDI, streams.
+    Inputs,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 25] = [
+    pub const ALL: [Tab; 26] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -150,6 +154,7 @@ impl Tab {
         Tab::LayerWindows,
         Tab::Studio,
         Tab::Scopes,
+        Tab::Inputs,
     ];
 
     pub fn title(self) -> String {
@@ -165,6 +170,7 @@ impl Tab {
             Tab::Media => "Media",
             Tab::Library => "Effects",
             Tab::Presets => "Presets",
+            Tab::Inputs => "Inputs",
             Tab::Audio => "Audio",
             Tab::Modulators => "Modulators",
             Tab::Control => "MIDI / OSC",
@@ -241,6 +247,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Media => media(ui, st),
         Tab::Library => crate::explorer::explorer(ui, st),
         Tab::Presets => presets(ui, st),
+        Tab::Inputs => inputs_panel(ui, st),
         Tab::Audio => audio(ui, st),
         Tab::Modulators => modulators::modulators(ui, st),
         Tab::Control => control(ui, st),

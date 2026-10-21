@@ -76,6 +76,88 @@ pub fn ndi_source(name: &str) -> SourceSpec {
 }
 
 /// Starts decoding a live source.
+/// What kind of live input (for grouping and icons).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InputKind {
+    Camera,
+    Syphon,
+    Screen,
+    Window,
+    Ndi,
+}
+
+impl InputKind {
+    pub const ALL: [InputKind; 5] = [InputKind::Camera, InputKind::Screen, InputKind::Window, InputKind::Syphon, InputKind::Ndi];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            InputKind::Camera => "Cameras & capture cards",
+            InputKind::Syphon => "Syphon (other apps)",
+            InputKind::Screen => "Screens",
+            InputKind::Window => "Windows",
+            InputKind::Ndi => "NDI (network)",
+        }
+    }
+}
+
+/// One live input that can go on a layer or a clip.
+#[derive(Clone, Debug)]
+pub struct LiveInput {
+    pub kind: InputKind,
+    pub label: String,
+    pub source: SourceSpec,
+}
+
+/// Every live input there is right now: `cameras` (asked for separately: listing them is slow), Syphon servers,
+/// screens and windows, NDI sources. Plus a note per kind when there's something to say (none found, needs
+/// permission…). Cheap enough to call while a menu or the Inputs panel is showing.
+pub fn inputs(cameras: &[String]) -> (Vec<LiveInput>, Vec<(InputKind, String)>) {
+    let mut out: Vec<LiveInput> = cameras.iter().map(|n| LiveInput { kind: InputKind::Camera, label: n.clone(), source: camera_source(&Camera { name: n.clone() }) }).collect();
+    let mut notes = Vec::new();
+    if cameras.is_empty() {
+        notes.push((InputKind::Camera, "None found.".to_string()));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let servers = crate::syphon::servers();
+        if servers.is_empty() {
+            notes.push((InputKind::Syphon, "No app is publishing Syphon right now.".into()));
+        }
+        out.extend(servers.iter().map(|s| LiveInput { kind: InputKind::Syphon, label: s.label(), source: syphon_source(&s.label()) }));
+        let (targets, error) = crate::screen_capture::targets();
+        match error {
+            Some(e) => notes.push((InputKind::Screen, e)),
+            None if targets.is_empty() => notes.push((InputKind::Screen, "Looking…".into())),
+            None => {}
+        }
+        for t in targets {
+            let kind = if t.url.starts_with("display:") { InputKind::Screen } else { InputKind::Window };
+            out.push(LiveInput { kind, source: screen_source(&t.label, &t.url), label: t.label });
+        }
+    }
+    #[cfg(any(target_os = "macos", windows))]
+    {
+        let sources = crate::ndi::sources();
+        if sources.is_empty() {
+            let note = if crate::ndi::Ndi::library().is_some() { "No NDI sources found yet (they appear within a second or two)." } else { "Install the free NDI Tools (ndi.video) to receive NDI." };
+            notes.push((InputKind::Ndi, note.into()));
+        }
+        out.extend(sources.iter().map(|s| LiveInput { kind: InputKind::Ndi, label: s.clone(), source: ndi_source(s) }));
+    }
+    (out, notes)
+}
+
+/// The camera list, asked for once and kept in egui's memory (`refresh` asks again).
+pub fn cameras_cached(ctx: &eframe::egui::Context, refresh: bool) -> Vec<String> {
+    let id = eframe::egui::Id::new("live_cameras");
+    if !refresh && let Some(c) = ctx.data(|d| d.get_temp::<Vec<String>>(id)) {
+        return c;
+    }
+    let list: Vec<String> = cameras().into_iter().map(|c| c.name).collect();
+    ctx.data_mut(|d| d.insert_temp(id, list.clone()));
+    list
+}
+
 pub fn open(name: &str, format: &str, url: &str) -> Result<VideoPlayer, String> {
     if format == "avfoundation" {
         // Cameras only open at a frame rate they support; try the common ones. NV12 is what
