@@ -12,6 +12,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **From a link:** Media › From a link… brings in the video or GIF from a post on X, Instagram, TikTok, YouTube,
   Vimeo and more: download it into the media bin (a clip that loops and works offline) or play it live from the
   link. Instagram may need "Sign-in from <your browser>". Needs yt-dlp (free; the window says how to get it).
+  GIFs stay GIFs: a direct GIF link is saved as is, a site's GIF is preferred over its MP4, and GIF/picture posts
+  (Tumblr, Imgur…) come in through gallery-dl when it's installed. (X and Instagram only have MP4s.)
 - **FFGL mixer plugins (Mac).** Mixer plugins (the kind Resolume uses to blend layers) now work: Inspector ›
   **Mixer plugin** picks one for a layer, and it blends that layer onto the layers below instead of its blend
   mode. The layer's opacity goes to the mixer's Opacity setting, like in Resolume, and its other settings are
