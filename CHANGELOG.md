@@ -10,6 +10,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
   **Mixer plugin** picks one for a layer, and it blends that layer onto the layers below instead of its blend
   mode. The layer's opacity goes to the mixer's Opacity setting, like in Resolume, and its other settings are
   right there.
+- **A file straight on a slice.** A mapping slice's "Shows" list has **A file…**: pick a picture or movie and
+  that slice plays it on its own, without it appearing in the mix.
 
 ## 0.2.91 (2026-10-21)
 

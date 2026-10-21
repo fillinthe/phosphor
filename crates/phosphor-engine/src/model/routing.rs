@@ -2,7 +2,7 @@
 //! slice (`mapping::Surface`) whose `layer` is that source; `send_to_output` makes one, `outputs_showing` lists
 //! them. Every layer / group can go to any number of outputs this way, and stay in (or leave) the main mix.
 
-use super::Composition;
+use super::{Composition, SourceSpec};
 
 impl Composition {
     /// Shows `source` (a layer or group id) on output `output`: adds a full-size slice for it (or re-enables the one
@@ -18,6 +18,19 @@ impl Composition {
         let s = o.mapping.add_surface(slice_id);
         s.layer = Some(source);
         Some(slice_id)
+    }
+
+    /// A slice shows a file of its own (MadMapper's "media on a surface"): a new layer plays it, kept out of the
+    /// mix, and the slice shows that layer. Returns the layer's id (None if the slice is gone).
+    pub fn show_file_on_slice(&mut self, slice: u64, name: &str, source: SourceSpec) -> Option<u64> {
+        self.slice(slice)?;
+        let layer = self.add_layer();
+        layer.name = name.to_string();
+        layer.source = source;
+        layer.in_mix = false;
+        let id = layer.id;
+        self.slice_mut(slice)?.layer = Some(id);
+        Some(id)
     }
 
     /// Stops output `output` showing `source` on its own (its slice goes; the mix stays as it was).
@@ -82,5 +95,24 @@ mod tests {
         assert!(c.send_to_output(layer, 999).is_none());
         c.remove_from_output(layer, out);
         assert!(c.outputs_showing(layer).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod file_on_slice_tests {
+    use super::*;
+
+    #[test]
+    fn a_slice_can_show_a_file_without_it_reaching_the_mix() {
+        let mut c = Composition::default();
+        c.ensure_outputs();
+        let sid = c.new_id();
+        c.outputs[0].mapping.add_surface(sid);
+        let spec = SourceSpec::Movie { name: "loop.mov".into(), path: Some("/x/loop.mov".into()) };
+        let id = c.show_file_on_slice(sid, "loop.mov", spec.clone()).unwrap();
+        let l = c.layers.iter().find(|l| l.id == id).unwrap();
+        assert!(!l.in_mix && l.source == spec);
+        assert_eq!(c.slice(sid).unwrap().layer, Some(id));
+        assert!(c.show_file_on_slice(999, "x", SourceSpec::None).is_none());
     }
 }
