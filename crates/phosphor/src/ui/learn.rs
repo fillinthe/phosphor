@@ -26,8 +26,11 @@ pub(crate) fn mapped_sources(ui: &egui::Ui, target: &ControlTarget) -> Vec<Strin
 }
 
 pub(crate) fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
-    !mapped_sources(ui, target).is_empty()
+    ui.ctx().data(|d| d.get_temp::<MappedList>(egui::Id::new(MAPPED_TARGETS))).is_some_and(|v| v.iter().any(|(t, _)| t == target))
 }
+
+/// The colour that says "mapped to a controller" (outline and tint on the control, Map mode, the menu).
+pub(crate) const MAPPED: Color32 = Color32::from_rgb(255, 196, 70);
 
 /// Typed-in mapping drafts, remembered per control while the menu is open.
 /// The "Map" section of any control's right-click menu: Learn, the built-in OSC address, typed
@@ -66,7 +69,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     let sources = mapped_sources(ui, target);
     if !sources.is_empty() {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("Mapped: {}", sources.join(", "))).small().color(Color32::from_rgb(255, 196, 70)));
+            ui.label(RichText::new(format!("Mapped: {}", sources.join(", "))).small().color(MAPPED));
             if ui.small_button(label(icon::X, "Forget")).clicked() {
                 request(ui, UNLEARN_REQUEST, target.clone());
                 ui.close();
@@ -78,15 +81,24 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
 /// Small badge on a control that has a MIDI/OSC/key mapping.
 pub(crate) fn mapped_badge(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget) {
     lock_badge(ui, resp, target);
-    mapped_dot(ui, resp, target);
+    mapped_look(ui, resp, target, ui.visuals().widgets.inactive.corner_radius);
 }
 
-/// The mapped dot and Map mode overlay, without the lock badge (sliders draw their own lock).
+/// The mapped look and Map mode overlay, without the lock badge (sliders draw their own lock). A mapped control
+/// is tinted gold with a gold outline and a dot in its corner, so it reads as mapped at a glance.
 pub(crate) fn mapped_dot(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget) {
+    mapped_look(ui, resp, target, egui::CornerRadius::ZERO);
+}
+
+/// `mapped_dot` with the control's own corners (square sliders, rounded buttons).
+fn mapped_look(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget, corners: egui::CornerRadius) {
     let mapped = is_mapped(ui, target);
     if mapped {
-        let p = resp.rect.left_top() + egui::vec2(1.0, 1.0);
-        ui.painter().circle_filled(p, 3.0, Color32::from_rgb(255, 196, 70));
+        let painter = ui.painter();
+        let rect = resp.rect.shrink(0.5);
+        painter.rect_filled(rect, corners, MAPPED.gamma_multiply(0.16));
+        painter.rect_stroke(rect, corners, Stroke::new(1.5, MAPPED), egui::StrokeKind::Inside);
+        painter.circle_filled(resp.rect.left_top() + egui::vec2(2.5, 2.5), 3.0, MAPPED);
     }
     if ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new(MAP_MODE))).unwrap_or(false) {
         map_overlay(ui, resp, target, mapped);
@@ -105,7 +117,7 @@ pub(crate) fn map_overlay(ui: &egui::Ui, resp: &egui::Response, target: &Control
     let rect = resp.rect.expand(1.5);
     // Click *and* drag, so sliders underneath get neither while mapping.
     let r = ui.interact(rect, resp.id.with("map_overlay"), Sense::click_and_drag());
-    let gold = Color32::from_rgb(255, 196, 70);
+    let gold = MAPPED;
     let (fill, stroke) = if active {
         let t = ui.ctx().input(|i| i.time) as f32;
         let a = 0.5 + 0.5 * (t * 6.0).sin();
