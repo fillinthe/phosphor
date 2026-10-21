@@ -224,7 +224,7 @@ impl PhosphorApp {
                 Err(e) => eprintln!("snapshot failed: {e}"),
             }
             // Outputs that differ from the program (mapping, masks, colour), as <name>-out<N>.png.
-            for (i, o) in self.state.comp.outputs.iter().enumerate().filter(|(_, o)| o.mapping.active() || !o.mapping.masks.is_empty() || !o.color.is_neutral()) {
+            for (i, o) in self.state.comp.outputs.iter().enumerate().filter(|(_, o)| o.mapping.active() || !o.mapping.masks.is_empty() || !o.color.is_neutral() || o.program.is_some()) {
                 if let Some((w, h, px)) = engine.read_output_of(o.id) {
                     let p = path.trim_end_matches(".png").to_string() + &format!("-out{}.png", i + 1);
                     if image::save_buffer(&p, &px, w, h, image::ColorType::Rgba8).is_ok() {

@@ -9,7 +9,6 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **Older macOS 11–13** (#9): build for macOS 11, check what breaks (FFmpeg build target, APIs used).
 - [ ] **Phosphor Player for Raspberry Pi** (#9): a Linux ARM build that follows a Mac (Follow another Phosphor) on
       a Pi, built on GitHub.
-- [ ] **Masters** (#5): several program mixes, each with its own layers' mix, for different outputs.
 - [ ] **Crash reports sent automatically** (#5): needs a private endpoint on a server you run;
       I'll build the app side and say what the server needs.
 - [ ] **Render thread** (#6): rendering on its own thread, so the UI never slows the outputs (and costs less when
@@ -18,6 +17,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
 
 ## Done
+
+- [x] **Masters** (#5): an output can show a whole comp as its program (Outputs list and Studio › output:
+      "Shows: Main mix / Comp …"). Make one comp per master, switch its "In the master mix" off, and pick it on the
+      output: each output then has its own mix. Checked: two comps (red, green), output 2 showing the green one,
+      main output red, output 2 green; with the green comp still in the master mix, the picker says so.
 
 - [x] **Shader packs** (#5), as far as is sensible:
       - daitomanabe's 11 (MIT) were already in; **px-stream**: of darosh's own shaders (MIT), Glitch Wave ships.

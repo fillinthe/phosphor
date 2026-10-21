@@ -141,6 +141,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         let mut send: Option<crate::screens::Display> = None;
         let displays = st.displays.clone();
         let others = super::mapping::picture_sources(&st.comp, id);
+        let comps: Vec<(u64, String, bool)> = st.comp.comps.iter().map(|c| (c.id, c.name.clone(), c.in_mix)).collect();
         let (layers, groups) = (&mut st.comp.layers, &mut st.comp.groups);
         let o = &mut st.comp.outputs[i];
         card_frame(ui, false).show(ui, |ui| {
@@ -158,6 +159,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
                         crate::ui::toggle(ui, &mut o.enabled, "ON").on_hover_text("Render this output");
                         grid_toggle(ui, &mut o.grid);
+                        program_picker(ui, o, &comps);
                         if ui.small_button(icon::MONITOR).on_hover_text("Preview this output (after mapping) in a window").clicked() {
                             request_preview(ui, MonitorSource::OneOutput(id));
                         }
@@ -308,6 +310,29 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// Colour correction for an output or a mapping surface: match projectors, screens and materials.
+/// What an output shows when it isn't mapped: the main mix, or one comp as its own program (masters). Only offered
+/// when the project has comps (`comps` = id, name, in the main mix).
+pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, comps: &[(u64, String, bool)]) {
+    if comps.len() < 2 {
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.label("Shows");
+        let current = o.program.and_then(|id| comps.iter().find(|(c, _, _)| *c == id)).map_or("Main mix".to_string(), |(_, n, _)| format!("Comp: {n}"));
+        ComboBox::from_id_salt(("output_program", o.id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
+            ui.selectable_value(&mut o.program, None, "Main mix");
+            for (id, name, _) in comps {
+                ui.selectable_value(&mut o.program, Some(*id), format!("Comp: {name}"));
+            }
+        })
+        .response
+        .on_hover_text("A comp as this output's whole picture: each output its own mix (masters). With mapping on, its slices decide instead");
+    });
+    if o.program.is_some_and(|id| comps.iter().any(|(c, _, mixed)| *c == id && *mixed)) {
+        hint(ui, "That comp is also in the main mix: switch its \"In the master mix\" off (Comp settings) to show it only here.");
+    }
+}
+
 pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_engine::ColorGrade) {
     let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
     egui::CollapsingHeader::new(title).id_salt(("color_grade", id)).show(ui, |ui| {
