@@ -381,7 +381,7 @@ impl PhosphorApp {
                 }
             }
             layer_textures.retain(|id, (tex, _)| {
-                let live = comp.layers.iter().any(|l| l.id == *id) || comp.group(*id).is_some();
+                let live = comp.layers.iter().any(|l| l.id == *id) || comp.group(*id).is_some() || comp.comp(*id).is_some();
                 if !live {
                     renderer.free_texture(tex);
                 }

@@ -12,7 +12,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
   maps it.
 - **Player mode.** While following another Phosphor, "Every time Phosphor starts (a player)" makes this Mac
   follow that leader at every launch: with start-at-login and outputs-on-their-screens it comes back by itself.
-- The patch canvas no longer draws under the Shader Editor's preview.
+- The patch canvas no longer draws under the Shader Editor's preview, and a comp's picture shows in the Inspector.
 
 ## 0.2.90 (2026-10-21)
 
