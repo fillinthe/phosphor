@@ -84,7 +84,7 @@ impl Engine {
             .iter()
             .flat_map(|m| {
                 let corners = (0..m.points.len()).filter(|i| m.is_corner(*i)).fold(0u32, |a, i| a.rotate_left(5) ^ (i as u32 + 1));
-                [m.points.len() as u32 * 4 + m.invert as u32 + m.smooth as u32 * 2, m.feather.to_bits(), corners, m.handles.len() as u32]
+                [m.points.len() as u32 * 4 + m.invert as u32 + m.smooth as u32 * 2, m.feather.to_bits(), corners, m.handles.len() as u32 * 4 + m.edge as u32]
             })
             .collect();
         let hash = hash_points(placed.iter().flat_map(|m| m.points.iter()).chain(handles.iter()), &flags);

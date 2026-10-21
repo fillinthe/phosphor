@@ -726,11 +726,51 @@ pub struct Mask {
     /// mirror image). Missing = automatic (straight sides, or smooth with Smooth on).
     #[serde(default)]
     pub handles: Vec<Option<[f32; 2]>>,
+    /// Where the soft edge sits: centred on the outline, all inside it, or all outside it.
+    #[serde(default)]
+    pub edge: MaskEdge,
+}
+
+/// Where a mask's soft edge sits relative to its outline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum MaskEdge {
+    #[default]
+    Centre,
+    Inside,
+    Outside,
+}
+
+impl MaskEdge {
+    pub const ALL: [MaskEdge; 3] = [MaskEdge::Centre, MaskEdge::Inside, MaskEdge::Outside];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            MaskEdge::Centre => "Centred",
+            MaskEdge::Inside => "Inside",
+            MaskEdge::Outside => "Outside",
+        }
+    }
+
+    /// The fade band's (inner, outer) offsets from the outline for a soft edge `width` wide.
+    pub fn band(self, width: f32) -> (f32, f32) {
+        match self {
+            MaskEdge::Centre => (-width / 2.0, width / 2.0),
+            MaskEdge::Inside => (-width, 0.0),
+            MaskEdge::Outside => (0.0, width),
+        }
+    }
+}
+
+impl crate::model::Choice for MaskEdge {
+    const OPTIONS: &'static [Self] = &MaskEdge::ALL;
+    fn label(self) -> &'static str {
+        self.name()
+    }
 }
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new() }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new(), edge: MaskEdge::Centre }
     }
 }
 
@@ -959,12 +999,13 @@ impl Mask {
         let outline = self.outline();
         let points = &outline;
         const OUTPUT: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
-        let half = self.feather.max(0.0) / 2.0;
-        if half <= 0.0 {
+        let width = self.feather.max(0.0);
+        if width <= 0.0 {
             // Inverted: the whole output with the shape cut out as a hole.
             return if self.invert { fill(&OUTPUT, Some(points), 1.0) } else { fill(points, None, 1.0) };
         }
-        let (inner, outer) = (offset_polygon(points, -half), offset_polygon(points, half));
+        let (a, b) = self.edge.band(width);
+        let (inner, outer) = (offset_polygon(points, a), offset_polygon(points, b));
         let (mut out, d_in, d_out) = if self.invert { (fill(&OUTPUT, Some(&outer), 1.0), 0.0, 1.0) } else { (fill(&inner, None, 1.0), 1.0, 0.0) };
         let n = inner.len();
         for i in 0..n {
@@ -979,6 +1020,20 @@ impl Mask {
 #[cfg(test)]
 mod mask_corner_tests {
     use super::*;
+
+    #[test]
+    fn the_soft_edge_can_sit_inside_or_outside() {
+        let mut m = Mask { feather: 0.04, ..Default::default() };
+        let reach = |m: &Mask| m.triangles().iter().fold((1.0f32, 0.0f32), |(lo, hi), v| (lo.min(v[0]), hi.max(v[0])));
+        let centred = reach(&m);
+        assert!((centred.0 - 0.38).abs() < 1e-4 && (centred.1 - 0.62).abs() < 1e-4, "{centred:?}");
+        m.edge = MaskEdge::Inside;
+        let inside = reach(&m);
+        assert!((inside.0 - 0.4).abs() < 1e-4 && (inside.1 - 0.6).abs() < 1e-4, "the fade ends at the outline: {inside:?}");
+        m.edge = MaskEdge::Outside;
+        let outside = reach(&m);
+        assert!((outside.0 - 0.36).abs() < 1e-4, "{outside:?}");
+    }
 
     #[test]
     fn flipping_mirrors_the_input() {

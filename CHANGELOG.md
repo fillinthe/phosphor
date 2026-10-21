@@ -9,6 +9,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - **Effects on one slice** (MadMapper's surface FX): select a slice in the Mapping Studio; under its settings,
   Effects › Add effect works as on a layer. The effects run on that slice's part of the picture only: pixelate one
   window of a building, invert one panel. Their settings can be mapped and modulated like any effect.
+- **Mask soft edge inside or outside:** with a soft edge on a mask, Fade picks where it sits: centred on the
+  outline, all inside the shape, or all outside it (as in MadMapper).
 - **Flip a slice's picture** (as in MadMapper): a slice's Input region has Flip left-right and Flip upside down
   (both = turned half round), for rear projection or a projector hung from the ceiling.
 
