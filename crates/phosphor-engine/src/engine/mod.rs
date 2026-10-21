@@ -171,6 +171,8 @@ mod passes;
 mod previews;
 mod sample;
 mod timing;
+#[cfg(test)]
+mod gpu_tests;
 
 use fit::{fit_transform, push_fit_copy};
 use mesh::{MeshCache, MeshDraw, hash_points};
