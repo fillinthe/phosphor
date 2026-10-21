@@ -815,14 +815,14 @@ impl crate::model::Choice for MaskShape {
 }
 
 /// Triangles filling `outer` (minus `hole`), each vertex (x, y, darkness, 0).
-fn fill(outer: &[[f32; 2]], hole: Option<&[[f32; 2]]>, darkness: f32) -> Vec<[f32; 4]> {
+fn fill(outer: &[[f32; 2]], holes: &[&[[f32; 2]]], darkness: f32) -> Vec<[f32; 4]> {
     let mut data: Vec<f64> = outer.iter().flat_map(|p| [p[0] as f64, p[1] as f64]).collect();
-    let mut holes = Vec::new();
-    if let Some(h) = hole {
-        holes.push(outer.len());
+    let mut starts = Vec::new();
+    for h in holes {
+        starts.push(data.len() / 2);
         data.extend(h.iter().flat_map(|p| [p[0] as f64, p[1] as f64]));
     }
-    let Ok(idx) = earcutr::earcut(&data, &holes, 2) else { return Vec::new() };
+    let Ok(idx) = earcutr::earcut(&data, &starts, 2) else { return Vec::new() };
     idx.into_iter().map(|i| [data[i * 2] as f32, data[i * 2 + 1] as f32, darkness, 0.0]).collect()
 }
 
@@ -993,33 +993,74 @@ impl Mask {
     /// Triangles (x, y, darkness, 0) covering what this mask blacks out; with a feather, a band along the
     /// outline fades from black to clear.
     pub fn triangles(&self) -> Vec<[f32; 4]> {
+        let Some((hole, mut band)) = self.edge_parts() else { return Vec::new() };
+        let mut out = if self.invert { fill(&OUTPUT, &[&hole], 1.0) } else { fill(&hole, &[], 1.0) };
+        out.append(&mut band);
+        out
+    }
+
+    /// The solid shape's outline (for an inverted mask: the hole's), and the soft-edge band's triangles.
+    fn edge_parts(&self) -> Option<(Vec<[f32; 2]>, Vec<[f32; 4]>)> {
         if self.points.len() < 3 {
-            return Vec::new();
+            return None;
         }
-        let outline = self.outline();
-        let points = &outline;
-        const OUTPUT: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let points = self.outline();
         let width = self.feather.max(0.0);
         if width <= 0.0 {
-            // Inverted: the whole output with the shape cut out as a hole.
-            return if self.invert { fill(&OUTPUT, Some(points), 1.0) } else { fill(points, None, 1.0) };
+            return Some((points, Vec::new()));
         }
         let (a, b) = self.edge.band(width);
-        let (inner, outer) = (offset_polygon(points, a), offset_polygon(points, b));
-        let (mut out, d_in, d_out) = if self.invert { (fill(&OUTPUT, Some(&outer), 1.0), 0.0, 1.0) } else { (fill(&inner, None, 1.0), 1.0, 0.0) };
+        let (inner, outer) = (offset_polygon(&points, a), offset_polygon(&points, b));
+        // Inverted: clear inside, dark outside; else dark inside, clear outside.
+        let (d_in, d_out) = if self.invert { (0.0, 1.0) } else { (1.0, 0.0) };
         let n = inner.len();
+        let mut band = Vec::with_capacity(n * 6);
         for i in 0..n {
             let j = (i + 1) % n;
             let (a, b, c, d) = ([inner[i][0], inner[i][1], d_in, 0.0], [inner[j][0], inner[j][1], d_in, 0.0], [outer[j][0], outer[j][1], d_out, 0.0], [outer[i][0], outer[i][1], d_out, 0.0]);
-            out.extend_from_slice(&[a, b, c, a, c, d]);
+            band.extend_from_slice(&[a, b, c, a, c, d]);
         }
-        out
+        Some((if self.invert { outer } else { inner }, band))
     }
+}
+
+/// The whole output, for inverted masks.
+const OUTPUT: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+
+/// Everything a set of masks blacks out. Inverted masks ("only show inside") work together: the output goes dark
+/// except inside any of them (two inverted masks = two windows), instead of each darkening the other's window.
+pub fn masks_triangles(masks: &[Mask]) -> Vec<[f32; 4]> {
+    let inverted: Vec<&Mask> = masks.iter().filter(|m| m.invert).collect();
+    let mut out: Vec<[f32; 4]> = masks.iter().filter(|m| !m.invert || inverted.len() == 1).flat_map(Mask::triangles).collect();
+    if inverted.len() > 1 {
+        let parts: Vec<(Vec<[f32; 2]>, Vec<[f32; 4]>)> = inverted.iter().filter_map(|m| m.edge_parts()).collect();
+        let holes: Vec<&[[f32; 2]]> = parts.iter().map(|(h, _)| h.as_slice()).collect();
+        out.extend(fill(&OUTPUT, &holes, 1.0));
+        out.extend(parts.into_iter().flat_map(|(_, band)| band));
+    }
+    out
 }
 
 #[cfg(test)]
 mod mask_corner_tests {
     use super::*;
+
+    #[test]
+    fn two_inverted_masks_are_two_windows() {
+        let left = Mask { invert: true, points: vec![[0.1, 0.1], [0.3, 0.1], [0.3, 0.3], [0.1, 0.3]], ..Default::default() };
+        let right = Mask { invert: true, points: vec![[0.6, 0.1], [0.8, 0.1], [0.8, 0.3], [0.6, 0.3]], ..Default::default() };
+        let dark = |tris: &[[f32; 4]], p: [f32; 2]| {
+            tris.chunks_exact(3).any(|t| {
+                let s = |a: [f32; 4], b: [f32; 4]| (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+                let (d1, d2, d3) = (s(t[0], t[1]), s(t[1], t[2]), s(t[2], t[0]));
+                !((d1 < 0.0 || d2 < 0.0 || d3 < 0.0) && (d1 > 0.0 || d2 > 0.0 || d3 > 0.0))
+            })
+        };
+        let tris = masks_triangles(&[left.clone(), right.clone()]);
+        assert!(!dark(&tris, [0.2, 0.2]) && !dark(&tris, [0.7, 0.2]), "both windows show");
+        assert!(dark(&tris, [0.5, 0.6]), "the rest is dark");
+        assert_eq!(masks_triangles(std::slice::from_ref(&left)), left.triangles(), "one inverted mask: as before");
+    }
 
     #[test]
     fn the_soft_edge_can_sit_inside_or_outside() {
@@ -1324,7 +1365,7 @@ impl Mapping {
 
     /// Everything the enabled masks black out, as one triangle list.
     pub fn mask_triangles(&self) -> Vec<[f32; 4]> {
-        self.placed_masks().iter().flat_map(Mask::triangles).collect()
+        masks_triangles(&self.placed_masks())
     }
 }
 

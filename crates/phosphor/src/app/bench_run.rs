@@ -224,6 +224,21 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "twowindows" {
+                // Two inverted masks on the first output: only two windows of the picture show.
+                self.state.comp.ensure_outputs();
+                let (a, b) = (self.state.comp.new_id(), self.state.comp.new_id());
+                if let Some(o) = self.state.comp.outputs.first_mut() {
+                    for (id, x) in [(a, 0.1), (b, 0.6)] {
+                        let m = o.mapping.add_mask(id);
+                        m.points = vec![[x, 0.1], [x + 0.2, 0.1], [x + 0.2, 0.3], [x, 0.3]];
+                        m.invert = true;
+                    }
+                    o.mapping.enabled = true;
+                    println!("QUICK twowindows");
+                }
+                continue;
+            }
             if name == "cornerpin" {
                 // The top layer pinned into a trapezoid (narrow at the top).
                 if let Some(l) = self.state.comp.layers.last_mut() {

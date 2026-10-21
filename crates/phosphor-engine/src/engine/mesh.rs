@@ -88,7 +88,7 @@ impl Engine {
             })
             .collect();
         let hash = hash_points(placed.iter().flat_map(|m| m.points.iter()).chain(handles.iter()), &flags);
-        let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || placed.iter().flat_map(mapping::Mask::triangles).collect()) else { return };
+        let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || mapping::masks_triangles(&placed)) else { return };
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [size.0 as f32, size.1 as f32];
         passes.push(Pass { entry: "fs_mask", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
