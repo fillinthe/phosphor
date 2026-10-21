@@ -4,6 +4,11 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.87 (2026-10-21)
+
+- **Fix:** 0.2.86 froze when the Mapping Studio opened. Fixed, and every release now opens each panel once
+  before it ships.
+
 ## 0.2.86 (2026-10-21)
 
 - **Fixes:**

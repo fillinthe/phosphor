@@ -602,6 +602,8 @@ struct BenchRun {
     rebuilt: bool,
     /// `--ui-shot`: the window picture was requested.
     shot_requested: bool,
+    /// `--tab all`: how many panels have been shown so far.
+    tabs_shown: usize,
 }
 
 /// What a Listen in the Mappings editor is for.

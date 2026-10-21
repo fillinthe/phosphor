@@ -21,6 +21,17 @@ impl PhosphorApp {
         if let Some(id) = run.cfg.select.take_if(|_| now - started >= 0.5) {
             self.state.selected = Some(id);
         }
+        // --tab all: every panel in turn, so one that panics when drawn fails the bench.
+        if run.cfg.tab.as_deref() == Some("all") {
+            let due = ((now - started) / 0.2) as usize;
+            if run.tabs_shown <= due && run.tabs_shown < Tab::ALL.len() {
+                let tab = Tab::ALL[run.tabs_shown];
+                run.tabs_shown += 1;
+                println!("TAB {}", tab.title());
+                self.show_tab(tab);
+                return;
+            }
+        }
         if let Some(col) = run.cfg.trigger_column.take_if(|_| now - started >= run.cfg.trigger_at) {
             self.state.trigger(Trigger::Column(col), now);
             return;

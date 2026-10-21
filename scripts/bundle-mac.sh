@@ -104,6 +104,9 @@ codesign "${SIGN_ARGS[@]}" --entitlements scripts/Phosphor.entitlements "$APP" >
 codesign --verify --deep --strict "$APP"
 echo "built $APP ($(du -sh "$APP" | cut -f1))"
 
+# Every panel must draw without panicking before this build goes anywhere.
+scripts/panel-check.sh "$APP/Contents/MacOS/Phosphor"
+
 if [[ "${1:-}" != "--no-install" ]]; then
   rm -rf /Applications/Phosphor.app
   cp -R "$APP" /Applications/
