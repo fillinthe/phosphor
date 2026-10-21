@@ -79,3 +79,42 @@ fn ayuv_frames_convert_with_their_alpha() {
         assert!((*c as i32 - 128).abs() <= 4, "50% grey expected, got {px:?}");
     }
 }
+
+/// Every blend mode against its formula: 50% grey over 25% grey (mattes cut the 25% by the top layer's luma/alpha).
+#[test]
+fn blend_modes_match_their_formulas() {
+    use crate::BlendMode as B;
+    let Some(mut engine) = test_engine() else { return };
+    let solid = |id: u64, v: f32, blend: B| {
+        let mut l = LayerState { id, source: SourceSpec::Generator("solid".into()), blend, ..Default::default() };
+        l.generator_values = vec![v, v, v];
+        l
+    };
+    let expect = [
+        (B::Normal, 0.5),
+        (B::Add, 0.75),
+        (B::Multiply, 0.125),
+        (B::Screen, 0.625),
+        (B::Overlay, 0.25),
+        (B::Difference, 0.25),
+        (B::Lighten, 0.5),
+        (B::Darken, 0.25),
+        (B::Subtract, 0.0),
+        (B::Exclusion, 0.5),
+        (B::LumaMask, 0.125),
+        (B::InverseLumaMask, 0.125),
+        (B::AlphaMask, 0.25),
+    ];
+    assert_eq!(expect.len(), B::ALL.len(), "a new blend mode needs a line here");
+    let mut wrong = Vec::new();
+    for (mode, want) in expect {
+        let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+        comp.layers.push(solid(1, 0.25, B::Normal));
+        comp.layers.push(solid(2, 0.5, mode));
+        let got = middle(&mut engine, &comp)[0] as f32 / 255.0;
+        if (got - want).abs() > 0.02 {
+            wrong.push(format!("{mode:?}: {got:.3}, expected {want}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
