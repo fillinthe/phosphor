@@ -314,6 +314,11 @@ impl Engine {
         crate::shaders::register_custom(desc);
     }
 
+    /// Is an imported shader still waiting to be built (it draws blank until then)? Failures are in `failed_modules`.
+    pub fn shader_pending(&self, entry: &str) -> bool {
+        self.pending_modules.contains_key(entry) || self.compiling.contains(entry)
+    }
+
     /// True if `entry` is ready to draw. Compiles pending shaders within a small per-frame budget
     /// so browsing a big library never stalls the show.
     /// Is this shader ready to draw? An imported shader used for the first time is validated and built on a

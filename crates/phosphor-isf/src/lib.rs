@@ -458,6 +458,10 @@ void phosphor_vs_user() {{
     if mad_shim::called_not_defined(&whole, "texture") {
         full.push_str("#define texture(img, nuv) textureLod(sampler2D(img, phosphor_samp), phosphor_flip(nuv), 0.0)\n");
     }
+    // `textureGrad` (explicit derivatives, for mip selection): every picture here has one level, so a plain read.
+    if mad_shim::called_not_defined(&whole, "textureGrad") {
+        full.push_str("#define textureGrad(img, nuv, gx, gy) textureLod(sampler2D(img, phosphor_samp), phosphor_flip(nuv), 0.0)\n");
+    }
     if includes.iter().any(|f| f == "MadCommon.glsl") {
         full.push_str(&glsl::mad_common_shim(&whole));
     }

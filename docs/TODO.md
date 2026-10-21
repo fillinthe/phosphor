@@ -4,7 +4,8 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 ## Next round (2026-10-21, "keep going on the large stuff"), quickest first
 
-Released in **0.2.97** (Mac, Windows zip + installer, Linux ARM; installed here): the three items marked done below.
+Released in **0.2.97** (Mac, Windows zip + installer, Linux ARM; installed here): the first three items below.
+Hap R is in **0.2.98** (published), lostjared's effects in **0.2.99**. This round is done.
 
 - [x] **Mapped controls stand out** (asked mid-way): gold outline and tint on every mapped control. Checked on a screenshot.
 - [x] **Stereo audio pictures**: row 0 left, row 1 right, both sides in each pixel's colours; newest 512 samples in
@@ -15,8 +16,9 @@ Released in **0.2.97** (Mac, Windows zip + installer, Linux ARM; installed here)
       (`out`/`varying`). MadMapper's **Transform Particles** now works (checked: copies of the test card fly out and
       blend over each other). The 406-shader corpus went from 396 to 397. MadMapper's "3D Particles" and
       "instancing" generators still don't: they draw their own 3D meshes (vertex attributes), which Phosphor's quad can't stand in for.
-- [ ] **Hand-picked lostjared effects**: render every one of the 2,700 (MIT) to a picture, sort out the blank /
-      broken / near-duplicates automatically, look at the rest on contact sheets, ship the best few dozen.
+- [x] **Hand-picked lostjared effects**: 53 shipped (0.2.99). 1,330 of the collection compiled; drawn over a photo,
+      557 dropped automatically (blank, untouched, hard flashing, near-duplicates), the other 773 looked at on contact
+      sheets. Not checked moving in the app with real music.
 - [x] **Hap R recording** (BC7: Hap's best quality), and with it a real check of Hap R playback. Record and Convert
       both offer it. Playback didn't work before: FFmpeg doesn't know the Hap R tag, so files opened as an unknown codec
       (fixed). Checked: 1080p recording kept up at 30 fps, and the recording played back with the right picture. Not
