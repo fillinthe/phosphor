@@ -65,6 +65,8 @@ mod tracking;
 mod pjlink;
 mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
+mod webrtc;
+#[cfg(not(target_arch = "wasm32"))]
 mod scanner;
 #[cfg(not(target_arch = "wasm32"))]
 mod dylib;
