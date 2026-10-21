@@ -36,6 +36,7 @@ impl PhosphorApp {
         }
         storage.set_string(KEY_PROJECT_PATH, self.state.project_path.clone().unwrap_or_default());
         storage.set_string(KEY_UPDATE_SKIP, self.state.updater.skipped.clone());
+        storage.set_string(KEY_FOLLOW_AT_LAUNCH, self.state.follow_at_launch.clone());
         storage.set_string(KEY_LOCK, self.lock.to_setting());
         if let Some(t) = layout::to_text(&self.state.render_rate) {
             storage.set_string(KEY_RENDER_RATE, t);

@@ -79,6 +79,8 @@ const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
 const KEY_REMOTE_PASSWORD: &str = "remote_password";
 const KEY_UPDATE_SKIP: &str = "update_skip";
+/// A player: the leader to follow every time Phosphor starts ("" = none).
+const KEY_FOLLOW_AT_LAUNCH: &str = "follow_at_launch";
 const KEY_LOCK: &str = "lock";
 const KEY_RENDER_RATE: &str = "render_rate";
 const KEY_RECENT_PROJECTS: &str = "recent_projects";
@@ -152,6 +154,8 @@ pub struct State {
     /// Following another Phosphor (`crate::follow`): the link to the leader, and what this one sends when it leads.
     #[cfg(not(target_arch = "wasm32"))]
     pub following: Option<crate::follow::Link>,
+    /// A player: follow this leader every time Phosphor starts (empty = don't).
+    pub follow_at_launch: String,
     #[cfg(not(target_arch = "wasm32"))]
     pub leader: crate::follow::Leader,
     /// FFGL plugins: the list found, and the instances drawing for effects and sources.

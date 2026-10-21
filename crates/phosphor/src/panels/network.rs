@@ -231,7 +231,17 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
             });
             if stop {
                 st.following = None;
+                st.follow_at_launch.clear();
                 return;
+            }
+            // A player: a Mac (or PC) that only plays this show, from login, on its own projectors.
+            let addr = st.following.as_ref().map(|l| l.address.clone()).unwrap_or_default();
+            let mut always = st.follow_at_launch == addr;
+            if crate::ui::toggle(ui, &mut always, "Every time Phosphor starts (a player)")
+                .on_hover_text("This Mac becomes a player: it follows this leader at launch. With \"Start Phosphor when this Mac logs in\" and \"Open outputs on their screens\" (Output panel) it needs no one to set it up after a restart")
+                .changed()
+            {
+                st.follow_at_launch = if always { addr } else { String::new() };
             }
             hint(ui, "This Mac plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
         }
