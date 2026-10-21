@@ -71,6 +71,8 @@ pub struct BenchConfig {
     pub trigger_at: f64,
     /// Host a network session and analyse viewer audio.
     pub net: bool,
+    /// Follow the Phosphor at this address (a FOLLOW line at the end).
+    pub follow: Option<String>,
     /// Turn NDI output on.
     pub ndi: bool,
     /// Require this password for remote control.
@@ -106,6 +108,7 @@ impl BenchConfig {
                 ("--stream-copy", Some(v)) => cfg.stream_copy = Some(v),
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
+                ("--follow", Some(v)) => cfg.follow = Some(v),
                 ("--window", Some(v)) => cfg.window = v.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))),
                 ("--area-tab", Some(v)) => cfg.area_tab = Some(v),
                 ("--brightness", Some(v)) => cfg.brightness = v.parse().ok(),

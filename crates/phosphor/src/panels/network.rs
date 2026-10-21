@@ -3,6 +3,8 @@
 use super::*;
 
 pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
+    #[cfg(not(target_arch = "wasm32"))]
+    follow_section(ui, st);
     let State { net, notice, .. } = &mut *st;
     ui.label(RichText::new("Session").strong());
     hint(ui, "Anyone on your network opens the link and sees the output live; they can send their music back.");
@@ -211,4 +213,39 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     if toggle {
         st.toggle_play_qr(now);
     }
+}
+
+/// Follow another Phosphor: play its show (project, beat, clips) on this machine's own outputs (`crate::follow`).
+#[cfg(not(target_arch = "wasm32"))]
+fn follow_section(ui: &mut egui::Ui, st: &mut State) {
+    ui.label(RichText::new("Follow another Phosphor").strong());
+    let key = egui::Id::new("phosphor_follow_address");
+    match &st.following {
+        Some(l) => {
+            let rtt = l.rtt().map(|r| format!(" · {:.0} ms away", r * 1000.0)).unwrap_or_default();
+            let text = format!("{} {}: {}{rtt}", icon::LINK, l.address, l.status);
+            let mut stop = false;
+            ui.horizontal(|ui| {
+                ui.colored_label(accent(), text);
+                stop = ui.button(label(icon::STOP, "Stop following")).clicked();
+            });
+            if stop {
+                st.following = None;
+                return;
+            }
+            hint(ui, "This Mac plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
+        }
+        None => {
+            let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+            ui.horizontal(|ui| {
+                crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(220.0));
+                if ui.add_enabled(!addr.trim().is_empty(), egui::Button::new(label(icon::LINK, "Follow"))).clicked() {
+                    st.following = Some(crate::follow::Link::connect(&addr));
+                }
+            });
+            hint(ui, "On the leading Mac, start its Session below. Then type its address here: both play the same show in sync, each on its own projectors.");
+            ui.ctx().data_mut(|d| d.insert_temp(key, addr));
+        }
+    }
+    ui.separator();
 }

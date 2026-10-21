@@ -27,6 +27,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                         crate::net::PeerKind::Viewer => (icon::EYE, "watching"),
                         crate::net::PeerKind::Audio => (icon::MICROPHONE, "sending audio"),
                         crate::net::PeerKind::Guest => (icon::GAME_CONTROLLER, "audience (play page)"),
+                        crate::net::PeerKind::Follower => (icon::MONITOR_PLAY, "following this show"),
                     };
                     ui.label(format!("{glyph} {}", p.device));
                     ui.monospace(&p.ip);

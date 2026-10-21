@@ -15,6 +15,8 @@ mod explorer;
 #[cfg(not(target_arch = "wasm32"))]
 mod folders;
 #[cfg(not(target_arch = "wasm32"))]
+mod follow;
+#[cfg(not(target_arch = "wasm32"))]
 mod isf_lib;
 mod media;
 mod net;

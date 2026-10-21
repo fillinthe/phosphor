@@ -79,6 +79,30 @@ impl PhosphorApp {
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
         #[cfg(not(target_arch = "wasm32"))]
+        if let Some(l) = &self.state.following {
+            let show = l.show_time().unwrap_or(f64::NAN);
+            println!(
+                "FOLLOW {} projects={} layers={} rtt_ms={:.1} show={:.3} beats={:.3} bpm={} wall={:.3}",
+                l.status,
+                l.projects,
+                self.state.comp.layers.len(),
+                l.rtt().unwrap_or(f64::NAN) * 1000.0,
+                show,
+                self.state.clock.beats(now),
+                self.state.clock.bpm,
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
+            );
+        }
+        if self.state.net.followers.load(std::sync::atomic::Ordering::Relaxed) > 0 {
+            println!(
+                "LEADER followers={} beats={:.3} now={now:.3} bpm={} wall={:.3}",
+                self.state.net.followers.load(std::sync::atomic::Ordering::Relaxed),
+                self.state.clock.beats(now),
+                self.state.clock.bpm,
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
+            );
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if self.state.scanner.status != crate::scanner::Status::Idle {
             println!("SCAN {:?}", self.state.scanner.status);
         }
