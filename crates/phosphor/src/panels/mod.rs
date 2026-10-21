@@ -43,6 +43,8 @@ mod stage;
 mod slice_tree;
 mod studio;
 mod surface;
+#[cfg(not(target_arch = "wasm32"))]
+mod tracking;
 
 pub(crate) use account::*;
 pub(crate) use audio::*;

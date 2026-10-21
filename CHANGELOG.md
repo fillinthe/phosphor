@@ -4,6 +4,17 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.84 (2026-10-20)
+
+- **Video tracking** (as in VDMX, Mac): Modulators › Video tracking. Pick what to watch (usually a camera layer),
+  switch on Faces, Hands and/or Body, and Phosphor follows them with Apple Vision: the face's position and size, the
+  index fingertip and a thumb-to-finger pinch, the hips and both wrists. Each one is a modulator ("Track Face X",
+  "Track Pinch"…) that any slider can follow: right-click it › Modulate. A small picture shows what it sees, with a
+  dot on each find; Smoothing takes out the jitter. Nothing runs while it's off.
+- **Bezier handles on mask points** (as in MadMapper): right-click a mask point › Bezier handles, then drag either
+  handle to bend the outline there (the other side mirrors it).
+- Masks now redraw on the output straight away when you switch Smooth or a sharp corner.
+
 ## 0.2.83 (2026-10-20)
 
 - **Slice groups** (as in MadMapper): in the Mapping Studio, right-click slices › Group these slices (or right-click

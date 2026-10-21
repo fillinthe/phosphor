@@ -124,8 +124,8 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
         {
             let x = ((p.x - frame.left()) / frame.width()).clamp(0.0, 1.0);
             let y = (1.0 - (p.y - frame.top()) / frame.height()).clamp(0.0, 1.0);
-            set_hand(st, &format!("Preview {n} X"), x);
-            set_hand(st, &format!("Preview {n} Y"), y);
+            st.comp.set_hand(&format!("Preview {n} X"), x);
+            st.comp.set_hand(&format!("Preview {n} Y"), y);
         }
         // Where the pointer last was: a crosshair from the two modulators.
         let get = |name: &str| st.comp.modulators.iter().find(|m| m.name == name).map(|m| m.value);
@@ -145,16 +145,3 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
 
 // Mixer: one vertical fader strip per layer, plus master.
 
-/// Sets (or first makes) a Hand modulator called `name` to `v`: X/Y from a preview window.
-fn set_hand(st: &mut State, name: &str, v: f32) {
-    if let Some(m) = st.comp.modulators.iter_mut().find(|m| m.name == name) {
-        m.value = v;
-        return;
-    }
-    if st.comp.modulators.len() >= phosphor_engine::control::MAX_SHARED {
-        return;
-    }
-    let id = st.comp.new_id();
-    let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() };
-    st.comp.modulators.push(phosphor_engine::Modulator { id, name: name.to_string(), signal, value: v, ..Default::default() });
-}
