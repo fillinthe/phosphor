@@ -12,6 +12,10 @@
 //! ```
 //!
 //! Every helper from the built-in shaders (src, luma, palette, hash21, rgb2hsv, …) is available.
+//!
+//! More passes: `// @pass blur_x 0.5` declares a pass drawn first (here at half size) by `fn blur_x(in: VOut) ->
+//! vec4f`; later passes and `main` read its picture with `read_blur_x(uv)` (blurs, glows, bloom). `// @feedback`
+//! instead gives `last(uv)`, the shader's own previous frame.
 
 use crate::shaders::{self, MAX_PARAMS, Param, ShaderDesc};
 
@@ -38,7 +42,12 @@ pub struct Header {
     pub params: Vec<Param>,
     /// `// @feedback`: `last(uv)` reads this shader's previous frame (trails, echoes, smears).
     pub feedback: bool,
+    /// `// @pass name [scale]`: passes drawn before `main`, in order, each into its own picture (`read_<name>(uv)`).
+    pub passes: Vec<(String, f32)>,
 }
+
+/// At most this many `@pass` lines (each one is a buffer).
+pub const MAX_PASSES: usize = 8;
 
 fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
@@ -51,7 +60,7 @@ pub fn slug(name: &str) -> String {
 }
 
 pub fn parse_header(source: &str) -> Result<Header, CompileError> {
-    let mut header = Header { name: "Untitled".into(), generator: false, params: Vec::new(), feedback: false };
+    let mut header = Header { name: "Untitled".into(), generator: false, params: Vec::new(), feedback: false, passes: Vec::new() };
     for (i, line) in source.lines().enumerate() {
         let Some(rest) = line.trim().strip_prefix("// @") else { continue };
         let err = |m: &str| CompileError { line: Some(i as u32 + 1), message: m.to_string() };
@@ -61,6 +70,24 @@ pub fn parse_header(source: &str) -> Result<Header, CompileError> {
             "name" => header.name = value.to_string(),
             "kind" => header.generator = value.eq_ignore_ascii_case("generator"),
             "feedback" => header.feedback = true,
+            "pass" => {
+                let mut parts = value.split_whitespace();
+                let name = parts.next().unwrap_or_default();
+                if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || name.starts_with(|c: char| c.is_ascii_digit()) || name == "main" {
+                    return Err(err("@pass needs a name made of letters, digits and _ (then an optional size, 0.05 to 1)"));
+                }
+                let scale = match parts.next() {
+                    Some(s) => s.parse::<f32>().map_err(|_| err("@pass size must be a number (1 = full size, 0.5 = half)"))?.clamp(0.05, 1.0),
+                    None => 1.0,
+                };
+                if header.passes.iter().any(|(n, _)| n == name) {
+                    return Err(err("two passes with the same name"));
+                }
+                if header.passes.len() >= MAX_PASSES {
+                    return Err(err("at most 8 passes"));
+                }
+                header.passes.push((name.to_string(), scale));
+            }
             "param" => {
                 let parts: Vec<&str> = value.split_whitespace().collect();
                 if parts.len() < 4 {
@@ -80,7 +107,28 @@ pub fn parse_header(source: &str) -> Result<Header, CompileError> {
             _ => {}
         }
     }
+    if header.feedback && !header.passes.is_empty() {
+        return Err(CompileError { line: None, message: "use either @feedback or @pass, not both".into() });
+    }
     Ok(header)
+}
+
+/// How a user shader runs when it isn't one plain pass: `@feedback` or its `@pass` list.
+pub fn plan_for(header: &Header) -> Option<shaders::PassPlan> {
+    if header.feedback {
+        return Some(feedback_plan());
+    }
+    if header.passes.is_empty() {
+        return None;
+    }
+    let mut passes: Vec<shaders::PlanPass> = header
+        .passes
+        .iter()
+        .enumerate()
+        .map(|(i, (_, scale))| shaders::PlanPass { target: Some(i), float: false, width: Some(format!("$WIDTH * {scale}")), height: Some(format!("$HEIGHT * {scale}")) })
+        .collect();
+    passes.push(shaders::PlanPass::default());
+    Some(shaders::PassPlan { passes, buffers: header.passes.len(), vars: Vec::new(), images: Vec::new() })
 }
 
 /// Builds the module source for a user shader, renaming `fn main(` to `entry`.
@@ -100,6 +148,27 @@ pub(crate) fn module_source(source: &str, entry: &str) -> Result<(String, u32), 
         let wrapper = format!(
             "\n// Feedback: last frame, and the two passes.\nfn last(uv: vec2f) -> vec4f {{\n    return textureSampleLevel(buf0, samp, uv, 0.0);\n}}\n@fragment\nfn {entry}(in: VOut) -> @location(0) vec4f {{\n    if u.p[15].x < 0.5 {{\n        return {entry}_user(in);\n    }}\n    return textureSampleLevel(buf0, samp, in.uv, 0.0);\n}}\n"
         );
+        return Ok((format!("{prelude}\n{user}{wrapper}"), prelude_lines));
+    }
+    let passes = parse_header(source).map(|h| h.passes).unwrap_or_default();
+    if !passes.is_empty() {
+        // Several passes (`plan_for`): one entry point that runs pass k's function, `main` last. Each pass's
+        // picture is buf k, read with read_<name>(uv). Added after the user's code so error lines stay theirs.
+        for (name, _) in &passes {
+            if !source.contains(&format!("fn {name}(")) {
+                return Err(CompileError { line: None, message: format!("@pass {name}: define fn {name}(in: VOut) -> vec4f") });
+            }
+        }
+        let user = source.replace("@fragment", "").replace("-> @location(0)", "->").replace("fn main(", &format!("fn {entry}_main("));
+        let mut wrapper = String::from("\n// Passes: their pictures, and which one this draw is.\n");
+        for (i, (name, _)) in passes.iter().enumerate() {
+            wrapper.push_str(&format!("fn read_{name}(uv: vec2f) -> vec4f {{\n    return textureSampleLevel(buf{i}, samp, uv, 0.0);\n}}\n"));
+        }
+        wrapper.push_str(&format!("@fragment\nfn {entry}(in: VOut) -> @location(0) vec4f {{\n"));
+        for (i, (name, _)) in passes.iter().enumerate() {
+            wrapper.push_str(&format!("    if u.p[15].x < {}.5 {{\n        return {name}(in);\n    }}\n", i));
+        }
+        wrapper.push_str(&format!("    return {entry}_main(in);\n}}\n"));
         return Ok((format!("{prelude}\n{user}{wrapper}"), prelude_lines));
     }
     let user = source.replace("fn main(", &format!("fn {entry}("));
@@ -314,6 +383,52 @@ fn main(in: VOut) -> @location(0) vec4f {
 ",
     },
     Template {
+        name: "Passes: soft glow",
+        about: "A glow built from three passes: bright parts picked out and blurred across at half size, then down, then added back",
+        source: "// @name My Glow
+// @kind effect
+// @pass bright 0.5
+// @pass blur_x 0.5
+// @pass blur_y 0.5
+// @param Threshold 0 1 0.6
+// @param Size 0 8 3
+// @param Amount 0 3 1.2
+
+// Each @pass line is a step drawn before main, into its own picture (0.5 = half size: faster, softer).
+// Write a function with the pass's name; later steps read its picture with read_<name>(uv).
+
+fn bright(in: VOut) -> vec4f {
+    let c = src(in.uv);
+    return c * smoothstep(P(0u), P(0u) + 0.2, luma(c.rgb));   // keep only the bright parts
+}
+
+fn blur_x(in: VOut) -> vec4f {
+    let step = vec2f(P(1u) / u.resolution.x, 0.0);
+    var sum = vec4f(0.0);
+    for (var i = -4; i <= 4; i++) {
+        sum += read_bright(in.uv + step * f32(i));         // sideways
+    }
+    return sum / 9.0;
+}
+
+fn blur_y(in: VOut) -> vec4f {
+    let step = vec2f(0.0, P(1u) / u.resolution.y);
+    var sum = vec4f(0.0);
+    for (var i = -4; i <= 4; i++) {
+        sum += read_blur_x(in.uv + step * f32(i));         // then up and down
+    }
+    return sum / 9.0;
+}
+
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    let glow = read_blur_y(in.uv);
+    return vec4f(c.rgb + glow.rgb * P(2u), c.a);           // the glow added on top
+}
+",
+    },
+    Template {
         name: "Generator: pulsing rings",
         about: "Rings moving out from the centre; map Pulse to the kick to make them hit with the music",
         source: "// @name My Rings
@@ -398,6 +513,20 @@ pub fn builtin_as_custom(id: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passes_are_declared_and_checked() {
+        let h = parse_header("// @pass blur_x 0.5\n// @pass blur_y\n").unwrap();
+        assert_eq!(h.passes, vec![("blur_x".to_string(), 0.5), ("blur_y".to_string(), 1.0)]);
+        let plan = plan_for(&h).unwrap();
+        assert_eq!((plan.passes.len(), plan.buffers), (3, 2), "two buffers, then the output");
+        assert_eq!(plan.passes[0].width.as_deref(), Some("$WIDTH * 0.5"));
+        assert!(parse_header("// @pass 2fast\n").is_err());
+        assert!(parse_header("// @pass a\n// @pass a\n").is_err());
+        assert!(parse_header("// @pass a\n// @feedback\n").is_err(), "one or the other");
+        let missing = module_source("// @pass glow\n@fragment\nfn main(in: VOut) -> @location(0) vec4f { return src(in.uv); }\n", "e");
+        assert!(missing.unwrap_err().message.contains("fn glow("));
+    }
 
     #[test]
     fn template_and_builtin_copies_compile() {

@@ -78,7 +78,7 @@ app that's much smaller and lighter on the CPU.
     - [ ] NotchLC: decoder is in; find a sample file to verify (no encoder available here)
     - [x] Hap / Hap Alpha / Hap Q / Hap Q Alpha / Hap R decode (unit tests per format; GPU BC7 path for Hap R)
     - [ ] Verify Hap Q and Hap R files made by other apps (no encoder here)
-    - [ ] Run the codec test on Windows in CI (its FFmpeg differs)
+    - [x] Run the codec test on Windows in CI (its FFmpeg differs): every Windows build plays them (CODECS line)
     - [ ] Not possible without the makers' SDKs: Blackmagic RAW, RED R3D, ARRIRAW (the converter can't read them
           either; export to ProRes from their apps)
 12. **Every effect** (asked 2026-10-20): ISF collection 327/327 ✔, MadMapper materials 39/42, Surface FX 19/23.
@@ -96,7 +96,7 @@ app that's much smaller and lighter on the CPU.
     effects with live preview. Next:
     - [x] "New from template…" in the Shader Editor: 8 starters, every line explained (2026-10-20)
     - [x] Feedback in user shaders (`// @feedback` → `last(uv)`) + Trails template (2026-10-20)
-    - [ ] User shaders with several passes / blur buffers
+    - [x] User shaders with several passes / blur buffers (`// @pass`, 0.2.85)
     - [ ] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code
     - [ ] Describe it in words → an AI drafts the shader, previewed live, editable (needs an API key: owner)
     - [ ] Share effects to your account / the online library
