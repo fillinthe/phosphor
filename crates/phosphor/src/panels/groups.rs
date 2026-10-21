@@ -111,7 +111,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
             ui.close();
         }
     });
-    let dropped = frame.response.dnd_release_payload::<u64>().map(|p| *p);
+    let dropped = crate::ui::drop_payload::<u64>(&frame.response).map(|p| *p);
     if frame.response.dnd_hover_payload::<u64>().is_some() {
         ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }

@@ -56,6 +56,9 @@ pub struct BenchConfig {
     pub stream: Option<String>,
     /// `--right-click-studio`: right-clicks the middle of the Mapping Studio's output canvas (shows its menu).
     pub right_click_studio: bool,
+    /// `--drag x,y:x,y` (window points; `studio` = the middle of the Mapping Studio canvas): a real drag with the
+    /// mouse, pressed at the first point, moved there in steps, released at the second (drag and drop tests).
+    pub drag: Option<(String, String)>,
     pub stream2: Option<String>,
     pub stream_copy: Option<String>,
     /// Open the import chooser for this Resolume / VDMX file.
@@ -110,6 +113,7 @@ impl BenchConfig {
                 ("--stream-copy", Some(v)) => cfg.stream_copy = Some(v),
                 ("--export", Some(v)) => cfg.export = Some(v),
                 ("--tab", Some(v)) => cfg.tab = Some(v),
+                ("--drag", Some(v)) => cfg.drag = v.split_once(':').map(|(a, b)| (a.to_string(), b.to_string())),
                 ("--follow", Some(v)) => cfg.follow = Some(v),
                 ("--window", Some(v)) => cfg.window = v.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))),
                 ("--area-tab", Some(v)) => cfg.area_tab = Some(v),

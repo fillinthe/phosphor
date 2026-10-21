@@ -712,11 +712,41 @@ pub struct PhosphorApp {
     heartbeat: crate::recovery::Heartbeat,
 }
 
+/// Bench `--drag`: one step of a scripted mouse drag per UI frame, starting a second in (the panels are drawn).
+fn bench_drag(run: &mut BenchRun, ctx: &egui::Context, raw: &mut egui::RawInput) {
+    let Some((from, to)) = run.cfg.drag.clone() else { return };
+    let point = |s: &str| -> Option<egui::Pos2> {
+        if s == "studio" {
+            return ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("studio_canvas_rect"))).map(|r| r.center());
+        }
+        let (x, y) = s.split_once(',')?;
+        Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
+    };
+    let step = ctx.data(|d| d.get_temp::<u32>(egui::Id::new("bench_drag_step"))).unwrap_or(0);
+    if ctx.input(|i| i.time) < 1.0 {
+        return;
+    }
+    let (Some(a), Some(b)) = (point(&from), point(&to)) else { return };
+    const STEPS: u32 = 12;
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    match step {
+        0 => raw.events.extend([egui::Event::PointerMoved(a), button(a, true)]),
+        s if s <= STEPS => raw.events.push(egui::Event::PointerMoved(a + (b - a) * (s as f32 / STEPS as f32))),
+        s if s == STEPS + 1 => raw.events.push(button(b, false)),
+        _ => {
+            run.cfg.drag = None;
+            println!("DRAG done {from} -> {to}");
+        }
+    }
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("bench_drag_step"), step + 1));
+}
+
 impl eframe::App for PhosphorApp {
     /// Bench `--right-click-studio`: a real right-click (press + release) in the middle of the Studio canvas, a
     /// moment after it has been drawn, so a UI shot can show the menu.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         let Some(run) = self.bench.as_mut() else { return };
+        bench_drag(run, ctx, raw);
         if !run.cfg.right_click_studio {
             return;
         }

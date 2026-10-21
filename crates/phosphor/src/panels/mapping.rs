@@ -755,15 +755,16 @@ fn slice_drop(ui: &mut egui::Ui, frame: egui::Rect, mapping: &Mapping) {
     if !ctx.input(|i| i.pointer.any_released()) {
         return;
     }
-    let what = if let Some(m) = egui::DragAndDrop::take_payload::<super::MediaDrag>(&ctx) {
-        SliceDrop::Media(m.0)
-    } else if let Some(d) = egui::DragAndDrop::take_payload::<super::SourceDrag>(&ctx) {
-        SliceDrop::Source((*d).clone())
-    } else if let Some(l) = egui::DragAndDrop::take_payload::<u64>(&ctx) {
-        SliceDrop::Layer(*l)
+    // `take_payload` drops whatever is carried even when it's another type: look before taking.
+    use egui::DragAndDrop as Dnd;
+    let what = if Dnd::has_payload_of_type::<super::MediaDrag>(&ctx) {
+        Dnd::take_payload::<super::MediaDrag>(&ctx).map(|m| SliceDrop::Media(m.0))
+    } else if Dnd::has_payload_of_type::<super::SourceDrag>(&ctx) {
+        Dnd::take_payload::<super::SourceDrag>(&ctx).map(|d| SliceDrop::Source((*d).clone()))
     } else {
-        return;
+        Dnd::take_payload::<u64>(&ctx).map(|l| SliceDrop::Layer(*l))
     };
+    let Some(what) = what else { return };
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(SLICE_DROP), (s.id, what)));
 }
 
