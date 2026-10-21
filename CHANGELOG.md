@@ -6,6 +6,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.86 (2026-10-21)
 
+- **Several "show only inside" masks work together:** two inverted masks now show two windows of the picture.
+  Before, each one blacked out the other's window and the output went black.
 - **Scopes** (as in VDMX): a new Scopes panel (View › Panels, or the Outputs area) shows a waveform, RGB parade,
   vectorscope or histogram of the mix or any layer, for matching colours between cameras, clips and projectors.
   It only measures while it's on screen.
