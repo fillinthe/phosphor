@@ -4,6 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.88 (2026-10-21)
+
+- **Patches: build an effect from blocks, no code.** In the Shader Editor, **+ Patch** opens a canvas: right-click
+  to add blocks (pictures like noise, rings and stripes; colour; warps like kaleidoscope, ripple and swirl; blur,
+  glow and edges; ways to mix two pictures; and **Last frame** for trails), then drag from one block's dot to the
+  next to wire them. The result is a normal effect or generator: it shows in the Effects list, and every block
+  slider becomes one of its settings, so you can map it to MIDI and modulate it. **Code** shows the shader the
+  blocks make, and **Turn into code** carries on from there by hand.
+- Your own shaders can now use extra passes and trails (`@pass` and `@feedback`) together.
+
 ## 0.2.87 (2026-10-21)
 
 - **Fix:** 0.2.86 froze when the Mapping Studio opened. Fixed, and every release now opens each panel once

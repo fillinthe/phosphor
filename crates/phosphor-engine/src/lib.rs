@@ -8,6 +8,7 @@ mod engine;
 mod gpu;
 pub mod expr;
 pub mod mapping;
+pub mod patch;
 pub mod model;
 pub mod shaders;
 

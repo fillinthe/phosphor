@@ -97,7 +97,7 @@ app that's much smaller and lighter on the CPU.
     - [x] "New from template…" in the Shader Editor: 8 starters, every line explained (2026-10-20)
     - [x] Feedback in user shaders (`// @feedback` → `last(uv)`) + Trails template (2026-10-20)
     - [x] User shaders with several passes / blur buffers (`// @pass`, 0.2.85)
-    - [ ] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code
+    - [x] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code (0.2.88: Shader Editor › + Patch)
     - [ ] Describe it in words → an AI drafts the shader, previewed live, editable (needs an API key: owner)
     - [ ] Share effects to your account / the online library
 14. **Web control for the audience and guests** (asked 2026-10-20):
