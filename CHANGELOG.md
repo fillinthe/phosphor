@@ -4,6 +4,18 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.93 (2026-10-21)
+
+- **Curved slice edges:** turn on Curved edges on a slice and drag the two handles on each edge to bend it onto
+  round tables, arches and curved screens; the picture follows. Works with Mesh warp too.
+- **Movie sound in streams and recordings:** Stream & Record › Movie sound puts the sound of the movies playing into
+  your stream or recording, in sync with the picture, mixed with your mic or interface if you pick one too.
+- **Choose where movie sound plays:** Audio › Plays on (headphones, an interface, a loopback…). Remembered.
+- **Step tracks fire clips:** a gate step track can play clips, fire columns or switch any control on each lit step,
+  a clip sequencer on the beat.
+- **Lights are controls:** a moving head's pan, tilt, dimmer and movement size, and any light's brightness, can be
+  learned to MIDI, modulated, locked, put on the Control Surface, and set over OSC.
+
 ## 0.2.92 (2026-10-21)
 
 - **Describe a shader (AI):** in the Shader Editor, Describe it… — say what it should look like and the AI writes it
