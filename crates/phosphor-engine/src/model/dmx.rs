@@ -163,6 +163,15 @@ impl HeadMotion {
     }
 }
 
+/// A moving head channel after its layout (gobo, prism, zoom, strobe, focus…): a name and a level.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExtraChannel {
+    pub name: String,
+    /// 0..1, sent as 0–255.
+    pub value: f32,
+}
+
 /// One LED strip, matrix or set of lights.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -195,6 +204,8 @@ pub struct Fixture {
     pub motion_size: f32,
     pub motion_beats: f32,
     pub dimmer: f32,
+    /// Moving heads: channels after the layout's, in order (gobo, prism, zoom…), each a control of its own.
+    pub extra: Vec<ExtraChannel>,
 }
 
 impl Default for Fixture {
@@ -220,12 +231,14 @@ impl Default for Fixture {
             motion_size: 0.2,
             motion_beats: 8.0,
             dimmer: 1.0,
+            extra: Vec::new(),
         }
     }
 }
 
 impl Fixture {
-    /// Its controllable settings, as `ControlTarget::Fixture` params (all 0..1). Pan to motion size: moving heads.
+    /// Its controllable settings, as `ControlTarget::Fixture` params (all 0..1). Pan to motion size: moving heads;
+    /// after these come its extra channels (5 = the first).
     pub const PARAMS: [&'static str; 5] = ["pan", "tilt", "dimmer", "motion size", "brightness"];
 
     /// Setting `param` (`PARAMS`), to read or set.
@@ -236,7 +249,7 @@ impl Fixture {
             2 => &mut self.dimmer,
             3 => &mut self.motion_size,
             4 => &mut self.brightness,
-            _ => return None,
+            n => &mut self.extra.get_mut(n as usize - 5)?.value,
         })
     }
 
@@ -247,13 +260,21 @@ impl Fixture {
             2 => self.dimmer,
             3 => self.motion_size,
             4 => self.brightness,
-            _ => return None,
+            n => self.extra.get(n as usize - 5)?.value,
         })
+    }
+
+    /// What `param` is called ("pan", or an extra channel's name).
+    pub fn param_name(&self, param: u8) -> String {
+        match Self::PARAMS.get(param as usize) {
+            Some(n) => n.to_string(),
+            None => self.extra.get(param as usize - 5).map_or_else(|| "?".into(), |e| if e.name.is_empty() { format!("channel {}", param - 4) } else { e.name.clone() }),
+        }
     }
 
     /// The params that apply to this fixture (heads have all; strips and grids only brightness).
     pub fn params(&self) -> std::ops::Range<u8> {
-        if self.shape == FixtureShape::MovingHead { 0..5 } else { 4..5 }
+        if self.shape == FixtureShape::MovingHead { 0..(5 + self.extra.len().min(200)) as u8 } else { 4..5 }
     }
 
     pub fn pixel_count(&self) -> usize {
@@ -266,7 +287,7 @@ impl Fixture {
 
     /// DMX channels one "pixel" takes (a moving head is one pixel with all its channels).
     fn channels_per_pixel(&self) -> usize {
-        if self.shape == FixtureShape::MovingHead { self.head.channels() } else { self.order.channels() }
+        if self.shape == FixtureShape::MovingHead { (self.head.channels() + self.extra.len()).min(512) } else { self.order.channels() }
     }
 
     /// A moving head's pan and tilt (0..1) at `beats`: its centre plus its movement.
@@ -329,6 +350,8 @@ impl Fixture {
                 HeadLayout::Rgbw9 => v.extend([dim, r - w, g - w, b - w, w]),
                 HeadLayout::ShutterRgbw10 => v.extend([255, dim, r - w, g - w, b - w, w]),
             }
+            v.extend(self.extra.iter().map(|e| (e.value.clamp(0.0, 1.0) * 255.0).round() as u8));
+            v.truncate(per);
             let data = universes.entry(uni).or_insert([0; 512]);
             data[ch..ch + per].copy_from_slice(&v);
             return;

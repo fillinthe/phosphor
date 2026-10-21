@@ -163,8 +163,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     }
                 });
                 if f.shape == FixtureShape::MovingHead {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().slider_width = 90.0;
+                    // One row each: a level fills its row.
+                    ui.vertical(|ui| {
                         ui.horizontal(|ui| {
                             Level::percent(&mut f.pan, "Pan").default(0.5).target(ControlTarget::Fixture { fixture: f.id, param: 0 }).show(ui);
                         });
@@ -186,6 +186,24 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                     hint(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
+                    // Channels after the layout's (gobo, prism, zoom, strobe…), each a control of its own.
+                    let mut gone = None;
+                    for (i, e) in f.extra.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            crate::ui::text_field(ui, &mut e.name, &format!("channel {}", f.head.channels() + i + 1), Some(80.0));
+                            let name = if e.name.is_empty() { format!("Ch {}", f.head.channels() + i + 1) } else { e.name.clone() };
+                            Level::percent(&mut e.value, &name).default(0.0).width(160.0).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
+                            if ui.small_button(icon::TRASH).on_hover_text("Remove this channel (the ones after it move up one)").clicked() {
+                                gone = Some(i);
+                            }
+                        });
+                    }
+                    if let Some(i) = gone {
+                        f.extra.remove(i);
+                    }
+                    if f.extra.len() < 32 && ui.small_button(label(icon::PLUS, "Channel")).on_hover_text("A channel after the layout's: gobo, prism, zoom, strobe… (in the order your light's manual lists them)").clicked() {
+                        f.extra.push(phosphor_engine::ExtraChannel::default());
+                    }
                 }
                 ui.horizontal_wrapped(|ui| {
                     guarded!(ui, f.universe, egui::DragValue::new(&mut f.universe).range(0..=32767).prefix("universe "));
