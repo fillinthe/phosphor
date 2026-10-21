@@ -132,6 +132,7 @@ impl PhosphorApp {
             }
             if leading {
                 st.run_autopilot(now);
+                st.run_step_fires(now);
                 st.run_auto_show(now);
                 st.run_cues(now);
             }

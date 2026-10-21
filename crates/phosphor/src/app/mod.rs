@@ -34,6 +34,7 @@ use crate::theme;
 mod auto_show;
 mod welcome;
 mod autopilot;
+mod step_fires;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod beat_match;
 mod bench_run;
@@ -184,6 +185,8 @@ pub struct State {
     pub cue_run: cues::CueRun,
     /// Autopilot's per-layer state (which clip, since when).
     pub(crate) autopilot: HashMap<u64, autopilot::AutoRun>,
+    /// The step each firing step track was on last frame (`run_step_fires`).
+    pub(crate) step_fired: HashMap<u64, usize>,
     render_state: Option<egui_wgpu::RenderState>,
     pub texture: Option<egui::TextureId>,
     texture_generation: u64,

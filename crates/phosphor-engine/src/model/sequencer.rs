@@ -15,11 +15,14 @@ pub struct StepTrack {
     pub gate: bool,
     /// Slide from one step to the next instead of jumping (levels only).
     pub glide: bool,
+    /// Gate tracks: what each lit step sets to its range's top as it starts, and back as it ends (clips play and
+    /// let go, columns fire, anything else switches on and off with the steps).
+    pub fires: Vec<super::Binding>,
 }
 
 impl Default for StepTrack {
     fn default() -> Self {
-        Self { steps: [1.0, 0.0, 0.5, 0.0].repeat(4), per_beat: 4.0, gate: false, glide: false }
+        Self { steps: [1.0, 0.0, 0.5, 0.0].repeat(4), per_beat: 4.0, gate: false, glide: false, fires: Vec::new() }
     }
 }
 
@@ -43,6 +46,21 @@ impl StepTrack {
     /// The step playing at this beat.
     pub fn step_at(&self, beats: f32) -> usize {
         ((beats * self.rate()).floor() as i64).rem_euclid(self.len() as i64) as usize
+    }
+
+    /// Is step `i` lit (gate tracks)?
+    pub fn lit(&self, i: usize) -> bool {
+        self.steps.get(i).is_some_and(|v| *v >= 0.5)
+    }
+
+    /// What firing does between the last step seen and the one at `beats`: (lit step ended, lit step started).
+    /// Nothing while the step is the same.
+    pub fn edges(&self, last: Option<usize>, beats: f32) -> (bool, bool) {
+        let now = self.step_at(beats);
+        if last == Some(now) {
+            return (false, false);
+        }
+        (last.is_some_and(|l| self.lit(l)), self.lit(now))
     }
 
     /// The track's value at this beat (0..1).
@@ -95,6 +113,17 @@ impl StepTrack {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lit_steps_start_and_end_once() {
+        let t = StepTrack { steps: vec![1.0, 1.0, 0.0, 1.0], per_beat: 1.0, gate: true, ..Default::default() };
+        assert_eq!(t.edges(None, 0.2), (false, true), "first lit step starts");
+        assert_eq!(t.edges(Some(0), 0.7), (false, false), "same step: nothing");
+        assert_eq!(t.edges(Some(0), 1.1), (true, true), "two lit steps in a row: let go, then again");
+        assert_eq!(t.edges(Some(1), 2.0), (true, false), "into a dark step");
+        assert_eq!(t.edges(Some(2), 3.5), (false, true));
+        assert_eq!(t.edges(Some(3), 4.1), (true, true), "wraps round");
+    }
 
     #[test]
     fn steps_follow_the_beat() {
