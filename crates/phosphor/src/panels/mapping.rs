@@ -49,18 +49,18 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         let base = if s.enabled { accent() } else { Color32::GRAY };
         let line = if is_selected { Stroke::new(2.0, base) } else { Stroke::new(1.0, base.gamma_multiply(0.55)) };
         let id = ui.id().with(("surface", s.id));
-        // Outline: the corner quad, or the mesh's curved grid lines.
+        // Outline: the corner quad, the curved edges, or the mesh's curved grid lines.
         match &s.mesh {
             Some(m) => {
                 let steps = 24;
                 for j in 0..=m.rows {
                     let t = j as f32 / m.rows as f32;
-                    let pts: Vec<egui::Pos2> = (0..=steps).map(|k| to_screen(m.eval(k as f32 / steps as f32, t))).collect();
+                    let pts: Vec<egui::Pos2> = (0..=steps).map(|k| to_screen(s.warp_at(k as f32 / steps as f32, t))).collect();
                     ui.painter().add(egui::Shape::line(pts, if j == 0 || j == m.rows { line } else { Stroke::new(1.0, base.gamma_multiply(0.35)) }));
                 }
                 for i in 0..=m.cols {
                     let u = i as f32 / m.cols as f32;
-                    let pts: Vec<egui::Pos2> = (0..=steps).map(|k| to_screen(m.eval(u, k as f32 / steps as f32))).collect();
+                    let pts: Vec<egui::Pos2> = (0..=steps).map(|k| to_screen(s.warp_at(u, k as f32 / steps as f32))).collect();
                     ui.painter().add(egui::Shape::line(pts, if i == 0 || i == m.cols { line } else { Stroke::new(1.0, base.gamma_multiply(0.35)) }));
                 }
             }
@@ -79,7 +79,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
                 }
             }
             None => {
-                let pts: Vec<egui::Pos2> = s.corners.iter().map(|c| to_screen(*c)).collect();
+                let pts: Vec<egui::Pos2> = if s.bend.is_some() { s.outline(24).into_iter().map(to_screen).collect() } else { s.corners.iter().map(|c| to_screen(*c)).collect() };
                 ui.painter().add(egui::Shape::closed_line(pts, line));
             }
         }
@@ -128,6 +128,28 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             p[0] += d[0];
             p[1] += d[1];
             touched |= d != [0.0, 0.0];
+        }
+        // Curved edges (selected slice): two handles per edge, each joined to its corner.
+        if is_selected
+            && !locked
+            && s.line.is_none()
+            && s.model.is_none()
+            && let Some(mut b) = s.bend
+        {
+            let corners = s.corners;
+            for k in 0..8 {
+                let at = b.handle_at(&corners, k);
+                let anchor = phosphor_engine::mapping::Bend::anchor(&corners, k);
+                ui.painter().line_segment([to_screen(anchor), to_screen(at)], Stroke::new(1.0, base.gamma_multiply(0.6)));
+                let mut d = [0.0, 0.0];
+                let r = bezier_handle(ui, id.with(("bend", k)), to_screen(at), frame, base, &mut d);
+                if d != [0.0, 0.0] {
+                    b.set_handle(&corners, k, [at[0] + d[0], at[1] + d[1]]);
+                    touched = true;
+                }
+                r.on_hover_text("Drag to bend this edge (the picture follows)");
+            }
+            s.bend = Some(b);
         }
         // 3D model calibration: click a model point to pin it, drag pins to where those points really are.
         if is_selected
@@ -806,6 +828,16 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         }
         if changed {
             s.set_mesh(on, cols, rows);
+        }
+    }));
+    ui.add_enabled_ui(s.line.is_none() && s.model.is_none(), |ui| ui.horizontal(|ui| {
+        let mut on = s.bend.is_some();
+        if toggle(ui, &mut on, label(icon::BEZIER_CURVE, "Curved edges")).on_hover_text("Two handles on each edge bend it (round tables, arches, curved screens); the picture follows").changed() {
+            s.set_bend(on);
+        }
+        if s.bend.is_some_and(|b| !b.is_straight()) && ui.small_button("Straighten").on_hover_text("Edges back to straight lines").clicked() {
+            s.set_bend(false);
+            s.set_bend(true);
         }
     }));
     ui.collapsing("Input region (part of the picture shown)", |ui| {

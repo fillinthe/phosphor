@@ -47,7 +47,7 @@ app that's much smaller and lighter on the CPU.
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
    mappable themselves; Mappings editor with Listen + ranges. on the phone/iPad remote ✔. Next: TouchOSC `.tosc` export, multiple surface pages
 4. ~~**Mapping upgrades**~~ mesh warp ✔ (Catmull-Rom grid up to 8×8), masks ✔ (polygons, invert). Per-output colour ✔,
-   blend curve ✔, mask feather ✔, circle/triangle masks ✔, smooth (Catmull-Rom) mask outlines ✔, bezier handles on mask points ✔ (0.2.84). Next: bezier edges on slices
+   blend curve ✔, mask feather ✔, circle/triangle masks ✔, smooth (Catmull-Rom) mask outlines ✔, bezier handles on mask points ✔ (0.2.84), curved (bezier) slice edges ✔ (2026-10-21)
 5. **OBS / pro I/O**: Syphon out ✔, NDI out ✔, cameras/capture ✔, network streams in ✔, Syphon in ✔, NDI in ✔. Next:
    virtual camera out (needs a Developer ID); capture-card audio shows up as an input device already (Audio panel)
 6. **Secure session links** (HTTPS) so viewers' mics work without the Chrome flag; WebRTC low-latency video
@@ -100,7 +100,7 @@ app that's much smaller and lighter on the CPU.
     - [x] Feedback in user shaders (`// @feedback` → `last(uv)`) + Trails template (2026-10-20)
     - [x] User shaders with several passes / blur buffers (`// @pass`, 0.2.85)
     - [x] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code (0.2.88: Shader Editor › + Patch)
-    - [ ] Describe it in words → an AI drafts the shader, previewed live, editable (needs an API key: owner)
+    - [x] Describe it in words → the AI drafts the shader, compile-checked and auto-fixed (Shader Editor › Describe it…, your API key; 0.2.92)
     - [ ] Share effects to your account / the online library
 14. **Web control for the audience and guests** (asked 2026-10-20):
     - [x] Build buttons, faders, toggles and XY pads for phones: the Control Surface (any page can be the guests' page)
