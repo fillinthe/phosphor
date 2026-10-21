@@ -9,7 +9,9 @@ cd "$(dirname "$0")/.."
 VERSION=$(grep -m1 '^version' crates/phosphor/Cargo.toml | cut -d'"' -f2)
 
 # Oldest macOS the app runs on. Everything bundled must be built for it (checked at the end).
-MIN_MACOS=14.0
+# The oldest macOS Phosphor runs on (one value for FFmpeg, Syphon and the app: scripts/min-macos). 13 is the floor:
+# the ScreenCaptureKit bridge uses macOS 13 calls.
+MIN_MACOS=$(cat scripts/min-macos)
 # FFmpeg built for MIN_MACOS (scripts/build-ffmpeg-mac.sh); Homebrew's only runs on the macOS it was built on.
 # The bundle build gets its own target folder so day-to-day builds keep using Homebrew's FFmpeg.
 VENDOR_FFMPEG=$PWD/vendor/ffmpeg

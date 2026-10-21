@@ -8,7 +8,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
-MIN_MACOS=14.0
+# The oldest macOS Phosphor runs on, for every bundled binary (one value: scripts/min-macos).
+MIN_MACOS=$(cat scripts/min-macos)
 FFMPEG_VER=9.0.2
 DAV1D_VER=1.5.1
 VPX_VER=1.15.2
