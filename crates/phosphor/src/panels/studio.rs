@@ -38,7 +38,7 @@ enum TreeAction {
     AddMask(u64, MaskShape),
     /// A mask drawn by hand on output `.0` (output space points).
     DrawnMask(u64, Vec<[f32; 2]>),
-    Duplicate(u64, u64),
+    Duplicate(u64),
     Delete(u64, u64),
     DeleteMany(u64, Vec<u64>),
     /// Put these slices of output `.0` into a new group.
@@ -113,7 +113,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                 use super::slice_tree::SliceAct;
                 match a {
                     SliceAct::Group(ids) => action = Some(TreeAction::Group(o.id, ids)),
-                    SliceAct::Duplicate(id) => action = Some(TreeAction::Duplicate(o.id, id)),
+                    SliceAct::Duplicate(id) => action = Some(TreeAction::Duplicate(id)),
                     SliceAct::Delete(ids) => action = Some(TreeAction::DeleteMany(o.id, ids)),
                 }
             }
@@ -194,16 +194,8 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
                 st.selected_surface = Some(id);
             }
         }
-        Some(TreeAction::Duplicate(oid, sid)) => {
-            let id = st.comp.new_id();
-            if let Some(o) = st.comp.output_mut(oid)
-                && let Some(i) = o.mapping.surfaces.iter().position(|s| s.id == sid)
-            {
-                let mut copy = o.mapping.surfaces[i].clone();
-                copy.id = id;
-                copy.name = format!("{} copy", copy.name);
-                copy.translate(0.03, 0.03);
-                o.mapping.surfaces.insert(i + 1, copy);
+        Some(TreeAction::Duplicate(sid)) => {
+            if let Some(id) = st.comp.duplicate_slice(sid) {
                 st.selected_surface = Some(id);
             }
         }
@@ -569,7 +561,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             ui.close();
         }
         if ui.button(label(icon::COPY, "Duplicate")).clicked() {
-            *action = Some(TreeAction::Duplicate(oid, id));
+            *action = Some(TreeAction::Duplicate(id));
             ui.close();
         }
         if ui.button(label(icon::TRASH, "Delete")).clicked() {
@@ -686,6 +678,8 @@ fn input_view(
 /// The selected slice or mask, or the output's own settings.
 fn properties(ui: &mut egui::Ui, st: &mut State) {
     let oid = st.mapping_output;
+    let clipboard_len = st.fx_clipboard.len();
+    let mut fx_action = None;
     let State {
         comp,
         selected_surface,
@@ -719,6 +713,11 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
             super::mapping_points::point_fields(ui, s, size);
             ui.separator();
             surface_settings(ui, s, layers, groups, &others);
+            ui.separator();
+            // Surface FX: effects on this slice alone (same editor as a layer's).
+            if let Some(a) = super::effects::effects_editor(ui, &mut s.effects, clipboard_len) {
+                fx_action = Some((s.id, a));
+            }
         } else if let Some(m) = o.mapping.masks.iter_mut().find(|m| Some(m.id) == *selected_surface) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
@@ -748,6 +747,9 @@ fn properties(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
         }
     });
+    if let Some((sid, a)) = fx_action {
+        super::effects::apply_fx_action(st, sid, a);
+    }
 }
 
 #[cfg(test)]

@@ -6,6 +6,9 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.85 (2026-10-21)
 
+- **Effects on one slice** (MadMapper's surface FX): select a slice in the Mapping Studio; under its settings,
+  Effects › Add effect works as on a layer. The effects run on that slice's part of the picture only: pixelate one
+  window of a building, invert one panel. Their settings can be mapped and modulated like any effect.
 - **Flip a slice's picture** (as in MadMapper): a slice's Input region has Flip left-right and Flip upside down
   (both = turned half round), for rear projection or a projector hung from the ceiling.
 

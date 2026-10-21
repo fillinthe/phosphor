@@ -36,6 +36,20 @@ impl Composition {
         self.outputs.iter_mut().flat_map(|o| o.mapping.surfaces.iter_mut()).find(|s| s.id == id)
     }
 
+    /// A copy of slice `sid` just after it (a little offset, fresh ids for it and its effects). Returns the copy's id.
+    pub fn duplicate_slice(&mut self, sid: u64) -> Option<u64> {
+        let mut copy = self.slice(sid)?.clone();
+        copy.id = self.new_id();
+        copy.name = format!("{} copy", copy.name);
+        copy.translate(0.03, 0.03);
+        copy.effects = self.adopt_effects(std::mem::take(&mut copy.effects));
+        let id = copy.id;
+        let mapping = self.outputs.iter_mut().map(|o| &mut o.mapping).find(|m| m.surfaces.iter().any(|s| s.id == sid))?;
+        let i = mapping.surfaces.iter().position(|s| s.id == sid)?;
+        mapping.surfaces.insert(i + 1, copy);
+        Some(id)
+    }
+
     /// The slices a slice control reaches: slice `id`, or every slice in slice group `id` (and the groups inside it).
     pub fn slices_reached(&self, id: u64) -> Vec<u64> {
         self.outputs.iter().flat_map(|o| o.mapping.group_members(id)).collect()

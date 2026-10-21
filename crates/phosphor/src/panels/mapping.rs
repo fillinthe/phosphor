@@ -621,17 +621,8 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     if let Some(i) = duplicate {
-        let mut copy = o.mapping.surfaces[i].clone();
-        copy.id = comp.next_id;
-        comp.next_id += 1;
-        copy.name = format!("{} copy", copy.name);
-        for c in &mut copy.corners {
-            c[0] += 0.03;
-            c[1] += 0.03;
-        }
-        if let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) {
-            o.mapping.surfaces.insert(i + 1, copy);
-        }
+        let sid = o.mapping.surfaces[i].id;
+        comp.duplicate_slice(sid);
     }
 }
 

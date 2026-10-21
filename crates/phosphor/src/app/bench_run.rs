@@ -224,6 +224,25 @@ impl PhosphorApp {
                 println!("QUICK login: {:?}", crate::login_item::set(true));
                 continue;
             }
+            if name == "slicefx" {
+                // Output 1: the left half of the picture on the left, and the same half again on the right through
+                // Invert (a slice effect), mirrored. Compare the -out1.png halves.
+                self.state.comp.ensure_outputs();
+                let (a, b) = (self.state.comp.new_id(), self.state.comp.new_id());
+                let fx = self.state.comp.new_effect("invert");
+                if let Some(o) = self.state.comp.outputs.first_mut() {
+                    for (id, x) in [(a, 0.0), (b, 0.5)] {
+                        let s = o.mapping.add_surface(id);
+                        s.corners = [[x, 0.0], [x + 0.5, 0.0], [x + 0.5, 1.0], [x, 1.0]];
+                        s.input = [0.0, 0.0, 0.5, 1.0];
+                    }
+                    o.mapping.surfaces[1].flip = [true, false];
+                    o.mapping.surfaces[1].effects.extend(fx);
+                    o.mapping.enabled = true;
+                    println!("QUICK slicefx: {} effect(s) on slice {b}", o.mapping.surfaces[1].effects.len());
+                }
+                continue;
+            }
             if name == "tracking" {
                 // Video tracking on the mix: faces, hands and body (TRACK line at the end).
                 let t = &mut self.state.comp.tracking;

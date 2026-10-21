@@ -57,6 +57,9 @@ pub struct Surface {
     /// Its picture mirrored left-right / upside down (both = turned half round), e.g. for a rear or ceiling projector.
     #[serde(default)]
     pub flip: [bool; 2],
+    /// Effects on this slice alone (MadMapper's surface FX), run on its part of the picture.
+    #[serde(default)]
+    pub effects: Vec<crate::EffectState>,
 }
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
@@ -1065,6 +1068,7 @@ impl Default for Surface {
             blend: SliceBlend::Normal,
             group: None,
             flip: [false; 2],
+            effects: Vec::new(),
         }
     }
 }
