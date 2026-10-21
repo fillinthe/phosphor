@@ -467,7 +467,8 @@ impl ControlHub {
                 map.range.apply(map.shape(v))
             };
             // (A smoothed mapping glides instead of jumping, so it doesn't need soft takeover.)
-            if self.soft_takeover && v != FLIP && map.smoothing() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+            // (Delayed moves land later, so the takeover check would never see them arrive; they skip it too.)
+            if self.soft_takeover && v != FLIP && map.smoothing() == 0.0 && map.delay() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
                 continue;
             }
             if map.delay() > 0.0 {

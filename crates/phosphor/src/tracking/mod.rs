@@ -88,6 +88,10 @@ impl Tracker {
 
     /// Should the engine read back the Remove background effects' pictures this frame? (Paced, one batch at a time.)
     pub fn cutout_due(&mut self, now: f64) -> bool {
+        // Only Apple Vision makes mattes: elsewhere the effect passes the picture through and nothing is read back.
+        if !cfg!(target_os = "macos") {
+            return false;
+        }
         if self.cutout_busy_since.is_some_and(|t| now - t > 1.0) {
             self.cutout_busy_since = None;
         }

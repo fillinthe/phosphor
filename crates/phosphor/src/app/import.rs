@@ -33,7 +33,7 @@ impl State {
 
     /// Media files the project uses that aren't where it says.
     pub fn missing_media(&self) -> Vec<String> {
-        self.comp.media_paths().into_iter().filter(|p| !std::path::Path::new(p).exists()).collect()
+        self.comp.media_paths().into_iter().filter(|p| !crate::media::sequence::exists(p)).collect()
     }
 
     /// Looks through `folder` (and everything inside) for the missing files by name, in the background.

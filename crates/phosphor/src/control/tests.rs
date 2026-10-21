@@ -395,6 +395,7 @@ fn a_glide_moves_a_target_over_time() {
 #[test]
 fn delayed_moves_land_later() {
     let mut hub = ControlHub::new();
+    hub.soft_takeover = true;
     let mut comp = Composition::starter();
     comp.master_fade = 0.0;
     let source = ControlSource::MidiCc { channel: 0, cc: 10 };
@@ -408,6 +409,11 @@ fn delayed_moves_land_later() {
     assert_eq!(comp.master_fade, 0.0);
     hub.apply(&mut comp, 10.51);
     assert!((comp.master_fade - 0.8).abs() < 1e-6, "half a second later");
+    // The fader keeps moving (soft takeover on): every move lands, late.
+    hub.inject(&mut comp, Incoming { source: ControlSource::MidiCc { channel: 0, cc: 10 }, value: 0.9 });
+    hub.apply(&mut comp, 10.6);
+    hub.apply(&mut comp, 11.11);
+    assert!((comp.master_fade - 0.9).abs() < 1e-6, "{}", comp.master_fade);
 }
 
 #[test]

@@ -31,7 +31,8 @@ fn split(name: &str) -> Option<(&str, &str, &str)> {
 /// Only picture files, at least `MIN_FRAMES` with the same prefix, digit count and extension.
 pub fn find(names: &[String], is_picture: impl Fn(&str) -> bool) -> Vec<(String, Vec<String>)> {
     let mut groups: std::collections::BTreeMap<(String, usize, String), Vec<String>> = Default::default();
-    for n in names.iter().filter(|n| is_picture(n)) {
+    // "._frame_0001.png": metadata macOS writes beside files on FAT/exFAT drives, not frames.
+    for n in names.iter().filter(|n| !n.starts_with('.') && is_picture(n)) {
         if let Some((prefix, digits, ext)) = split(n) {
             groups.entry((prefix.to_string(), digits.len(), ext.to_string())).or_default().push(n.clone());
         }
@@ -70,6 +71,11 @@ pub fn members(pattern: &str) -> Vec<std::path::PathBuf> {
     out
 }
 
+/// Is this media path there? (An image sequence is there when any of its frames is.)
+pub fn exists(path: &str) -> bool {
+    if is_sequence(path) { !members(path).is_empty() } else { std::path::Path::new(path).exists() }
+}
+
 /// The lowest frame number on disk for a pattern path (FFmpeg only looks for frames 0–4 by itself).
 pub fn first_number(pattern: &str) -> Option<u32> {
     let path = std::path::Path::new(pattern);
@@ -99,6 +105,7 @@ mod tests {
         names.push("cover.png".into());
         names.push("notes_1.txt".into());
         names.extend((1..4).map(|i| format!("other{i}.jpg")));
+        names.extend((1001..1020).map(|i| format!("._shot_{i}.png")));
         let found = find(&names, |n| n.ends_with(".png") || n.ends_with(".jpg"));
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].0, "shot_%04d.png");
