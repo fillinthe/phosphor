@@ -227,3 +227,12 @@ fn mad_fx_headers_and_vertex_functions() {
     let sh = crate::import("madfx2", plain_fs, Some(plain_vs)).expect("converts");
     assert!(sh.unsupported.is_none() && sh.vertex_entry.is_none(), "{:?}", sh.unsupported);
 }
+
+/// Old GLSL names that GLSL 4.50 reserves (`sample`, `filter`…) are renamed; an input with such a name keeps it.
+#[test]
+fn reserved_words_used_as_names() {
+    let fs = "/*{ \"INPUTS\": [ {\"NAME\": \"inputImage\", \"TYPE\": \"image\"}, {\"NAME\": \"filter\", \"TYPE\": \"float\", \"DEFAULT\": 0.5} ] }*/\nvoid main() { vec4 sample = IMG_NORM_PIXEL(inputImage, isf_FragNormCoord); vec4 output = sample * filter; gl_FragColor = output; }\n";
+    let sh = crate::import("reserved", fs, None).expect("converts");
+    assert!(sh.unsupported.is_none(), "{:?}", sh.unsupported);
+    crate::validate_wgsl(&sh.wgsl).expect("valid WGSL");
+}

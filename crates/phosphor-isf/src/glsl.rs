@@ -260,6 +260,37 @@ pub(crate) fn rename_main(src: &str, name: &str) -> Option<String> {
     None
 }
 
+/// Words reserved in GLSL 4.50 (what shaders are converted as) that older ISF / GLSL shaders use as plain names
+/// (`vec3 sample = …`, `float filter`, `vec4 input`).
+const RESERVED_SINCE_OLD_GLSL: [&str; 13] = ["sample", "input", "output", "filter", "buffer", "shared", "common", "partition", "active", "patch", "resource", "subroutine", "superp"];
+
+/// Renames those words where a shader uses them as names (`sample` → `isf_sample`), except `keep` (the shader's own
+/// input names: Phosphor declares those itself).
+pub(crate) fn rename_reserved(src: &str, keep: &[&str]) -> String {
+    let mut out = src.to_string();
+    for word in RESERVED_SINCE_OLD_GLSL.iter().filter(|w| !keep.contains(w)) {
+        if !uses_ident(&out, word) {
+            continue;
+        }
+        let b = out.as_bytes();
+        let mut next = String::with_capacity(out.len() + 16);
+        let mut i = 0;
+        while let Some(pos) = out[i..].find(word) {
+            let s = i + pos;
+            let e = s + word.len();
+            next.push_str(&out[i..s]);
+            if (s == 0 || !is_ident(b[s - 1])) && (e >= b.len() || !is_ident(b[e])) {
+                next.push_str("isf_");
+            }
+            next.push_str(word);
+            i = e;
+        }
+        next.push_str(&out[i..]);
+        out = next;
+    }
+    out
+}
+
 /// True if `name` appears as an identifier in `src`.
 pub(crate) fn uses_ident(src: &str, name: &str) -> bool {
     let b = src.as_bytes();
