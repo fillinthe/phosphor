@@ -56,5 +56,12 @@ if [ -n "$WIN_RUN" ]; then
     echo "Adding the Windows build from run $WIN_RUN"
   fi
 fi
+# The Linux ARM (Raspberry Pi) package, when its build of this code succeeded (optional: never holds a release up).
+LINUX_RUN=$(bash scripts/ci-run.sh linux.yml --success || true)
+rm -rf dist/linux
+if [ -n "$LINUX_RUN" ] && gh run download "$LINUX_RUN" -R fillinthe/phosphor -n Phosphor-linux-arm64 -D dist/linux 2>/dev/null; then
+  ASSETS="$ASSETS dist/linux/Phosphor-linux-arm64.tar.gz"
+  echo "Adding the Linux ARM build from run $LINUX_RUN"
+fi
 gh release create "$TAG" $ASSETS -R fillinthe/phosphor --title "Phosphor $VER" --notes-file "$NOTES"
 echo "Published $TAG. Running apps install it within the hour, and when they next open."
