@@ -196,7 +196,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Output window: borderless (no title/menu bar), drag by its surface to the projector, F or double-click = fullscreen, cursor hidden
 - [x] Stats (fps, engine ms, process CPU, memory) + `--bench` mode with PNG snapshot
 - [x] Images (drag and drop / Open… dialog), project Save/Open (.phosphor JSON), autosave
-- [ ] **CPU: 25–50 % of one core at 110–120 Hz** (bench, 2026-10-16; the figure swings with how the loop is paced).
+- [x] **CPU: 25–50 % of one core at 110–120 Hz** (2026-10-21, release: 18% at 60 fps, 10% at 30; our code ≈ 4% of samples, the rest is presenting frames: see NOTES) (bench, 2026-10-16; the figure swings with how the loop is paced).
       Profile: engine encoding ≈ 3 %, UI layout ≈ 4 %, UI drawing ≈ 4.5 %, Metal's queue threads ≈ 12 % (two
       submits per frame). Tried 2026-10-16: one GPU submission per frame (engine command buffer carried by an egui paint callback):
       no gain in three A/B runs (7.3 vs 7.5 ms CPU per frame), dropped. The bench's CPU figure still swings with
