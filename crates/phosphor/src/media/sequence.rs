@@ -73,6 +73,10 @@ pub fn members(pattern: &str) -> Vec<std::path::PathBuf> {
 
 /// Is this media path there? (An image sequence is there when any of its frames is.)
 pub fn exists(path: &str) -> bool {
+    // A web address (a movie played from a link) isn't a file to look for.
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return true;
+    }
     if is_sequence(path) { !members(path).is_empty() } else { std::path::Path::new(path).exists() }
 }
 

@@ -80,6 +80,11 @@ impl PhosphorApp {
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
         #[cfg(not(target_arch = "wasm32"))]
+        if let Some(s) = self.state.link_import.status() {
+            let layer = self.state.comp.layers.last().map(|l| l.source.label()).unwrap_or_default();
+            println!("LINK {s:?} layer_source={layer} media_bin={}", self.state.comp.media_bin.len());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(l) = &self.state.following {
             let show = l.show_time().unwrap_or(f64::NAN);
             println!(
@@ -567,6 +572,17 @@ impl PhosphorApp {
             #[cfg(target_os = "macos")]
             if name == "ffgl" {
                 println!("QUICK ffgl: {:?}", crate::ffgl::bench_apply(&mut self.state));
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "link" {
+                // From a link: PHOSPHOR_LINK_URL downloaded onto the top layer (a LINK line at the end).
+                let url = std::env::var("PHOSPHOR_LINK_URL").unwrap_or_default();
+                if self.state.comp.layers.is_empty() {
+                    self.state.comp.add_layer();
+                }
+                self.state.link_import.bench_download(&url);
+                println!("QUICK link: {url}");
                 continue;
             }
             if name == "patch" {

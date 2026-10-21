@@ -279,6 +279,7 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
     let (glyph, kind, detail): (&str, &str, Option<String>) = match &layer.source {
         SourceSpec::None => (icon::PROHIBIT, "No source", None),
         SourceSpec::Generator(id) => (icon::SPARKLE, "Generated", Some(shaders::generator(id).map_or(id.clone(), |d| d.name.to_string()))),
+        SourceSpec::Movie { name, path } if path.as_deref().is_some_and(|p| p.starts_with("http")) => (icon::LINK, "Movie from a link (not saved)", Some(name.clone())),
         SourceSpec::Movie { name, path } => (icon::FILM_STRIP, "Movie file", Some(path.clone().unwrap_or_else(|| name.clone()))),
         SourceSpec::Image { name, path } => (icon::IMAGE, "Picture file", Some(path.clone().unwrap_or_else(|| name.clone()))),
         SourceSpec::Live { name, format, url } => {
@@ -304,7 +305,7 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
         }
     });
     if let Some(d) = detail {
-        let is_file = matches!(layer.source, SourceSpec::Movie { path: Some(_), .. } | SourceSpec::Image { path: Some(_), .. });
+        let is_file = matches!(&layer.source, SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } if !p.starts_with("http"));
         ui.horizontal(|ui| {
             #[cfg(not(target_arch = "wasm32"))]
             if is_file {
