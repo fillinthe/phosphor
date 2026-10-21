@@ -328,7 +328,7 @@ Legend: [x] done · [~] in progress · [ ] not started
       output live as MJPEG (≤1280 px, 10–30 fps); Start/Stop + copy link in the Session panel
 - [x] **Audio back-channel**: the player page's "Send my audio" streams the viewer's mic over a WebSocket
       into Phosphor's audio analysis ("Session viewers" source), so visuals react to *their* music
-- [ ] Upgrade transport to WebRTC (WHEP) for sub-second latency and HTTPS/TLS so mic access works
+- [x] Upgrade transport to WebRTC (WHEP) for sub-second latency (0.2.92; the mic still uses the https link)
       without the Chrome insecure-origin flag
 - [ ] **Phosphor Player** for Raspberry Pi / small PCs: a headless build that either plays the
       stream or renders the project itself from a synced clock (tiny bandwidth, perfect sync)

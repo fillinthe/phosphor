@@ -39,6 +39,7 @@ flate2 = "1"
 roxmltree = "0.20"
 rusty_link = "0.4"
 tungstenite = "0.26"
+str0m = { version = "0.24", default-features = false, features = ["rust-crypto"] }
 qrcode = { version = "0.14.1", default-features = false }
 pollster = "0.4"
 snap = "1"

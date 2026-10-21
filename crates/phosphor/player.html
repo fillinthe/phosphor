@@ -6,7 +6,7 @@
 <title>Phosphor session</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font: 14px system-ui, sans-serif; color: #ddd; }
-  #v { width: 100vw; height: 100vh; object-fit: contain; display: block; }
+  #v, #wv { width: 100vw; height: 100vh; object-fit: contain; display: block; background: #000; }
   #bar { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; opacity: .9; transition: opacity .4s; }
   body.idle #bar { opacity: 0; }
   button { background: #1d2023; color: #78ffaa; border: 1px solid #2c3034; border-radius: 6px; padding: 8px 12px; font: inherit; cursor: pointer; }
@@ -63,7 +63,46 @@ micBtn.onclick = () => (ws ? stopMic() : startMic());
 document.getElementById('fs').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
 let idle; const wake = () => { document.body.classList.remove('idle'); clearTimeout(idle); idle = setTimeout(() => document.body.classList.add('idle'), 3000); };
 ['mousemove', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, wake)); wake();
-document.getElementById('v').onerror = () => { st.textContent = 'reconnecting…'; setTimeout(() => { document.getElementById('v').src = '/stream.mjpeg?' + Date.now(); }, 1000); };
+document.getElementById('v').onerror = () => { if (!rtc) { st.textContent = 'reconnecting…'; setTimeout(() => { document.getElementById('v').src = '/stream.mjpeg?' + Date.now(); }, 1000); } };
+// Low latency first: WebRTC (WHEP, H.264). The MJPEG picture stays until the video plays, and comes back if it fails.
+let rtc = null;
+async function webrtc() {
+  if (!window.RTCPeerConnection) return;
+  const pc = new RTCPeerConnection();
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  const video = document.createElement('video');
+  video.id = 'wv'; video.autoplay = true; video.muted = true; video.playsInline = true; video.style.display = 'none';
+  document.body.appendChild(video);
+  // Connected and the picture's track is here: swap the MJPEG picture for the video.
+  const live = () => {
+    if (rtc || pc.connectionState !== 'connected' || !video.srcObject) return;
+    rtc = pc; clearTimeout(fallback);
+    const img = document.getElementById('v');
+    img.removeAttribute('src'); img.replaceWith(video);
+    video.style.display = ''; video.play().catch(() => {});
+    st.textContent = 'live (WebRTC)';
+  };
+  pc.ontrack = e => { video.srcObject = e.streams[0] || new MediaStream([e.track]); live(); };
+  pc.onconnectionstatechange = () => {
+    live();
+    if (rtc === pc && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) {
+      // Back to MJPEG, then try WebRTC again.
+      rtc = null; pc.close();
+      const img = document.createElement('img'); img.id = 'v'; img.src = '/stream.mjpeg?' + Date.now();
+      video.replaceWith(img);
+      st.textContent = 'reconnecting…'; setTimeout(webrtc, 2000);
+    }
+  };
+  // No WebRTC within a few seconds (an old browser, a blocked network): stay on MJPEG.
+  const fallback = setTimeout(() => { if (!rtc) { pc.close(); video.remove(); } }, 8000);
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    const r = await fetch('/whep', { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: pc.localDescription.sdp });
+    if (!r.ok) throw new Error(await r.text());
+    await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() });
+  } catch (err) { clearTimeout(fallback); pc.close(); video.remove(); }
+}
+webrtc();
 </script>
 </body>
 </html>

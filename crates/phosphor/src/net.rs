@@ -178,6 +178,9 @@ pub struct NetSession {
     #[cfg(not(target_arch = "wasm32"))]
     pub follow: crate::follow::SharedFeed,
     pub followers: Arc<AtomicUsize>,
+    /// WebRTC viewers (`/whep`): low-latency H.264 instead of MJPEG.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub webrtc: crate::webrtc::Hub,
     /// The secure listener (port + 1) is up.
     pub https: bool,
     pub status: String,
@@ -209,6 +212,8 @@ impl NetSession {
             #[cfg(not(target_arch = "wasm32"))]
             follow: Default::default(),
             followers: Arc::new(AtomicUsize::new(0)),
+            #[cfg(not(target_arch = "wasm32"))]
+            webrtc: Default::default(),
             https: false,
             status: String::new(),
         }
@@ -317,7 +322,8 @@ impl NetSession {
         let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone(), self.password.clone());
         let registry = self.registry.clone();
         let thumbs = self.thumbs.clone();
-        let follow = (self.follow.clone(), self.followers.clone());
+        let follow = (self.follow.clone(), self.followers.clone(), self.webrtc.clone());
+        self.webrtc.set_fps(self.fps);
         std::thread::Builder::new()
             .name("phosphor-net".into())
             .spawn(move || {
@@ -414,6 +420,8 @@ impl NetSession {
 
     /// Hands a captured frame to the encoder; drops it if the encoder is still busy.
     pub fn push_frame(&mut self, w: u32, h: u32, rgba: Vec<u8>) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.webrtc.push(w, h, &rgba);
         if let Some(tx) = &self.encoder
             && let Err(TrySendError::Disconnected(_)) = tx.try_send((w, h, rgba))
         {
@@ -502,7 +510,7 @@ mod native {
         remote: super::RemoteHub,
         registry: super::Reg,
         thumbs: Thumbs,
-        follow: (crate::follow::SharedFeed, Arc<AtomicUsize>),
+        follow: (crate::follow::SharedFeed, Arc<AtomicUsize>, crate::webrtc::Hub),
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
         let _ = stream.set_nonblocking(false);
@@ -538,6 +546,28 @@ mod native {
         if path.starts_with("/guest") {
             let seat = super::Seat::join(&registry, super::PeerKind::Guest, &ip, &device);
             control_socket(stream, tcp, running, remote, seat, true);
+            return;
+        }
+        // WebRTC (WHEP): the browser posts its offer (SDP), gets the answer; the picture then comes over UDP.
+        if path.starts_with("/whep") && request.starts_with("POST") {
+            let len = request.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0).min(64 * 1024);
+            // The connection replays the request head first: read head + body, then keep what's after the head.
+            let head_len = request.find("\r\n\r\n").map_or(request.len(), |i| i + 4);
+            let mut all = Vec::with_capacity(head_len + len);
+            let mut chunk = [0u8; 4096];
+            while all.len() < head_len + len {
+                match stream.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => all.extend_from_slice(&chunk[..n]),
+                }
+            }
+            let body = all.get(head_len..).unwrap_or_default().to_vec();
+            let host = tcp.local_addr().map(|a| a.ip()).unwrap_or(std::net::IpAddr::from([127, 0, 0, 1]));
+            let reply = match follow.2.answer(&String::from_utf8_lossy(&body), host) {
+                Ok(sdp) => format!("HTTP/1.1 201 Created\r\nContent-Type: application/sdp\r\nLocation: /whep/viewer\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{sdp}", sdp.len()),
+                Err(e) => format!("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{e}", e.len()),
+            };
+            let _ = stream.write_all(reply.as_bytes());
             return;
         }
         // Another Phosphor following this show.
