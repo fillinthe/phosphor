@@ -1,0 +1,79 @@
+# Linux ARM build of Phosphor (Raspberry Pi 5 and other 64-bit ARM boards): the "Phosphor Player" that follows a Mac
+# over the network (Follow another Phosphor) and shows its outputs. Built on GitHub's ARM Linux machines with
+# BtbN's shared FFmpeg n9.0 (same as Windows); its libraries ship next to the binary.
+name: Linux ARM build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "ROADMAP.md"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q pkg-config clang libasound2-dev libudev-dev libx11-dev libxkbcommon-dev \
+            libwayland-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb mesa-vulkan-drivers \
+            libvulkan1 libssl-dev
+
+      - name: FFmpeg (BtbN n9.0 shared, arm64)
+        run: |
+          curl -sL -o ffmpeg.tar.xz "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linuxarm64-gpl-shared-9.0.tar.xz"
+          tar xf ffmpeg.tar.xz -C "$RUNNER_TEMP"
+          D=$(ls -d "$RUNNER_TEMP"/ffmpeg-n9.0-*)
+          echo "FFMPEG_DIR=$D" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$D/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$D/lib" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-arm-${{ hashFiles('Cargo.lock') }}
+
+      - name: Engine and ISF crates
+        run: cargo test -p phosphor-engine -p phosphor-isf --release
+
+      - name: App
+        run: cargo build -p phosphor --release
+
+      - name: Package (binary + FFmpeg libraries)
+        run: |
+          mkdir -p dist/Phosphor/lib
+          cp target/release/phosphor dist/Phosphor/phosphor
+          cp -P "$FFMPEG_DIR"/lib/*.so* dist/Phosphor/lib/
+          cp "$FFMPEG_DIR"/bin/ffmpeg dist/Phosphor/
+          cp -r assets/isf dist/Phosphor/isf
+          cp -r assets/gl-transitions dist/Phosphor/gl-transitions
+          printf '#!/bin/sh\nD=$(dirname "$(readlink -f "$0")")\nLD_LIBRARY_PATH="$D/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$D/phosphor" "$@"\n' > dist/Phosphor/Phosphor.sh
+          chmod +x dist/Phosphor/Phosphor.sh
+          tar czf dist/Phosphor-linux-arm64.tar.gz -C dist Phosphor
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phosphor-linux-arm64
+          path: dist/Phosphor-linux-arm64.tar.gz
+
+      # Smoke test: the packaged app on a virtual display with Mesa's software Vulkan (lavapipe).
+      - name: Launch test
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          WGPU_BACKEND: vulkan
+        run: |
+          xvfb-run -a -s "-screen 0 1440x900x24" timeout 150 dist/Phosphor/Phosphor.sh --bench 4 --project scripts/ci/smoke.phosphor --snapshot "$PWD/dist/linux-snapshot.png" > dist/launch.txt 2>&1 || true
+          grep -E "SUMMARY|LAYERS|LAYER_ERROR|panicked|error" dist/launch.txt | head -20
+          test -f dist/linux-snapshot.png
