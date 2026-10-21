@@ -15,6 +15,8 @@ impl State {
 impl PhosphorApp {
     /// Advances media, renders the frame, and keeps the preview + thumbnail textures registered.
     pub(crate) fn render(&mut self, now: f64) {
+        #[cfg(target_os = "macos")]
+        crate::menu_test::RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         #[cfg(not(target_arch = "wasm32"))]
         if !self.bench_session {
             self.heartbeat.beat(now);

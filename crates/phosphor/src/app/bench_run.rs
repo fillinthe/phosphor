@@ -530,6 +530,12 @@ impl PhosphorApp {
                 println!("QUICK autoshow: on, every bar");
                 continue;
             }
+            #[cfg(target_os = "macos")]
+            if name == "menutest" {
+                crate::menu_test::schedule(1.0);
+                println!("QUICK menutest: a menu opens in 1 s for 3 s");
+                continue;
+            }
             if name == "clipsound" {
                 self.state.audio.use_clips();
                 println!("QUICK clipsound: analysing the clip mix");
