@@ -54,6 +54,9 @@ pub struct Surface {
     /// The slice group it's in (`Mapping::groups`), if any.
     #[serde(default)]
     pub group: Option<u64>,
+    /// Its picture mirrored left-right / upside down (both = turned half round), e.g. for a rear or ceiling projector.
+    #[serde(default)]
+    pub flip: [bool; 2],
 }
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
@@ -975,6 +978,21 @@ mod mask_corner_tests {
     use super::*;
 
     #[test]
+    fn flipping_mirrors_the_input() {
+        let mut s = Surface { input: [0.25, 0.5, 0.5, 0.25], ..Default::default() };
+        let at = |s: &Surface, st: [f32; 2]| {
+            let x = s.input_xform();
+            [st[0] * x[0] + x[2], st[1] * x[1] + x[3]]
+        };
+        assert_eq!(at(&s, [0.0, 0.0]), [0.25, 0.5]);
+        s.flip = [true, false];
+        assert_eq!(at(&s, [0.0, 0.0]), [0.75, 0.5], "left edge shows the input's right edge");
+        assert_eq!(at(&s, [1.0, 1.0]), [0.25, 0.75]);
+        s.flip = [true, true];
+        assert_eq!(at(&s, [0.0, 0.0]), [0.75, 0.75], "turned half round");
+    }
+
+    #[test]
     fn a_handle_set_to_the_automatic_one_changes_nothing() {
         let mut m = Mask { smooth: true, ..Default::default() };
         m.points[1] = [0.65, 0.35];
@@ -1046,6 +1064,7 @@ impl Default for Surface {
             locked: false,
             blend: SliceBlend::Normal,
             group: None,
+            flip: [false; 2],
         }
     }
 }
@@ -1060,6 +1079,14 @@ impl Surface {
         self.color = other.color.clone();
         self.blend = other.blend;
         self.shape = other.shape;
+    }
+
+    /// The shaders' `uv_xform` for its input: picture uv = (s, t) * xy + zw, mirrored by `flip`.
+    pub fn input_xform(&self) -> [f32; 4] {
+        let [x, y, w, h] = self.input;
+        let (sw, ox) = if self.flip[0] { (-w, x + w) } else { (w, x) };
+        let (sh, oy) = if self.flip[1] { (-h, y + h) } else { (h, y) };
+        [sw, sh, ox, oy]
     }
 
     /// For the slice shader (`u.p[11]` widths, `u.p[12].x` on): per-side soft edges, when set.

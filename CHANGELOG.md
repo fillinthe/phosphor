@@ -4,6 +4,11 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.85 (2026-10-21)
+
+- **Flip a slice's picture** (as in MadMapper): a slice's Input region has Flip left-right and Flip upside down
+  (both = turned half round), for rear projection or a projector hung from the ceiling.
+
 ## 0.2.84 (2026-10-21)
 
 - **Video tracking** (as in VDMX, Mac): Modulators › Video tracking. Pick what to watch (usually a camera layer),
