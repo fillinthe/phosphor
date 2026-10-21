@@ -1,5 +1,7 @@
-//! In-app updates: checks GitHub releases (once a day and on request), downloads the new app, swaps it in
-//! place and relaunches. `PHOSPHOR_UPDATE_URL` points the check elsewhere (tests use a local server).
+//! In-app updates: checks GitHub releases (as soon as Phosphor opens, then every hour, and on request). With
+//! "Install updates by themselves" (on by default) a newer version downloads and swaps itself in place in the
+//! background, then the Update window offers to relaunch; otherwise the new version opens next time. Only the real
+//! app (an .app bundle, not a bench run) installs by itself. `PHOSPHOR_UPDATE_URL` points the check elsewhere (tests use a local server).
 
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
@@ -24,7 +26,7 @@ fn version_from_url(url: &str) -> Option<String> {
     let v = tag.trim_start_matches(['v', 'V']);
     (!parse_version(v).is_empty()).then(|| v.to_string())
 }
-const CHECK_EVERY: f64 = 24.0 * 3600.0;
+const CHECK_EVERY: f64 = 60.0 * 60.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Release {
@@ -65,17 +67,28 @@ pub struct Updater {
     progress: Arc<Mutex<String>>,
     /// Bench: install as soon as an update shows up, print `UPDATE_READY`, never relaunch.
     pub test: bool,
+    /// Download and install new versions by themselves (setting; on by default).
+    pub auto: bool,
 }
 
 impl Default for Updater {
     fn default() -> Self {
-        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 8.0, check_rx: None, install_rx: None, progress: Default::default(), test: false }
+        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 2.0, check_rx: None, install_rx: None, progress: Default::default(), test: false, auto: true }
     }
 }
 
 impl Updater {
-    pub fn with_skipped(skipped: String) -> Self {
-        Self { skipped, ..Default::default() }
+    /// The saved settings: the version skipped, and whether updates install by themselves.
+    pub fn with_settings(skipped: String, auto: bool) -> Self {
+        Self { skipped, auto, ..Default::default() }
+    }
+
+    /// Installs updates by itself here: the setting is on, Phosphor runs from an app bundle, and it isn't a bench.
+    fn installs_by_itself(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.auto && current_bundle().is_some() && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err();
+        #[cfg(target_arch = "wasm32")]
+        false
     }
 }
 
@@ -187,7 +200,9 @@ impl Updater {
                 Ok(_) => Status::UpToDate,
                 Err(e) => Status::Failed(e),
             };
-            if self.test && let Status::Available(_) = &self.status {
+            if let Status::Available(r) = &self.status
+                && (self.test || (self.installs_by_itself() && r.version != self.skipped))
+            {
                 self.install();
             }
         }
@@ -200,7 +215,13 @@ impl Updater {
                 _ => None,
             };
             self.status = match (res, release) {
-                (Ok((path, true)), _) => Status::Ready(path),
+                // Installed: say so (the window offers to relaunch; otherwise it opens next time).
+                (Ok((path, true)), _) => {
+                    if !self.test {
+                        self.window = true;
+                    }
+                    Status::Ready(path)
+                }
                 (Ok((path, false)), _) => Status::Downloaded(path),
                 // Keep the release: the top bar still offers it and the window links its download.
                 (Err(e), Some(r)) => {
@@ -435,6 +456,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
     let (mut open, mut detached) = (up.window, up.detached);
     crate::ui::tool_window(ctx, &format!("{} Update Phosphor", icon::ARROW_CIRCLE_UP), &mut open, &mut detached, 440.0, |ui| {
         ui.label(format!("You have Phosphor {}.", env!("CARGO_PKG_VERSION")));
+        crate::ui::toggle(ui, &mut up.auto, "Install updates by themselves").on_hover_text("Phosphor checks when it opens and every hour; a new version downloads and installs in the background, and opens when you relaunch");
         match up.status.clone() {
             Status::Idle => {
                 if ui.button("Check now").clicked() {
@@ -482,7 +504,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 });
             }
             Status::Ready(path) => {
-                ui.colored_label(crate::theme::accent(), "Installed. Relaunch to start using it.");
+                ui.colored_label(crate::theme::accent(), "The new Phosphor is installed. Relaunch to start using it.");
                 #[cfg(not(target_arch = "wasm32"))]
                 if ui.button(format!("{} Relaunch now", icon::ARROW_CLOCKWISE)).clicked() {
                     relaunch(ctx, &path);

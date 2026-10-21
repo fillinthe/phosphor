@@ -21,6 +21,9 @@ else
 fi
 rm -f dist/Phosphor-mac.zip
 (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
+# Only /Applications/Phosphor.app should be openable: the build copy goes (Spotlight / Launchpad could open it).
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$PWD/dist/Phosphor.app" 2>/dev/null || true
+rm -rf dist/Phosphor.app
 NOTES=${1:-}
 if [ -z "$NOTES" ]; then
   # This version's CHANGELOG.md section plus install steps (add the section before releasing).
@@ -50,4 +53,4 @@ if [ -n "$WIN_RUN" ]; then
   fi
 fi
 gh release create "$TAG" $ASSETS -R fillinthe/phosphor --title "Phosphor $VER" --notes-file "$NOTES"
-echo "Published $TAG. Running apps see it within a day (Help › Check for Updates… right away)."
+echo "Published $TAG. Running apps install it within the hour, and when they next open."
