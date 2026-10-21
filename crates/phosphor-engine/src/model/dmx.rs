@@ -225,6 +225,37 @@ impl Default for Fixture {
 }
 
 impl Fixture {
+    /// Its controllable settings, as `ControlTarget::Fixture` params (all 0..1). Pan to motion size: moving heads.
+    pub const PARAMS: [&'static str; 5] = ["pan", "tilt", "dimmer", "motion size", "brightness"];
+
+    /// Setting `param` (`PARAMS`), to read or set.
+    pub fn param_mut(&mut self, param: u8) -> Option<&mut f32> {
+        Some(match param {
+            0 => &mut self.pan,
+            1 => &mut self.tilt,
+            2 => &mut self.dimmer,
+            3 => &mut self.motion_size,
+            4 => &mut self.brightness,
+            _ => return None,
+        })
+    }
+
+    pub fn param(&self, param: u8) -> Option<f32> {
+        Some(match param {
+            0 => self.pan,
+            1 => self.tilt,
+            2 => self.dimmer,
+            3 => self.motion_size,
+            4 => self.brightness,
+            _ => return None,
+        })
+    }
+
+    /// The params that apply to this fixture (heads have all; strips and grids only brightness).
+    pub fn params(&self) -> std::ops::Range<u8> {
+        if self.shape == FixtureShape::MovingHead { 0..5 } else { 4..5 }
+    }
+
     pub fn pixel_count(&self) -> usize {
         match self.shape {
             FixtureShape::Strip => self.cols.clamp(1, 4096) as usize,

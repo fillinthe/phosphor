@@ -166,13 +166,13 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().slider_width = 90.0;
                         ui.horizontal(|ui| {
-                            Level::percent(&mut f.pan, "Pan").default(0.5).show(ui);
+                            Level::percent(&mut f.pan, "Pan").default(0.5).target(ControlTarget::Fixture { fixture: f.id, param: 0 }).show(ui);
                         });
                         ui.horizontal(|ui| {
-                            Level::percent(&mut f.tilt, "Tilt").default(0.5).show(ui);
+                            Level::percent(&mut f.tilt, "Tilt").default(0.5).target(ControlTarget::Fixture { fixture: f.id, param: 1 }).show(ui);
                         });
                         ui.horizontal(|ui| {
-                            Level::percent(&mut f.dimmer, "Dimmer").default(1.0).show(ui);
+                            Level::percent(&mut f.dimmer, "Dimmer").default(1.0).target(ControlTarget::Fixture { fixture: f.id, param: 2 }).show(ui);
                         });
                     });
                     ui.horizontal_wrapped(|ui| {
@@ -180,7 +180,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                         if f.motion != phosphor_engine::HeadMotion::Still {
                             ui.spacing_mut().slider_width = 80.0;
                             ui.horizontal(|ui| {
-                                Level::percent(&mut f.motion_size, "Size").default(0.2).show(ui);
+                                Level::percent(&mut f.motion_size, "Size").default(0.2).target(ControlTarget::Fixture { fixture: f.id, param: 3 }).show(ui);
                             });
                             guarded!(ui, f.motion_beats, egui::DragValue::new(&mut f.motion_beats).range(0.25..=64.0).speed(0.25).suffix(" beats"));
                         }
@@ -192,7 +192,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     guarded!(ui, f.channel, egui::DragValue::new(&mut f.channel).range(1..=512).prefix("channel "));
                     ui.spacing_mut().slider_width = 90.0;
                     ui.horizontal(|ui| {
-                        Level::percent(&mut f.brightness, "Bright").default(1.0).show(ui);
+                        Level::percent(&mut f.brightness, "Bright").default(1.0).target(ControlTarget::Fixture { fixture: f.id, param: 4 }).show(ui);
                     });
                     ui.horizontal(|ui| {
                         Level::range(&mut f.gamma, 1.0, 3.0, "Gamma").default(2.2).tip("2.2 makes fades look even on most LEDs").show(ui);

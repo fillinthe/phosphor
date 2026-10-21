@@ -448,3 +448,23 @@ fn corner_pin_corners_are_controls() {
     assert_eq!(get_target(&comp, &t), Some(0.7));
     assert_eq!(default_osc_address(&t), format!("/phosphor/layer/{id}/corner/3/y"));
 }
+
+/// Lights are controls: a moving head's pan / tilt / dimmer / motion size and any light's brightness.
+#[test]
+fn lights_are_controls() {
+    let mut comp = Composition::default();
+    comp.dmx.fixtures.push(phosphor_engine::Fixture { id: 5, name: "Head".into(), shape: phosphor_engine::FixtureShape::MovingHead, ..Default::default() });
+    comp.dmx.fixtures.push(phosphor_engine::Fixture { id: 6, name: "Strip".into(), ..Default::default() });
+    let pan = ControlTarget::Fixture { fixture: 5, param: 0 };
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &pan, 0.25, &mut deferred);
+    assert_eq!(comp.dmx.fixtures[0].pan, 0.25);
+    assert_eq!(get_target(&comp, &pan), Some(0.25));
+    assert_eq!(default_osc_address(&ControlTarget::Fixture { fixture: 5, param: 3 }), "/phosphor/light/5/motion_size");
+    let all = all_targets(&comp);
+    assert_eq!(all.iter().filter(|(t, _)| matches!(t, ControlTarget::Fixture { fixture: 5, .. })).count(), 5);
+    assert_eq!(all.iter().filter(|(t, _)| matches!(t, ControlTarget::Fixture { fixture: 6, .. })).count(), 1, "a strip: brightness only");
+    comp.control_prefs.set_locked(&pan, true);
+    set_target(&mut comp, &pan, 0.9, &mut deferred);
+    assert_eq!(comp.dmx.fixtures[0].pan, 0.25, "locked");
+}
