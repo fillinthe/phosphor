@@ -5,7 +5,8 @@
 //! Layers stay in one list (`Composition::layers`) with `LayerState::comp` saying which comp they're in, so ids,
 //! controls, cues and slices find them as before. A project without comps has one, "Main", holding every layer;
 //! the first comp is also home to any layer that names none. A comp's layers sit next to each other, in comp order
-//! (`normalize_comps`), so stacking rules stay inside one comp.
+//! (`normalize_comps`), so stacking rules stay inside one comp; a group lives in one comp; solo works inside a comp.
+//! Column triggers fire every comp (a mapped button does the same whichever comp is on screen).
 
 use serde::{Deserialize, Serialize};
 
@@ -190,13 +191,13 @@ mod tests {
         // Moving up stops at the comp's edge.
         c.move_layer(y, true);
         assert_eq!(c.layers.iter().map(|l| l.id).collect::<Vec<_>>(), [a, b, y, x]);
-        // Columns trigger only the open comp's layers.
-        for id in [a, x] {
-            c.layer_mut(id).unwrap().clips = vec![Clip { id: 7, source: SourceSpec::Generator("plasma".into()), ..Default::default() }];
-        }
-        c.trigger_column(0, 0.0);
-        assert_eq!(c.layer_mut(a).unwrap().source, SourceSpec::Generator("plasma".into()));
-        assert_eq!(c.layer_mut(x).unwrap().source, SourceSpec::None, "another comp's column didn't fire");
+        // A layer can't be grouped with one in another comp.
+        assert_eq!(c.create_group(&[x, b]).map(|g| c.layers.iter().filter(|l| l.parent == Some(g)).count()), Some(1));
+        c.ungroup(c.groups[0].id);
+        // Solo stays inside its comp.
+        c.layer_mut(x).unwrap().solo = true;
+        assert_eq!(c.sound_gain(&c.layers.iter().find(|l| l.id == a).unwrap().clone()) > 0.0, c.layers.iter().find(|l| l.id == a).unwrap().volume > 0.0);
+        c.layer_mut(x).unwrap().solo = false;
         // Moving a layer across, and removing a comp keeps its layers.
         c.move_to_comp(a, side);
         assert_eq!(c.comp_layers(Some(side)).map(|l| l.id).collect::<Vec<_>>(), [x, a]);

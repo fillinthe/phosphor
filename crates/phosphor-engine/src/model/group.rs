@@ -119,7 +119,9 @@ impl Composition {
 
     /// Puts these layers in a new group (taking them out of any group they were in). They gather where the top one is.
     pub fn create_group(&mut self, layers: &[u64]) -> Option<u64> {
-        let members: Vec<u64> = layers.iter().copied().filter(|id| self.layers.iter().any(|l| l.id == *id)).collect();
+        // All from one comp (the first layer's).
+        let home = layers.first().and_then(|id| self.layers.iter().find(|l| l.id == *id)).map(|l| self.comp_of(l));
+        let members: Vec<u64> = layers.iter().copied().filter(|id| self.layers.iter().any(|l| l.id == *id && Some(self.comp_of(l)) == home)).collect();
         if members.is_empty() {
             return None;
         }
@@ -209,6 +211,14 @@ impl Composition {
         }
         let layers = &self.layers;
         self.groups.retain(|g| layers.iter().any(|l| l.parent == Some(g.id)));
+        // A group lives in one comp: its top member's.
+        for id in self.groups.iter().map(|g| g.id).collect::<Vec<_>>() {
+            let home = self.layers.iter().rev().find(|l| l.parent == Some(id)).map(|l| l.comp);
+            for l in self.layers.iter_mut().filter(|l| l.parent == Some(id)) {
+                l.comp = home.flatten();
+            }
+        }
+        self.normalize_comps();
         for id in self.groups.iter().map(|g| g.id).collect::<Vec<_>>() {
             let at: Vec<usize> = self.layers.iter().enumerate().filter(|(_, l)| l.parent == Some(id)).map(|(i, _)| i).collect();
             let (first, top) = (at[0], at[at.len() - 1]);

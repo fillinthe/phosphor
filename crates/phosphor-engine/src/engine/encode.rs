@@ -149,6 +149,7 @@ impl Engine {
             t.finish(&mut encoder);
         }
         self.gpu.queue.submit([encoder.finish()]);
+        self.mark_external_frame();
         if let Some(t) = &mut self.gpu_timer {
             t.after_submit();
         }

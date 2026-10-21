@@ -127,6 +127,15 @@ fn probe_safely(path: &Path) -> Entry {
     let Ok(mut child) = std::process::Command::new(exe).arg("--ffgl-probe").arg(path).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn() else {
         return failed("can't start the check");
     };
+    // Read what it prints as it goes (a chatty plugin would otherwise fill the pipe and look hung).
+    let reader = child.stdout.take().map(|mut out| {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut s = String::new();
+            let _ = out.read_to_string(&mut s);
+            s
+        })
+    });
     let started = std::time::Instant::now();
     loop {
         match child.try_wait() {
@@ -139,11 +148,7 @@ fn probe_safely(path: &Path) -> Entry {
             }
         }
     }
-    let mut out = String::new();
-    if let Some(mut s) = child.stdout.take() {
-        use std::io::Read;
-        let _ = s.read_to_string(&mut out);
-    }
+    let out = reader.and_then(|r| r.join().ok()).unwrap_or_default();
     out.lines().rev().find_map(|l| serde_json::from_str::<Entry>(l).ok()).unwrap_or_else(|| failed("it crashed when opened"))
 }
 
@@ -154,13 +159,22 @@ fn cache_path() -> Option<PathBuf> {
 /// Finds every plugin, probing the new or changed ones (background thread).
 fn scan() -> Vec<Entry> {
     let cached: Vec<Entry> = cache_path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-    let list: Vec<Entry> = bundles(&folders())
+    let mut list: Vec<Entry> = bundles(&folders())
         .into_iter()
         .map(|path| {
             let m = modified(&path);
             cached.iter().find(|e| e.path == path && e.modified == m).cloned().unwrap_or_else(|| probe_safely(&path))
         })
         .collect();
+    // The same bundle name in two folders: the second gets its own id.
+    for i in 0..list.len() {
+        let mut n = 2;
+        while list[..i].iter().any(|e| e.id == list[i].id) {
+            let base = list[i].id.trim_end_matches(|c: char| c.is_ascii_digit() || c == '_').to_string();
+            list[i].id = format!("{base}_{n}");
+            n += 1;
+        }
+    }
     if let Some(p) = cache_path() {
         let _ = std::fs::write(p, serde_json::to_string(&list).unwrap_or_default());
     }
@@ -240,6 +254,21 @@ pub struct Ffgl {
     frame: u64,
 }
 
+impl Drop for Ffgl {
+    /// Instances go first, with their GL context current (their textures and framebuffers are GL objects), then
+    /// the context.
+    fn drop(&mut self) {
+        if let Some((g, _)) = &self.gl {
+            g.make_current();
+            for (_, i) in self.instances.drain() {
+                if let Some(l) = self.loaded.get(i.id) {
+                    l.plugin.deinstantiate(i.ptr);
+                }
+            }
+        }
+    }
+}
+
 impl Ffgl {
     /// Looks for plugins in the background (call once at start; `poll` picks up the result).
     pub fn start_scan(&mut self) {
@@ -305,9 +334,17 @@ impl Ffgl {
         }
         let Some((glc, copier)) = self.gl.take() else { return };
         glc.make_current();
-        // The engine's copies into the input pictures must be finished before GL reads them.
-        if jobs.iter().any(|j| j.has_input) {
-            engine.wait_idle();
+        // GL may only read the engine's input copies (and draw over results the engine last showed) once the GPU has
+        // finished the frame that made them; if it hasn't yet, the plugins skip this frame (never a wait here).
+        if !engine.gpu_caught_up() {
+            let frame = self.frame;
+            for j in &jobs {
+                if let Some(i) = self.instances.get_mut(&j.key) {
+                    i.used = frame;
+                }
+            }
+            self.gl = Some((glc, copier));
+            return;
         }
         for job in &jobs {
             self.run_job(&glc, &copier, engine, job, time, bpm, bar_phase);
@@ -337,7 +374,12 @@ impl Ffgl {
             {
                 l.plugin.deinstantiate(old.ptr);
             }
-            let Some(ptr) = self.load(job.id).and_then(|l| l.plugin.instantiate(w, h)) else { return };
+            let Some(ptr) = self.load(job.id).and_then(|l| l.plugin.instantiate(w, h)) else {
+                if !self.broken.contains(&job.id) {
+                    self.broken.push(job.id);
+                }
+                return;
+            };
             let device = engine.device().clone();
             let made = (|| {
                 let send = if job.has_input { Some(gl::Shared::new(glc, &device, w, h)?) } else { None };
@@ -351,8 +393,9 @@ impl Ffgl {
                 self.broken.push(job.id);
                 return;
             };
-            engine.set_external_textures(job.key, send.as_ref().map(|s| &s.texture), &recv[0].texture);
-            self.instances.insert(job.key, Instance { id: job.id, ptr, size: (w, h), send, recv, front: 0, drawing: None, input, output, used: self.frame });
+            // Input only until the first result is ready (the picture passes through, no blank frame).
+            engine.set_external_textures(job.key, send.as_ref().map(|s| &s.texture), None);
+            self.instances.insert(job.key, Instance { id: job.id, ptr, size: (w, h), send, recv, front: 1, drawing: None, input, output, used: self.frame });
         }
         let (Some(inst), Some(l)) = (self.instances.get_mut(&job.key), self.loaded.get(job.id)) else { return };
         inst.used = self.frame;
@@ -363,7 +406,7 @@ impl Ffgl {
             }
             inst.drawing = None;
             inst.front = 1 - inst.front;
-            engine.set_external_textures(job.key, inst.send.as_ref().map(|s| &s.texture), &inst.recv[inst.front].texture);
+            engine.set_external_textures(job.key, inst.send.as_ref().map(|s| &s.texture), Some(&inst.recv[inst.front].texture));
         }
         for ((index, options), v) in l.params.iter().zip(&job.params) {
             let value = if options.is_empty() { *v } else { options.get(v.round().max(0.0) as usize).copied().unwrap_or(0.0) };
@@ -374,6 +417,8 @@ impl Ffgl {
         // Input: the shared picture, turned the right way up for GL into a plain texture.
         if let Some(send) = &inst.send {
             copier.read(send, &inst.input);
+            // The engine writes this input again next frame: let GL's copy of it finish first (a tiny copy).
+            gl::Fence::new().wait(std::time::Duration::from_millis(2));
         }
         inst.output.clear(w, h);
         let tex = plugin::GlTexture { width: w, height: h, hardware_width: w, hardware_height: h, handle: inst.input.tex };

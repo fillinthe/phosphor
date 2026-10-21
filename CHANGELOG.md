@@ -6,6 +6,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.89 (2026-10-21)
 
+- **Clips start the moment you trigger them.** Movies now open in the background instead of holding up the app,
+  and the next few movie clips in the bank on screen are kept open, paused on their first frame. A triggered clip
+  shows on the very next frame instead of about a tenth of a second later, which matters on beat-quantised cuts.
+  **Preload** in the launch bar turns it off.
+- **Patches and your own shaders keep their settings when you edit them.** Layers already using one keep each
+  setting, its modulation and its MIDI/OSC mapping by name, even when blocks are added or removed.
 - **Scan the stage with a camera.** In the Mapping Studio, **Stage photo › Scan the stage with a camera…**: the
   projector shows black, white and striped pictures while a camera watches, and Phosphor draws the stage as the
   projector sees it. That becomes the output's stage photo, so you can draw slices straight onto the real objects
@@ -19,7 +25,8 @@ What changed in each Phosphor release, newest first. Downloads are on the
     can stay out of the master mix to go only to outputs of its own (the screen button, as for layers).
   - A layer can show a comp (source: Feed › Comp), a mapping slice can show a comp, and a layer's right-click
     menu has **Move to comp**.
-  - Comps share one tempo. Column triggers (keys 1–9) and Surprise act on the comp you have open.
+  - Comps share one tempo. Surprise acts on the comp you have open; column triggers (keys 1–9, mapped buttons)
+    fire every comp, so a controller does the same whichever comp is on screen. Solo works inside a comp.
   - Projects from earlier versions open as one comp, "Main", and look the same.
 - **FFGL plugins (Mac).** Phosphor now loads FFGL effect and source plugins, the kind Resolume and VDMX use.
   It looks in ~/Library/Graphics/FreeFrame Plug-Ins, /Library/Graphics/FreeFrame Plug-Ins, Resolume's Extra

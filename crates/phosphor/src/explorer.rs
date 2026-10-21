@@ -468,10 +468,17 @@ fn compile(st: &mut State, index: usize, save: bool) {
         shaders::unregister_custom(&sh.id);
         sh.id = new_id;
     }
+    // Its parameters before, so whatever already uses it keeps its settings by name (`Composition::remap_params`).
+    let old: Option<Vec<&'static str>> = shaders::effect(&sh.id).or_else(|| shaders::generator(&sh.id)).map(|d| d.params.iter().map(|p| p.name).collect());
     match engine.compile_custom(&sh.id, &sh.source) {
         Ok(_) => {
             sh.error = None;
             sh.compiled = true;
+            if let (Some(old), Some(d)) = (old, shaders::effect(&sh.id).or_else(|| shaders::generator(&sh.id))) {
+                let new: Vec<(&str, f32)> = d.params.iter().map(|p| (p.name, p.default)).collect();
+                st.comp.remap_params(&sh.id.clone(), &old, &new);
+            }
+            let sh = &mut st.editor.shaders[index];
             #[cfg(not(target_arch = "wasm32"))]
             if save && let Some(dir) = effects_dir() {
                 let _ = std::fs::create_dir_all(&dir);
@@ -741,7 +748,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
         };
     });
     ui.ctx().data_mut(|d| d.insert_temp(code_id, show_code));
-    crate::ui::hint(ui, "Right-click the canvas to add a block · drag from a block's right dot to another's left dot to wire it · drag a wire's end away to unplug it · every slider becomes a parameter of the effect (MIDI, modulation)");
+    crate::ui::hint(ui, "Right-click the canvas to add a block · drag from a block's right dot to another's left dot to wire it · drag a wire's end away to unplug it · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
     if show_code {
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             ui.add(egui::TextEdit::multiline(&mut sh.source.as_str()).code_editor().font(egui::FontId::monospace(12.0)).desired_width(f32::INFINITY));

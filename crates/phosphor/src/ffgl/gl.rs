@@ -350,6 +350,15 @@ impl Fence {
         Fence(unsafe { glFenceSync(0x9117, 0) })
     }
 
+    /// Waits up to `limit` for the GPU to get past it (flushing first).
+    pub fn wait(&self, limit: std::time::Duration) {
+        if !self.0.is_null() {
+            // GL_SYNC_FLUSH_COMMANDS_BIT = 1.
+            // SAFETY: our sync object.
+            unsafe { glClientWaitSync(self.0, 1, limit.as_nanos() as u64) };
+        }
+    }
+
     /// Finished (or failed: don't wait forever on a broken one). Never blocks.
     pub fn done(&self) -> bool {
         // SAFETY: our sync object; a zero timeout only polls. TIMEOUT_EXPIRED = 0x911B.

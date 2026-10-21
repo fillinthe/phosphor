@@ -313,11 +313,13 @@ pub struct LaunchSettings {
     pub auto_beat_match: bool,
     /// Effect the "Through an effect" fade style uses (effect id); set from the launch bar it goes to every layer.
     pub transition_effect: String,
+    /// Keep the next movie clips open and paused on their first frame, so they start the moment they're triggered.
+    pub preload: bool,
 }
 
 impl Default for LaunchSettings {
     fn default() -> Self {
-        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: true, transition_effect: "zoom_blur".into() }
+        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: true, transition_effect: "zoom_blur".into(), preload: true }
     }
 }
 

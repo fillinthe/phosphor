@@ -162,6 +162,8 @@ pub struct VideoPlayer {
     sound: Option<sound::ClipAudio>,
     /// A sound file with no picture: the clock runs, the sound follows it, no frames ever come.
     audio_only: bool,
+    /// When it went on a layer, until its first frame shows (logged: how long a trigger takes to show).
+    opened_at: Option<std::time::Instant>,
 }
 
 /// Logs how long opening took when it drops (info level: `RUST_LOG=phosphor=info`).
@@ -323,6 +325,7 @@ impl VideoPlayer {
             passes: 0,
             sound: None,
             audio_only: false,
+            opened_at: Some(std::time::Instant::now()),
         })
     }
 
@@ -375,7 +378,13 @@ impl VideoPlayer {
             passes: 0,
             sound,
             audio_only: true,
+            opened_at: None,
         })
+    }
+
+    /// It's on a layer from now (for the "first frame after starting" log).
+    pub fn mark_started(&mut self) {
+        self.opened_at = Some(std::time::Instant::now());
     }
 
     pub fn set_playing(&mut self, playing: bool) {
@@ -495,6 +504,11 @@ impl VideoPlayer {
             .clock
             .store(self.clock.to_bits(), Ordering::Relaxed);
         self.update_sound();
+        if out.is_some()
+            && let Some(t) = self.opened_at.take()
+        {
+            log::info!("first frame {:.0} ms after starting ({}x{})", t.elapsed().as_secs_f64() * 1000.0, self.size.0, self.size.1);
+        }
         out
     }
 

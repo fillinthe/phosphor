@@ -26,7 +26,6 @@ const GET_PARAMETER_ELEMENT_NAME: u32 = 35;
 const GET_PARAMETER_ELEMENT_VALUE: u32 = 36;
 const SET_BEATINFO: u32 = 38;
 const SET_HOSTINFO: u32 = 39;
-const GET_PARAM_DISPLAY_NAME: u32 = 51;
 
 const FAIL: u32 = 0xFFFF_FFFF;
 const CAP_MINIMUM_INPUT_FRAMES: u32 = 10;
@@ -219,11 +218,8 @@ impl Plugin {
             .map(|i| {
                 let kind = self.uint(GET_PARAMETER_TYPE, Mixed::uint(i), null);
                 // SAFETY: GET_PARAMETER_NAME returns a pointer, GET_PARAMETER_DEFAULT a float in the number half.
-                let mut name = c_string(unsafe { self.call(GET_PARAMETER_NAME, Mixed::uint(i), null).ptr }, 64);
-                let display = c_string(unsafe { self.call(GET_PARAM_DISPLAY_NAME, Mixed::uint(i), null).ptr }, 64);
-                if !display.is_empty() {
-                    name = display;
-                }
+                // (Display names need an instance and a string buffer: the plain name is enough here.)
+                let name = c_string(unsafe { self.call(GET_PARAMETER_NAME, Mixed::uint(i), null).ptr }, 64);
                 let default = if matches!(kind, TYPE_TEXT | TYPE_FILE | TYPE_BUFFER) { 0.0 } else { f32::from_bits(self.uint(GET_PARAMETER_DEFAULT, Mixed::uint(i), null)) };
                 let mut options = Vec::new();
                 if kind == TYPE_OPTION {

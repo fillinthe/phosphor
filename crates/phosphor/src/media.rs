@@ -7,6 +7,8 @@ use phosphor_engine::{Composition, Engine, SourceSpec};
 #[cfg(not(target_arch = "wasm32"))]
 pub mod live;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod preload;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod rhythm;
 pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]
@@ -105,6 +107,9 @@ pub struct MediaManager {
     /// few frames so the decoder never reuses memory the GPU is reading.
     #[cfg(not(target_arch = "wasm32"))]
     held: Held,
+    /// Movies opening in the background, and clips kept ready to start at once.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub preload: preload::Preloader,
 }
 
 /// Per (layer, outgoing): recent zero-copy frames (kept alive while the GPU may read them) and the GPU
@@ -229,17 +234,11 @@ impl MediaManager {
                         self.errors.insert(layer.id, e);
                     }
                 }
+                // A clip kept ready starts at once; anything else opens in the background (never on this thread).
                 #[cfg(not(target_arch = "wasm32"))]
-                SourceSpec::Movie { path: Some(path), .. } => match video::VideoPlayer::open(path) {
-                    Ok(mut player) => {
-                        if let Some(t) = self.pending_seek.remove(&layer.id) {
-                            player.seek(t);
-                        }
-                        self.players.insert(layer.id, player);
-                    }
-                    Err(e) => {
-                        self.errors.insert(layer.id, e);
-                    }
+                SourceSpec::Movie { path: Some(path), .. } => match self.preload.take(path) {
+                    Some(player) => self.add_player(layer.id, player),
+                    None => self.preload.open_for(layer.id, layer.source.clone(), path.clone()),
                 },
                 SourceSpec::Movie { .. } => {
                     self.errors.insert(layer.id, "Video playback in the browser is coming soon".into());
@@ -313,7 +312,36 @@ impl MediaManager {
     }
 
     /// Pulls the newest due frame from every movie into the engine. `now` is the frame clock in seconds.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn add_player(&mut self, layer: u64, mut player: video::VideoPlayer) {
+        player.mark_started();
+        if let Some(t) = self.pending_seek.remove(&layer) {
+            player.seek(t);
+        }
+        self.players.insert(layer, player);
+    }
+
+    /// Keeps the open bank's next movie clips ready (`page` = the bank on screen), or none with preload off.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn preload_clips(&mut self, comp: &Composition, page: usize, per_page: usize) {
+        let list = if comp.launch.preload { preload::candidates(comp, page, per_page) } else { Vec::new() };
+        self.preload.want(&list);
+    }
+
     pub fn update_video(&mut self, comp: &Composition, engine: &mut Engine, now: f64) {
+        // Movies opened in the background: in place if the layer still wants them.
+        #[cfg(not(target_arch = "wasm32"))]
+        for (id, spec, result) in self.preload.opened() {
+            if !comp.layers.iter().any(|l| l.id == id && l.source == spec) {
+                continue;
+            }
+            match result {
+                Ok(player) => self.add_player(id, player),
+                Err(e) => {
+                    self.errors.insert(id, e);
+                }
+            }
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some((_, rx)) = &self.decoded {
             for (id, spec, result) in rx.try_iter() {
