@@ -258,6 +258,11 @@ impl Composition {
     /// The scheduled cue whose time of day came between `prev` and `now` (local seconds since midnight; the window
     /// wraps at midnight) on `weekday` (0 = Sunday). The latest one wins.
     pub fn scheduled_cue(&self, prev: u32, now: u32, weekday: u8) -> Option<usize> {
+        // Backwards by less than half a day = the clock was set back (time sync, clocks going back): nothing fires.
+        // Further back = it went past midnight.
+        if now < prev && prev - now < 43_200 {
+            return None;
+        }
         let passed = |t: u32| if prev <= now { t > prev && t <= now } else { t > prev || t <= now };
         self.cues
             .cues
@@ -294,6 +299,7 @@ mod tests {
         assert_eq!(comp.scheduled_cue(18 * 3600, 18 * 3600 + 1, 3), None, "once");
         assert_eq!(comp.scheduled_cue(86_399, 2 * 3600 + 5, 1), Some(1), "across midnight (asleep a while)");
         assert_eq!(comp.scheduled_cue(2 * 3600 - 1, 2 * 3600, 0), None, "not on Sunday");
+        assert_eq!(comp.scheduled_cue(18 * 3600 + 30, 18 * 3600 + 10, 3), None, "the clock went back a little: nothing again");
     }
 
     #[test]

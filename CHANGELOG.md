@@ -6,6 +6,14 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.86 (2026-10-21)
 
+- **Fixes:**
+  - a mapping with Delay dropped most fader moves while soft takeover was on;
+  - "Only selected" in the Mapping Studio now ends when you leave the Studio, and selecting a mask no longer
+    blacks the output;
+  - image sequences no longer count as missing media in imports;
+  - the hidden "._" files macOS leaves on external drives no longer turn into a broken extra clip;
+  - a daily cue doesn't fire again when the computer's clock is set back a little;
+  - Remove Background does no work on Windows (where it can't cut yet) or in effect previews.
 - **Several "show only inside" masks work together:** two inverted masks now show two windows of the picture.
   Before, each one blacked out the other's window and the output went black.
 - **Scopes** (as in VDMX): a new Scopes panel (View › Panels, or the Outputs area) shows a waveform, RGB parade,

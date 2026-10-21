@@ -225,6 +225,13 @@ impl PhosphorApp {
                 }
             }
         }
+        // "Only selected" (Studio) lasts only while the Studio is on screen.
+        let studio_at: f64 = ctx.data(|d| d.get_temp(egui::Id::new(crate::panels::STUDIO_SHOWN))).unwrap_or(f64::MIN);
+        if now - studio_at > 0.5 {
+            for o in self.state.comp.outputs.iter_mut().filter(|o| !o.mapping.solo.is_empty()) {
+                o.mapping.solo.clear();
+            }
+        }
         self.output_windows(&ctx);
         self.finish_bench(&ctx, now);
         // A VJ app renders continuously. At "Display rate" every vsync; with a cap, ask for the repaint

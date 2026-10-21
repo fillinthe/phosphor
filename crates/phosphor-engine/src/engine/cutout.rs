@@ -56,7 +56,9 @@ impl Engine {
     /// matte to cut with (None = none yet).
     pub(super) fn cutout_matte(&mut self, res: u64, input: &wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>) -> Option<wgpu::TextureView> {
         let frame = self.frame_index;
-        if self.cutouts.want && !self.cutouts.reads.contains(&res) {
+        // Effect previews and "through an effect" transitions use made-up ids: they never ask Vision for a matte.
+        let real = res < super::RESERVED_IDS && res & (super::TRANSITION_IN | super::TRANSITION_OUT) == 0;
+        if real && self.cutouts.want && !self.cutouts.reads.contains(&res) {
             let h = (READ_WIDTH as f32 * size.1 as f32 / size.0.max(1) as f32).round().clamp(16.0, 2048.0) as u32;
             let entry = self.cutouts.small.entry(res).or_insert_with(|| (Target::new(&self.gpu.device, "cutout read", READ_WIDTH, h), frame));
             if (entry.0.width, entry.0.height) != (READ_WIDTH, h) {
