@@ -82,7 +82,7 @@ impl PhosphorApp {
         if let Some(l) = &self.state.following {
             let show = l.show_time().unwrap_or(f64::NAN);
             println!(
-                "FOLLOW {} projects={} layers={} rtt_ms={:.1} show={:.3} beats={:.3} bpm={} wall={:.3}",
+                "FOLLOW {} projects={} layers={} rtt_ms={:.1} show={:.3} beats={:.3} bpm={} wall={:.3} pos={:?}",
                 l.status,
                 l.projects,
                 self.state.comp.layers.len(),
@@ -90,16 +90,18 @@ impl PhosphorApp {
                 show,
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
+                self.state.media.positions()
             );
         }
         if self.state.net.followers.load(std::sync::atomic::Ordering::Relaxed) > 0 {
             println!(
-                "LEADER followers={} beats={:.3} now={now:.3} bpm={} wall={:.3}",
+                "LEADER followers={} beats={:.3} now={now:.3} bpm={} wall={:.3} pos={:?}",
                 self.state.net.followers.load(std::sync::atomic::Ordering::Relaxed),
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
+                self.state.media.positions()
             );
         }
         #[cfg(not(target_arch = "wasm32"))]

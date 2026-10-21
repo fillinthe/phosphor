@@ -6,6 +6,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
 
 ## 0.2.90 (2026-10-21)
 
+- **Follow another Phosphor.** Network › Follow another Phosphor: type the address of a Phosphor running a
+  Session, and this one plays its show in sync (project, beat, clips, fades, movie positions) on its own outputs
+  and mapping. Use it for several machines or projectors in one show. The media must be at the same place on
+  each Mac.
 - **Audience play: limits per control and per player.** In the Control Surface editor each control has
   **Guests can use it** (off hides it from guests' phones) and a guest range, so guests can push a strobe only up
   to 30%, say. With several players at once, each place can have its own page (Network › Audience play). The

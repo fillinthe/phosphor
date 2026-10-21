@@ -28,7 +28,8 @@ impl PhosphorApp {
         {
             // Effects named on the command line may be ISF shaders that only exist now.
             run.rebuilt = true;
-            if run.cfg.project.is_none() {
+            // (A follower's project comes from its leader.)
+            if run.cfg.project.is_none() && run.cfg.follow.is_none() {
                 let bin = std::mem::take(&mut self.state.comp.media_bin);
                 let ndi = self.state.comp.ndi.clone();
                 self.state.comp = run.cfg.composition();
