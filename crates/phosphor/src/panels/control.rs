@@ -252,6 +252,9 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
                     ValueFx::Formula(f) => {
                         text_field(ui, f, "1 - $VAL", Some(140.0)).on_hover_text("$VAL is the value (0..1); + - * / ^, sin, cos, abs, min, max, clamp…");
                     }
+                    ValueFx::Delay(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=30.0).speed(0.01).suffix(" s")).on_hover_text("Each move lands this much later");
+                    }
                 }
                 if ui.small_button(icon::X).clicked() {
                     remove = Some(k);
@@ -263,7 +266,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
         }
         ui.separator();
         ui.horizontal_wrapped(|ui| {
-            for (name, f) in [("Smooth", ValueFx::Smooth(0.3)), ("Steps", ValueFx::Steps(4)), ("Curve", ValueFx::Curve(2.0)), ("Formula", ValueFx::Formula("1 - $VAL".into()))] {
+            for (name, f) in [("Smooth", ValueFx::Smooth(0.3)), ("Steps", ValueFx::Steps(4)), ("Curve", ValueFx::Curve(2.0)), ("Formula", ValueFx::Formula("1 - $VAL".into())), ("Delay", ValueFx::Delay(0.5))] {
                 if ui.small_button(label(icon::PLUS, name)).clicked() {
                     fx.push(f);
                 }
