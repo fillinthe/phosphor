@@ -212,6 +212,12 @@ pub const EFFECTS: &[ShaderDesc] = &[
         params: &[p("Key hue", 0.0, 1.0, 0.33), p("Tolerance", 0.0, 0.3, 0.08), p("Softness", 0.0, 0.3, 0.05)],
     },
     ShaderDesc {
+        id: "remove_bg",
+        name: "Remove Background",
+        entry: "fx_cutout",
+        params: &[p("Edge", 0.0, 1.0, 0.5), p("Softness", 0.0, 0.5, 0.15), p("Invert", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc {
         id: "gamma",
         name: "Gamma / Lift / Gain",
         entry: "fx_gamma",
@@ -550,6 +556,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "rutt_etra" => ("3D", "Scan-processor lines (v002)"),
         "rutt_etra_points" => ("3D", "Scan-processor points (v002)"),
         "chroma_key" => ("Key", "Make a colour transparent"),
+        "remove_bg" => ("Key", "Keep the people, lose the background (Mac)"),
         "plasma" | "gradient" | "noise" | "voronoi" => ("Patterns", "Animated pattern"),
         "rings" | "spiral" | "tunnel" => ("Patterns", "Hypnotic motion"),
         "checker" | "color_bars" | "solid" => ("Utility", "Test and fill"),

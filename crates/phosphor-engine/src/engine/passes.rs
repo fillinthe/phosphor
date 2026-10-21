@@ -378,6 +378,11 @@ impl Engine {
                     if k == last_index && entry == "fx_glow_add" {
                         tex1 = Some(dry.clone());
                     }
+                    if entry == "fx_cutout" {
+                        // Remove background: the matte from the app on tex2; p[14].w says one is there yet.
+                        tex2 = self.cutout_matte(res_id, &input, (w, h), passes);
+                        u.p[14][3] = if tex2.is_some() { 1.0 } else { 0.0 };
+                    }
                     let (_, a1, a2) = self.audio_extra(entry);
                     tex1 = tex1.or(a1);
                     tex2 = tex2.or(a2);

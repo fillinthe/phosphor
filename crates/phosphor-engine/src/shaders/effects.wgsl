@@ -352,6 +352,17 @@ fn fx_chroma_key(in: VOut) -> @location(0) vec4f {
     return vec4f(c.rgb, c.a * keep);
 }
 
+// Remove background: keeps what the matte on tex2 says is a person (Apple Vision, sent by the app). P(0) edge,
+// P(1) softness, P(2) invert. p[14].w = 1 once a matte exists (until then the picture passes through).
+@fragment
+fn fx_cutout(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    var m = textureSampleLevel(tex2, samp, in.uv, 0.0).r;
+    m = smoothstep(P(0u) - P(1u), P(0u) + P(1u) + 0.001, m);
+    m = mix(m, 1.0 - m, step(0.5, P(2u)));
+    return vec4f(c.rgb, c.a * mix(1.0, m, step(0.5, u.p[14].w)));
+}
+
 @fragment
 fn fx_gamma(in: VOut) -> @location(0) vec4f {
     let c = src(in.uv);

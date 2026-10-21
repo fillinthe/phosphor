@@ -35,7 +35,7 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
         });
         ui.horizontal(|ui| Level::percent(&mut t.smoothing, "Smoothing").default(0.5).show(ui)).inner.on_hover_text("Higher = less jitter, a little more lag");
         if !t.enabled {
-            hint(ui, "Turn it on, pick a camera layer, then right-click any slider › Modulate › a Track modulator.");
+            hint(ui, "Turn it on, pick a camera layer, then right-click any slider › Modulate › a Track modulator. To cut people out of the background, add the Remove Background effect to the layer instead (no tracking needed).");
             return;
         }
         let status = if st.tracker.status.is_empty() { "Starting…".to_string() } else { st.tracker.status.clone() };

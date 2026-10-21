@@ -148,7 +148,7 @@ app that's much smaller and lighter on the CPU.
     - [x] A two-LUT mixer (0.2.82: LUT Mix)
     - [x] Gamepad input as control sources (0.2.75; other HID devices still to do)
     - [x] Video tracking (Vision: faces, hands, body as modulators, 0.2.84)
-    - [ ] Remove background (Vision person segmentation) as an effect
+    - [x] Remove background (Vision person segmentation) as an effect (0.2.84)
     - [x] On-end rules (autopilot Next / Previous / Random / Clear the layer) and layer crop (0.2.77)
     - [x] Multi-track step sequencer (0.2.77: step tracks on shared modulators)
     - [x] Extra preview windows for any layer / group / output (0.2.78)

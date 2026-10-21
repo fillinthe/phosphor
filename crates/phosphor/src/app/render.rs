@@ -137,6 +137,16 @@ impl PhosphorApp {
                 engine.read_monitor(mwants.len() - 1);
             }
         }
+        // Remove background: fresh mattes in, and the effects' pictures out when the worker is free.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            for (res, (w, h, mask)) in tracker.take_mattes() {
+                engine.set_matte(res, w, h, &mask);
+            }
+            if tracker.cutout_due(now) {
+                engine.request_cutout_frames();
+            }
+        }
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
         // LED / DMX: sample the fixtures' pixels from this frame when the lights want one.
@@ -160,6 +170,10 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         for f in engine.take_monitor_reads() {
             tracker.give(f.rgba, f.width, f.height, &comp.tracking);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        for f in engine.take_cutout_frames() {
+            tracker.give_cutout(f.tag, f.rgba, f.width, f.height);
         }
         let render_secs = t0.elapsed().as_secs_f64();
         // Layer thumbnails for phones on the remote page: one small readback at a time, only while one is connected.
