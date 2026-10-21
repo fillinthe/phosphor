@@ -27,6 +27,8 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let mut remove = None;
     let mut moves: Option<(usize, usize)> = None;
     let earlier: Vec<(u64, String)> = st.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();
+    // What gate tracks can fire (only worked out when there's a gate track to show).
+    let targets = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.gate)) { crate::control::all_targets(&st.comp) } else { Vec::new() };
     let n = st.comp.modulators.len();
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (i, m) in st.comp.modulators.iter_mut().enumerate() {
@@ -59,6 +61,10 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     if ui.push_id(("seq", m.id), |ui| super::sequencer::track_editor(ui, track, beats, seed)).inner {
                         m.sequence = None;
                         m.signal.source = phosphor_engine::ModSource::LfoSine;
+                    } else if track.gate {
+                        // Lit steps fire clips, columns or anything else.
+                        ui.label(RichText::new("Each lit step fires (a clip plays and lets go, a column fires, a control switches on):").small());
+                        crate::ui::binding_list(ui, ("fires", m.id), &targets, &mut track.fires);
                     }
                 } else {
                     let mut sig = Some(m.signal);

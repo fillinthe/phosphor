@@ -209,6 +209,7 @@ impl PhosphorApp {
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
                 autopilot: HashMap::new(),
+                step_fired: HashMap::new(),
                 cue_run: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 link: None,
