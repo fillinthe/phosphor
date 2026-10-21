@@ -705,12 +705,16 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         }
     });
 
+    // The space left between the list and the preview (so nothing draws under either).
     let sh = &mut st.editor.shaders[idx];
-    if sh.patch.is_some() {
-        patch_view(ui, sh, &mut st.editor.dirty_at, now);
-    } else {
-        code_view(ui, sh, &mut st.editor.dirty_at, now, is_generator);
-    }
+    let dirty_at = &mut st.editor.dirty_at;
+    egui::CentralPanel::no_frame().show(ui, |ui| {
+        if sh.patch.is_some() {
+            patch_view(ui, sh, dirty_at, now);
+        } else {
+            code_view(ui, sh, dirty_at, now, is_generator);
+        }
+    });
     if st.editor.dirty_at.is_some_and(|t| now - t > 0.35) {
         st.editor.dirty_at = None;
         compile(st, idx, true);

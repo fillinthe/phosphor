@@ -317,8 +317,7 @@ impl PhosphorApp {
                     let before = self.ui_brightness;
                     ui.menu_button(icon::SUN, |ui| {
                         ui.label(egui::RichText::new("Interface brightness").strong());
-                        ui.spacing_mut().slider_width = 200.0;
-                        ui.add(egui::Slider::new(&mut self.ui_brightness, 0.0..=1.0).show_value(false));
+                        crate::ui::Level::percent(&mut self.ui_brightness, "Brightness").default(theme::DEFAULT_BRIGHTNESS).width(220.0).show(ui);
                         ui.horizontal(|ui| {
                             for (name, b) in theme::BRIGHTNESS_PRESETS {
                                 if ui.selectable_label((self.ui_brightness - b).abs() < 0.01, *name).clicked() {

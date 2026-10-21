@@ -13,8 +13,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
         if ui.button(label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
         }
-        ui.label("Width");
-        ui.add(egui::Slider::new(&mut col_w, 220.0..=520.0).show_value(false));
+        Level::range(&mut col_w, 220.0, 520.0, "Width").default(300.0).width(180.0).show(ui);
         hint(ui, "Each layer in its own window, top layer on the left. Click a picture to select it for the Inspector and controllers.");
     });
     ui.ctx().data_mut(|d| d.insert_temp(width_id, col_w));

@@ -144,6 +144,10 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
                 n.values.resize(b.settings.len(), 0.0);
                 n.values[i] = s.default;
             }
+            // (The slider paints with its own clip: only draw it when its whole row is on the canvas.)
+            if !area.contains_rect(row) {
+                continue;
+            }
             let mut v = n.values[i];
             let resp = ui
                 .scope_builder(egui::UiBuilder::new().max_rect(row).id_salt(("setting", n.id, i)), |ui| {

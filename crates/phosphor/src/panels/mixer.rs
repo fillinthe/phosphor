@@ -125,19 +125,15 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
     ui.horizontal(|ui| {
         ui.label(RichText::new("A").strong());
-        ui.spacing_mut().slider_width = (ui.available_width() - 40.0).clamp(120.0, 520.0);
-        let r = guarded!(ui, comp.crossfader, Slider::new(&mut comp.crossfader, 0.0..=1.0).show_value(false));
+        // (Double-click centres it: its default.)
+        let width = (ui.available_width() - 200.0).clamp(120.0, 520.0);
+        let r = Level::percent(&mut comp.crossfader, "Crossfader").default(0.5).target(target.clone()).width(width).show(ui);
         let r = r.on_hover_text(if used { "Crossfader: left = A layers, right = B layers, centre = both · double-click to centre" } else { "Crossfader: set layers to A or B below" });
-        if r.double_clicked() {
-            comp.crossfader = 0.5;
-        }
         value_bubble(ui, &r, match comp.crossfader {
             x if x < 0.01 => "A".to_string(),
             x if x > 0.99 => "B".to_string(),
             x => format!("A {:.0}% · B {:.0}%", phosphor_engine::CrossGroup::A.gain(x) * 100.0, phosphor_engine::CrossGroup::B.gain(x) * 100.0),
         });
-        mapped_badge(ui, &r, &target);
-        map_menu(ui, &r, target);
         ui.label(RichText::new("B").strong());
         let towards = if comp.crossfader < 0.5 { "B" } else { "A" };
         let auto = action_button(ui, Act::Go, label(if gliding { icon::HOURGLASS } else { icon::ARROWS_LEFT_RIGHT }, "Auto"))
