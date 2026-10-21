@@ -77,7 +77,8 @@ app that's much smaller and lighter on the CPU.
     Resolume DXV, MJPEG, MPEG-2/4, QuickTime Animation, PNG, GIF, FFV1, UtVideo, HuffYUV, VC-2, WMV2, FLV).
     - [ ] NotchLC: decoder is in; find a sample file to verify (no encoder available here)
     - [x] Hap / Hap Alpha / Hap Q / Hap Q Alpha / Hap R decode (unit tests per format; GPU BC7 path for Hap R)
-    - [ ] Verify Hap Q and Hap R files made by other apps (no encoder here)
+    - [x] Hap Q / Hap Q Alpha: Phosphor now encodes them (recording, converter); FFmpeg decodes ours exactly and Phosphor plays them back within 1 level (2026-10-21)
+    - [ ] Verify Hap R files made by other apps (no encoder here)
     - [x] Run the codec test on Windows in CI (its FFmpeg differs): every Windows build plays them (CODECS line)
     - [ ] Not possible without the makers' SDKs: Blackmagic RAW, RED R3D, ARRIRAW (the converter can't read them
           either; export to ProRes from their apps)

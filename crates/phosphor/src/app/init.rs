@@ -404,7 +404,13 @@ impl PhosphorApp {
             app.state.stream.settings.height = 0;
             app.state.stream.settings.program_sound = app.bench.as_ref().is_some_and(|b| b.cfg.movie_sound);
             if app.bench.as_ref().is_some_and(|b| b.cfg.hap) {
-                app.state.stream.settings.file_format = crate::stream::FileFormat::Hap;
+                use crate::stream::FileFormat as F;
+                app.state.stream.settings.file_format = match app.bench.as_ref().and_then(|b| b.cfg.hap_kind.as_deref()) {
+                    Some("alpha") => F::HapAlpha,
+                    Some("q") => F::HapQ,
+                    Some("qalpha") => F::HapQAlpha,
+                    _ => F::Hap,
+                };
             }
             if app.bench.as_ref().is_some_and(|b| b.cfg.hevc) {
                 app.state.stream.settings.file_format = crate::stream::FileFormat::Hevc;

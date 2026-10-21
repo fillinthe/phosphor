@@ -50,6 +50,8 @@ pub struct BenchConfig {
     pub show_clock: bool,
     /// `--record` writes Hap instead of H.264 / ProRes.
     pub hap: bool,
+    /// `--hap-kind alpha|q|qalpha`: which Hap `--record … --hap` writes (default plain Hap).
+    pub hap_kind: Option<String>,
     /// `--record x.mp4 --hevc`: HEVC through the Mac encoder.
     pub hevc: bool,
     /// `--stream rtmp://…` (custom RTMP, no key) and `--stream2 rtmp://…` (second destination) and `--stream-copy file.mp4`.
@@ -133,6 +135,7 @@ impl BenchConfig {
                 ("--quick", Some(v)) => cfg.quick = Some(v),
                 ("--column", Some(v)) => cfg.trigger_column = v.parse::<usize>().ok().map(|c| c.saturating_sub(1)),
                 ("--at", Some(v)) => cfg.trigger_at = v.parse().unwrap_or(1.0),
+                ("--hap-kind", Some(v)) => cfg.hap_kind = Some(v),
                 ("--hap", _) => {
                     cfg.hap = true;
                     i += 1;
