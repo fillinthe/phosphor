@@ -308,6 +308,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         for s in &o.mapping.surfaces {
             out.push((ControlTarget::SliceOpacity(s.id), format!("{} · {} · opacity", o.name, s.name)));
             out.push((ControlTarget::SliceEnabled(s.id), format!("{} · {} · on/off", o.name, s.name)));
+            effects(&format!("{} · {}", o.name, s.name), &s.effects, &mut out);
         }
         for g in &o.mapping.groups {
             out.push((ControlTarget::SliceOpacity(g.id), format!("{} · {} (group) · opacity", o.name, g.name)));

@@ -424,7 +424,9 @@ impl Engine {
         }
 
         // Drop GPU resources for layers that no longer exist.
-        let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).collect();
+        // (Slices with effects keep theirs too.)
+        let slice_fx = comp.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).filter(|s| s.effects.iter().any(|e| e.enabled)).map(|s| s.id);
+        let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).chain(slice_fx).collect();
         self.layers.retain(|id, _| *id >= RESERVED_IDS || live.contains(id));
 
         for (i, slot) in self.accum.iter_mut().enumerate() {
@@ -610,6 +612,25 @@ impl Engine {
                     }
                     _ => master.clone(),
                 };
+                // Surface FX: the slice's part of the picture (flipped as set) on its own, through its effects.
+                let (src, input_xform) = if s.effects.iter().any(|e| e.enabled) {
+                    let iw = ((s.input[2].abs() * w as f32).round() as u32).clamp(16, 8192);
+                    let ih = ((s.input[3].abs() * h as f32).round() as u32).clamp(16, 8192);
+                    let res = self.layers.entry(s.id).or_default();
+                    Target::ensure(&mut res.feed, &device, "slice input", iw, ih);
+                    let cut = res.feed.as_ref().unwrap().view.clone();
+                    let mut cu = Uniforms::with_params(&[]);
+                    cu.resolution = [iw as f32, ih as f32];
+                    cu.opacity = 1.0;
+                    cu.uv_xform = s.input_xform();
+                    passes.push(Pass { entry: "fs_composite", target: cut.clone(), tex0: src, tex1: None, tex2: None, uniforms: cu, mesh: None, bufs: Vec::new() });
+                    match self.apply_effects(s.id, &s.effects, Frame::Rgb { view: cut, w: iw, h: ih }, time, mods, &comp.layers, &mut passes) {
+                        Frame::Rgb { view, .. } => (view, [1.0, 1.0, 0.0, 0.0]),
+                        _ => continue,
+                    }
+                } else {
+                    (src, s.input_xform())
+                };
                 // 3D model: projected through its virtual camera, drawn like a mesh.
                 if let Some(m) = &s.model {
                     let aspect = ow as f32 / oh.max(1) as f32;
@@ -620,7 +641,7 @@ impl Engine {
                     let mut u = Uniforms::with_params(&[]);
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
-                    u.uv_xform = s.input_xform();
+                    u.uv_xform = input_xform;
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
@@ -638,7 +659,7 @@ impl Engine {
                     let mut u = Uniforms::with_params(&[]);
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
-                    u.uv_xform = s.input_xform();
+                    u.uv_xform = input_xform;
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, 0.0];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
@@ -655,7 +676,7 @@ impl Engine {
                     let mut u = Uniforms::with_params(&[]);
                     u.resolution = [ow as f32, oh as f32];
                     u.opacity = s.opacity * fade;
-                    u.uv_xform = s.input_xform();
+                    u.uv_xform = input_xform;
                     u.mode = o.mapping.test_pattern as u32;
                     u.p[4] = [0.0, s.feather, s.blend_gamma - 1.0, s.shape as u32 as f32];
                     [u.p[11], u.p[12]] = s.edge_uniforms();
@@ -670,7 +691,7 @@ impl Engine {
                 let mut u = Uniforms::with_params(&[]);
                 u.resolution = [ow as f32, oh as f32];
                 u.opacity = s.opacity * fade;
-                u.uv_xform = s.input_xform();
+                u.uv_xform = input_xform;
                 u.mode = o.mapping.test_pattern as u32;
                 u.p[0] = [c[0][0], c[0][1], c[1][0], c[1][1]];
                 u.p[1] = [c[2][0], c[2][1], c[3][0], c[3][1]];

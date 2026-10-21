@@ -409,3 +409,22 @@ fn delayed_moves_land_later() {
     hub.apply(&mut comp, 10.51);
     assert!((comp.master_fade - 0.8).abs() < 1e-6, "half a second later");
 }
+
+#[test]
+fn slice_effects_are_controls_and_copies_get_their_own() {
+    let mut comp = Composition::default();
+    let out = comp.add_output();
+    let sid = comp.new_id();
+    comp.outputs.iter_mut().find(|o| o.id == out).unwrap().mapping.add_surface(sid);
+    let fx = comp.new_effect("invert").unwrap();
+    let fid = fx.id;
+    comp.effects_mut(sid).expect("a slice has a chain").push(fx);
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &ControlTarget::EffectMix(fid), 0.25, &mut deferred);
+    assert_eq!(comp.effects(sid).unwrap()[0].mix, 0.25, "found through all_effects");
+    assert!(all_targets(&comp).iter().any(|(t, _)| *t == ControlTarget::EffectMix(fid)));
+    let copy = comp.duplicate_slice(sid).unwrap();
+    let copied = comp.effects(copy).unwrap()[0].id;
+    assert_ne!(copied, fid, "its own effect, not a second handle on the first");
+    assert_eq!(comp.slice(copy).unwrap().name, "Surface 1 copy");
+}
