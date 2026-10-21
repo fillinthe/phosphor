@@ -66,7 +66,7 @@ pub(super) struct Decoder {
 
 impl Decoder {
     pub(super) fn open(path: &str) -> Result<Self, String> {
-        let input = ff::format::input(&path).map_err(|e| format!("can't open ({e})"))?;
+        let input = super::open_input(path).map_err(|e| format!("can't open ({e})"))?;
         Self::from_input(path, input, false)
     }
 
@@ -730,7 +730,7 @@ impl Decoder {
         // SAFETY: seeking the demuxer we own, on this thread.
         let ok = unsafe { ffi::av_seek_frame(self.input.as_mut_ptr(), self.stream as i32, ts, ffi::AVSEEK_FLAG_BACKWARD) >= 0 };
         if !ok {
-            self.input = ff::format::input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
+            self.input = super::open_input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
         }
         self.dec.flush();
         self.eof_sent = false;
@@ -751,7 +751,7 @@ impl Decoder {
         };
         if !ok {
             self.input =
-                ff::format::input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
+                super::open_input(&self.path).map_err(|e| format!("can't reopen ({e})"))?;
         }
         self.dec.flush();
         self.eof_sent = false;

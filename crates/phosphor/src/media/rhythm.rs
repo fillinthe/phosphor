@@ -110,7 +110,7 @@ pub fn settings_for(r: &Rhythm, loop_out: f32, music_bpm: f32) -> (f32, f32) {
 /// Decodes the movie small and grey, measuring how much each frame differs from the last.
 /// Returns the motion series and its frame rate.
 fn motion(path: &str, max_secs: f32) -> Result<(Vec<f32>, f32, f32), String> {
-    let mut input = ff::format::input(&path).map_err(|e| format!("can't open ({e})"))?;
+    let mut input = crate::media::video::open_input(path).map_err(|e| format!("can't open ({e})"))?;
     let stream = input.streams().best(ff::media::Type::Video).ok_or("no video")?;
     let index = stream.index();
     let rate = stream.avg_frame_rate();

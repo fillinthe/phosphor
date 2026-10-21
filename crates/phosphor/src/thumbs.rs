@@ -125,8 +125,13 @@ mod native {
         let name = path.to_ascii_lowercase();
         let img = if crate::media::is_movie(&name) {
             let ffmpeg = crate::stream::ffmpeg_path()?;
+            // An image sequence: where its numbers start and its frame rate, before the input.
+            let start = crate::media::sequence::first_number(path).unwrap_or(0).to_string();
+            let sequence: &[&str] = if crate::media::sequence::is_sequence(path) { &["-start_number", &start, "-framerate", crate::media::sequence::RATE] } else { &[] };
             let out = Command::new(ffmpeg)
-                .args(["-v", "error", "-ss", "0.5", "-i", path, "-frames:v", "1", "-vf", &format!("scale={size}:-2"), "-f", "image2pipe", "-vcodec", "png", "-"])
+                .args(["-v", "error"])
+                .args(sequence)
+                .args(["-ss", "0.5", "-i", path, "-frames:v", "1", "-vf", &format!("scale={size}:-2"), "-f", "image2pipe", "-vcodec", "png", "-"])
                 .stdin(Stdio::null())
                 .stderr(Stdio::null())
                 .output()

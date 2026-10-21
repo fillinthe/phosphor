@@ -67,6 +67,9 @@ fn walk(dir: &Path, depth: u32, budget: &mut usize, root: &str, out: &mut Found)
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     let mut entries: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
     entries.sort();
+    for (name, path) in crate::media::sequence::take_sequences(dir, &mut entries) {
+        out.push((name, path, root.to_string()));
+    }
     for p in entries {
         if *budget == 0 {
             return;

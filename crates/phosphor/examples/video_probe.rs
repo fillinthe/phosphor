@@ -6,6 +6,17 @@
 #[path = "../src/media/video/mod.rs"]
 mod video;
 
+/// What the video code needs from `crate::media` (image sequences).
+#[allow(dead_code)]
+#[path = "../src/media"]
+mod media {
+    pub mod sequence;
+
+    pub fn is_picture(name: &str) -> bool {
+        name.rsplit_once('.').is_some_and(|(_, e)| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "webp"))
+    }
+}
+
 use std::time::{Duration, Instant};
 use video::{VideoFrame, VideoPlayer};
 

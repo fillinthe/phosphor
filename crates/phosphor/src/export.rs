@@ -39,8 +39,9 @@ pub struct Request {
 /// What an export would pack: (files, bytes, missing). Reads file sizes, so call it once, not per frame.
 pub fn summary(comp: &Composition) -> (usize, u64, usize) {
     let files = comp.media_paths();
-    let missing = files.iter().filter(|f| !Path::new(f).is_file()).count();
-    let bytes = files.iter().filter_map(|f| std::fs::metadata(f).ok()).map(|m| m.len()).sum();
+    let parts = |f: &String| if crate::media::sequence::is_sequence(f) { crate::media::sequence::members(f) } else { vec![PathBuf::from(f)] };
+    let missing = files.iter().filter(|f| parts(f).iter().all(|p| !p.is_file())).count();
+    let bytes = files.iter().flat_map(parts).filter_map(|f| std::fs::metadata(f).ok()).map(|m| m.len()).sum();
     (files.len(), bytes, missing)
 }
 
@@ -134,6 +135,29 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
     let paths = comp.media_paths();
     let total = paths.len();
     for (i, path) in paths.iter().enumerate() {
+        // An image sequence: all its frames into a folder of their own.
+        if crate::media::sequence::is_sequence(path) {
+            let frames = crate::media::sequence::members(path);
+            if frames.is_empty() {
+                failed.push(path.clone());
+                continue;
+            }
+            let mut folder = crate::media::sequence::label(path);
+            let mut n = 2;
+            while !names.insert(folder.clone()) {
+                folder = format!("{} {n}", crate::media::sequence::label(path));
+                n += 1;
+            }
+            let dir = media.join(&folder);
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            step(p, &format!("Copying media {}/{total}: {folder} ({} frames)", i + 1, frames.len()));
+            for f in &frames {
+                bytes += std::fs::copy(f, dir.join(f.file_name().unwrap_or_default())).map_err(|e| format!("copying {}: {e}", f.display()))?;
+            }
+            let pattern = Path::new(path).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            copied.insert(path.clone(), format!("media/{folder}/{pattern}"));
+            continue;
+        }
         let src = Path::new(path);
         if !src.is_file() {
             failed.push(path.clone());
