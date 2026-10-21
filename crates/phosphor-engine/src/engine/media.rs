@@ -42,32 +42,35 @@ impl Engine {
         self.plan_images.insert((entry, slot), target);
     }
 
-    /// This frame's audio for ISF `audio` / `audioFFT` inputs: `wave` samples (-1..1) and `fft` magnitudes
-    /// (0..1), each one row of pixels. Cheap: two tiny uploads.
-    pub fn set_audio(&mut self, wave: &[f32], fft: &[f32]) {
+    /// This frame's audio for ISF `audio` / `audioFFT` inputs. `wave`: (left, right) samples (-1..1), drawn two rows
+    /// tall (row 0 left, row 1 right, the ISF way; each pixel = this side, the other side, the middle, so shaders
+    /// that read two colour channels of one row get both sides too). `fft`: magnitudes (0..1), one row. Cheap: tiny uploads.
+    pub fn set_audio(&mut self, wave: &[[f32; 2]], fft: &[f32]) {
         let device = &self.gpu.device;
         let queue = &self.gpu.queue;
-        let upload = |slot: &mut Option<Target>, label: &'static str, data: &[f32], centred: bool| {
-            if data.is_empty() {
+        let upload = |slot: &mut Option<Target>, label: &'static str, rgba: &[u8], w: usize, h: u32| {
+            if w == 0 {
                 return;
             }
-            let w = data.len() as u32;
-            if slot.as_ref().is_none_or(|t| t.width != w) {
-                *slot = Some(Target::new(device, label, w, 1));
+            let w = w as u32;
+            if slot.as_ref().is_none_or(|t| t.width != w || t.height != h) {
+                *slot = Some(Target::new(device, label, w, h));
             }
-            let rgba: Vec<u8> = data
-                .iter()
-                .flat_map(|v| {
-                    let x = if centred { v * 0.5 + 0.5 } else { *v };
-                    let b = (x.clamp(0.0, 1.0) * 255.0) as u8;
-                    [b, b, b, 255]
-                })
-                .collect();
             let t = slot.as_ref().unwrap();
-            queue.write_texture(t.texture.as_image_copy(), &rgba, wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 4), rows_per_image: None }, t.texture.size());
+            queue.write_texture(t.texture.as_image_copy(), rgba, wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 4), rows_per_image: None }, t.texture.size());
         };
-        upload(&mut self.audio_wave, "audio wave", wave, true);
-        upload(&mut self.audio_fft, "audio fft", fft, false);
+        let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u8;
+        let centred = |v: f32| byte(v * 0.5 + 0.5);
+        let mut rgba = Vec::with_capacity(wave.len() * 8);
+        // Shaders read pictures bottom row first (GL's way), so ISF row 0 (left) is uploaded last.
+        for side in [1, 0] {
+            for s in wave {
+                rgba.extend([centred(s[side]), centred(s[1 - side]), centred((s[0] + s[1]) * 0.5), 255]);
+            }
+        }
+        upload(&mut self.audio_wave, "audio wave", &rgba, wave.len(), 2);
+        let rgba: Vec<u8> = fft.iter().flat_map(|v| [byte(*v), byte(*v), byte(*v), 255]).collect();
+        upload(&mut self.audio_fft, "audio fft", &rgba, fft.len(), 1);
     }
 
     /// A video frame's luma (R8) and chroma (RG8) planes as textures someone else made (zero-copy hardware

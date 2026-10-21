@@ -4,6 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.2.97 (2026-10-21)
+
+- **Mapped controls stand out:** any slider, button or clip cell mapped to MIDI, OSC or a key now has a gold outline
+  and tint (it was a tiny dot), so you can see at a glance what's mapped.
+- **Stereo sound for shaders:** audio-reactive shaders now get left and right separately (the ISF way: one row per
+  channel), so XY oscilloscopes and stereo visualizers work. New: **Curve Ink Scope** (px-stream by darosh), an XY
+  scope that draws left against right. The waveform shaders see is now the newest ~11 ms in a row, as other ISF
+  hosts give it.
+- **Particles:** MadMapper's **Transform Particles** effect now works (shaders that draw their picture many times).
+
 ## 0.2.96 (2026-10-21)
 
 - **Runs on macOS 13 Ventura** (was 14 and newer).

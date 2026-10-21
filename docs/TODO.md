@@ -4,8 +4,10 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 ## Next round (2026-10-21, "keep going on the large stuff"), quickest first
 
-- [ ] **Stereo audio pictures**: shaders' audio inputs get left and right (today mono), so XY scopes and stereo
-      visualizers work; then ship px-stream's XY scopes.
+- [x] **Mapped controls stand out** (asked mid-way): gold outline and tint on every mapped control. Checked on a screenshot.
+- [x] **Stereo audio pictures**: row 0 left, row 1 right, both sides in each pixel's colours; newest 512 samples in
+      a row. Checked with test tones, left only and then 2:3 stereo. Curve Ink Scope (px-stream) ships and draws the
+      Lissajous figure; X.1–X.5 need a picture drawn by their Max patch, not sound.
 - [x] **Instanced vertex shaders**: a shader can draw its quad many times (`gl_InstanceID`, MadMapper
       `INSTANCE_COUNT`, a fixed number or a setting), and its vertex stage can hand its own values to the pixel stage
       (`out`/`varying`). MadMapper's **Transform Particles** now works (checked: copies of the test card fly out and
