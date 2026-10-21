@@ -265,7 +265,8 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         toggle(ui, &mut solo, label(icon::CROSSHAIR, "Only selected")).on_hover_text("The output shows only the selected slice(s), so you can see which is which on the real object");
         let slices: Vec<u64> = many.iter().copied().filter(|id| o.mapping.surfaces.iter().any(|s| s.id == *id)).collect();
         o.mapping.solo = if solo { if slices.is_empty() { o.mapping.solo.clone() } else { slices } } else { Vec::new() };
-        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_SHOWN), ui.input(|i| i.time)));
+        let now = ui.input(|i| i.time);
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_SHOWN), now));
         toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("Dragged points land on other slices' points nearby, otherwise on a 1/64 grid");
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");

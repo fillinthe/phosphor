@@ -21,7 +21,8 @@ pub struct BenchConfig {
     pub rate: Option<String>,
     /// Export the bench project as a standalone show into this folder (tests Export Show).
     pub export: Option<String>,
-    /// Bring this panel to the front (its title, e.g. "Control Surface"), for screenshots.
+    /// Bring this panel to the front (its title, e.g. "Control Surface"), for screenshots. "all" = every panel in
+    /// turn (one per 0.2 s, a TAB line each): catches a panel that panics when drawn.
     pub tab: Option<String>,
     /// Window size in points ("1280x800"): UI pictures at smaller sizes.
     pub window: Option<(f32, f32)>,
