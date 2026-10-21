@@ -428,3 +428,17 @@ fn slice_effects_are_controls_and_copies_get_their_own() {
     assert_ne!(copied, fid, "its own effect, not a second handle on the first");
     assert_eq!(comp.slice(copy).unwrap().name, "Surface 1 copy");
 }
+
+#[test]
+fn corner_pin_corners_are_controls() {
+    let mut comp = Composition::default();
+    let id = comp.add_layer().id;
+    let t = ControlTarget::LayerCorner { layer: id, point: 5 };
+    assert!(!all_targets(&comp).iter().any(|(x, _)| *x == t), "only while pinned");
+    comp.layer_mut(id).unwrap().transform.corners = Some([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &t, 0.7, &mut deferred);
+    assert_eq!(comp.layer_mut(id).unwrap().transform.corners.unwrap()[2], [1.0, 0.7], "bottom-right y");
+    assert_eq!(get_target(&comp, &t), Some(0.7));
+    assert_eq!(default_osc_address(&t), format!("/phosphor/layer/{id}/corner/3/y"));
+}

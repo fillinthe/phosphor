@@ -45,6 +45,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerY(id) => (layer(id)?.transform.y + 1.0) / 2.0,
         ControlTarget::LayerScale(id) => to_unit(layer(id)?.transform.scale, 0.05, 4.0, true),
         ControlTarget::LayerRotation(id) => (layer(id)?.transform.rotation + 180.0) / 360.0,
+        ControlTarget::LayerCorner { layer: id, point } => layer(id)?.transform.corners?[(*point as usize / 2).min(3)][*point as usize % 2].clamp(0.0, 1.0),
         ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
         ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
         ControlTarget::LayerDirection(id) => {
@@ -170,6 +171,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                     ControlTarget::LayerScale(_) => t.scale = unit_to(v, 0.05, 4.0, true),
                     _ => t.rotation = v * 360.0 - 180.0,
                 }
+            }
+        }
+        ControlTarget::LayerCorner { layer, point } => {
+            if let Some(c) = comp.layer_mut(*layer).and_then(|l| l.transform.corners.as_mut()) {
+                c[(*point as usize / 2).min(3)][*point as usize % 2] = v.clamp(0.0, 1.0);
             }
         }
         ControlTarget::LayerSpeed(id) => {
@@ -330,6 +336,11 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         out.push((ControlTarget::LayerY(l.id), format!("{} · position Y", l.name)));
         out.push((ControlTarget::LayerScale(l.id), format!("{} · scale", l.name)));
         out.push((ControlTarget::LayerRotation(l.id), format!("{} · rotation", l.name)));
+        if l.transform.corners.is_some() {
+            for (point, name) in ["top-left X", "top-left Y", "top-right X", "top-right Y", "bottom-right X", "bottom-right Y", "bottom-left X", "bottom-left Y"].iter().enumerate() {
+                out.push((ControlTarget::LayerCorner { layer: l.id, point: point as u8 }, format!("{} · corner {name}", l.name)));
+            }
+        }
         if matches!(l.source, phosphor_engine::SourceSpec::Movie { .. }) {
             out.push((ControlTarget::LayerScrub(l.id), format!("{} · scrub", l.name)));
             out.push((ControlTarget::LayerVolume(l.id), format!("{} · volume", l.name)));
@@ -379,6 +390,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerY(id) => format!("/phosphor/layer/{id}/y"),
         ControlTarget::LayerScale(id) => format!("/phosphor/layer/{id}/scale"),
         ControlTarget::LayerRotation(id) => format!("/phosphor/layer/{id}/rotation"),
+        ControlTarget::LayerCorner { layer, point } => format!("/phosphor/layer/{layer}/corner/{}/{}", point / 2 + 1, if point % 2 == 0 { "x" } else { "y" }),
         ControlTarget::Surface(id) => format!("/phosphor/surface/{id}"),
         ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
         ControlTarget::Modulator(id) => format!("/phosphor/modulator/{id}"),
