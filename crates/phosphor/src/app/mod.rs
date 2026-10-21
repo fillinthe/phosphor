@@ -82,6 +82,8 @@ const KEY_REMOTE_PASSWORD: &str = "remote_password";
 const KEY_UPDATE_SKIP: &str = "update_skip";
 /// "Install updates by themselves" ("0" = off).
 const KEY_UPDATE_AUTO: &str = "update_auto";
+/// Send crash reports by themselves ("1").
+const KEY_SEND_CRASHES: &str = "send_crashes";
 /// The output movie sound plays on (empty = the default).
 const KEY_SOUND_OUT: &str = "sound_out_device";
 /// A player: the leader to follow every time Phosphor starts ("" = none).
