@@ -6,8 +6,6 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 - [~] **Windows installer** (#7) — built and pushed; waiting for the Windows build to install / run / uninstall it.: a Setup.exe built on GitHub with every push; CI installs it silently on the
       Windows machine and checks the installed Phosphor starts. Zip stays for people who prefer it.
-- [ ] **Shader packs** (#5): download the free packs on the list (MIT / CC0 only, licence checked per file),
-      convert them, ship the ones that work.
 - [ ] **Older macOS 11–13** (#9): build for macOS 11, check what breaks (FFmpeg build target, APIs used).
 - [ ] **Phosphor Player for Raspberry Pi** (#9): a Linux ARM build that follows a Mac (Follow another Phosphor) on
       a Pi, built on GitHub.
@@ -20,6 +18,15 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       but macOS only loads it when it's signed with your Developer ID: it can't be tried until you sign it.
 
 ## Done
+
+- [x] **Shader packs** (#5), as far as is sensible:
+      - daitomanabe's 11 (MIT) were already in; **px-stream**: of darosh's own shaders (MIT), Glitch Wave ships.
+        His XY scopes convert but need stereo audio pictures (Phosphor's is mono), so they'd only draw a diagonal.
+      - The converter now renames words that newer GLSL reserves (`sample`, `filter`, `input`…), which older ISF
+        shaders use as names. That fixed 3 of these, and helps anything you import. No change across the 406-shader
+        corpus.
+      - **lostjared/shaders** (MIT, 2,700 effects): checked, not shipped. No categories or ratings to pick from, and
+        converting 2,700 at every launch would cost tens of seconds of CPU. Worth a hand-picked set if you want one.
 
 - [x] **One Inspector** (#8): the Inspector shows whatever you selected last: a layer (with its clip, and its
       effects as before), a mapping slice or mask, or a Control Surface widget. A Layer / Slice / Widget switch on
