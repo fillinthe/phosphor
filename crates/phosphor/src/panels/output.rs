@@ -130,6 +130,8 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     spout_row(ui, st);
     #[cfg(any(target_os = "macos", windows))]
     ndi_row(ui, st);
+    #[cfg(target_os = "macos")]
+    vcam_row(ui, st);
     let canvas = (st.comp.width, st.comp.height);
     let mut remove = None;
     let count = st.comp.outputs.len();
@@ -307,6 +309,34 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
         };
         output_status(ui, status);
     });
+}
+
+/// Phosphor as a camera ("Phosphor") in Zoom, OBS, Teams…: on/off and what macOS said about installing it.
+#[cfg(target_os = "macos")]
+pub fn vcam_row(ui: &mut egui::Ui, st: &mut State) {
+    ui.horizontal(|ui| {
+        let was = st.vcam.on;
+        crate::ui::toggle(ui, &mut st.vcam.on, label(icon::WEBCAM, "Virtual camera"))
+            .on_hover_text("The composition as a camera called \"Phosphor\" in video calls, OBS and other apps (1920×1080, 30 fps)");
+        if st.vcam.on && !was {
+            crate::virtual_camera::activate();
+        }
+        let said = crate::virtual_camera::status();
+        let status = if st.vcam.connected() {
+            OutputStatus::Receiving(1)
+        } else if !st.vcam.on {
+            OutputStatus::Off
+        } else if said.starts_with("macOS didn't") || said.starts_with("This copy") {
+            OutputStatus::Error(&said)
+        } else {
+            OutputStatus::Waiting("waiting for the camera")
+        };
+        output_status(ui, status);
+    });
+    let said = crate::virtual_camera::status();
+    if st.vcam.on && !st.vcam.connected() && !said.is_empty() {
+        hint(ui, said);
+    }
 }
 
 /// Colour correction for an output or a mapping surface: match projectors, screens and materials.

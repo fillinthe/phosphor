@@ -79,6 +79,10 @@ impl PhosphorApp {
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
+        #[cfg(target_os = "macos")]
+        if self.state.vcam.on {
+            println!("VCAM connected={} status={:?}", self.state.vcam.connected(), crate::virtual_camera::status());
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(s) = self.state.link_import.status() {
             let layer = self.state.comp.layers.last().map(|l| l.source.label()).unwrap_or_default();
@@ -528,6 +532,14 @@ impl PhosphorApp {
                 self.state.comp.auto_show.enabled = true;
                 self.state.comp.auto_show.bars = 1;
                 println!("QUICK autoshow: on, every bar");
+                continue;
+            }
+            #[cfg(target_os = "macos")]
+            if name == "vcam" {
+                // Virtual camera on: installs the extension (macOS answers later: the VCAM line at the end).
+                self.state.vcam.on = true;
+                crate::virtual_camera::activate();
+                println!("QUICK vcam: asked macOS to install the camera");
                 continue;
             }
             #[cfg(target_os = "macos")]

@@ -12,3 +12,5 @@
 /.playwright-mcp
 /backups
 /vendor/ffmpeg/
+/vendor/*.systemextension
+/vendor/PhosphorCamera.entitlements

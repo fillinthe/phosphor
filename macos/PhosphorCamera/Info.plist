@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>co.fillintheblank.phosphor.camera</string>
+  <key>CFBundleName</key><string>Phosphor Camera</string>
+  <key>CFBundleDisplayName</key><string>Phosphor Camera</string>
+  <key>CFBundleExecutable</key><string>co.fillintheblank.phosphor.camera</string>
+  <key>CFBundlePackageType</key><string>SYSX</string>
+  <key>CFBundleShortVersionString</key><string>VERSION</string>
+  <key>CFBundleVersion</key><string>VERSION</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>NSSystemExtensionUsageDescription</key><string>Shows Phosphor's picture as a camera in video calls, OBS and other apps.</string>
+  <key>CMIOExtension</key>
+  <dict>
+    <!-- Must start with the team ID of the Developer ID that signs it (filled in by the build script). -->
+    <key>CMIOExtensionMachServiceName</key><string>TEAMID.co.fillintheblank.phosphor.camera</string>
+  </dict>
+</dict>
+</plist>

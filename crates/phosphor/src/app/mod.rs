@@ -313,6 +313,9 @@ pub struct State {
     pub syphon: crate::syphon::Syphon,
     #[cfg(any(target_os = "macos", windows))]
     pub ndi: crate::ndi::Ndi,
+    /// Phosphor as a camera in other apps (macOS camera extension).
+    #[cfg(target_os = "macos")]
+    pub vcam: crate::virtual_camera::VirtualCamera,
     #[cfg(windows)]
     pub spout: crate::spout::Spout,
     pub clock: Clock,

@@ -63,6 +63,8 @@ mod screen_capture;
 mod ffgl;
 #[cfg(target_os = "macos")]
 mod menu_test;
+#[cfg(target_os = "macos")]
+mod virtual_camera;
 #[cfg(not(target_arch = "wasm32"))]
 mod tracking;
 #[cfg(not(target_arch = "wasm32"))]

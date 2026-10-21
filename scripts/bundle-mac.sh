@@ -28,6 +28,11 @@ cp target/bundle/release/phosphor "$APP/Contents/MacOS/Phosphor"
 [[ -d vendor/Syphon.framework ]] || scripts/build-syphon.sh
 mkdir -p "$APP/Contents/Frameworks"
 cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
+# The virtual camera (scripts/build-camera-extension.sh), when it's been built. Inert until signed (see that script).
+if [[ -d vendor/PhosphorCamera.systemextension ]]; then
+  mkdir -p "$APP/Contents/Library/SystemExtensions"
+  cp -R vendor/PhosphorCamera.systemextension "$APP/Contents/Library/SystemExtensions/"
+fi
 cp vendor/Syphon-LICENSE.txt "$APP/Contents/Resources/"
 # The free ISF collection (MIT), so every Mac has those effects without VDMX.
 cp -R assets/isf "$APP/Contents/Resources/isf"
@@ -102,6 +107,10 @@ fi
 for lib in "$APP"/Contents/Frameworks/*.dylib; do codesign "${SIGN_ARGS[@]}" "$lib" >/dev/null; done
 codesign "${SIGN_ARGS[@]}" "$APP/Contents/Frameworks/Syphon.framework" >/dev/null
 [[ -f "$APP/Contents/MacOS/ffmpeg" ]] && codesign "${SIGN_ARGS[@]}" "$APP/Contents/MacOS/ffmpeg" >/dev/null
+# The camera extension, before the app around it (its own entitlements; a real one also needs its provisioning profile,
+# see scripts/build-camera-extension.sh).
+CAM="$APP/Contents/Library/SystemExtensions/PhosphorCamera.systemextension"
+[[ -d "$CAM" ]] && codesign "${SIGN_ARGS[@]}" --entitlements vendor/PhosphorCamera.entitlements "$CAM" >/dev/null
 codesign "${SIGN_ARGS[@]}" --entitlements scripts/Phosphor.entitlements "$APP" >/dev/null
 codesign --verify --deep --strict "$APP"
 echo "built $APP ($(du -sh "$APP" | cut -f1))"

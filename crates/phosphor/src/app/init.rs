@@ -205,6 +205,8 @@ impl PhosphorApp {
                 syphon: Default::default(),
                 #[cfg(any(target_os = "macos", windows))]
                 ndi: Default::default(),
+                #[cfg(target_os = "macos")]
+                vcam: Default::default(),
                 #[cfg(windows)]
                 spout: Default::default(),
                 clock: Clock::new(comp_bpm),
