@@ -16,6 +16,8 @@ pub struct AudiencePlay {
     pub players: u32,
     /// Control Surface page guests get (None = every page).
     pub surface_page: Option<usize>,
+    /// Each place's own page (player 1, 2…), before `surface_page` (None = the usual rule).
+    pub place_pages: Vec<Option<usize>>,
     /// Guests may trigger clip columns.
     pub columns: bool,
     /// Guests get a Surprise button.
@@ -67,6 +69,6 @@ impl QrStyle {
 
 impl Default for AudiencePlay {
     fn default() -> Self {
-        Self { enabled: false, turn_secs: 60, rest_secs: 0, players: 1, surface_page: None, columns: true, surprise: true, title: "Take the controls".into(), show_names: false, qr_style: QrStyle::default(), qr_caption: true }
+        Self { enabled: false, turn_secs: 60, rest_secs: 0, players: 1, surface_page: None, place_pages: Vec::new(), columns: true, surprise: true, title: "Take the controls".into(), show_names: false, qr_style: QrStyle::default(), qr_caption: true }
     }
 }

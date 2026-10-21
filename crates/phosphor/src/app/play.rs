@@ -83,6 +83,9 @@ impl State {
 
     /// The Surface page a place plays: the chosen page, else (several players) one page per place.
     pub fn slot_page(&self, slot: usize) -> Option<usize> {
+        if let Some(p) = self.comp.play.place_pages.get(slot).copied().flatten() {
+            return Some(p);
+        }
         if let Some(p) = self.comp.play.surface_page {
             return Some(p);
         }
@@ -306,7 +309,7 @@ impl State {
                     ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => id,
                     _ => return false,
                 };
-                self.comp.surface.widgets.iter().any(|w| w.id == widget && page.is_none_or(|pg| w.page == pg))
+                self.comp.surface.widgets.iter().any(|w| w.id == widget && w.guests && page.is_none_or(|pg| w.page == pg))
             }
             _ => false,
         }

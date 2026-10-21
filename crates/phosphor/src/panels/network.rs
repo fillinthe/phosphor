@@ -135,6 +135,24 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         ui.label("Title");
         ui.add(egui::TextEdit::singleline(&mut play.title).desired_width(160.0));
     });
+    // Several players: each place can have its own page (and so its own controls).
+    if play.players > 1 {
+        play.place_pages.resize(play.players as usize, None);
+        ui.horizontal_wrapped(|ui| {
+            let pages = &st.comp.surface.pages;
+            for (i, slot) in play.place_pages.iter_mut().enumerate() {
+                ui.label(format!("Player {}", i + 1));
+                let current = slot.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "usual".into());
+                ComboBox::from_id_salt(("place_page", i)).width(90.0).selected_text(current).show_ui(ui, |ui| {
+                    ui.selectable_value(slot, None, "usual").on_hover_text("The page above, or page by place");
+                    for (p, name) in pages.iter().enumerate() {
+                        ui.selectable_value(slot, Some(p), name);
+                    }
+                });
+            }
+        });
+    }
+    hint(ui, "Each control's guest settings (whether guests get it, how far they can push it) are in the Control Surface editor.");
     let style_changed = ui
         .horizontal(|ui| {
             ui.label("Code on the output");
