@@ -131,14 +131,15 @@ impl<'a> Level<'a> {
         let p = ui.painter();
         let t = to_t(*value);
         let hovered = r.hovered() || r.dragged();
-        p.rect_filled(rect, 4.0, ui_vis.extreme_bg_color);
+        // Square corners (the owner's choice: sharp sliders).
+        p.rect_filled(rect, 0.0, ui_vis.extreme_bg_color);
         let mut fill = rect;
         match vertical {
             Some(_) => fill.min.y = rect.bottom() - t * rect.height(),
             None => fill.max.x = rect.left() + t * rect.width(),
         }
         let base = if locked { Color32::from_gray(120) } else { accent() };
-        p.rect_filled(fill, 4.0, base.gamma_multiply(if hovered { 0.75 } else { 0.55 }));
+        p.rect_filled(fill, 0.0, base.gamma_multiply(if hovered { 0.75 } else { 0.55 }));
         // Snap points: your own as small ticks; all of them while Shift is held over the bar.
         let tick = |t: f32, strong: bool| {
             let stroke = Stroke::new(if strong { 1.5 } else { 1.0 }, if strong { ui_vis.strong_text_color() } else { ui_vis.weak_text_color() });
@@ -179,7 +180,7 @@ impl<'a> Level<'a> {
             }
         }
         if hovered {
-            p.rect_stroke(rect, 4.0, Stroke::new(1.0, base), StrokeKind::Inside);
+            p.rect_stroke(rect, 0.0, Stroke::new(1.0, base), StrokeKind::Inside);
         }
         let font = egui::FontId::proportional(11.0);
         let color = ui_vis.strong_text_color();

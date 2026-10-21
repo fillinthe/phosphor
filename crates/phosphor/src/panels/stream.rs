@@ -112,7 +112,10 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
         });
-        guarded!(ui, s.kbps, Slider::new(&mut s.kbps, 1000..=30000).text("Bitrate (kbps)").logarithmic(true));
+        let mut kbps = s.kbps as f32;
+        if ui.horizontal(|ui| Level::range(&mut kbps, 1000.0, 30000.0, "Bitrate (kbps)").default(6000.0).log().width(320.0).show(ui)).inner.changed() {
+            s.kbps = kbps.round() as u32;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         ui.horizontal(|ui| {
             ui.label("Audio");

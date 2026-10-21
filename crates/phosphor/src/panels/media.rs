@@ -96,9 +96,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 ui.selectable_value(&mut st.media_view.sort, MediaSort::Type, "Type");
             });
             crate::ui::toggle(ui, &mut st.media_view.by_folder, "Group by folder");
-            ui.label(RichText::new("Tile size").strong());
-            ui.spacing_mut().slider_width = 160.0;
-            guarded!(ui, st.media_view.tile, Slider::new(&mut st.media_view.tile, 72.0..=240.0).show_value(false));
+            Level::range(&mut st.media_view.tile, 72.0, 240.0, "Tile size").default(128.0).width(180.0).show(ui);
         })
         .response
         .on_hover_text("Sort, group by folder, tile size");
