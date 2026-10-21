@@ -75,6 +75,10 @@ impl PhosphorApp {
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
         println!("AUDIO {}", self.state.audio.debug_line());
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.state.scanner.status != crate::scanner::Status::Idle {
+            println!("SCAN {:?}", self.state.scanner.status);
+        }
         for l in self.state.comp.layers.iter().filter(|l| l.collection.is_some()) {
             let file = match &l.source {
                 phosphor_engine::SourceSpec::Movie { name, .. } | phosphor_engine::SourceSpec::Image { name, .. } => name.clone(),
@@ -274,6 +278,18 @@ impl PhosphorApp {
                     o.mapping.surfaces[1].effects.extend(fx);
                     o.mapping.enabled = true;
                     println!("QUICK slicefx: {} effect(s) on slice {b}", o.mapping.surfaces[1].effects.len());
+                }
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "scan" {
+                // Stage scanner on output 1 with the output itself as the camera (a SCAN line at the end).
+                self.state.comp.ensure_outputs();
+                if let Some(o) = self.state.comp.outputs.first() {
+                    let size = o.size((self.state.comp.width, self.state.comp.height));
+                    self.state.scanner.settle = 0.05;
+                    self.state.scanner.start(o.id, size, o.id, size.0 as f32 / size.1.max(1) as f32);
+                    println!("QUICK scan: output {} at {}x{}", o.id, size.0, size.1);
                 }
                 continue;
             }

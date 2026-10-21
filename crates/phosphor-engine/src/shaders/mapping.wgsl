@@ -184,3 +184,24 @@ fn fs_grid(in: VOut) -> @location(0) vec4f {
     }
     return vec4f(c, 1.0);
 }
+
+// Stage scanner (structured light): p[0] = (kind, bit, axis, inverse). kind 0 black, 1 white, 2 one bit of the
+// Gray code of the pixel's column (axis 0) or row (axis 1); inverse swaps black and white.
+@fragment
+fn fs_scan(in: VOut) -> @location(0) vec4f {
+    let kind = u32(u.p[0].x + 0.5);
+    if kind == 0u {
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+    if kind == 1u {
+        return vec4f(1.0);
+    }
+    let px = vec2u(in.uv * u.resolution);
+    let v = select(px.x, px.y, u.p[0].z > 0.5);
+    let gray = v ^ (v >> 1u);
+    var on = (gray >> u32(u.p[0].y + 0.5)) & 1u;
+    if u.p[0].w > 0.5 {
+        on = 1u - on;
+    }
+    return vec4f(vec3f(f32(on)), 1.0);
+}

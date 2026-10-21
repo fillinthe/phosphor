@@ -45,6 +45,8 @@ mod projector;
 mod stream;
 mod stage;
 mod scopes;
+#[cfg(not(target_arch = "wasm32"))]
+mod scanner;
 mod slice_tree;
 mod studio;
 mod surface;
@@ -70,6 +72,8 @@ pub(crate) use mixer::*;
 pub(crate) use monitor::*;
 pub(crate) use network::*;
 pub(crate) use output::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use scanner::*;
 pub(crate) use patch::*;
 pub(crate) use preset_list::*;
 pub(crate) use preview::*;

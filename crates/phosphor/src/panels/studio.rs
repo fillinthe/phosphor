@@ -49,6 +49,8 @@ enum TreeAction {
 }
 
 pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
+    #[cfg(not(target_arch = "wasm32"))]
+    super::scan_window(&ui.ctx().clone(), st);
     st.comp.ensure_outputs();
     if !st.comp.outputs.iter().any(|o| o.id == st.mapping_output) {
         st.mapping_output = st.primary_output();
@@ -422,6 +424,11 @@ fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
         hint(ui, "A photo of the stage taken from where the projector stands: line the slices up with it. Only shows here, never on the output.");
         if ui.button(label(icon::FOLDER_OPEN, if o.stage_photo.is_empty() { "Choose a photo…" } else { "Another photo…" })).clicked() {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(super::mapping::PICK_STAGE_PHOTO), o.id));
+            ui.close();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::SCAN, "Scan the stage with a camera…")).on_hover_text("The projector shows patterns, a camera watches: Phosphor makes the photo for you (MadMapper's spatial scanner)").clicked() {
+            super::open_scan_window(ui.ctx(), o.id);
             ui.close();
         }
         if !o.stage_photo.is_empty() {
