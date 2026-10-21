@@ -10,6 +10,10 @@ What changed in each Phosphor release, newest first. Downloads are on the
   **Mixer plugin** picks one for a layer, and it blends that layer onto the layers below instead of its blend
   mode. The layer's opacity goes to the mixer's Opacity setting, like in Resolume, and its other settings are
   right there.
+- **Where a layer's picture comes from.** The Inspector now says it at the top: generated (and by what), a movie
+  or picture file (its full path, a Show in Finder button, and a warning if the file is missing), a camera,
+  screen, Syphon, NDI or stream, another layer, or text; and which clip slot triggered it.
+- **New example patch:** Shader Editor › Patch › "Example: kaleidoscope glow with trails".
 - **The Session picture is live (WebRTC).** People watching your output in a browser on the network now get
   it over WebRTC (H.264): sub-second instead of the old JPEG stream, and much less network traffic. Browsers that
   can't do it still get the old picture.

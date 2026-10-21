@@ -503,18 +503,8 @@ pub fn bench_template(st: &mut State, n: usize) -> Option<String> {
 /// Bench `--quick patch`: a patch (Input, Kaleidoscope, Glow, mixed with its own Last frame for trails) on the
 /// top layer and open in the Shader Editor.
 pub fn bench_patch(st: &mut State) -> Option<String> {
-    let mut p = Patch::new("Bench Patch", false);
-    let (input, out) = (p.nodes[0].id, p.nodes[1].id);
-    p.nodes[1].pos = [760.0, 60.0];
-    let k = p.add("kaleido", [200.0, 20.0]);
-    let g = p.add("glow", [200.0, 120.0]);
-    let last = p.add("last", [200.0, 230.0]);
-    let mix = p.add("mix", [500.0, 80.0]);
-    p.connect(input, k, 0);
-    p.connect(k, g, 0);
-    p.connect(g, mix, 0);
-    p.connect(last, mix, 1);
-    p.connect(mix, out, 0);
+    let mut p = Patch::kaleido_glow_trails();
+    p.name = "Bench Patch".into();
     let src = p.compile().ok()?;
     let name = bench_shader(st, "bench_patch".into(), src, "patch");
     st.editor.current = Some(st.editor.shaders.len() - 1);
@@ -571,6 +561,11 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
                         create = Patch::new(if generator { "My Patch Generator" } else { "My Patch" }, generator).compile().ok();
                         ui.close();
                     }
+                }
+                ui.separator();
+                if ui.button("Example: kaleidoscope glow with trails").on_hover_text("The picture through a kaleidoscope and a glow, mixed with its own last frame (trails): open it and change any block").clicked() {
+                    create = Patch::kaleido_glow_trails().compile().ok();
+                    ui.close();
                 }
             })
             .response

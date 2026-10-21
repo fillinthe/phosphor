@@ -650,6 +650,23 @@ impl Patch {
         p
     }
 
+    /// A ready-made example: the picture through a kaleidoscope and a glow, mixed with its own last frame for trails.
+    pub fn kaleido_glow_trails() -> Patch {
+        let mut p = Patch::new("Kaleido Glow Trails", false);
+        let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+        p.nodes[1].pos = [760.0, 60.0];
+        let k = p.add("kaleido", [200.0, 20.0]);
+        let g = p.add("glow", [200.0, 120.0]);
+        let last = p.add("last", [200.0, 230.0]);
+        let mix = p.add("mix", [500.0, 80.0]);
+        p.connect(input, k, 0);
+        p.connect(k, g, 0);
+        p.connect(g, mix, 0);
+        p.connect(last, mix, 1);
+        p.connect(mix, out, 0);
+        p
+    }
+
     pub fn node(&self, id: u32) -> Option<&Node> {
         self.nodes.iter().find(|n| n.id == id)
     }
