@@ -118,6 +118,7 @@ pub(crate) struct LayerMedia<'a> {
 pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &LayerMedia, clipboard_len: usize) -> (Option<FxAction>, Option<f64>) {
     let (info, position, has_sound) = (media.info, media.position, media.has_sound);
     let mut seek_to: Option<f64> = None;
+    source_line(ui, layer);
 
         if let SourceSpec::Generator(id) = &layer.source
             && let Some(desc) = shaders::generator(id)
@@ -270,6 +271,56 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
     mixer_editor(ui, layer);
     ui.separator();
     (effects_editor(ui, &mut layer.effects, clipboard_len), seek_to)
+}
+
+/// What the layer is showing and where it comes from: generated, a file on disk (its path, Show in Finder, and a
+/// warning when it's missing), a live input, another layer, text; and the clip slot it was triggered from.
+pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
+    let (glyph, kind, detail): (&str, &str, Option<String>) = match &layer.source {
+        SourceSpec::None => (icon::PROHIBIT, "No source", None),
+        SourceSpec::Generator(id) => (icon::SPARKLE, "Generated", Some(shaders::generator(id).map_or(id.clone(), |d| d.name.to_string()))),
+        SourceSpec::Movie { name, path } => (icon::FILM_STRIP, "Movie file", Some(path.clone().unwrap_or_else(|| name.clone()))),
+        SourceSpec::Image { name, path } => (icon::IMAGE, "Picture file", Some(path.clone().unwrap_or_else(|| name.clone()))),
+        SourceSpec::Live { name, format, url } => {
+            let what = match format.as_str() {
+                "avfoundation" => "Camera / capture",
+                "screen" => "Screen capture",
+                "syphon" => "Syphon",
+                "ndi" => "NDI",
+                "lavfi" => "Test pattern (made by FFmpeg)",
+                _ => "Live stream",
+            };
+            (icon::VIDEO_CAMERA, what, Some(if url.is_empty() || url == name { name.clone() } else { format!("{name} · {url}") }))
+        }
+        SourceSpec::Feed { name, .. } => (icon::ARROW_BEND_DOWN_RIGHT, "Another layer's picture", Some(name.clone())),
+        SourceSpec::Text(_) => (icon::TEXT_T, "Text", None),
+    };
+    // Triggered from the clip grid: which slot.
+    let clip = layer.active_clip.and_then(|id| layer.clips.iter().position(|c| c.id == id));
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new(format!("{glyph} {kind}")).strong());
+        if let Some(i) = clip {
+            hint(ui, format!("· clip {} (column {})", layer.clips[i].name.trim().is_empty().then(|| (i + 1).to_string()).unwrap_or_else(|| layer.clips[i].name.clone()), i + 1));
+        }
+    });
+    if let Some(d) = detail {
+        let is_file = matches!(layer.source, SourceSpec::Movie { path: Some(_), .. } | SourceSpec::Image { path: Some(_), .. });
+        ui.horizontal(|ui| {
+            #[cfg(not(target_arch = "wasm32"))]
+            if is_file {
+                if !std::path::Path::new(&d).exists() && !crate::media::sequence::exists(&d) {
+                    ui.colored_label(WARN, format!("{} missing", icon::WARNING)).on_hover_text("The file isn't at this path any more: File › Find Missing Media");
+                }
+                if ui.small_button(icon::FOLDER_OPEN).on_hover_text("Show in Finder").clicked() {
+                    crate::os::reveal(std::path::Path::new(&d));
+                }
+            }
+            #[cfg(target_arch = "wasm32")]
+            let _ = is_file;
+            ui.add(egui::Label::new(RichText::new(&d).small().color(Color32::GRAY)).truncate()).on_hover_text(&d);
+        });
+    }
+    ui.separator();
 }
 
 /// "Mixer plugin": blend the layer onto the layers below with an FFGL mixer instead of its blend mode, and the
