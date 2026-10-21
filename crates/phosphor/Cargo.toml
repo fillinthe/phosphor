@@ -55,6 +55,11 @@ objc2-vision = { version = "0.3", default-features = false, features = ["std", "
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes"] }
 objc2-core-video = { version = "0.3", default-features = false, features = ["std", "CVPixelBuffer", "CVBuffer", "CVImageBuffer", "CVReturn", "CVBase"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux (Raspberry Pi player): a window system for winit, and Vulkan for wgpu.
+eframe = { version = "0.36.2", default-features = false, features = ["x11", "wayland"] }
+wgpu = { version = "30", default-features = false, features = ["vulkan", "wgsl"] }
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_Security", "Win32_System_ProcessStatus", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging", "Win32_System_SystemInformation"] }
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common"] }
