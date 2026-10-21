@@ -11,6 +11,8 @@ pub enum ControlSource {
     Key { key: String },
     /// A game controller's button, stick or trigger (gilrs name: "South", "LeftStickX", "RightTrigger2"…).
     Gamepad { input: String },
+    /// A DMX channel (1–512) of a universe coming in over Art-Net or sACN (a lighting desk).
+    Dmx { universe: u16, channel: u16 },
 }
 
 impl ControlSource {
@@ -21,6 +23,7 @@ impl ControlSource {
             ControlSource::Osc { address } => format!("OSC {address}"),
             ControlSource::Key { key } => format!("Key {key}"),
             ControlSource::Gamepad { input } => format!("Gamepad {input}"),
+            ControlSource::Dmx { universe, channel } => format!("DMX u{universe} ch{channel}"),
         }
     }
 

@@ -155,6 +155,7 @@ app that's much smaller and lighter on the CPU.
     - [x] Clicks in a preview window as XY data (0.2.81)
     - [x] Projector power / shutter over PJLink (MadMapper; 0.2.84)
     - [x] Crossfader auto-fade (0.2.84)
+    - [x] DMX in (Art-Net / sACN) as controller input (0.2.84)
 
 ## TODO
 

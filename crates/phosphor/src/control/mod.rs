@@ -139,6 +139,9 @@ pub struct ControlHub {
     #[cfg(not(target_arch = "wasm32"))]
     pub oscquery: Option<oscquery::Server>,
     next_query: f64,
+    /// DMX in (Art-Net / sACN) while it's switched on.
+    #[cfg(not(target_arch = "wasm32"))]
+    dmx_listener: Option<crate::dmx::DmxListener>,
 }
 
 /// Controller settings kept between launches.
@@ -149,11 +152,13 @@ pub struct ControlSettings {
     pub feedback: bool,
     pub feedback_port: u16,
     pub soft_takeover: bool,
+    /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
+    pub dmx_in: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true }
+        Self { osc_port: DEFAULT_OSC_PORT, feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, dmx_in: false }
     }
 }
 
@@ -191,11 +196,37 @@ impl ControlHub {
         hub.feedback_port = s.feedback_port;
         hub.soft_takeover = s.soft_takeover;
         hub.reconnect();
+        hub.set_dmx_in(s.dmx_in);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover }
+        ControlSettings { osc_port: self.osc_port, feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, dmx_in: self.dmx_in() }
+    }
+
+    /// Starts or stops listening for DMX (Art-Net on udp/6454, sACN on udp/5568) as controller input.
+    pub fn set_dmx_in(&mut self, on: bool) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if on != self.dmx_listener.is_some() {
+            self.dmx_listener = on.then(|| crate::dmx::DmxListener::start(self.tx.clone()));
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = on;
+    }
+
+    pub fn dmx_in(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.dmx_listener.is_some();
+        #[cfg(target_arch = "wasm32")]
+        false
+    }
+
+    /// What the DMX listener has heard ("Art-Net on udp/6454 · 2 universes"), or why it can't listen.
+    pub fn dmx_status(&self) -> String {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.dmx_listener.as_ref().map_or_else(String::new, |l| l.status());
+        #[cfg(target_arch = "wasm32")]
+        String::new()
     }
 
     /// A hub for tests: values apply at once (soft takeover off; its own test turns it on).
@@ -236,6 +267,8 @@ impl ControlHub {
             monitor_paused: false,
             pickups: HashMap::new(),
             glides: HashMap::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            dmx_listener: None,
             fresh: HashMap::new(),
             sent: HashMap::new(),
             feedback_ips: Vec::new(),
@@ -401,7 +434,7 @@ impl ControlHub {
                     ControlSource::Osc { address } => self.backend.send_osc(&self.feedback_ips, self.feedback_port, address, v),
                     ControlSource::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | channel, *cc, (v * 127.0).round() as u8]),
                     ControlSource::MidiNote { channel, note } => self.backend.send_midi(&[0x90 | channel, *note, if v > 0.5 { 127 } else { 0 }]),
-                    ControlSource::Key { .. } | ControlSource::Gamepad { .. } => {}
+                    ControlSource::Key { .. } | ControlSource::Gamepad { .. } | ControlSource::Dmx { .. } => {}
                 }
             }
         }
