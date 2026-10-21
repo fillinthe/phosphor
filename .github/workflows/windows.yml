@@ -72,6 +72,40 @@ jobs:
           name: Phosphor-windows
           path: dist/Phosphor-windows.zip
 
+      # The installer (Inno Setup, preinstalled here): per-user, Start menu, .phosphor files, uninstaller.
+      - name: Installer
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path crates\phosphor\Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$v" "/DSourceDir=$PWD\dist\Phosphor" "/O$PWD\dist" scripts\windows\phosphor.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-Item dist\Phosphor-windows-setup.exe | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phosphor-windows-setup
+          path: dist/Phosphor-windows-setup.exe
+
+      # Install it silently, check what landed, run the installed copy, then uninstall and check it's gone.
+      - name: Install test
+        shell: pwsh
+        timeout-minutes: 6
+        env:
+          WGPU_BACKEND: dx12
+        run: |
+          $dir = "$env:RUNNER_TEMP\PhosphorInstalled"
+          Start-Process dist\Phosphor-windows-setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=$dir" -Wait
+          foreach ($f in "Phosphor.exe","ffmpeg.exe","unins000.exe","isf") { if (-not (Test-Path "$dir\$f")) { "INSTALL missing $f"; exit 1 } }
+          $assoc = (Get-ItemProperty "HKCU:\Software\Classes\Phosphor.Project\shell\open\command" -ErrorAction SilentlyContinue).'(default)'
+          "INSTALL ok: $dir; .phosphor opens with: $assoc"
+          $p = Start-Process "$dir\Phosphor.exe" -ArgumentList "--bench","3","--project","$PWD\scripts\ci\smoke.phosphor" -PassThru -NoNewWindow -RedirectStandardOutput dist\installed-run.txt
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); "INSTALLED_RUN timeout" }
+          Get-Content dist\installed-run.txt | Select-String "SUMMARY|LAYERS" | Select-Object -First 2
+          Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path "$dir\Phosphor.exe") { "UNINSTALL left Phosphor.exe behind"; exit 1 }
+          "UNINSTALL ok"
+
       # NDI's free redistributable runtime, so the launch test can send and find NDI (not shipped in the zip).
       - name: NDI Runtime
         continue-on-error: true
