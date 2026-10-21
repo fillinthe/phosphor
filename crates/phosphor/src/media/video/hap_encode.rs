@@ -1,12 +1,35 @@
-//! Hap encoding for recordings (FFmpeg as shipped here has no Hap encoder): RGBA frames → DXT1 (Hap) or DXT5
-//! (Hap Alpha) blocks on every core → Snappy → Hap frame header → a QuickTime .mov muxed in-process by the
-//! FFmpeg libraries Phosphor already links. Plays in Phosphor, VDMX, Resolume, MadMapper and any Hap player.
+//! Hap encoding for recordings and conversions (FFmpeg as shipped here has no Hap encoder): RGBA frames → GPU
+//! blocks on every core → Snappy → Hap frame header → a QuickTime .mov muxed in-process by the FFmpeg libraries
+//! Phosphor already links. Plays in Phosphor, VDMX, Resolume, MadMapper and any Hap player.
+//!
+//! Hap = DXT1, Hap Alpha = DXT5, Hap Q = scaled YCoCg in DXT5 (better colour, twice the size), Hap Q Alpha = Hap Q
+//! plus an RGTC1 (BC4) alpha image. Format: github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md.
 
 use ff::ffi;
 use ffmpeg_next as ff;
 
 /// One 4×4 block of RGBA pixels.
 type Block = [[u8; 4]; 16];
+
+/// Which Hap: the codec tag and the images each frame holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HapKind {
+    Hap,
+    HapAlpha,
+    HapQ,
+    HapQAlpha,
+}
+
+impl HapKind {
+    fn tag(self) -> [u8; 4] {
+        match self {
+            HapKind::Hap => *b"Hap1",
+            HapKind::HapAlpha => *b"Hap5",
+            HapKind::HapQ => *b"HapY",
+            HapKind::HapQAlpha => *b"HapM",
+        }
+    }
+}
 
 fn rgb565(c: [f32; 3]) -> u16 {
     let r = (c[0].clamp(0.0, 255.0) * 31.0 / 255.0).round() as u16;
@@ -82,34 +105,65 @@ fn bc1(px: &Block) -> [u8; 8] {
     out
 }
 
-/// DXT5 alpha block (eight-value mode), then the colour block.
-fn bc3(px: &Block) -> [u8; 16] {
-    let (amin, amax) = px.iter().fold((255u8, 0u8), |(lo, hi), p| (lo.min(p[3]), hi.max(p[3])));
-    let mut out = [0u8; 16];
-    out[0] = amax;
-    out[1] = amin;
-    if amax > amin {
-        let (a0, a1) = (amax as i32, amin as i32);
+/// One channel of a block in eight-value mode: DXT5's alpha half, and the whole of an RGTC1 (BC4) block.
+fn bc4(v: [u8; 16]) -> [u8; 8] {
+    let (vmin, vmax) = v.iter().fold((255u8, 0u8), |(lo, hi), x| (lo.min(*x), hi.max(*x)));
+    let mut out = [0u8; 8];
+    out[0] = vmax;
+    out[1] = vmin;
+    if vmax > vmin {
+        let (a0, a1) = (vmax as i32, vmin as i32);
         let pal: Vec<i32> = (0..8).map(|k| match k {
             0 => a0,
             1 => a1,
             k => ((8 - k) * a0 + (k - 1) * a1) / 7,
         }).collect();
         let mut bits = 0u64;
-        for (i, p) in px.iter().enumerate() {
-            let best = (0..8).min_by_key(|&k| (pal[k] - p[3] as i32).abs()).unwrap_or(0) as u64;
+        for (i, x) in v.iter().enumerate() {
+            let best = (0..8).min_by_key(|&k| (pal[k] - *x as i32).abs()).unwrap_or(0) as u64;
             bits |= best << (3 * i);
         }
         out[2..8].copy_from_slice(&bits.to_le_bytes()[..6]);
     }
+    out
+}
+
+/// DXT5: the alpha block, then the colour block.
+fn bc3(px: &Block) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    out[..8].copy_from_slice(&bc4(std::array::from_fn(|i| px[i][3])));
     out[8..].copy_from_slice(&bc1(px));
     out
 }
 
+/// Hap Q: scaled YCoCg in DXT5 (alpha = Y; red, green = Co, Cg scaled by 1, 2 or 4 around 128; blue = the scale), the
+/// layout the decoding shader reads (`sample_source`, mode 2).
+fn ycocg(px: &Block) -> [u8; 16] {
+    let conv: [[f32; 3]; 16] = std::array::from_fn(|i| {
+        let [r, g, b] = [px[i][0] as f32, px[i][1] as f32, px[i][2] as f32];
+        [r / 4.0 + g / 2.0 + b / 4.0, r / 2.0 - b / 2.0, -r / 4.0 + g / 2.0 - b / 4.0]
+    });
+    // The largest chroma decides how much it can be magnified (more precision for pale blocks).
+    let spread = conv.iter().fold(0f32, |m, c| m.max(c[1].abs()).max(c[2].abs()));
+    let scale: f32 = if spread < 31.0 { 4.0 } else if spread < 63.0 { 2.0 } else { 1.0 };
+    let block: Block = std::array::from_fn(|i| {
+        let [y, co, cg] = conv[i];
+        let q = |c: f32| (c * scale + 128.0).round().clamp(0.0, 255.0) as u8;
+        [q(co), q(cg), ((scale - 1.0) * 8.0) as u8, y.round().clamp(0.0, 255.0) as u8]
+    });
+    bc3(&block)
+}
+
 /// The frame's DXT blocks, row by row (edges padded by repeating the last pixel), encoded on every core.
 pub fn dxt(rgba: &[u8], w: u32, h: u32, alpha: bool) -> Vec<u8> {
+    if alpha { blocks(rgba, w, h, 16, |b, out| out.copy_from_slice(&bc3(b))) } else { blocks(rgba, w, h, 8, |b, out| out.copy_from_slice(&bc1(b))) }
+}
+
+/// Every 4×4 block of the frame through `encode` (`size` bytes each), row by row, edges padded by repeating the last
+/// pixel, on every core.
+fn blocks(rgba: &[u8], w: u32, h: u32, size: usize, encode: impl Fn(&Block, &mut [u8]) + Sync) -> Vec<u8> {
     let (bw, bh) = (w.div_ceil(4) as usize, h.div_ceil(4) as usize);
-    let size = if alpha { 16 } else { 8 };
+    let encode = &encode;
     let mut out = vec![0u8; bw * bh * size];
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(16);
     let rows_per = bh.div_ceil(threads).max(1);
@@ -126,12 +180,7 @@ pub fn dxt(rgba: &[u8], w: u32, h: u32, alpha: bool) -> Vec<u8> {
                             let o = (y * w as usize + x) * 4;
                             px.copy_from_slice(&rgba[o..o + 4]);
                         }
-                        let dst = &mut row[bx * size..bx * size + size];
-                        if alpha {
-                            dst.copy_from_slice(&bc3(&block));
-                        } else {
-                            dst.copy_from_slice(&bc1(&block));
-                        }
+                        encode(&block, &mut row[bx * size..bx * size + size]);
                     }
                 }
             });
@@ -140,21 +189,37 @@ pub fn dxt(rgba: &[u8], w: u32, h: u32, alpha: bool) -> Vec<u8> {
     out
 }
 
-/// One Hap frame: section header (Snappy-compressed DXT1 = 0xBB, DXT5 = 0xBE) + data.
-pub fn hap_frame(rgba: &[u8], w: u32, h: u32, alpha: bool) -> Vec<u8> {
-    let blocks = dxt(rgba, w, h, alpha);
-    let packed = snap::raw::Encoder::new().compress_vec(&blocks).unwrap_or_default();
-    let kind: u8 = if alpha { 0xBE } else { 0xBB };
-    let mut out = Vec::with_capacity(packed.len() + 8);
-    if packed.len() <= 0xFF_FFFF {
-        let n = packed.len() as u32;
+/// A Hap section: its header (3-byte size and type, or 0 + a 4-byte size) and payload.
+fn section(kind: u8, payload: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(payload.len() + 8);
+    if !payload.is_empty() && payload.len() <= 0xFF_FFFF {
+        let n = payload.len() as u32;
         out.extend_from_slice(&[n as u8, (n >> 8) as u8, (n >> 16) as u8, kind]);
     } else {
         out.extend_from_slice(&[0, 0, 0, kind]);
-        out.extend_from_slice(&(packed.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     }
-    out.extend_from_slice(&packed);
+    out.extend_from_slice(payload);
     out
+}
+
+fn snappy(data: &[u8]) -> Vec<u8> {
+    snap::raw::Encoder::new().compress_vec(data).unwrap_or_default()
+}
+
+/// One Hap frame. Section types: Snappy (0xB_) + DXT1 0xB, DXT5 0xE, YCoCg DXT5 0xF, RGTC1 0x1; Hap Q Alpha is a
+/// "multiple images" section (0x0D) holding the YCoCg image and the alpha image.
+pub fn hap_frame(rgba: &[u8], w: u32, h: u32, kind: HapKind) -> Vec<u8> {
+    match kind {
+        HapKind::Hap => section(0xBB, &snappy(&dxt(rgba, w, h, false))),
+        HapKind::HapAlpha => section(0xBE, &snappy(&dxt(rgba, w, h, true))),
+        HapKind::HapQ => section(0xBF, &snappy(&blocks(rgba, w, h, 16, |b, out| out.copy_from_slice(&ycocg(b))))),
+        HapKind::HapQAlpha => {
+            let colour = section(0xBF, &snappy(&blocks(rgba, w, h, 16, |b, out| out.copy_from_slice(&ycocg(b)))));
+            let alpha = section(0xB1, &snappy(&blocks(rgba, w, h, 8, |b, out| out.copy_from_slice(&bc4(std::array::from_fn(|i| b[i][3]))))));
+            section(0x0D, &[colour, alpha].concat())
+        }
+    }
 }
 
 /// Writes Hap frames into a .mov file.
@@ -162,7 +227,7 @@ pub struct HapWriter {
     octx: ff::format::context::Output,
     w: u32,
     h: u32,
-    alpha: bool,
+    kind: HapKind,
     frame: i64,
     /// Frame numbers count in 1/fps; the muxer may store a finer time base.
     fps_tb: ff::Rational,
@@ -170,7 +235,7 @@ pub struct HapWriter {
 }
 
 impl HapWriter {
-    pub fn create(path: &str, w: u32, h: u32, fps: u32, alpha: bool) -> Result<Self, String> {
+    pub fn create(path: &str, w: u32, h: u32, fps: u32, kind: HapKind) -> Result<Self, String> {
         super::init();
         let mut octx = ff::format::output_as(&path, "mov").map_err(|e| format!("can't create {path} ({e})"))?;
         let fps = fps.max(1) as i32;
@@ -183,8 +248,7 @@ impl HapWriter {
                 let par = (*st.as_mut_ptr()).codecpar;
                 (*par).codec_type = ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
                 (*par).codec_id = ffi::AVCodecID::AV_CODEC_ID_HAP;
-                let tag = if alpha { *b"Hap5" } else { *b"Hap1" };
-                (*par).codec_tag = u32::from_le_bytes(tag);
+                (*par).codec_tag = u32::from_le_bytes(kind.tag());
                 (*par).width = w as i32;
                 (*par).height = h as i32;
             }
@@ -192,7 +256,7 @@ impl HapWriter {
         octx.write_header().map_err(|e| format!("can't start the movie ({e})"))?;
         let fps_tb = ff::Rational::new(1, fps);
         let out_tb = octx.stream(0).map_or(fps_tb, |s| s.time_base());
-        Ok(Self { octx, w, h, alpha, frame: 0, fps_tb, out_tb })
+        Ok(Self { octx, w, h, kind, frame: 0, fps_tb, out_tb })
     }
 
     /// Encodes and writes one RGBA frame.
@@ -200,7 +264,7 @@ impl HapWriter {
         if rgba.len() < (self.w * self.h * 4) as usize {
             return Err("frame size changed".into());
         }
-        let data = hap_frame(rgba, self.w, self.h, self.alpha);
+        let data = hap_frame(rgba, self.w, self.h, self.kind);
         let mut pkt = ff::Packet::copy(&data);
         pkt.set_stream(0);
         pkt.set_pts(Some(self.frame));
@@ -243,7 +307,7 @@ mod tests {
             let left = (i as u32 % w) < w / 2;
             p.copy_from_slice(if left { &[255, 0, 0, 255] } else { &[0, 0, 255, 255] });
         }
-        let mut wr = HapWriter::create(&path, w, h, 30, false).unwrap();
+        let mut wr = HapWriter::create(&path, w, h, 30, HapKind::Hap).unwrap();
         for _ in 0..10 {
             wr.write(&frame).unwrap();
         }
@@ -264,20 +328,26 @@ mod tests {
     }
 }
 
-/// Writes a sample Hap movie to $PHOSPHOR_HAP_OUT (for checking with other players).
+/// Writes sample movies to the folder $PHOSPHOR_HAP_OUT, one per Hap flavour, for checking with other players: a
+/// subtle dark ramp across (where DXT1's 5-6-5 colour bands) and alpha rising from top (clear) to bottom (solid).
 #[cfg(test)]
 #[test]
 fn write_sample_hap() {
-    let Some(out) = std::env::var_os("PHOSPHOR_HAP_OUT") else { return };
+    let Some(dir) = std::env::var_os("PHOSPHOR_HAP_OUT") else { return };
     let (w, h) = (320u32, 180u32);
     let mut frame = vec![0u8; (w * h * 4) as usize];
     for (i, p) in frame.chunks_exact_mut(4).enumerate() {
-        let x = i as u32 % w;
-        p.copy_from_slice(if x < w / 3 { &[255, 0, 0, 255] } else if x < 2 * w / 3 { &[0, 255, 0, 255] } else { &[0, 0, 255, 255] });
+        let (x, y) = (i as u32 % w, i as u32 / w);
+        let t = x as f32 / (w - 1) as f32;
+        p.copy_from_slice(&[(20.0 + 40.0 * t) as u8, (30.0 + 25.0 * t) as u8, (45.0 + 30.0 * t) as u8, (255 * y / (h - 1)) as u8]);
     }
-    let mut wr = HapWriter::create(&out.to_string_lossy(), w, h, 30, false).unwrap();
-    for _ in 0..30 {
-        wr.write(&frame).unwrap();
+    let dir = std::path::PathBuf::from(dir);
+    std::fs::write(dir.join("source.rgba"), &frame).unwrap();
+    for (name, kind) in [("hap", HapKind::Hap), ("hap_alpha", HapKind::HapAlpha), ("hapq", HapKind::HapQ), ("hapq_alpha", HapKind::HapQAlpha)] {
+        let mut wr = HapWriter::create(&dir.join(format!("{name}.mov")).to_string_lossy(), w, h, 30, kind).unwrap();
+        for _ in 0..30 {
+            wr.write(&frame).unwrap();
+        }
+        wr.finish().unwrap();
     }
-    wr.finish().unwrap();
 }

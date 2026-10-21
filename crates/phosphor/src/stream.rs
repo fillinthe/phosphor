@@ -47,18 +47,36 @@ pub enum FileFormat {
     Hap,
     /// Hap Alpha (DXT5): keeps transparency.
     HapAlpha,
+    /// Hap Q (YCoCg DXT5): better colour than Hap, twice the size.
+    HapQ,
+    /// Hap Q with a separate alpha image.
+    HapQAlpha,
     /// HEVC (H.265) through the Mac's encoder: about half the size of H.264 at the same quality.
     Hevc,
 }
 
 impl FileFormat {
-    pub const ALL: [FileFormat; 4] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha, FileFormat::Hevc];
+    pub const ALL: [FileFormat; 6] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha, FileFormat::HapQ, FileFormat::HapQAlpha, FileFormat::Hevc];
+
+    /// The Hap flavour this records, if it's one.
+    pub fn hap(self) -> Option<crate::media::video::hap_encode::HapKind> {
+        use crate::media::video::hap_encode::HapKind;
+        match self {
+            FileFormat::Hap => Some(HapKind::Hap),
+            FileFormat::HapAlpha => Some(HapKind::HapAlpha),
+            FileFormat::HapQ => Some(HapKind::HapQ),
+            FileFormat::HapQAlpha => Some(HapKind::HapQAlpha),
+            _ => None,
+        }
+    }
 
     pub fn name(self) -> &'static str {
         match self {
             FileFormat::Auto => "H.264 (.mp4) / ProRes (.mov)",
             FileFormat::Hap => "Hap (.mov)",
             FileFormat::HapAlpha => "Hap Alpha (.mov)",
+            FileFormat::HapQ => "Hap Q (.mov, better colour)",
+            FileFormat::HapQAlpha => "Hap Q Alpha (.mov)",
             FileFormat::Hevc => "HEVC (.mp4, smaller files)",
         }
     }
@@ -427,9 +445,9 @@ impl Streamer {
             return Err("Choose a file first".into());
         }
         let path = s.recorded_path();
-        let alpha = s.file_format == FileFormat::HapAlpha;
+        let kind = s.file_format.hap().unwrap_or(crate::media::video::hap_encode::HapKind::Hap);
         let fps = s.fps.clamp(1, 120);
-        let mut writer = crate::media::video::hap_encode::HapWriter::create(&path, width, height, fps, alpha)?;
+        let mut writer = crate::media::video::hap_encode::HapWriter::create(&path, width, height, fps, kind)?;
         let (tx, rx) = std::sync::mpsc::sync_channel::<Msg>(4);
         let shared = self.shared.clone();
         std::thread::Builder::new()
@@ -462,15 +480,15 @@ impl Streamer {
         self.frame_size = (width, height);
         self.pacer.reset(now);
         self.started = Some(now);
-        let kind = if alpha { "Hap Alpha" } else { "Hap" };
-        *self.shared.lock().unwrap() = Shared { status: format!("Recording {kind} · {path}"), ..Default::default() };
+        let name = self.settings.file_format.name().trim_end_matches(" (.mov)").trim_end_matches(" (.mov, better colour)");
+        *self.shared.lock().unwrap() = Shared { status: format!("Recording {name} · {path}"), ..Default::default() };
         Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn start_native(&mut self, width: u32, height: u32, now: f64) -> Result<(), String> {
         self.close();
-        if self.settings.destination == Destination::File && matches!(self.settings.file_format, FileFormat::Hap | FileFormat::HapAlpha) {
+        if self.settings.destination == Destination::File && self.settings.file_format.hap().is_some() {
             return self.start_hap(width, height, now);
         }
         let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found. Install it with: brew install ffmpeg")?;

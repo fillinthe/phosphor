@@ -15,17 +15,33 @@ pub enum Format {
     #[default]
     Hap,
     HapAlpha,
+    HapQ,
+    HapQAlpha,
     ProRes,
     H264Keyframes,
 }
 
 impl Format {
-    pub const ALL: [Format; 4] = [Format::Hap, Format::HapAlpha, Format::ProRes, Format::H264Keyframes];
+    pub const ALL: [Format; 6] = [Format::Hap, Format::HapAlpha, Format::HapQ, Format::HapQAlpha, Format::ProRes, Format::H264Keyframes];
+
+    /// The Hap flavour, for the Hap formats.
+    fn hap(self) -> Option<crate::media::video::hap_encode::HapKind> {
+        use crate::media::video::hap_encode::HapKind;
+        match self {
+            Format::Hap => Some(HapKind::Hap),
+            Format::HapAlpha => Some(HapKind::HapAlpha),
+            Format::HapQ => Some(HapKind::HapQ),
+            Format::HapQAlpha => Some(HapKind::HapQAlpha),
+            _ => None,
+        }
+    }
 
     pub fn name(self) -> &'static str {
         match self {
             Format::Hap => "Hap",
             Format::HapAlpha => "Hap Alpha",
+            Format::HapQ => "Hap Q",
+            Format::HapQAlpha => "Hap Q Alpha",
             Format::ProRes => "ProRes",
             Format::H264Keyframes => "H.264, every frame a keyframe",
         }
@@ -35,6 +51,8 @@ impl Format {
         match self {
             Format::Hap => "Smoothest on any computer (Mac or Windows): the graphics card decodes it. Plays backwards and jumps instantly. Big files; no sound.",
             Format::HapAlpha => "Hap that keeps transparency (for overlays). Bigger than Hap; no sound.",
+            Format::HapQ => "Hap with much better colour (smooth gradients, skin, logos), still decoded by the graphics card. Twice the size of Hap; no sound.",
+            Format::HapQAlpha => "Hap Q that keeps transparency. The biggest Hap; no sound.",
             Format::ProRes => "Smooth, plays backwards well, keeps the sound. Very big files.",
             Format::H264Keyframes => "Plays backwards smoothly and keeps the sound, at a fraction of the size of the others. Uses a bit more of the computer than Hap.",
         }
@@ -45,6 +63,8 @@ impl Format {
         match self {
             Format::Hap => "Hap",
             Format::HapAlpha => "Hap Alpha",
+            Format::HapQ => "Hap Q",
+            Format::HapQAlpha => "Hap Q Alpha",
             Format::ProRes => "ProRes",
             Format::H264Keyframes => "keyframes",
         }
@@ -153,13 +173,14 @@ pub fn estimate(p: &Probe, format: Format, quality: Quality, size: Size) -> u64 
     let bits = match (format, quality) {
         // Hap: Snappy squeezes DXT anywhere from about a third to most of its size depending on the picture.
         (Format::Hap, _) => 4.0 * 0.6,
-        (Format::HapAlpha, _) => 8.0 * 0.6,
+        (Format::HapAlpha | Format::HapQ, _) => 8.0 * 0.6,
+        (Format::HapQAlpha, _) => 12.0 * 0.6,
         (Format::ProRes, Quality::Small) => 0.72,
         (Format::ProRes, Quality::Balanced) => 1.64,
         (Format::ProRes, Quality::Best) => 2.36,
         (Format::H264Keyframes, q) => h264_bits(q),
     };
-    let audio = if p.has_audio && !matches!(format, Format::Hap | Format::HapAlpha) { 192_000.0 / 8.0 * p.seconds } else { 0.0 };
+    let audio = if p.has_audio && format.hap().is_none() { 192_000.0 / 8.0 * p.seconds } else { 0.0 };
     (pixels_per_second * bits / 8.0 * p.seconds + audio) as u64
 }
 
@@ -258,9 +279,9 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
     let total = (job.probe.seconds * job.probe.fps).max(1.0);
     let scale = format!("scale={w}:{h}:flags=lanczos");
     match job.format {
-        Format::Hap | Format::HapAlpha => {
+        Format::Hap | Format::HapAlpha | Format::HapQ | Format::HapQAlpha => {
             // Decode with ffmpeg to RGBA frames, encode them with Phosphor's Hap encoder.
-            let alpha = job.format == Format::HapAlpha;
+            let kind = job.format.hap().unwrap_or(crate::media::video::hap_encode::HapKind::Hap);
             let fps = job.probe.fps.round().max(1.0) as u32;
             let mut child = Command::new(&ffmpeg)
                 .args(["-hide_banner", "-loglevel", "error", "-i", &job.src, "-an", "-vf", &scale, "-f", "rawvideo", "-pix_fmt", "rgba", "-"])
@@ -269,7 +290,7 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
                 .spawn()
                 .map_err(|e| format!("couldn't start FFmpeg ({e})"))?;
             let mut stdout = child.stdout.take().ok_or("no output from FFmpeg")?;
-            let mut writer = crate::media::video::hap_encode::HapWriter::create(out, w, h, fps, alpha)?;
+            let mut writer = crate::media::video::hap_encode::HapWriter::create(out, w, h, fps, kind)?;
             let mut frame = vec![0u8; w as usize * h as usize * 4];
             let mut n = 0u64;
             while stdout.read_exact(&mut frame).is_ok() {
