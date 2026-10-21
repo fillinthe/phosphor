@@ -118,3 +118,28 @@ fn blend_modes_match_their_formulas() {
     }
     assert!(wrong.is_empty(), "{wrong:?}");
 }
+
+/// Opacity mixes over what's below, and a group's opacity applies to its members as one picture.
+#[test]
+fn layer_and_group_opacity() {
+    let Some(mut engine) = test_engine() else { return };
+    let solid = |id: u64, rgb: [f32; 3]| {
+        let mut l = LayerState { id, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+        l.generator_values = rgb.to_vec();
+        l
+    };
+    // White at 25% over black: 25% grey.
+    let mut comp = Composition { width: 16, height: 16, next_id: 100, ..Default::default() };
+    comp.layers.push(solid(1, [0.0, 0.0, 0.0]));
+    let mut white = solid(2, [1.0, 1.0, 1.0]);
+    white.opacity = 0.25;
+    comp.layers.push(white);
+    let px = middle(&mut engine, &comp);
+    assert!((px[0] as i32 - 64).abs() <= 3, "25% white over black: {px:?}");
+    // The same white, fully opaque inside a group at 50%: 50% grey.
+    comp.layers[1].opacity = 1.0;
+    let g = comp.create_group(&[2]).expect("group");
+    comp.groups.iter_mut().find(|x| x.id == g).unwrap().opacity = 0.5;
+    let px = middle(&mut engine, &comp);
+    assert!((px[0] as i32 - 128).abs() <= 3, "group at 50%: {px:?}");
+}
