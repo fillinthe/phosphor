@@ -1,0 +1,225 @@
+{
+ "width": 1920,
+ "height": 1080,
+ "next_id": 50,
+ "clip_columns": 4,
+ "layers": [
+  {
+   "id": 1,
+   "name": "Deck",
+   "source": {
+    "Generator": "plasma"
+   },
+   "generator_values": [
+    1.0,
+    6.0,
+    0.0
+   ],
+   "transition_secs": 1.0,
+   "transition_kind": "Crossfade",
+   "clips": [
+    {
+     "id": 11,
+     "name": "Plasma",
+     "source": {
+      "Generator": "plasma"
+     },
+     "generator_values": [
+      1.0,
+      6.0,
+      0.0
+     ]
+    },
+    {
+     "id": 12,
+     "name": "Clip A",
+     "source": {
+      "Movie": {
+       "name": "a.mp4",
+       "path": "/Volumes/_FOOTAGE/_ORIG/3244070447511548074.mp4"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Top",
+   "source": {
+    "Generator": "rings"
+   },
+   "generator_values": [
+    10.0,
+    1.0,
+    0.5
+   ],
+   "blend": "Screen",
+   "opacity": 0.5,
+   "transition_secs": 1.0,
+   "transition_kind": "Wipe",
+   "clips": [
+    {
+     "id": 21,
+     "name": "Rings",
+     "source": {
+      "Generator": "rings"
+     },
+     "generator_values": [
+      10.0,
+      1.0,
+      0.5
+     ]
+    },
+    {
+     "id": 22,
+     "name": "Bars",
+     "source": {
+      "Generator": "color_bars"
+     }
+    }
+   ]
+  }
+ ],
+ "surface": {
+  "columns": 12,
+  "next_id": 7,
+  "widgets": [
+   {
+    "id": 1,
+    "kind": "Label",
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 1,
+    "label": "MY SHOW",
+    "color": [
+     255,
+     196,
+     70
+    ]
+   },
+   {
+    "id": 2,
+    "kind": "Fader",
+    "x": 0,
+    "y": 1,
+    "w": 1,
+    "h": 4,
+    "label": "Deck",
+    "color": [
+     0,
+     200,
+     190
+    ],
+    "value": 0.7,
+    "bindings": [
+     {
+      "target": {
+       "LayerOpacity": 1
+      },
+      "range": {
+       "min": 0.0,
+       "max": 1.0,
+       "invert": false
+      }
+     }
+    ]
+   },
+   {
+    "id": 3,
+    "kind": "Fader",
+    "x": 1,
+    "y": 1,
+    "w": 1,
+    "h": 4,
+    "label": "Top",
+    "color": [
+     90,
+     170,
+     255
+    ],
+    "value": 0.35,
+    "bindings": [
+     {
+      "target": {
+       "LayerOpacity": 2
+      },
+      "range": {
+       "min": 0.0,
+       "max": 1.0,
+       "invert": true
+      }
+     }
+    ]
+   },
+   {
+    "id": 4,
+    "kind": "Toggle",
+    "x": 2,
+    "y": 1,
+    "w": 2,
+    "h": 2,
+    "label": "Deck on",
+    "color": [
+     120,
+     220,
+     110
+    ],
+    "value": 1.0,
+    "bindings": [
+     {
+      "target": {
+       "LayerEnabled": 1
+      },
+      "range": {
+       "min": 0.0,
+       "max": 1.0,
+       "invert": false
+      }
+     }
+    ]
+   },
+   {
+    "id": 5,
+    "kind": "Button",
+    "x": 2,
+    "y": 3,
+    "w": 2,
+    "h": 2,
+    "label": "FLASH",
+    "color": [
+     255,
+     105,
+     97
+    ],
+    "value": 0.0,
+    "bindings": [
+     {
+      "target": "MasterFade",
+      "range": {
+       "min": 0.0,
+       "max": 1.0,
+       "invert": false
+      }
+     }
+    ]
+   },
+   {
+    "id": 6,
+    "kind": "XyPad",
+    "x": 4,
+    "y": 1,
+    "w": 4,
+    "h": 4,
+    "label": "XY",
+    "color": [
+     160,
+     120,
+     255
+    ],
+    "value": 0.3,
+    "value_y": 0.6
+   }
+  ]
+ }
+}

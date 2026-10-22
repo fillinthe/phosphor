@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "width": 1920,
+  "height": 1080,
+  "master_fade": 1.0,
+  "layers": [
+    {
+      "id": 3,
+      "name": "Plasma Base",
+      "source": {
+        "Generator": "plasma"
+      },
+      "enabled": true,
+      "opacity": 1.0,
+      "blend": "Normal",
+      "fit": "Fill",
+      "generator_values": [
+        1.0,
+        6.0,
+        0.0
+      ],
+      "effects": [
+        {
+          "id": 1,
+          "effect": "kaleidoscope",
+          "enabled": true,
+          "values": [
+            6.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "id": 2,
+          "effect": "rgb_shift",
+          "enabled": true,
+          "values": [
+            0.01,
+            0.0
+          ]
+        }
+      ],
+      "playing": true,
+      "rate": 1.0,
+      "looping": true
+    },
+    {
+      "id": 6,
+      "name": "Rings",
+      "source": {
+        "Generator": "rings"
+      },
+      "enabled": true,
+      "opacity": 0.7,
+      "blend": "Screen",
+      "fit": "Fill",
+      "generator_values": [
+        10.0,
+        1.0,
+        0.5
+      ],
+      "effects": [
+        {
+          "id": 4,
+          "effect": "kaleidoscope",
+          "enabled": true,
+          "values": [
+            6.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "id": 5,
+          "effect": "rgb_shift",
+          "enabled": true,
+          "values": [
+            0.01,
+            0.0
+          ]
+        }
+      ],
+      "playing": true,
+      "rate": 1.0,
+      "looping": true
+    },
+    {
+      "id": 9,
+      "name": "Plasma Glow",
+      "source": {
+        "Generator": "plasma"
+      },
+      "enabled": true,
+      "opacity": 0.7,
+      "blend": "Screen",
+      "fit": "Fill",
+      "generator_values": [
+        1.0,
+        6.0,
+        0.0
+      ],
+      "effects": [
+        {
+          "id": 7,
+          "effect": "kaleidoscope",
+          "enabled": true,
+          "values": [
+            6.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "id": 8,
+          "effect": "rgb_shift",
+          "enabled": true,
+          "values": [
+            0.01,
+            0.0
+          ]
+        }
+      ],
+      "playing": true,
+      "rate": 1.0,
+      "looping": true
+    }
+  ],
+  "next_id": 10
+}
