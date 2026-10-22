@@ -4,6 +4,45 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.3.0 (2026-10-22)
+
+The first batch of what VDMX and MadMapper have that Phosphor didn't.
+
+**Playback**
+- **Random frames:** a new play direction that jumps all over the clip (between its in and out points).
+- **Black at end:** with Loop off, a movie can go to black when it ends instead of holding its last frame.
+- **Jump back / forward** buttons in Playback, by a number of beats or seconds; MIDI, OSC and keys can press them.
+- **1:1 pixels:** a layer can show its picture at its own size (no scaling), next to Fit, Fill and Stretch.
+- **Reload** a movie or picture after changing it in another app (media right-click, or the button in Playback).
+- Playback shows more about a file: frame rate, bit rate, pixel format, colour space, sound. Media tiles say how
+  many layers and clips use each file.
+
+**Mixing**
+- **13 more blend modes:** Soft, Hard, Vivid, Linear and Pin Light, Hard Mix, Colour Burn and Dodge, Divide, Hue,
+  Saturation, Colour, Luminosity.
+- **Crossfader curves:** both full in the middle (as before), smooth (no dip), straight, or a cut.
+
+**Outputs**
+- **Freeze** an output to hold its picture while you change things behind it (also one mappable control for all).
+- **Flip** an output left-right or top-bottom (rear projection, upside-down projectors).
+- **Delay** an output by up to 10 frames, to line it up with a slower projector or LED processor.
+- **Snapshot** of one output, as the projector gets it.
+- Mapping Studio: **Match the picture's shape** squares a slice up to its picture's proportions.
+
+**Controllers**
+- **Endless knobs** (relative MIDI) and a **dead band** for jittery faders.
+- More value effects on mappings: **threshold** (a fader as a switch), **limit**, **repeat**, **jitter**, **fall**
+  (peak hold) and a **drawn curve**.
+- Soft takeover can **glide** the value to the fader instead of waiting, and the pickup distance can be set.
+- **Several OSC ports**, and **wildcard OSC addresses** on mappings (`/deck/*/level`, `/btn/[1-4]`).
+- **Copy and paste** a control's mappings (and a slider's motion) onto another control.
+- Each mapping in the list has a button that **shows its control** (selects its layer and opens the panel).
+
+**Elsewhere**
+- **Notes** panel, saved with the project.
+- Search in the layer source menu; **hide** effects and sources you never use from the lists.
+- More imported shaders convert: functions that take a picture, `textureLod`, and shaders with a variable named `u`.
+
 ## 0.2.99 (2026-10-21)
 
 - **53 new effects** hand-picked from Jared Bruni's lostjared collection: tunnels, kaleidoscopes, mirrors, spirals,

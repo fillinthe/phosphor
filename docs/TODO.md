@@ -10,6 +10,8 @@ lack was looked for in the code. This is what's missing or only partly there. **
 Sizes are my estimate: **S** = an hour or two, **M** = half a day to two days, **L** = several days or more.
 Hardware items can be built but not tested here without the device.
 
+Items 1–22: in **0.3.0**.
+
 ### Small
 - [x] 1. **Copy size mode** for layers: 1:1 pixels, no scaling (V). Has Fit / Fill / Stretch.
       Checked: unit test (a half-size picture fills the middle).
