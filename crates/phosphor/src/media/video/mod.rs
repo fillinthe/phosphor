@@ -772,6 +772,7 @@ mod decoder;
 mod bc7;
 mod hap;
 pub mod hap_encode;
+mod eq;
 pub mod sound;
 #[cfg(target_os = "macos")]
 pub mod surface;
