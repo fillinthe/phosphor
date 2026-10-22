@@ -21,10 +21,12 @@ pub enum ChainMode {
     Max,
     /// The other one sets its speed: from a quarter (at 0) to four times (at 1), the middle = as set.
     Speed,
+    /// Halfway between the two (weighted by the amount).
+    Average,
 }
 
 impl ChainMode {
-    pub const ALL: [ChainMode; 5] = [ChainMode::Multiply, ChainMode::Add, ChainMode::Min, ChainMode::Max, ChainMode::Speed];
+    pub const ALL: [ChainMode; 6] = [ChainMode::Multiply, ChainMode::Add, ChainMode::Min, ChainMode::Max, ChainMode::Average, ChainMode::Speed];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -33,6 +35,7 @@ impl ChainMode {
             ChainMode::Min => "lower of it and",
             ChainMode::Max => "higher of it and",
             ChainMode::Speed => "speed set by",
+            ChainMode::Average => "averaged with",
         }
     }
 }
@@ -223,6 +226,7 @@ pub fn evaluate(mods: &[Modulator], inputs: &ModInputs, phases: &mut ModPhases) 
                 ChainMode::Add => v + a * w,
                 ChainMode::Min => v.min(w + (1.0 - a)),
                 ChainMode::Max => v.max(w * a),
+                ChainMode::Average => v + (w - v) * a * 0.5,
                 ChainMode::Speed => v,
             }
             .clamp(0.0, 1.0);
