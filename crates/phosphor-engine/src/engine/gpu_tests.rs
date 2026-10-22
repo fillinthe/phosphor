@@ -501,3 +501,22 @@ fn blur_background_keeps_the_person_sharp() {
     assert!(person > 0.4, "sharp: {person}");
     assert!(background < person - 0.15, "blurred: {background} vs {person}");
 }
+
+/// Palette: a dark grey with only black and white to choose from becomes black; a light one white.
+#[test]
+fn palette_snaps_to_the_nearest_colour() {
+    let Some(mut engine) = test_engine() else { return };
+    let red_of = |engine: &mut Engine, grey: f32| {
+        let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+        let mut l = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![grey, grey, grey], ..Default::default() };
+        let mut values = crate::shaders::effect("palette").unwrap().defaults();
+        values[..6].copy_from_slice(&[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+        values[18] = 2.0;
+        l.effects.push(EffectState { id: 2, effect: "palette".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        comp.layers.push(l);
+        engine.render(&comp, 0.0, &ModInputs::default());
+        engine.read_output().expect("output").2[0]
+    };
+    assert!(red_of(&mut engine, 0.3) < 5);
+    assert!(red_of(&mut engine, 0.7) > 250);
+}
