@@ -155,7 +155,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
 
 ### Large
-- [ ] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one.
+- [~] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one. Done: tracks for any control, keys (hold / line / smooth), markers (pause, loop back), Timeline panel. Left: record by moving controls, sound track, OSC / MIDI tracks, clip track.
 - [ ] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
 - [x] 88. **Record DMX** output and play it back (M).
 - [ ] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration exist.
