@@ -1,6 +1,125 @@
-# To do (asked 2026-10-21: "do 2, 5, 6, 7, 8, 9, shortest first")
+# To do
 
 Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` done (with what was checked).
+
+## VDMX + MadMapper parity (researched 2026-10-22), easiest first
+
+Every feature of VDMX6 (about 430) and MadMapper 6 (about 490) was listed from their manuals and release notes
+(`docs/research/vdmx-features-full.md`, `docs/research/madmapper-features-full.md`), then each one Phosphor might
+lack was looked for in the code. This is what's missing or only partly there. **V** = VDMX has it, **M** = MadMapper.
+Sizes are my estimate: **S** = an hour or two, **M** = half a day to two days, **L** = several days or more.
+Hardware items can be built but not tested here without the device.
+
+### Small
+- [ ] 1. **Copy size mode** for layers: 1:1 pixels, no scaling (V). Has Fit / Fill / Stretch.
+- [ ] 2. **Cut to black** when a clip ends (V). Has loop, hold last frame, ping-pong.
+- [ ] 3. **Random frames** play mode (M).
+- [ ] 4. **Jump back / forward** buttons: N seconds or N beats (V).
+- [ ] 5. **Reload a media file** from disk after you've edited it (M).
+- [ ] 6. **Media info**: fps, bit rate, colour space, sound; **used by** count (which layers/clips use a file) (M). Has codec, size, length.
+- [ ] 7. **More blend modes**: Soft/Hard/Vivid/Linear/Pin Light, Hard Mix, Colour Burn/Dodge, Divide, Hue, Saturation, Colour, Luminosity (V). Has 10 + 3 masks.
+- [ ] 8. **Crossfader curve** (V). Fixed straight line now.
+- [ ] 9. **Soft takeover settings**: pickup distance, and "glide to the controller" (V). Has pickup at a fixed distance.
+- [ ] 10. **More mapping value effects**: threshold, randomize, clamp, wrap, peak-hold (fall), average, drawn lookup curve (V). Has smooth, steps, curve, formula, delay.
+- [ ] 11. **Dead-band and endless encoders** (relative MIDI knobs) on mappings (V).
+- [ ] 12. **Controller inputs**: turn single MIDI devices on/off, several OSC ports, wildcard OSC addresses (V, M).
+- [ ] 13. **Mappings list: jump to the control** it drives (V). The list itself exists.
+- [ ] 14. **Search in the layer source menu** (V). Explorer and ⌘K already search.
+- [ ] 15. **Copy / paste a control's mappings and modulation** onto another control (V, M).
+- [ ] 16. **Project notes** panel (V, M).
+- [ ] 17. **Freeze outputs**: hold the picture while you change things behind it (M).
+- [ ] 18. **Flip an output** horizontally / vertically, for rear projection (V, M).
+- [ ] 19. **Output delay** in frames, to line up mixed projectors and LED processors (M).
+- [ ] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
+- [ ] 21. **Hide effects** you never use from the menus (V). Favourites exist.
+- [ ] 22. **Slice: match the media's size / shape** (M).
+- [ ] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
+- [ ] 24. **Permissions panel** (Mac): camera, microphone, screen recording, network at a glance (V).
+- [ ] 25. **Choose the graphics card** on machines with more than one (V).
+- [ ] 26. **Step sequencer colour and index tracks** (V). Has value and gate tracks.
+- [ ] 27. **DMX monitor**: live view of the channels being sent (M).
+- [ ] 28. **Colour swatches** saved and usable on every colour control (M).
+- [ ] 29. **More picture formats**: EXR and HDR (float), PSD, HEIC as a layer (M). Has PNG, JPEG, WebP, BMP, TIFF, GIF.
+- [ ] 30. **Look fade time**: a saved look fades in instead of cutting (V).
+- [ ] 31. **Autosave interval and backups**: keep the last few versions on every save (M). Crash recovery exists.
+- [ ] 32. **ISF files reload when edited** on disk (V). Loaded once at start now.
+- [ ] 33. **LUT mask mixer** (two LUTs mixed by a mask) and a few **built-in LUT looks** (V). LUT Mix exists.
+- [ ] 34. **Saved "show only these" slice sets** while mapping (M).
+- [ ] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
+
+### Medium
+- [ ] 36. **A layer's picture before its effects** as another layer's source (V). After effects exists.
+- [ ] 37. **Blend mode per effect**: how an effect's output mixes back with its input (V). Dry/wet exists.
+- [ ] 38. **Wipe blend modes** driven by opacity (radial, star, blocks…) (V). Wipes exist as clip transitions only.
+- [ ] 39. **Your own blend modes** written as shaders (V).
+- [ ] 40. **Generator size per layer / clip** (V). Generators render at the comp's size.
+- [ ] 41. **Frame rate per layer / comp**, to save GPU (V).
+- [ ] 42. **Before / after preview of one effect** in a chain (V).
+- [ ] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
+- [ ] 44. **Previews**: drag to scrub the movie, frame-rate cap (V).
+- [ ] 45. **Eyedropper**: pick a colour from a preview (V).
+- [ ] 46. **Endless scratch** control for movies (V).
+- [ ] 47. **Movie chapter markers**: jump to chapters stored in the file (V).
+- [ ] 48. **Text from a file**, shown word / line / sentence at a time with next / previous; **animated text styles** (beat, scrolling, fade); **text set by OSC** (V).
+- [ ] 49. **Strings and colours from controllers** (OSC text and colour values) (V).
+- [ ] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
+- [ ] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, colour wheel, computed values (V).
+- [ ] 52. **Import TouchOSC layouts** (V). Export exists.
+- [ ] 53. **Clip grid lights on Launchpad / APC**: pad colours for empty / loaded / playing / queued (V, M).
+- [ ] 54. **Map a whole row of clips at once** (first and last note), bank / transpose the mapping, pick a clip by index or value (V).
+- [ ] 55. **Export / import a bank of clips** with settings; **set a clip's thumbnail** from the current frame (V).
+- [ ] 56. **Recorder**: record any layer, comp or camera (not only an output), start/stop on the beat, several recorders at once (V).
+- [ ] 57. **Scopes as a layer source** (V).
+- [ ] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
+- [ ] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
+- [ ] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now.
+- [ ] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade.
+- [ ] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
+- [ ] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
+- [ ] 64. **Schedules**: calendar (.ics) events trigger cues, an idle cue after N minutes of nothing, a startup cue (M). Daily times exist.
+- [ ] 65. **Combine controls**: mix several sources into one (max, add, multiply…) (M).
+- [ ] 66. **Readable OSC addresses** by name (`/layer/Intro/opacity`) and wildcards (M). Addresses use ids now.
+- [ ] 67. **Merge another project** into this one (M).
+- [ ] 68. **New project from a template** (simple player, mixer, 4 projectors…) (V, M).
+- [ ] 69. **Background picture on an output** (M).
+- [ ] 70. **Mapping**: drop a file on the stage to make a slice at its shape; draw a line slice freehand (M).
+- [ ] 71. **Automatic soft edges** from overlapping slices (M). Set by hand now.
+- [ ] 72. **One canvas across several displays** (2×2 etc.) and **one output shown on several displays** (V, M).
+- [ ] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M).
+- [ ] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
+- [ ] 75. **Generators**: countdown, stopwatch, GPU particles (M).
+- [ ] 76. **NDI sound** in and out (V).
+- [ ] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
+- [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
+- [ ] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
+- [ ] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M).
+- [ ] 81. **SVG and Lottie** (After Effects) animations as clips (M).
+- [ ] 82. **Lock the panel layout** only (not the whole player mode) (V).
+- [ ] 83. **Interface colour themes** (V). Has a brightness slider.
+- [ ] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M).
+- [ ] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
+
+### Large
+- [ ] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one.
+- [ ] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
+- [ ] 88. **Record DMX** output and play it back (M).
+- [ ] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration exist.
+- [ ] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist.
+- [ ] 91. **Read text and QR codes** from video into data (V).
+- [ ] 92. **LED scanner**: a camera finds each LED and places the fixtures (M).
+- [ ] 93. **MilkDrop visualiser** (projectM) (V).
+- [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
+- [ ] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Hardware.
+- [ ] 96. **Blackmagic** capture and SDI / HDMI output (V, M). Hardware + SDK.
+- [ ] 97. **Arduino** (Firmata): sensors in, LEDs / servos out (M). Hardware.
+- [ ] 98. **Depth cameras** (Kinect v2, RealSense) (M). Hardware.
+- [ ] 99. **Lasers** (ILDA files, Ether Dream, Helios) (M). Hardware, and laser safety.
+
+### Not planned (say if you want any)
+Quartz Composer / Vuo / TouchDesigner hosting (QC is dead, the others need their own apps), Core Image filters,
+Wiimote, Leap Motion, Makey Makey, weather data, Canon / Sony DSLR inputs, MiniMad hardware export, licences / demo mode.
+
+Already in Phosphor and not listed: everything else in the two research files at headline level (see `docs/PARITY.md`).
 
 ## Next round (2026-10-21, "keep going on the large stuff"), quickest first
 
