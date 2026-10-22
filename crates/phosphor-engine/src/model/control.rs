@@ -64,6 +64,8 @@ pub enum ControlTarget {
     Surface(u64),
     /// An XY pad's vertical value.
     SurfaceY(u64),
+    /// One bar of a multi-slider (counted from 0).
+    SurfaceBar { widget: u64, bar: u8 },
     /// A shared modulator's hand-set value (its "Hand / MIDI" source): one knob feeding a chain.
     Modulator(u64),
     /// App-wide controls (tempo, launch settings, audio…).

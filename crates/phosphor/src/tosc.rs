@@ -92,6 +92,15 @@ fn widget(x: &mut String, w: &SurfaceWidget, cell: f32) {
         WidgetKind::Label | WidgetKind::Text => node(x, "LABEL", &w.label, frame, w.color, &[], &[]),
         // (TouchOSC's radio needs its own count; a horizontal fader picks the choices the same way.)
         WidgetKind::Choices => node(x, "FADER", &w.label, frame, w.color, &[("orientation", 1)], &[(main, "x")]),
+        // A fader per bar, side by side.
+        WidgetKind::Multi => {
+            let n = w.bars.len().max(1) as f32;
+            let bw = frame[2] / n;
+            for i in 0..w.bars.len() {
+                let addr = default_osc_address(&ControlTarget::SurfaceBar { widget: w.id, bar: i as u8 });
+                node(x, "FADER", &format!("{} {}", w.label, i + 1), [frame[0] + i as f32 * bw, frame[1], bw - 2.0, frame[3]], w.color, &[], &[(addr, "x")]);
+            }
+        }
     }
 }
 

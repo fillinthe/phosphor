@@ -305,7 +305,7 @@ function renderSurface() {
   // Guests see only what they may use.
   const sf = { ...all, widgets: all.widgets.filter(w => (w.page || 0) === surfPage && (!guest || w.guests !== false)) };
   const box = $('#surface');
-  const sig = surfPage + '#' + sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color, (w.items || []).join(';')].join(',')).join('|');
+  const sig = surfPage + '#' + sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color, (w.items || []).join(';'), (w.bars || []).length].join(',')).join('|');
   if (box.dataset.sig !== sig) {
     box.dataset.sig = sig; box.innerHTML = '';
     const cell = Math.max(28, (box.clientWidth || window.innerWidth - 24) / sf.columns - 6);
@@ -343,6 +343,19 @@ function renderSurface() {
           el.setValue = v => { [...el.children].forEach((b, i) => { const on = i === Math.min(n - 1, Math.floor(v * n)); b.style.background = on ? w.color : '#1b1f22'; b.style.color = on ? '#000' : '#eee'; }); };
           el.setValue(w.value);
         }
+        else if (w.kind === 'Multi') {
+          // Bars side by side: draw across them with a finger, each bar under it takes its height.
+          el.className = 'w multi'; el.style.cssText += ';display:flex;gap:2px;padding:2px;align-items:stretch;touch-action:none';
+          const n = Math.max(1, (w.bars || []).length);
+          for (let i = 0; i < n; i++) { const b = document.createElement('div'); b.style.cssText = 'flex:1;display:flex;flex-direction:column;justify-content:flex-end;background:#181b1e'; const f = document.createElement('div'); f.style.background = w.color; b.appendChild(f); el.appendChild(b); }
+          el.setValue = vals => [...el.children].forEach((b, i) => { b.firstChild.style.height = ((vals || [])[i] || 0) * 100 + '%'; });
+          const at = e => { const r = el.getBoundingClientRect(); const x = Math.min(0.999, Math.max(0, (e.clientX - r.left) / r.width)), y = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height)); const i = Math.floor(x * n); el.children[i].firstChild.style.height = y * 100 + '%'; setTarget({ SurfaceBar: { widget: w.id, bar: i } }, y); };
+          el.addEventListener('pointerdown', e => { touching.add(el.dataset.key); try { el.setPointerCapture(e.pointerId); } catch (_) {} at(e); e.preventDefault(); });
+          el.addEventListener('pointermove', e => { if (el.hasPointerCapture(e.pointerId)) at(e); });
+          const end = () => setTimeout(() => touching.delete(el.dataset.key), 300);
+          el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+          el.setValue(w.bars);
+        }
         else if (w.kind === 'XyPad' || w.kind === 'Color') {
           el.className = 'w xy';
           // Colour: hue across, saturation up (grey at the bottom).
@@ -376,6 +389,7 @@ function renderSurface() {
     if (w.kind === 'Fader' || w.kind === 'Slider') el.setValue(w.value);
     else if (w.kind === 'XyPad' || w.kind === 'Color') el.setValue(w.value, w.value_y);
     else if (w.kind === 'Choices') el.setValue(w.value);
+    else if (w.kind === 'Multi') el.setValue(w.bars);
     else if (w.kind === 'Button' || w.kind === 'Toggle') { const on = w.value > 0.5 || el.classList.contains('held'); el.style.background = on ? el.dataset.color : '#1b1f22'; el.style.color = on ? '#000' : '#eee'; el.style.borderColor = el.dataset.color; }
   });
 }

@@ -112,7 +112,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
       Right-click any control › Send out: OSC to the Control Surface's OSC-out host, MIDI CC or note. Checked: real UDP test.
 - [~] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, colour wheel, computed values (V).
-      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field (onto a text layer; Mac and phone). A button grid = Choices + "pick a clip by value". Multi-slider, computed values: not yet. Checked: tests.
+      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field (onto a text layer; Mac and phone). A button grid = Choices + "pick a clip by value". Multi-slider (bars with their own targets; draw across them; Mac, phone, TouchOSC export). Computed values: not yet. Checked: tests.
 - [x] 52. **Import TouchOSC layouts** (V). Export exists.
       MIDI / OSC panel › Import TouchOSC layout: pages, controls in place, OSC addresses mapped. Checked: round-trip test with the export.
 - [x] 53. **Clip grid lights on Launchpad / APC**: pad colours for empty / loaded / playing / queued (V, M).
