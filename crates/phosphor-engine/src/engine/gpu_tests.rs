@@ -202,7 +202,7 @@ fn outputs_freeze_delay_and_flip() {
     comp.layers.push(grey);
     let out = comp.add_output();
     // (left quarter, right quarter) red of the output after one frame.
-    let mut frame = |engine: &mut Engine, comp: &Composition, v: f32| {
+    let frame = |engine: &mut Engine, comp: &Composition, v: f32| {
         let mut c = comp.clone();
         c.layers[0].generator_values = vec![v, v, v];
         engine.render(&c, 0.0, &ModInputs::default());
@@ -316,7 +316,7 @@ fn layers_can_run_at_their_own_frame_rate() {
     let mut l = LayerState { id: 3, source: SourceSpec::Generator("solid".into()), render_fps: 10.0, ..Default::default() };
     l.generator_values = vec![0.2, 0.2, 0.2];
     comp.layers.push(l);
-    let mut at = |engine: &mut Engine, comp: &Composition, t: f32| {
+    let at = |engine: &mut Engine, comp: &Composition, t: f32| {
         engine.render(comp, t, &ModInputs::default());
         let (w, h, px) = engine.read_output().expect("output");
         px[((h / 2 * w + w / 2) * 4) as usize] as f32 / 255.0

@@ -39,6 +39,8 @@ pub enum Purpose {
     MergeProject,
     /// A background picture for this output.
     OutputBackground(u64),
+    /// A patch list (CSV) of LED fixtures.
+    ImportFixtures,
 }
 
 pub struct Dialogs {

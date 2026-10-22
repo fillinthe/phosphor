@@ -82,16 +82,22 @@ pub enum FixtureShape {
     Grid,
     /// A moving head: colour from the picture at `points[0]`, pan / tilt from its own position and movement.
     MovingHead,
+    /// `cols` pixels round a circle: centre `points[0]`, the first pixel at `points[1]`.
+    Ring,
+    /// `cols` pixels along a curve: a Bézier from `points[0]` to `points[3]`, bent towards `points[1]` and `points[2]`.
+    Curve,
 }
 
 impl FixtureShape {
-    pub const ALL: [FixtureShape; 3] = [FixtureShape::Strip, FixtureShape::Grid, FixtureShape::MovingHead];
+    pub const ALL: [FixtureShape; 5] = [FixtureShape::Strip, FixtureShape::Curve, FixtureShape::Ring, FixtureShape::Grid, FixtureShape::MovingHead];
 
     pub fn name(self) -> &'static str {
         match self {
             FixtureShape::Strip => "Strip",
             FixtureShape::Grid => "Grid / matrix",
             FixtureShape::MovingHead => "Moving head",
+            FixtureShape::Ring => "Ring",
+            FixtureShape::Curve => "Curve",
         }
     }
 }
@@ -187,6 +193,9 @@ pub struct Fixture {
     pub rows: u32,
     /// Grid wiring: every other row runs backwards (the usual LED matrix zig-zag).
     pub zigzag: bool,
+    /// Grid wiring: column by column (top to bottom) instead of row by row.
+    #[serde(default)]
+    pub by_columns: bool,
     pub order: PixelOrder,
     /// First universe (Art-Net counts from 0, sACN from 1) and channel (1–512). Long fixtures continue
     /// into the next universes without splitting a pixel.
@@ -219,6 +228,7 @@ impl Default for Fixture {
             cols: 60,
             rows: 8,
             zigzag: true,
+            by_columns: false,
             order: PixelOrder::Rgb,
             universe: 0,
             channel: 1,
@@ -279,7 +289,7 @@ impl Fixture {
 
     pub fn pixel_count(&self) -> usize {
         match self.shape {
-            FixtureShape::Strip => self.cols.clamp(1, 4096) as usize,
+            FixtureShape::Strip | FixtureShape::Ring | FixtureShape::Curve => self.cols.clamp(1, 4096) as usize,
             FixtureShape::Grid => (self.cols.clamp(1, 512) * self.rows.clamp(1, 512)) as usize,
             FixtureShape::MovingHead => 1,
         }
@@ -312,16 +322,43 @@ impl Fixture {
             }
             FixtureShape::Grid => {
                 let (cols, rows) = (self.cols.clamp(1, 512), self.rows.clamp(1, 512));
-                let mut out = Vec::with_capacity((cols * rows) as usize);
-                for r in 0..rows {
+                let at = |c: u32, r: u32| {
                     let t = centre(r, rows);
-                    let (left, right) = (lerp(p[0], p[3], t), lerp(p[1], p[2], t));
-                    for c in 0..cols {
-                        let c = if self.zigzag && r % 2 == 1 { cols - 1 - c } else { c };
-                        out.push(lerp(left, right, centre(c, cols)));
+                    lerp(lerp(p[0], p[3], t), lerp(p[1], p[2], t), centre(c, cols))
+                };
+                let mut out = Vec::with_capacity((cols * rows) as usize);
+                // Wired row by row (or column by column), every other one backwards with zig-zag.
+                let (outer, inner) = if self.by_columns { (cols, rows) } else { (rows, cols) };
+                for a in 0..outer {
+                    for b in 0..inner {
+                        let b = if self.zigzag && a % 2 == 1 { inner - 1 - b } else { b };
+                        out.push(if self.by_columns { at(a, b) } else { at(b, a) });
                     }
                 }
                 out
+            }
+            FixtureShape::Ring => {
+                let n = self.cols.clamp(1, 4096);
+                let (cx, cy) = (p[0][0], p[0][1]);
+                let (dx, dy) = (p[1][0] - cx, p[1][1] - cy);
+                (0..n)
+                    .map(|i| {
+                        let a = std::f32::consts::TAU * i as f32 / n as f32;
+                        let (s, c) = a.sin_cos();
+                        [cx + dx * c - dy * s, cy + dx * s + dy * c]
+                    })
+                    .collect()
+            }
+            FixtureShape::Curve => {
+                let n = self.cols.clamp(1, 4096);
+                (0..n)
+                    .map(|i| {
+                        let t = centre(i, n);
+                        let u = 1.0 - t;
+                        let w = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+                        [0, 1].map(|k| w[0] * p[0][k] + w[1] * p[1][k] + w[2] * p[2][k] + w[3] * p[3][k])
+                    })
+                    .collect()
             }
         }
     }
@@ -432,6 +469,56 @@ impl DmxSettings {
         self.fixtures.iter().filter(|f| f.enabled).flat_map(|f| f.sample_points()).collect()
     }
 
+    /// Fixtures from a table (a patch list from a spreadsheet): a header row naming the columns, then one fixture a
+    /// row. Columns (any order, any case): name, shape (strip / grid / ring / curve), pixels (or cols / width), rows
+    /// (or height), universe, channel, x1, y1 … x4, y4 (0..1 of the picture). `new_id` gives each one an id.
+    /// Returns how many came in.
+    pub fn import_csv(&mut self, text: &str, mut new_id: impl FnMut() -> u64) -> Result<usize, String> {
+        let mut rows = text.lines().filter(|l| !l.trim().is_empty());
+        let header: Vec<String> = rows.next().ok_or("empty table")?.split([',', ';', '\t']).map(|h| h.trim().to_lowercase()).collect();
+        let col = |names: &[&str]| header.iter().position(|h| names.contains(&h.as_str()));
+        let (name, shape, pixels, height) = (col(&["name"]), col(&["shape", "type"]), col(&["pixels", "cols", "width", "leds"]), col(&["rows", "height"]));
+        let (universe, channel) = (col(&["universe"]), col(&["channel", "address", "start"]));
+        let xy: Vec<(Option<usize>, Option<usize>)> = (1..=4).map(|k| (col(&[format!("x{k}").as_str()]), col(&[format!("y{k}").as_str()]))).collect();
+        if pixels.is_none() && xy[0].0.is_none() {
+            return Err("no \"pixels\" or \"x1\" column".into());
+        }
+        let mut n = 0;
+        for row in rows {
+            let f: Vec<&str> = row.split([',', ';', '\t']).map(str::trim).collect();
+            let get = |c: Option<usize>| c.and_then(|c| f.get(c)).copied().filter(|v| !v.is_empty());
+            let num = |c: Option<usize>| get(c).and_then(|v| v.parse::<f32>().ok());
+            let mut fx = Fixture { id: new_id(), ..Default::default() };
+            fx.name = get(name).map_or_else(|| format!("Fixture {}", self.fixtures.len() + 1), str::to_string);
+            fx.shape = match get(shape).map(str::to_lowercase).as_deref() {
+                Some("grid" | "matrix") => FixtureShape::Grid,
+                Some("ring" | "circle") => FixtureShape::Ring,
+                Some("curve" | "bezier") => FixtureShape::Curve,
+                _ => FixtureShape::Strip,
+            };
+            if let Some(p) = num(pixels) {
+                fx.cols = p.max(1.0) as u32;
+            }
+            if let Some(r) = num(height) {
+                fx.rows = r.max(1.0) as u32;
+            }
+            if let Some(u) = num(universe) {
+                fx.universe = u.max(0.0) as u16;
+            }
+            if let Some(c) = num(channel) {
+                fx.channel = c.clamp(1.0, 512.0) as u16;
+            }
+            for (k, (x, y)) in xy.iter().enumerate() {
+                if let (Some(x), Some(y)) = (num(*x), num(*y)) {
+                    fx.points[k] = [x, y];
+                }
+            }
+            self.fixtures.push(fx);
+            n += 1;
+        }
+        Ok(n)
+    }
+
     /// Turns sampled colours (in `sample_points` order) into DMX universes; `beats` (the show clock) times the
     /// moving heads' movements.
     pub fn universes(&self, colors: &[[u8; 4]], beats: f64) -> BTreeMap<u16, [u8; 512]> {
@@ -451,6 +538,34 @@ impl DmxSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixtures_come_in_from_a_table() {
+        let mut d = DmxSettings::default();
+        let mut id = 10;
+        let csv = "Name;Shape;Pixels;Universe;Channel;X1;Y1;X2;Y2\nBar left;strip;60;0;1;0.1;0.2;0.1;0.8\nHalo;ring;24;1;1;0.5;0.5;0.6;0.5\n";
+        assert_eq!(d.import_csv(csv, || { id += 1; id }), Ok(2));
+        assert_eq!((d.fixtures[0].name.as_str(), d.fixtures[0].cols, d.fixtures[0].points[1]), ("Bar left", 60, [0.1, 0.8]));
+        assert_eq!((d.fixtures[1].shape, d.fixtures[1].universe, d.fixtures[1].id), (FixtureShape::Ring, 1, 12));
+        assert!(d.import_csv("a,b\n1,2", || 0).is_err());
+    }
+
+    #[test]
+    fn rings_curves_and_column_wiring() {
+        let ring = Fixture { shape: FixtureShape::Ring, cols: 4, points: [[0.5, 0.5], [0.7, 0.5], [0.0; 2], [0.0; 2]], ..Default::default() };
+        let pts = ring.sample_points();
+        assert_eq!(pts.len(), 4);
+        assert!((pts[0][0] - 0.7).abs() < 1e-5 && (pts[1][1] - 0.7).abs() < 1e-5 && (pts[2][0] - 0.3).abs() < 1e-5, "{pts:?}");
+        let curve = Fixture { shape: FixtureShape::Curve, cols: 3, points: [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]], ..Default::default() };
+        let c = curve.sample_points();
+        assert!((c[1][0] - 0.5).abs() < 1e-5 && c[1][1] > 0.7, "bends up in the middle: {c:?}");
+        let mut grid = Fixture { shape: FixtureShape::Grid, cols: 2, rows: 3, points: [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], by_columns: true, ..Default::default() };
+        let g = grid.sample_points();
+        assert!(g[0][0] < 0.5 && g[1][0] < 0.5 && g[2][0] < 0.5 && g[3][0] > 0.5, "first column first");
+        grid.zigzag = true;
+        let z = grid.sample_points();
+        assert!(z[3][1] > z[5][1], "the second column runs back up");
+    }
 
     #[test]
     fn strips_fill_universes_without_splitting_pixels() {
