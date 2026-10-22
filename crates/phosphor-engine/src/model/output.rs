@@ -86,6 +86,8 @@ pub struct OutputConfig {
     /// (a "master": several outputs, each its own mix).
     #[serde(default)]
     pub program: Option<u64>,
+    /// Smooth slice edges: drawn at twice the size and scaled down (anti-aliasing; costs 4× the output's pixels).
+    pub smooth: bool,
     /// Mirror the finished picture (rear projection, ceiling-mounted projectors).
     pub flip_x: bool,
     pub flip_y: bool,
@@ -188,7 +190,7 @@ impl GridOverlay {
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None, flip_x: false, flip_y: false, delay_frames: 0, frozen: false, background: String::new(), background_opacity: 1.0 }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None, smooth: false, flip_x: false, flip_y: false, delay_frames: 0, frozen: false, background: String::new(), background_opacity: 1.0 }
     }
 }
 
