@@ -71,7 +71,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       A colour button with saved swatches: on text colour and on every shader colour input (ISF colours). Kept between launches. Not checked on screen.
 - [x] 29. **More picture formats**: EXR and HDR (float), PSD, HEIC as a layer (M). Has PNG, JPEG, WebP, BMP, TIFF, GIF.
       EXR, HDR, TGA, QOI through the image library, PSD and HEIC through FFmpeg. Also fixed: BMP and TIFF were offered but couldn't open. Checked: test making each format with macOS's sips / FFmpeg.
-- [ ] 30. **Look fade time**: a saved look fades in instead of cutting (V).
+- [x] 30. **Look fade time**: a saved look fades in instead of cutting (V).
       Moved to medium: a look replaces the whole project, so a fade means holding the old picture over the new one.
 - [x] 31. **Autosave interval and backups**: keep the last few versions on every save (M). Crash recovery exists.
       Every save first copies the old file into "<name> Backups" (last 10 kept); File › Autosave On / Off (every 5 minutes when changed), File › Show Backups. Checked: tests.
@@ -96,11 +96,11 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Inspector › Render size 100 / 75 / 50 / 25% for generators (effects run at that size too). Checked: GPU test.
 - [x] 41. **Frame rate per layer / comp**, to save GPU (V).
       Inspector › Frame rate: every frame / 30 / 15 / 10 / 5, the picture held between. Checked: GPU test.
-- [ ] 42. **Before / after preview of one effect** in a chain (V).
+- [x] 42. **Before / after preview of one effect** in a chain (V).
 - [~] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
       Preview bar: a mouse button; dragging moves the selected layer's point settings (ISF point2D). No iMouse input yet. Checked: test of the point mapping.
-- [ ] 44. **Previews**: drag to scrub the movie, frame-rate cap (V).
-- [ ] 45. **Eyedropper**: pick a colour from a preview (V).
+- [x] 44. **Previews**: drag to scrub the movie, frame-rate cap (V).
+- [x] 45. **Eyedropper**: pick a colour from a preview (V).
 - [x] 46. **Endless scratch** control for movies (V).
       Playback › Scratch strip (drag; wraps at the ends).
 - [x] 47. **Movie chapter markers**: jump to chapters stored in the file (V).
@@ -143,16 +143,16 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [ ] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
 - [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
 - [ ] 76. **NDI sound** in and out (V).
-- [ ] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
+- [~] 77. **Edit several clips / layers at once** (M). Slices already multi-select. Done: layers (Shift / Cmd-click). Left: clips.
 - [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
 - [ ] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
-- [ ] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M).
+- [~] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG export, masks from SVG. Left: PNG / PDF, lines.
 - [ ] 81. **SVG and Lottie** (After Effects) animations as clips (M).
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
 - [x] 83. **Interface colour themes** (V). Has a brightness slider.
 - [ ] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M).
-- [ ] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
+- [x] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
 
 ### Large
 - [ ] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one.
