@@ -228,6 +228,21 @@ mod text_tests {
     use super::*;
 
     #[test]
+    fn text_moves_the_ready_made_ways() {
+        let mut l = crate::LayerState::default();
+        l.set_text_motion(TextMotion::ScrollLeft);
+        assert_eq!(l.text_motion(), TextMotion::ScrollLeft);
+        let inputs = |phase: f32| crate::control::ModInputs { beats: phase * 8.0, time: phase, ..Default::default() };
+        let x = |l: &crate::LayerState, p: f32| crate::control::modulate(l.transform.x, -1.0, 1.0, l.transform.x_mod.as_ref(), &inputs(p));
+        assert!(x(&l, 0.1) > x(&l, 0.6), "moves left");
+        l.set_text_motion(TextMotion::Fade);
+        assert!(l.transform.x_mod.is_none() && l.opacity_mod.is_some(), "one at a time");
+        l.set_text_motion(TextMotion::Still);
+        assert_eq!(l.text_motion(), TextMotion::Still);
+        assert!(l.opacity_mod.is_none());
+    }
+
+    #[test]
     fn live_text_reads_the_time() {
         assert_eq!(LiveText::Clock.words(3 * 3600 + 4 * 60 + 5, 0.0).as_deref(), Some("03:04:05"));
         assert_eq!(LiveText::Countdown(18 * 3600).words(18 * 3600 - 75, 0.0).as_deref(), Some("01:15"));
@@ -252,5 +267,61 @@ mod text_tests {
         assert_eq!((t.part, t.text.as_str()), (0, "Hello there. How are you?"), "round at the end");
         t.step_part(false);
         assert_eq!(t.text, "Second verse");
+    }
+}
+
+/// Ready-made movement for a text layer (or any layer): it sets the layer's position, size or opacity motion.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextMotion {
+    #[default]
+    Still,
+    /// Across from right to left, every 8 beats (a ticker).
+    ScrollLeft,
+    /// Up from the bottom, every 8 beats (credits).
+    ScrollUp,
+    /// A kick of size on every beat.
+    Pulse,
+    /// In and out over 4 beats.
+    Fade,
+}
+
+impl TextMotion {
+    pub const ALL: [TextMotion; 5] = [TextMotion::Still, TextMotion::ScrollLeft, TextMotion::ScrollUp, TextMotion::Pulse, TextMotion::Fade];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            TextMotion::Still => "Still",
+            TextMotion::ScrollLeft => "Scroll left",
+            TextMotion::ScrollUp => "Scroll up",
+            TextMotion::Pulse => "Pulse on the beat",
+            TextMotion::Fade => "Fade in and out",
+        }
+    }
+}
+
+impl crate::LayerState {
+    /// Sets the layer moving one of the ready-made ways (Still takes those movements off again).
+    pub fn set_text_motion(&mut self, m: TextMotion) {
+        use crate::{ModSource, Modulation};
+        let synced = |source, beats: f32, min: f32, max: f32| Some(Modulation { source, sync: true, rate: beats, range: true, min, max, amount: 1.0, ..Default::default() });
+        let t = &mut self.transform;
+        (t.x_mod, t.y_mod, t.scale_mod, self.opacity_mod) = (None, None, None, None);
+        match m {
+            TextMotion::Still => {}
+            // X and Y run -1..1: from just off one side to just off the other.
+            TextMotion::ScrollLeft => t.x_mod = synced(ModSource::LfoSaw, 8.0, 1.0, 0.0),
+            TextMotion::ScrollUp => t.y_mod = synced(ModSource::LfoSaw, 8.0, 0.0, 1.0),
+            TextMotion::Pulse => t.scale_mod = Some(Modulation { source: ModSource::Beat, invert: true, amount: 0.02, ..Default::default() }),
+            TextMotion::Fade => self.opacity_mod = synced(ModSource::LfoSine, 4.0, 0.0, 1.0),
+        }
+    }
+
+    /// Which ready-made movement the layer has now (Still when it's anything else).
+    pub fn text_motion(&self) -> TextMotion {
+        TextMotion::ALL.into_iter().find(|m| {
+            let mut probe = self.clone();
+            probe.set_text_motion(*m);
+            (probe.transform.x_mod, probe.transform.y_mod, probe.transform.scale_mod, probe.opacity_mod) == (self.transform.x_mod, self.transform.y_mod, self.transform.scale_mod, self.opacity_mod)
+        }).unwrap_or(TextMotion::Still)
     }
 }

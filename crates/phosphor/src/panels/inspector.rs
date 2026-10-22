@@ -215,6 +215,16 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             if text_editor(ui, style, layer.id) {
                 media.text_file.set(true);
             }
+            // Ready-made movement (it sets the layer's move / size / opacity motion, on the tempo).
+            let mut motion = layer.text_motion();
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("Moves").small());
+                let was = motion;
+                choice_buttons(ui, &mut motion, |_, _| {});
+                if motion != was {
+                    layer.set_text_motion(motion);
+                }
+            });
             ui.separator();
         }
         if let Some(name) = layer.collection.clone() {
