@@ -11,10 +11,22 @@ impl PhosphorApp {
         self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), "Phosphor snapshot.png");
     }
 
+    /// The same for one output, after its mapping (as the projector gets it).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn save_output_snapshot(&mut self, id: u64) {
+        let Some(engine) = &self.state.engine else { return };
+        self.pending_snapshot = engine.read_output_of(id);
+        let name = self.state.comp.outputs.iter().find(|o| o.id == id).map_or_else(|| "Output".to_string(), |o| o.name.clone());
+        self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), &format!("{name} snapshot.png"));
+    }
+
     /// Answers from file dialogs, and files found in watched folders.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn handle_dialogs_and_folders(&mut self, now: f64) {
         use crate::dialogs::Purpose;
+        if let Some(id) = self.state.snapshot_output.take() {
+            self.save_output_snapshot(id);
+        }
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
         // Watched folders first: this has to run every frame (it rescans every 10 s), not only when a dialog closes.
         // A collection's folders are watched too (an opened project may bring new ones).

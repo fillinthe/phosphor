@@ -38,11 +38,13 @@ pub struct ExplorerState {
     /// Recently added effects (most recent first).
     pub recent: Vec<String>,
     pub search: String,
-    /// "" = all, "★" = favourites, otherwise a category name.
+    /// "" = all, "★" = favourites, "hidden" = the hidden ones, otherwise a category name.
     pub category: String,
     /// Show generators (sources) instead of effects.
     pub sources: bool,
     pub favorites: Vec<String>,
+    /// Effects and sources hidden from the lists (shown only under "Hidden").
+    pub hidden: Vec<String>,
     /// The tile clicked last: chosen, not yet added to anything.
     pub picked: Option<&'static str>,
 }
@@ -64,6 +66,7 @@ fn preview_fx(desc: &shaders::ShaderDesc, index: usize) -> EffectState {
 enum TileAction {
     Apply(&'static str),
     Favorite(String),
+    Hide(String),
     EditCopy(&'static str),
     EditCustom(String),
 }
@@ -99,6 +102,10 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal_wrapped(|ui| {
         ui.selectable_value(&mut st.explorer.category, String::new(), "All");
         ui.selectable_value(&mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+        let hidden = list.iter().filter(|d| st.explorer.hidden.iter().any(|h| h == d.id)).count();
+        if hidden > 0 {
+            ui.selectable_value(&mut st.explorer.category, "hidden".to_string(), label(icon::EYE_SLASH, &format!("Hidden ({hidden})")));
+        }
         for cat in CATEGORY_ORDER {
             if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
                 ui.selectable_value(&mut st.explorer.category, cat.to_string(), *cat);
@@ -152,8 +159,9 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         .iter()
         .enumerate()
         .filter(|(_, d)| matches(d, &st.explorer.search))
+        .filter(|(_, d)| (st.explorer.category == "hidden") == st.explorer.hidden.iter().any(|h| h == d.id))
         .filter(|(_, d)| match st.explorer.category.as_str() {
-            "" => true,
+            "" | "hidden" => true,
             "★" => st.explorer.favorites.iter().any(|f| f == d.id),
             cat => shaders::info(d.id).0 == cat,
         })
@@ -227,6 +235,12 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                         action = Some(TileAction::Favorite(desc.id.to_string()));
                         ui.close();
                     }
+                    let is_hidden = st.explorer.hidden.iter().any(|h| h == desc.id);
+                    let text = if is_hidden { label(icon::EYE, "Show in the lists again") } else { label(icon::EYE_SLASH, "Hide from the lists") };
+                    if ui.button(text).on_hover_text("Hidden ones only show under \"Hidden\" (and still work wherever they're used)").clicked() {
+                        action = Some(TileAction::Hide(desc.id.to_string()));
+                        ui.close();
+                    }
                     if desc.id.starts_with(shaders::CUSTOM_EFFECT) || desc.id.starts_with(shaders::CUSTOM_GENERATOR) {
                         if ui.button(label(icon::CODE, "Edit in Shader Editor")).clicked() {
                             action = Some(TileAction::EditCustom(desc.id.to_string()));
@@ -250,6 +264,13 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     }
     match action {
         Some(TileAction::Apply(id)) => apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(id), generator: st.explorer.sources.then_some(id) }, None),
+        Some(TileAction::Hide(id)) => {
+            if let Some(i) = st.explorer.hidden.iter().position(|h| *h == id) {
+                st.explorer.hidden.remove(i);
+            } else {
+                st.explorer.hidden.push(id);
+            }
+        }
         Some(TileAction::Favorite(id)) => {
             if let Some(i) = st.explorer.favorites.iter().position(|f| *f == id) {
                 st.explorer.favorites.remove(i);
@@ -1047,6 +1068,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
             .iter()
             .copied()
             .filter(|d| matches(d, &b.search))
+            .filter(|d| !st.explorer.hidden.iter().any(|h| h == d.id))
             .filter(|d| match b.category.as_str() {
                 "" => true,
                 "★" => st.explorer.favorites.iter().any(|f| f == d.id),

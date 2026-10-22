@@ -26,6 +26,9 @@ impl PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.state.explorer.favorites) {
             storage.set_string(KEY_FAVORITES, json);
         }
+        if let Ok(json) = serde_json::to_string(&self.state.explorer.hidden) {
+            storage.set_string(KEY_HIDDEN_FX, json);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Ok(json) = serde_json::to_string(&self.state.folders.folders) {
             storage.set_string(KEY_WATCHED, json);

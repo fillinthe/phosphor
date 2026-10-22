@@ -76,6 +76,7 @@ const KEY_STREAM: &str = "stream";
 const KEY_KNOWN_TABS: &str = "known_tabs";
 const KEY_DETACHED: &str = "detached";
 const KEY_FAVORITES: &str = "favorites";
+const KEY_HIDDEN_FX: &str = "hidden_effects";
 const KEY_MONITORS: &str = "monitors";
 const KEY_RECENT: &str = "recent_effects";
 const KEY_REMOTE_PASSWORD: &str = "remote_password";
@@ -275,6 +276,10 @@ pub struct State {
     pub(crate) preview_textures: Vec<(egui::TextureId, (u32, u32))>,
     /// A panel to bring to the front (set by explorer actions and the palette).
     pub open_tab: Option<Tab>,
+    /// A snapshot of this output was asked for (Output panel); the app saves it.
+    pub snapshot_output: Option<u64>,
+    /// Mappings copied from a control's menu (their target is replaced on paste).
+    pub maps_clipboard: Vec<phosphor_engine::ControlMap>,
     pub fx_browser: Option<crate::explorer::FxBrowser>,
     pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
     /// Monitor pictures requested this frame: (monitor number, source, width, height).

@@ -733,6 +733,9 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
                     s.mesh = Some(phosphor_engine::mapping::Mesh::from_corners(&s.corners, c, r));
                 }
             }
+            if s.line.is_none() && s.model.is_none() && ui.small_button(label(icon::FRAME_CORNERS, "Match the picture's shape")).on_hover_text("A straight rectangle with the picture's own proportions (no stretching), as tall as the slice is now").clicked() {
+                s.match_picture_shape(canvas, size);
+            }
             super::mapping_points::point_fields(ui, s, size);
             ui.separator();
             surface_settings(ui, s, layers, groups, &others);

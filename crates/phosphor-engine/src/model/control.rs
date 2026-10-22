@@ -129,10 +129,12 @@ pub enum AppControl {
     ProjectorsShutter,
     /// The crossfader glides to the other side (A ↔ B) over the auto-fade time.
     AutoFade,
+    /// Every output holds its picture (on) / goes live again (off).
+    FreezeOutputs,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 29] = [
+    pub const ALL: [AppControl; 30] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -162,6 +164,7 @@ impl AppControl {
         AppControl::ProjectorsOff,
         AppControl::ProjectorsShutter,
         AppControl::AutoFade,
+        AppControl::FreezeOutputs,
     ];
 
     pub fn name(self) -> &'static str {
@@ -195,6 +198,7 @@ impl AppControl {
             AppControl::ProjectorsOff => "Projectors: switch off (PJLink)",
             AppControl::ProjectorsShutter => "Projectors: shutter closed/open (PJLink)",
             AppControl::AutoFade => "Crossfader: auto-fade to the other side",
+            AppControl::FreezeOutputs => "Freeze outputs (hold the picture)",
         }
     }
 
@@ -230,12 +234,13 @@ impl AppControl {
             AppControl::ProjectorsOff => "projectors/off",
             AppControl::ProjectorsShutter => "projectors/shutter",
             AppControl::AutoFade => "crossfader/auto",
+            AppControl::FreezeOutputs => "outputs/freeze",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel | AppControl::WebControl | AppControl::ProjectorsShutter)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel | AppControl::WebControl | AppControl::ProjectorsShutter | AppControl::FreezeOutputs)
     }
 }
 
@@ -333,6 +338,18 @@ impl ControlMap {
     /// Seconds each move waits before it lands (0 = straight away).
     pub fn delay(&self) -> f32 {
         self.fx.iter().map(|f| if let ValueFx::Delay(s) = f { *s } else { 0.0 }).sum()
+    }
+}
+
+impl crate::Composition {
+    /// Copies of `maps` (input, range, value effects) aimed at `target` too; one already the same isn't added twice.
+    pub fn paste_mappings(&mut self, maps: &[ControlMap], target: &ControlTarget) {
+        for m in maps {
+            let copy = ControlMap { target: target.clone(), ..m.clone() };
+            if !self.control_maps.contains(&copy) {
+                self.control_maps.push(copy);
+            }
+        }
     }
 }
 
@@ -445,6 +462,19 @@ fn jitter() -> f32 {
 #[cfg(test)]
 mod value_fx_tests {
     use super::*;
+
+    #[test]
+    fn mappings_paste_onto_another_control() {
+        let mut c = crate::Composition::default();
+        let mut m = ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 7 }, ControlTarget::MasterFade);
+        m.fx.push(ValueFx::Smooth(0.2));
+        c.control_maps.push(m.clone());
+        c.paste_mappings(&[m.clone()], &ControlTarget::LayerOpacity(3));
+        c.paste_mappings(&[m], &ControlTarget::LayerOpacity(3));
+        assert_eq!(c.control_maps.len(), 2, "pasted once");
+        assert_eq!(c.control_maps[1].target, ControlTarget::LayerOpacity(3));
+        assert_eq!(c.control_maps[1].fx, vec![ValueFx::Smooth(0.2)]);
+    }
 
     #[test]
     fn value_effects_shape_a_controller() {

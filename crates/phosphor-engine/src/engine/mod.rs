@@ -184,6 +184,14 @@ pub struct FrameInfo {
     pub layers_drawn: usize,
 }
 
+/// A flipped or delayed output's extra pictures (`Engine::finish_outputs`).
+#[derive(Default)]
+struct OutputExtra {
+    scratch: Option<Target>,
+    ring: Vec<Option<Target>>,
+    head: usize,
+}
+
 pub struct Engine {
     gpu: Gpu,
     layers: HashMap<u64, LayerResources>,
@@ -211,6 +219,8 @@ pub struct Engine {
     frame_index: u64,
     /// One target per configured output, at that output's size.
     output_targets: HashMap<u64, Option<Target>>,
+    /// Outputs that are flipped or delayed: drawn here first, then mirrored / held back into `output_targets`.
+    output_extra: HashMap<u64, OutputExtra>,
     meshes: MeshCache,
     previews: Vec<(PreviewItem, bool)>,
     /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
@@ -272,6 +282,7 @@ impl Engine {
             sampler: Default::default(),
             frame_index: 0,
             output_targets: HashMap::new(),
+            output_extra: HashMap::new(),
             meshes: MeshCache::default(),
             previews: Vec::new(),
             monitor_req: Vec::new(),
@@ -447,6 +458,39 @@ impl Engine {
 
     /// Records and submits one frame. `time` is in seconds and drives animated shaders;
     /// `mods` carries this frame's audio/LFO signals for modulated parameters.
+    /// Flipped / delayed outputs: the picture drawn this frame (mirrored as set) goes into a ring of `delay + 1`
+    /// pictures, and the output shows the oldest; with no delay it's copied straight across.
+    fn finish_outputs(&mut self, comp: &Composition, device: &wgpu::Device, passes: &mut Vec<Pass>) {
+        for o in comp.outputs.iter().filter(|o| o.enabled && !o.frozen) {
+            let (Some(extra), Some(Some(out))) = (self.output_extra.get_mut(&o.id), self.output_targets.get(&o.id)) else { continue };
+            let Some(scratch) = extra.scratch.as_ref() else { continue };
+            let size = (scratch.width, scratch.height);
+            let mirror = [if o.flip_x { -1.0 } else { 1.0 }, if o.flip_y { -1.0 } else { 1.0 }, if o.flip_x { 1.0 } else { 0.0 }, if o.flip_y { 1.0 } else { 0.0 }];
+            let copy = |target: wgpu::TextureView, src: wgpu::TextureView, xform: [f32; 4], passes: &mut Vec<Pass>| {
+                let mut u = Uniforms::with_params(&[]);
+                u.resolution = [size.0 as f32, size.1 as f32];
+                u.opacity = 1.0;
+                u.uv_xform = xform;
+                passes.push(Pass { entry: "fs_composite", target, tex0: src, tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+            };
+            let delay = o.delay_frames.min(crate::MAX_OUTPUT_DELAY) as usize;
+            if delay == 0 {
+                extra.ring.clear();
+                copy(out.view.clone(), scratch.view.clone(), mirror, passes);
+                continue;
+            }
+            // Written `delay` frames ago = the one after this frame's slot (a ring of delay + 1).
+            extra.ring.resize_with(delay + 1, || None);
+            let head = extra.head % extra.ring.len();
+            Target::ensure(&mut extra.ring[head], device, "output delay", size.0, size.1);
+            copy(extra.ring[head].as_ref().unwrap().view.clone(), scratch.view.clone(), mirror, passes);
+            let oldest = (head + 1) % extra.ring.len();
+            let shown = extra.ring[oldest].as_ref().map_or_else(|| self.gpu.blank.clone(), |t| t.view.clone());
+            copy(out.view.clone(), shown, [1.0, 1.0, 0.0, 0.0], passes);
+            extra.head = oldest;
+        }
+    }
+
     pub fn render(&mut self, comp: &Composition, time: f32, mods: &ModInputs) -> FrameInfo {
         let (w, h) = (comp.width.max(16), comp.height.max(16));
         let device = self.gpu.device.clone();
@@ -567,13 +611,24 @@ impl Engine {
 
         // Each output: its own size and mapping surfaces.
         for o in comp.outputs.iter().filter(|o| o.enabled) {
+            // Frozen: its last picture stays (nothing drawn into it).
+            if o.frozen && self.output_targets.get(&o.id).is_some_and(|t| t.is_some()) {
+                continue;
+            }
             // Its mapping, or the comp it shows as its program (one full-size slice).
             let mapping = o.effective_mapping();
             let (ow, oh) = o.size((w, h));
             let (ow, oh) = (ow.max(16), oh.max(16));
             let slot = self.output_targets.entry(o.id).or_insert(None);
             Target::ensure(slot, &device, "output", ow, oh);
-            let view = slot.as_ref().unwrap().view.clone();
+            let view = if o.flip_x || o.flip_y || o.delay_frames > 0 {
+                let extra = self.output_extra.entry(o.id).or_default();
+                Target::ensure(&mut extra.scratch, &device, "output before flip / delay", ow, oh);
+                extra.scratch.as_ref().unwrap().view.clone()
+            } else {
+                self.output_extra.remove(&o.id);
+                slot.as_ref().unwrap().view.clone()
+            };
             let mut u = Uniforms::with_params(&[]);
             u.resolution = [ow as f32, oh as f32];
             let [g0, g1] = o.color.uniforms();
@@ -696,7 +751,9 @@ impl Engine {
             self.push_masks(o.id, &mapping, &view, (ow, oh), &mut passes);
             self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
         }
+        self.finish_outputs(comp, &device, &mut passes);
         self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
+        self.output_extra.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
         // Preview windows showing one output (after its mapping).
         for (i, &(src, mw, mh)) in monitors.iter().enumerate() {
             if let Some(view) = self.output_targets.get(&src).and_then(|t| t.as_ref()).map(|t| t.view.clone()) {

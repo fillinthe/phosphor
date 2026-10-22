@@ -37,15 +37,24 @@ Hardware items can be built but not tested here without the device.
       MIDI devices could already be switched off one by one (Devices). New: more OSC ports ("also on ports…"), and wildcard OSC addresses on mappings (`*`, `?`, `[1-4]`, `{a,b}`). Checked: matching test + a real UDP message on the extra port.
 - [x] 13. **Mappings list: jump to the control** it drives (V). The list itself exists.
       Crosshair button on each mapping: selects its layer / group / slice and opens its panel. Checked: test.
-- [ ] 14. **Search in the layer source menu** (V). Explorer and ⌘K already search.
-- [ ] 15. **Copy / paste a control's mappings and modulation** onto another control (V, M).
-- [ ] 16. **Project notes** panel (V, M).
-- [ ] 17. **Freeze outputs**: hold the picture while you change things behind it (M).
-- [ ] 18. **Flip an output** horizontally / vertically, for rear projection (V, M).
-- [ ] 19. **Output delay** in frames, to line up mixed projectors and LED processors (M).
-- [ ] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
-- [ ] 21. **Hide effects** you never use from the menus (V). Favourites exist.
-- [ ] 22. **Slice: match the media's size / shape** (M).
+- [x] 14. **Search in the layer source menu** (V). Explorer and ⌘K already search.
+      A search field at the top of the layer source menu finds any generator (built-in and imported). Not checked on screen.
+- [x] 15. **Copy / paste a control's mappings and modulation** onto another control (V, M).
+      Right-click any control › Map: Copy (its mappings) and Paste mappings here. Sliders with modulation also get Copy / Paste the motion. Checked: test of the paste.
+- [x] 16. **Project notes** panel (V, M).
+      A Notes panel (View › Panels), saved in the project file. Checked: panel check.
+- [x] 17. **Freeze outputs**: hold the picture while you change things behind it (M).
+      FREEZE on each output (Output panel), and a mappable "Freeze outputs" for all of them. Not saved: a show opens live. Checked: GPU test.
+- [x] 18. **Flip an output** horizontally / vertically, for rear projection (V, M).
+      Flip left-right / top-bottom on each output (Output panel). Checked: GPU test. The output window's edit mode doesn't mirror its handles yet: map before flipping.
+- [x] 19. **Output delay** in frames, to line up mixed projectors and LED processors (M).
+      Delay 0–10 frames per output. Checked: GPU test (2 frames late shows the frame from 2 frames before).
+- [~] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
+      Partly: a camera button on each output saves a picture of it after mapping (the mix snapshot already existed). Layers and comps on their own: not yet.
+- [x] 21. **Hide effects** you never use from the menus (V). Favourites exist.
+      Right-click an effect or source › Hide from the lists; they show under "Hidden" (to bring back) and still work where used. Kept between launches.
+- [x] 22. **Slice: match the media's size / shape** (M).
+      Mapping Studio: "Match the picture's shape" (keeps the height and centre, sets the width). Checked: test.
 - [ ] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
 - [ ] 24. **Permissions panel** (Mac): camera, microphone, screen recording, network at a glance (V).
 - [ ] 25. **Choose the graphics card** on machines with more than one (V).

@@ -41,6 +41,21 @@ impl PhosphorApp {
         }) {
             st.comp.control_maps.retain(|m| m.target != t);
         }
+        let take = |key: &str| {
+            ctx.data_mut(|d| {
+                let id = egui::Id::new(key);
+                let t = d.get_temp::<phosphor_engine::ControlTarget>(id);
+                d.remove::<phosphor_engine::ControlTarget>(id);
+                t
+            })
+        };
+        if let Some(t) = take(panels::COPY_MAPS_REQUEST) {
+            st.maps_clipboard = st.comp.control_maps.iter().filter(|m| m.target == t).cloned().collect();
+        }
+        if let Some(t) = take(panels::PASTE_MAPS_REQUEST) {
+            st.comp.paste_mappings(&st.maps_clipboard, &t);
+        }
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::MAPS_COPIED), st.maps_clipboard.len()));
         // Keys act as controller buttons (ignored while typing in a text field).
         if ctx.memory(|m| m.focused().is_some()) {
             return;

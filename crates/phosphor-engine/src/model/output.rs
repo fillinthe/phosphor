@@ -86,7 +86,32 @@ pub struct OutputConfig {
     /// (a "master": several outputs, each its own mix).
     #[serde(default)]
     pub program: Option<u64>,
+    /// Mirror the finished picture (rear projection, ceiling-mounted projectors).
+    pub flip_x: bool,
+    pub flip_y: bool,
+    /// Show the picture this many frames late, to line up with slower projectors / LED processors (0 = none).
+    pub delay_frames: u32,
+    /// Hold the last picture while everything behind it keeps changing (not saved: a show opens live).
+    #[serde(skip)]
+    pub frozen: bool,
 }
+
+impl crate::Composition {
+    /// Every enabled output frozen (and at least one).
+    pub fn outputs_frozen(&self) -> bool {
+        let mut on = self.outputs.iter().filter(|o| o.enabled).peekable();
+        on.peek().is_some() && on.all(|o| o.frozen)
+    }
+
+    pub fn freeze_outputs(&mut self, frozen: bool) {
+        for o in &mut self.outputs {
+            o.frozen = frozen;
+        }
+    }
+}
+
+/// Most frames an output can be held back (each one is a full picture in GPU memory).
+pub const MAX_OUTPUT_DELAY: u32 = 10;
 
 /// A network projector (PJLink): its address (IP or name, `:port` optional) and PJLink password (often empty).
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
@@ -160,7 +185,7 @@ impl GridOverlay {
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None, flip_x: false, flip_y: false, delay_frames: 0, frozen: false }
     }
 }
 
