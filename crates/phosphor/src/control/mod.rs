@@ -130,6 +130,9 @@ pub struct ControlHub {
     pub pickup_near: f32,
     /// Soft takeover glides the value to the fader instead of waiting for the fader to reach it.
     pub takeover_glide: bool,
+    /// Pads mapped to clips light up: the note velocity for an empty slot, a loaded clip and a playing one (grid
+    /// controllers pick a colour by velocity).
+    pub clip_lights: [u8; 3],
     /// The last messages that came in, newest last (the MIDI / OSC monitor): when, from what, value.
     pub recent: std::collections::VecDeque<(std::time::Instant, ControlSource, f32)>,
     /// The monitor is paused (messages still work; the list stops moving).
@@ -172,13 +175,14 @@ pub struct ControlSettings {
     pub soft_takeover: bool,
     pub pickup_near: f32,
     pub takeover_glide: bool,
+    pub clip_lights: [u8; 3],
     /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
     pub dmx_in: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, dmx_in: false }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, dmx_in: false }
     }
 }
 
@@ -204,6 +208,9 @@ struct Glide {
 /// Messages the MIDI / OSC monitor keeps.
 pub(crate) const MONITOR_LEN: usize = 200;
 
+/// Ready-made clip pad colours (empty, loaded, playing velocities) for common grid controllers.
+pub(crate) const CLIP_LIGHTS: [(&str, [u8; 3]); 2] = [("Launchpad / APC mini mk2", [0, 13, 21]), ("APC mini (first)", [0, 5, 1])];
+
 /// Within this of the current value (0..1), a fader counts as caught (the default; `pickup_near`).
 pub(crate) const PICKUP_NEAR: f32 = 0.03;
 
@@ -221,13 +228,14 @@ impl ControlHub {
         hub.soft_takeover = s.soft_takeover;
         hub.pickup_near = s.pickup_near.clamp(0.005, 0.5);
         hub.takeover_glide = s.takeover_glide;
+        hub.clip_lights = s.clip_lights;
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, dmx_in: self.dmx_in() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, dmx_in: self.dmx_in() }
     }
 
     /// Starts or stops listening for DMX (Art-Net on udp/6454, sACN on udp/5568) as controller input.
@@ -295,6 +303,7 @@ impl ControlHub {
             soft_takeover: true,
             pickup_near: PICKUP_NEAR,
             takeover_glide: false,
+            clip_lights: CLIP_LIGHTS[0].1,
             recent: std::collections::VecDeque::new(),
             monitor_paused: false,
             pickups: HashMap::new(),
@@ -478,6 +487,13 @@ impl ControlHub {
                 if matches!(map.source, ControlSource::Key { .. }) {
                     continue;
                 }
+                // A pad on a clip: lit by the clip's state (the velocity picks the pad's colour).
+                if let (ControlTarget::TriggerClip { layer, slot }, ControlSource::MidiNote { .. }) = (&map.target, &map.source) {
+                    if let Some(vel) = clip_light(comp, *layer, *slot, self.clip_lights) {
+                        out.push((map.source.clone(), vel as f32 / 127.0 + CLIP_LIGHT));
+                    }
+                    continue;
+                }
                 if let Some(v) = get_target(comp, &map.target) {
                     out.push((map.source.clone(), map.range.unapply(v)));
                 }
@@ -497,6 +513,8 @@ impl ControlHub {
                 match &source {
                     ControlSource::Osc { address } => self.backend.send_osc(&self.feedback_ips, self.feedback_port, address, v),
                     ControlSource::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | channel, *cc, (v * 127.0).round() as u8]),
+                    // (Clip lights carry their own velocity, marked by `CLIP_LIGHT`.)
+                    ControlSource::MidiNote { channel, note } if v >= CLIP_LIGHT => self.backend.send_midi(&[0x90 | channel, *note, ((v - CLIP_LIGHT) * 127.0).round() as u8]),
                     ControlSource::MidiNote { channel, note } => self.backend.send_midi(&[0x90 | channel, *note, if v > 0.5 { 127 } else { 0 }]),
                     ControlSource::Key { .. } | ControlSource::Gamepad { .. } | ControlSource::Dmx { .. } => {}
                 }
@@ -711,6 +729,20 @@ impl ControlHub {
     pub(crate) fn inject_text(&self, address: &str, words: &str) {
         let _ = self.text_tx.send((address.into(), words.into()));
     }
+}
+
+/// Added to a clip light's 0..1 velocity in the feedback list, so it's sent as that velocity (not on / off).
+const CLIP_LIGHT: f32 = 10.0;
+
+/// The note velocity that shows a clip slot's state: empty, loaded, or playing now. None for a missing layer.
+pub(crate) fn clip_light(comp: &Composition, layer: u64, slot: usize, lights: [u8; 3]) -> Option<u8> {
+    let l = comp.layers.iter().find(|l| l.id == layer)?;
+    Some(match l.clips.get(slot) {
+        None => lights[0],
+        Some(c) if c.is_empty() => lights[0],
+        Some(c) if l.enabled && l.active_clip == Some(c.id) => lights[2],
+        Some(_) => lights[1],
+    })
 }
 
 /// An OSC address with OSC 1.0 pattern characters in it.

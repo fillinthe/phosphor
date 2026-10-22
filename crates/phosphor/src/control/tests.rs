@@ -692,3 +692,18 @@ fn choices_widgets_pick_options() {
     assert_eq!(comp.layers.iter().find(|l| l.id == layer).unwrap().direction, phosphor_engine::PlayDirection::Reverse);
     assert_eq!(comp.surface.widget(id).unwrap().picked(), 1);
 }
+
+#[test]
+fn clip_pads_show_empty_loaded_and_playing() {
+    let mut comp = Composition::starter();
+    let layer = comp.add_layer().id;
+    let movie = phosphor_engine::SourceSpec::Movie { name: "a".into(), path: Some("/x/a.mp4".into()) };
+    comp.place_clips(layer, 0, vec![("a".into(), movie.clone()), ("b".into(), movie)]);
+    let lights = [0, 13, 21];
+    let l = comp.layers.iter_mut().find(|l| l.id == layer).unwrap();
+    l.active_clip = Some(l.clips[1].id);
+    assert_eq!(super::clip_light(&comp, layer, 0, lights), Some(13), "loaded");
+    assert_eq!(super::clip_light(&comp, layer, 1, lights), Some(21), "playing");
+    assert_eq!(super::clip_light(&comp, layer, 5, lights), Some(0), "empty slot");
+    assert_eq!(super::clip_light(&comp, 999, 0, lights), None);
+}
