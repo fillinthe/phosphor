@@ -164,6 +164,20 @@ impl State {
         }
     }
 
+    /// Live text layers (clock, countdown, stopwatch): their words follow the time. Every frame; a layer only
+    /// redraws when its words change (once a second).
+    pub(crate) fn run_live_text(&mut self, now: f64) {
+        let (tod, _) = crate::clock::local_time();
+        for l in &mut self.comp.layers {
+            if let phosphor_engine::SourceSpec::Text(style) = &mut l.source
+                && let Some(words) = style.live.words(tod, now - style.live_start)
+                && style.text != words
+            {
+                style.text = words;
+            }
+        }
+    }
+
     /// Someone touched something (the idle cue waits again).
     pub(crate) fn touched(&mut self, now: f64) {
         self.cue_run.last_input = now;

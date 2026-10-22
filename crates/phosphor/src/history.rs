@@ -18,12 +18,20 @@ pub struct History {
     checked_at: f64,
 }
 
-/// Fields that change on their own (tempo following, transitions in flight) aren't edits.
+/// Fields that change on their own (tempo following, transitions in flight, live text) aren't edits.
 fn settle_volatile(from: &Composition, into: &mut Composition) {
     into.bpm = from.bpm;
     for l in &mut into.layers {
         if let Some(src) = from.layers.iter().find(|s| s.id == l.id) {
             l.transition = src.transition.clone();
+            // Live text (a clock, a countdown) changes its words by itself.
+            if let (phosphor_engine::SourceSpec::Text(t), phosphor_engine::SourceSpec::Text(st)) = (&mut l.source, &src.source)
+                && st.live != phosphor_engine::LiveText::Off
+                && t.live == st.live
+            {
+                t.text.clone_from(&st.text);
+                t.live_start = st.live_start;
+            }
         }
     }
 }
