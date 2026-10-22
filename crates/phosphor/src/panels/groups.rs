@@ -92,6 +92,11 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
             request_preview(ui, MonitorSource::Group(g.id));
             ui.close();
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::CAMERA, "Save a picture…")).on_hover_text("This group's picture now, at the canvas size, as a PNG").clicked() {
+            super::request_snapshot(ui, g.id);
+            ui.close();
+        }
         ui.separator();
         if ui.button(label(icon::ARROW_UP, "Move up")).clicked() {
             action = Some(GroupAction::Up);

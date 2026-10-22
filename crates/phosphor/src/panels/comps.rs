@@ -37,6 +37,11 @@ pub(crate) fn comp_tabs(ui: &mut egui::Ui, st: &mut State) {
                         request_preview(ui, MonitorSource::Group(*id));
                         ui.close();
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button(label(icon::CAMERA, "Save a picture…")).on_hover_text("This comp's picture now, as a PNG").clicked() {
+                        super::request_snapshot(ui, *id);
+                        ui.close();
+                    }
                     if many {
                         ui.separator();
                         if ui.button(label(icon::ARROW_LEFT, "Earlier (further down in the master)")).clicked() {

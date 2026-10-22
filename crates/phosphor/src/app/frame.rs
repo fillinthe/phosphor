@@ -233,6 +233,14 @@ impl PhosphorApp {
         }) {
             self.state.new_monitor = Some(src);
         }
+        if let Some(id) = ctx.data_mut(|d| d.remove_temp::<u64>(egui::Id::new(panels::SNAPSHOT_REQUEST))) {
+            self.state.snapshot_source = Some(id);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(px) = self.state.snapshot_ready.take() {
+            self.pending_snapshot = Some(px);
+            self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), "Phosphor snapshot.png");
+        }
         if let Some(src) = self.state.new_monitor.take() {
             self.add_monitor_with(src);
         }
