@@ -35,6 +35,8 @@ pub enum Purpose {
     TextFile(u64),
     /// A calendar (.ics) whose events start cues.
     CueCalendar,
+    /// A project to merge into this one.
+    MergeProject,
 }
 
 pub struct Dialogs {

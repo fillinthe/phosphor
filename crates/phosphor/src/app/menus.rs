@@ -132,6 +132,10 @@ impl PhosphorApp {
                 st.control.learning = None;
             }
             A::ResetLayout => self.reset_area_layout(),
+            A::MergeProject => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.state.dialogs.pick_file(crate::dialogs::Purpose::MergeProject, Some(("Phosphor project", &["phosphor"])));
+            }
             A::LockPanels => {
                 self.panels_locked = !self.panels_locked;
                 self.state.notice = Some(if self.panels_locked { "Panels locked: they stay where they are (View › Lock Panels to move them again)".into() } else { "Panels unlocked".into() });

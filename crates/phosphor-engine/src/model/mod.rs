@@ -20,6 +20,8 @@ mod options;
 mod output;
 mod play;
 mod quick;
+mod merge;
+pub use merge::Merged;
 mod remap;
 mod source;
 mod surface;

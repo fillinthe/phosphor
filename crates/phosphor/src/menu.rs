@@ -66,6 +66,8 @@ pub enum Action {
     ShowBackups,
     /// Panels stay where they are (no dragging, closing or splitting off).
     LockPanels,
+    /// Bring another project's layers, media, cues and mappings into this one.
+    MergeProject,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -89,6 +91,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::NewProject, "New Project", Some((false, Key::N))),
             I(A::Open, "Open Project…", Some((false, Key::O))),
             D("Open Recent"),
+            I(A::MergeProject, "Merge Project…", None),
             S,
             I(A::Save, "Save", Some((false, Key::S))),
             I(A::SaveAs, "Save As…", Some((true, Key::S))),
