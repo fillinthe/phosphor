@@ -71,6 +71,8 @@ struct LayerResources {
     thumbnail: Option<Target>,
     /// Full-size picture of the layer alone, while a mapping surface shows it.
     feed: Option<Target>,
+    /// A user blend mode: the layer fitted to the canvas, and the blend's result (`shader_blend`).
+    blend: [Option<Target>; 2],
     /// Its picture before its effects, while another layer shows that (`SourceSpec::Feed { before_fx }`).
     feed_pre: Option<Target>,
     /// A layer with its own frame rate: its last finished picture, and when it was drawn.
@@ -1043,7 +1045,11 @@ impl Engine {
                 let mixed = match layer.mixer.as_deref().and_then(crate::shaders::mixer) {
                     Some(d) => {
                         let params = resolve_params(d, &layer.mixer_values, &[], mods);
-                        self.external_mix(layer.id, d, params, &frame, layer.fit, opacity, 2, &mut group_current, (w, h), passes)
+                        if crate::shaders::is_external(d.entry) {
+                            self.external_mix(layer.id, d, params, &frame, layer.fit, opacity, 2, &mut group_current, (w, h), passes)
+                        } else {
+                            self.shader_blend(layer.id, d, params, &frame, layer.fit, opacity, 2, &mut group_current, (w, h), time, passes)
+                        }
                     }
                     None => false,
                 };
@@ -1055,7 +1061,11 @@ impl Engine {
                 let mixed = match layer.mixer.as_deref().and_then(crate::shaders::mixer) {
                     Some(d) => {
                         let params = resolve_params(d, &layer.mixer_values, &[], mods);
-                        self.external_mix(layer.id, d, params, &frame, layer.fit, opacity, 0, &mut current, (w, h), passes)
+                        if crate::shaders::is_external(d.entry) {
+                            self.external_mix(layer.id, d, params, &frame, layer.fit, opacity, 0, &mut current, (w, h), passes)
+                        } else {
+                            self.shader_blend(layer.id, d, params, &frame, layer.fit, opacity, 0, &mut current, (w, h), time, passes)
+                        }
                     }
                     None => false,
                 };

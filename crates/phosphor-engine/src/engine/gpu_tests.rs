@@ -423,3 +423,27 @@ fn a_layer_thumbnail_reads_back() {
     assert!(px[1] > 240 && px[0] < 15, "green: {:?}", &px[..4]);
     assert!(engine.read_layer_thumbnail(99).is_none());
 }
+
+/// A user blend mode: `src` is the layer, `below` the stack under it; the layer's opacity mixes the result in.
+#[test]
+fn a_user_blend_mode_blends() {
+    let Some(mut engine) = test_engine() else { return };
+    let source = "// @name Difference\n// @kind blend\n\n@fragment\nfn main(in: VOut) -> @location(0) vec4f {\n    return vec4f(abs(src(in.uv).rgb - below(in.uv).rgb), 1.0);\n}\n";
+    let desc = engine.compile_custom("customblend:difference", source).expect("compiles");
+    assert!(crate::shaders::mixer(desc.id).is_some(), "listed as a mixer");
+    let mut comp = Composition { width: 32, height: 32, ..Default::default() };
+    let solid = |id: u64, v: f32| LayerState { id, source: SourceSpec::Generator("solid".into()), generator_values: vec![v, v, v], ..Default::default() };
+    comp.layers.push(solid(1, 0.8));
+    let mut top = solid(2, 0.3);
+    top.mixer = Some(desc.id.to_string());
+    comp.layers.push(top);
+    let red = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        engine.read_output().expect("output").2[0] as f32 / 255.0
+    };
+    let v = red(&mut engine, &comp);
+    assert!((v - 0.5).abs() < 0.03, "|0.3 - 0.8| = {v}");
+    comp.layers[1].opacity = 0.5;
+    let v = red(&mut engine, &comp);
+    assert!((v - 0.65).abs() < 0.03, "half way back to 0.8: {v}");
+}

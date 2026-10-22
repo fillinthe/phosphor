@@ -117,6 +117,46 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     /// A shader transition: both pictures fitted to the canvas, then the transition's own pass with `progress`
     /// (startImage = the old picture in tex0, endImage = the new one in tex1).
+    /// A user blend mode (`// @kind blend`): its shader gets the layer (tex0, fitted to the canvas) and the stack below
+    /// (tex1), then its result goes over the stack at the layer's opacity.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn shader_blend(
+        &mut self,
+        layer_id: u64,
+        desc: &'static crate::shaders::ShaderDesc,
+        params: Vec<f32>,
+        frame: &Frame,
+        fit: FitMode,
+        opacity: f32,
+        base: usize,
+        current: &mut Option<usize>,
+        canvas: (u32, u32),
+        time: f32,
+        passes: &mut Vec<Pass>,
+    ) -> bool {
+        let (w, h) = canvas;
+        let device = self.gpu.device.clone();
+        let res = self.layers.entry(layer_id).or_default();
+        for slot in res.blend.iter_mut() {
+            Target::ensure(slot, &device, "blend", w, h);
+        }
+        let (top, result) = (res.blend[0].as_ref().unwrap().view.clone(), res.blend[1].as_ref().unwrap().view.clone());
+        super::fit::push_fit_copy(top.clone(), frame, canvas, fit, canvas, passes);
+        let below = current.map_or_else(|| self.gpu.blank.clone(), |c| self.accum[base + c].as_ref().unwrap().view.clone());
+        let mut u = Uniforms::with_params(&params);
+        u.resolution = [w as f32, h as f32];
+        u.time = time;
+        u.opacity = 1.0;
+        passes.push(Pass { entry: desc.entry, target: result.clone(), tex0: top, tex1: Some(below.clone()), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+        let next = current.map_or(0, |c| 1 - c);
+        let mut u = Uniforms::with_params(&[]);
+        u.resolution = [w as f32, h as f32];
+        u.opacity = opacity;
+        passes.push(Pass { entry: "fs_mix", target: self.accum[base + next].as_ref().unwrap().view.clone(), tex0: result, tex1: Some(below), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+        *current = Some(next);
+        true
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn shader_transition(
         &mut self,

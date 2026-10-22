@@ -193,7 +193,7 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
                     let _ = std::fs::copy(&vs, isf_dir.join(format!("{slug}.vs")));
                 }
             }
-        } else if let Some(slug) = id.strip_prefix(shaders::CUSTOM_EFFECT).or_else(|| id.strip_prefix(shaders::CUSTOM_GENERATOR)) {
+        } else if let Some(slug) = id.strip_prefix(shaders::CUSTOM_EFFECT).or_else(|| id.strip_prefix(shaders::CUSTOM_GENERATOR)).or_else(|| id.strip_prefix(shaders::CUSTOM_BLEND)) {
             let file = crate::show::storage_dir().map(|d| d.join("effects").join(format!("{slug}.wgsl")));
             if let Some(file) = file.filter(|f| f.is_file()) {
                 std::fs::create_dir_all(&fx_dir).map_err(|e| e.to_string())?;

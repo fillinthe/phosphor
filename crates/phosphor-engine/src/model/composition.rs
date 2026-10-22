@@ -198,7 +198,9 @@ impl Composition {
     pub fn used_shader_ids(&self) -> Vec<String> {
         let effects = self.all_effects().map(|e| e.effect.clone());
         let generators = self.sources().filter_map(|s| if let SourceSpec::Generator(g) = s { Some(g.clone()) } else { None });
-        let mut ids: Vec<String> = effects.chain(generators).collect();
+        // Blend shaders and mixer plugins too.
+        let mixers = self.layers.iter().filter_map(|l| l.mixer.clone());
+        let mut ids: Vec<String> = effects.chain(generators).chain(mixers).collect();
         ids.sort();
         ids.dedup();
         ids
