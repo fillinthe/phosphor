@@ -94,6 +94,23 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                     if ui.small_button(icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() && i > 0 {
                         swap = Some((i, i - 1));
                     }
+                    // Before / after: the picture without this one effect while the button is held.
+                    let key = egui::Id::new(("fx_compare", fx.id));
+                    let was: Option<bool> = ui.ctx().data(|d| d.get_temp(key));
+                    if fx.enabled || was.is_some() {
+                        let held = ui.small_button(icon::EYE_SLASH).on_hover_text("Hold to see the picture without this effect").is_pointer_button_down_on();
+                        match (held, was) {
+                            (true, None) => {
+                                ui.ctx().data_mut(|d| d.insert_temp(key, fx.enabled));
+                                fx.enabled = false;
+                            }
+                            (false, Some(on)) => {
+                                fx.enabled = on;
+                                ui.ctx().data_mut(|d| d.remove_temp::<bool>(key));
+                            }
+                            _ => {}
+                        }
+                    }
                 });
             });
             header.body(|ui| {
