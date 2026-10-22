@@ -1,0 +1,107 @@
+{
+ "width": 1920,
+ "height": 1080,
+ "next_id": 20,
+ "layers": [
+  {
+   "id": 1,
+   "name": "Plasma",
+   "source": {
+    "Generator": "plasma"
+   },
+   "generator_values": [
+    1.0,
+    6.0,
+    0.0
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Rings",
+   "source": {
+    "Generator": "rings"
+   },
+   "generator_values": [
+    10.0,
+    1.0,
+    0.5
+   ],
+   "blend": "Screen",
+   "opacity": 0.6
+  }
+ ],
+ "master_effects": [
+  {
+   "id": 5,
+   "effect": "invert",
+   "enabled": true,
+   "values": [
+    1.0
+   ]
+  }
+ ],
+ "mapping": {
+  "enabled": true,
+  "test_pattern": true,
+  "surfaces": [
+   {
+    "id": 11,
+    "name": "Left wall",
+    "corners": [
+     [
+      0.05,
+      0.1
+     ],
+     [
+      0.5,
+      0.04
+     ],
+     [
+      0.48,
+      0.9
+     ],
+     [
+      0.08,
+      0.96
+     ]
+    ],
+    "input": [
+     0.0,
+     0.0,
+     0.5,
+     1.0
+    ]
+   },
+   {
+    "id": 12,
+    "name": "Right wall",
+    "corners": [
+     [
+      0.42,
+      0.2
+     ],
+     [
+      0.95,
+      0.1
+     ],
+     [
+      0.98,
+      0.85
+     ],
+     [
+      0.52,
+      0.78
+     ]
+    ],
+    "input": [
+     0.5,
+     0.0,
+     0.5,
+     1.0
+    ],
+    "feather": 0.15,
+    "opacity": 0.9
+   }
+  ]
+ }
+}
