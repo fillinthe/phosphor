@@ -49,10 +49,33 @@ impl State {
         if self.comp.timeline.tracks.is_empty() || self.timeline_applied == Some(self.timeline_pos) {
             return;
         }
+        // Recording: a control moved by hand since the timeline last set it gets a key here instead.
+        let mut moved: Vec<phosphor_engine::ControlTarget> = Vec::new();
+        if self.timeline_record && self.timeline_play.is_some() {
+            let t = self.timeline_pos;
+            for (target, was) in std::mem::take(&mut self.timeline_set) {
+                if let Some(v) = crate::control::get_target(&self.comp, &target)
+                    && (v - was).abs() > 0.004
+                {
+                    self.comp.timeline.track_mut(&target).set_key(t, v);
+                    moved.push(target);
+                }
+            }
+        }
         self.timeline_applied = Some(self.timeline_pos);
-        let values: Vec<(phosphor_engine::ControlTarget, f32)> = self.comp.timeline.values_at(self.timeline_pos).into_iter().map(|(t, v)| (t.clone(), v)).collect();
+        let values: Vec<(phosphor_engine::ControlTarget, f32)> =
+            self.comp.timeline.values_at(self.timeline_pos).into_iter().filter(|(t, _)| !moved.contains(t)).map(|(t, v)| (t.clone(), v)).collect();
+        self.timeline_set.clear();
         for (target, v) in values {
             self.set_control(&target, v, now);
+            // What it actually is now (locks and ranges can change it).
+            let now_v = crate::control::get_target(&self.comp, &target).unwrap_or(v);
+            self.timeline_set.push((target, now_v));
+        }
+        for target in moved {
+            if let Some(v) = crate::control::get_target(&self.comp, &target) {
+                self.timeline_set.push((target, v));
+            }
         }
     }
 
