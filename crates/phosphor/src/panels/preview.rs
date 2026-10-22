@@ -74,6 +74,21 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
         let uv = [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
         mouse_into_shaders(st, uv);
     }
+    // Eyedropper: a colour button is waiting for a click on the picture.
+    if crate::ui::eyedropper::armed(ui.ctx()).is_some() {
+        ui.painter().text(frame.left_top() + egui::vec2(8.0, 8.0), egui::Align2::LEFT_TOP, "Click the picture to pick a colour · Esc stops", egui::FontId::proportional(12.0), Color32::WHITE);
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            crate::ui::eyedropper::arm(ui.ctx(), None);
+        } else if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+            && frame.contains(p)
+        {
+            crate::ui::eyedropper::want(ui.ctx(), [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()]);
+        }
+    }
     corner_pin_handles(ui, st, frame);
     resp.right_menu(|ui| {
         let open = st.output_open();

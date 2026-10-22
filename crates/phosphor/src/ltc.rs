@@ -134,7 +134,7 @@ mod tests {
         let mut out = Vec::new();
         let mut level = 1.0f32;
         let mut pos = 0.0f32;
-        let (mut h, mut m, mut s, mut f) = start;
+        let (h, mut m, mut s, mut f) = start;
         for _ in 0..frames {
             let mut bits = [false; 80];
             let mut put = |start: usize, len: usize, v: u32| {
