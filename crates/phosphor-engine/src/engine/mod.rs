@@ -857,7 +857,7 @@ impl Engine {
                 }
             }
             let muted = (any_solo && !layer.solo) || !layer.in_mix;
-            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader) };
+            let opacity = if muted { 0.0 } else { modulate(layer.opacity, 0.0, 1.0, layer.opacity_mod.as_ref(), mods) * layer.group.gain(comp.crossfader, comp.fader_curve) };
             if opacity <= 0.001 {
                 continue;
             }

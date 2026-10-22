@@ -203,6 +203,7 @@ impl BenchConfig {
             let dir = match d {
                 "reverse" => phosphor_engine::PlayDirection::Reverse,
                 "pingpong" | "ping-pong" => phosphor_engine::PlayDirection::PingPong,
+                "random" => phosphor_engine::PlayDirection::Random,
                 _ => phosphor_engine::PlayDirection::Forward,
             };
             for l in &mut comp.layers {

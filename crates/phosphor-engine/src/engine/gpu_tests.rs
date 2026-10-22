@@ -106,6 +106,21 @@ fn blend_modes_match_their_formulas() {
         (B::Darken, 0.25),
         (B::Subtract, 0.0),
         (B::Exclusion, 0.5),
+        // At 50% the light modes leave the layer below as it is.
+        (B::SoftLight, 0.25),
+        (B::HardLight, 0.25),
+        (B::VividLight, 0.25),
+        (B::LinearLight, 0.25),
+        (B::PinLight, 0.25),
+        (B::HardMix, 0.0),
+        (B::ColorBurn, 0.0),
+        (B::ColorDodge, 0.5),
+        (B::Divide, 0.5),
+        // Greys: hue / saturation / colour keep the grey below; luminosity takes the layer's.
+        (B::Hue, 0.25),
+        (B::Saturation, 0.25),
+        (B::Color, 0.25),
+        (B::Luminosity, 0.5),
         (B::LumaMask, 0.125),
         (B::InverseLumaMask, 0.125),
         (B::AlphaMask, 0.25),
@@ -120,6 +135,27 @@ fn blend_modes_match_their_formulas() {
         if (got - want).abs() > 0.02 {
             wrong.push(format!("{mode:?}: {got:.3}, expected {want}"));
         }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
+    // 75% over 25%, where the light modes differ from each other.
+    for (mode, want) in [(B::SoftLight, 0.375), (B::HardLight, 0.625), (B::VividLight, 0.5), (B::LinearLight, 0.75), (B::PinLight, 0.5), (B::ColorDodge, 1.0), (B::Divide, 0.333)] {
+        let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+        comp.layers.push(solid(1, 0.25, B::Normal));
+        comp.layers.push(solid(2, 0.75, mode));
+        let got = middle(&mut engine, &comp)[0] as f32 / 255.0;
+        if (got - want).abs() > 0.02 {
+            wrong.push(format!("{mode:?} at 75%: {got:.3}, expected {want}"));
+        }
+    }
+    // Colour: red over 50% grey = red at the grey's brightness (1.0, 0.286, 0.286).
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    comp.layers.push(solid(1, 0.5, B::Normal));
+    let mut red = solid(2, 0.0, B::Color);
+    red.generator_values = vec![1.0, 0.0, 0.0];
+    comp.layers.push(red);
+    let px = middle(&mut engine, &comp);
+    if (px[0] as i32 - 255).abs() > 4 || (px[1] as i32 - 73).abs() > 5 || (px[2] as i32 - 73).abs() > 5 {
+        wrong.push(format!("Color: red over grey gave {px:?}, expected about [255, 73, 73]"));
     }
     assert!(wrong.is_empty(), "{wrong:?}");
 }

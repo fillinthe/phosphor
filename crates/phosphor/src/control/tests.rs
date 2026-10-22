@@ -138,7 +138,7 @@ fn get_target_reads_back_what_set_target_wrote() {
 #[test]
 fn osc_feedback_reaches_the_sender() {
     use std::net::UdpSocket;
-    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_571, feedback: true, feedback_port: 18_572, soft_takeover: false, dmx_in: false });
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_571, feedback: true, feedback_port: 18_572, soft_takeover: false, dmx_in: false, ..Default::default() });
     let device = UdpSocket::bind("127.0.0.1:18572").unwrap();
     device.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
     let msg = rosc::encoder::encode(&rosc::OscPacket::Message(rosc::OscMessage { addr: "/phosphor/master".into(), args: vec![rosc::OscType::Float(0.8)] })).unwrap();
@@ -173,7 +173,7 @@ fn surface_widgets_send_osc_to_another_app() {
     use std::net::UdpSocket;
     let app = UdpSocket::bind("127.0.0.1:18573").unwrap();
     app.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
-    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_574, feedback: false, feedback_port: 18_575, soft_takeover: false, dmx_in: false });
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_574, feedback: false, feedback_port: 18_575, soft_takeover: false, dmx_in: false, ..Default::default() });
     let mut comp = Composition::starter();
     comp.surface.osc_host = "127.0.0.1".into();
     comp.surface.osc_port = 18_573;
@@ -202,7 +202,7 @@ fn locks_to_midi_clock_from_a_real_midi_port() {
     use midir::os::unix::VirtualOutput;
     let Ok(out) = midir::MidiOutput::new("phosphor-test") else { return };
     let Ok(mut port) = out.create_virtual("Phosphor Test Clock") else { return };
-    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_581, feedback: false, feedback_port: 18_582, soft_takeover: false, dmx_in: false });
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_581, feedback: false, feedback_port: 18_582, soft_takeover: false, dmx_in: false, ..Default::default() });
     assert!(hub.midi_ports.iter().any(|p| p.contains("Phosphor Test Clock")), "virtual port not opened: {:?}", hub.midi_ports);
     let start = std::time::Instant::now();
     let tick = std::time::Duration::from_secs_f64(60.0 / 128.0 / 24.0);
@@ -274,7 +274,7 @@ fn a_knob_sets_a_hand_modulator_and_osc_has_an_address() {
 /// in between makes it catch up again.
 #[test]
 fn faders_take_over_softly() {
-    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_576, feedback: false, feedback_port: 18_577, soft_takeover: true, dmx_in: false });
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_576, feedback: false, feedback_port: 18_577, soft_takeover: true, dmx_in: false, ..Default::default() });
     let mut comp = Composition::starter();
     comp.master_fade = 0.5;
     let source = ControlSource::Osc { address: "/fader1".into() };
@@ -487,4 +487,126 @@ fn extra_light_channels() {
     // Rgb8 = 8 channels, then Gobo (0) and Zoom (128); nothing after.
     assert_eq!((u[8], u[9], u[10]), (0, 128, 0));
     assert_eq!(comp.dmx.fixtures[0].next_free(), (0, 11));
+}
+
+#[test]
+fn soft_takeover_waits_or_glides() {
+    let source = ControlSource::MidiCc { channel: 0, cc: 11 };
+    let setup = || {
+        let mut comp = Composition::starter();
+        comp.master_fade = 0.2;
+        comp.control_maps.push(phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade));
+        comp
+    };
+    // Waiting (the default): a fader far away does nothing until it comes within the distance.
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = true;
+    let mut comp = setup();
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.9 });
+    hub.apply(&mut comp, 1.0);
+    assert_eq!(comp.master_fade, 0.2);
+    hub.pickup_near = 0.1;
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.28 });
+    hub.apply(&mut comp, 1.1);
+    assert!((comp.master_fade - 0.28).abs() < 1e-6, "caught within 10%: {}", comp.master_fade);
+    // Glide: the value travels to the fader and then follows it.
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = true;
+    hub.takeover_glide = true;
+    let mut comp = setup();
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.9 });
+    hub.apply(&mut comp, 2.0);
+    hub.apply(&mut comp, 2.15);
+    assert!(comp.master_fade > 0.3 && comp.master_fade < 0.9, "on its way: {}", comp.master_fade);
+    hub.apply(&mut comp, 2.5);
+    assert!((comp.master_fade - 0.9).abs() < 1e-6, "arrived: {}", comp.master_fade);
+    hub.inject(&mut comp, Incoming { source, value: 0.85 });
+    hub.apply(&mut comp, 2.6);
+    assert!((comp.master_fade - 0.85).abs() < 1e-6, "follows the fader once there: {}", comp.master_fade);
+}
+
+#[test]
+fn fall_holds_peaks() {
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = true;
+    let mut comp = Composition::starter();
+    comp.master_fade = 0.0;
+    let source = ControlSource::MidiCc { channel: 0, cc: 12 };
+    let mut map = phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade);
+    map.fx.push(phosphor_engine::ValueFx::Fall(1.0));
+    comp.control_maps.push(map);
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.9 });
+    hub.apply(&mut comp, 1.0);
+    assert!((comp.master_fade - 0.9).abs() < 1e-6, "a rise lands at once (and skips soft takeover)");
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.1 });
+    hub.apply(&mut comp, 1.0);
+    hub.apply(&mut comp, 1.3);
+    assert!(comp.master_fade > 0.2 && comp.master_fade < 0.9, "falling: {}", comp.master_fade);
+    hub.inject(&mut comp, Incoming { source: source.clone(), value: 0.1 });
+    hub.apply(&mut comp, 1.6);
+    hub.apply(&mut comp, 2.1);
+    assert!((comp.master_fade - 0.1).abs() < 1e-6, "down after the fall time (repeats didn't restart it): {}", comp.master_fade);
+}
+
+#[test]
+fn endless_knobs_and_dead_bands() {
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = true;
+    let mut comp = Composition::starter();
+    comp.master_fade = 0.5;
+    let knob = ControlSource::MidiCc { channel: 0, cc: 13 };
+    let mut map = phosphor_engine::ControlMap::new(knob.clone(), ControlTarget::MasterFade);
+    map.fx.push(phosphor_engine::ValueFx::Endless(0.01));
+    comp.control_maps.push(map);
+    // Three clicks up (CC value 3), then two down (126).
+    hub.inject(&mut comp, Incoming { source: knob.clone(), value: 3.0 / 127.0 });
+    hub.apply(&mut comp, 1.0);
+    assert!((comp.master_fade - 0.53).abs() < 1e-5, "{}", comp.master_fade);
+    hub.inject(&mut comp, Incoming { source: knob, value: 126.0 / 127.0 });
+    hub.apply(&mut comp, 1.1);
+    assert!((comp.master_fade - 0.51).abs() < 1e-5, "{}", comp.master_fade);
+
+    let fader = ControlSource::MidiCc { channel: 0, cc: 14 };
+    let mut comp = Composition::starter();
+    comp.crossfader = 0.0;
+    let mut map = phosphor_engine::ControlMap::new(fader.clone(), ControlTarget::App(phosphor_engine::AppControl::Crossfader));
+    map.fx.push(phosphor_engine::ValueFx::DeadBand(0.05));
+    comp.control_maps.push(map);
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = false;
+    for (t, v, want) in [(1.0, 0.5, 0.5), (1.1, 0.52, 0.5), (1.2, 0.48, 0.5), (1.3, 0.56, 0.56)] {
+        hub.inject(&mut comp, Incoming { source: fader.clone(), value: v });
+        hub.apply(&mut comp, t);
+        assert!((comp.crossfader - want).abs() < 1e-6, "{v} → {} (wanted {want})", comp.crossfader);
+    }
+}
+
+#[test]
+fn osc_wildcards_match_like_the_spec() {
+    use super::osc_match as m;
+    assert!(m("/fader/*", "/fader/12") && !m("/fader/*", "/fader/1/x"), "* stays inside one part");
+    assert!(m("/btn/?", "/btn/3") && !m("/btn/?", "/btn/33"));
+    assert!(m("/btn/[1-4]", "/btn/2") && !m("/btn/[1-4]", "/btn/5") && m("/btn/[!1-4]", "/btn/5"));
+    assert!(m("/{deck,mixer}/x", "/mixer/x") && !m("/{deck,mixer}/x", "/fx/x"));
+    assert!(m("/a*z", "/abcz") && m("/a*z", "/az") && !m("/a*z", "/abc"));
+}
+
+/// A mapping with a wildcard address catches matching messages; a second OSC port also listens.
+#[test]
+fn wildcard_mappings_and_extra_osc_ports() {
+    use std::net::UdpSocket;
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_591, osc_extra_ports: vec![18_592], feedback: false, soft_takeover: false, ..Default::default() });
+    assert!(hub.osc_status.contains("18592"), "{}", hub.osc_status);
+    let mut comp = Composition::starter();
+    comp.control_maps.push(phosphor_engine::ControlMap::new(ControlSource::Osc { address: "/deck/*/level".into() }, ControlTarget::MasterFade));
+    let send = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let msg = rosc::encoder::encode(&rosc::OscPacket::Message(rosc::OscMessage { addr: "/deck/2/level".into(), args: vec![rosc::OscType::Float(0.35)] })).unwrap();
+    send.send_to(&msg, "127.0.0.1:18592").unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while (comp.master_fade - 0.35).abs() > 1e-6 && std::time::Instant::now() < deadline {
+        hub.poll(&mut comp);
+        hub.apply(&mut comp, 0.0);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!((comp.master_fade - 0.35).abs() < 1e-6, "{}", comp.master_fade);
 }

@@ -42,6 +42,8 @@ pub(crate) enum MediaAct {
     PlayOn(usize, u64),
     /// Open the Convert window for this item.
     Convert(usize),
+    /// Open the file again from disk (it was edited).
+    Reload(usize),
     Favorite(usize),
     Toggle(usize, String),
     Rename(usize, String),
@@ -207,7 +209,8 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             playing.entry(p.clone()).or_default().push(l.name.clone());
         }
     }
-    let targets = MediaTargets { layers: &layers, click: click_target.as_deref(), playing: &playing };
+    let uses = st.comp.media_uses();
+    let targets = MediaTargets { layers: &layers, click: click_target.as_deref(), playing: &playing, uses: &uses };
     let State { comp, thumbs, .. } = st;
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
@@ -287,6 +290,12 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 }
                 #[cfg(target_arch = "wasm32")]
                 let _ = i;
+            }
+            MediaAct::Reload(i) => {
+                if let Some(item) = st.comp.media_bin.get(i).cloned() {
+                    st.media.reload(&st.comp, &item.path);
+                    st.thumbs.forget(&item.path);
+                }
             }
             MediaAct::PlayOn(i, layer) => {
                 let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
@@ -419,6 +428,8 @@ pub(crate) struct MediaTargets<'a> {
     pub click: Option<&'a str>,
     /// Files on screen now (path → the layers showing them), marked on their tiles.
     pub playing: &'a std::collections::HashMap<String, Vec<String>>,
+    /// How many layers and clips use each file.
+    pub uses: &'a std::collections::HashMap<String, usize>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -486,7 +497,12 @@ pub(crate) fn media_tile(
         None => "Click: play on a new layer · drag onto any layer or clip slot · right-click: Play on…".to_string(),
     };
     let showing = on.map_or(String::new(), |ls| format!("\nOn screen now: {}", ls.join(", ")));
-    resp.on_hover_text(format!("{}{showing}\n{click}", item.path)).right_menu(|ui| {
+    let used = match targets.uses.get(&item.path).copied().unwrap_or(0) {
+        0 => "\nNot used by any layer or clip".to_string(),
+        1 => "\nUsed by 1 layer or clip".to_string(),
+        n => format!("\nUsed by {n} layers and clips"),
+    };
+    resp.on_hover_text(format!("{}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
         ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
             for (id, name) in targets.layers {
                 if ui.button(name).clicked() {
@@ -525,6 +541,10 @@ pub(crate) fn media_tile(
         #[cfg(not(target_arch = "wasm32"))]
         if crate::media::is_movie(&item.name) && ui.button(label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show (Hap, ProRes, or H.264 with every frame a keyframe); see the size first").clicked() {
             acts.push(MediaAct::Convert(i));
+            ui.close();
+        }
+        if ui.button(label(icon::ARROW_CLOCKWISE, "Reload")).on_hover_text("Open the file again from disk (after you've changed it in another app)").clicked() {
+            acts.push(MediaAct::Reload(i));
             ui.close();
         }
         ui.separator();

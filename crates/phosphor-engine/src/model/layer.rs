@@ -172,6 +172,11 @@ pub struct LayerState {
     pub playing: bool,
     pub rate: f32,
     pub looping: bool,
+    /// Not looping: black once the movie ends (instead of holding its last frame).
+    pub black_at_end: bool,
+    /// The jump back / forward buttons' step, in beats of playback (or seconds with `jump_in_seconds`).
+    pub jump: f32,
+    pub jump_in_seconds: bool,
     pub direction: PlayDirection,
     /// Crossfader side (Mixer).
     pub group: CrossGroup,
@@ -277,6 +282,9 @@ impl Default for LayerState {
             playing: true,
             rate: 1.0,
             looping: true,
+            black_at_end: false,
+            jump: 1.0,
+            jump_in_seconds: false,
             direction: PlayDirection::Forward,
             group: CrossGroup::None,
             parent: None,
@@ -310,6 +318,13 @@ impl LayerState {
         let (lo, hi) = self.loop_range(d, bpm).unwrap_or((0.0, d));
         let beats_secs = self.sync_beats as f64 * 60.0 / bpm.max(1.0) as f64;
         (((hi - lo) / beats_secs) as f32).clamp(0.1, 4.0)
+    }
+
+    /// How far (seconds into the movie) one jump back / forward goes: `jump` seconds, or `jump` beats of
+    /// playback at the layer's speed.
+    pub fn jump_secs(&self, duration: Option<f64>, bpm: f32) -> f64 {
+        let step = self.jump.max(0.0) as f64;
+        if self.jump_in_seconds { step } else { step * 60.0 / bpm.max(1.0) as f64 * self.play_rate(duration, bpm) as f64 }
     }
 
     /// The loop region in seconds for a movie of `duration` at `bpm`, or None for the whole movie.

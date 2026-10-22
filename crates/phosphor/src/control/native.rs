@@ -123,48 +123,22 @@ impl Backend {
         }
     }
 
-    pub fn open_osc(&mut self, port: u16, tx: mpsc::Sender<Incoming>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
+    /// Listens for OSC on `port` (announced over Zeroconf) and on each of `extra` (other apps that only send to
+    /// their own port). Replaces any listeners already open. Returns the extra ports that couldn't open (and why).
+    pub fn open_osc(&mut self, port: u16, extra: &[u16], tx: mpsc::Sender<Incoming>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<Vec<String>, String> {
         if let Some(stop) = self.osc_stop.take() {
             stop.store(true, Ordering::Relaxed);
         }
         self.mdns = None;
-        let socket = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| e.to_string())?;
-        socket.set_read_timeout(Some(Duration::from_millis(200))).map_err(|e| e.to_string())?;
         let stop = Arc::new(AtomicBool::new(false));
         self.osc_stop = Some(stop.clone());
-        std::thread::Builder::new()
-            .name("phosphor-osc".into())
-            .spawn(move || {
-                let mut buf = [0u8; 65_536];
-                while !stop.load(Ordering::Relaxed) {
-                    let Ok((n, from)) = socket.recv_from(&mut buf) else { continue };
-                    let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) else { continue };
-                    let ip = from.ip().to_string();
-                    {
-                        let mut a = activity.lock().unwrap();
-                        if a.osc_blocked.contains(&ip) {
-                            continue;
-                        }
-                        let address = match &packet {
-                            rosc::OscPacket::Message(m) => m.addr.clone(),
-                            rosc::OscPacket::Bundle(_) => "(bundle)".into(),
-                        };
-                        let e = a.osc.entry(ip.clone()).or_insert(super::OscSender {
-                            ip: ip.clone(),
-                            count: 0,
-                            last_address: String::new(),
-                            last_seen: std::time::Instant::now(),
-                            uses_builtin: false,
-                        });
-                        e.uses_builtin |= address.starts_with("/phosphor/");
-                        e.count += 1;
-                        e.last_address = address;
-                        e.last_seen = std::time::Instant::now();
-                    }
-                    deliver(packet, &tx);
-                }
-            })
-            .map_err(|e| e.to_string())?;
+        listen_osc(port, stop.clone(), tx.clone(), activity.clone())?;
+        let mut failed = Vec::new();
+        for &p in extra.iter().filter(|p| **p != port) {
+            if let Err(e) = listen_osc(p, stop.clone(), tx.clone(), activity.clone()) {
+                failed.push(format!("{p}: {e}"));
+            }
+        }
         // Zeroconf, so controllers can pick "Phosphor" from a list instead of typing an IP.
         if let Some(ip) = ip
             && let Ok(daemon) = mdns_sd::ServiceDaemon::new()
@@ -177,7 +151,7 @@ impl Backend {
                 self.mdns = Some(daemon);
             }
         }
-        Ok(())
+        Ok(failed)
     }
 }
 
@@ -189,6 +163,46 @@ fn parse_midi(msg: &[u8]) -> Option<Incoming> {
         0x80 => Some(Incoming { source: ControlSource::MidiNote { channel, note: *msg.get(1)? }, value: 0.0 }),
         _ => None,
     }
+}
+
+/// One OSC port's listener thread: every message is counted per sender (unless blocked) and delivered.
+fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
+    let socket = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| e.to_string())?;
+    socket.set_read_timeout(Some(Duration::from_millis(200))).map_err(|e| e.to_string())?;
+    std::thread::Builder::new()
+        .name(format!("phosphor-osc {port}"))
+        .spawn(move || {
+            let mut buf = [0u8; 65_536];
+            while !stop.load(Ordering::Relaxed) {
+                let Ok((n, from)) = socket.recv_from(&mut buf) else { continue };
+                let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) else { continue };
+                let ip = from.ip().to_string();
+                {
+                    let mut a = activity.lock().unwrap();
+                    if a.osc_blocked.contains(&ip) {
+                        continue;
+                    }
+                    let address = match &packet {
+                        rosc::OscPacket::Message(m) => m.addr.clone(),
+                        rosc::OscPacket::Bundle(_) => "(bundle)".into(),
+                    };
+                    let e = a.osc.entry(ip.clone()).or_insert(super::OscSender {
+                        ip: ip.clone(),
+                        count: 0,
+                        last_address: String::new(),
+                        last_seen: std::time::Instant::now(),
+                        uses_builtin: false,
+                    });
+                    e.uses_builtin |= address.starts_with("/phosphor/");
+                    e.count += 1;
+                    e.last_address = address;
+                    e.last_seen = std::time::Instant::now();
+                }
+                deliver(packet, &tx);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>) {

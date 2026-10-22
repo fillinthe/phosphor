@@ -18,6 +18,8 @@ pub enum Deferred {
     App(AppControl, f32),
     /// Jump a layer's movie to this fraction of its length.
     Scrub(u64, f32),
+    /// Jump a layer's movie one step back / forward.
+    Jump(u64, bool),
 }
 
 /// Sent instead of a value when a pad or key press should flip an on/off control.
@@ -103,6 +105,8 @@ pub struct ControlHub {
     pub midi_disabled: std::collections::BTreeSet<String>,
     pub activity: std::sync::Arc<std::sync::Mutex<Activity>>,
     pub osc_port: u16,
+    /// More ports to listen on (apps that only send to their own port).
+    pub osc_extra_ports: Vec<u16>,
     pub osc_status: String,
     pub local_ip: Option<String>,
     pub last: Option<Incoming>,
@@ -119,11 +123,17 @@ pub struct ControlHub {
     pub feedback_port: u16,
     /// Faders and knobs only change a value once they reach it (no jump when the hardware is elsewhere).
     pub soft_takeover: bool,
+    /// How close (0..1 of the range) a fader must come to count as having reached the value.
+    pub pickup_near: f32,
+    /// Soft takeover glides the value to the fader instead of waiting for the fader to reach it.
+    pub takeover_glide: bool,
     /// The last messages that came in, newest last (the MIDI / OSC monitor): when, from what, value.
     pub recent: std::collections::VecDeque<(std::time::Instant, ControlSource, f32)>,
     /// The monitor is paused (messages still work; the list stops moving).
     pub monitor_paused: bool,
     pickups: HashMap<String, Pickup>,
+    /// Dead band: the last value each mapping let through.
+    passed: HashMap<String, f32>,
     /// Smoothed mappings on their way to a new value.
     glides: HashMap<String, Glide>,
     /// Moves waiting for their Delay: (when, target, value, smoothing seconds).
@@ -151,16 +161,19 @@ pub struct ControlHub {
 #[serde(default)]
 pub struct ControlSettings {
     pub osc_port: u16,
+    pub osc_extra_ports: Vec<u16>,
     pub feedback: bool,
     pub feedback_port: u16,
     pub soft_takeover: bool,
+    pub pickup_near: f32,
+    pub takeover_glide: bool,
     /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
     pub dmx_in: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, dmx_in: false }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, dmx_in: false }
     }
 }
 
@@ -186,24 +199,30 @@ struct Glide {
 /// Messages the MIDI / OSC monitor keeps.
 pub(crate) const MONITOR_LEN: usize = 200;
 
-/// Within this of the current value (0..1), a fader counts as caught.
-const PICKUP_NEAR: f32 = 0.03;
+/// Within this of the current value (0..1), a fader counts as caught (the default; `pickup_near`).
+pub(crate) const PICKUP_NEAR: f32 = 0.03;
+
+/// Soft takeover's glide (`takeover_glide`): how long the value takes to reach the fader.
+const TAKEOVER_GLIDE_SECS: f32 = 0.3;
 
 impl ControlHub {
     /// Opens MIDI and OSC with saved settings.
     pub fn with_settings(s: ControlSettings) -> Self {
         let mut hub = Self::new_unopened();
         hub.osc_port = s.osc_port;
+        hub.osc_extra_ports = s.osc_extra_ports;
         hub.feedback = s.feedback;
         hub.feedback_port = s.feedback_port;
         hub.soft_takeover = s.soft_takeover;
+        hub.pickup_near = s.pickup_near.clamp(0.005, 0.5);
+        hub.takeover_glide = s.takeover_glide;
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, dmx_in: self.dmx_in() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, dmx_in: self.dmx_in() }
     }
 
     /// Starts or stops listening for DMX (Art-Net on udp/6454, sACN on udp/5568) as controller input.
@@ -255,6 +274,7 @@ impl ControlHub {
             midi_disabled: Default::default(),
             activity: Default::default(),
             osc_port: DEFAULT_OSC_PORT,
+            osc_extra_ports: Vec::new(),
             osc_status: "OSC off".into(),
             local_ip: None,
             last: None,
@@ -265,9 +285,12 @@ impl ControlHub {
             feedback: true,
             feedback_port: DEFAULT_FEEDBACK_PORT,
             soft_takeover: true,
+            pickup_near: PICKUP_NEAR,
+            takeover_glide: false,
             recent: std::collections::VecDeque::new(),
             monitor_paused: false,
             pickups: HashMap::new(),
+            passed: HashMap::new(),
             glides: HashMap::new(),
             delayed: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -306,12 +329,13 @@ impl ControlHub {
             self.midi_all = all;
             self.midi_ports = open;
             self.local_ip = local_ip();
-            self.osc_status = match self.backend.open_osc(self.osc_port, self.tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
-                Ok(()) => format!(
-                    "OSC listening on udp/{} at {}",
-                    self.osc_port,
-                    self.local_ip.clone().unwrap_or_else(|| "this machine".into())
-                ),
+            self.osc_status = match self.backend.open_osc(self.osc_port, &self.osc_extra_ports, self.tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
+                Ok(failed) => {
+                    let also: Vec<String> = self.osc_extra_ports.iter().filter(|p| **p != self.osc_port).map(|p| p.to_string()).collect();
+                    let also = if also.is_empty() { String::new() } else { format!(" (and {})", also.join(", ")) };
+                    let failed = if failed.is_empty() { String::new() } else { format!(" · couldn't open {}", failed.join("; ")) };
+                    format!("OSC listening on udp/{}{also} at {}{failed}", self.osc_port, self.local_ip.clone().unwrap_or_else(|| "this machine".into()))
+                }
                 Err(e) => format!("OSC failed: {e}"),
             };
             self.oscquery = None;
@@ -457,7 +481,34 @@ impl ControlHub {
             if !map.enabled {
                 continue;
             }
-            let Some(v) = self.fresh.get(&map.source).copied() else { continue };
+            let v = match &map.source {
+                // An OSC address with wildcards (`/fader/*`, `/btn/[1-4]`, `/{a,b}/x`) takes any matching message.
+                ControlSource::Osc { address } if is_osc_pattern(address) => self
+                    .fresh
+                    .iter()
+                    .find_map(|(s, v)| matches!(s, ControlSource::Osc { address: a } if osc_match(address, a)).then_some(*v)),
+                s => self.fresh.get(s).copied(),
+            };
+            let Some(v) = v else { continue };
+            // Endless knob: the message is a turn (clicks up / down), added to where the value is now.
+            if let Some(step) = map.endless() {
+                let clicks = phosphor_engine::encoder_clicks(v);
+                if clicks != 0
+                    && let Some(current) = get_target(comp, &map.target)
+                {
+                    set_target(comp, &map.target, (current + clicks as f32 * step).clamp(0.0, 1.0), &mut self.triggers);
+                }
+                continue;
+            }
+            // Dead band: too small a change from the last value let through is ignored.
+            let band = map.dead_band();
+            if band > 0.0 {
+                let key = format!("{:?}|{:?}", map.source, map.target);
+                if self.passed.get(&key).is_some_and(|last| (v - last).abs() < band) {
+                    continue;
+                }
+                self.passed.insert(key, v);
+            }
             let v = if momentary(&map.source) && is_toggle(comp, &map.target) {
                 if v <= 0.5 {
                     continue;
@@ -468,11 +519,32 @@ impl ControlHub {
             };
             // (A smoothed mapping glides instead of jumping, so it doesn't need soft takeover.)
             // (Delayed moves land later, so the takeover check would never see them arrive; they skip it too.)
-            if self.soft_takeover && v != FLIP && map.smoothing() == 0.0 && map.delay() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+            if self.soft_takeover && v != FLIP && map.smoothing() == 0.0 && map.delay() == 0.0 && map.fall() == 0.0 && !momentary(&map.source) && !is_toggle(comp, &map.target) && !self.picked_up(comp, &map, v) {
+                // Glide: the value comes to the fader (caught once it gets there) instead of waiting for it.
+                if self.takeover_glide {
+                    let from = get_target(comp, &map.target).unwrap_or(v);
+                    self.glide_to(map.target.clone(), from, v, now, TAKEOVER_GLIDE_SECS);
+                }
                 continue;
             }
             if map.delay() > 0.0 {
                 self.delayed.push((now + map.delay(), map.target.clone(), v, map.smoothing()));
+                continue;
+            }
+            // Fall: a drop glides down over its seconds; a rise lands at once (and stops the fall).
+            let fall = map.fall();
+            if fall > 0.0 && v != FLIP {
+                let from = get_target(comp, &map.target).unwrap_or(v);
+                let key = format!("{:?}", map.target);
+                if v < from {
+                    // Keep a fall that's already on its way down to this value (each message would restart it).
+                    if self.glides.get(&key).is_none_or(|g| (g.to - v).abs() > 1e-6) {
+                        self.glides.insert(key, Glide { target: map.target.clone(), from, to: v, start: now, secs: fall });
+                    }
+                } else {
+                    self.glides.remove(&key);
+                    set_target(comp, &map.target, v, &mut self.triggers);
+                }
                 continue;
             }
             let secs = map.smoothing();
@@ -561,7 +633,7 @@ impl ControlHub {
         if p.last_set.is_some_and(|s| (s - current).abs() > 0.005) {
             p.caught = false;
         }
-        let near = (v - current).abs() <= PICKUP_NEAR;
+        let near = (v - current).abs() <= self.pickup_near;
         let passed = p.last_in.is_some_and(|last| (last - current) * (v - current) <= 0.0);
         if !p.caught && (near || passed) {
             p.caught = true;
@@ -569,6 +641,49 @@ impl ControlHub {
         p.last_in = Some(v);
         p.last_set = if p.caught { Some(v) } else { None };
         p.caught
+    }
+}
+
+/// An OSC address with OSC 1.0 pattern characters in it.
+pub(crate) fn is_osc_pattern(address: &str) -> bool {
+    address.contains(['*', '?', '[', '{'])
+}
+
+/// OSC 1.0 address matching: `*` any run within a part, `?` one character, `[abc]` / `[a-z]` / `[!a]` one of a set,
+/// `{one,two}` one of the words. Parts (between `/`) match one by one.
+pub(crate) fn osc_match(pattern: &str, address: &str) -> bool {
+    let (p, a): (Vec<&str>, Vec<&str>) = (pattern.split('/').collect(), address.split('/').collect());
+    p.len() == a.len() && p.iter().zip(&a).all(|(p, a)| part_match(p.as_bytes(), a.as_bytes()))
+}
+
+fn part_match(p: &[u8], a: &[u8]) -> bool {
+    match p.first() {
+        None => a.is_empty(),
+        Some(b'*') => (0..=a.len()).any(|k| part_match(&p[1..], &a[k..])),
+        Some(b'?') => !a.is_empty() && part_match(&p[1..], &a[1..]),
+        Some(b'[') => {
+            let Some(end) = p.iter().position(|c| *c == b']') else { return false };
+            let Some(&c) = a.first() else { return false };
+            let set = &p[1..end];
+            let (negate, set) = if set.first() == Some(&b'!') { (true, &set[1..]) } else { (false, set) };
+            let mut hit = false;
+            let mut i = 0;
+            while i < set.len() {
+                if i + 2 < set.len() && set[i + 1] == b'-' {
+                    hit |= (set[i]..=set[i + 2]).contains(&c);
+                    i += 3;
+                } else {
+                    hit |= set[i] == c;
+                    i += 1;
+                }
+            }
+            hit != negate && part_match(&p[end + 1..], &a[1..])
+        }
+        Some(b'{') => {
+            let Some(end) = p.iter().position(|c| *c == b'}') else { return false };
+            p[1..end].split(|c| *c == b',').any(|w| a.starts_with(w) && part_match(&p[end + 1..], &a[w.len()..]))
+        }
+        Some(c) => a.first() == Some(c) && part_match(&p[1..], &a[1..]),
     }
 }
 

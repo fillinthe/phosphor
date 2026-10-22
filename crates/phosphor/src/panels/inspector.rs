@@ -57,9 +57,11 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let info = st.media.video_info(sel);
         let position = st.media.position(sel);
         let has_sound = st.media.has_sound(sel);
+        let bpm = st.comp.bpm;
         let mut seek_to: Option<f64> = None;
         let mut quick = None;
         let mut match_beat: Option<u64> = None;
+        let mut reload: Option<String> = None;
         #[cfg(not(target_arch = "wasm32"))]
         let (beat_pending, beat) = {
             let path = st.comp.layers.iter().find(|l| l.id == sel).and_then(|l| crate::app::beat_match::movie_path(&l.source));
@@ -94,8 +96,13 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, match_beat: Default::default() };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, reload: Default::default(), match_beat: Default::default() };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
+            if media.reload.get() {
+                if let SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } = &layer.source {
+                    reload = Some(p.clone());
+                }
+            }
             fx_action = fx;
             seek_to = seek;
             if media.match_beat.get() {
@@ -114,6 +121,10 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let _ = match_beat;
         if let Some(t) = seek_to {
             st.media.seek(sel, t);
+        }
+        if let Some(path) = reload {
+            st.media.reload(&st.comp, &path);
+            st.thumbs.forget(&path);
         }
         if let Some(q) = quick {
             st.quick_on(q, Some(sel), ui.ctx().input(|i| i.time));
@@ -142,6 +153,10 @@ pub(crate) struct LayerMedia<'a> {
     pub beat_pending: bool,
     /// Match the beat: what the last scan of this movie found (BPM, how steady 0..1).
     pub beat: Option<(f32, f32)>,
+    /// The tempo (jump buttons step in beats).
+    pub bpm: f32,
+    /// Set by the editor when Reload is pressed (the caller opens the file again).
+    pub reload: std::cell::Cell<bool>,
     /// Set by the editor when the Match the beat button is pressed (the caller starts the scan).
     pub match_beat: std::cell::Cell<bool>,
 }
@@ -245,14 +260,38 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 if action_button(ui, Act::Go, text).clicked() {
                     layer.playing = !layer.playing;
                 }
+                if ui.button(icon::ARROW_CLOCKWISE).on_hover_text("Reload: open the file again from disk (after you've changed it in another app)").clicked() {
+                    media.reload.set(true);
+                }
                 if ui.button(icon::SKIP_BACK).on_hover_text("Back to the start").clicked() {
                     seek_to = Some(0.0);
                 }
                 toggle(ui, &mut layer.looping, "Loop");
-                ui.separator();
-                let target = ControlTarget::LayerDirection(layer.id);
-                choice_mapped(ui, &mut layer.direction, target.clone());
+                if !layer.looping {
+                    toggle(ui, &mut layer.black_at_end, "Black at end").on_hover_text("When the movie ends, show nothing instead of holding its last frame");
+                }
             });
+            ui.horizontal_wrapped(|ui| {
+                choice_mapped(ui, &mut layer.direction, ControlTarget::LayerDirection(layer.id));
+            });
+            if let Some((pos, dur)) = position {
+                ui.horizontal(|ui| {
+                    ui.label("Jump");
+                    let step = layer.jump_secs(Some(dur), media.bpm);
+                    for (forward, glyph, tip) in [(false, icon::REWIND, "Jump back one step"), (true, icon::FAST_FORWARD, "Jump forward one step")] {
+                        let r = ui.button(glyph).on_hover_text(tip);
+                        if r.clicked() {
+                            seek_to = Some(if forward { pos + step } else { pos - step }.clamp(0.0, dur));
+                        }
+                        map_menu(ui, &r, ControlTarget::LayerJump { layer: layer.id, forward });
+                    }
+                    guarded!(ui, layer.jump, egui::DragValue::new(&mut layer.jump).range(0.05..=64.0).speed(0.05).max_decimals(2)).on_hover_text("How far each jump goes");
+                    let unit = if layer.jump_in_seconds { "seconds" } else if layer.jump == 1.0 { "beat" } else { "beats" };
+                    if ui.small_button(unit).on_hover_text("Click: step in seconds or in beats").clicked() {
+                        layer.jump_in_seconds = !layer.jump_in_seconds;
+                    }
+                });
+            }
             ui.horizontal(|ui| {
                 ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
                     Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).target(ControlTarget::LayerSpeed(layer.id)).show(ui);

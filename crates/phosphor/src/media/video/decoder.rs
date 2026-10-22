@@ -18,6 +18,8 @@ pub(super) struct Decoder {
     default_dur: f64,
     pub(super) duration: Option<f64>,
     pub(super) codec: String,
+    /// Frame rate, bit rate, pixel format, colour space, sound: for the Inspector (`describe`).
+    pub(super) about: String,
     pub(super) dec: ff::decoder::Video,
     /// VideoToolbox was attached; cleared if it fails before the first frame.
     hw: bool,
@@ -121,6 +123,7 @@ impl Decoder {
             0
         };
         let (dec, codec, hw) = open_decoder(&input, stream, true)?;
+        let about = describe(&input, stream, fps);
         // SAFETY: a static table lookup by codec id.
         let intra = unsafe {
             let d = ffi::avcodec_descriptor_get(dec.id().into());
@@ -143,6 +146,7 @@ impl Decoder {
             default_dur,
             duration,
             codec,
+            about,
             dec,
             hw,
             intra,
@@ -919,4 +923,37 @@ struct RevJob {
     wrap: bool,
     /// How far before `end` the seek went (grows when a seek lands too late).
     back: f64,
+}
+
+/// "29.97 fps · 12.4 Mb/s · yuv420p · BT.709 · sound 48 kHz, 2 ch" for a movie's video stream and its sound.
+fn describe(input: &ff::format::context::Input, stream: usize, fps: f64) -> String {
+    let mut parts = Vec::new();
+    if fps > 0.0 && fps < 1000.0 {
+        parts.push(format!("{} fps", (fps * 100.0).round() / 100.0));
+    }
+    let bits = input.bit_rate();
+    if bits > 0 {
+        parts.push(format!("{:.1} Mb/s", bits as f64 / 1e6));
+    }
+    let name = |p: *const std::ffi::c_char| (!p.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().to_string());
+    if let Some(st) = input.stream(stream) {
+        // SAFETY: reading plain fields of the stream's codec parameters; the name lookups are static tables.
+        let (fmt, space) = unsafe {
+            let par = st.parameters().as_ptr();
+            (name(ffi::av_get_pix_fmt_name(std::mem::transmute::<i32, ffi::AVPixelFormat>((*par).format))), name(ffi::av_color_space_name((*par).color_space)))
+        };
+        parts.extend(fmt);
+        if let Some(space) = space.filter(|s| s != "unknown" && s != "gbr") {
+            parts.push(space.replace("bt", "BT.").to_uppercase());
+        }
+    }
+    match input.streams().best(ff::media::Type::Audio) {
+        // SAFETY: as above.
+        Some(a) => unsafe {
+            let par = a.parameters().as_ptr();
+            parts.push(format!("sound {} kHz, {} ch", (*par).sample_rate as f64 / 1000.0, (*par).ch_layout.nb_channels));
+        },
+        None => parts.push("no sound".into()),
+    }
+    parts.join(" · ")
 }

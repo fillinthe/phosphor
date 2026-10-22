@@ -85,7 +85,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::SurfacePage => phosphor_engine::pick_unit(comp.surface.current_page(), comp.surface.pages.len()),
             _ => return None,
         },
-        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) => return None,
+        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } => return None,
     })
 }
 
@@ -200,6 +200,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             }
         }
         ControlTarget::LayerScrub(id) => out.push(Deferred::Scrub(*id, v.clamp(0.0, 1.0))),
+        ControlTarget::LayerJump { layer, forward } => {
+            if v > 0.5 || v == FLIP {
+                out.push(Deferred::Jump(*layer, *forward));
+            }
+        }
         ControlTarget::App(a) => match a {
             AppControl::LaunchFade => comp.launch.fade = toggled(comp.launch.fade, v),
             AppControl::FadeTime => comp.launch.fade_secs = unit_to(v, 0.05, 10.0, true),
@@ -360,6 +365,8 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         }
         if matches!(l.source, phosphor_engine::SourceSpec::Movie { .. }) {
             out.push((ControlTarget::LayerScrub(l.id), format!("{} · scrub", l.name)));
+            out.push((ControlTarget::LayerJump { layer: l.id, forward: false }, format!("{} · jump back", l.name)));
+            out.push((ControlTarget::LayerJump { layer: l.id, forward: true }, format!("{} · jump forward", l.name)));
             out.push((ControlTarget::LayerVolume(l.id), format!("{} · volume", l.name)));
             out.push((ControlTarget::LayerLoopIn(l.id), format!("{} · loop in", l.name)));
             out.push((ControlTarget::LayerLoopOut(l.id), format!("{} · loop out", l.name)));
@@ -406,6 +413,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerLoopOut(id) => format!("/phosphor/layer/{id}/loop/out"),
         ControlTarget::LayerDirection(id) => format!("/phosphor/layer/{id}/direction"),
         ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
+        ControlTarget::LayerJump { layer, forward } => format!("/phosphor/layer/{layer}/jump/{}", if *forward { "forward" } else { "back" }),
         ControlTarget::LayerVolume(id) => format!("/phosphor/layer/{id}/volume"),
         ControlTarget::LayerX(id) => format!("/phosphor/layer/{id}/x"),
         ControlTarget::LayerY(id) => format!("/phosphor/layer/{id}/y"),

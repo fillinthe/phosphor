@@ -11,19 +11,32 @@ Sizes are my estimate: **S** = an hour or two, **M** = half a day to two days, *
 Hardware items can be built but not tested here without the device.
 
 ### Small
-- [ ] 1. **Copy size mode** for layers: 1:1 pixels, no scaling (V). Has Fit / Fill / Stretch.
-- [ ] 2. **Cut to black** when a clip ends (V). Has loop, hold last frame, ping-pong.
-- [ ] 3. **Random frames** play mode (M).
-- [ ] 4. **Jump back / forward** buttons: N seconds or N beats (V).
-- [ ] 5. **Reload a media file** from disk after you've edited it (M).
-- [ ] 6. **Media info**: fps, bit rate, colour space, sound; **used by** count (which layers/clips use a file) (M). Has codec, size, length.
-- [ ] 7. **More blend modes**: Soft/Hard/Vivid/Linear/Pin Light, Hard Mix, Colour Burn/Dodge, Divide, Hue, Saturation, Colour, Luminosity (V). Has 10 + 3 masks.
-- [ ] 8. **Crossfader curve** (V). Fixed straight line now.
-- [ ] 9. **Soft takeover settings**: pickup distance, and "glide to the controller" (V). Has pickup at a fixed distance.
-- [ ] 10. **More mapping value effects**: threshold, randomize, clamp, wrap, peak-hold (fall), average, drawn lookup curve (V). Has smooth, steps, curve, formula, delay.
-- [ ] 11. **Dead-band and endless encoders** (relative MIDI knobs) on mappings (V).
-- [ ] 12. **Controller inputs**: turn single MIDI devices on/off, several OSC ports, wildcard OSC addresses (V, M).
-- [ ] 13. **Mappings list: jump to the control** it drives (V). The list itself exists.
+- [x] 1. **Copy size mode** for layers: 1:1 pixels, no scaling (V). Has Fit / Fill / Stretch.
+      Checked: unit test (a half-size picture fills the middle).
+- [x] 2. **Cut to black** when a clip ends (V). Has loop, hold last frame, ping-pong.
+      Shown next to Loop when Loop is off. Checked: player test (finished at the end, not after seeking back).
+- [x] 3. **Random frames** play mode (M).
+      A fourth direction, "Random frames". Checked: player test (jumps all over the loop region, never leaves it); 1280×720 H.264 jumps ~75 times a second.
+- [x] 4. **Jump back / forward** buttons: N seconds or N beats (V).
+      Jump row in Playback: back / forward, step in beats (at the layer's speed) or seconds; both mappable. Checked: unit test of the step.
+- [x] 5. **Reload a media file** from disk after you've edited it (M).
+      Media bin right-click › Reload, and a Reload button in Playback; keeps the place in a movie. Not tried with a file edited while playing.
+- [x] 6. **Media info**: fps, bit rate, colour space, sound; **used by** count (which layers/clips use a file) (M). Has codec, size, length.
+      Playback line now shows fps, bit rate, pixel format, colour space (when the file says) and sound; media tiles say how many layers and clips use the file. Checked: unit test + screenshot.
+- [x] 7. **More blend modes**: Soft/Hard/Vivid/Linear/Pin Light, Hard Mix, Colour Burn/Dodge, Divide, Hue, Saturation, Colour, Luminosity (V). Has 10 + 3 masks.
+      13 more (Soft / Hard / Vivid / Linear / Pin Light, Hard Mix, Colour Burn / Dodge, Divide, Hue, Saturation, Colour, Luminosity). Checked: GPU test of every mode's formula.
+- [x] 8. **Crossfader curve** (V). Fixed straight line now.
+      Mixer: Both full in the middle (as before) / Smooth (no dip) / Straight / Cut. Checked: unit test + screenshot.
+- [x] 9. **Soft takeover settings**: pickup distance, and "glide to the controller" (V). Has pickup at a fixed distance.
+      Control panel: Glide (the value comes to the fader) and the pickup distance. Checked: tests of both.
+- [x] 10. **More mapping value effects**: threshold, randomize, clamp, wrap, peak-hold (fall), average, drawn lookup curve (V). Has smooth, steps, curve, formula, delay.
+      Threshold, Limit, Repeat, Jitter, Fall (peak hold), Drawn curve. Average left out (Smooth does that job). Checked: tests.
+- [x] 11. **Dead-band and endless encoders** (relative MIDI knobs) on mappings (V).
+      Value effects "Endless knob" (relative MIDI, two's complement) and "Dead band". Checked: tests.
+- [x] 12. **Controller inputs**: turn single MIDI devices on/off, several OSC ports, wildcard OSC addresses (V, M).
+      MIDI devices could already be switched off one by one (Devices). New: more OSC ports ("also on ports…"), and wildcard OSC addresses on mappings (`*`, `?`, `[1-4]`, `{a,b}`). Checked: matching test + a real UDP message on the extra port.
+- [x] 13. **Mappings list: jump to the control** it drives (V). The list itself exists.
+      Crosshair button on each mapping: selects its layer / group / slice and opens its panel. Checked: test.
 - [ ] 14. **Search in the layer source menu** (V). Explorer and ⌘K already search.
 - [ ] 15. **Copy / paste a control's mappings and modulation** onto another control (V, M).
 - [ ] 16. **Project notes** panel (V, M).

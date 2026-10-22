@@ -13,6 +13,13 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         ui.label(RichText::new("OSC").strong());
         guarded!(ui, control.osc_port, egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
+        // More ports, typed as a list ("8000, 9001"); applied by Reconnect.
+        let id = ui.id().with("osc_extra");
+        let mut text = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| control.osc_extra_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
+        if crate::ui::text_field(ui, &mut text, "also on ports…", Some(110.0)).on_hover_text("More ports to listen on, for apps that only send to their own port (e.g. 8000, 9001); press Reconnect").changed() {
+            control.osc_extra_ports = text.split([',', ' ']).filter_map(|p| p.trim().parse::<u16>().ok()).filter(|p| *p >= 1024).collect();
+        }
+        ui.data_mut(|d| d.insert_temp(id, text));
         if ui.button(label(icon::ARROWS_CLOCKWISE, "Reconnect")).clicked() {
             control.reconnect();
         }
@@ -33,6 +40,17 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         crate::ui::toggle(ui, &mut control.soft_takeover, "Soft takeover")
             .on_hover_text("A fader or knob only takes over once it reaches the value on screen (moves it past it), so the picture never jumps when the hardware was left somewhere else");
+        if control.soft_takeover {
+            crate::ui::toggle(ui, &mut control.takeover_glide, "Glide")
+                .on_hover_text("Instead of waiting for the fader to reach the value, the value glides to the fader (a smooth catch-up, no jump)");
+            let mut pct = control.pickup_near * 100.0;
+            if guarded!(ui, pct, egui::DragValue::new(&mut pct).range(0.5..=50.0).speed(0.1).max_decimals(1).prefix("within ").suffix("%"))
+                .on_hover_text("How close a fader has to come to the value on screen to take over")
+                .changed()
+            {
+                control.pickup_near = pct / 100.0;
+            }
+        }
         crate::ui::toggle(ui, &mut control.feedback, "Send feedback")
             .on_hover_text("Controllers follow Phosphor: values changed here (mouse, phone, other controllers) go back to TouchOSC faders and to MIDI controllers with motor faders or LED rings");
         ui.add_enabled_ui(control.feedback, |ui| {
@@ -103,11 +121,43 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
     });
 }
 
+/// Where a mapped control lives: the panel to open, the layer / group / comp to select (MASTER_ID = master), the
+/// slice to select. None when it's gone.
+fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Option<(Tab, Option<u64>, Option<u64>)> {
+    use ControlTarget as T;
+    let item = |id: u64| Some((Tab::Inspector, Some(id), None));
+    match target {
+        T::MasterFade => item(phosphor_engine::MASTER_ID),
+        T::LayerOpacity(id) | T::LayerEnabled(id) | T::LayerSpeed(id) | T::LayerFxBypass(id) | T::LayerLoopIn(id) | T::LayerLoopOut(id) | T::LayerDirection(id) | T::LayerScrub(id) | T::LayerVolume(id) | T::LayerX(id) | T::LayerY(id) | T::LayerScale(id) | T::LayerRotation(id) => item(*id),
+        T::GeneratorParam { layer, .. } | T::LayerJump { layer, .. } | T::LayerCorner { layer, .. } => item(*layer),
+        T::TriggerClip { layer, .. } => Some((Tab::Clips, Some(*layer), None)),
+        T::TriggerColumn(_) => Some((Tab::Clips, None, None)),
+        T::EffectParam { effect, .. } | T::EffectMix(effect) | T::EffectEnabled(effect) => {
+            let has = |chain: &[phosphor_engine::EffectState]| chain.iter().any(|e| e.id == *effect);
+            if has(&comp.master_effects) {
+                return item(phosphor_engine::MASTER_ID);
+            }
+            let owner = comp.layers.iter().find(|l| has(&l.effects)).map(|l| l.id).or_else(|| comp.groups.iter().find(|g| has(&g.effects)).map(|g| g.id)).or_else(|| comp.comps.iter().find(|c| has(&c.effects)).map(|c| c.id));
+            if let Some(id) = owner {
+                return item(id);
+            }
+            let slice = comp.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).find(|s| has(&s.effects))?;
+            Some((Tab::Mapping, None, Some(slice.id)))
+        }
+        T::SliceOpacity(id) | T::SliceEnabled(id) => Some((Tab::Mapping, None, Some(*id))),
+        T::Surface(_) | T::SurfaceY(_) => Some((Tab::Surface, None, None)),
+        T::Modulator(_) => Some((Tab::Modulators, None, None)),
+        T::Fixture { .. } => Some((Tab::Leds, None, None)),
+        T::App(_) => None,
+    }
+}
+
 /// Every controller mapping, editable: Listen for a new input, retype or re-listen an input, pick
 /// the target, set the range, switch on/off, delete. A live meter shows each input as it moves.
 fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     use crate::app::ListenFor;
-    let State { control, comp, listen_for, map_draft, map_search, mapping_presets, mapping_preset_name, notice, .. } = st;
+    let mut show: Option<(Tab, Option<u64>, Option<u64>)> = None;
+    let State { control, comp, listen_for, map_draft, map_search, mapping_presets, mapping_preset_name, notice, selected, selected_surface, open_tab, .. } = st;
     // A heard input lands where the Listen was for.
     if let Some(src) = control.heard.take() {
         match listen_for.take() {
@@ -183,6 +233,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         if comp.control_maps.is_empty() && map_draft.is_none() {
             hint(ui, format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
         }
+        let places: Vec<_> = comp.control_maps.iter().map(|m| where_is(comp, &m.target)).collect();
         egui::Grid::new("mappings").num_columns(6).striped(true).spacing([6.0, 3.0]).show(ui, |ui| {
             for (i, m) in comp.control_maps.iter_mut().enumerate() {
                 let name = targets.iter().find(|(t, _)| *t == m.target).map_or("(removed)", |(_, n)| n.as_str());
@@ -207,9 +258,15 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                     fill.set_width(r.width() * v.clamp(0.0, 1.0));
                     ui.painter().rect_filled(fill, 2.0, accent());
                 }
-                if let Some(t) = target_picker(ui, ("map_target", i), &targets, Some(&m.target), 220.0) {
-                    m.target = t;
-                }
+                ui.horizontal(|ui| {
+                    if let Some(t) = target_picker(ui, ("map_target", i), &targets, Some(&m.target), 220.0) {
+                        m.target = t;
+                    }
+                    let place = places.get(i).copied().flatten();
+                    if ui.add_enabled(place.is_some(), egui::Button::new(icon::CROSSHAIR).small()).on_hover_text("Show this control (selects its layer and opens its panel)").clicked() {
+                        show = place;
+                    }
+                });
                 ui.horizontal(|ui| {
                     range_editor(ui, &mut m.range);
                     value_fx_menu(ui, ("map_fx", i), &mut m.fx);
@@ -224,6 +281,15 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     if let Some(i) = remove {
         comp.control_maps.remove(i);
         *listen_for = None;
+    }
+    if let Some((tab, item, slice)) = show {
+        if item.is_some() {
+            *selected = item;
+        }
+        if slice.is_some() {
+            *selected_surface = slice;
+        }
+        *open_tab = Some(tab);
     }
 }
 
@@ -255,6 +321,32 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
                     ValueFx::Delay(s) => {
                         guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=30.0).speed(0.01).suffix(" s")).on_hover_text("Each move lands this much later");
                     }
+                    ValueFx::Threshold(t) => {
+                        guarded!(ui, *t, egui::DragValue::new(t).range(0.0..=1.0).speed(0.005).max_decimals(2)).on_hover_text("On (full) at or above this, off below: a fader becomes a switch");
+                    }
+                    ValueFx::Clamp(lo, hi) => {
+                        guarded!(ui, *lo, egui::DragValue::new(lo).range(0.0..=1.0).speed(0.005).max_decimals(2).prefix("from ")).on_hover_text("Lowest value it can send");
+                        guarded!(ui, *hi, egui::DragValue::new(hi).range(0.0..=1.0).speed(0.005).max_decimals(2).prefix("to ")).on_hover_text("Highest value it can send");
+                    }
+                    ValueFx::Repeat(n) => {
+                        guarded!(ui, *n, egui::DragValue::new(n).range(1..=32).suffix("×")).on_hover_text("The range repeats this many times along the fader");
+                    }
+                    ValueFx::Randomize(a) => {
+                        guarded!(ui, *a, egui::DragValue::new(a).range(0.0..=1.0).speed(0.005).max_decimals(2)).on_hover_text("Up to this much random wobble on each value");
+                    }
+                    ValueFx::Fall(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=10.0).speed(0.01).suffix(" s")).on_hover_text("Rises land at once; drops glide down over this long (peak hold)");
+                    }
+                    ValueFx::Endless(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.001..=0.25).speed(0.0005).max_decimals(3).prefix("per click ")).on_hover_text("For knobs that turn forever (relative MIDI: 1–63 up, 65–127 down): how far one click moves the value (0.01 = 1%)");
+                    }
+                    ValueFx::DeadBand(d) => {
+                        guarded!(ui, *d, egui::DragValue::new(d).range(0.001..=0.25).speed(0.0005).max_decimals(3)).on_hover_text("Changes smaller than this are ignored (a jittery fader or sensor)");
+                    }
+                    ValueFx::Lookup(points) => {
+                        // Draw the output: left = fader at 0, right = fader at full.
+                        crate::ui::step_bars(ui, points, None, false, 40.0);
+                    }
                 }
                 if ui.small_button(icon::X).clicked() {
                     remove = Some(k);
@@ -266,7 +358,23 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
         }
         ui.separator();
         ui.horizontal_wrapped(|ui| {
-            for (name, f) in [("Smooth", ValueFx::Smooth(0.3)), ("Steps", ValueFx::Steps(4)), ("Curve", ValueFx::Curve(2.0)), ("Formula", ValueFx::Formula("1 - $VAL".into())), ("Delay", ValueFx::Delay(0.5))] {
+            let fresh = [
+                ValueFx::Smooth(0.3),
+                ValueFx::Steps(4),
+                ValueFx::Curve(2.0),
+                ValueFx::Formula("1 - $VAL".into()),
+                ValueFx::Delay(0.5),
+                ValueFx::Threshold(0.5),
+                ValueFx::Clamp(0.0, 1.0),
+                ValueFx::Repeat(2),
+                ValueFx::Randomize(0.1),
+                ValueFx::Fall(0.5),
+                ValueFx::Lookup((0..9).map(|i| i as f32 / 8.0).collect()),
+                ValueFx::Endless(0.01),
+                ValueFx::DeadBand(0.02),
+            ];
+            for f in fresh {
+                let name = f.name();
                 if ui.small_button(label(icon::PLUS, name)).clicked() {
                     fx.push(f);
                 }
@@ -276,4 +384,22 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
     .response
     .on_hover_text("Smooth, steps, curve or a formula on this mapping's value");
     let _ = id;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mapped_controls_are_found() {
+        let mut comp = phosphor_engine::Composition::starter();
+        let layer = comp.add_layer().id;
+        let fx = comp.new_effect("invert").unwrap();
+        let fid = fx.id;
+        comp.layers.iter_mut().find(|l| l.id == layer).unwrap().effects.push(fx);
+        assert_eq!(where_is(&comp, &ControlTarget::EffectMix(fid)), Some((Tab::Inspector, Some(layer), None)));
+        assert_eq!(where_is(&comp, &ControlTarget::LayerJump { layer, forward: true }), Some((Tab::Inspector, Some(layer), None)));
+        assert_eq!(where_is(&comp, &ControlTarget::MasterFade).map(|p| p.1), Some(Some(phosphor_engine::MASTER_ID)));
+        assert_eq!(where_is(&comp, &ControlTarget::EffectMix(999_999)), None, "gone");
+    }
 }
