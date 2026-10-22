@@ -44,6 +44,13 @@ const LEVEL_MAX: f32 = 4.0;
 const LEVEL_SECS: f32 = 3.0;
 /// Output sample rate once the device is open (0 = not open).
 static OUT_RATE: AtomicU32 = AtomicU32::new(0);
+/// The output device's channel count once open (0 = not open): pairs beyond 1-2 can carry layers of their own.
+static OUT_CHANNELS: AtomicU32 = AtomicU32::new(0);
+
+/// How many channels the sound output has (0 before it opens).
+pub fn output_channels() -> u32 {
+    OUT_CHANNELS.load(Ordering::Relaxed)
+}
 static OUTPUT_RUNNING: AtomicBool = AtomicBool::new(false);
 static CLIPS: Mutex<Vec<Weak<Clip>>> = Mutex::new(Vec::new());
 /// Sample frames the output has taken from clips (diagnostics: bench prints it).
@@ -187,6 +194,8 @@ struct Clip {
     applied: AtomicU32,
     /// How loud the clip is (mean square, averaged over `LEVEL_SECS`; 0 = nothing heard yet), for levelling.
     loudness: AtomicU32,
+    /// Which pair of the output's channels it plays on (0 = 1-2, 1 = 3-4…).
+    pair: AtomicU32,
     follow: Mutex<Follow>,
     quit: AtomicBool,
 }
@@ -225,6 +234,7 @@ impl ClipAudio {
             gain: AtomicU32::new(1f32.to_bits()),
             applied: AtomicU32::new(0f32.to_bits()),
             loudness: AtomicU32::new(0),
+            pair: AtomicU32::new(0),
             follow: Mutex::new(Follow { rate: 1.0, looping: true, ..Default::default() }),
             quit: AtomicBool::new(false),
         });
@@ -244,6 +254,11 @@ impl ClipAudio {
 
     pub fn set_gain(&self, g: f32) {
         self.clip.gain.store(g.clamp(0.0, 4.0).to_bits(), Ordering::Relaxed);
+    }
+
+    /// Plays on this pair of the output's channels (0 = 1-2, 1 = 3-4…; past the last pair = the last pair).
+    pub fn set_pair(&self, pair: u32) {
+        self.clip.pair.store(pair, Ordering::Relaxed);
     }
 }
 
@@ -598,31 +613,33 @@ fn run_output() -> Result<bool, String> {
     let channels = supported.channels().max(1) as usize;
     let rate = supported.sample_rate();
     let config: cpal::StreamConfig = supported.config();
-    let mut scratch: Vec<f32> = Vec::new();
-    let mut eq = super::eq::Eq::default();
+    // One stereo block per pair of output channels (layers can be sent to 3-4, 5-6… on a multichannel interface).
+    let pairs = (channels / 2).max(1);
+    let mut blocks: Vec<f32> = Vec::new();
+    let mut sum: Vec<f32> = Vec::new();
+    let mut eqs: Vec<super::eq::Eq> = (0..pairs).map(|_| super::eq::Eq::default()).collect();
     let mut mix = move |out: &mut [f32]| {
         let frames = out.len() / channels;
-        scratch.clear();
-        scratch.resize(frames * 2, 0.0);
-        mix_clips(&mut scratch);
-        eq.process(&mut scratch, EQ_DB.each_ref().map(|d| f32::from_bits(d.load(Ordering::Relaxed))), rate as f32);
-        TAP.push(scratch.iter().copied());
-        PROGRAM.push(scratch.iter().copied());
-        NDI_TAP.push(scratch.iter().copied());
+        blocks.clear();
+        blocks.resize(frames * 2 * pairs, 0.0);
+        mix_clips(&mut blocks, pairs);
+        let db = EQ_DB.each_ref().map(|d| f32::from_bits(d.load(Ordering::Relaxed)));
+        for (block, eq) in blocks.chunks_mut(frames * 2).zip(&mut eqs) {
+            eq.process(block, db, rate as f32);
+        }
+        // Streams, recordings, NDI and the analyser hear everything.
+        sum.clear();
+        sum.resize(frames * 2, 0.0);
+        for block in blocks.chunks(frames * 2) {
+            sum.iter_mut().zip(block).for_each(|(s, b)| *s += b);
+        }
+        TAP.push(sum.iter().copied());
+        PROGRAM.push(sum.iter().copied());
+        NDI_TAP.push(sum.iter().copied());
         if !LOCAL.load(Ordering::Relaxed) {
-            scratch.iter_mut().for_each(|s| *s = 0.0);
+            blocks.iter_mut().for_each(|s| *s = 0.0);
         }
-        for (i, frame) in out.chunks_mut(channels).enumerate() {
-            let (l, r) = (scratch[i * 2], scratch[i * 2 + 1]);
-            match frame.len() {
-                1 => frame[0] = 0.5 * (l + r),
-                _ => {
-                    frame[0] = l;
-                    frame[1] = r;
-                    frame[2..].iter_mut().for_each(|s| *s = 0.0);
-                }
-            }
-        }
+        to_device(&blocks, frames, out, channels);
     };
     let err_fn = |e: cpal::Error| log::warn!("sound output: {e}");
     let stream = match supported.sample_format() {
@@ -647,6 +664,7 @@ fn run_output() -> Result<bool, String> {
     .map_err(|e| e.to_string())?;
     stream.play().map_err(|e| e.to_string())?;
     OUT_RATE.store(rate, Ordering::Relaxed);
+    OUT_CHANNELS.store(channels as u32, Ordering::Relaxed);
     log::info!("sound output: {} at {rate} Hz", device.description().map(|d| d.name().to_string()).unwrap_or_default());
     let mut idle = 0;
     loop {
@@ -665,13 +683,28 @@ fn run_output() -> Result<bool, String> {
     }
 }
 
-/// Adds every clip's next samples into `out` (stereo interleaved), ramping gain changes.
-fn mix_clips(out: &mut [f32]) {
+/// The pair blocks (each `frames` stereo frames) into the device's interleaved channels; a mono device gets the
+/// first pair folded down, channels past the pairs stay silent.
+fn to_device(blocks: &[f32], frames: usize, out: &mut [f32], channels: usize) {
+    for (i, frame) in out.chunks_mut(channels).enumerate().take(frames) {
+        if frame.len() == 1 {
+            frame[0] = 0.5 * (blocks[i * 2] + blocks[i * 2 + 1]);
+            continue;
+        }
+        for (c, s) in frame.iter_mut().enumerate() {
+            let (pair, side) = (c / 2, c % 2);
+            *s = blocks.get(pair * frames * 2 + i * 2 + side).copied().unwrap_or(0.0);
+        }
+    }
+}
+
+/// Adds every clip's next samples into its pair's block of `out` (`pairs` stereo blocks), ramping gain changes.
+fn mix_clips(out: &mut [f32], pairs: usize) {
     let clips: Vec<Arc<Clip>> = match CLIPS.try_lock() {
         Ok(c) => c.iter().filter_map(Weak::upgrade).collect(),
         Err(_) => return,
     };
-    let frames = out.len() / 2;
+    let frames = out.len() / 2 / pairs.max(1);
     let level = AUTO_LEVEL.load(Ordering::Relaxed);
     for clip in clips {
         let mut target = f32::from_bits(clip.gain.load(Ordering::Relaxed));
@@ -681,10 +714,11 @@ fn mix_clips(out: &mut [f32]) {
         let from = f32::from_bits(clip.applied.load(Ordering::Relaxed));
         let Ok(mut buf) = clip.buf.lock() else { continue };
         let n = frames.min(buf.len() / 2);
+        let base = (clip.pair.load(Ordering::Relaxed) as usize).min(pairs.max(1) - 1) * frames * 2;
         for i in 0..n {
             let g = from + (target - from) * (i as f32 / frames.max(1) as f32);
-            out[i * 2] += buf.pop_front().unwrap_or(0.0) * g;
-            out[i * 2 + 1] += buf.pop_front().unwrap_or(0.0) * g;
+            out[base + i * 2] += buf.pop_front().unwrap_or(0.0) * g;
+            out[base + i * 2 + 1] += buf.pop_front().unwrap_or(0.0) * g;
         }
         clip.applied.store(target.to_bits(), Ordering::Relaxed);
         PLAYED.fetch_add(n as u64, Ordering::Relaxed);
@@ -698,6 +732,19 @@ fn mix_clips(out: &mut [f32]) {
 mod level_tests {
     use super::*;
 
+    /// Pair blocks land on their channels: pair 0 on 1-2, pair 1 on 3-4; a 6-channel device's 5-6 stay silent.
+    #[test]
+    fn pairs_go_to_their_channels() {
+        // Two frames each: pair 0 = (1, 2), (3, 4); pair 1 = (5, 6), (7, 8).
+        let blocks = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let mut out = [9.0; 12];
+        to_device(&blocks, 2, &mut out, 6);
+        assert_eq!(out, [1.0, 2.0, 5.0, 6.0, 0.0, 0.0, 3.0, 4.0, 7.0, 8.0, 0.0, 0.0]);
+        let mut mono = [0.0; 2];
+        to_device(&blocks[..4], 2, &mut mono, 1);
+        assert_eq!(mono, [1.5, 3.5]);
+    }
+
     /// A loud clip is turned down and a quiet one up, to the same level; silence and the limits hold.
     #[test]
     fn levelling_meets_in_the_middle() {
@@ -707,7 +754,7 @@ mod level_tests {
         assert!((0.04 * quiet - LEVEL_TARGET).abs() < 1e-4, "{quiet}");
         assert_eq!(level_gain(0.0), 1.0);
         assert_eq!(level_gain(0.0001 * 0.0001), LEVEL_MAX);
-        let clip = Clip { buf: Mutex::new(VecDeque::new()), gain: AtomicU32::new(0), applied: AtomicU32::new(0), loudness: AtomicU32::new(0), follow: Mutex::new(Follow::default()), quit: AtomicBool::new(false) };
+        let clip = Clip { buf: Mutex::new(VecDeque::new()), gain: AtomicU32::new(0), applied: AtomicU32::new(0), loudness: AtomicU32::new(0), pair: AtomicU32::new(0), follow: Mutex::new(Follow::default()), quit: AtomicBool::new(false) };
         clip.measure(&[0.0001; 4800], 48_000.0);
         assert_eq!(f32::from_bits(clip.loudness.load(Ordering::Relaxed)), 0.0, "silence doesn't count");
         clip.measure(&[0.2; 4800], 48_000.0);
@@ -732,6 +779,7 @@ mod tests {
             gain: AtomicU32::new(1f32.to_bits()),
             applied: AtomicU32::new(0),
             loudness: AtomicU32::new(0),
+            pair: AtomicU32::new(0),
             follow: Mutex::new(Follow { pos: 0.9, playing: true, rate: 1.0, looping: true, range: None, generation: 1 }),
             quit: AtomicBool::new(false),
         });

@@ -586,6 +586,22 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
         volume_bar(ui, layer, w);
     });
     crate::ui::toggle(ui, &mut layer.volume_follows_opacity, "Sound follows opacity").on_hover_text("Fading the layer (or its group, or the crossfader) fades its sound too");
+    // A multichannel sound output: which pair of its outputs this layer plays on.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
+        if pairs > 1 || layer.sound_pair > 0 {
+            let name = |p: u8| format!("Outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
+            ui.horizontal(|ui| {
+                ui.label("Plays on");
+                ComboBox::from_id_salt(("sound_pair", layer.id)).width(120.0).selected_text(name(layer.sound_pair)).show_ui(ui, |ui| {
+                    for p in 0..pairs.max(layer.sound_pair + 1) {
+                        ui.selectable_value(&mut layer.sound_pair, p, name(p));
+                    }
+                });
+            });
+        }
+    }
 }
 
 /// A layer's volume (to 200%; the mark is 100%).
