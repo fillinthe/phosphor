@@ -722,3 +722,29 @@ fn a_value_picks_a_clip() {
     let slots: Vec<usize> = out.iter().filter_map(|d| if let Deferred::Clip(_, s) = d { Some(*s) } else { None }).collect();
     assert_eq!(slots, vec![2, 3]);
 }
+
+/// MIDI clock out reaches a MIDI destination at 24 pulses a beat (a virtual one made here).
+#[cfg(target_os = "macos")]
+#[test]
+fn midi_clock_goes_out_at_the_tempo() {
+    use midir::os::unix::VirtualInput;
+    use std::sync::{Arc, Mutex};
+    let Ok(input) = midir::MidiInput::new("phosphor-test-sink") else { return };
+    let got: Arc<Mutex<Vec<u8>>> = Arc::default();
+    let g = got.clone();
+    let Ok(_sink) = input.create_virtual("Phosphor Clock Sink", move |_, msg, _| g.lock().unwrap().extend_from_slice(msg), ()) else { return };
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let clock = super::clock_out::ClockOut::start("Phosphor Clock Sink", 0.0, 120.0).expect("the sink is an output");
+    let started = std::time::Instant::now();
+    while started.elapsed().as_millis() < 500 {
+        clock.follow(started.elapsed().as_secs_f64() * 2.0, 120.0);
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
+    drop(clock);
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let msgs = got.lock().unwrap().clone();
+    let pulses = msgs.iter().filter(|b| **b == 0xF8).count();
+    assert_eq!(msgs.first(), Some(&0xFA), "Start first");
+    assert!((20..=28).contains(&pulses), "{pulses} pulses in half a second at 120 BPM (24 expected)");
+    assert_eq!(msgs.last(), Some(&0xFC), "Stop when it ends");
+}
