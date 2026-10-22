@@ -520,3 +520,27 @@ fn palette_snaps_to_the_nearest_colour() {
     assert!(red_of(&mut engine, 0.3) < 5);
     assert!(red_of(&mut engine, 0.7) > 250);
 }
+
+/// Smooth edges: a diamond-shaped slice has in-between pixels along its edges only when the output smooths them.
+#[test]
+fn smooth_outputs_soften_slice_edges() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 64, height: 64, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
+    let out = comp.add_output();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    (o.width, o.height) = (64, 64);
+    o.mapping.enabled = true;
+    o.mapping.add_surface(50).corners = [[0.5, 0.05], [0.95, 0.5], [0.5, 0.95], [0.05, 0.5]];
+    let soft = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (_, _, px) = engine.read_output_of(out).expect("output");
+        px.chunks(4).filter(|p| p[0] > 30 && p[0] < 225).count()
+    };
+    let hard = soft(&mut engine, &comp);
+    comp.outputs[0].smooth = true;
+    let smooth = soft(&mut engine, &comp);
+    assert!(smooth > hard + 40, "edges: {hard} in-between pixels sharp, {smooth} smooth");
+    let (w, h, _) = engine.read_output_of(out).unwrap();
+    assert_eq!((w, h), (64, 64), "the output keeps its size");
+}

@@ -538,9 +538,11 @@ impl Engine {
             let Some(scratch) = extra.scratch.as_ref() else { continue };
             let size = (scratch.width, scratch.height);
             let mirror = [if o.flip_x { -1.0 } else { 1.0 }, if o.flip_y { -1.0 } else { 1.0 }, if o.flip_x { 1.0 } else { 0.0 }, if o.flip_y { 1.0 } else { 0.0 }];
-            let copy = |target: wgpu::TextureView, src: wgpu::TextureView, xform: [f32; 4], passes: &mut Vec<Pass>| {
+            // (The output itself can be smaller than the scratch: smooth edges draw at twice the size.)
+            let out_size = (out.width, out.height);
+            let copy = |target: wgpu::TextureView, src: wgpu::TextureView, xform: [f32; 4], res: (u32, u32), passes: &mut Vec<Pass>| {
                 let mut u = Uniforms::with_params(&[]);
-                u.resolution = [size.0 as f32, size.1 as f32];
+                u.resolution = [res.0 as f32, res.1 as f32];
                 u.opacity = 1.0;
                 u.uv_xform = xform;
                 passes.push(Pass { entry: "fs_composite", target, tex0: src, tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
@@ -548,17 +550,17 @@ impl Engine {
             let delay = o.delay_frames.min(crate::MAX_OUTPUT_DELAY) as usize;
             if delay == 0 {
                 extra.ring.clear();
-                copy(out.view.clone(), scratch.view.clone(), mirror, passes);
+                copy(out.view.clone(), scratch.view.clone(), mirror, out_size, passes);
                 continue;
             }
             // Written `delay` frames ago = the one after this frame's slot (a ring of delay + 1).
             extra.ring.resize_with(delay + 1, || None);
             let head = extra.head % extra.ring.len();
             Target::ensure(&mut extra.ring[head], device, "output delay", size.0, size.1);
-            copy(extra.ring[head].as_ref().unwrap().view.clone(), scratch.view.clone(), mirror, passes);
+            copy(extra.ring[head].as_ref().unwrap().view.clone(), scratch.view.clone(), mirror, size, passes);
             let oldest = (head + 1) % extra.ring.len();
             let shown = extra.ring[oldest].as_ref().map_or_else(|| self.gpu.blank.clone(), |t| t.view.clone());
-            copy(out.view.clone(), shown, [1.0, 1.0, 0.0, 0.0], passes);
+            copy(out.view.clone(), shown, [1.0, 1.0, 0.0, 0.0], out_size, passes);
             extra.head = oldest;
         }
     }
@@ -697,7 +699,10 @@ impl Engine {
             let (ow, oh) = (ow.max(16), oh.max(16));
             let slot = self.output_targets.entry(o.id).or_insert(None);
             Target::ensure(slot, &device, "output", ow, oh);
-            let view = if o.flip_x || o.flip_y || o.delay_frames > 0 {
+            // Smooth edges: everything below draws at twice the size; `finish_outputs` scales it down.
+            let ss = if o.smooth { 2 } else { 1 };
+            let (ow, oh) = (ow * ss, oh * ss);
+            let view = if o.flip_x || o.flip_y || o.delay_frames > 0 || o.smooth {
                 let extra = self.output_extra.entry(o.id).or_default();
                 Target::ensure(&mut extra.scratch, &device, "output before flip / delay", ow, oh);
                 extra.scratch.as_ref().unwrap().view.clone()

@@ -268,6 +268,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     ui.horizontal_wrapped(|ui| {
                         crate::ui::toggle(ui, &mut o.flip_x, label(icon::ARROWS_LEFT_RIGHT, "Flip")).on_hover_text("Mirror left-right (rear projection)");
                         crate::ui::toggle(ui, &mut o.flip_y, label(icon::ARROWS_DOWN_UP, "Flip")).on_hover_text("Mirror top-bottom (projector hung upside down)");
+                        crate::ui::toggle(ui, &mut o.smooth, "Smooth edges").on_hover_text("Anti-aliasing: slice edges without stair steps (draws this output at twice the size; turn off while lining up with the grid)");
                         guarded!(ui, o.delay_frames, egui::DragValue::new(&mut o.delay_frames).range(0..=phosphor_engine::MAX_OUTPUT_DELAY).prefix("delay ").suffix(" frames"))
                             .on_hover_text("Show this output a few frames late, to line it up with a slower projector or LED processor");
                         #[cfg(not(target_arch = "wasm32"))]
