@@ -25,10 +25,12 @@ pub enum WidgetKind {
     /// A row of named buttons, one picked at a time (a blend mode, a clip, a direction): its value is the middle of
     /// the picked one's slice of 0..1, the way pick-one controls read it.
     Choices,
+    /// Words you type, shown on a text layer (messages on screen during a show).
+    Text,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 8] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Label];
+    pub const ALL: [WidgetKind; 9] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Text, WidgetKind::Label];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -40,6 +42,7 @@ impl WidgetKind {
             WidgetKind::Label => "Label",
             WidgetKind::Color => "Colour",
             WidgetKind::Choices => "Choices",
+            WidgetKind::Text => "Text field",
         }
     }
 
@@ -53,6 +56,7 @@ impl WidgetKind {
             WidgetKind::Label => (3.0, 1.0),
             WidgetKind::Color => (4.0, 4.0),
             WidgetKind::Choices => (6.0, 1.0),
+            WidgetKind::Text => (6.0, 1.0),
         }
     }
 }
@@ -89,11 +93,14 @@ pub struct SurfaceWidget {
     pub guest_range: [f32; 2],
     /// Choices: the buttons' names, in order.
     pub items: Vec<String>,
+    /// Text field: the words, and the text layer they go on.
+    pub text: String,
+    pub text_layer: Option<u64>,
 }
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new() }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None }
     }
 }
 
@@ -288,5 +295,35 @@ mod osc_out_tests {
         s.osc_host = "127.0.0.1".into();
         let m = s.osc_messages();
         assert_eq!(m, vec![(1, "/lights/dim".to_string(), vec![0.25]), (2, "/td/xy".to_string(), vec![0.1, 0.9])]);
+    }
+}
+
+impl crate::Composition {
+    /// A Text field widget's words: kept on the widget and put on its text layer (live text off, so they stay).
+    pub fn set_surface_text(&mut self, widget: u64, text: &str) {
+        let Some(w) = self.surface.widget_mut(widget) else { return };
+        w.text = text.to_string();
+        let Some(layer) = w.text_layer else { return };
+        if let Some(l) = self.layer_mut(layer)
+            && let crate::SourceSpec::Text(style) = &mut l.source
+        {
+            style.text = text.to_string();
+            style.live = crate::LiveText::Off;
+        }
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    #[test]
+    fn a_text_field_writes_on_its_layer() {
+        let mut c = crate::Composition::default();
+        c.layers.push(crate::LayerState { id: 4, source: crate::SourceSpec::Text(crate::TextStyle::default()), ..Default::default() });
+        let id = c.surface.add(super::WidgetKind::Text);
+        c.surface.widget_mut(id).unwrap().text_layer = Some(4);
+        c.set_surface_text(id, "Happy birthday Sam");
+        let crate::SourceSpec::Text(s) = &c.layers[0].source else { panic!() };
+        assert_eq!(s.text, "Happy birthday Sam");
+        assert_eq!(c.surface.widgets[0].text, "Happy birthday Sam");
     }
 }

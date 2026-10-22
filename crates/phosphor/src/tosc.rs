@@ -89,7 +89,7 @@ fn widget(x: &mut String, w: &SurfaceWidget, cell: f32) {
         // orientation 1 = east (horizontal).
         WidgetKind::Slider => node(x, "FADER", &w.label, frame, w.color, &[("orientation", 1)], &[(main, "x")]),
         WidgetKind::XyPad | WidgetKind::Color => node(x, "XY", &w.label, frame, w.color, &[], &[(main, "x"), (y, "y")]),
-        WidgetKind::Label => node(x, "LABEL", &w.label, frame, w.color, &[], &[]),
+        WidgetKind::Label | WidgetKind::Text => node(x, "LABEL", &w.label, frame, w.color, &[], &[]),
         // (TouchOSC's radio needs its own count; a horizontal fader picks the choices the same way.)
         WidgetKind::Choices => node(x, "FADER", &w.label, frame, w.color, &[("orientation", 1)], &[(main, "x")]),
     }
