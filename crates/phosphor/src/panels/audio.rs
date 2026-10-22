@@ -156,6 +156,11 @@ fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     sound_device(ui);
+    ui.horizontal(|ui| {
+        for (k, name) in ["Low", "Mid", "High"].into_iter().enumerate() {
+            Level::range(&mut comp.sound_eq[k], -24.0, 12.0, name).default(0.0).width(110.0).tip("Movie sound EQ (dB): 0 = as it is").show(ui);
+        }
+    });
     let r = crate::ui::toggle(ui, &mut comp.sound_auto_level, "Even out volume levels").on_hover_text("Each movie is brought towards the same loudness as it plays (up to 4× up or down; silence isn't boosted)");
     map_menu(ui, &r, ControlTarget::App(AppControl::AutoLevel));
     if comp.sound_auto_level {

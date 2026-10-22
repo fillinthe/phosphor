@@ -106,6 +106,7 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             crate::media::video::sound::set_auto_level(self.state.comp.sound_auto_level);
+            crate::media::video::sound::set_eq(self.state.comp.sound_eq);
             self.state.stream.mute_audio = self.state.comp.sound_muted;
         }
         self.remote_sync(now);

@@ -25,6 +25,15 @@ static OUT_CHANGED: AtomicU32 = AtomicU32::new(0);
 static LOCAL: AtomicBool = AtomicBool::new(true);
 /// Even out the clips' loudness (the project's "Even out volume levels").
 static AUTO_LEVEL: AtomicBool = AtomicBool::new(false);
+/// Sound EQ band gains in dB (low, mid, high), as f32 bits.
+static EQ_DB: [AtomicU32; 3] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+
+/// The movie sound EQ: low / mid / high gains in dB (0 = flat).
+pub fn set_eq(db: [f32; 3]) {
+    for (slot, v) in EQ_DB.iter().zip(db) {
+        slot.store(v.to_bits(), Ordering::Relaxed);
+    }
+}
 /// The level every clip is brought towards (RMS, about -20 dBFS).
 const LEVEL_TARGET: f32 = 0.1;
 /// Quieter than this (about -50 dBFS) is silence: it doesn't count towards a clip's loudness.
@@ -578,11 +587,13 @@ fn run_output() -> Result<bool, String> {
     let rate = supported.sample_rate();
     let config: cpal::StreamConfig = supported.config();
     let mut scratch: Vec<f32> = Vec::new();
+    let mut eq = super::eq::Eq::default();
     let mut mix = move |out: &mut [f32]| {
         let frames = out.len() / channels;
         scratch.clear();
         scratch.resize(frames * 2, 0.0);
         mix_clips(&mut scratch);
+        eq.process(&mut scratch, EQ_DB.each_ref().map(|d| f32::from_bits(d.load(Ordering::Relaxed))), rate as f32);
         TAP.push(scratch.iter().copied());
         PROGRAM.push(scratch.iter().copied());
         if !LOCAL.load(Ordering::Relaxed) {

@@ -104,6 +104,8 @@ pub struct Composition {
     pub sound_muted: bool,
     /// Even out the movies' loudness: each one is brought towards the same level as it plays.
     pub sound_auto_level: bool,
+    /// Movie sound EQ: low, mid and high in dB (0 = flat).
+    pub sound_eq: [f32; 3],
     /// Phones and browsers (remote and audience play) may not change anything: you have the controls.
     pub web_control_off: bool,
     /// LED / DMX pixel mapping (Art-Net, sACN).
@@ -118,7 +120,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, sound_eq: [0.0; 3], web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 
