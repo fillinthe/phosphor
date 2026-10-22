@@ -1357,6 +1357,18 @@ impl Mapping {
         self.masks.last_mut()
     }
 
+    /// A line slice along a stroke drawn by hand (simplified to its corners and curves), showing the mix.
+    pub fn add_line_stroke(&mut self, id: u64, stroke: &[[f32; 2]]) -> Option<&mut Surface> {
+        let points = simplify_stroke(stroke, 0.004, 96);
+        if points.len() < 2 {
+            return None;
+        }
+        let s = self.add_surface(id);
+        s.name = format!("Line {}", s.name.trim_start_matches("Surface "));
+        s.line = Some(Line { points, width: 0.02 });
+        Some(s)
+    }
+
     /// A new mask of `shape` in the middle of an output `aspect` (width / height) wide, so circles look round.
     pub fn add_mask_shape(&mut self, id: u64, shape: MaskShape, aspect: f32) -> &mut Mask {
         let n = self.masks.len() + 1;
@@ -1535,6 +1547,16 @@ pub fn output_to_surface(corners: &[[f32; 2]; 4], p: [f32; 2]) -> Option<[f32; 2
 #[cfg(test)]
 mod shape_tests {
     use super::*;
+
+    #[test]
+    fn a_drawn_stroke_becomes_a_line_slice() {
+        let mut m = Mapping::default();
+        let stroke: Vec<[f32; 2]> = (0..=100).map(|k| [0.1 + 0.8 * k as f32 / 100.0, 0.5]).collect();
+        let s = m.add_line_stroke(4, &stroke).expect("a line");
+        let line = s.line.as_ref().unwrap();
+        assert!(line.points.len() >= 2 && line.points.len() < 10, "straight stroke simplified: {}", line.points.len());
+        assert!(m.add_line_stroke(5, &[[0.5, 0.5]]).is_none(), "a dot isn't a line");
+    }
 
     #[test]
     fn a_slice_takes_its_pictures_shape() {

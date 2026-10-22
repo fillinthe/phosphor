@@ -33,6 +33,24 @@ impl Composition {
         Some(id)
     }
 
+    /// A new slice on `output` showing a file, centred at `at` (0..1 of the output, y down), a third of the output high
+    /// and as wide as the picture's shape (`aspect` = its width / height) needs. Returns the slice id.
+    pub fn add_slice_with_file(&mut self, output: u64, at: [f32; 2], aspect: f32, name: &str, source: SourceSpec) -> Option<u64> {
+        let canvas = (self.width, self.height);
+        let (ow, oh) = self.outputs.iter().find(|o| o.id == output)?.size(canvas);
+        let sid = self.new_id();
+        let h = 1.0 / 3.0;
+        let w = h * aspect.max(0.05) * oh.max(1) as f32 / ow.max(1) as f32;
+        let (x0, y0) = (at[0] - w / 2.0, at[1] - h / 2.0);
+        let o = self.outputs.iter_mut().find(|o| o.id == output)?;
+        o.mapping.enabled = true;
+        let s = o.mapping.add_surface(sid);
+        s.name = name.to_string();
+        s.corners = [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]];
+        self.show_file_on_slice(sid, name, source)?;
+        Some(sid)
+    }
+
     /// Stops output `output` showing `source` on its own (its slice goes; the mix stays as it was).
     pub fn remove_from_output(&mut self, source: u64, output: u64) {
         if let Some(o) = self.outputs.iter_mut().find(|o| o.id == output) {
@@ -80,6 +98,21 @@ impl Composition {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_dropped_file_becomes_a_slice_shaped_like_it() {
+        let mut c = Composition { width: 1920, height: 1080, ..Default::default() };
+        let out = c.add_output();
+        let movie = SourceSpec::Movie { name: "m".into(), path: Some("/x/m.mp4".into()) };
+        let sid = c.add_slice_with_file(out, [0.5, 0.5], 16.0 / 9.0, "m", movie.clone()).unwrap();
+        let s = c.slice(sid).unwrap();
+        let (w, h) = (s.corners[1][0] - s.corners[0][0], s.corners[2][1] - s.corners[1][1]);
+        assert!((w * 1920.0 / (h * 1080.0) - 16.0 / 9.0).abs() < 1e-3, "16:9 on the output");
+        assert!((s.corners[0][0] + w / 2.0 - 0.5).abs() < 1e-5, "centred where dropped");
+        let layer = s.layer.expect("shows its own layer");
+        assert_eq!(c.layers.iter().find(|l| l.id == layer).map(|l| (&l.source, l.in_mix)), Some((&movie, false)));
+    }
+
     use super::*;
 
     #[test]

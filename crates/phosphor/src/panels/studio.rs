@@ -27,12 +27,16 @@ struct ViewState {
     snap: bool,
     /// Drag on the canvas to draw a mask by hand.
     drawing: bool,
+    /// Drag on the canvas to draw a line slice by hand.
+    drawing_line: bool,
     /// Centre the view on this output point next frame (Zoom to slice; the pan needs the canvas size).
     zoom_to: Option<[f32; 2]>,
 }
 
 /// Temp-data key: when the Studio was last drawn ("Only selected" ends when it's off screen).
 pub(crate) const STUDIO_SHOWN: &str = "phosphor_studio_shown";
+/// The Studio's output canvas on screen: (pass drawn, visible area, the output's rect, output id).
+pub(crate) const STUDIO_DROP: &str = "phosphor_studio_drop";
 
 enum TreeAction {
     AddSlice(u64),
@@ -41,6 +45,8 @@ enum TreeAction {
     AddMask(u64, MaskShape),
     /// A mask drawn by hand on output `.0` (output space points).
     DrawnMask(u64, Vec<[f32; 2]>),
+    /// A line slice drawn by hand on output `.0`.
+    DrawnLine(u64, Vec<[f32; 2]>),
     Duplicate(u64),
     Delete(u64, u64),
     DeleteMany(u64, Vec<u64>),
@@ -198,6 +204,15 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
                 st.selected_surface = Some(id);
             }
         }
+        Some(TreeAction::DrawnLine(oid, stroke)) => {
+            let id = st.comp.new_id();
+            if let Some(o) = st.comp.output_mut(oid)
+                && o.mapping.add_line_stroke(id, &stroke).is_some()
+            {
+                o.mapping.enabled = true;
+                st.selected_surface = Some(id);
+            }
+        }
         Some(TreeAction::Duplicate(sid)) => {
             if let Some(id) = st.comp.duplicate_slice(sid) {
                 st.selected_surface = Some(id);
@@ -302,7 +317,12 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("Dragged points land on other slices' points nearby, otherwise on a 1/64 grid");
         super::output::grid_toggle(ui, &mut o.grid);
         toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern").on_hover_text("A test pattern inside every slice instead of its picture (checks each slice's own alignment)");
-        toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)");
+        if toggle(ui, &mut vs.drawing, label(icon::PENCIL_SIMPLE, "Draw mask")).on_hover_text("Drag on the canvas to draw a mask by hand (it becomes a smooth outline you can edit)").changed() && vs.drawing {
+            vs.drawing_line = false;
+        }
+        if toggle(ui, &mut vs.drawing_line, label(icon::LINE_SEGMENTS, "Draw line")).on_hover_text("Drag on the canvas to draw a line slice by hand (edges, outlines, LED-like strips)").changed() && vs.drawing_line {
+            vs.drawing = false;
+        }
         stage_photo_menu(ui, o);
         if crate::ui::toggle(ui, &mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
@@ -350,6 +370,9 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             vs.pan = egui::vec2((0.5 - c[0]) * base.width(), (0.5 - c[1]) * base.height()) * vs.zoom;
         }
         let frame = egui::Rect::from_center_size(base.center() + vs.pan, base.size() * vs.zoom);
+        // Where files dropped from the Finder land as new slices (this frame's canvas, for `handle_dropped_files`).
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_DROP), (pass, area, frame, oid)));
         let mut child = ui.new_child(UiBuilder::new().max_rect(area));
         child.set_clip_rect(area.intersect(ui.clip_rect()));
         let p = child.painter().clone();
@@ -373,7 +396,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             }
         }
         p.rect_stroke(frame, 0.0, Stroke::new(1.0, Color32::from_gray(80)), StrokeKind::Outside);
-        if vs.drawing {
+        if vs.drawing || vs.drawing_line {
             let to_out = |p: egui::Pos2| [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
             let mut stroke: Vec<[f32; 2]> = ui.ctx().data(|d| d.get_temp(stroke_id)).unwrap_or_default();
             if bg.drag_started_by(egui::PointerButton::Primary) {
@@ -386,11 +409,13 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             }
             if stroke.len() > 1 {
                 let pts: Vec<egui::Pos2> = stroke.iter().map(|q| egui::pos2(frame.left() + q[0] * frame.width(), frame.top() + q[1] * frame.height())).collect();
-                p.add(egui::Shape::line(pts, Stroke::new(2.0, MASK_COLOR)));
+                p.add(egui::Shape::line(pts, Stroke::new(2.0, if vs.drawing_line { accent() } else { MASK_COLOR })));
             }
             if bg.drag_stopped_by(egui::PointerButton::Primary) {
-                action = Some(TreeAction::DrawnMask(o.id, std::mem::take(&mut stroke)));
+                let stroke = std::mem::take(&mut stroke);
+                action = Some(if vs.drawing_line { TreeAction::DrawnLine(o.id, stroke) } else { TreeAction::DrawnMask(o.id, stroke) });
                 vs.drawing = false;
+                vs.drawing_line = false;
             }
             ui.ctx().data_mut(|d| d.insert_temp(stroke_id, stroke));
             if bg.hovered() {

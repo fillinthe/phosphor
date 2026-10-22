@@ -290,6 +290,28 @@ impl PhosphorApp {
             st.audio.use_clips();
             st.notice = Some("Audio source set to Clip sound: the visuals follow what you play (Audio panel to change)".into());
         }
+        // Onto the Mapping Studio's canvas: a slice there for each file, shaped like its picture.
+        let studio = ctx.data(|d| d.get_temp::<(u64, egui::Rect, egui::Rect, u64)>(egui::Id::new(crate::panels::STUDIO_DROP)));
+        if let (Some(p), Some((pass, area, frame, oid))) = (drop_point(ctx), studio)
+            && ctx.cumulative_pass_nr() <= pass + 2
+            && area.contains(p)
+        {
+            let mut made = 0;
+            for (k, (name, path)) in files.iter().enumerate() {
+                let at = [((p.x - frame.left()) / frame.width()) + k as f32 * 0.04, ((p.y - frame.top()) / frame.height()) + k as f32 * 0.04];
+                // A picture's own shape; movies are taken as 16:9 (their size is known once they open).
+                #[cfg(not(target_arch = "wasm32"))]
+                let aspect = path.as_deref().filter(|_| media::is_picture(name)).and_then(|p| image::image_dimensions(p).ok()).map_or(16.0 / 9.0, |(w, h)| w as f32 / h.max(1) as f32);
+                #[cfg(target_arch = "wasm32")]
+                let aspect = 16.0 / 9.0;
+                if let Some(sid) = st.comp.add_slice_with_file(oid, at, aspect, &media::clip_name(name), media::spec_for(name, path.clone())) {
+                    st.selected_surface = Some(sid);
+                    made += 1;
+                }
+            }
+            st.notice = Some(format!("{made} slice{} added where you dropped", if made == 1 { "" } else { "s" }));
+            return;
+        }
         let cell = drop_point(ctx).and_then(|p| st.clip_cells.iter().find(|(r, ..)| r.contains(p)).map(|(_, l, s)| (*l, *s)));
         if let Some((layer, slot)) = cell {
             let n = st.comp.place_clips(layer, slot, items);
