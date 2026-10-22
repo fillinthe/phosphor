@@ -1020,11 +1020,11 @@ pub(crate) fn svg_menu(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     ui.menu_button(label(icon::FILE_SVG, "SVG"), |ui| {
         let oid = st.mapping_output;
-        if ui.button("Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (for the venue, a cutter, another app)").clicked() {
-            st.dialogs.save_file(crate::dialogs::Purpose::ExportMappingSvg(oid), ("SVG", &["svg"]), "Mapping.svg");
+        if ui.button("Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (SVG for the venue, a cutter or another app; PNG for a picture)").clicked() {
+            st.dialogs.save_file(crate::dialogs::Purpose::ExportMappingSvg(oid), ("Drawing", &["svg", "png"]), "Mapping.svg");
             ui.close();
         }
-        if ui.button("Masks from a drawing…").on_hover_text("Each closed shape in an SVG becomes a mask on this output").clicked() {
+        if ui.button("Masks and lines from a drawing…").on_hover_text("Each closed shape in an SVG becomes a mask on this output, each open line a line slice").clicked() {
             st.dialogs.pick_file(crate::dialogs::Purpose::ImportMasksSvg(oid), Some(("SVG", &["svg"])));
             ui.close();
         }

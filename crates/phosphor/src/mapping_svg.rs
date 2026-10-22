@@ -34,9 +34,16 @@ pub fn export(mapping: &Mapping, w: u32, h: u32) -> String {
     out + "</g>\n</svg>\n"
 }
 
-/// Every closed shape in an SVG (polygon, polyline, rect, path; curves follow their end points), in 0..1 of the
-/// drawing's size (its viewBox, else width × height).
-pub fn import(text: &str) -> Result<Vec<Vec<[f32; 2]>>, String> {
+/// What an SVG holds: closed shapes (for masks) and open lines (for line slices), in 0..1 of the drawing.
+#[derive(Debug, Default)]
+pub struct Drawing {
+    pub shapes: Vec<Vec<[f32; 2]>>,
+    pub lines: Vec<Vec<[f32; 2]>>,
+}
+
+/// Every closed shape (polygon, rect, closed path) and open line (polyline, line, open path) in an SVG; curves follow
+/// their end points. In 0..1 of the drawing's size (its viewBox, else width × height).
+pub fn import(text: &str) -> Result<Drawing, String> {
     let doc = roxmltree::Document::parse(text).map_err(|e| e.to_string())?;
     let root = doc.root_element();
     let nums = |s: &str| s.split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).filter_map(|t| t.parse::<f32>().ok()).collect::<Vec<_>>();
@@ -51,24 +58,34 @@ pub fn import(text: &str) -> Result<Vec<Vec<[f32; 2]>>, String> {
         })
         .ok_or("the drawing has no size (viewBox or width / height)")?;
     let unit = |x: f32, y: f32| [((x - size.0) / size.2).clamp(0.0, 1.0), ((y - size.1) / size.3).clamp(0.0, 1.0)];
-    let mut shapes = Vec::new();
+    let mut out = Drawing::default();
     // Phosphor's own exports have a background rectangle: not a shape.
     for n in root.descendants().filter(|n| n.is_element() && n.attribute("id") != Some("background")) {
-        let pts: Vec<[f32; 2]> = match n.tag_name().name() {
-            "polygon" | "polyline" => nums(n.attribute("points").unwrap_or("")).chunks_exact(2).map(|p| unit(p[0], p[1])).collect(),
+        let (pts, closed): (Vec<[f32; 2]>, bool) = match n.tag_name().name() {
+            "polygon" => (nums(n.attribute("points").unwrap_or("")).chunks_exact(2).map(|p| unit(p[0], p[1])).collect(), true),
+            "polyline" => (nums(n.attribute("points").unwrap_or("")).chunks_exact(2).map(|p| unit(p[0], p[1])).collect(), false),
+            "line" => {
+                let a = |k: &str| n.attribute(k).and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0);
+                (vec![unit(a("x1"), a("y1")), unit(a("x2"), a("y2"))], false)
+            }
             "rect" => {
                 let a = |k: &str| n.attribute(k).and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0);
                 let (x, y, w, h) = (a("x"), a("y"), a("width"), a("height"));
-                vec![unit(x, y), unit(x + w, y), unit(x + w, y + h), unit(x, y + h)]
+                (vec![unit(x, y), unit(x + w, y), unit(x + w, y + h), unit(x, y + h)], true)
             }
-            "path" => path_points(n.attribute("d").unwrap_or("")).into_iter().map(|p| unit(p[0], p[1])).collect(),
+            "path" => {
+                let d = n.attribute("d").unwrap_or("");
+                (path_points(d).into_iter().map(|p| unit(p[0], p[1])).collect(), d.contains(['Z', 'z']))
+            }
             _ => continue,
         };
-        if pts.len() >= 3 {
-            shapes.push(pts);
+        if closed && pts.len() >= 3 {
+            out.shapes.push(pts);
+        } else if !closed && pts.len() >= 2 {
+            out.lines.push(pts);
         }
     }
-    Ok(shapes)
+    Ok(out)
 }
 
 /// The corner points of an SVG path (M, L, H, V, C, S, Q, T, A, Z; absolute or relative). Curves keep their end points.
@@ -152,10 +169,13 @@ mod tests {
         s.corners = [[0.0, 0.0], [0.5, 0.0], [0.5, 1.0], [0.0, 1.0]];
         let svg = export(&m, 1000, 500);
         assert!(svg.contains("slice-7") && svg.contains("Left &lt;wall&gt;"), "{svg}");
-        let back = import(&svg).unwrap();
+        let back = import(&svg).unwrap().shapes;
         // Only the slice outline (not the background).
         assert!(back.iter().all(|p| p.iter().all(|q| q[0] <= 0.501)), "{back:?}");
-        let shapes = import(r#"<svg viewBox="0 0 100 100"><path d="M10 10 h80 v80 H10z"/><polygon points="0,0 50,0 50,50"/><path d="m10,10 l20-0 c0,0 0,0 0,20z"/></svg>"#).unwrap();
+        let drawing = import(r#"<svg viewBox="0 0 100 100"><path d="M10 10 h80 v80 H10z"/><polygon points="0,0 50,0 50,50"/><path d="m10,10 l20-0 c0,0 0,0 0,20z"/><polyline points="0,50 100,50"/><line x1="0" y1="0" x2="100" y2="100"/></svg>"#).unwrap();
+        assert_eq!(drawing.lines.len(), 2, "open lines");
+        assert_eq!(drawing.lines[1], vec![[0.0, 0.0], [1.0, 1.0]]);
+        let shapes = drawing.shapes;
         assert_eq!(shapes[0], vec![[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]]);
         assert_eq!(shapes[1].len(), 3);
         assert_eq!(shapes[2], vec![[0.1, 0.1], [0.3, 0.1], [0.3, 0.3]]);

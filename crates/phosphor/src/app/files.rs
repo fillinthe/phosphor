@@ -300,8 +300,16 @@ impl PhosphorApp {
                 }
                 Purpose::ExportMappingSvg(id) => {
                     if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter().find(|o| o.id == id)) {
-                        let p = p.with_extension("svg");
-                        st.notice = Some(match std::fs::write(&p, crate::mapping_svg::export(&o.mapping, o.width, o.height)) {
+                        let svg = crate::mapping_svg::export(&o.mapping, o.width, o.height);
+                        // .png = the drawing as a picture at the output's size; anything else = SVG.
+                        let png = p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"));
+                        let p = if png { p.clone() } else { p.with_extension("svg") };
+                        let written = if png {
+                            crate::media::render_svg_sized(svg.as_bytes(), o.width.max(o.height) as f32).and_then(|img| img.save(&p).map_err(|e| e.to_string()))
+                        } else {
+                            std::fs::write(&p, svg).map_err(|e| e.to_string())
+                        };
+                        st.notice = Some(match written {
                             Ok(()) => format!("Mapping saved: {}", p.display()),
                             Err(e) => format!("Couldn't save the drawing: {e}"),
                         });
@@ -310,17 +318,22 @@ impl PhosphorApp {
                 Purpose::ImportMasksSvg(id) => {
                     if let Some(p) = paths.first() {
                         match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| crate::mapping_svg::import(&t)) {
-                            Ok(shapes) => {
-                                let ids: Vec<u64> = shapes.iter().map(|_| st.comp.new_id()).collect();
+                            Ok(drawing) => {
+                                let ids: Vec<u64> = drawing.shapes.iter().chain(&drawing.lines).map(|_| st.comp.new_id()).collect();
+                                let mut ids = ids.into_iter();
+                                let mut lines = 0;
                                 if let Some(o) = st.comp.outputs.iter_mut().find(|o| o.id == id) {
                                     o.mapping.enabled = true;
-                                    for (k, (shape, mid)) in shapes.iter().zip(ids).enumerate() {
-                                        let m = o.mapping.add_mask(mid);
+                                    for (k, shape) in drawing.shapes.iter().enumerate() {
+                                        let m = o.mapping.add_mask(ids.next().unwrap_or_default());
                                         m.points.clone_from(shape);
                                         m.name = format!("{} {}", name_of(p), k + 1);
                                     }
+                                    for line in &drawing.lines {
+                                        lines += o.mapping.add_line_stroke(ids.next().unwrap_or_default(), line).is_some() as usize;
+                                    }
                                 }
-                                st.notice = Some(format!("{} masks from {}", shapes.len(), name_of(p)));
+                                st.notice = Some(format!("{} masks and {lines} line slices from {}", drawing.shapes.len(), name_of(p)));
                             }
                             Err(e) => st.notice = Some(format!("Couldn't read that drawing: {e}")),
                         }

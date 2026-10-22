@@ -23,12 +23,18 @@ const SVG_SIZE: f32 = 3840.0;
 /// An SVG drawing as a picture, `SVG_SIZE` on its longer side, transparent where nothing is drawn.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn render_svg(data: &[u8]) -> Result<image::RgbaImage, String> {
+    render_svg_sized(data, SVG_SIZE)
+}
+
+/// An SVG drawing as a picture `longest` pixels on its longer side.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn render_svg_sized(data: &[u8], longest: f32) -> Result<image::RgbaImage, String> {
     use resvg::{tiny_skia, usvg};
     let mut opt = usvg::Options::default();
     opt.fontdb_mut().load_system_fonts();
     let tree = usvg::Tree::from_data(data, &opt).map_err(|e| e.to_string())?;
     let size = tree.size();
-    let scale = SVG_SIZE / size.width().max(size.height()).max(1.0);
+    let scale = longest.max(1.0) / size.width().max(size.height()).max(1.0);
     let (w, h) = (((size.width() * scale).round() as u32).max(1), ((size.height() * scale).round() as u32).max(1));
     let mut pixmap = tiny_skia::Pixmap::new(w, h).ok_or("the drawing is empty")?;
     resvg::render(&tree, tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
