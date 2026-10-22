@@ -26,6 +26,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         if ui.button(label(icon::SKIP_BACK, "To the start")).clicked() {
             st.timeline_seek(0.0, now);
         }
+        crate::ui::toggle(ui, &mut st.timeline_record, label(icon::RECORD, "Record")).on_hover_text("While it plays, moving a control that has a track keys it as you go (key a control once from its menu to give it a track)");
         ui.label(RichText::new(format!("{} / {}", clock(st.timeline_pos), clock(st.comp.timeline.length))).monospace());
         let tl = &mut st.comp.timeline;
         crate::ui::toggle(ui, &mut tl.looping, "Loop");

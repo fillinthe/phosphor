@@ -314,6 +314,10 @@ pub struct State {
     pub timeline_pos: f64,
     pub timeline_play: Option<(f64, f64)>,
     pub timeline_applied: Option<f64>,
+    /// Recording: moving a track's control while the timeline plays keys it. What each track was last set to
+    /// (a different value now = moved by hand).
+    pub timeline_record: bool,
+    pub timeline_set: Vec<(phosphor_engine::ControlTarget, f32)>,
     /// LTC out (timecode audio), while it's switched on.
     #[cfg(not(target_arch = "wasm32"))]
     pub ltc_out: Option<timecode_out::LtcOut>,
