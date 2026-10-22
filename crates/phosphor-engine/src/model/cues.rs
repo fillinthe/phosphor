@@ -22,6 +22,21 @@ pub struct CueLayer {
     pub effects: Vec<(u64, bool, f32, Vec<f32>)>,
 }
 
+impl CueLayer {
+    /// A layer as it is now.
+    pub fn of(l: &LayerState) -> Self {
+        Self {
+            id: l.id,
+            enabled: l.enabled,
+            source: l.source.clone(),
+            generator_values: l.generator_values.clone(),
+            opacity: l.opacity,
+            blend: l.blend,
+            effects: l.effects.iter().map(|e| (e.id, e.enabled, e.mix, e.values.clone())).collect(),
+        }
+    }
+}
+
 /// One mapping slice as a cue remembers it (MadMapper scenes: switch slice layouts between songs).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -55,11 +70,16 @@ pub struct Cue {
     /// Which days `daily` fires on: bit 0 = Sunday … bit 6 = Saturday (0 = every day).
     #[serde(default)]
     pub days: u8,
+    /// What it changes (MadMapper's cues vs scenes): the layers' sources (off = the media keeps playing, only the
+    /// numbers glide), the master fade, the mapping slices. Which layers: the ones in `layers`.
+    pub sets_sources: bool,
+    pub sets_master: bool,
+    pub sets_slices: bool,
 }
 
 impl Default for Cue {
     fn default() -> Self {
-        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None, daily: None, days: 0 }
+        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None, daily: None, days: 0, sets_sources: true, sets_master: true, sets_slices: true }
     }
 }
 
@@ -121,19 +141,7 @@ impl CueFade {
 impl Composition {
     /// The state of every layer now, as a cue.
     pub fn record_cue(&mut self, name: String) -> Cue {
-        let layers = self
-            .layers
-            .iter()
-            .map(|l| CueLayer {
-                id: l.id,
-                enabled: l.enabled,
-                source: l.source.clone(),
-                generator_values: l.generator_values.clone(),
-                opacity: l.opacity,
-                blend: l.blend,
-                effects: l.effects.iter().map(|e| (e.id, e.enabled, e.mix, e.values.clone())).collect(),
-            })
-            .collect();
+        let layers = self.layers.iter().map(CueLayer::of).collect();
         let slices = self
             .outputs
             .iter()
@@ -151,7 +159,7 @@ impl Composition {
         let mut fade = CueFade { cue: index, start: now, secs, master_from: self.master_fade, layers: Vec::new(), turn_off: Vec::new(), slices: Vec::new(), slices_off: Vec::new() };
         for c in &cue.layers {
             let Some(l) = self.layers.iter_mut().find(|l| l.id == c.id) else { continue };
-            let switching = l.source != c.source;
+            let switching = cue.sets_sources && l.source != c.source;
             if switching {
                 l.start_transition(now, secs);
                 l.source = c.source.clone();
@@ -181,7 +189,7 @@ impl Composition {
             let values_from = if switching { c.generator_values.clone() } else { l.generator_values.clone() };
             fade.layers.push((l.id, from_opacity, values_from, fx_from));
         }
-        for c in &cue.slices {
+        for c in cue.slices.iter().filter(|_| cue.sets_slices) {
             let Some(s) = self.slice_mut(c.id) else { continue };
             let mut from = s.opacity;
             if c.enabled && !s.enabled {
@@ -204,7 +212,9 @@ impl Composition {
         // Ease in and out.
         let k = t * t * (3.0 - 2.0 * t);
         let lerp = |a: f32, b: f32| a + (b - a) * k;
-        self.master_fade = lerp(fade.master_from, cue.master_fade);
+        if cue.sets_master {
+            self.master_fade = lerp(fade.master_from, cue.master_fade);
+        }
         for (id, op_from, vals_from, fx_from) in &fade.layers {
             let (Some(c), Some(l)) = (cue.layers.iter().find(|c| c.id == *id), self.layers.iter_mut().find(|l| l.id == *id)) else { continue };
             let off = fade.turn_off.contains(id);
@@ -363,6 +373,33 @@ fn csv_row(line: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cue_changes_only_what_it_says() {
+        let mut comp = Composition::default();
+        let a = comp.add_layer().id;
+        let b = comp.add_layer().id;
+        let movie = SourceSpec::Movie { name: "m".into(), path: Some("/x/m.mp4".into()) };
+        for l in &mut comp.layers {
+            l.source = movie.clone();
+            l.opacity = 1.0;
+        }
+        let mut cue = comp.record_cue("half".into());
+        cue.fade = 0.0;
+        for c in &mut cue.layers {
+            c.opacity = 0.5;
+            c.source = SourceSpec::Generator("plasma".into());
+        }
+        cue.layers.retain(|c| c.id == a);
+        cue.master_fade = 0.1;
+        (cue.sets_sources, cue.sets_master) = (false, false);
+        comp.cues.cues.push(cue);
+        comp.go_to_cue(0, 0.0);
+        let la = comp.layers.iter().find(|l| l.id == a).unwrap();
+        assert_eq!((la.opacity, &la.source), (0.5, &movie), "the number glides, the movie keeps playing");
+        assert_eq!(comp.layers.iter().find(|l| l.id == b).unwrap().opacity, 1.0, "a layer left out of the cue stays");
+        assert_eq!(comp.master_fade, 1.0, "master left alone");
+    }
 
     #[test]
     fn cues_go_out_and_come_back_as_csv() {

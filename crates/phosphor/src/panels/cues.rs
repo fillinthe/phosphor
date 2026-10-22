@@ -111,6 +111,9 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     let mut update = None;
     let mut remove = None;
     let current = st.cue_run.current;
+    // For "Changes": every layer (name, and how it is now, for adding it to a cue).
+    let layer_now: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
+    let mut add_layer: Option<(usize, u64)> = None;
     let progress = st.cue_run.fade.as_ref().map(|f| (f.cue, if f.secs > 0.0 { ((now as f32 - f.start) / f.secs).clamp(0.0, 1.0) } else { 1.0 }));
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         for (i, cue) in st.comp.cues.cues.iter_mut().enumerate() {
@@ -142,6 +145,25 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         }
                     }
                     daily_editor(ui, cue);
+                    ui.menu_button(label(icon::FUNNEL, "Changes"), |ui| {
+                        ui.set_min_width(240.0);
+                        hint(ui, "What going to this cue changes. Leave sources off to keep the media playing and only glide the numbers.");
+                        toggle(ui, &mut cue.sets_sources, "Sources (clips, generators)");
+                        toggle(ui, &mut cue.sets_master, "Master fade");
+                        toggle(ui, &mut cue.sets_slices, "Mapping slices");
+                        ui.separator();
+                        ui.label(RichText::new("Layers").small());
+                        for (id, name) in &layer_now {
+                            let mut on = cue.layers.iter().any(|c| c.id == *id);
+                            if toggle(ui, &mut on, name).on_hover_text("On: the cue sets this layer (as it is now, when you switch it on)").changed() {
+                                if on {
+                                    add_layer = Some((i, *id));
+                                } else {
+                                    cue.layers.retain(|c| c.id != *id);
+                                }
+                            }
+                        }
+                    });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button(icon::TRASH).on_hover_text("Delete cue").clicked() {
                             remove = Some(i);
@@ -164,13 +186,23 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, "Set up a look, press Record cue; change things, record again. Then GO steps through them.");
         }
     });
+    if let Some((i, id)) = add_layer
+        && let Some(l) = st.comp.layers.iter().find(|l| l.id == id)
+    {
+        let snap = phosphor_engine::CueLayer::of(l);
+        if let Some(c) = st.comp.cues.cues.get_mut(i) {
+            c.layers.push(snap);
+        }
+    }
     if let Some(i) = fire {
         st.go_cue(i, now);
     }
     if let Some(i) = update {
         let fresh = st.comp.record_cue(String::new());
         if let Some(c) = st.comp.cues.cues.get_mut(i) {
-            c.layers = fresh.layers;
+            // The layers it already sets (a cue narrowed to some layers stays that way).
+            let keep: Vec<u64> = c.layers.iter().map(|l| l.id).collect();
+            c.layers = fresh.layers.into_iter().filter(|l| keep.contains(&l.id)).collect();
             c.master_fade = fresh.master_fade;
         }
     }
