@@ -95,6 +95,7 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.state.sync_backgrounds();
         self.state.run_live_text(now);
+        self.state.run_multi_edit();
         #[cfg(not(target_arch = "wasm32"))]
         {
             crate::media::video::sound::set_auto_level(self.state.comp.sound_auto_level);

@@ -205,6 +205,10 @@ pub struct State {
     pub media: MediaManager,
     pub stats: Stats,
     pub selected: Option<u64>,
+    /// More layers selected with Shift / Cmd-click: edits to the selected layer go to these too (`run_multi_edit`).
+    pub also_selected: Vec<u64>,
+    /// The selected layer as of the last frame (what changed since is copied to `also_selected`).
+    pub multi_before: Option<phosphor_engine::LayerState>,
     /// The clip last clicked in the grid (layer, slot): the Inspector shows its settings while that layer is selected.
     pub selected_clip: Option<(u64, usize)>,
     pub selected_surface: Option<u64>,
