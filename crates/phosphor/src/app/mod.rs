@@ -95,6 +95,9 @@ const KEY_RECENT_PROJECTS: &str = "recent_projects";
 /// In-window menu clicks, queued for `menu_actions`.
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
+const KEY_AUTOSAVE: &str = "autosave";
+/// How often autosave saves a changed project.
+pub(crate) const AUTOSAVE_MINUTES: u32 = 5;
 const KEY_WATCHED: &str = "watched_folders";
 /// Set once the Library has been opened by default for an existing arrangement (0.2.67).
 const KEY_LIBRARY_DEFAULT: &str = "library_default_v1";
@@ -190,7 +193,7 @@ pub struct State {
     pub(crate) autopilot: HashMap<u64, autopilot::AutoRun>,
     /// The step each firing step track was on last frame (`run_step_fires`).
     pub(crate) step_fired: HashMap<u64, usize>,
-    render_state: Option<egui_wgpu::RenderState>,
+    pub(crate) render_state: Option<egui_wgpu::RenderState>,
     pub texture: Option<egui::TextureId>,
     texture_generation: u64,
     /// Per-layer thumbnail textures, keyed by layer id, with the size they were registered at.
@@ -303,6 +306,11 @@ pub struct State {
     pub fx_fades: Vec<(u64, f32, f32, f32)>,
     /// The project file being worked on (Save writes here).
     pub project_path: Option<String>,
+    /// Save the project by itself every `AUTOSAVE_MINUTES` when it changed (File › Autosave).
+    pub autosave: bool,
+    /// When autosave last looked, and a hash of what was last written (only a changed project is saved).
+    autosave_at: f64,
+    saved_hash: u64,
     /// phosphorfx.com account and the project open from it (id, name).
     pub account: crate::account::Account,
     pub account_ui: crate::panels::AccountUi,
@@ -380,11 +388,30 @@ impl State {
         }
         #[cfg(not(target_arch = "wasm32"))]
         match &self.project_path {
-            Some(p) => match std::fs::write(p, self.comp.to_json()) {
+            Some(p) => match crate::backups::back_up(std::path::Path::new(p), crate::backups::now_secs()).and_then(|_| {
+                let json = self.comp.to_json();
+                self.saved_hash = hash_text(&json);
+                std::fs::write(p, json)
+            }) {
                 Ok(()) => self.notice = Some(format!("Saved {}", std::path::Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned()))),
                 Err(e) => self.notice = Some(format!("Save failed: {e}")),
             },
             None => self.save_project_as(),
+        }
+    }
+
+    /// Autosave: every few minutes, a project that has a file and changed since it was saved is saved (with a backup).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn autosave_tick(&mut self, now: f64) {
+        if !self.autosave || self.project_path.is_none() || now - self.autosave_at < AUTOSAVE_MINUTES as f64 * 60.0 {
+            return;
+        }
+        self.autosave_at = now;
+        if hash_text(&self.comp.to_json()) != self.saved_hash {
+            self.save_project();
+            if let Some(n) = &mut self.notice {
+                *n = format!("Autosaved ({})", n.trim_start_matches("Saved "));
+            }
         }
     }
 
@@ -408,6 +435,7 @@ impl State {
                 let newer = comp.made_by_newer();
                 self.load_composition(comp);
                 self.set_project_path(path);
+                self.saved_hash = hash_text(&self.comp.to_json());
                 if newer {
                     self.notice = Some("This project was saved by a newer Phosphor: some of its settings may be missing here. Update Phosphor (Help > Check for Updates) before saving over it.".into());
                 }
@@ -513,6 +541,7 @@ impl State {
             A::Surprise if press => self.quick(Quick::Surprise, now),
             A::Shuffle if press => self.quick(Quick::Shuffle, now),
             A::CueBack if press => self.cue_back(now),
+            A::CueRandom if press => self.cue_random(now),
             A::AutoFade if press => self.auto_fade(now),
             #[cfg(not(target_arch = "wasm32"))]
             A::ProjectorsOn if press => self.projectors.ask_all(&self.comp.outputs, crate::pjlink::Ask::PowerOn),
@@ -827,6 +856,9 @@ impl eframe::App for PhosphorApp {
                 let snap = self.snapshot();
                 self.saver.save(now, &snap);
             }
+            if !self.bench_session {
+                self.state.autosave_tick(now);
+            }
         }
     }
 
@@ -934,4 +966,12 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.state.account.push_doc(ctx, crate::account::DocKind::Saves, &crate::presets::export_all());
     }
+}
+
+/// A quick fingerprint of a project's text (autosave: has it changed since the last save?).
+fn hash_text(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut h);
+    h.finish()
 }

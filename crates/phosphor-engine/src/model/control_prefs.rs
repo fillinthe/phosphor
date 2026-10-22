@@ -11,6 +11,9 @@ pub struct ControlPrefs {
     pub locked: Vec<ControlTarget>,
     /// A control's own snap points (0..1 of its range), besides the built-in ones (ends, default, 100%).
     pub snaps: Vec<(ControlTarget, Vec<f32>)>,
+    /// Limits (0..1 of its range, low ≤ high): the mouse stays between them, and a controller's whole travel is
+    /// spread over them (VDMX's slider envelope).
+    pub limits: Vec<(ControlTarget, (f32, f32))>,
 }
 
 impl ControlPrefs {
@@ -56,6 +59,33 @@ impl ControlPrefs {
     pub fn clear_snaps(&mut self, target: &ControlTarget) {
         self.snaps.retain(|(t, _)| t != target);
     }
+
+    pub fn limits_of(&self, target: &ControlTarget) -> Option<(f32, f32)> {
+        self.limits.iter().find(|(t, _)| t == target).map(|(_, l)| *l)
+    }
+
+    /// Sets the low or high limit (the other stays; they never cross), or clears both with `None`.
+    pub fn set_limit(&mut self, target: &ControlTarget, low: bool, unit: Option<f32>) {
+        let (mut lo, mut hi) = self.limits_of(target).unwrap_or((0.0, 1.0));
+        self.limits.retain(|(t, _)| t != target);
+        let Some(u) = unit.map(|u| u.clamp(0.0, 1.0)) else { return };
+        if low {
+            lo = u.min(hi);
+        } else {
+            hi = u.max(lo);
+        }
+        if (lo, hi) != (0.0, 1.0) {
+            self.limits.push((target.clone(), (lo, hi)));
+        }
+    }
+
+    /// A controller's 0..1 spread over the limits (unchanged without).
+    pub fn within_limits(&self, target: &ControlTarget, v: f32) -> f32 {
+        match self.limits_of(target) {
+            Some((lo, hi)) => lo + v.clamp(0.0, 1.0) * (hi - lo),
+            None => v,
+        }
+    }
 }
 
 impl Composition {
@@ -73,6 +103,21 @@ pub fn nearest_snap(x: f32, points: &[f32]) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn limits_spread_a_controller_over_part_of_the_range() {
+        let mut p = ControlPrefs::default();
+        let a = ControlTarget::LayerOpacity(1);
+        assert_eq!(p.within_limits(&a, 0.5), 0.5);
+        p.set_limit(&a, true, Some(0.2));
+        p.set_limit(&a, false, Some(0.6));
+        assert_eq!(p.limits_of(&a), Some((0.2, 0.6)));
+        assert!((p.within_limits(&a, 0.0) - 0.2).abs() < 1e-6 && (p.within_limits(&a, 1.0) - 0.6).abs() < 1e-6);
+        p.set_limit(&a, true, Some(0.9));
+        assert_eq!(p.limits_of(&a), Some((0.6, 0.6)), "low never passes high");
+        p.set_limit(&a, true, None);
+        assert_eq!(p.limits_of(&a), None);
+    }
 
     #[test]
     fn locks_and_snaps_per_control() {

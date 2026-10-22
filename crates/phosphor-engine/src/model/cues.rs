@@ -284,9 +284,100 @@ impl Composition {
     }
 }
 
+impl CueList {
+    /// The cues as a table (one row each): number, name, fade, then-next seconds, timecode, daily time, days.
+    /// For a running order in a spreadsheet; the looks themselves stay in the project.
+    pub fn to_csv(&self) -> String {
+        let mut out = String::from("cue,name,fade,follow,timecode,daily,days\n");
+        for (i, c) in self.cues.iter().enumerate() {
+            let daily = c.daily.map_or(String::new(), |t| format!("{:02}:{:02}", t / 3600, t / 60 % 60));
+            let days = if c.daily.is_none() || c.days == 0 { String::new() } else { (0..7).filter(|b| c.days & (1 << b) != 0).map(|b| ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][b]).collect::<Vec<_>>().join(" ") };
+            let at = c.at.map_or(String::new(), |a| format!("{a}"));
+            out.push_str(&format!("{},{},{},{},{at},{daily},{days}\n", i + 1, csv_field(&c.name), c.fade, c.follow));
+        }
+        out
+    }
+
+    /// Names and timings from a table like `to_csv`'s, onto the cues in order (row 1 → cue 1). Rows past the last
+    /// cue are left out (a cue is a recorded look). Returns how many cues changed.
+    pub fn apply_csv(&mut self, text: &str) -> Result<usize, String> {
+        let mut rows = text.lines().filter(|l| !l.trim().is_empty());
+        let header: Vec<String> = csv_row(rows.next().ok_or("empty file")?).iter().map(|h| h.trim().to_lowercase()).collect();
+        let col = |name: &str| header.iter().position(|h| h == name);
+        let (name, fade, follow, tc, daily, days) = (col("name"), col("fade"), col("follow"), col("timecode"), col("daily"), col("days"));
+        if name.is_none() && fade.is_none() {
+            return Err("no \"name\" or \"fade\" column".into());
+        }
+        let mut changed = 0;
+        for (cue, row) in self.cues.iter_mut().zip(rows) {
+            let f = csv_row(row);
+            let get = |c: Option<usize>| c.and_then(|c| f.get(c)).map(|v| v.trim().to_string());
+            if let Some(n) = get(name).filter(|n| !n.is_empty()) {
+                cue.name = n;
+            }
+            if let Some(v) = get(fade).and_then(|v| v.parse::<f32>().ok()) {
+                cue.fade = v.clamp(0.0, 600.0);
+            }
+            if let Some(v) = get(follow).and_then(|v| v.parse::<f32>().ok()) {
+                cue.follow = v.max(0.0);
+            }
+            if let Some(v) = get(tc) {
+                cue.at = v.parse::<f32>().ok();
+            }
+            if let Some(v) = get(daily) {
+                cue.daily = v.split_once(':').and_then(|(h, m)| Some(h.trim().parse::<u32>().ok()?.min(23) * 3600 + m.trim().parse::<u32>().ok()?.min(59) * 60));
+            }
+            if let Some(v) = get(days) {
+                cue.days = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].iter().enumerate().filter(|(_, d)| v.split_whitespace().any(|w| w.eq_ignore_ascii_case(d))).fold(0, |acc, (b, _)| acc | (1 << b));
+            }
+            changed += 1;
+        }
+        Ok(changed)
+    }
+}
+
+/// A CSV field, quoted when it has to be.
+fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
+}
+
+/// One CSV line's fields (quotes and doubled quotes understood).
+fn csv_row(line: &str) -> Vec<String> {
+    let (mut fields, mut cur, mut quoted) = (Vec::new(), String::new(), false);
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (c, quoted) {
+            ('"', true) if chars.peek() == Some(&'"') => {
+                cur.push('"');
+                chars.next();
+            }
+            ('"', _) => quoted = !quoted,
+            (',', false) => fields.push(std::mem::take(&mut cur)),
+            _ => cur.push(c),
+        }
+    }
+    fields.push(cur);
+    fields
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cues_go_out_and_come_back_as_csv() {
+        let mut list = CueList::default();
+        list.cues = vec![Cue { name: "Intro, slow".into(), fade: 3.0, ..Default::default() }, Cue { name: "Drop".into(), follow: 8.0, at: Some(61.5), daily: Some(18 * 3600), days: 0b100_0001, ..Default::default() }];
+        let csv = list.to_csv();
+        assert!(csv.contains("\"Intro, slow\"") && csv.contains("18:00") && csv.contains("Su Sa"), "{csv}");
+        let mut other = CueList::default();
+        other.cues = vec![Cue::default(), Cue::default(), Cue::default()];
+        assert_eq!(other.apply_csv(&csv), Ok(2));
+        assert_eq!(other.cues[0].name, "Intro, slow");
+        assert_eq!((other.cues[1].follow, other.cues[1].at, other.cues[1].daily, other.cues[1].days), (8.0, Some(61.5), Some(18 * 3600), 0b100_0001));
+        assert_eq!(other.cues[2].name, "Cue", "no row for it: unchanged");
+        assert!(other.apply_csv("what,ever\n1,2").is_err());
+    }
 
     #[test]
     fn scheduled_cues_fire_once_at_their_time() {

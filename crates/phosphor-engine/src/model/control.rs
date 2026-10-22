@@ -131,10 +131,12 @@ pub enum AppControl {
     AutoFade,
     /// Every output holds its picture (on) / goes live again (off).
     FreezeOutputs,
+    /// Cue list: a random cue (not the one on now).
+    CueRandom,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 30] = [
+    pub const ALL: [AppControl; 31] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -165,6 +167,7 @@ impl AppControl {
         AppControl::ProjectorsShutter,
         AppControl::AutoFade,
         AppControl::FreezeOutputs,
+        AppControl::CueRandom,
     ];
 
     pub fn name(self) -> &'static str {
@@ -199,6 +202,7 @@ impl AppControl {
             AppControl::ProjectorsShutter => "Projectors: shutter closed/open (PJLink)",
             AppControl::AutoFade => "Crossfader: auto-fade to the other side",
             AppControl::FreezeOutputs => "Freeze outputs (hold the picture)",
+            AppControl::CueRandom => "Cue list: a random cue",
         }
     }
 
@@ -235,6 +239,7 @@ impl AppControl {
             AppControl::ProjectorsShutter => "projectors/shutter",
             AppControl::AutoFade => "crossfader/auto",
             AppControl::FreezeOutputs => "outputs/freeze",
+            AppControl::CueRandom => "cue/random",
         }
     }
 

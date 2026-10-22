@@ -26,6 +26,9 @@ pub enum Purpose {
     SliceFile(u64),
     /// A folder for this collection to watch.
     CollectionFolder(String),
+    /// Save the cue list's names and timings as CSV / read them back.
+    ExportCues,
+    ImportCues,
 }
 
 pub struct Dialogs {

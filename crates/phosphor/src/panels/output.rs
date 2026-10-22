@@ -33,6 +33,8 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
             });
         });
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    gpu_row(ui, st);
     ui.separator();
     outputs_list(ui, st);
     ui.separator();
@@ -102,6 +104,41 @@ pub(crate) const OUTPUT_SIZES: &[(u32, u32, &str)] = &[
     (1080, 1920, "1080×1920 (portrait)"),
 ];
 
+/// Which graphics card renders, on machines with more than one (applies at the next start).
+#[cfg(not(target_arch = "wasm32"))]
+fn gpu_row(ui: &mut egui::Ui, st: &mut State) {
+    let Some(rs) = &st.render_state else { return };
+    let current = rs.adapter.get_info().name;
+    let mut names: Vec<String> = rs.available_adapters.iter().map(|a| a.get_info().name).collect();
+    names.dedup();
+    let wanted = crate::gpu_pick::wanted();
+    if names.len() < 2 && wanted.is_none() {
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.label("Graphics card");
+        let shown = wanted.clone().unwrap_or_else(|| "Automatic".into());
+        let mut pick: Option<Option<String>> = None;
+        ComboBox::from_id_salt("gpu_pick").width(220.0).selected_text(&shown).show_ui(ui, |ui| {
+            if ui.selectable_label(wanted.is_none(), "Automatic").clicked() {
+                pick = Some(None);
+            }
+            for n in &names {
+                if ui.selectable_label(wanted.as_deref() == Some(n.as_str()), n).clicked() {
+                    pick = Some(Some(n.clone()));
+                }
+            }
+        });
+        if let Some(p) = pick {
+            st.notice = Some(match crate::gpu_pick::set(p.as_deref()) {
+                Ok(()) => "Graphics card saved: it's used from the next time Phosphor starts".into(),
+                Err(e) => format!("Couldn't save the graphics card: {e}"),
+            });
+        }
+        hint(ui, format!("using {current}"));
+    });
+}
+
 /// Every output with its size, screen, window and Identify controls.
 pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
@@ -160,7 +197,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     paint_texture(ui.painter(), t, fit_rect(r, ow as f32 / oh.max(1) as f32));
                 }
                 ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.label(RichText::new(format!("{}", i + 1)).strong().color(accent()));
                         ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(110.0));
                         crate::ui::toggle(ui, &mut o.enabled, "ON").on_hover_text("Render this output");
@@ -180,7 +217,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                             ui.label(RichText::new(format!("{} mapped", icon::PROJECTOR_SCREEN)).small().color(accent()));
                         }
                     });
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         let current = OUTPUT_SIZES.iter().find(|(w, h, _)| *w == o.width && *h == o.height).map_or(format!("{}×{}", o.width, o.height), |(_, _, n)| n.to_string());
                         ComboBox::from_id_salt(("out_size", id)).width(130.0).selected_text(current).show_ui(ui, |ui| {
                             for (w, h, name) in OUTPUT_SIZES {
@@ -209,7 +246,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                             remove = Some(i);
                         }
                     });
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         crate::ui::toggle(ui, &mut o.flip_x, label(icon::ARROWS_LEFT_RIGHT, "Flip")).on_hover_text("Mirror left-right (rear projection)");
                         crate::ui::toggle(ui, &mut o.flip_y, label(icon::ARROWS_DOWN_UP, "Flip")).on_hover_text("Mirror top-bottom (projector hung upside down)");
                         guarded!(ui, o.delay_frames, egui::DragValue::new(&mut o.delay_frames).range(0..=phosphor_engine::MAX_OUTPUT_DELAY).prefix("delay ").suffix(" frames"))

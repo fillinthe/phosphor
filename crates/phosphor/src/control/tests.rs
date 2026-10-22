@@ -610,3 +610,18 @@ fn wildcard_mappings_and_extra_osc_ports() {
     }
     assert!((comp.master_fade - 0.35).abs() < 1e-6, "{}", comp.master_fade);
 }
+
+#[test]
+fn a_fader_covers_only_a_limited_slider() {
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = false;
+    let mut comp = Composition::starter();
+    let source = ControlSource::MidiCc { channel: 0, cc: 15 };
+    comp.control_maps.push(phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade));
+    comp.control_prefs.set_limit(&ControlTarget::MasterFade, true, Some(0.5));
+    for (t, v, want) in [(1.0, 0.0, 0.5), (1.1, 1.0, 1.0), (1.2, 0.5, 0.75)] {
+        hub.inject(&mut comp, Incoming { source: source.clone(), value: v });
+        hub.apply(&mut comp, t);
+        assert!((comp.master_fade - want).abs() < 1e-5, "{v} → {} (wanted {want})", comp.master_fade);
+    }
+}

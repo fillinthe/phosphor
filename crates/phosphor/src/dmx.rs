@@ -22,6 +22,9 @@ pub struct DmxOut {
     pub error: Option<String>,
     pub packets: u64,
     cid: [u8; 16],
+    /// The DMX monitor is on screen: keep a copy of what goes out (`sent`). The panel sets it each frame it draws.
+    pub watching: bool,
+    pub sent: BTreeMap<u16, [u8; 512]>,
 }
 
 impl DmxOut {
@@ -82,6 +85,11 @@ impl DmxOut {
             }
         }
         self.universes = universes.len();
+        if std::mem::take(&mut self.watching) {
+            self.sent.clone_from(universes);
+        } else if !self.sent.is_empty() {
+            self.sent.clear();
+        }
     }
 }
 
@@ -299,5 +307,25 @@ mod tests {
         let n = rx.recv(&mut buf).unwrap();
         assert_eq!(n, 530);
         assert_eq!(buf[20], 42);
+    }
+}
+
+#[cfg(test)]
+mod monitor_tests {
+    #[test]
+    fn the_monitor_sees_what_was_sent_only_while_open() {
+        let s = phosphor_engine::DmxSettings { enabled: true, target: "127.0.0.1".into(), ..Default::default() };
+        let mut out = super::DmxOut::default();
+        let mut unis = std::collections::BTreeMap::new();
+        let mut data = [0u8; 512];
+        data[4] = 200;
+        unis.insert(3u16, data);
+        out.send(&s, &unis);
+        assert!(out.sent.is_empty(), "not watching: no copy");
+        out.watching = true;
+        out.send(&s, &unis);
+        assert_eq!(out.sent.get(&3).map(|d| d[4]), Some(200));
+        out.send(&s, &unis);
+        assert!(out.sent.is_empty(), "panel closed: copy dropped");
     }
 }

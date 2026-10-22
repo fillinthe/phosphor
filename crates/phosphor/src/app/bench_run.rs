@@ -212,6 +212,8 @@ impl PhosphorApp {
                 println!("VIDEO {} ({:?}): {info}", l.name, l.direction);
             }
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        println!("ISF {} loaded, {} skipped, reloaded {:?}", self.state.isf.loaded, self.state.isf.skipped, self.state.isf.reloaded);
         println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
         if self.state.stream.running() {
             let h = self.state.stream.history();
@@ -654,6 +656,27 @@ impl PhosphorApp {
                 }
                 self.state.selected = Some(id);
                 println!("QUICK collection: {c} watching {folder}, playing on layer {id}");
+                continue;
+            }
+            if name == "cues" {
+                // Three cues; cue 1 follows on after 1 s; random never repeats the cue that's on; the countdown.
+                for k in 1..=3 {
+                    let cue = self.state.comp.record_cue(format!("Cue {k}"));
+                    self.state.comp.cues.cues.push(cue);
+                }
+                self.state.comp.cues.cues[0].fade = 0.0;
+                self.state.comp.cues.cues[0].follow = 1.0;
+                self.state.go_cue(0, now);
+                self.state.run_cues(now);
+                let countdown = self.state.next_cue_in(now + 0.25);
+                let mut picks = Vec::new();
+                for _ in 0..12 {
+                    let before = self.state.cue_run.current;
+                    self.state.cue_random(now);
+                    picks.push((before, self.state.cue_run.current));
+                }
+                let repeats = picks.iter().filter(|(a, b)| a == b).count();
+                println!("CUES countdown={countdown:?} random_repeats={repeats} picks={:?}", picks.iter().map(|p| p.1.unwrap_or(99)).collect::<Vec<_>>());
                 continue;
             }
             if name == "takeover" {

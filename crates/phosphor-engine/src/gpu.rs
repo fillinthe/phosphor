@@ -183,6 +183,12 @@ impl Gpu {
         (self.device.clone(), self.pipeline_layout.clone())
     }
 
+    /// Drops a shader's module and pipelines (it's being replaced: an edited file).
+    pub fn forget_custom(&mut self, entry: &str) {
+        self.custom_modules.remove(entry);
+        self.pipelines.retain(|(e, _), _| *e != entry);
+    }
+
     /// Installs a module + pipeline built elsewhere (background shader compilation).
     pub fn install_custom(&mut self, entry: &'static str, module: wgpu::ShaderModule, pipeline: wgpu::RenderPipeline) {
         self.custom_modules.insert(entry, module);

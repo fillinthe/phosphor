@@ -36,6 +36,9 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         }
     });
 
+    #[cfg(not(target_arch = "wasm32"))]
+    dmx_monitor(ui, st);
+
     // The picture with every fixture on it.
     let w = ui.available_width().max(160.0);
     let h = (w / aspect).min(ui.available_height() * 0.5).max(90.0);
@@ -234,4 +237,44 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
 /// The first universe / channel after the last fixture, so new fixtures don't overlap.
 fn next_free(fixtures: &[Fixture]) -> (u16, u16) {
     fixtures.last().map_or((0, 1), |f| f.next_free())
+}
+
+/// What's being sent: one universe's 512 channels as a grid (brighter = higher), value on hover. Only copied while
+/// this is open.
+#[cfg(not(target_arch = "wasm32"))]
+fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
+    egui::CollapsingHeader::new(label(icon::MONITOR, "Monitor (what's being sent)")).id_salt("dmx_monitor").show(ui, |ui| {
+        st.dmx.watching = true;
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+        let unis: Vec<u16> = st.dmx.sent.keys().copied().collect();
+        if unis.is_empty() {
+            hint(ui, "Nothing going out (LED / DMX off, or no fixtures on).");
+            return;
+        }
+        let id = ui.id().with("dmx_monitor_uni");
+        let mut uni = ui.data(|d| d.get_temp::<u16>(id)).filter(|u| unis.contains(u)).unwrap_or(unis[0]);
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Universe");
+            for u in &unis {
+                if ui.selectable_label(*u == uni, u.to_string()).clicked() {
+                    uni = *u;
+                }
+            }
+        });
+        ui.data_mut(|d| d.insert_temp(id, uni));
+        let Some(data) = st.dmx.sent.get(&uni) else { return };
+        let cols = 32usize;
+        let cell = ((ui.available_width() - 4.0) / cols as f32).clamp(6.0, 22.0);
+        let (rect, resp) = ui.allocate_exact_size(egui::vec2(cell * cols as f32, cell * (512 / cols) as f32), Sense::hover());
+        let p = ui.painter();
+        for (i, v) in data.iter().enumerate() {
+            let r = egui::Rect::from_min_size(rect.min + egui::vec2((i % cols) as f32 * cell, (i / cols) as f32 * cell), egui::vec2(cell - 1.0, cell - 1.0));
+            p.rect_filled(r, 0.0, if *v == 0 { Color32::from_gray(24) } else { accent().gamma_multiply(0.15 + 0.85 * *v as f32 / 255.0) });
+        }
+        if let Some(pos) = resp.hover_pos() {
+            let (cx, cy) = (((pos.x - rect.left()) / cell) as usize, ((pos.y - rect.top()) / cell) as usize);
+            let i = (cy * cols + cx).min(511);
+            resp.on_hover_text(format!("Universe {uni} · channel {} = {}", i + 1, data[i]));
+        }
+    });
 }

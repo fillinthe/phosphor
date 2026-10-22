@@ -161,6 +161,22 @@ impl PhosphorApp {
                     st.notice = Some(format!("ISF shaders you drop into {} appear in the browsers at the next launch", dir.display()));
                 }
             }
+            A::Autosave => {
+                st.autosave = !st.autosave;
+                st.notice = Some(if st.autosave {
+                    format!("Autosave on: the project saves itself every {} minutes when it has changed (after you've saved it once)", crate::app::AUTOSAVE_MINUTES)
+                } else {
+                    "Autosave off".into()
+                });
+            }
+            A::ShowBackups => {
+                #[cfg(not(target_arch = "wasm32"))]
+                match &st.project_path {
+                    Some(p) if crate::backups::folder(std::path::Path::new(p)).exists() => crate::os::open(crate::backups::folder(std::path::Path::new(p))),
+                    Some(_) => st.notice = Some("No backups yet: they're made each time you save over the project".into()),
+                    None => st.notice = Some("Save the project first: backups go in a folder next to it".into()),
+                }
+            }
             A::LutFolder => {
                 // ~/Library/Application Support/Phosphor/luts: each .cube becomes an effect (category LUT).
                 if let Some(dir) = crate::show::storage_dir().map(|d| d.join("luts")) {

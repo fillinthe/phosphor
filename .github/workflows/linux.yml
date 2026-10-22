@@ -58,6 +58,7 @@ jobs:
           cp "$FFMPEG_DIR"/bin/ffmpeg dist/Phosphor/
           cp -r assets/isf dist/Phosphor/isf
           cp -r assets/gl-transitions dist/Phosphor/gl-transitions
+          cp -r assets/luts dist/Phosphor/luts
           printf '#!/bin/sh\nD=$(dirname "$(readlink -f "$0")")\nLD_LIBRARY_PATH="$D/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$D/phosphor" "$@"\n' > dist/Phosphor/Phosphor.sh
           chmod +x dist/Phosphor/Phosphor.sh
           cp scripts/linux/README-player.md dist/Phosphor/README.md

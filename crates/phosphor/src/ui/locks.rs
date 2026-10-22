@@ -17,6 +17,8 @@ pub enum PrefChange {
     AddSnap(ControlTarget, f32),
     RemoveSnap(ControlTarget, f32),
     ClearSnaps(ControlTarget),
+    /// Set the low (true) or high limit to a 0..1 point, or clear both (None).
+    Limit(ControlTarget, bool, Option<f32>),
 }
 
 impl PrefChange {
@@ -26,6 +28,7 @@ impl PrefChange {
             PrefChange::AddSnap(t, u) => p.add_snap(&t, u),
             PrefChange::RemoveSnap(t, u) => p.remove_snap(&t, u),
             PrefChange::ClearSnaps(t) => p.clear_snaps(&t),
+            PrefChange::Limit(t, low, u) => p.set_limit(&t, low, u),
         }
     }
 }
@@ -36,6 +39,35 @@ fn prefs(ui: &egui::Ui) -> Option<std::sync::Arc<ControlPrefs>> {
 
 pub(crate) fn is_locked(ui: &egui::Ui, target: &ControlTarget) -> bool {
     prefs(ui).is_some_and(|p| p.is_locked(target))
+}
+
+/// A control's limits (0..1 of its range), if it has any.
+pub(crate) fn limits(ui: &egui::Ui, target: &ControlTarget) -> Option<(f32, f32)> {
+    prefs(ui).and_then(|p| p.limits_of(target))
+}
+
+/// "Limits" for a slider's right-click menu: the lowest / highest it can go, set at the current value.
+pub(crate) fn limit_items(ui: &mut egui::Ui, target: &ControlTarget, unit: f32, show: &dyn Fn(f32) -> String) {
+    let now = limits(ui, target);
+    ui.menu_button(label(icon::ARROWS_IN_LINE_HORIZONTAL, "Limits…"), |ui| {
+        ui.set_min_width(240.0);
+        hint(ui, "Use only part of the slider: the mouse stays inside, and a controller's whole travel covers just that part.");
+        if let Some((lo, hi)) = now {
+            ui.label(format!("Now: {} to {}", show(lo), show(hi)));
+        }
+        if ui.button(format!("Lowest = here ({})", show(unit))).clicked() {
+            ask(ui, PrefChange::Limit(target.clone(), true, Some(unit)));
+            ui.close();
+        }
+        if ui.button(format!("Highest = here ({})", show(unit))).clicked() {
+            ask(ui, PrefChange::Limit(target.clone(), false, Some(unit)));
+            ui.close();
+        }
+        if now.is_some() && ui.button(label(icon::X, "No limits")).clicked() {
+            ask(ui, PrefChange::Limit(target.clone(), true, None));
+            ui.close();
+        }
+    });
 }
 
 /// A control's own snap points (0..1 of its range).

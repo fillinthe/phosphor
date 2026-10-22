@@ -178,6 +178,24 @@ impl PhosphorApp {
                         st.start_relink(p.clone());
                     }
                 }
+                Purpose::ExportCues => {
+                    if let Some(p) = paths.first() {
+                        let p = p.with_extension("csv");
+                        st.notice = Some(match std::fs::write(&p, st.comp.cues.to_csv()) {
+                            Ok(()) => format!("Cue list saved: {}", p.display()),
+                            Err(e) => format!("Couldn't save the cue list: {e}"),
+                        });
+                    }
+                }
+                Purpose::ImportCues => {
+                    if let Some(p) = paths.first() {
+                        let read = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| st.comp.cues.apply_csv(&t));
+                        st.notice = Some(match read {
+                            Ok(n) => format!("Names and timings read into {n} cue(s) (the looks stay as recorded)"),
+                            Err(e) => format!("Couldn't read that cue list: {e}"),
+                        });
+                    }
+                }
                 Purpose::TouchOsc => {
                     if let Some(p) = paths.first() {
                         let p = p.with_extension("tosc");

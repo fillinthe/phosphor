@@ -515,7 +515,8 @@ impl ControlHub {
                 }
                 FLIP
             } else {
-                map.range.apply(map.shape(v))
+                // A slider with limits: the controller's whole travel is spread over them.
+                comp.control_prefs.within_limits(&map.target, map.range.apply(map.shape(v)))
             };
             // (A smoothed mapping glides instead of jumping, so it doesn't need soft takeover.)
             // (Delayed moves land later, so the takeover check would never see them arrive; they skip it too.)

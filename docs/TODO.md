@@ -57,19 +57,32 @@ Items 1–22: in **0.3.0**.
       Right-click an effect or source › Hide from the lists; they show under "Hidden" (to bring back) and still work where used. Kept between launches.
 - [x] 22. **Slice: match the media's size / shape** (M).
       Mapping Studio: "Match the picture's shape" (keeps the height and centre, sets the width). Checked: test.
-- [ ] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
-- [ ] 24. **Permissions panel** (Mac): camera, microphone, screen recording, network at a glance (V).
-- [ ] 25. **Choose the graphics card** on machines with more than one (V).
-- [ ] 26. **Step sequencer colour and index tracks** (V). Has value and gate tracks.
-- [ ] 27. **DMX monitor**: live view of the channels being sent (M).
-- [ ] 28. **Colour swatches** saved and usable on every colour control (M).
-- [ ] 29. **More picture formats**: EXR and HDR (float), PSD, HEIC as a layer (M). Has PNG, JPEG, WebP, BMP, TIFF, GIF.
+- [~] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
+      Random cue (button + mappable), a countdown to the next cue that fires by itself, CSV out and in (names and timings; the looks stay recorded). Cue groups: not done. Checked: CSV test, bench run (countdown right, random never repeats), screenshot.
+- [x] 24. **Permissions panel** (Mac): camera, microphone, screen recording, network at a glance (V).
+      Devices panel: camera, microphone and screen recording, each with a System Settings button. Checked: screenshot (all three read right here).
+- [x] 25. **Choose the graphics card** on machines with more than one (V).
+      Output panel › Graphics card (shown when there's more than one, or one was chosen); used from the next start. Checked: test of the choice. Not tried on a Mac with two GPUs (none here).
+- [~] 26. **Step sequencer colour and index tracks** (V). Has value and gate tracks.
+      Index tracks: "Choices" on a level track, each step picks one of N (a clip, blend mode, direction). Colour tracks: not done (mappings carry numbers, not colours). Checked: test.
+- [x] 27. **DMX monitor**: live view of the channels being sent (M).
+      LED / DMX panel › Monitor: one universe's 512 channels as a grid, value on hover; copied only while it's open. Checked: test.
+- [x] 28. **Colour swatches** saved and usable on every colour control (M).
+      A colour button with saved swatches: on text colour and on every shader colour input (ISF colours). Kept between launches. Not checked on screen.
+- [x] 29. **More picture formats**: EXR and HDR (float), PSD, HEIC as a layer (M). Has PNG, JPEG, WebP, BMP, TIFF, GIF.
+      EXR, HDR, TGA, QOI through the image library, PSD and HEIC through FFmpeg. Also fixed: BMP and TIFF were offered but couldn't open. Checked: test making each format with macOS's sips / FFmpeg.
 - [ ] 30. **Look fade time**: a saved look fades in instead of cutting (V).
-- [ ] 31. **Autosave interval and backups**: keep the last few versions on every save (M). Crash recovery exists.
-- [ ] 32. **ISF files reload when edited** on disk (V). Loaded once at start now.
-- [ ] 33. **LUT mask mixer** (two LUTs mixed by a mask) and a few **built-in LUT looks** (V). LUT Mix exists.
-- [ ] 34. **Saved "show only these" slice sets** while mapping (M).
-- [ ] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
+      Moved to medium: a look replaces the whole project, so a fade means holding the old picture over the new one.
+- [x] 31. **Autosave interval and backups**: keep the last few versions on every save (M). Crash recovery exists.
+      Every save first copies the old file into "<name> Backups" (last 10 kept); File › Autosave On / Off (every 5 minutes when changed), File › Show Backups. Checked: tests.
+- [x] 32. **ISF files reload when edited** on disk (V). Loaded once at start now.
+      Shader files are watched (every 2 s): a saved edit replaces the shader on screen. Checked: GPU test (black → red after the edit) and a bench run with a file edited mid-run.
+- [~] 33. **LUT mask mixer** (two LUTs mixed by a mask) and a few **built-in LUT looks** (V). LUT Mix exists.
+      8 looks ship (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film, Night; made by scripts/make-luts.py), and LUT Split: two LUTs by brightness, left/right, top/bottom or from the centre. A mask from another layer: not done. Checked: tests.
+- [x] 34. **Saved "show only these" slice sets** while mapping (M).
+      Mapping Studio › Sets: save the selected slices as a named set, pick it to select them and show only them. Saved with the project.
+- [~] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
+      Slider limits (right-click › Limits…): the mouse stays inside, a controller's whole travel covers just that part, outside is shaded. "Ignore while hidden": not done. Checked: tests.
 
 ### Medium
 - [ ] 36. **A layer's picture before its effects** as another layer's source (V). After effects exists.

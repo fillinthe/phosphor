@@ -60,6 +60,10 @@ pub enum Action {
     /// Reveals the folder Phosphor scans for your own ISF shaders.
     ShaderFolder,
     LutFolder,
+    /// Save the project by itself every few minutes (when it has a file and changed).
+    Autosave,
+    /// Shows the project's backups folder.
+    ShowBackups,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -86,6 +90,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             S,
             I(A::Save, "Save", Some((false, Key::S))),
             I(A::SaveAs, "Save As…", Some((true, Key::S))),
+            I(A::Autosave, "Autosave On / Off", None),
+            I(A::ShowBackups, "Show Backups", None),
             I(A::SaveToAccount, "Save to Account", None),
             I(A::OpenFromAccount, "Open from Account…", None),
             S,

@@ -138,7 +138,7 @@ mod native {
                 .ok()?;
             image::load_from_memory(&out.stdout).ok()?
         } else {
-            image::open(path).ok()?.thumbnail(size, size)
+            crate::media::decode_still(path).ok()?.thumbnail(size, size)
         };
         let rgba = img.to_rgba8();
         Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))

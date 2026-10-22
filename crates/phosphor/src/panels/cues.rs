@@ -48,6 +48,11 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
         if back.clicked() {
             st.cue_back(now);
         }
+        let random = ui.button(label(icon::SHUFFLE, "Random")).on_hover_text("A random cue (not the one on now)");
+        map_menu(ui, &random, ControlTarget::App(AppControl::CueRandom));
+        if random.clicked() {
+            st.cue_random(now);
+        }
         if ui.button(label(icon::RECORD, "Record cue")).on_hover_text("Save how every layer looks now (sources, on/off, opacity, blend, values, effects) as the next cue").clicked() {
             let n = st.comp.cues.cues.len() + 1;
             let cue = st.comp.record_cue(format!("Cue {n}"));
@@ -83,6 +88,22 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             }
             None => {}
         }
+    });
+    ui.horizontal(|ui| {
+        if let Some((next, secs)) = st.next_cue_in(now) {
+            let name = st.comp.cues.cues.get(next).map_or(String::new(), |c| c.name.clone());
+            ui.label(RichText::new(format!("{} next: {} \"{name}\" in {}", icon::HOURGLASS, next + 1, format_tc(secs))).color(accent()));
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.small_button(label(icon::UPLOAD_SIMPLE, "Save CSV")).on_hover_text("Save the cue names and timings as a table (spreadsheet)").clicked() {
+                st.dialogs.save_file(crate::dialogs::Purpose::ExportCues, ("CSV", &["csv"]), "Cues.csv");
+            }
+            if ui.small_button(label(icon::DOWNLOAD_SIMPLE, "Read CSV")).on_hover_text("Read names and timings from a table into the cues, in order (the looks stay as recorded)").clicked() {
+                st.dialogs.pick_file(crate::dialogs::Purpose::ImportCues, Some(("CSV", &["csv", "txt"])));
+            }
+        });
     });
     hint(ui, "Cues remember every layer and every mapping slice (on/off, opacity, corners). GO fades to the next one; sources change through each layer's transition, slices glide into place.");
     ui.add_space(4.0);

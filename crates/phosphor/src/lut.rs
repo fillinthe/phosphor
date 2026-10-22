@@ -118,8 +118,23 @@ pub fn pack_all(luts: &[Lut]) -> (u32, u32, Vec<u8>) {
 }
 
 /// The LUT mixer's shader: LUT A (P(0)) and LUT B (P(1)) from the stacked picture, blended by Mix (P(2)), mixed
-/// into the picture by Amount (P(3)).
-pub fn wgsl_mix(entry: &str, count: usize) -> String {
+/// into the picture by Amount (P(3)). With `split`, the blend is per pixel instead: P(2) = what decides (0 brightness,
+/// 1 left to right, 2 top to bottom, 3 distance from the centre), P(3) = where it changes, P(4) = how softly,
+/// P(5) = Amount.
+pub fn wgsl_mix(entry: &str, count: usize, split: bool) -> String {
+    let blend = if split {
+        "let by = round(P(2u));
+    var m = dot(c.rgb, vec3f(0.2126, 0.7152, 0.0722));
+    if (by == 1.0) { m = in.uv.x; }
+    if (by == 2.0) { m = in.uv.y; }
+    if (by == 3.0) { m = length(in.uv - vec2f(0.5)) * 1.4142; }
+    let soft = max(P(4u), 0.001);
+    let graded = mix(a, b, smoothstep(P(3u) - soft, P(3u) + soft, m));
+    return vec4f(mix(c.rgb, graded, P(5u)), c.a);"
+    } else {
+        "let graded = mix(a, b, P(2u));
+    return vec4f(mix(c.rgb, graded, P(3u)), c.a);"
+    };
     let n = MIX_SIZE;
     format!(
         "fn lut_band(c: vec3f, band: f32) -> vec3f {{
@@ -141,8 +156,7 @@ fn {entry}(in: VOut) -> @location(0) vec4f {{
     let last = {count}.0 - 1.0;
     let a = lut_band(c.rgb, clamp(round(P(0u)), 0.0, last));
     let b = lut_band(c.rgb, clamp(round(P(1u)), 0.0, last));
-    let graded = mix(a, b, P(2u));
-    return vec4f(mix(c.rgb, graded, P(3u)), c.a);
+    {blend}
 }}
 "
     )
@@ -211,13 +225,27 @@ mod tests {
     }
 
     #[test]
+    fn the_shipped_looks_parse() {
+        let dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/luts"));
+        let mut n = 0;
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let lut = parse_cube(&std::fs::read_to_string(e.path()).unwrap()).unwrap_or_else(|err| panic!("{}: {err}", e.path().display()));
+            assert_eq!(lut.size, 17);
+            n += 1;
+        }
+        assert!(n >= 8, "{n} looks");
+    }
+
+    #[test]
     fn the_shader_validates() {
         // The same prelude the engine compiles imported shaders with.
         let full = format!("{}\n{}", phosphor_engine::shaders::common_source(), wgsl("isf_lut_test", 33));
         let module = naga::front::wgsl::parse_str(&full).expect("parses");
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::default()).validate(&module).expect("valid");
-        let mix = format!("{}\n{}", phosphor_engine::shaders::common_source(), wgsl_mix("isf_lut_mixer", 3));
-        let module = naga::front::wgsl::parse_str(&mix).unwrap_or_else(|e| panic!("{}", e.emit_to_string(&mix)));
-        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::default()).validate(&module).expect("mixer valid");
+        for split in [false, true] {
+            let mix = format!("{}\n{}", phosphor_engine::shaders::common_source(), wgsl_mix("isf_lut_mixer", 3, split));
+            let module = naga::front::wgsl::parse_str(&mix).unwrap_or_else(|e| panic!("{}", e.emit_to_string(&mix)));
+            naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::default()).validate(&module).expect("mixer valid");
+        }
     }
 }
