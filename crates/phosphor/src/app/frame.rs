@@ -53,6 +53,9 @@ impl PhosphorApp {
         self.fade_in_effects();
         self.shortcuts(&ctx);
         let busy = ctx.input(|i| i.pointer.any_down());
+        if ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { .. } | egui::Event::Key { .. } | egui::Event::MouseWheel { .. }))) {
+            self.state.touched(now);
+        }
         self.state.history.track(&self.state.comp, now, busy);
         self.update_title(&ctx);
         #[cfg(not(target_arch = "wasm32"))]
@@ -98,7 +101,7 @@ impl PhosphorApp {
         self.sync_mapping_from_output();
         {
             let State { control, comp, clock, .. } = &mut self.state;
-            control.poll(comp);
+            let heard = control.poll(comp);
             control.poll_clock(now);
             control.tick_clock_out(clock.beats(now), clock.bpm);
             control.apply(comp, now as f32);
@@ -106,6 +109,9 @@ impl PhosphorApp {
             control.surface_osc(comp);
             control.sends(comp);
             control.publish_query(comp, now);
+            if heard {
+                self.state.touched(now);
+            }
         }
         for d in std::mem::take(&mut self.state.control.triggers) {
             self.state.run_deferred(d, now);

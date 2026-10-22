@@ -379,10 +379,14 @@ impl ControlHub {
     }
 
     /// Drains incoming messages; binds the learning target if one is waiting.
-    pub fn poll(&mut self, comp: &mut Composition) {
+    /// Takes in what controllers sent; true if anything came (someone's there: the idle cue waits).
+    pub fn poll(&mut self, comp: &mut Composition) -> bool {
+        let mut any = false;
         while let Ok(msg) = self.rx.try_recv() {
             self.handle(comp, msg);
+            any = true;
         }
+        any
     }
 
     /// Feeds clock messages into `midi_clock`, timed in app seconds (`now`) from when they arrived.
