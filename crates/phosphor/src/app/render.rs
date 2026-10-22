@@ -155,6 +155,7 @@ impl PhosphorApp {
                 engine.read_monitor(mwants.len() - 1, crate::tracking::MONITOR_KEY as u64);
             }
         }
+        scopes.layers = comp.layers.iter().filter(|l| l.enabled).filter_map(|l| Some((l.id, crate::scopes::ScopeKind::of_source(&l.source)?))).collect();
         if let Some((src, w, h)) = scopes.picture(now, (comp.width, comp.height)) {
             mwants.push((crate::scopes::MONITOR_KEY, src, w, h));
             if scopes.due(now) {
@@ -224,7 +225,14 @@ impl PhosphorApp {
             match f.tag as u8 {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::tracking::MONITOR_KEY => tracker.give(f.rgba, f.width, f.height, &comp.tracking),
-                crate::scopes::MONITOR_KEY => scopes.give(&f.rgba, f.width, f.height),
+                crate::scopes::MONITOR_KEY => {
+                    scopes.give(&f.rgba, f.width, f.height, now);
+                    for (id, img) in scopes.take_layer_pictures() {
+                        let [w, h] = img.size;
+                        let rgba: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_array()).collect();
+                        engine.upload_rgba(id, w as u32, h as u32, &rgba);
+                    }
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::scanner::MONITOR_KEY => scanner.give(f.rgba, f.width, f.height),
                 _ => {}

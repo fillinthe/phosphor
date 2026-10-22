@@ -14,6 +14,14 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
             ui.selectable_value(&mut s.source, MASTER_ID, "Mix");
             crate::ui::layer_items(ui, &st.comp.layers, &mut s.source, |id| id);
         });
+        if ui.button(label(icon::STACK_PLUS, "As a layer")).on_hover_text("A new layer showing this scope (it keeps measuring while the layer is on)").clicked() {
+            let kind = s.kind;
+            let l = st.comp.add_layer();
+            l.source = kind.layer_source();
+            l.name = format!("Scope: {}", kind.name());
+            l.blend = phosphor_engine::BlendMode::Add;
+            st.selected = Some(l.id);
+        }
     });
     let hint_text = match st.scopes.kind {
         crate::scopes::ScopeKind::Waveform => "Brightness across the picture: top = white, bottom = black",
