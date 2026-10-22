@@ -10,7 +10,7 @@ lack was looked for in the code. This is what's missing or only partly there. **
 Sizes are my estimate: **S** = an hour or two, **M** = half a day to two days, **L** = several days or more.
 Hardware items can be built but not tested here without the device.
 
-Items 1–22: in **0.3.0**; 23–35 in **0.3.1**.
+Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are done and tested but not released yet.
 
 ### Small
 - [x] 1. **Copy size mode** for layers: 1:1 pixels, no scaling (V). Has Fit / Fill / Stretch.
@@ -85,33 +85,50 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**.
       Slider limits (right-click › Limits…): the mouse stays inside, a controller's whole travel covers just that part, outside is shaded. "Ignore while hidden": not done. Checked: tests.
 
 ### Medium
-- [ ] 36. **A layer's picture before its effects** as another layer's source (V). After effects exists.
-- [ ] 37. **Blend mode per effect**: how an effect's output mixes back with its input (V). Dry/wet exists.
-- [ ] 38. **Wipe blend modes** driven by opacity (radial, star, blocks…) (V). Wipes exist as clip transitions only.
+- [x] 36. **A layer's picture before its effects** as another layer's source (V). After effects exists.
+      Source menu › From another layer › "(before effects)". Checked: GPU test (0.2 before an invert, 0.8 after).
+- [x] 37. **Blend mode per effect**: how an effect's output mixes back with its input (V). Dry/wet exists.
+      A blend menu beside each effect's Mix. Checked: GPU test (Invert with Multiply).
+- [x] 38. **Wipe blend modes** driven by opacity (radial, star, blocks…) (V). Wipes exist as clip transitions only.
+      Six blend modes: Wipe left to right, top down, from the centre, diamond, blocks, and Dissolve; opacity = how far it's come in. Checked: GPU tests.
 - [ ] 39. **Your own blend modes** written as shaders (V).
-- [ ] 40. **Generator size per layer / clip** (V). Generators render at the comp's size.
-- [ ] 41. **Frame rate per layer / comp**, to save GPU (V).
+- [x] 40. **Generator size per layer / clip** (V). Generators render at the comp's size.
+      Inspector › Render size 100 / 75 / 50 / 25% for generators (effects run at that size too). Checked: GPU test.
+- [x] 41. **Frame rate per layer / comp**, to save GPU (V).
+      Inspector › Frame rate: every frame / 30 / 15 / 10 / 5, the picture held between. Checked: GPU test.
 - [ ] 42. **Before / after preview of one effect** in a chain (V).
-- [ ] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
+- [~] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
+      Preview bar: a mouse button; dragging moves the selected layer's point settings (ISF point2D). No iMouse input yet. Checked: test of the point mapping.
 - [ ] 44. **Previews**: drag to scrub the movie, frame-rate cap (V).
 - [ ] 45. **Eyedropper**: pick a colour from a preview (V).
-- [ ] 46. **Endless scratch** control for movies (V).
-- [ ] 47. **Movie chapter markers**: jump to chapters stored in the file (V).
-- [ ] 48. **Text from a file**, shown word / line / sentence at a time with next / previous; **animated text styles** (beat, scrolling, fade); **text set by OSC** (V).
-- [ ] 49. **Strings and colours from controllers** (OSC text and colour values) (V).
-- [ ] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
-- [ ] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, colour wheel, computed values (V).
-- [ ] 52. **Import TouchOSC layouts** (V). Export exists.
-- [ ] 53. **Clip grid lights on Launchpad / APC**: pad colours for empty / loaded / playing / queued (V, M).
-- [ ] 54. **Map a whole row of clips at once** (first and last note), bank / transpose the mapping, pick a clip by index or value (V).
+- [x] 46. **Endless scratch** control for movies (V).
+      Playback › Scratch strip (drag; wraps at the ends).
+- [x] 47. **Movie chapter markers**: jump to chapters stored in the file (V).
+      Playback › Chapters menu when the file has chapters. Checked: test with a movie made with two chapters.
+- [~] 48. **Text from a file**, shown word / line / sentence at a time with next / previous; **animated text styles** (beat, scrolling, fade); **text set by OSC** (V).
+      Text › Parts: from a file or by splitting, by lines / sentences / words / paragraphs; next / previous (mappable). Animated text styles: not yet. Checked: tests.
+- [~] 49. **Strings and colours from controllers** (OSC text and colour values) (V).
+      OSC words into text layers (`/phosphor/layer/<id>/text`, or any mapped address). Colours from controllers: not done. Checked: test.
+- [x] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
+      Right-click any control › Send out: OSC to the Control Surface's OSC-out host, MIDI CC or note. Checked: real UDP test.
+- [~] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, colour wheel, computed values (V).
+      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field, multi-slider, expressions: not yet. Checked: test.
+- [x] 52. **Import TouchOSC layouts** (V). Export exists.
+      MIDI / OSC panel › Import TouchOSC layout: pages, controls in place, OSC addresses mapped. Checked: round-trip test with the export.
+- [x] 53. **Clip grid lights on Launchpad / APC**: pad colours for empty / loaded / playing / queued (V, M).
+      MIDI / OSC panel › Clip pad lights (presets for Launchpad / APC mini mk2 and the first APC mini). Checked: test of the states; not tried on a real Launchpad.
+- [x] 54. **Map a whole row of clips at once** (first and last note), bank / transpose the mapping, pick a clip by index or value (V).
+      Clip row name menu › MIDI notes: map the row from a note, shift by ±1 / ±8; "Pick a clip by value" (mappable). Checked: tests.
 - [ ] 55. **Export / import a bank of clips** with settings; **set a clip's thumbnail** from the current frame (V).
 - [ ] 56. **Recorder**: record any layer, comp or camera (not only an output), start/stop on the beat, several recorders at once (V).
 - [ ] 57. **Scopes as a layer source** (V).
-- [ ] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
+- [x] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
+      "Drawn wave" modulation source (a smooth loop through eight points). Checked: test.
 - [ ] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
 - [ ] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now.
 - [ ] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade.
-- [ ] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
+- [~] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
+      MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC / LTC out: not yet. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
 - [ ] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
 - [ ] 64. **Schedules**: calendar (.ics) events trigger cues, an idle cue after N minutes of nothing, a startup cue (M). Daily times exist.
 - [ ] 65. **Combine controls**: mix several sources into one (max, add, multiply…) (M).
@@ -131,7 +148,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**.
 - [ ] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
 - [ ] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M).
 - [ ] 81. **SVG and Lottie** (After Effects) animations as clips (M).
-- [ ] 82. **Lock the panel layout** only (not the whole player mode) (V).
+- [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
+      View › Lock Panels On / Off.
 - [ ] 83. **Interface colour themes** (V). Has a brightness slider.
 - [ ] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M).
 - [ ] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
