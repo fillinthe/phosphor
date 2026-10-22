@@ -41,6 +41,10 @@ pub enum Purpose {
     OutputBackground(u64),
     /// A patch list (CSV) of LED fixtures.
     ImportFixtures,
+    /// Save this output's mapping as SVG.
+    ExportMappingSvg(u64),
+    /// Shapes from an SVG become masks on this output.
+    ImportMasksSvg(u64),
 }
 
 pub struct Dialogs {

@@ -493,6 +493,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     output_strip(ui, st, 54.0);
     ui.horizontal(|ui| {
         venue_menu(ui, st);
+        svg_menu(ui, st);
         outputs_actions(ui, st);
     });
     let oid = st.mapping_output;
@@ -1010,6 +1011,22 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
             crate::ui::toggle(ui, &mut l.in_mix, "Also in the mix").on_hover_text(tip);
         } else if let Some(g) = s.layer.and_then(|id| groups.iter_mut().find(|g| g.id == id)) {
             crate::ui::toggle(ui, &mut g.in_mix, "Also in the mix").on_hover_text(tip);
+        }
+    });
+}
+
+/// The edited output's mapping as an SVG drawing, or shapes from one as masks.
+pub(crate) fn svg_menu(ui: &mut egui::Ui, st: &mut State) {
+    #[cfg(not(target_arch = "wasm32"))]
+    ui.menu_button(label(icon::FILE_SVG, "SVG"), |ui| {
+        let oid = st.mapping_output;
+        if ui.button("Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (for the venue, a cutter, another app)").clicked() {
+            st.dialogs.save_file(crate::dialogs::Purpose::ExportMappingSvg(oid), ("SVG", &["svg"]), "Mapping.svg");
+            ui.close();
+        }
+        if ui.button("Masks from a drawing…").on_hover_text("Each closed shape in an SVG becomes a mask on this output").clicked() {
+            st.dialogs.pick_file(crate::dialogs::Purpose::ImportMasksSvg(oid), Some(("SVG", &["svg"])));
+            ui.close();
         }
     });
 }
