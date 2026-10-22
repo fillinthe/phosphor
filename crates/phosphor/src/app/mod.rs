@@ -282,6 +282,8 @@ pub struct State {
     pub open_tab: Option<Tab>,
     /// Dragging in the Preview moves the selected layer's shader points (ISF point inputs).
     pub mouse_to_shaders: bool,
+    /// File › New from Template is open.
+    pub templates_open: bool,
     /// A snapshot of this output was asked for (Output panel); the app saves it.
     pub snapshot_output: Option<u64>,
     /// Mappings copied from a control's menu (their target is replaced on paste).

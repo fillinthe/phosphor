@@ -21,6 +21,8 @@ mod output;
 mod play;
 mod quick;
 mod merge;
+mod templates;
+pub use templates::TEMPLATES;
 pub use merge::Merged;
 mod remap;
 mod source;

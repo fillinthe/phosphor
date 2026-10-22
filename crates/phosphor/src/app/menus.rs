@@ -132,6 +132,7 @@ impl PhosphorApp {
                 st.control.learning = None;
             }
             A::ResetLayout => self.reset_area_layout(),
+            A::NewFromTemplate => st.templates_open = true,
             A::MergeProject => {
                 #[cfg(not(target_arch = "wasm32"))]
                 self.state.dialogs.pick_file(crate::dialogs::Purpose::MergeProject, Some(("Phosphor project", &["phosphor"])));
