@@ -326,3 +326,30 @@ fn layers_can_run_at_their_own_frame_rate() {
     assert!((at(&mut engine, &comp, 0.05) - 0.2).abs() < 0.03, "held between frames");
     assert!((at(&mut engine, &comp, 0.11) - 0.8).abs() < 0.03, "next frame");
 }
+
+/// A mapped output's background picture shows where no slice covers it.
+#[test]
+fn output_backgrounds_show_behind_slices() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, next_id: 100, ..Default::default() };
+    let mut l = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    l.generator_values = vec![0.0, 1.0, 0.0];
+    comp.layers.push(l);
+    let out = comp.add_output();
+    let sid = comp.new_id();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    let s = o.mapping.add_surface(sid);
+    s.corners = [[0.0, 0.0], [0.5, 0.0], [0.5, 0.5], [0.0, 0.5]];
+    o.mapping.enabled = true;
+    o.background = "red.png".into();
+    o.background_opacity = 0.5;
+    let red: Vec<u8> = [255u8, 0, 0, 255].repeat(4 * 4);
+    engine.set_output_background(out, Some((4, 4, &red)));
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, px) = engine.read_output_of(out).expect("output");
+    let at = |x: u32, y: u32| { let i = ((y * w + x) * 4) as usize; [px[i], px[i + 1], px[i + 2]] };
+    let slice = at(w / 4, h / 4);
+    let bg = at(w * 3 / 4, h * 3 / 4);
+    assert!(slice[1] > 200 && slice[0] < 30, "the slice: {slice:?}");
+    assert!((bg[0] as i32 - 128).abs() < 10 && bg[1] < 20, "half-strength red behind: {bg:?}");
+}

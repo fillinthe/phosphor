@@ -175,6 +175,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     let canvas = (st.comp.width, st.comp.height);
     let mut remove = None;
     let mut snapshot = None;
+    let mut background: Option<u64> = None;
     let count = st.comp.outputs.len();
     for i in 0..count {
         let id = st.comp.outputs[i].id;
@@ -251,6 +252,17 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         crate::ui::toggle(ui, &mut o.flip_y, label(icon::ARROWS_DOWN_UP, "Flip")).on_hover_text("Mirror top-bottom (projector hung upside down)");
                         guarded!(ui, o.delay_frames, egui::DragValue::new(&mut o.delay_frames).range(0..=phosphor_engine::MAX_OUTPUT_DELAY).prefix("delay ").suffix(" frames"))
                             .on_hover_text("Show this output a few frames late, to line it up with a slower projector or LED processor");
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if o.background.is_empty() {
+                            if ui.small_button(label(icon::IMAGE, "Background…")).on_hover_text("A picture behind this output's slices (a backdrop; only with mapping)").clicked() {
+                                background = Some(id);
+                            }
+                        } else {
+                            Level::percent(&mut o.background_opacity, "Background").default(1.0).width(110.0).show(ui);
+                            if ui.small_button(icon::X).on_hover_text("No background picture").clicked() {
+                                o.background.clear();
+                            }
+                        }
                     });
                 });
             });
@@ -293,6 +305,12 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     if snapshot.is_some() {
         st.snapshot_output = snapshot;
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(id) = background {
+        st.dialogs.pick_file(crate::dialogs::Purpose::OutputBackground(id), Some(("Picture", &["png", "jpg", "jpeg", "webp", "tif", "tiff", "psd", "heic", "exr", "bmp"])));
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = background;
 }
 
 /// Composition → Syphon toggle with status.
