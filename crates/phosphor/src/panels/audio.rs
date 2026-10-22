@@ -55,6 +55,14 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         Level::range(&mut audio.gain, 0.1, 10.0, "Input gain").log().default(1.0).target(ControlTarget::App(phosphor_engine::AppControl::AudioGain)).tip("How much the input is boosted before the visuals hear it").show(ui);
     });
+    // Play-through: hear the input on the sound output (off each time Phosphor opens: no surprise feedback).
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut on = audio.play_through();
+        if crate::ui::toggle(ui, &mut on, "Hear it").on_hover_text("Play this input through the sound output (monitoring). Careful with a microphone near the speakers: it can feed back.").changed() {
+            audio.set_play_through(on, 1.0);
+        }
+    }
     ui.horizontal(|ui| {
         Level::range(&mut audio.envelope.attack, 0.0, 0.5, "Attack (s)").default(0.0).tip("How fast the levels rise: 0 = instantly (punchy), higher = smoother swells").show(ui);
     });
