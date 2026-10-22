@@ -48,6 +48,29 @@ pub const HAND: [&str; 4] = ["Track Hand X", "Track Hand Y", "Track Pinch", "Tra
 pub const BODY: [&str; 5] = ["Track Body X", "Track Body Y", "Track Left Wrist Y", "Track Right Wrist Y", "Track Body Found"];
 
 impl super::Composition {
+    /// Puts `layer` on the face: its X, Y and size follow face tracking (a mask, a logo, a picture over the face).
+    pub fn follow_face(&mut self, layer: u64) -> bool {
+        self.tracking.enabled = true;
+        self.tracking.faces = true;
+        let mut links = Vec::new();
+        for name in &FACE[..3] {
+            if self.hand(name).is_none() {
+                self.set_hand(name, 0.0);
+            }
+            let Some(m) = self.modulators.iter().find(|m| m.name == *name) else { return false };
+            links.push(m.id);
+        }
+        let Some(l) = self.layer_mut(layer) else { return false };
+        // Range mode over each control's range: X / Y = face − 0.5 (offsets from the centre), scale ≈ 1.3 × the
+        // face's height (scale runs 0.01 to 8).
+        let follow = |link: u64, min: f32, max: f32| Some(super::Modulation { link, range: true, min, max, amount: 1.0, ..Default::default() });
+        l.transform.x_mod = follow(links[0], 0.25, 0.75);
+        l.transform.y_mod = follow(links[1], 0.25, 0.75);
+        l.transform.scale_mod = follow(links[2], 0.0, 1.3 / 7.99);
+        l.transform.corners = None;
+        true
+    }
+
     /// Hides faces in the chain `owner` (a layer, group or `MASTER_ID`): face tracking on, and a Hide Face effect
     /// whose X, Y, Size and Found follow the face. Returns the effect's id.
     pub fn add_face_hider(&mut self, owner: u64) -> Option<u64> {
@@ -78,6 +101,28 @@ pub fn smooth_toward(current: f32, found: f32, smoothing: f32) -> f32 {
 
 #[cfg(test)]
 mod hider_tests {
+    #[test]
+    fn a_layer_follows_the_face() {
+        let mut c = crate::Composition::default();
+        c.layers.push(crate::LayerState { id: 3, ..Default::default() });
+        assert!(c.follow_face(3));
+        let t = &c.layers[0].transform;
+        let inputs = |x: f32, y: f32, size: f32| {
+            let mut i = crate::control::ModInputs::default();
+            let ids: Vec<u64> = c.modulators.iter().map(|m| m.id).collect();
+            i.shared[0] = (ids[0], x);
+            i.shared[1] = (ids[1], y);
+            i.shared[2] = (ids[2], size);
+            i
+        };
+        let at = inputs(0.75, 0.25, 0.4);
+        let m = |v, lo, hi, md: &Option<crate::Modulation>| crate::control::modulate(v, lo, hi, md.as_ref(), &at);
+        assert!((m(t.x, -1.0, 1.0, &t.x_mod) - 0.25).abs() < 1e-4, "face right of centre");
+        assert!((m(t.y, -1.0, 1.0, &t.y_mod) + 0.25).abs() < 1e-4, "face below centre");
+        assert!((m(t.scale, 0.01, 8.0, &t.scale_mod) - (0.01 + 0.4 * 1.3)).abs() < 1e-3, "about the face's size");
+        assert!(!c.follow_face(99));
+    }
+
     #[test]
     fn a_face_hider_follows_the_face() {
         let mut c = crate::Composition::default();

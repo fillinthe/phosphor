@@ -39,6 +39,13 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
         {
             st.notice = Some("Faces are hidden on MASTER (Hide Face effect; tracking on)".into());
         }
+        let sel = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
+        if ui.add_enabled(sel.is_some(), egui::Button::new(label(icon::SMILEY, "Selected layer on the face"))).on_hover_text("The selected layer's position and size follow the face (a mask, a logo, a picture over the face). Its X, Y and Scale show the motion; Stop the motion there to undo.").clicked()
+            && let Some(id) = sel
+            && st.comp.follow_face(id)
+        {
+            st.notice = Some(format!("{} follows the face now", crate::ui::layer_name(&st.comp.layers, id)));
+        }
         if !st.comp.tracking.enabled {
             hint(ui, "Turn it on, pick a camera layer, then right-click any slider › Modulate › a Track modulator. To cut people out of the background, add the Remove Background effect to the layer instead (no tracking needed).");
             return;

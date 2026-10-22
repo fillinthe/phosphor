@@ -893,7 +893,8 @@ fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModI
     let a = rotation.to_radians();
     let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
     // y is up for people, down in texture space.
-    p[0] = [t.x, -t.y, sx, sy];
+    let (x, y) = (modulate(t.x, -1.0, 1.0, t.x_mod.as_ref(), mods), modulate(t.y, -1.0, 1.0, t.y_mod.as_ref(), mods));
+    p[0] = [x, -y, sx, sy];
     p[1] = [a.cos(), a.sin(), aspect, 1.0];
     Some(p)
 }
