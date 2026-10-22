@@ -392,7 +392,7 @@ impl MediaManager {
             let fade_in = layer.transition.as_ref().map_or(1.0, |t| t.progress(now as f32));
             player.set_volume(comp.sound_gain(layer) * fade_in);
             player.set_playing(layer.playing && layer.enabled);
-            player.set_rate(layer.play_rate(player.duration(), comp.bpm));
+            player.set_rate(layer.play_rate(player.duration(), comp.bpm) * comp.master_speed.clamp(0.25, 4.0));
             player.set_looping(layer.looping);
             let range = player.duration().and_then(|d| layer.loop_range(d, comp.bpm));
             player.set_mode(layer.direction, range);

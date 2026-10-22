@@ -79,6 +79,8 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::WebControl => on(!comp.web_control_off),
             AppControl::Dmx => on(comp.dmx.enabled),
             // (Nothing to freeze without an output: no value to show.)
+            AppControl::DmxMaster => comp.dmx.master,
+            AppControl::MasterSpeed => to_unit(comp.master_speed, 0.25, 4.0, true),
             AppControl::FreezeOutputs if !comp.outputs.iter().any(|o| o.enabled) => return None,
             AppControl::FreezeOutputs => on(comp.outputs_frozen()),
             AppControl::MasterFxBypass => on(comp.master_fx_bypass),
@@ -244,6 +246,8 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             AppControl::AutoLevel => comp.sound_auto_level = toggled(comp.sound_auto_level, v),
             AppControl::WebControl => comp.web_control_off = !toggled(!comp.web_control_off, v),
             AppControl::Dmx => comp.dmx.enabled = toggled(comp.dmx.enabled, v),
+            AppControl::DmxMaster => comp.dmx.master = v.clamp(0.0, 1.0),
+            AppControl::MasterSpeed => comp.master_speed = unit_to(v, 0.25, 4.0, true),
             AppControl::FreezeOutputs => {
                 let frozen = toggled(comp.outputs_frozen(), v);
                 comp.freeze_outputs(frozen);

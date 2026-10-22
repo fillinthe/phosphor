@@ -21,6 +21,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         ui.add(egui::TextEdit::singleline(&mut d.target).desired_width(120.0).hint_text(hint_text))
             .on_hover_text("The controller's IP address (e.g. 2.0.0.10), or leave empty to send to the whole network");
         guarded!(ui, d.fps, egui::DragValue::new(&mut d.fps).range(1.0..=60.0).speed(0.2).suffix(" fps"));
+        Level::percent(&mut d.master, "Master").default(1.0).width(120.0).target(ControlTarget::App(phosphor_engine::AppControl::DmxMaster)).tip("Every fixture's level at once").show(ui);
         #[cfg(not(target_arch = "wasm32"))]
         {
             let status = match (&st.dmx.error, d.enabled) {

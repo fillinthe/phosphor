@@ -142,6 +142,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
         map_menu(ui, &auto, auto_target);
         guarded!(ui, comp.auto_fade_secs, egui::DragValue::new(&mut comp.auto_fade_secs).range(0.0..=60.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Auto-fade time");
         choice_combo(ui, "fader_curve", &mut comp.fader_curve, 150.0, false).on_hover_text("How the crossfader shares out A and B");
+        crate::ui::Level::range(&mut comp.master_speed, 0.25, 4.0, "Speed").log().default(1.0).width(130.0).target(ControlTarget::App(phosphor_engine::AppControl::MasterSpeed)).tip("Every movie plays this much faster or slower").show(ui);
     });
     if fade {
         st.auto_fade(now);
