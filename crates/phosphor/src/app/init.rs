@@ -187,6 +187,8 @@ impl PhosphorApp {
                 snapshot_output: None,
                 clip_thumb_request: None,
                 #[cfg(not(target_arch = "wasm32"))]
+                ltc_out: None,
+                #[cfg(not(target_arch = "wasm32"))]
                 color_ref: None,
                 stream_bar: None,
                 mouse_to_shaders: false,

@@ -1,6 +1,6 @@
 //! LTC (linear / SMPTE timecode as audio) decoding for the cue list: zero crossings → biphase-mark bits →
 //! 80-bit frames (sync word 0011 1111 1111 1101) → hours:minutes:seconds:frames. Runs on the audio thread;
-//! the time runs on between frames like MIDI timecode.
+//! the time runs on between frames like MIDI timecode. `LtcEncoder` writes LTC (timecode out on a sound output).
 
 use std::time::Instant;
 
@@ -124,49 +124,70 @@ impl LtcClock {
     }
 }
 
+/// Writes LTC audio, frame by frame (biphase mark: the level flips at every bit start, and again half way for a 1).
+pub struct LtcEncoder {
+    sample_rate: f32,
+    level: f32,
+    /// Where the next bit starts, in samples (fractional: bits rarely land on whole samples).
+    pos: f64,
+    written: u64,
+}
+
+impl LtcEncoder {
+    pub fn new(sample_rate: u32) -> Self {
+        Self { sample_rate: sample_rate.max(8000) as f32, level: 1.0, pos: 0.0, written: 0 }
+    }
+
+    /// One frame's samples: hours, minutes, seconds, frames at `fps` (24, 25 or 30), half volume.
+    pub fn frame(&mut self, h: u32, m: u32, s: u32, f: u32, fps: u32) -> Vec<f32> {
+        let mut bits = [false; 80];
+        let mut put = |start: usize, len: usize, v: u32| {
+            for i in 0..len {
+                bits[start + i] = (v >> i) & 1 == 1;
+            }
+        };
+        put(0, 4, f % 10);
+        put(8, 2, f / 10);
+        put(16, 4, s % 10);
+        put(24, 3, s / 10);
+        put(32, 4, m % 10);
+        put(40, 3, m / 10);
+        put(48, 4, h % 10);
+        put(56, 2, h / 10);
+        put(64, 16, 0b1011_1111_1111_1100);
+        let bit_len = self.sample_rate as f64 / (fps as f64 * 80.0);
+        let mut out = Vec::with_capacity((bit_len * 80.0) as usize + 2);
+        for b in bits {
+            self.level = -self.level;
+            let (half, end) = (self.pos + bit_len / 2.0, self.pos + bit_len);
+            while (self.written as f64) < half {
+                out.push(self.level * 0.5);
+                self.written += 1;
+            }
+            if b {
+                self.level = -self.level;
+            }
+            while (self.written as f64) < end {
+                out.push(self.level * 0.5);
+                self.written += 1;
+            }
+            self.pos = end;
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// An LTC signal for `frames` frames from the given start, at `fps`, as samples.
     fn encode(start: (u32, u32, u32, u32), frames: u32, fps: u32, sample_rate: u32) -> Vec<f32> {
-        let bit_len = sample_rate as f32 / (fps as f32 * 80.0);
-        let mut out = Vec::new();
-        let mut level = 1.0f32;
-        let mut pos = 0.0f32;
+        let mut enc = LtcEncoder::new(sample_rate);
         let (h, mut m, mut s, mut f) = start;
+        let mut out = Vec::new();
         for _ in 0..frames {
-            let mut bits = [false; 80];
-            let mut put = |start: usize, len: usize, v: u32| {
-                for i in 0..len {
-                    bits[start + i] = (v >> i) & 1 == 1;
-                }
-            };
-            put(0, 4, f % 10);
-            put(8, 2, f / 10);
-            put(16, 4, s % 10);
-            put(24, 3, s / 10);
-            put(32, 4, m % 10);
-            put(40, 3, m / 10);
-            put(48, 4, h % 10);
-            put(56, 2, h / 10);
-            put(64, 16, 0b1011_1111_1111_1100);
-            for b in bits {
-                // Biphase mark: flip at every bit start; ones flip again half way.
-                level = -level;
-                let half = pos + bit_len / 2.0;
-                let end = pos + bit_len;
-                while (out.len() as f32) < half {
-                    out.push(level * 0.5);
-                }
-                if b {
-                    level = -level;
-                }
-                while (out.len() as f32) < end {
-                    out.push(level * 0.5);
-                }
-                pos = end;
-            }
+            out.extend(enc.frame(h, m, s, f, fps));
             f += 1;
             if f == fps {
                 f = 0;

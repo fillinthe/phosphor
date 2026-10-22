@@ -56,6 +56,8 @@ pub(crate) mod play;
 mod quick;
 pub(crate) use quick::dice;
 mod recording;
+#[cfg(not(target_arch = "wasm32"))]
+mod timecode_out;
 mod recovery;
 mod render;
 mod settings;
@@ -307,6 +309,9 @@ pub struct State {
     pub snapshot_output: Option<u64>,
     /// Make this clip's grid picture from its layer's picture now (layer, slot).
     pub clip_thumb_request: Option<(u64, usize)>,
+    /// LTC out (timecode audio), while it's switched on.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub ltc_out: Option<timecode_out::LtcOut>,
     /// A reference picture's colours, worked out on a worker thread (layer, average and spread per channel).
     #[cfg(not(target_arch = "wasm32"))]
     pub color_ref: Option<std::sync::mpsc::Receiver<(u64, Result<[(f32, f32); 3], String>)>>,

@@ -75,6 +75,18 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 }
                 ui.separator();
                 crate::ui::toggle(ui, &mut control.mtc_time_of_day, "Time of day").on_hover_text("Send the clock time instead of the show clock (Cues panel)");
+                ui.separator();
+                ui.label(RichText::new("LTC (timecode as sound)").small());
+                let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
+                if ui.selectable_label(control.ltc_out_pair.is_none(), "LTC off").clicked() {
+                    control.ltc_out_pair = None;
+                }
+                for p in 0..pairs.max(control.ltc_out_pair.map_or(0, |p| p + 1)) {
+                    let name = format!("LTC on outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
+                    if ui.selectable_label(control.ltc_out_pair == Some(p), name).clicked() {
+                        control.ltc_out_pair = Some(p);
+                    }
+                }
             })
             .response
             .on_hover_text("Send MIDI timecode (25 fps) to a MIDI output: the show clock, or the time of day. Lighting desks, DAWs and other apps follow it");

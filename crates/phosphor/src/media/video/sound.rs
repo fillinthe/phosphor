@@ -251,6 +251,11 @@ impl PlayThrough {
         self.clip.gain.store(g.clamp(0.0, 4.0).to_bits(), Ordering::Relaxed);
     }
 
+    /// Plays on this pair of the output's channels (0 = 1-2…).
+    pub fn set_pair(&self, pair: u32) {
+        self.clip.pair.store(pair, Ordering::Relaxed);
+    }
+
     /// New input (left, right at `rate` Hz) to be heard.
     pub fn push(&self, frames: &[[f32; 2]], rate: u32) {
         let out = match OUT_RATE.load(Ordering::Relaxed) {
