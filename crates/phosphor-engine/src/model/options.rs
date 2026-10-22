@@ -426,11 +426,13 @@ pub struct LaunchSettings {
     pub transition_effect: String,
     /// Keep the next movie clips open and paused on their first frame, so they start the moment they're triggered.
     pub preload: bool,
+    /// A saved look fades in over this many seconds (0 = cuts).
+    pub look_fade: f32,
 }
 
 impl Default for LaunchSettings {
     fn default() -> Self {
-        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: true, transition_effect: "zoom_blur".into(), preload: true }
+        Self { fade: true, fade_secs: 0.5, timing: LaunchTiming::Now, style: TransitionKind::Crossfade, auto_beat_match: true, transition_effect: "zoom_blur".into(), preload: true, look_fade: 1.0 }
     }
 }
 

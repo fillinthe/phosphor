@@ -15,6 +15,11 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
         let State { presets, preset_name, layer_presets, layer_preset_name, chain_presets, chain_preset_name, comp, .. } = &mut *st;
         egui::CollapsingHeader::new(RichText::new("Looks").strong()).default_open(true).show(ui, |ui| {
             hint(ui, "The whole project: layers, effects, mapping.");
+            ui.horizontal(|ui| {
+                ui.label("Fade in");
+                guarded!(ui, comp.launch.look_fade, egui::DragValue::new(&mut comp.launch.look_fade).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(1))
+                    .on_hover_text("A look fades in from the picture showing now (0 = cut)");
+            });
             look = named_saves(ui, presets, preset_name, "look", || comp.to_json());
         });
         egui::CollapsingHeader::new(RichText::new("Layers").strong()).default_open(true).show(ui, |ui| {
@@ -33,7 +38,15 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
     });
     match look {
         Some(SaveAction::Load(json)) => match phosphor_engine::Composition::from_json(&json) {
-            Ok(comp) => st.load_composition(comp),
+            Ok(mut comp) => {
+                // The fade time stays this project's (not the saved look's).
+                let secs = st.comp.launch.look_fade;
+                comp.launch.look_fade = secs;
+                if let Some(e) = st.engine.as_mut() {
+                    e.fade_in_next(secs);
+                }
+                st.load_composition(comp);
+            }
             Err(e) => st.notice = Some(format!("Couldn't load preset: {e}")),
         },
         Some(SaveAction::Error(e)) => st.notice = Some(e),
