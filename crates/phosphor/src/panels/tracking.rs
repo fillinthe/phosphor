@@ -34,7 +34,12 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
             toggle(ui, &mut t.body, "Body").on_hover_text("The hips: Track Body X / Y, both wrists' height, Found");
         });
         ui.horizontal(|ui| Level::percent(&mut t.smoothing, "Smoothing").default(0.5).show(ui)).inner.on_hover_text("Higher = less jitter, a little more lag");
-        if !t.enabled {
+        if ui.button(label(icon::EYE_SLASH, "Hide faces")).on_hover_text("Adds a Hide Face effect to MASTER that follows the face it finds (pixelate, blur or black: change it in the effect)").clicked()
+            && st.comp.add_face_hider(MASTER_ID).is_some()
+        {
+            st.notice = Some("Faces are hidden on MASTER (Hide Face effect; tracking on)".into());
+        }
+        if !st.comp.tracking.enabled {
             hint(ui, "Turn it on, pick a camera layer, then right-click any slider › Modulate › a Track modulator. To cut people out of the background, add the Remove Background effect to the layer instead (no tracking needed).");
             return;
         }

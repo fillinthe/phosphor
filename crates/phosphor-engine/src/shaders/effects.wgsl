@@ -49,6 +49,39 @@ fn fx_pixelate(in: VOut) -> @location(0) vec4f {
     return src((floor(in.uv / cell) + 0.5) * cell);
 }
 
+// A face hidden inside an ellipse: X, Y (up = 1) and Size (its height, as a share of the picture's) come from face
+// tracking; Found 0 = nothing to hide. Style: 0 pixelate, 1 blur, 2 black.
+@fragment
+fn fx_hide_face(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    if (P(3u) < 0.5) {
+        return c;
+    }
+    let aspect = u.resolution.x / max(u.resolution.y, 1.0);
+    let d = (in.uv - vec2f(P(0u), 1.0 - P(1u))) * vec2f(aspect, 1.0);
+    let r = max(P(2u), 0.02) * 0.65;
+    let inside = 1.0 - smoothstep(r * 0.85, r, length(d));
+    if (inside <= 0.0) {
+        return c;
+    }
+    let style = u32(round(P(4u)));
+    var hidden = vec4f(0.0, 0.0, 0.0, c.a);
+    if (style == 0u) {
+        let cell = vec2f(r * 2.0 / max(P(5u), 1.0)) / vec2f(aspect, 1.0);
+        hidden = src((floor(in.uv / cell) + 0.5) * cell);
+    } else if (style == 1u) {
+        var sum = vec4f(0.0);
+        let step = vec2f(r * 0.12) / vec2f(aspect, 1.0);
+        for (var y = -3; y <= 3; y = y + 1) {
+            for (var x = -3; x <= 3; x = x + 1) {
+                sum = sum + src(in.uv + vec2f(f32(x), f32(y)) * step);
+            }
+        }
+        hidden = sum / 49.0;
+    }
+    return mix(c, hidden, inside);
+}
+
 @fragment
 fn fx_mirror(in: VOut) -> @location(0) vec4f {
     let mode = u32(round(P(0u)));
