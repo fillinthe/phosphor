@@ -234,7 +234,7 @@ pub(crate) fn layer_card(
     is_selected: bool,
     muted: bool,
     err: Option<&str>,
-    feeds: &[(u64, String)],
+    feeds: &[(u64, String, bool)],
     other_comps: &[(u64, String)],
 ) -> CardOut {
     let mut select = false;
@@ -391,15 +391,16 @@ pub(crate) fn layer_card(
 
 /// Source menu for a layer card; returns a request for the browser or the Open dialog.
 /// What a layer can take another picture from: the program (feedback), groups and layers.
-pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, String)> {
-    std::iter::once((MASTER_ID, "Program (feedback)".to_string()))
-        .chain(comp.comps.iter().filter(|_| comp.comps.len() > 1).map(|c| (c.id, format!("Comp: {}", c.name))))
-        .chain(comp.groups.iter().map(|g| (g.id, g.name.clone())))
-        .chain(comp.layers.iter().rev().map(|l| (l.id, l.name.clone())))
+/// What a layer can show another's picture from: (id, name, is a layer (has a "before its effects" picture too)).
+pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, String, bool)> {
+    std::iter::once((MASTER_ID, "Program (feedback)".to_string(), false))
+        .chain(comp.comps.iter().filter(|_| comp.comps.len() > 1).map(|c| (c.id, format!("Comp: {}", c.name), false)))
+        .chain(comp.groups.iter().map(|g| (g.id, g.name.clone(), false)))
+        .chain(comp.layers.iter().rev().map(|l| (l.id, l.name.clone(), true)))
         .collect()
 }
 
-pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String)]) -> Option<LayerAction> {
+pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String, bool)]) -> Option<LayerAction> {
     let mut action = None;
     ui.horizontal(|ui| {
         if ui.button(icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
@@ -440,17 +441,30 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
             }
             ui.menu_button(label(icon::ARROW_BEND_DOWN_RIGHT, "From another layer"), |ui| {
                 hint(ui, "Use another layer's finished picture (with its effects), or the program for video feedback.");
-                for (id, name) in feeds.iter().filter(|(id, _)| *id != layer.id) {
-                    let active = matches!(&layer.source, SourceSpec::Feed { id: cur, .. } if cur == id);
+                for (id, name, _) in feeds.iter().filter(|(id, ..)| *id != layer.id) {
+                    let active = matches!(&layer.source, SourceSpec::Feed { id: cur, before_fx: false, .. } if cur == id);
                     if ui.selectable_label(active, name).clicked() {
-                        layer.source = SourceSpec::Feed { id: *id, name: name.clone() };
+                        layer.source = SourceSpec::Feed { id: *id, name: name.clone(), before_fx: false };
                         ui.close();
+                    }
+                }
+                // Layers only (groups and the program have no "before"): the picture before its effects.
+                let plain: Vec<&(u64, String, bool)> = feeds.iter().filter(|(id, _, is_layer)| *id != layer.id && *is_layer).collect();
+                if !plain.is_empty() {
+                    ui.separator();
+                    hint(ui, "Before its effects:");
+                    for (id, name, _) in plain {
+                        let active = matches!(&layer.source, SourceSpec::Feed { id: cur, before_fx: true, .. } if cur == id);
+                        if ui.selectable_label(active, format!("{name} (before effects)")).clicked() {
+                            layer.source = SourceSpec::Feed { id: *id, name: format!("{name} (before effects)"), before_fx: true };
+                            ui.close();
+                        }
                     }
                 }
                 // A layer feeding on itself = trails / feedback of its own previous frame.
                 let me = matches!(&layer.source, SourceSpec::Feed { id, .. } if *id == layer.id);
                 if ui.selectable_label(me, "Itself (previous frame)").clicked() {
-                    layer.source = SourceSpec::Feed { id: layer.id, name: "itself".into() };
+                    layer.source = SourceSpec::Feed { id: layer.id, name: "itself".into(), before_fx: false };
                     ui.close();
                 }
             });

@@ -561,6 +561,19 @@ impl MediaManager {
         }
     }
 
+    /// A movie layer's chapters (start in seconds, title); empty when the file has none.
+    pub fn chapters(&self, layer: u64) -> Vec<(f64, String)> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            return self.players.get(&layer).map(|p| p.chapters().to_vec()).unwrap_or_default();
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = layer;
+            Vec::new()
+        }
+    }
+
     /// Codec and decoder details for a movie layer, for the Inspector.
     pub fn video_info(&self, layer: u64) -> Option<String> {
         #[cfg(not(target_arch = "wasm32"))]

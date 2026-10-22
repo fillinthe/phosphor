@@ -121,6 +121,13 @@ fn blend_modes_match_their_formulas() {
         (B::Saturation, 0.25),
         (B::Color, 0.25),
         (B::Luminosity, 0.5),
+        // Wipes at 100% opacity: fully in.
+        (B::WipeRight, 0.5),
+        (B::WipeDown, 0.5),
+        (B::WipeRadial, 0.5),
+        (B::WipeDiamond, 0.5),
+        (B::WipeBlocks, 0.5),
+        (B::Dissolve, 0.5),
         (B::LumaMask, 0.125),
         (B::InverseLumaMask, 0.125),
         (B::AlphaMask, 0.25),
@@ -221,4 +228,101 @@ fn outputs_freeze_delay_and_flip() {
     comp.outputs[0].flip_x = true;
     let (l, r) = frame(&mut engine, &comp, 1.0);
     assert!(near(l, 0.0) && near(r, 1.0), "flipped: left {l} right {r}");
+}
+
+/// A layer can show another layer's picture before or after that layer's effects.
+#[test]
+fn feeds_before_and_after_effects() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, next_id: 100, ..Default::default() };
+    let mut grey = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    grey.generator_values = vec![0.2, 0.2, 0.2];
+    grey.effects.push(comp.new_effect("invert").unwrap());
+    comp.layers.push(grey);
+    let mut copy = LayerState { id: 2, source: SourceSpec::Feed { id: 1, name: "grey".into(), before_fx: false }, ..Default::default() };
+    copy.fit = crate::FitMode::Stretch;
+    comp.layers.push(copy);
+    let after = middle(&mut engine, &comp)[0] as f32 / 255.0;
+    comp.layers[1].source = SourceSpec::Feed { id: 1, name: "grey".into(), before_fx: true };
+    middle(&mut engine, &comp);
+    let before = middle(&mut engine, &comp)[0] as f32 / 255.0;
+    assert!((after - 0.8).abs() < 0.03, "after the invert: {after}");
+    assert!((before - 0.2).abs() < 0.03, "before the invert: {before}");
+}
+
+/// An effect with a blend mode lands on its own input that way: grey 25% inverted (75%), multiplied = 18.75%.
+#[test]
+fn effects_blend_onto_their_input() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, next_id: 100, ..Default::default() };
+    let mut grey = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    grey.generator_values = vec![0.25, 0.25, 0.25];
+    let mut fx = comp.new_effect("invert").unwrap();
+    fx.blend = crate::BlendMode::Multiply;
+    grey.effects.push(fx);
+    comp.layers.push(grey);
+    let got = middle(&mut engine, &comp)[0] as f32 / 255.0;
+    assert!((got - 0.1875).abs() < 0.02, "{got}");
+    comp.layers[0].effects[0].blend = crate::BlendMode::Normal;
+    let got = middle(&mut engine, &comp)[0] as f32 / 255.0;
+    assert!((got - 0.75).abs() < 0.02, "plain: {got}");
+}
+
+/// A wipe at half opacity: in on the left half (left to right), out on the right.
+#[test]
+fn wipes_follow_the_opacity() {
+    use crate::BlendMode as B;
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 16, ..Default::default() };
+    let mut black = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    black.generator_values = vec![0.0, 0.0, 0.0];
+    let mut white = LayerState { id: 2, source: SourceSpec::Generator("solid".into()), blend: B::WipeRight, opacity: 0.5, ..Default::default() };
+    white.generator_values = vec![1.0, 1.0, 1.0];
+    comp.layers = vec![black, white];
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, px) = engine.read_output().expect("output");
+    let at = |x: u32| px[((h / 2 * w + x) * 4) as usize];
+    assert!(at(w / 8) > 240 && at(w * 7 / 8) < 15, "left {} right {}", at(w / 8), at(w * 7 / 8));
+    // Dissolve at 30%: about 30% of the pixels are in.
+    comp.layers[1].blend = B::Dissolve;
+    comp.layers[1].opacity = 0.3;
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (_, _, px) = engine.read_output().expect("output");
+    let lit = px.chunks(4).filter(|p| p[0] > 128).count() as f32 / (px.len() / 4) as f32;
+    assert!((lit - 0.3).abs() < 0.12, "{lit} of the pixels in");
+}
+
+/// A generator at half render size draws a quarter of the pixels and still fills the canvas.
+#[test]
+fn generators_render_smaller_when_asked() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 64, height: 32, ..Default::default() };
+    let mut l = LayerState { id: 7, source: SourceSpec::Generator("solid".into()), render_scale: 0.5, ..Default::default() };
+    l.generator_values = vec![0.6, 0.6, 0.6];
+    comp.layers.push(l);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, px) = engine.read_output().expect("output");
+    let corner = px[((h - 2) * w + w - 2) as usize * 4] as f32 / 255.0;
+    assert!((corner - 0.6).abs() < 0.03, "fills the canvas: {corner}");
+    let g = engine.layers.get(&7).and_then(|r| r.generator.as_ref()).map(|t| (t.width, t.height));
+    assert_eq!(g, Some((32, 16)));
+}
+
+/// A layer at 10 fps keeps its picture between its frames.
+#[test]
+fn layers_can_run_at_their_own_frame_rate() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    let mut l = LayerState { id: 3, source: SourceSpec::Generator("solid".into()), render_fps: 10.0, ..Default::default() };
+    l.generator_values = vec![0.2, 0.2, 0.2];
+    comp.layers.push(l);
+    let mut at = |engine: &mut Engine, comp: &Composition, t: f32| {
+        engine.render(comp, t, &ModInputs::default());
+        let (w, h, px) = engine.read_output().expect("output");
+        px[((h / 2 * w + w / 2) * 4) as usize] as f32 / 255.0
+    };
+    assert!((at(&mut engine, &comp, 0.0) - 0.2).abs() < 0.03);
+    comp.layers[0].generator_values = vec![0.8, 0.8, 0.8];
+    assert!((at(&mut engine, &comp, 0.05) - 0.2).abs() < 0.03, "held between frames");
+    assert!((at(&mut engine, &comp, 0.11) - 0.8).abs() < 0.03, "next frame");
 }

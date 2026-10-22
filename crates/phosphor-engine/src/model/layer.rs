@@ -16,6 +16,9 @@ pub struct EffectState {
     pub mix: f32,
     #[serde(default)]
     pub mods: Vec<ParamMod>,
+    /// How the effect's result lands on what went into it (Normal = the plain dry / wet mix).
+    #[serde(default)]
+    pub blend: BlendMode,
 }
 
 fn default_transition_effect() -> String {
@@ -174,6 +177,11 @@ pub struct LayerState {
     pub looping: bool,
     /// Not looping: black once the movie ends (instead of holding its last frame).
     pub black_at_end: bool,
+    /// Generators draw at this share of the canvas size (1 = full; 0.5 = a quarter of the pixels, scaled up), to save
+    /// the GPU on heavy shaders. Their effects run at that size too.
+    pub render_scale: f32,
+    /// Draw this layer (source and effects) this many times a second and hold the picture between (0 = every frame).
+    pub render_fps: f32,
     /// The jump back / forward buttons' step, in beats of playback (or seconds with `jump_in_seconds`).
     pub jump: f32,
     pub jump_in_seconds: bool,
@@ -283,6 +291,8 @@ impl Default for LayerState {
             rate: 1.0,
             looping: true,
             black_at_end: false,
+            render_scale: 1.0,
+            render_fps: 0.0,
             jump: 1.0,
             jump_in_seconds: false,
             direction: PlayDirection::Forward,

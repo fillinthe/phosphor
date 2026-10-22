@@ -58,6 +58,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let position = st.media.position(sel);
         let has_sound = st.media.has_sound(sel);
         let bpm = st.comp.bpm;
+        let st_chapters = st.media.chapters(sel);
         let mut seek_to: Option<f64> = None;
         let mut quick = None;
         let mut match_beat: Option<u64> = None;
@@ -96,7 +97,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, reload: Default::default(), match_beat: Default::default() };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), match_beat: Default::default() };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
             if media.reload.get() {
                 if let SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } = &layer.source {
@@ -155,6 +156,8 @@ pub(crate) struct LayerMedia<'a> {
     pub beat: Option<(f32, f32)>,
     /// The tempo (jump buttons step in beats).
     pub bpm: f32,
+    /// Chapters in the movie (start in seconds, title).
+    pub chapters: Vec<(f64, String)>,
     /// Set by the editor when Reload is pressed (the caller opens the file again).
     pub reload: std::cell::Cell<bool>,
     /// Set by the editor when the Match the beat button is pressed (the caller starts the scan).
@@ -176,6 +179,16 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             for (i, p) in desc.params.iter().enumerate() {
                 param_slider(ui, &mut layer.generator_values, &mut layer.generator_mods, i, p, Some(ControlTarget::GeneratorParam { layer: layer.id, index: i }));
             }
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Render size").small());
+                let sizes: Vec<(f32, String)> = [1.0, 0.75, 0.5, 0.25].iter().map(|s| (*s, format!("{:.0}%", s * 100.0))).collect();
+                let mut scale = sizes.iter().map(|(s, _)| *s).min_by(|a, b| (a - layer.render_scale).abs().total_cmp(&(b - layer.render_scale).abs())).unwrap_or(1.0);
+                if segmented(ui, &mut scale, &sizes, |_, r, _| {
+                    r.clone().on_hover_text("Draw this generator smaller and scale it up: much lighter on the GPU for heavy shaders (softer picture)");
+                }) {
+                    layer.render_scale = scale;
+                }
+            });
             ui.separator();
         }
         if let SourceSpec::Text(style) = &mut layer.source {
@@ -215,6 +228,13 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
         });
         transition_settings(ui, layer);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Frame rate").small());
+            let rates: Vec<(f32, String)> = [(0.0, "every frame".to_string()), (30.0, "30".into()), (15.0, "15".into()), (10.0, "10".into()), (5.0, "5".into())].into_iter().collect();
+            segmented(ui, &mut layer.render_fps, &rates, |_, r, _| {
+                r.clone().on_hover_text("Draw this layer (its source and effects) only this often and hold the picture between: saves the GPU, or a choppy look on purpose");
+            });
+        });
         ui.separator();
         if matches!(layer.source, SourceSpec::Movie { .. }) {
             ui.label(RichText::new("Playback").strong());
@@ -285,11 +305,47 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                         }
                         map_menu(ui, &r, ControlTarget::LayerJump { layer: layer.id, forward });
                     }
+                    if !media.chapters.is_empty() {
+                        ui.menu_button(label(icon::BOOKMARKS_SIMPLE, "Chapters"), |ui| {
+                            for (at, title) in &media.chapters {
+                                if ui.button(format!("{}  {title}", crate::app::format_tc(*at))).clicked() {
+                                    seek_to = Some(*at);
+                                    ui.close();
+                                }
+                            }
+                        });
+                    }
                     guarded!(ui, layer.jump, egui::DragValue::new(&mut layer.jump).range(0.05..=64.0).speed(0.05).max_decimals(2)).on_hover_text("How far each jump goes");
                     let unit = if layer.jump_in_seconds { "seconds" } else if layer.jump == 1.0 { "beat" } else { "beats" };
                     if ui.small_button(unit).on_hover_text("Click: step in seconds or in beats").clicked() {
                         layer.jump_in_seconds = !layer.jump_in_seconds;
                     }
+                });
+            }
+            if let Some((pos, dur)) = position {
+                // Scratch: drag along the strip to move through the movie (a screen-width drag = 4 seconds), endlessly.
+                ui.horizontal(|ui| {
+                    ui.label("Scratch");
+                    let (rect, r) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(260.0), 18.0), Sense::drag());
+                    let p = ui.painter();
+                    p.rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
+                    // Ridges that move with the playhead, like a record's grooves.
+                    let phase = (pos as f32 * 60.0).rem_euclid(12.0);
+                    let mut x = rect.left() - phase;
+                    while x < rect.right() {
+                        if x > rect.left() {
+                            p.line_segment([egui::pos2(x, rect.top() + 3.0), egui::pos2(x, rect.bottom() - 3.0)], egui::Stroke::new(1.0, ui.visuals().weak_text_color()));
+                        }
+                        x += 12.0;
+                    }
+                    if r.hovered() || r.dragged() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                    }
+                    if r.dragged() {
+                        let dx = r.drag_delta().x as f64;
+                        seek_to = Some((pos + dx / 1600.0 * 4.0).rem_euclid(dur.max(1e-3)));
+                    }
+                    r.on_hover_text("Drag to scratch through the movie (wraps round at the ends)");
                 });
             }
             ui.horizontal(|ui| {

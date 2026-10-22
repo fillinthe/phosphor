@@ -180,6 +180,7 @@ impl PhosphorApp {
                 open_tab: None,
                 maps_clipboard: Vec::new(),
                 snapshot_output: None,
+                mouse_to_shaders: false,
                 fx_browser: None,
                 monitors: stored(KEY_MONITORS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 monitor_wants: Vec::new(),

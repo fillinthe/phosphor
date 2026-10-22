@@ -57,12 +57,14 @@ impl Engine {
                     uniforms: u, mesh: None, bufs: Vec::new() });
                 Some(Frame::Rgb { view: target.view.clone(), w, h })
             }
-            SourceSpec::Feed { id, .. } => {
+            SourceSpec::Feed { id, before_fx, .. } => {
                 // Copied into the layer's own texture, so a layer can feed on itself (feedback) safely.
                 let (view, fw, fh) = if *id == MASTER_ID {
                     self.output.as_ref().map(|t| (t.view.clone(), t.width, t.height))?
                 } else {
-                    self.layers.get(id)?.feed.as_ref().map(|t| (t.view.clone(), t.width, t.height))?
+                    let res = self.layers.get(id)?;
+                    let t = if *before_fx { res.feed_pre.as_ref() } else { res.feed.as_ref() };
+                    t.map(|t| (t.view.clone(), t.width, t.height))?
                 };
                 let device = &self.gpu.device;
                 let res = self.layers.entry(layer_id).or_default();
@@ -285,7 +287,7 @@ impl Engine {
         let chain: Vec<_> = effects
             .iter()
             .filter(|e| e.enabled)
-            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix)))
+            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix, e.blend)))
             .collect();
         if chain.is_empty() {
             return frame;
@@ -320,7 +322,7 @@ impl Engine {
             }
         };
         let parity = (self.frame_index % 2) as usize;
-        for (desc, fx_id, values, param_mods, mix) in chain {
+        for (desc, fx_id, values, param_mods, mix, blend) in chain {
             let external = shaders::is_external(desc.entry);
             if !external && !self.ensure_module(desc.entry) {
                 continue;
@@ -404,9 +406,11 @@ impl Engine {
                     input_idx = next_idx;
                 }
             }
-            if mix < 0.999 {
+            // Dry / wet, and the effect's blend mode (its result over what went in; masks don't apply here).
+            let blend = if blend.is_mask() || blend.is_wipe() { crate::BlendMode::Normal } else { blend };
+            if mix < 0.999 || blend != crate::BlendMode::Normal {
                 let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
-                let u = Uniforms { opacity: mix, ..base };
+                let u = Uniforms { opacity: mix, mode: blend.shader_index(), ..base };
                 passes.push(Pass { entry: "fs_mix", target: views[i].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
                 input = views[i].clone();
                 input_idx = Some(i);
