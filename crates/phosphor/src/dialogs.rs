@@ -41,6 +41,8 @@ pub enum Purpose {
     OutputBackground(u64),
     /// A patch list (CSV) of LED fixtures.
     ImportFixtures,
+    /// A reference picture: this layer's colours are matched to it.
+    MatchColour(u64),
     /// Save a layer's clip row as a bank file.
     ExportBank(u64),
     /// Replace a layer's clip row with a bank file.

@@ -42,6 +42,22 @@ impl PhosphorApp {
         if let Some(id) = self.state.snapshot_output.take() {
             self.save_output_snapshot(id);
         }
+        // A reference picture's colours are ready: match the layer's (its picture now) to them.
+        if let Some((layer, found)) = self.state.color_ref.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.state.color_ref = None;
+            let now_px = self.state.engine.as_ref().and_then(|e| e.read_layer_thumbnail(layer));
+            self.state.notice = Some(match (found, now_px) {
+                (Ok(to), Some((_, _, px))) => {
+                    let from = phosphor_engine::color_stats(&px);
+                    match self.state.comp.add_color_match(layer, from, to) {
+                        Some(_) => "Colour Match added: the layer's colours follow the picture (tweak it in its effects)".into(),
+                        None => "That layer is gone".into(),
+                    }
+                }
+                (Err(e), _) => format!("Couldn't read that picture: {e}"),
+                (_, None) => "The layer has no picture to match (is it on?)".into(),
+            });
+        }
         if let Some((layer, slot)) = self.state.clip_thumb_request.take() {
             self.state.notice = Some(match self.save_clip_thumbnail(layer, slot) {
                 Ok(()) => "The clip shows this picture in the grid now".into(),
@@ -251,6 +267,17 @@ impl PhosphorApp {
                             }
                             Err(e) => st.notice = Some(format!("Couldn't read that file: {e}")),
                         }
+                    }
+                }
+                Purpose::MatchColour(id) => {
+                    if let Some(p) = paths.first().cloned() {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        self.state.color_ref = Some(rx);
+                        let path = p.to_string_lossy().to_string();
+                        std::thread::spawn(move || {
+                            let stats = crate::media::decode_still(&path).map(|img| phosphor_engine::color_stats(img.thumbnail(320, 320).to_rgba8().as_raw()));
+                            let _ = tx.send((id, stats));
+                        });
                     }
                 }
                 Purpose::ExportBank(id) => {

@@ -300,6 +300,9 @@ pub struct State {
     pub snapshot_output: Option<u64>,
     /// Make this clip's grid picture from its layer's picture now (layer, slot).
     pub clip_thumb_request: Option<(u64, usize)>,
+    /// A reference picture's colours, worked out on a worker thread (layer, average and spread per channel).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub color_ref: Option<std::sync::mpsc::Receiver<(u64, Result<[(f32, f32); 3], String>)>>,
     /// Mappings copied from a control's menu (their target is replaced on paste).
     pub maps_clipboard: Vec<phosphor_engine::ControlMap>,
     pub fx_browser: Option<crate::explorer::FxBrowser>,

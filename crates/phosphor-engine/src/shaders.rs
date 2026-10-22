@@ -110,6 +110,12 @@ pub const EFFECTS: &[ShaderDesc] = &[
         entry: "fx_kaleidoscope",
         params: &[p("Segments", 2.0, 16.0, 6.0), p("Rotation", 0.0, 1.0, 0.0), p("Zoom", 0.25, 4.0, 1.0)],
     },
+    ShaderDesc {
+        id: "color_match",
+        name: "Colour Match",
+        entry: "fx_color_match",
+        params: &[p("Gain R", 0.0, 4.0, 1.0), p("Gain G", 0.0, 4.0, 1.0), p("Gain B", 0.0, 4.0, 1.0), p("Offset R", -1.0, 1.0, 0.0), p("Offset G", -1.0, 1.0, 0.0), p("Offset B", -1.0, 1.0, 0.0)],
+    },
     ShaderDesc { id: "pixelate", name: "Pixelate", entry: "fx_pixelate", params: &[p("Cell Size", 1.0, 128.0, 16.0)] },
     ShaderDesc {
         id: "hide_face",
@@ -666,6 +672,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "plasma" | "gradient" | "noise" | "voronoi" => ("Patterns", "Animated pattern"),
         "rings" | "spiral" | "tunnel" => ("Patterns", "Hypnotic motion"),
         "checker" | "color_bars" | "solid" => ("Utility", "Test and fill"),
+        "color_match" => ("Colour", "Per-colour gain and offset: Match colour (layer menu) sets it so the layer looks like a reference picture"),
         "hide_face" => ("Tracking", "Pixelates, blurs or blacks out a face: with face tracking on, it follows the face (Modulators › Video tracking › Hide faces)"),
         "starfield" | "lines" => ("Motion", "Moving lines and points"),
         "particles" => ("Motion", "A fountain of glowing particles from one point (map the emitter to a hand or the mouse)"),
