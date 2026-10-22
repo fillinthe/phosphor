@@ -437,6 +437,24 @@ impl Composition {
         n
     }
 
+    /// A layer's clip row as a file (a bank: sources, names and each clip's settings).
+    pub fn export_bank(&self, layer: u64) -> Option<String> {
+        let clips: Vec<&Clip> = self.layer(layer)?.clips.iter().collect();
+        serde_json::to_string_pretty(&clips).ok()
+    }
+
+    /// Replaces a layer's clip row with a bank file's clips (fresh ids). Returns how many came in.
+    pub fn import_bank(&mut self, layer: u64, json: &str) -> Result<usize, String> {
+        let clips: Vec<Clip> = serde_json::from_str(json).map_err(|e| format!("not a clip bank ({e})"))?;
+        let ids: Vec<u64> = clips.iter().map(|_| self.new_id()).collect();
+        let l = self.layer_mut(layer).ok_or("that layer is gone")?;
+        l.clips = clips.into_iter().zip(ids).map(|(c, id)| Clip { id, ..c }).collect();
+        let n = l.clips.len();
+        let used = l.clips.iter().filter(|c| !c.is_empty()).count();
+        self.clip_columns = self.clip_columns.max(n);
+        Ok(used)
+    }
+
     /// Puts a new source on a layer using the launch fade.
     pub fn set_layer_source(&mut self, layer: u64, source: SourceSpec, values: Vec<f32>, name: String, now: f32) {
         let secs = self.launch_secs();
@@ -574,6 +592,20 @@ impl Composition {
 #[cfg(test)]
 mod voice_tests {
     use super::*;
+
+    #[test]
+    fn a_bank_goes_out_and_comes_back_with_new_ids() {
+        let mut c = Composition::default();
+        c.layers.push(LayerState { id: 1, ..Default::default() });
+        c.layers.push(LayerState { id: 2, ..Default::default() });
+        c.layers[0].clips = vec![Clip { id: 50, name: "A".into(), source: SourceSpec::Generator("plasma".into()), ..Default::default() }, Clip::default()];
+        let bank = c.export_bank(1).unwrap();
+        assert_eq!(c.import_bank(2, &bank), Ok(1));
+        assert_eq!(c.layers[1].clips.len(), 2);
+        assert_eq!(c.layers[1].clips[0].name, "A");
+        assert_ne!(c.layers[1].clips[0].id, 50, "fresh id");
+        assert!(c.import_bank(2, "{}").is_err());
+    }
 
     #[test]
     fn clips_share_out_over_the_layers() {

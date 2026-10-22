@@ -41,6 +41,10 @@ pub enum Purpose {
     OutputBackground(u64),
     /// A patch list (CSV) of LED fixtures.
     ImportFixtures,
+    /// Save a layer's clip row as a bank file.
+    ExportBank(u64),
+    /// Replace a layer's clip row with a bank file.
+    ImportBank(u64),
     /// Save this output's mapping as SVG.
     ExportMappingSvg(u64),
     /// Shapes from an SVG become masks on this output.
