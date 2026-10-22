@@ -455,11 +455,13 @@ pub struct DmxSettings {
     pub target: String,
     pub fps: f32,
     pub fixtures: Vec<Fixture>,
+    /// LED / DMX master: every fixture's colour (and moving heads' dimmers) scaled by this (0..1).
+    pub master: f32,
 }
 
 impl Default for DmxSettings {
     fn default() -> Self {
-        Self { enabled: false, protocol: DmxProtocol::ArtNet, target: String::new(), fps: 40.0, fixtures: Vec::new() }
+        Self { enabled: false, protocol: DmxProtocol::ArtNet, target: String::new(), fps: 40.0, fixtures: Vec::new(), master: 1.0 }
     }
 }
 
@@ -524,10 +526,17 @@ impl DmxSettings {
     pub fn universes(&self, colors: &[[u8; 4]], beats: f64) -> BTreeMap<u16, [u8; 512]> {
         let mut out = BTreeMap::new();
         let mut at = 0;
+        let master = self.master.clamp(0.0, 1.0);
         for f in self.fixtures.iter().filter(|f| f.enabled) {
             let n = f.pixel_count();
             if let Some(c) = colors.get(at..(at + n).min(colors.len())) {
-                f.write(c, &mut out, beats);
+                if master < 1.0 {
+                    let dimmed: Vec<[u8; 4]> = c.iter().map(|p| [0, 1, 2, 3].map(|k| if k < 3 { (p[k] as f32 * master).round() as u8 } else { p[k] })).collect();
+                    let f = Fixture { dimmer: f.dimmer * master, ..f.clone() };
+                    f.write(&dimmed, &mut out, beats);
+                } else {
+                    f.write(c, &mut out, beats);
+                }
             }
             at += n;
         }
@@ -538,6 +547,16 @@ impl DmxSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_dmx_master_dims_everything() {
+        let mut d = DmxSettings { fixtures: vec![Fixture { cols: 1, order: PixelOrder::Rgb, gamma: 1.0, ..Default::default() }], ..Default::default() };
+        let full = d.universes(&[[200, 100, 50, 255]], 0.0);
+        d.master = 0.5;
+        let half = d.universes(&[[200, 100, 50, 255]], 0.0);
+        assert_eq!(&full[&0][..3], &[200, 100, 50]);
+        assert_eq!(&half[&0][..3], &[100, 50, 25]);
+    }
 
     #[test]
     fn fixtures_come_in_from_a_table() {

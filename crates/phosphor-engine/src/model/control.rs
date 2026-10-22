@@ -139,10 +139,14 @@ pub enum AppControl {
     FreezeOutputs,
     /// Cue list: a random cue (not the one on now).
     CueRandom,
+    /// LED / DMX master level.
+    DmxMaster,
+    /// Every movie's speed (0..1 = a quarter to four times, the middle = as set).
+    MasterSpeed,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 31] = [
+    pub const ALL: [AppControl; 33] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -174,6 +178,8 @@ impl AppControl {
         AppControl::AutoFade,
         AppControl::FreezeOutputs,
         AppControl::CueRandom,
+        AppControl::DmxMaster,
+        AppControl::MasterSpeed,
     ];
 
     pub fn name(self) -> &'static str {
@@ -209,6 +215,8 @@ impl AppControl {
             AppControl::AutoFade => "Crossfader: auto-fade to the other side",
             AppControl::FreezeOutputs => "Freeze outputs (hold the picture)",
             AppControl::CueRandom => "Cue list: a random cue",
+            AppControl::DmxMaster => "LED / DMX master",
+            AppControl::MasterSpeed => "Master speed (every movie)",
         }
     }
 
@@ -246,6 +254,8 @@ impl AppControl {
             AppControl::AutoFade => "crossfader/auto",
             AppControl::FreezeOutputs => "outputs/freeze",
             AppControl::CueRandom => "cue/random",
+            AppControl::DmxMaster => "dmx/master",
+            AppControl::MasterSpeed => "speed",
         }
     }
 
