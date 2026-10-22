@@ -62,6 +62,25 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             if let Some(e) = &control.clock_out_error {
                 ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(Color32::from_rgb(230, 160, 60)));
             }
+            let shown = if control.mtc_out_port.is_empty() { "Off".to_string() } else { control.mtc_out_port.clone() };
+            ComboBox::from_id_salt("mtc_out").width(140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
+                if ui.selectable_label(control.mtc_out_port.is_empty(), "Off").clicked() {
+                    control.mtc_out_port.clear();
+                }
+                for p in crate::control::clock_out::outputs() {
+                    if ui.selectable_label(control.mtc_out_port == p, &p).clicked() {
+                        control.mtc_out_port = p;
+                        control.mtc_out_error = None;
+                    }
+                }
+                ui.separator();
+                crate::ui::toggle(ui, &mut control.mtc_time_of_day, "Time of day").on_hover_text("Send the clock time instead of the show clock (Cues panel)");
+            })
+            .response
+            .on_hover_text("Send MIDI timecode (25 fps) to a MIDI output: the show clock, or the time of day. Lighting desks, DAWs and other apps follow it");
+            if let Some(e) = &control.mtc_out_error {
+                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(Color32::from_rgb(230, 160, 60)));
+            }
         }
         ui.menu_button(label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
             ui.set_min_width(260.0);

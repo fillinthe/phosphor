@@ -767,3 +767,36 @@ fn osc_by_name_and_wildcard() {
     hub.apply(&mut comp, 1.1);
     assert!((op(&comp, a) - 0.6).abs() < 1e-6 && (op(&comp, b) - 0.6).abs() < 1e-6, "every layer");
 }
+
+/// MIDI timecode out reaches a MIDI destination and Phosphor's own MTC reader gets the time back.
+#[cfg(target_os = "macos")]
+#[test]
+fn midi_timecode_goes_out() {
+    use midir::os::unix::VirtualInput;
+    use std::sync::{Arc, Mutex};
+    let Ok(input) = midir::MidiInput::new("phosphor-test-mtc") else { return };
+    let mtc: Arc<Mutex<(crate::clock::Mtc, Vec<u8>)>> = Arc::default();
+    let m = mtc.clone();
+    let started = std::time::Instant::now();
+    let Ok(_sink) = input.create_virtual("Phosphor MTC Sink", move |_, msg, _| {
+        let mut m = m.lock().unwrap();
+        m.1.push(msg[0]);
+        if msg.len() == 2 && msg[0] == 0xF1 {
+            m.0.quarter(msg[1], started.elapsed().as_secs_f64());
+        }
+    }, ()) else { return };
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let out = super::mtc_out::MtcOut::start("Phosphor MTC Sink", 3600.0).expect("the sink is an output");
+    let t0 = std::time::Instant::now();
+    while t0.elapsed().as_millis() < 600 {
+        out.follow(3600.0 + t0.elapsed().as_secs_f64(), true);
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
+    drop(out);
+    let m = mtc.lock().unwrap();
+    assert_eq!(m.1.first(), Some(&0xF0), "a full-frame message first");
+    let quarters = m.1.iter().filter(|b| **b == 0xF1).count();
+    assert!((40..=70).contains(&quarters), "{quarters} quarter frames in 0.6 s (100 a second)");
+    let tc = m.0.time(started.elapsed().as_secs_f64()).expect("decoded");
+    assert!((tc - 3600.6).abs() < 0.3, "the time came through: {tc}");
+}
