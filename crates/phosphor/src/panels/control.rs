@@ -43,6 +43,20 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         crate::ui::toggle(ui, &mut control.soft_takeover, "Soft takeover")
             .on_hover_text("A fader or knob only takes over once it reaches the value on screen (moves it past it), so the picture never jumps when the hardware was left somewhere else");
+        ui.menu_button(label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
+            ui.set_min_width(260.0);
+            hint(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
+            for (name, lights) in crate::control::CLIP_LIGHTS {
+                if ui.selectable_label(control.clip_lights == lights, name).clicked() {
+                    control.clip_lights = lights;
+                }
+            }
+            ui.horizontal(|ui| {
+                for (k, what) in ["empty", "loaded", "playing"].iter().enumerate() {
+                    guarded!(ui, control.clip_lights[k], egui::DragValue::new(&mut control.clip_lights[k]).range(0..=127).prefix(format!("{what} ")));
+                }
+            });
+        });
         if control.soft_takeover {
             crate::ui::toggle(ui, &mut control.takeover_glide, "Glide")
                 .on_hover_text("Instead of waiting for the fader to reach the value, the value glides to the fader (a smooth catch-up, no jump)");
