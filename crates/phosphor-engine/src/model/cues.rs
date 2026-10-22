@@ -75,11 +75,13 @@ pub struct Cue {
     pub sets_sources: bool,
     pub sets_master: bool,
     pub sets_slices: bool,
+    /// A cue group (a song, a scene): cues with the same group name in a row are one group (empty = none).
+    pub group: String,
 }
 
 impl Default for Cue {
     fn default() -> Self {
-        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None, daily: None, days: 0, sets_sources: true, sets_master: true, sets_slices: true }
+        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None, daily: None, days: 0, sets_sources: true, sets_master: true, sets_slices: true, group: String::new() }
     }
 }
 
@@ -125,6 +127,20 @@ pub struct CueList {
 }
 
 impl CueList {
+    /// The groups in the list, in order: (name, the index of its first cue). A name used again further down starts
+    /// another group there.
+    pub fn groups(&self) -> Vec<(String, usize)> {
+        let mut out: Vec<(String, usize)> = Vec::new();
+        let mut prev: Option<&str> = None;
+        for (i, c) in self.cues.iter().enumerate() {
+            if !c.group.is_empty() && prev != Some(c.group.as_str()) {
+                out.push((c.group.clone(), i));
+            }
+            prev = Some(c.group.as_str());
+        }
+        out
+    }
+
     /// The cue to go to after `quiet` seconds with nobody touching anything (when idle cues are on and it's time).
     pub fn idle_cue_index(&self, quiet: f64) -> Option<usize> {
         (self.idle_minutes > 0.0 && quiet >= self.idle_minutes as f64 * 60.0).then(|| self.cues.iter().position(|c| c.id == self.idle_cue)).flatten()
@@ -393,6 +409,15 @@ fn csv_row(line: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cue_groups_follow_the_list() {
+        let mut list = CueList::default();
+        for g in ["", "Intro", "Intro", "Song 1", "Song 1", "", "Intro"] {
+            list.cues.push(Cue { group: g.into(), ..Default::default() });
+        }
+        assert_eq!(list.groups(), vec![("Intro".into(), 1), ("Song 1".into(), 3), ("Intro".into(), 6)]);
+    }
 
     #[test]
     fn idle_and_opening_cues() {
