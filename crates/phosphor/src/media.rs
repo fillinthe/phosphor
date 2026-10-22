@@ -14,7 +14,31 @@ pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod video;
 
-const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "exr", "hdr", "tga", "qoi", "psd", "heic", "heif"];
+const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "exr", "hdr", "tga", "qoi", "psd", "heic", "heif", "svg"];
+
+/// SVG drawings are drawn this many pixels on their longer side (sharp at 4K, small enough to decode fast).
+#[cfg(not(target_arch = "wasm32"))]
+const SVG_SIZE: f32 = 3840.0;
+
+/// An SVG drawing as a picture, `SVG_SIZE` on its longer side, transparent where nothing is drawn.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn render_svg(data: &[u8]) -> Result<image::RgbaImage, String> {
+    use resvg::{tiny_skia, usvg};
+    let mut opt = usvg::Options::default();
+    opt.fontdb_mut().load_system_fonts();
+    let tree = usvg::Tree::from_data(data, &opt).map_err(|e| e.to_string())?;
+    let size = tree.size();
+    let scale = SVG_SIZE / size.width().max(size.height()).max(1.0);
+    let (w, h) = (((size.width() * scale).round() as u32).max(1), ((size.height() * scale).round() as u32).max(1));
+    let mut pixmap = tiny_skia::Pixmap::new(w, h).ok_or("the drawing is empty")?;
+    resvg::render(&tree, tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
+    // tiny-skia keeps premultiplied colour; pictures here are straight.
+    let rgba: Vec<u8> = pixmap.pixels().iter().flat_map(|p| {
+        let c = p.demultiply();
+        [c.red(), c.green(), c.blue(), c.alpha()]
+    }).collect();
+    image::RgbaImage::from_raw(w, h, rgba).ok_or_else(|| "bad size".to_string())
+}
 /// Pictures the image library can't read: FFmpeg turns them into a PNG first (`decode_still`).
 #[cfg(not(target_arch = "wasm32"))]
 const FFMPEG_STILLS: &[&str] = &["psd", "heic", "heif"];
@@ -53,6 +77,10 @@ pub fn is_picture(name: &str) -> bool {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn decode_still(path: &str) -> Result<image::DynamicImage, String> {
     let ext = extension(path);
+    if ext == "svg" {
+        let data = std::fs::read(path).map_err(|e| e.to_string())?;
+        return render_svg(&data).map(image::DynamicImage::ImageRgba8);
+    }
     let direct = if FFMPEG_STILLS.contains(&ext.as_str()) { None } else { Some(image::open(path)) };
     match direct {
         Some(Ok(img)) => Ok(img),
@@ -664,4 +692,18 @@ fn every_picture_format_opens() {
         assert!(is_picture(&p.to_string_lossy()));
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod svg_tests {
+    #[test]
+    fn svg_drawings_become_pictures() {
+        let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect x="100" width="100" height="100" fill="#ff0000"/></svg>"##;
+        let img = super::render_svg(svg).unwrap();
+        assert_eq!((img.width(), img.height()), (3840, 1920), "sharp: 4K on the long side");
+        assert_eq!(img.get_pixel(3000, 960).0, [255, 0, 0, 255], "the red half");
+        assert_eq!(img.get_pixel(500, 960).0[3], 0, "transparent where nothing's drawn");
+        assert!(super::is_supported("logo.svg"));
+        assert!(super::render_svg(b"not svg").is_err());
+    }
 }
