@@ -7,7 +7,7 @@ Writes drums-<bpm>.wav (kick on every beat, accent on beat one, a syncopated kic
 note per bar) for 92, 128, 140 and 170 BPM, and cuts-128.mp4: a 1280x720 clip that hard-cuts to a new colour on
 every beat of the 128 BPM track, with that track as its sound (needs ffmpeg on PATH).
 
-Bench checks (see docs/NOTES.md 2026-10-17):
+Bench checks:
   PHOSPHOR_BENCH_BPM=128 phosphor --bench 30 --sound --movie OUTDIR/drums-128.wav --gen plasma --quick baroff
   phosphor --bench 20 --movie OUTDIR/cuts-128.mp4 --quick beat
 """

@@ -181,7 +181,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
     (
         "Help",
         &[
-            I(A::Notes, "Notes — What's New", None),
+            I(A::Notes, "What's New", None),
             I(A::Roadmap, "Roadmap", None),
             I(A::Website, "phosphorfx.com", None),
             I(A::ShaderFolder, "Open ISF Shader Folder", None),

@@ -58,6 +58,7 @@ mod studio;
 mod surface;
 #[cfg(not(target_arch = "wasm32"))]
 mod tracking;
+mod timeline;
 
 pub(crate) use account::*;
 pub(crate) use audio::*;
@@ -129,10 +130,12 @@ pub enum Tab {
     Inputs,
     /// Notes kept with the project (show running order, venue details…).
     Notes,
+    /// Keyframe timeline: tracks of keys over time.
+    Timeline,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 27] = [
+    pub const ALL: [Tab; 28] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -160,6 +163,7 @@ impl Tab {
         Tab::Scopes,
         Tab::Inputs,
         Tab::Notes,
+        Tab::Timeline,
     ];
 
     pub fn title(self) -> String {
@@ -191,6 +195,7 @@ impl Tab {
             Tab::Leds => "LED / DMX",
             Tab::Scopes => "Scopes",
             Tab::Notes => "Notes",
+            Tab::Timeline => "Timeline",
             Tab::Cues => "Cues",
             Tab::LayerWindows => "Layer Windows",
             Tab::Studio => "Mapping Studio",
@@ -255,6 +260,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Presets => presets(ui, st),
         Tab::Inputs => inputs_panel(ui, st),
         Tab::Notes => notes_panel(ui, st),
+        Tab::Timeline => timeline::timeline_panel(ui, st),
         Tab::Audio => audio(ui, st),
         Tab::Modulators => modulators::modulators(ui, st),
         Tab::Control => control(ui, st),

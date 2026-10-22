@@ -186,6 +186,10 @@ impl PhosphorApp {
                 maps_clipboard: Vec::new(),
                 snapshot_output: None,
                 clip_thumb_request: None,
+                timeline_pos: 0.0,
+                timeline_play: None,
+                // Opening a project changes nothing: the timeline sets values once it plays or the playhead moves.
+                timeline_applied: Some(0.0),
                 #[cfg(not(target_arch = "wasm32"))]
                 ltc_out: None,
                 #[cfg(not(target_arch = "wasm32"))]

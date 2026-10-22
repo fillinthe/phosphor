@@ -157,7 +157,8 @@ impl PhosphorApp {
                 let on = st.comp.web_control_off;
                 st.set_web_control(on);
             }
-            A::Notes => open_doc("NOTES.md"),
+            // What changed in each version (the release notes come from CHANGELOG.md).
+            A::Notes => crate::os::open("https://github.com/fillinthe/phosphor/releases".to_string()),
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
             A::Donate => ctx.open_url(egui::OpenUrl::new_tab(crate::support::DONATE_URL)),

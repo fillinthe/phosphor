@@ -56,6 +56,7 @@ pub(crate) mod play;
 mod quick;
 pub(crate) use quick::dice;
 mod recording;
+mod timeline;
 #[cfg(not(target_arch = "wasm32"))]
 mod timecode_out;
 mod recovery;
@@ -309,6 +310,10 @@ pub struct State {
     pub snapshot_output: Option<u64>,
     /// Make this clip's grid picture from its layer's picture now (layer, slot).
     pub clip_thumb_request: Option<(u64, usize)>,
+    /// The timeline's playhead (seconds), playing since (app time, playhead then), and where its values were last set.
+    pub timeline_pos: f64,
+    pub timeline_play: Option<(f64, f64)>,
+    pub timeline_applied: Option<f64>,
     /// LTC out (timecode audio), while it's switched on.
     #[cfg(not(target_arch = "wasm32"))]
     pub ltc_out: Option<timecode_out::LtcOut>,
@@ -488,6 +493,8 @@ impl State {
     }
 
     pub fn load_composition(&mut self, comp: Composition) {
+        // The timeline starts over, stopped, and changes nothing until it plays.
+        (self.timeline_pos, self.timeline_play, self.timeline_applied) = (0.0, None, Some(0.0));
         self.selected = comp.layers.last().map(|l| l.id);
         self.comp = comp;
         self.comp.ensure_outputs();
