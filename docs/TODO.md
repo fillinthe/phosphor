@@ -5,7 +5,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 ## Next round (2026-10-21, "keep going on the large stuff"), quickest first
 
 Released in **0.2.97** (Mac, Windows zip + installer, Linux ARM; installed here): the first three items below.
-Hap R is in **0.2.98** (published), lostjared's effects in **0.2.99**. This round is done.
+Hap R is in **0.2.98**, lostjared's effects in **0.2.99** (both published). This round is done.
 
 - [x] **Mapped controls stand out** (asked mid-way): gold outline and tint on every mapped control. Checked on a screenshot.
 - [x] **Stereo audio pictures**: row 0 left, row 1 right, both sides in each pixel's colours; newest 512 samples in
