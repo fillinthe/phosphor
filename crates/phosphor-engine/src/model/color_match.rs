@@ -29,7 +29,54 @@ pub fn match_values(from: [(f32, f32); 3], to: [(f32, f32); 3]) -> Vec<f32> {
     gains.into_iter().chain(offsets).collect()
 }
 
+/// The picture's `k` main colours (k-means over its pixels, 0..1 RGB), darkest first. A few passes over a small
+/// picture: call it on a thumbnail.
+pub fn palette_of(rgba: &[u8], k: usize) -> Vec<[f32; 3]> {
+    let px: Vec<[f32; 3]> = rgba.chunks_exact(4).map(|p| [p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0]).collect();
+    if px.is_empty() || k == 0 {
+        return Vec::new();
+    }
+    let luma = |c: &[f32; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    // Start from k pixels spread over the picture's brightness range.
+    let mut by_luma = px.clone();
+    by_luma.sort_by(|a, b| luma(a).total_cmp(&luma(b)));
+    let mut centres: Vec<[f32; 3]> = (0..k).map(|i| by_luma[(i * 2 + 1) * by_luma.len() / (2 * k)]).collect();
+    let dist = |a: &[f32; 3], b: &[f32; 3]| (a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2);
+    for _ in 0..12 {
+        let mut sum = vec![[0.0f32; 4]; k];
+        for p in &px {
+            let near = (0..k).min_by(|&a, &b| dist(p, &centres[a]).total_cmp(&dist(p, &centres[b]))).unwrap_or(0);
+            for c in 0..3 {
+                sum[near][c] += p[c];
+            }
+            sum[near][3] += 1.0;
+        }
+        for (centre, s) in centres.iter_mut().zip(&sum) {
+            if s[3] > 0.0 {
+                *centre = [s[0] / s[3], s[1] / s[3], s[2] / s[3]];
+            }
+        }
+    }
+    centres.sort_by(|a, b| luma(a).total_cmp(&luma(b)));
+    centres
+}
+
 impl Composition {
+    /// Adds a Palette effect to `owner`'s chain with these colours (up to six): every pixel takes the nearest one.
+    pub fn add_palette(&mut self, owner: u64, colours: &[[f32; 3]]) -> Option<u64> {
+        let desc = crate::shaders::effect("palette")?;
+        let mut values = desc.defaults();
+        let n = colours.len().clamp(1, 6);
+        for (i, c) in colours.iter().take(6).enumerate() {
+            values[i * 3..i * 3 + 3].copy_from_slice(c);
+        }
+        values[18] = n as f32;
+        let id = self.new_id();
+        let fx = EffectState { id, effect: desc.id.to_string(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() };
+        self.effects_mut(owner)?.push(fx);
+        Some(id)
+    }
+
     /// Adds a Colour Match effect to `owner`'s chain that turns pictures like `from` into pictures like `to`.
     pub fn add_color_match(&mut self, owner: u64, from: [(f32, f32); 3], to: [(f32, f32); 3]) -> Option<u64> {
         let desc = crate::shaders::effect("color_match")?;
@@ -43,6 +90,20 @@ impl Composition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_main_colours_are_found() {
+        // Half red, a third blue, the rest near-white.
+        let px: Vec<u8> = (0..600).flat_map(|i| if i < 300 { [220, 20, 20, 255] } else if i < 500 { [10, 10, 200, 255] } else { [250, 250, 245, 255] }).collect();
+        let pal = palette_of(&px, 3);
+        assert_eq!(pal.len(), 3);
+        let has = |c: [f32; 3]| pal.iter().any(|p| (0..3).all(|k| (p[k] - c[k]).abs() < 0.02));
+        assert!(has([10.0 / 255.0, 10.0 / 255.0, 200.0 / 255.0]) && has([220.0 / 255.0, 20.0 / 255.0, 20.0 / 255.0]) && has([250.0 / 255.0, 250.0 / 255.0, 245.0 / 255.0]), "{pal:?}");
+        let mut c = Composition::default();
+        c.layers.push(LayerState { id: 1, ..Default::default() });
+        c.add_palette(1, &pal).unwrap();
+        assert_eq!(c.layers[0].effects[0].values[18], 3.0);
+    }
 
     #[test]
     fn colours_meet_the_reference() {

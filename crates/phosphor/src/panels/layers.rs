@@ -22,6 +22,8 @@ pub(crate) enum LayerAction {
     MoveToComp(u64),
     /// Colours like a reference picture (a Colour Match effect).
     MatchColour,
+    /// A Palette effect with this layer's own main colours.
+    Palette,
 }
 
 pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
@@ -387,6 +389,10 @@ pub(crate) fn layer_card(
             action = Some(LayerAction::MatchColour);
             ui.close();
         }
+        if ui.button(label(icon::SWATCHES, "Palette from this picture")).on_hover_text("Adds a Palette effect: every pixel becomes one of this layer's six main colours (change them in the effect)").clicked() {
+            action = Some(LayerAction::Palette);
+            ui.close();
+        }
         ui.separator();
         if ui.button(label(icon::TRASH, "Delete (Backspace)")).clicked() {
             action = Some(LayerAction::Remove);
@@ -595,6 +601,14 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
         LayerAction::Up => st.comp.move_layer(id, true),
         LayerAction::Down => st.comp.move_layer(id, false),
         LayerAction::GroupWithBelow => group_with_below(&mut st.comp, &mut st.selected, id),
+        LayerAction::Palette => {
+            // The layer's small thumbnail now (a one-off readback).
+            let px = st.engine.as_ref().and_then(|e| e.read_layer_thumbnail(id));
+            st.notice = Some(match px.map(|(_, _, px)| phosphor_engine::palette_of(&px, 6)) {
+                Some(pal) if !pal.is_empty() && st.comp.add_palette(id, &pal).is_some() => "Palette added with this layer's six main colours".into(),
+                _ => "The layer has no picture to take colours from (is it on?)".into(),
+            });
+        }
         LayerAction::MatchColour => {
             #[cfg(not(target_arch = "wasm32"))]
             st.dialogs.pick_file(crate::dialogs::Purpose::MatchColour(id), Some(("Picture", &["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "heic", "psd", "exr"])));

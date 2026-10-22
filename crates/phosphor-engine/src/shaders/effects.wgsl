@@ -417,6 +417,24 @@ fn fx_cutout_blur(in: VOut) -> @location(0) vec4f {
     return mix(sum / 49.0, c, m);
 }
 
+// Palette: each pixel takes the nearest of P(18) colours (P(0..17) = RGB each); P(19) = how much.
+@fragment
+fn fx_palette(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    let n = u32(clamp(round(P(18u)), 2.0, 6.0));
+    var best = vec3f(P(0u), P(1u), P(2u));
+    var best_d = 1e9;
+    for (var i = 0u; i < n; i = i + 1u) {
+        let col = vec3f(P(i * 3u), P(i * 3u + 1u), P(i * 3u + 2u));
+        let d = dot(c.rgb - col, c.rgb - col);
+        if (d < best_d) {
+            best_d = d;
+            best = col;
+        }
+    }
+    return vec4f(mix(c.rgb, best, P(19u)), c.a);
+}
+
 // Colour Match: each channel × its gain + its offset (set from a reference picture's colours).
 @fragment
 fn fx_color_match(in: VOut) -> @location(0) vec4f {
