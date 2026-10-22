@@ -105,9 +105,9 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Playback › Scratch strip (drag; wraps at the ends).
 - [x] 47. **Movie chapter markers**: jump to chapters stored in the file (V).
       Playback › Chapters menu when the file has chapters. Checked: test with a movie made with two chapters.
-- [~] 48. **Text from a file**, shown word / line / sentence at a time with next / previous; **animated text styles** (beat, scrolling, fade); **text set by OSC** (V).
+- [x] 48. **Text from a file**, shown word / line / sentence at a time with next / previous; **animated text styles** (beat, scrolling, fade); **text set by OSC** (V).
       Text › Parts: from a file or by splitting, by lines / sentences / words / paragraphs; next / previous (mappable). Animated text styles: not yet. Checked: tests.
-- [~] 49. **Strings and colours from controllers** (OSC text and colour values) (V).
+- [x] 49. **Strings and colours from controllers** (OSC text and colour values) (V).
       OSC words into text layers (`/phosphor/layer/<id>/text`, or any mapped address). Colours from controllers: not done. Checked: test.
 - [x] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
       Right-click any control › Send out: OSC to the Control Surface's OSC-out host, MIDI CC or note. Checked: real UDP test.
