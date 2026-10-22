@@ -51,6 +51,50 @@ impl Composition {
         Some(sid)
     }
 
+    /// Soft edges worked out from overlaps (MadMapper's Auto Setup): every slice showing the same picture gets a fade on
+    /// each side where another one's part of the picture (its input area) overlaps it, as wide as the overlap, with
+    /// the projector blend curve. Returns how many slices got edges.
+    pub fn auto_soft_edges(&mut self) -> usize {
+        let all: Vec<(u64, Option<u64>, [f32; 4])> = self.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).filter(|s| s.line.is_none() && s.model.is_none()).map(|s| (s.id, s.layer, s.input)).collect();
+        let mut changed = 0;
+        for &(id, src, [x, y, w, h]) in &all {
+            if w <= 0.0 || h <= 0.0 {
+                continue;
+            }
+            let mut e = [0.0f32; 4];
+            for &(oid, osrc, [ox, oy, ow, oh]) in &all {
+                if oid == id || osrc != src {
+                    continue;
+                }
+                let x_over = (x + w).min(ox + ow) - x.max(ox);
+                let y_over = (y + h).min(oy + oh) - y.max(oy);
+                if x_over <= 0.0 || y_over <= 0.0 {
+                    continue;
+                }
+                // Side by side (overlapping mostly along x) or stacked (along y).
+                if y_over >= x_over {
+                    if ox > x {
+                        e[1] = e[1].max(x_over / w);
+                    } else if ox + ow < x + w {
+                        e[0] = e[0].max(x_over / w);
+                    }
+                } else if oy > y {
+                    e[3] = e[3].max(y_over / h);
+                } else if oy + oh < y + h {
+                    e[2] = e[2].max(y_over / h);
+                }
+            }
+            if e.iter().any(|v| *v > 0.0)
+                && let Some(s) = self.slice_mut(id)
+            {
+                s.edges = Some(e);
+                s.blend_gamma = 2.2;
+                changed += 1;
+            }
+        }
+        changed
+    }
+
     /// Stops output `output` showing `source` on its own (its slice goes; the mix stays as it was).
     pub fn remove_from_output(&mut self, source: u64, output: u64) {
         if let Some(o) = self.outputs.iter_mut().find(|o| o.id == output) {
@@ -98,6 +142,21 @@ impl Composition {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn soft_edges_come_from_the_overlaps() {
+        let mut c = (crate::TEMPLATES.iter().find(|t| t.0 == "Four projectors").unwrap().2)();
+        let want: Vec<Option<[f32; 4]>> = c.outputs.iter().map(|o| o.mapping.surfaces[0].edges).collect();
+        for o in &mut c.outputs {
+            o.mapping.surfaces[0].edges = None;
+        }
+        assert_eq!(c.auto_soft_edges(), 4);
+        let got: Vec<Option<[f32; 4]>> = c.outputs.iter().map(|o| o.mapping.surfaces[0].edges).collect();
+        for (g, w) in got.iter().zip(&want) {
+            let (g, w) = (g.unwrap(), w.unwrap());
+            assert!(g.iter().zip(&w).all(|(a, b)| (a - b).abs() < 1e-4), "{g:?} vs {w:?}");
+        }
+    }
 
     #[test]
     fn a_dropped_file_becomes_a_slice_shaped_like_it() {
