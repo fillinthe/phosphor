@@ -470,8 +470,8 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
     ui.separator();
 }
 
-/// "Mixer plugin": blend the layer onto the layers below with an FFGL mixer instead of its blend mode, and the
-/// mixer's settings. Only shown when mixer plugins are installed.
+/// "Blend shader": blend the layer onto the layers below with your own blend shader (`// @kind blend`) or an FFGL
+/// mixer instead of its blend mode, and its settings. Only shown when there are some.
 fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     let mixers = shaders::all_mixers();
     if mixers.is_empty() {
@@ -479,11 +479,11 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     }
     let current = layer.mixer.as_deref().and_then(shaders::mixer);
     let title = match current {
-        Some(d) => label(icon::INTERSECT, &format!("Mixer plugin: {}", d.name)),
-        None => label(icon::INTERSECT, "Mixer plugin"),
+        Some(d) => label(icon::INTERSECT, &format!("Blend shader: {}", d.name)),
+        None => label(icon::INTERSECT, "Blend shader"),
     };
     egui::CollapsingHeader::new(title).id_salt(("mixer", layer.id)).show(ui, |ui| {
-        hint(ui, "An FFGL mixer blends this layer onto the layers below instead of its blend mode (its Opacity follows the layer's).");
+        hint(ui, "Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies.");
         let mut pick = layer.mixer.clone();
         ComboBox::from_id_salt(("mixer_pick", layer.id)).width(200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
             ui.selectable_value(&mut pick, None, "None (blend mode)");

@@ -39,6 +39,8 @@ impl std::fmt::Display for CompileError {
 pub struct Header {
     pub name: String,
     pub generator: bool,
+    /// `// @kind blend`: a blend mode (`src(uv)` = the layer, `below(uv)` = what's under it).
+    pub blend: bool,
     pub params: Vec<Param>,
     /// `// @feedback`: `last(uv)` reads this shader's previous frame (trails, echoes, smears).
     pub feedback: bool,
@@ -60,7 +62,7 @@ pub fn slug(name: &str) -> String {
 }
 
 pub fn parse_header(source: &str) -> Result<Header, CompileError> {
-    let mut header = Header { name: "Untitled".into(), generator: false, params: Vec::new(), feedback: false, passes: Vec::new() };
+    let mut header = Header { name: "Untitled".into(), generator: false, blend: false, params: Vec::new(), feedback: false, passes: Vec::new() };
     for (i, line) in source.lines().enumerate() {
         let Some(rest) = line.trim().strip_prefix("// @") else { continue };
         let err = |m: &str| CompileError { line: Some(i as u32 + 1), message: m.to_string() };
@@ -68,7 +70,10 @@ pub fn parse_header(source: &str) -> Result<Header, CompileError> {
         let value = value.trim();
         match key {
             "name" => header.name = value.to_string(),
-            "kind" => header.generator = value.eq_ignore_ascii_case("generator"),
+            "kind" => {
+                header.generator = value.eq_ignore_ascii_case("generator");
+                header.blend = value.eq_ignore_ascii_case("blend");
+            }
             "feedback" => header.feedback = true,
             "pass" => {
                 let mut parts = value.split_whitespace();
@@ -156,6 +161,8 @@ pub(crate) fn module_source(source: &str, entry: &str) -> Result<(String, u32), 
     let prelude = shaders::common_source();
     let prelude_lines = prelude.lines().count() as u32 + 1;
     let header = parse_header(source).ok();
+    // Blend modes read the picture below (tex1). Added after the user's code so error lines stay theirs.
+    let below = if header.as_ref().is_some_and(|h| h.blend) { "\nfn below(uv: vec2f) -> vec4f {\n    return textureSampleLevel(tex1, samp, uv, 0.0);\n}\n" } else { "" };
     let feedback = header.as_ref().is_some_and(|h| h.feedback);
     let passes = header.map(|h| h.passes).unwrap_or_default();
     if feedback || !passes.is_empty() {
@@ -186,10 +193,10 @@ pub(crate) fn module_source(source: &str, entry: &str) -> Result<(String, u32), 
         } else {
             wrapper.push_str(&format!("    return {entry}_main(in);\n}}\n"));
         }
-        return Ok((format!("{prelude}\n{user}{wrapper}"), prelude_lines));
+        return Ok((format!("{prelude}\n{user}{wrapper}{below}"), prelude_lines));
     }
     let user = source.replace("fn main(", &format!("fn {entry}("));
-    Ok((format!("{prelude}\n{user}"), prelude_lines))
+    Ok((format!("{prelude}\n{user}{below}"), prelude_lines))
 }
 
 /// Parses and validates with naga, reporting errors against the user's own line numbers.
@@ -489,6 +496,25 @@ fn main(in: VOut) -> @location(0) vec4f {
         amp *= 0.5;
     }
     return vec4f(palette(v + P(3u)), 1.0);
+}
+",
+    },
+    Template {
+        name: "Blend mode: soft glow",
+        about: "Your own way of putting a layer on the ones below (pick it in the layer's Blend shader menu)",
+        source: "// @name My Blend
+// @kind blend
+// @param Glow 0 2 1
+
+// src(uv) = this layer, below(uv) = the layers under it.
+@fragment
+fn main(in: VOut) -> @location(0) vec4f {
+    let top = src(in.uv);
+    let base = below(in.uv);
+    // Screen, pushed brighter where the layer is bright.
+    let screen = 1.0 - (1.0 - base.rgb) * (1.0 - top.rgb);
+    let c = mix(base.rgb, screen, top.a) + top.rgb * top.a * 0.25 * P(0u);
+    return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)), 1.0);
 }
 ",
     },

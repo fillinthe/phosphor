@@ -241,7 +241,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                         action = Some(TileAction::Hide(desc.id.to_string()));
                         ui.close();
                     }
-                    if desc.id.starts_with(shaders::CUSTOM_EFFECT) || desc.id.starts_with(shaders::CUSTOM_GENERATOR) {
+                    if desc.id.starts_with(shaders::CUSTOM_EFFECT) || desc.id.starts_with(shaders::CUSTOM_GENERATOR) || desc.id.starts_with(shaders::CUSTOM_BLEND) {
                         if ui.button(label(icon::CODE, "Edit in Shader Editor")).clicked() {
                             action = Some(TileAction::EditCustom(desc.id.to_string()));
                             ui.close();
@@ -456,8 +456,13 @@ fn effects_dir() -> Option<std::path::PathBuf> {
 }
 
 fn id_for(slug: &str, source: &str) -> String {
-    let generator = custom::parse_header(source).map(|h| h.generator).unwrap_or(false);
-    format!("{}{slug}", if generator { shaders::CUSTOM_GENERATOR } else { shaders::CUSTOM_EFFECT })
+    let header = custom::parse_header(source).ok();
+    let prefix = match header {
+        Some(h) if h.blend => shaders::CUSTOM_BLEND,
+        Some(h) if h.generator => shaders::CUSTOM_GENERATOR,
+        _ => shaders::CUSTOM_EFFECT,
+    };
+    format!("{prefix}{slug}")
 }
 
 /// Compiles every saved user shader once the engine exists.
