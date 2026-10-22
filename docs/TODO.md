@@ -140,14 +140,14 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 71. **Automatic soft edges** from overlapping slices (M). Set by hand now.
 - [x] 72. **One canvas across several displays** (2×2 etc.) and **one output shown on several displays** (V, M).
 - [~] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master. Left: average sampling, video-wall template.
-- [ ] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
+- [~] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists. Done: Hide Face, Blur Background, a layer on the face, Colour Match (QR on the output already existed). Left: palette (k-means).
 - [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
 - [ ] 76. **NDI sound** in and out (V).
 - [~] 77. **Edit several clips / layers at once** (M). Slices already multi-select. Done: layers (Shift / Cmd-click). Left: clips.
 - [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
-- [ ] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
+- [x] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
 - [~] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG export, masks from SVG. Left: PNG / PDF, lines.
-- [ ] 81. **SVG and Lottie** (After Effects) animations as clips (M).
+- [~] 81. **SVG and Lottie** (After Effects) animations as clips (M). Done: SVG. Left: Lottie.
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
 - [x] 83. **Interface colour themes** (V). Has a brightness slider.
