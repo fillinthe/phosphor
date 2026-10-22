@@ -91,7 +91,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       A blend menu beside each effect's Mix. Checked: GPU test (Invert with Multiply).
 - [x] 38. **Wipe blend modes** driven by opacity (radial, star, blocks…) (V). Wipes exist as clip transitions only.
       Six blend modes: Wipe left to right, top down, from the centre, diamond, blocks, and Dissolve; opacity = how far it's come in. Checked: GPU tests.
-- [ ] 39. **Your own blend modes** written as shaders (V).
+- [x] 39. **Your own blend modes** written as shaders (V).
 - [x] 40. **Generator size per layer / clip** (V). Generators render at the comp's size.
       Inspector › Render size 100 / 75 / 50 / 25% for generators (effects run at that size too). Checked: GPU test.
 - [x] 41. **Frame rate per layer / comp**, to save GPU (V).
@@ -119,14 +119,14 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       MIDI / OSC panel › Clip pad lights (presets for Launchpad / APC mini mk2 and the first APC mini). Checked: test of the states; not tried on a real Launchpad.
 - [x] 54. **Map a whole row of clips at once** (first and last note), bank / transpose the mapping, pick a clip by index or value (V).
       Clip row name menu › MIDI notes: map the row from a note, shift by ±1 / ±8; "Pick a clip by value" (mappable). Checked: tests.
-- [ ] 55. **Export / import a bank of clips** with settings; **set a clip's thumbnail** from the current frame (V).
-- [ ] 56. **Recorder**: record any layer, comp or camera (not only an output), start/stop on the beat, several recorders at once (V).
-- [ ] 57. **Scopes as a layer source** (V).
+- [x] 55. **Export / import a bank of clips** with settings; **set a clip's thumbnail** from the current frame (V).
+- [~] 56. **Recorder**: record any layer, comp or camera (not only an output), start/stop on the beat, several recorders at once (V). Done: record a layer / group / comp, start and stop on the bar. Left: several recorders at once.
+- [x] 57. **Scopes as a layer source** (V).
 - [x] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
       "Drawn wave" modulation source (a smooth loop through eight points). Checked: test.
-- [ ] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
+- [~] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V). Done: named sound bands. Left: play-through, another app's sound.
 - [ ] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now.
-- [~] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed. Left: sound master, EQ.
+- [x] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed, sound EQ (master volume was already there).
 - [~] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
       MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC / LTC out: not yet. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
 - [x] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
