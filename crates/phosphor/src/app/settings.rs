@@ -46,6 +46,7 @@ impl PhosphorApp {
         storage.set_string(KEY_SOUND_OUT, crate::media::video::sound::output_device().unwrap_or_default());
         storage.set_string(KEY_FOLLOW_AT_LAUNCH, self.state.follow_at_launch.clone());
         storage.set_string(KEY_LOCK, self.lock.to_setting());
+        storage.set_string(KEY_PANELS_LOCKED, if self.panels_locked { "1" } else { "0" }.into());
         if let Some(t) = layout::to_text(&self.state.render_rate) {
             storage.set_string(KEY_RENDER_RATE, t);
         }

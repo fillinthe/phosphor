@@ -90,6 +90,7 @@ const KEY_SOUND_OUT: &str = "sound_out_device";
 /// A player: the leader to follow every time Phosphor starts ("" = none).
 const KEY_FOLLOW_AT_LAUNCH: &str = "follow_at_launch";
 const KEY_LOCK: &str = "lock";
+const KEY_PANELS_LOCKED: &str = "panels_locked";
 const KEY_RENDER_RATE: &str = "render_rate";
 const KEY_RECENT_PROJECTS: &str = "recent_projects";
 /// In-window menu clicks, queued for `menu_actions`.
@@ -743,6 +744,8 @@ pub struct PhosphorApp {
     layouts: Layouts,
     /// Locked player mode (see `lock.rs`).
     pub(crate) lock: lock::Lock,
+    /// View › Lock Panels: tabs can't be dragged, closed or split off (everything else works as usual).
+    pub(crate) panels_locked: bool,
     /// Layouts from the account were applied this session; next upload check (seconds).
     cloud_layouts_applied: bool,
     cloud_layouts_check: f64,

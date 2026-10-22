@@ -265,6 +265,7 @@ impl PhosphorApp {
             show_start: None,
             layouts,
             lock: lock::Lock::from_setting(&stored(KEY_LOCK).unwrap_or_default()),
+            panels_locked: stored(KEY_PANELS_LOCKED).is_some_and(|v| v == "1"),
             cloud_layouts_applied: false,
             cloud_layouts_check: 5.0,
             layout_draft: None,
