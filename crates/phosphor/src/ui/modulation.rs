@@ -146,8 +146,9 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
             }
         });
     }
-    if mm.link == 0 && mm.source == ModSource::Steps {
-        ui.label(RichText::new("Steps (drag to set)").small().color(Color32::GRAY));
+    if mm.link == 0 && matches!(mm.source, ModSource::Steps | ModSource::Drawn) {
+        let what = if mm.source == ModSource::Drawn { "Wave (drag to draw; a smooth loop through the points)" } else { "Steps (drag to set)" };
+        ui.label(RichText::new(what).small().color(Color32::GRAY));
         let cycles = if mm.sync { inputs.beats / mm.rate.max(1.0 / 16.0) } else { inputs.time * mm.rate };
         let playing = ((cycles.rem_euclid(1.0)) * 8.0) as usize;
         step_bars(ui, &mut mm.steps, Some(playing), false, 56.0);
