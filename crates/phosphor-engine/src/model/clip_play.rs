@@ -32,6 +32,30 @@ impl TriggerMode {
     }
 }
 
+/// Where a layer's clips play: on the layer itself, or shared out over its neighbours (the layers in the same
+/// group and comp), like voices on a synth.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VoiceMode {
+    #[default]
+    Own,
+    /// Each clip on the next layer in turn.
+    NextLayer,
+    /// On the first layer with nothing playing (else the next in turn).
+    NextFree,
+}
+
+impl VoiceMode {
+    pub const ALL: [VoiceMode; 3] = [VoiceMode::Own, VoiceMode::NextLayer, VoiceMode::NextFree];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            VoiceMode::Own => "This layer",
+            VoiceMode::NextLayer => "Next layer each time",
+            VoiceMode::NextFree => "Next free layer",
+        }
+    }
+}
+
 /// What a layer plays next by itself.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Autopilot {
