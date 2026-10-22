@@ -93,6 +93,9 @@ pub struct ControlHub {
     tx: mpsc::Sender<Incoming>,
     clock_rx: mpsc::Receiver<(ClockEvent, std::time::Instant)>,
     clock_tx: mpsc::Sender<(ClockEvent, std::time::Instant)>,
+    /// OSC messages that carry text: (address, the words), for text layers.
+    text_rx: mpsc::Receiver<(String, String)>,
+    text_tx: mpsc::Sender<(String, String)>,
     /// Incoming MIDI clock (tempo and beat position); the app's clock follows it.
     pub midi_clock: crate::clock::MidiClock,
     /// MIDI timecode in (cue list).
@@ -145,6 +148,8 @@ pub struct ControlHub {
     next_feedback: f64,
     /// Control Surface OSC out: what each widget last sent.
     surface_sent: HashMap<u64, Vec<f32>>,
+    /// Sends (`Composition::control_sends`): the value each last went out at.
+    sends_sent: HashMap<String, f32>,
     #[cfg(not(target_arch = "wasm32"))]
     backend: native::Backend,
     /// OSC Query server (browse every address), with when it last got the project's controls.
@@ -262,11 +267,14 @@ impl ControlHub {
     fn new_unopened() -> Self {
         let (tx, rx) = mpsc::channel();
         let (clock_tx, clock_rx) = mpsc::channel();
+        let (text_tx, text_rx) = mpsc::channel();
         Self {
             rx,
             tx,
             clock_rx,
             clock_tx,
+            text_rx,
+            text_tx,
             midi_clock: Default::default(),
             mtc: Default::default(),
             midi_ports: Vec::new(),
@@ -300,6 +308,7 @@ impl ControlHub {
             feedback_ips: Vec::new(),
             next_feedback: 0.0,
             surface_sent: HashMap::new(),
+            sends_sent: HashMap::new(),
             #[cfg(not(target_arch = "wasm32"))]
             backend: native::Backend::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -329,7 +338,7 @@ impl ControlHub {
             self.midi_all = all;
             self.midi_ports = open;
             self.local_ip = local_ip();
-            self.osc_status = match self.backend.open_osc(self.osc_port, &self.osc_extra_ports, self.tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
+            self.osc_status = match self.backend.open_osc(self.osc_port, &self.osc_extra_ports, self.tx.clone(), self.text_tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
                 Ok(failed) => {
                     let also: Vec<String> = self.osc_extra_ports.iter().filter(|p| **p != self.osc_port).map(|p| p.to_string()).collect();
                     let also = if also.is_empty() { String::new() } else { format!(" (and {})", also.join(", ")) };
@@ -414,6 +423,34 @@ impl ControlHub {
         }
     }
 
+    /// Controls that send out (MIDI / OSC): the ones whose value changed since last time. Call every frame.
+    pub fn sends(&mut self, comp: &Composition) {
+        if comp.control_sends.is_empty() {
+            self.sends_sent.clear();
+            return;
+        }
+        for s in &comp.control_sends {
+            let Some(v) = get_target(comp, &s.target) else { continue };
+            let key = format!("{:?}{:?}", s.target, s.to);
+            if self.sends_sent.get(&key).is_some_and(|last| (last - v).abs() < 1.0 / 254.0) {
+                continue;
+            }
+            self.sends_sent.insert(key, v);
+            #[cfg(not(target_arch = "wasm32"))]
+            match &s.to {
+                phosphor_engine::SendTo::Osc { address } if !comp.surface.osc_host.trim().is_empty() => {
+                    self.backend.send_osc(&[comp.surface.osc_host.trim().to_string()], comp.surface.osc_port, address, v);
+                }
+                phosphor_engine::SendTo::Osc { .. } => {}
+                phosphor_engine::SendTo::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | (channel & 15), cc & 127, (v.clamp(0.0, 1.0) * 127.0).round() as u8]),
+                phosphor_engine::SendTo::MidiNote { channel, note } => {
+                    let on = v > 0.5;
+                    self.backend.send_midi(&[if on { 0x90 } else { 0x80 } | (channel & 15), note & 127, if on { 127 } else { 0 }]);
+                }
+            }
+        }
+    }
+
     /// Sends values that changed since the last check back to controllers. Cheap when nothing listens.
     pub fn feedback(&mut self, comp: &Composition, now: f64) {
         if !self.feedback || now < self.next_feedback {
@@ -472,6 +509,7 @@ impl ControlHub {
     /// Writes this frame's values into their targets, then forgets them so the UI stays in charge
     /// until the controller moves again.
     pub fn apply(&mut self, comp: &mut Composition, now: f32) {
+        self.apply_texts(comp);
         self.glide(comp, now);
         self.land_delayed(comp, now);
         if self.fresh.is_empty() {
@@ -642,6 +680,36 @@ impl ControlHub {
         p.last_in = Some(v);
         p.last_set = if p.caught { Some(v) } else { None };
         p.caught
+    }
+}
+
+impl ControlHub {
+    /// Words from OSC: `/phosphor/layer/<id>/text "…"`, or any address mapped to a layer's text.
+    fn apply_texts(&mut self, comp: &mut Composition) {
+        let texts: Vec<(String, String)> = self.text_rx.try_iter().collect();
+        for (address, words) in texts {
+            let mut layers: Vec<u64> = address.strip_prefix("/phosphor/layer/").and_then(|r| r.strip_suffix("/text")).and_then(|id| id.parse().ok()).into_iter().collect();
+            for m in comp.control_maps.iter().filter(|m| m.enabled) {
+                if let (ControlSource::Osc { address: a }, ControlTarget::LayerText(id)) = (&m.source, &m.target)
+                    && (*a == address || (is_osc_pattern(a) && osc_match(a, &address)))
+                {
+                    layers.push(*id);
+                }
+            }
+            for id in layers {
+                if !comp.control_locked(&ControlTarget::LayerText(id))
+                    && let Some(phosphor_engine::SourceSpec::Text(style)) = comp.layer_mut(id).map(|l| &mut l.source)
+                {
+                    style.text = words.clone();
+                }
+            }
+        }
+    }
+
+    /// Sends words as if they came in over OSC (tests).
+    #[cfg(test)]
+    pub(crate) fn inject_text(&self, address: &str, words: &str) {
+        let _ = self.text_tx.send((address.into(), words.into()));
     }
 }
 

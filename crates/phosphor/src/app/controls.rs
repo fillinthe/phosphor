@@ -56,6 +56,20 @@ impl PhosphorApp {
             st.comp.paste_mappings(&st.maps_clipboard, &t);
         }
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::MAPS_COPIED), st.maps_clipboard.len()));
+        // Sends: add / remove asked for in a control's menu, then this frame's list for the menus.
+        if let Some((target, to, add)) = ctx.data_mut(|d| {
+            let id = egui::Id::new(panels::SEND_REQUEST);
+            let r = d.get_temp::<(phosphor_engine::ControlTarget, phosphor_engine::SendTo, bool)>(id);
+            d.remove::<(phosphor_engine::ControlTarget, phosphor_engine::SendTo, bool)>(id);
+            r
+        }) {
+            st.comp.control_sends.retain(|s| !(s.target == target && s.to == to));
+            if add {
+                st.comp.control_sends.push(phosphor_engine::ControlSend { target, to });
+            }
+        }
+        let sends = std::sync::Arc::new(st.comp.control_sends.clone());
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::SENDS), sends));
         // Keys act as controller buttons (ignored while typing in a text field).
         if ctx.memory(|m| m.focused().is_some()) {
             return;

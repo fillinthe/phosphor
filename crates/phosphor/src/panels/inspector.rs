@@ -63,6 +63,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let mut quick = None;
         let mut match_beat: Option<u64> = None;
         let mut reload: Option<String> = None;
+        let mut text_file = false;
         #[cfg(not(target_arch = "wasm32"))]
         let (beat_pending, beat) = {
             let path = st.comp.layers.iter().find(|l| l.id == sel).and_then(|l| crate::app::beat_match::movie_path(&l.source));
@@ -97,8 +98,12 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), match_beat: Default::default() };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default() };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
+            #[cfg(not(target_arch = "wasm32"))]
+            if media.text_file.get() {
+                text_file = true;
+            }
             if media.reload.get() {
                 if let SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } = &layer.source {
                     reload = Some(p.clone());
@@ -122,6 +127,10 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let _ = match_beat;
         if let Some(t) = seek_to {
             st.media.seek(sel, t);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if text_file {
+            st.dialogs.pick_file(crate::dialogs::Purpose::TextFile(sel), Some(("Text", &["txt", "md", "srt", "lrc", "csv"])));
         }
         if let Some(path) = reload {
             st.media.reload(&st.comp, &path);
@@ -160,6 +169,8 @@ pub(crate) struct LayerMedia<'a> {
     pub chapters: Vec<(f64, String)>,
     /// Set by the editor when Reload is pressed (the caller opens the file again).
     pub reload: std::cell::Cell<bool>,
+    /// Set by the text editor's "From a file…" (the caller opens the dialog).
+    pub text_file: std::cell::Cell<bool>,
     /// Set by the editor when the Match the beat button is pressed (the caller starts the scan).
     pub match_beat: std::cell::Cell<bool>,
 }
@@ -193,7 +204,9 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         }
         if let SourceSpec::Text(style) = &mut layer.source {
             ui.label(RichText::new("Text").strong());
-            text_editor(ui, style, layer.id);
+            if text_editor(ui, style, layer.id) {
+                media.text_file.set(true);
+            }
             ui.separator();
         }
         if let Some(name) = layer.collection.clone() {
@@ -575,7 +588,36 @@ pub(crate) fn volume_bar(ui: &mut egui::Ui, layer: &mut LayerState, width: f32) 
 
 /// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, colour,
 /// alignment, outline and line spacing. Changes redraw the layer in the background.
-pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) {
+/// Returns true when "From a file…" was pressed (the caller opens the file dialog).
+pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
+    let mut from_file = false;
+    // In parts: one line / sentence / word at a time, stepped by the buttons (or a controller).
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("Parts").small());
+        choice_combo(ui, ("chunk_by", id), &mut style.chunk_by, 100.0, true);
+        if ui.small_button(label(icon::FILE_TEXT, "From a file…")).on_hover_text("Lyrics, a script, a list: shown a part at a time").clicked() {
+            from_file = true;
+        }
+        if style.parts.is_empty() {
+            if ui.small_button("Split what's typed").on_hover_text("Cut the text below into parts to show one at a time").clicked() {
+                let text = style.text.clone();
+                let by = style.chunk_by;
+                style.set_parts(&text, by);
+            }
+        } else {
+            for (forward, glyph) in [(false, icon::CARET_LEFT), (true, icon::CARET_RIGHT)] {
+                let r = ui.small_button(glyph).on_hover_text(if forward { "Next part" } else { "Previous part" });
+                if r.clicked() {
+                    style.step_part(forward);
+                }
+                map_menu(ui, &r, ControlTarget::LayerTextStep { layer: id, forward });
+            }
+            hint(ui, format!("{} / {}", style.part + 1, style.parts.len()));
+            if ui.small_button(icon::X).on_hover_text("Back to plain text (keeps the part showing)").clicked() {
+                style.parts.clear();
+            }
+        }
+    });
     use phosphor_engine::TextAlign;
     ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
     ui.horizontal(|ui| {
@@ -614,6 +656,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
         Level::range(&mut style.line_spacing, 0.6, 2.0, "Line spacing").default(1.0).show(ui);
     });
     hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
+    from_file
 }
 
 /// A shader transition's own settings (all but its progress), as bars; "Reset" goes back to its defaults.

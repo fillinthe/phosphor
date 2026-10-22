@@ -27,6 +27,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     let mut layer_action: Option<(u64, LayerAction)> = None;
     let mut fx_actions: Vec<(u64, FxAction)> = Vec::new();
     let mut beat_requests: Vec<u64> = Vec::new();
+    let mut text_file: Option<u64> = None;
     let mut seeks: Vec<(u64, f64)> = Vec::new();
     let mut quick: Vec<(u64, crate::app::Quick)> = Vec::new();
     let height = ui.available_height();
@@ -75,10 +76,13 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                         egui::ScrollArea::vertical().id_salt(("lw_scroll", id)).auto_shrink(false).show(ui, |ui| {
                             ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(70.0);
                             let (info, position, has_sound) = media.get(&id).cloned().unwrap_or((None, None, false));
-                            let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, beat: None, bpm, chapters: Vec::new(), reload: Default::default(), match_beat: Default::default() };
+                            let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, beat: None, bpm, chapters: Vec::new(), reload: Default::default(), text_file: Default::default(), match_beat: Default::default() };
                             let (fx, seek) = layer_editor(ui, layer, &m, clipboard_len);
                             if m.match_beat.get() {
                                 beat_requests.push(id);
+                            }
+                            if m.text_file.get() {
+                                text_file = Some(id);
                             }
                             if let Some(a) = fx {
                                 fx_actions.push((id, a));
@@ -105,6 +109,12 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     for (id, a) in fx_actions {
         apply_fx_action(st, id, a);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(id) = text_file {
+        st.dialogs.pick_file(crate::dialogs::Purpose::TextFile(id), Some(("Text", &["txt", "md", "srt", "lrc", "csv"])));
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = text_file;
     #[cfg(not(target_arch = "wasm32"))]
     for id in beat_requests {
         st.match_beat(crate::media::rhythm::MatchTarget::Layer(id));

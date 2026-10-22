@@ -88,7 +88,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::SurfacePage => phosphor_engine::pick_unit(comp.surface.current_page(), comp.surface.pages.len()),
             _ => return None,
         },
-        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } => return None,
+        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } => return None,
     })
 }
 
@@ -203,6 +203,15 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             }
         }
         ControlTarget::LayerScrub(id) => out.push(Deferred::Scrub(*id, v.clamp(0.0, 1.0))),
+        // Words, not numbers: set by OSC text (`ControlHub::apply_texts`).
+        ControlTarget::LayerText(_) => {}
+        ControlTarget::LayerTextStep { layer, forward } => {
+            if (v > 0.5 || v == FLIP)
+                && let Some(phosphor_engine::SourceSpec::Text(style)) = comp.layer_mut(*layer).map(|l| &mut l.source)
+            {
+                style.step_part(*forward);
+            }
+        }
         ControlTarget::LayerJump { layer, forward } => {
             if v > 0.5 || v == FLIP {
                 out.push(Deferred::Jump(*layer, *forward));
@@ -370,6 +379,11 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
                 out.push((ControlTarget::LayerCorner { layer: l.id, point: point as u8 }, format!("{} · corner {name}", l.name)));
             }
         }
+        if matches!(l.source, phosphor_engine::SourceSpec::Text(_)) {
+            out.push((ControlTarget::LayerText(l.id), format!("{} · text (OSC words)", l.name)));
+            out.push((ControlTarget::LayerTextStep { layer: l.id, forward: true }, format!("{} · next text part", l.name)));
+            out.push((ControlTarget::LayerTextStep { layer: l.id, forward: false }, format!("{} · previous text part", l.name)));
+        }
         if matches!(l.source, phosphor_engine::SourceSpec::Movie { .. }) {
             out.push((ControlTarget::LayerScrub(l.id), format!("{} · scrub", l.name)));
             out.push((ControlTarget::LayerJump { layer: l.id, forward: false }, format!("{} · jump back", l.name)));
@@ -420,6 +434,8 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerLoopOut(id) => format!("/phosphor/layer/{id}/loop/out"),
         ControlTarget::LayerDirection(id) => format!("/phosphor/layer/{id}/direction"),
         ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
+        ControlTarget::LayerText(id) => format!("/phosphor/layer/{id}/text"),
+        ControlTarget::LayerTextStep { layer, forward } => format!("/phosphor/layer/{layer}/text/{}", if *forward { "next" } else { "previous" }),
         ControlTarget::LayerJump { layer, forward } => format!("/phosphor/layer/{layer}/jump/{}", if *forward { "forward" } else { "back" }),
         ControlTarget::LayerVolume(id) => format!("/phosphor/layer/{id}/volume"),
         ControlTarget::LayerX(id) => format!("/phosphor/layer/{id}/x"),

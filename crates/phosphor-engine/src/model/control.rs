@@ -70,6 +70,10 @@ pub enum ControlTarget {
     App(AppControl),
     /// A movie layer's sound volume (0..1 = silent..2×).
     LayerVolume(u64),
+    /// A text layer's words, from an OSC message that carries text (numbers do nothing here).
+    LayerText(u64),
+    /// A text layer in parts: the next / previous part (a press).
+    LayerTextStep { layer: u64, forward: bool },
     /// Layer transform: position (0..1 = left/bottom..right/top), scale (0..1 = 0.05×..4×, log), rotation (0..1 = -180..180°).
     LayerX(u64),
     LayerY(u64),
@@ -344,6 +348,34 @@ impl ControlMap {
     pub fn delay(&self) -> f32 {
         self.fx.iter().map(|f| if let ValueFx::Delay(s) = f { *s } else { 0.0 }).sum()
     }
+}
+
+/// Where a control's value goes when it changes (besides back to the controller that moves it).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum SendTo {
+    /// An OSC float (0..1) to the Control Surface's OSC-out host and port.
+    Osc { address: String },
+    /// A MIDI CC (0–127) on every MIDI output.
+    MidiCc { channel: u8, cc: u8 },
+    /// A MIDI note: on (127) above half, off below.
+    MidiNote { channel: u8, note: u8 },
+}
+
+impl SendTo {
+    pub fn label(&self) -> String {
+        match self {
+            SendTo::Osc { address } => format!("OSC {address}"),
+            SendTo::MidiCc { channel, cc } => format!("MIDI ch {} CC {cc}", channel + 1),
+            SendTo::MidiNote { channel, note } => format!("MIDI ch {} note {note}", channel + 1),
+        }
+    }
+}
+
+/// A control that sends its value out (VDMX's senders).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ControlSend {
+    pub target: ControlTarget,
+    pub to: SendTo,
 }
 
 impl crate::Composition {

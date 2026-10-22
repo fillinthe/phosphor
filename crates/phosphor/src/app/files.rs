@@ -178,6 +178,20 @@ impl PhosphorApp {
                         st.start_relink(p.clone());
                     }
                 }
+                Purpose::TextFile(id) => {
+                    if let Some(p) = paths.first() {
+                        match std::fs::read_to_string(p) {
+                            Ok(text) => {
+                                if let Some(phosphor_engine::SourceSpec::Text(style)) = st.comp.layer_mut(id).map(|l| &mut l.source) {
+                                    let by = style.chunk_by;
+                                    style.set_parts(&text, by);
+                                    st.notice = Some(format!("{} parts from {}", style.parts.len(), name_of(p)));
+                                }
+                            }
+                            Err(e) => st.notice = Some(format!("Couldn't read that file: {e}")),
+                        }
+                    }
+                }
                 Purpose::ExportCues => {
                     if let Some(p) = paths.first() {
                         let p = p.with_extension("csv");
