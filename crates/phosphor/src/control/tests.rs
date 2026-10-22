@@ -748,3 +748,22 @@ fn midi_clock_goes_out_at_the_tempo() {
     assert!((20..=28).contains(&pulses), "{pulses} pulses in half a second at 120 BPM (24 expected)");
     assert_eq!(msgs.last(), Some(&0xFC), "Stop when it ends");
 }
+
+/// Built-in OSC addresses by layer name, and with wildcards (every layer at once).
+#[test]
+fn osc_by_name_and_wildcard() {
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = false;
+    let mut comp = Composition::starter();
+    let a = comp.add_layer().id;
+    let b = comp.add_layer().id;
+    comp.layer_mut(a).unwrap().name = "Intro Loop".into();
+    comp.layer_mut(b).unwrap().name = "Drums".into();
+    let op = |c: &Composition, id: u64| c.layers.iter().find(|l| l.id == id).unwrap().opacity;
+    hub.inject(&mut comp, Incoming { source: ControlSource::Osc { address: "/phosphor/layer/intro_loop/opacity".into() }, value: 0.3 });
+    hub.apply(&mut comp, 1.0);
+    assert!((op(&comp, a) - 0.3).abs() < 1e-6 && op(&comp, b) == 1.0, "by name");
+    hub.inject(&mut comp, Incoming { source: ControlSource::Osc { address: "/phosphor/layer/*/opacity".into() }, value: 0.6 });
+    hub.apply(&mut comp, 1.1);
+    assert!((op(&comp, a) - 0.6).abs() < 1e-6 && (op(&comp, b) - 0.6).abs() < 1e-6, "every layer");
+}

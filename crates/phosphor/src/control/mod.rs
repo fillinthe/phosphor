@@ -662,10 +662,27 @@ impl ControlHub {
             })
             .collect();
         if !osc.is_empty() {
-            let targets = all_targets(comp);
+            // By id (/phosphor/layer/3/opacity) or by name (/phosphor/layer/intro/opacity); wildcards reach many.
+            let names = osc_names(comp);
+            let targets: Vec<(ControlTarget, String, String)> = all_targets(comp)
+                .into_iter()
+                .map(|(t, _)| {
+                    let by_id = default_osc_address(&t);
+                    let by_name = named_address(&by_id, &names);
+                    (t, by_id, by_name)
+                })
+                .collect();
             for (address, v) in osc {
-                if let Some((t, _)) = targets.iter().find(|(t, _)| default_osc_address(t) == address) {
-                    set_target(comp, &t.clone(), v, &mut self.triggers);
+                let lower = address.to_lowercase();
+                let pattern = is_osc_pattern(&address);
+                for (t, by_id, by_name) in &targets {
+                    let hit = if pattern { osc_match(&lower, &by_id.to_lowercase()) || osc_match(&lower, by_name) } else { *by_id == address || *by_name == lower };
+                    if hit {
+                        set_target(comp, t, v, &mut self.triggers);
+                        if !pattern {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -782,6 +799,35 @@ pub(crate) fn clip_light(comp: &Composition, layer: u64, slot: usize, lights: [u
         Some(c) if l.enabled && l.active_clip == Some(c.id) => lights[2],
         Some(_) => lights[1],
     })
+}
+
+/// Names for OSC addresses by id: layers, groups, comps and slices, as lowercase slugs ("Intro loop" → intro_loop).
+pub(crate) fn osc_names(comp: &Composition) -> HashMap<u64, String> {
+    let slug = |n: &str| phosphor_engine::custom::slug(n.trim());
+    let mut names = HashMap::new();
+    for l in &comp.layers {
+        names.insert(l.id, slug(&l.name));
+    }
+    for g in &comp.groups {
+        names.insert(g.id, slug(&g.name));
+    }
+    for c in &comp.comps {
+        names.insert(c.id, slug(&c.name));
+    }
+    for s in comp.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()) {
+        names.insert(s.id, slug(&s.name));
+    }
+    names
+}
+
+/// An address with its ids swapped for names (`/phosphor/layer/3/opacity` → `/phosphor/layer/intro/opacity`),
+/// lowercase.
+pub(crate) fn named_address(by_id: &str, names: &HashMap<u64, String>) -> String {
+    by_id
+        .split('/')
+        .map(|part| part.parse::<u64>().ok().and_then(|id| names.get(&id)).map_or_else(|| part.to_lowercase(), |n| n.clone()))
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// An OSC address with OSC 1.0 pattern characters in it.
