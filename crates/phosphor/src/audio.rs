@@ -189,6 +189,11 @@ mod native {
         #[cfg(target_os = "macos")]
         system: Option<crate::screen_capture::SystemSound>,
         pub beats: BeatTracker,
+        /// Play-through: hear the input on the sound output (`set_play_through`). New samples since the last frame
+        /// wait in `fresh` while it's on.
+        through: Option<crate::media::video::sound::PlayThrough>,
+        through_on: Arc<std::sync::atomic::AtomicBool>,
+        fresh: Arc<Mutex<Vec<[f32; 2]>>>,
         /// LTC (audio timecode) on the first two channels, decoded only while `ltc_on`.
         ltc: Arc<Mutex<Ltc>>,
         ltc_on: Arc<std::sync::atomic::AtomicBool>,
@@ -230,6 +235,9 @@ mod native {
                 #[cfg(target_os = "macos")]
                 system: None,
                 beats: BeatTracker::default(),
+                through: None,
+                through_on: Default::default(),
+                fresh: Default::default(),
                 ltc: Arc::new(Mutex::new(Ltc::new(48_000))),
                 ltc_on: Default::default(),
             };
@@ -359,7 +367,13 @@ mod native {
             #[cfg(target_os = "macos")]
             if name == Some(super::SYSTEM_SOUND) {
                 let ring = self.ring.clone();
+                let (fresh, through_on) = (self.fresh.clone(), self.through_on.clone());
                 self.system = Some(crate::screen_capture::SystemSound::start(move |frames| {
+                    if through_on.load(std::sync::atomic::Ordering::Relaxed)
+                        && let Ok(mut f) = fresh.lock()
+                    {
+                        f.extend_from_slice(frames);
+                    }
                     let mut q = ring.lock().unwrap();
                     q.extend(frames.iter().copied());
                     while q.len() > FFT_SIZE * 2 {
@@ -385,6 +399,7 @@ mod native {
             self.sample_rate = supported.sample_rate();
             let config: cpal::StreamConfig = supported.config();
             let ring = self.ring.clone();
+            let (fresh, through_on) = (self.fresh.clone(), self.through_on.clone());
             *self.ltc.lock().unwrap() = Ltc::new(self.sample_rate);
             let (ltc, ltc_on) = (self.ltc.clone(), self.ltc_on.clone());
             // Keeps the first two channels (one channel = both sides) and only the newest samples.
@@ -399,8 +414,14 @@ mod native {
                     }
                 }
                 let mut q = ring.lock().unwrap();
+                let start = q.len();
                 for frame in data.chunks(channels) {
                     q.push_back([frame[0], frame.get(1).copied().unwrap_or(frame[0])]);
+                }
+                if through_on.load(std::sync::atomic::Ordering::Relaxed)
+                    && let Ok(mut f) = fresh.lock()
+                {
+                    f.extend(q.range(start..).copied());
                 }
                 while q.len() > FFT_SIZE * 2 {
                     q.pop_front();
@@ -428,6 +449,26 @@ mod native {
             self.stream = Some(stream);
             self.current = name.map(str::to_string);
             Ok(())
+        }
+
+        /// Hear the input on the sound output (`gain` = how loud), or stop.
+        pub fn set_play_through(&mut self, on: bool, gain: f32) {
+            self.through_on.store(on, std::sync::atomic::Ordering::Relaxed);
+            if !on {
+                self.through = None;
+                self.fresh.lock().unwrap().clear();
+                return;
+            }
+            if self.through.is_none() {
+                self.through = crate::media::video::sound::PlayThrough::start();
+            }
+            if let Some(t) = &self.through {
+                t.set_gain(gain);
+            }
+        }
+
+        pub fn play_through(&self) -> bool {
+            self.through.is_some()
         }
 
         /// Why the input isn't hearing anything, if it knows (this Mac's sound without permission).
@@ -466,6 +507,11 @@ mod native {
         pub fn update(&mut self) -> AudioAnalysis {
             if !self.live() {
                 return AudioAnalysis::default();
+            }
+            // Play-through: what came in since the last frame goes to the sound output.
+            if let Some(t) = &self.through {
+                let frames = std::mem::take(&mut *self.fresh.lock().unwrap());
+                t.push(&frames, self.sample_rate);
             }
             let now = web_time::Instant::now();
             let dt = self.last_update.map_or(1.0 / 60.0, |t| (now - t).as_secs_f32()).clamp(0.001, 0.1);
@@ -554,6 +600,10 @@ mod stub {
         }
         pub fn spectrum(&self) -> &[f32] {
             &[]
+        }
+        pub fn set_play_through(&mut self, _on: bool, _gain: f32) {}
+        pub fn play_through(&self) -> bool {
+            false
         }
         pub fn problem(&self) -> Option<String> {
             None

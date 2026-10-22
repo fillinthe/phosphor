@@ -222,6 +222,67 @@ pub(super) struct ClipAudio {
     thread: Option<JoinHandle<()>>,
 }
 
+/// The audio input heard through the sound output (monitoring): a clip in the mix whose sound is pushed in as it
+/// arrives, resampled to the output's rate. Kept short so it stays close to live.
+pub struct PlayThrough {
+    clip: Arc<Clip>,
+}
+
+/// At most this much input waits to be heard (seconds): more is dropped, so the delay can't grow.
+const THROUGH_MAX_SECS: f32 = 0.15;
+
+impl PlayThrough {
+    pub fn start() -> Option<Self> {
+        let clip = Arc::new(Clip {
+            buf: Mutex::new(VecDeque::new()),
+            gain: AtomicU32::new(1f32.to_bits()),
+            applied: AtomicU32::new(0f32.to_bits()),
+            loudness: AtomicU32::new(0),
+            pair: AtomicU32::new(0),
+            follow: Mutex::new(Follow::default()),
+            quit: AtomicBool::new(false),
+        });
+        CLIPS.lock().ok()?.push(Arc::downgrade(&clip));
+        ensure_output();
+        Some(Self { clip })
+    }
+
+    pub fn set_gain(&self, g: f32) {
+        self.clip.gain.store(g.clamp(0.0, 4.0).to_bits(), Ordering::Relaxed);
+    }
+
+    /// New input (left, right at `rate` Hz) to be heard.
+    pub fn push(&self, frames: &[[f32; 2]], rate: u32) {
+        let out = match OUT_RATE.load(Ordering::Relaxed) {
+            0 => rate,
+            r => r,
+        };
+        let samples = resample(frames, rate, out);
+        let Ok(mut buf) = self.clip.buf.lock() else { return };
+        buf.extend(samples.iter().flatten());
+        let max = (out as f32 * THROUGH_MAX_SECS) as usize * 2;
+        while buf.len() > max {
+            buf.pop_front();
+        }
+    }
+}
+
+/// Linear resampling of (left, right) frames from `from` Hz to `to` Hz (monitoring quality).
+pub fn resample(frames: &[[f32; 2]], from: u32, to: u32) -> Vec<[f32; 2]> {
+    if from == to || from == 0 || to == 0 || frames.len() < 2 {
+        return frames.to_vec();
+    }
+    let n = (frames.len() as u64 * to as u64 / from as u64) as usize;
+    (0..n)
+        .map(|i| {
+            let t = i as f64 * from as f64 / to as f64;
+            let (k, f) = (t as usize, (t.fract()) as f32);
+            let (a, b) = (frames[k.min(frames.len() - 1)], frames[(k + 1).min(frames.len() - 1)]);
+            [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]
+        })
+        .collect()
+}
+
 impl ClipAudio {
     /// Starts the sound of `path`, or None when it has no audio track (or sound is off).
     pub fn open(path: &str) -> Option<Self> {
@@ -731,6 +792,15 @@ fn mix_clips(out: &mut [f32], pairs: usize) {
 #[cfg(test)]
 mod level_tests {
     use super::*;
+
+    #[test]
+    fn input_is_resampled_for_the_output() {
+        let frames: Vec<[f32; 2]> = (0..441).map(|i| [i as f32, -(i as f32)]).collect();
+        let out = resample(&frames, 44_100, 48_000);
+        assert_eq!(out.len(), 480);
+        assert!((out[240][0] - 220.5).abs() < 0.6 && out[240][1] < 0.0, "{:?}", out[240]);
+        assert_eq!(resample(&frames, 48_000, 48_000).len(), 441);
+    }
 
     /// Pair blocks land on their channels: pair 0 on 1-2, pair 1 on 3-4; a 6-channel device's 5-6 stay silent.
     #[test]
