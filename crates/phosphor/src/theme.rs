@@ -7,9 +7,33 @@ pub const WARN: Color32 = Color32::from_rgb(255, 140, 90);
 /// True while the interface is on the light side (`set_brightness` above about half).
 static LIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// The one accent colour: bright green on dark backgrounds, a deeper green on light ones (readable as text).
+/// Which accent colour (index into `ACCENTS`).
+static ACCENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// The accent colours to choose from: (name, on dark backgrounds, on light ones). Gold means "mapped" and orange
+/// "warning", so neither is offered.
+pub const ACCENTS: [(&str, [u8; 3], [u8; 3]); 5] = [
+    ("Green", [120, 255, 170], [16, 138, 74]),
+    ("Cyan", [90, 225, 255], [0, 118, 150]),
+    ("Violet", [190, 160, 255], [104, 70, 190]),
+    ("Pink", [255, 140, 200], [176, 40, 110]),
+    ("Ice", [200, 230, 255], [60, 100, 150]),
+];
+
+/// The accent colour: bright on dark backgrounds, deeper on light ones (readable as text).
 pub fn accent() -> Color32 {
-    if LIGHT.load(std::sync::atomic::Ordering::Relaxed) { Color32::from_rgb(16, 138, 74) } else { Color32::from_rgb(120, 255, 170) }
+    let (_, dark, light) = ACCENTS[ACCENT.load(std::sync::atomic::Ordering::Relaxed).min(ACCENTS.len() - 1)];
+    let [r, g, b] = if LIGHT.load(std::sync::atomic::Ordering::Relaxed) { light } else { dark };
+    Color32::from_rgb(r, g, b)
+}
+
+/// Picks the accent colour (call `set_brightness` after to repaint the widgets with it).
+pub fn set_accent(i: usize) {
+    ACCENT.store(i.min(ACCENTS.len() - 1), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn accent_index() -> usize {
+    ACCENT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// `base` nudged toward the accent (selected cards, the playing clip): works on any brightness.

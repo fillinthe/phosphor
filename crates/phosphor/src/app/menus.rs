@@ -351,6 +351,20 @@ impl PhosphorApp {
                             }
                         });
                         crate::ui::hint(ui, "Darker for dark rooms and shows, lighter for daylight.");
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Accent").small());
+                            for (k, (name, dark, _)) in theme::ACCENTS.iter().enumerate() {
+                                let (r, resp) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::click());
+                                ui.painter().circle_filled(r.center(), 7.0, egui::Color32::from_rgb(dark[0], dark[1], dark[2]));
+                                if theme::accent_index() == k {
+                                    ui.painter().circle_stroke(r.center(), 8.5, egui::Stroke::new(1.5, ui.visuals().strong_text_color()));
+                                }
+                                if resp.on_hover_text(*name).clicked() {
+                                    theme::set_accent(k);
+                                    theme::set_brightness(ui.ctx(), self.ui_brightness);
+                                }
+                            }
+                        });
                     })
                     .response
                     .on_hover_text("Interface brightness: from darkest to light");
