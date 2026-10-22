@@ -50,10 +50,12 @@ pub enum ModSource {
     AudioBeat,
     /// A value set by hand, a MIDI knob, OSC or the remote (shared modulators: their `value`).
     Hand,
+    /// A wave you draw: a smooth loop through the eight `steps` points.
+    Drawn,
 }
 
 impl ModSource {
-    pub const ALL: [ModSource; 13] = [
+    pub const ALL: [ModSource; 14] = [
         ModSource::AudioLevel,
         ModSource::AudioLow,
         ModSource::AudioMid,
@@ -66,6 +68,7 @@ impl ModSource {
         ModSource::Beat,
         ModSource::Random,
         ModSource::Steps,
+        ModSource::Drawn,
         ModSource::Hand,
     ];
 
@@ -84,13 +87,14 @@ impl ModSource {
             ModSource::Steps => "Step sequencer",
             ModSource::AudioBeat => "Audio beat (kick)",
             ModSource::Hand => "Hand / MIDI knob",
+            ModSource::Drawn => "Drawn wave",
         }
     }
 
     pub fn is_lfo(self) -> bool {
         matches!(
             self,
-            ModSource::LfoSine | ModSource::LfoTriangle | ModSource::LfoSaw | ModSource::LfoSquare | ModSource::Random | ModSource::Steps
+            ModSource::LfoSine | ModSource::LfoTriangle | ModSource::LfoSaw | ModSource::LfoSquare | ModSource::Random | ModSource::Steps | ModSource::Drawn
         )
     }
 

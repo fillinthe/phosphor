@@ -47,11 +47,27 @@ pub fn source_value(m: &Modulation, inputs: &ModInputs) -> f32 {
             (n * 12.9898).sin().mul_add(43_758.547, 0.0).rem_euclid(1.0)
         }
         ModSource::Steps => m.steps[((phase * 8.0) as usize).min(7)],
+        ModSource::Drawn => drawn_wave(&m.steps, phase),
         ModSource::AudioBeat => inputs.audio_beat,
         // A control's own "hand" source has no value of its own: it follows a shared modulator instead.
         ModSource::Hand => 0.0,
     };
     if m.invert { 1.0 - v } else { v }
+}
+
+/// A smooth loop through `points` (evenly spaced, the last running back into the first): Catmull-Rom, kept in 0..1.
+pub fn drawn_wave(points: &[f32], phase: f32) -> f32 {
+    let n = points.len();
+    if n == 0 {
+        return 0.0;
+    }
+    let at = phase.rem_euclid(1.0) * n as f32;
+    let i = at.floor() as usize % n;
+    let t = at.fract();
+    let p = |k: isize| points[(i as isize + k).rem_euclid(n as isize) as usize];
+    let (p0, p1, p2, p3) = (p(-1), p(0), p(1), p(2));
+    let v = 0.5 * (2.0 * p1 + (p2 - p0) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t * t * t);
+    v.clamp(0.0, 1.0)
 }
 
 /// Applies an optional modulation to `base`, keeping the result inside `min..=max`.
@@ -100,5 +116,19 @@ mod tests {
         let synced = ModInputs { beats: 1.0, ..Default::default() };
         let m = Modulation { source: ModSource::LfoSaw, sync: true, rate: 2.0, ..Default::default() };
         assert!((source_value(&m, &synced) - 0.5).abs() < 1e-5);
+    }
+}
+
+#[cfg(test)]
+mod drawn_tests {
+    #[test]
+    fn a_drawn_wave_passes_through_its_points_and_loops() {
+        let pts = [0.0, 1.0, 0.0, 1.0, 0.5, 0.5, 0.2, 0.8];
+        for (k, p) in pts.iter().enumerate() {
+            assert!((super::drawn_wave(&pts, k as f32 / 8.0) - p).abs() < 1e-5, "point {k}");
+        }
+        assert!((super::drawn_wave(&pts, 1.0) - super::drawn_wave(&pts, 0.0)).abs() < 1e-5, "loops");
+        let mid = super::drawn_wave(&pts, 0.5 / 8.0);
+        assert!(mid > 0.3 && mid < 0.7, "smooth between: {mid}");
     }
 }
