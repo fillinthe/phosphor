@@ -210,6 +210,15 @@ impl PhosphorApp {
                         });
                     }
                 }
+                Purpose::ImportTouchOsc => {
+                    if let Some(p) = paths.first() {
+                        let result = std::fs::read(p).map_err(|e| e.to_string()).and_then(|b| crate::tosc::import(&mut st.comp, &b));
+                        st.notice = Some(match result {
+                            Ok(i) => format!("TouchOSC layout in: {} page(s), {} controls, {} OSC addresses mapped (Control Surface)", i.pages, i.widgets, i.mappings),
+                            Err(e) => format!("Couldn't read that layout: {e}"),
+                        });
+                    }
+                }
                 Purpose::TouchOsc => {
                     if let Some(p) = paths.first() {
                         let p = p.with_extension("tosc");

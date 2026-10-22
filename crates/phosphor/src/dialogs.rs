@@ -16,6 +16,8 @@ pub enum Purpose {
     StreamFile,
     ExportShow,
     TouchOsc,
+    /// A TouchOSC layout to bring in as Control Surface pages.
+    ImportTouchOsc,
     ImportResolume,
     RelinkFolder,
     /// A 3D model (OBJ) for this mapping surface.

@@ -151,9 +151,137 @@ pub fn export(comp: &Composition) -> Vec<u8> {
     z.finish().unwrap_or_default()
 }
 
+/// A TouchOSC node's property by key.
+fn prop<'a, 'i>(n: roxmltree::Node<'a, 'i>, key: &str) -> Option<roxmltree::Node<'a, 'i>> {
+    n.children().find(|c| c.has_tag_name("properties"))?.children().find(|p| p.has_tag_name("property") && p.children().any(|k| k.has_tag_name("key") && k.text() == Some(key)))
+}
+
+/// What an import brought in.
+pub struct Imported {
+    pub pages: usize,
+    pub widgets: usize,
+    pub mappings: usize,
+}
+
+/// Reads a TouchOSC layout (`.tosc`, or its plain XML) into the Control Surface: each TouchOSC page becomes a surface
+/// page, each fader / button / XY pad / radio / label a widget in the same place (scaled to the grid), and each
+/// control's OSC address is mapped to its widget, so the layout drives Phosphor as it is.
+pub fn import(comp: &mut Composition, bytes: &[u8]) -> Result<Imported, String> {
+    let text = if bytes.first() == Some(&b'<') {
+        String::from_utf8_lossy(bytes).into_owned()
+    } else {
+        let mut out = String::new();
+        std::io::Read::read_to_string(&mut flate2::read::ZlibDecoder::new(bytes), &mut out).map_err(|e| format!("not a TouchOSC file ({e})"))?;
+        out
+    };
+    let doc = roxmltree::Document::parse(&text).map_err(|e| format!("not a TouchOSC layout ({e})"))?;
+    let value_text = |n: roxmltree::Node, key: &str| prop(n, key).and_then(|p| p.children().find(|c| c.has_tag_name("value"))).and_then(|v| v.text()).map(str::to_string);
+    let frame = |n: roxmltree::Node| -> [f32; 4] {
+        let Some(v) = prop(n, "frame").and_then(|p| p.children().find(|c| c.has_tag_name("value"))) else { return [0.0; 4] };
+        let get = |k: &str| v.children().find(|c| c.has_tag_name(k)).and_then(|c| c.text()).and_then(|t| t.trim().parse::<f32>().ok()).unwrap_or(0.0);
+        [get("x"), get("y"), get("w"), get("h")]
+    };
+    let color = |n: roxmltree::Node| -> Option<[u8; 3]> {
+        let v = prop(n, "color")?.children().find(|c| c.has_tag_name("value"))?;
+        let get = |k: &str| v.children().find(|c| c.has_tag_name(k)).and_then(|c| c.text()).and_then(|t| t.trim().parse::<f32>().ok()).unwrap_or(1.0);
+        Some([(get("r") * 255.0) as u8, (get("g") * 255.0) as u8, (get("b") * 255.0) as u8])
+    };
+    // A control's OSC messages: (address, the variable it sends: x / y).
+    let messages = |n: roxmltree::Node| -> Vec<(String, String)> {
+        let Some(m) = n.children().find(|c| c.has_tag_name("messages")) else { return Vec::new() };
+        m.children()
+            .filter(|o| o.has_tag_name("osc"))
+            .filter_map(|o| {
+                let path: String = o.children().find(|c| c.has_tag_name("path"))?.children().filter(|p| p.has_tag_name("partial")).filter_map(|p| p.children().find(|c| c.has_tag_name("value")).and_then(|v| v.text())).collect();
+                let var = o.descendants().find(|c| c.has_tag_name("var")).and_then(|v| v.text()).unwrap_or("x").to_string();
+                path.starts_with('/').then_some((path, var))
+            })
+            .collect()
+    };
+    let root = doc.root_element().children().find(|n| n.has_tag_name("node")).ok_or("empty layout")?;
+    let root_w = frame(root)[2].max(1.0);
+    let cell = root_w / comp.surface.columns.max(1) as f32;
+    // Pages: the PAGER's children, else the whole layout as one page.
+    let pager = root.descendants().find(|n| n.attribute("type") == Some("PAGER"));
+    let pages: Vec<roxmltree::Node> = match pager {
+        Some(p) => p.children().filter(|c| c.has_tag_name("children")).flat_map(|c| c.children().filter(|n| n.has_tag_name("node"))).collect(),
+        None => vec![root],
+    };
+    let mut out = Imported { pages: 0, widgets: 0, mappings: 0 };
+    let first_new_page = comp.surface.pages.len();
+    for (k, page) in pages.iter().enumerate() {
+        let name = value_text(*page, "tabLabel").or_else(|| value_text(*page, "name")).unwrap_or_else(|| format!("TouchOSC {}", k + 1));
+        comp.surface.pages.push(name);
+        let page_index = first_new_page + k;
+        out.pages += 1;
+        let page_origin = frame(*page);
+        for n in page.descendants().filter(|n| n.has_tag_name("node") && *n != *page) {
+            let kind = match (n.attribute("type"), value_text(n, "buttonType").as_deref(), value_text(n, "orientation").as_deref()) {
+                (Some("BUTTON"), Some("0") | None, _) => WidgetKind::Button,
+                (Some("BUTTON"), ..) => WidgetKind::Toggle,
+                (Some("FADER"), _, Some("1") | Some("3")) | (Some("ENCODER"), ..) => WidgetKind::Slider,
+                (Some("FADER"), ..) => WidgetKind::Fader,
+                (Some("XY"), ..) => WidgetKind::XyPad,
+                (Some("RADIO"), ..) => WidgetKind::Choices,
+                (Some("LABEL"), ..) => WidgetKind::Label,
+                _ => continue,
+            };
+            // Frames are inside their parent group's: add up the offsets up to the page.
+            let mut f = frame(n);
+            for anc in n.ancestors().skip(1).filter(|a| a.has_tag_name("node")).take_while(|a| a != page) {
+                let af = frame(anc);
+                f[0] += af[0];
+                f[1] += af[1];
+            }
+            let _ = page_origin;
+            let id = comp.surface.add(kind);
+            let w = comp.surface.widget_mut(id).expect("just added");
+            w.page = page_index;
+            w.x = (f[0] / cell).round().max(0.0);
+            w.y = (f[1] / cell).round().max(0.0);
+            w.w = (f[2] / cell).round().max(1.0);
+            w.h = (f[3] / cell).round().max(1.0);
+            w.label = if kind == WidgetKind::Label { value_text(n, "text") } else { None }.or_else(|| value_text(n, "name")).unwrap_or_default();
+            if let Some(c) = color(n) {
+                w.color = c;
+            }
+            if kind == WidgetKind::Choices {
+                let steps = value_text(n, "steps").and_then(|s| s.parse::<usize>().ok()).unwrap_or(4).clamp(2, 32);
+                w.items = (1..=steps).map(|i| i.to_string()).collect();
+            }
+            out.widgets += 1;
+            for (address, var) in messages(n) {
+                let target = if var == "y" { ControlTarget::SurfaceY(id) } else { ControlTarget::Surface(id) };
+                comp.control_maps.push(phosphor_engine::ControlMap::new(phosphor_engine::ControlSource::Osc { address }, target));
+                out.mappings += 1;
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_layout_comes_back_in() {
+        let mut comp = Composition::default();
+        let fader = comp.surface.add(WidgetKind::Fader);
+        comp.surface.widget_mut(fader).unwrap().label = "Dimmer".into();
+        comp.surface.add(WidgetKind::XyPad);
+        comp.surface.add(WidgetKind::Label);
+        let bytes = export(&comp);
+        let mut fresh = Composition::default();
+        let got = import(&mut fresh, &bytes).unwrap();
+        assert_eq!((got.pages, got.widgets, got.mappings), (1, 3, 3), "fader x, pad x and y");
+        let w = fresh.surface.widgets.iter().find(|w| w.label == "Dimmer").expect("the fader");
+        assert_eq!((w.kind, w.page), (WidgetKind::Fader, 1));
+        let orig = comp.surface.widget(fader).unwrap();
+        assert_eq!((w.x, w.y, w.w, w.h), (orig.x, orig.y, orig.w, orig.h), "same place on the grid");
+        assert!(fresh.control_maps.iter().any(|m| m.source == phosphor_engine::ControlSource::Osc { address: format!("/phosphor/surface/{fader}") } && m.target == ControlTarget::Surface(w.id)));
+        assert!(import(&mut fresh, b"not a layout").is_err());
+    }
 
     #[test]
     fn exports_controls_with_their_addresses() {
