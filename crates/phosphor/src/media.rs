@@ -290,6 +290,8 @@ impl MediaManager {
                         }
                     }
                 }
+                // Scope layers: the scopes put their picture on the layer (`Scopes::take_layer_pictures`).
+                SourceSpec::Live { format, .. } if format == crate::scopes::SCOPE_FORMAT => {}
                 #[cfg(any(target_os = "macos", windows))]
                 SourceSpec::Live { format, url, .. } if format == "ndi" => match crate::ndi::NdiReceiver::connect(url) {
                     Ok(r) => {

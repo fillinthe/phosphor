@@ -1,6 +1,7 @@
 //! Scopes (VDMX's Scopes plugin): waveform, RGB parade, vectorscope and histogram of the mix or any layer, for
 //! matching colours between cameras, clips and projectors. A small copy of the picture is read back a few times a
-//! second, only while the Scopes panel is on screen; the scope picture is drawn on the CPU (a few thousand pixels).
+//! second, only while the Scopes panel is on screen or a scope layer shows one (`layer_source`); the scope picture
+//! is drawn on the CPU (a few thousand pixels).
 
 use eframe::egui;
 
@@ -8,6 +9,8 @@ use eframe::egui;
 pub const MONITOR_KEY: u8 = 251;
 /// Width of the picture read back (height keeps the canvas's shape).
 const WIDTH: u32 = 320;
+/// `SourceSpec::Live` format of a scope layer.
+pub const SCOPE_FORMAT: &str = "scope";
 /// Scope updates per second.
 const RATE: f64 = 10.0;
 
@@ -22,6 +25,19 @@ pub enum ScopeKind {
 
 impl ScopeKind {
     pub const ALL: [ScopeKind; 4] = [ScopeKind::Waveform, ScopeKind::Parade, ScopeKind::Vectorscope, ScopeKind::Histogram];
+
+    /// A layer source showing this scope (the picture comes from `Scopes::layer_pictures`).
+    pub fn layer_source(self) -> phosphor_engine::SourceSpec {
+        phosphor_engine::SourceSpec::Live { name: format!("Scope: {}", self.name()), format: SCOPE_FORMAT.into(), url: self.name().into() }
+    }
+
+    /// The scope a layer source shows, if it's a scope layer.
+    pub fn of_source(s: &phosphor_engine::SourceSpec) -> Option<ScopeKind> {
+        match s {
+            phosphor_engine::SourceSpec::Live { format, url, .. } if format == SCOPE_FORMAT => ScopeKind::ALL.into_iter().find(|k| k.name() == url),
+            _ => None,
+        }
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -51,18 +67,26 @@ pub struct Scopes {
     /// The newest scope picture, waiting for the panel to show it.
     pending: Option<egui::ColorImage>,
     texture: Option<egui::TextureHandle>,
+    /// Layers showing a scope (set every frame from the project): they keep the scopes measuring.
+    pub layers: Vec<(u64, ScopeKind)>,
+    /// Their newest pictures, for the app to put on those layers.
+    layer_pictures: Vec<(u64, egui::ColorImage)>,
 }
 
 impl Default for Scopes {
     fn default() -> Self {
-        Self { kind: ScopeKind::Waveform, source: phosphor_engine::MASTER_ID, shown_at: f64::MIN, next_at: 0.0, busy_since: None, pending: None, texture: None }
+        Self { kind: ScopeKind::Waveform, source: phosphor_engine::MASTER_ID, shown_at: f64::MIN, next_at: 0.0, busy_since: None, pending: None, texture: None, layers: Vec::new(), layer_pictures: Vec::new() }
     }
 }
 
 impl Scopes {
-    /// The monitor picture to ask for this frame, while the panel is open.
+    fn panel_open(&self, now: f64) -> bool {
+        now - self.shown_at < 0.5
+    }
+
+    /// The monitor picture to ask for this frame, while the panel is open or a layer shows a scope.
     pub fn picture(&self, now: f64, canvas: (u32, u32)) -> Option<(u64, u32, u32)> {
-        (now - self.shown_at < 0.5).then(|| (self.source, WIDTH, ((WIDTH * canvas.1) / canvas.0.max(1)).clamp(16, 1080)))
+        (self.panel_open(now) || !self.layers.is_empty()).then(|| (self.source, WIDTH, ((WIDTH * canvas.1) / canvas.0.max(1)).clamp(16, 1080)))
     }
 
     /// Read this frame's picture back? (Paced, one at a time.)
@@ -79,9 +103,18 @@ impl Scopes {
     }
 
     /// The picture came back: draw the scope (the panel shows it next time it's drawn).
-    pub fn give(&mut self, rgba: &[u8], width: u32, height: u32) {
+    pub fn give(&mut self, rgba: &[u8], width: u32, height: u32, now: f64) {
         self.busy_since = None;
-        self.pending = Some(draw(self.kind, rgba, width as usize, height as usize));
+        let (w, h) = (width as usize, height as usize);
+        if self.panel_open(now) {
+            self.pending = Some(draw(self.kind, rgba, w, h));
+        }
+        self.layer_pictures = self.layers.iter().map(|&(id, kind)| (id, draw(kind, rgba, w, h))).collect();
+    }
+
+    /// Scope layers' new pictures (once each).
+    pub fn take_layer_pictures(&mut self) -> Vec<(u64, egui::ColorImage)> {
+        std::mem::take(&mut self.layer_pictures)
     }
 
     /// The scope picture to show (uploads the newest one first).
@@ -207,6 +240,18 @@ pub fn draw(kind: ScopeKind, rgba: &[u8], w: usize, h: usize) -> egui::ColorImag
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn scope_layers_get_pictures_without_the_panel() {
+        let src = ScopeKind::Parade.layer_source();
+        assert_eq!(ScopeKind::of_source(&src), Some(ScopeKind::Parade));
+        let mut s = Scopes { layers: vec![(7, ScopeKind::Histogram)], ..Default::default() };
+        assert!(s.picture(100.0, (1920, 1080)).is_some(), "a scope layer keeps it measuring");
+        s.give(&[128u8; 16 * 9 * 4], 16, 9, 100.0);
+        let pics = s.take_layer_pictures();
+        assert_eq!((pics.len(), pics[0].0, pics[0].1.size), (1, 7, SIZE));
+        assert!(s.texture.is_none() && s.pending.is_none(), "panel closed: no panel picture");
+    }
     use super::*;
 
     fn picture(rgb: [u8; 3]) -> Vec<u8> {
