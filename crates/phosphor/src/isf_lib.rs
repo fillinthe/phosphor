@@ -420,8 +420,8 @@ impl IsfLibrary {
 /// thumbnail as hex (for finding near-duplicates). With `PHOSPHOR_ISF_SHEET_COST=1`, a last column: milliseconds per
 /// 1920×1080 frame (render and read back, so an upper bound). Run with
 /// `PHOSPHOR_ISF_SHEET="<shader folder>:<out folder>[:<picture>]" cargo test -p phosphor --release isf_sheet`.
-/// Sound: a made-up beat, so audio-reactive shaders move.
-#[cfg(test)]
+/// Sound: a made-up beat, so audio-reactive shaders move. Mac and Linux (the Windows build has no `wgpu` of its own).
+#[cfg(all(test, not(windows)))]
 #[test]
 fn isf_sheet() {
     use phosphor_engine::{Composition, EffectState, LayerState, ModInputs, SourceSpec};
