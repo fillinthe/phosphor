@@ -178,6 +178,22 @@ impl PhosphorApp {
                         st.start_relink(p.clone());
                     }
                 }
+                Purpose::ImportFixtures => {
+                    if let Some(p) = paths.first() {
+                        let text = std::fs::read_to_string(p).map_err(|e| e.to_string());
+                        // Read into a scratch list, then each gets a project id.
+                        let mut read = phosphor_engine::DmxSettings::default();
+                        let result = text.and_then(|t| read.import_csv(&t, || 0));
+                        for mut f in read.fixtures {
+                            f.id = st.comp.new_id();
+                            st.comp.dmx.fixtures.push(f);
+                        }
+                        st.notice = Some(match result {
+                            Ok(n) => format!("{n} fixtures from {}", name_of(p)),
+                            Err(e) => format!("Couldn't read that patch list: {e}"),
+                        });
+                    }
+                }
                 Purpose::OutputBackground(id) => {
                     if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter_mut().find(|o| o.id == id)) {
                         o.background = p.to_string_lossy().into_owned();

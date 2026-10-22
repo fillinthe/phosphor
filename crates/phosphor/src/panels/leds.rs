@@ -59,8 +59,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         let color = if !f.enabled { Color32::GRAY } else if is_sel { accent() } else { accent().gamma_multiply(0.6) };
         let corners = match f.shape {
             FixtureShape::MovingHead => 1,
-            FixtureShape::Strip => 2,
-            FixtureShape::Grid => 4,
+            FixtureShape::Strip | FixtureShape::Ring => 2,
+            FixtureShape::Grid | FixtureShape::Curve => 4,
         };
         let pts: Vec<egui::Pos2> = f.points[..corners].iter().map(|p| to_screen(*p)).collect();
         let p = ui.painter();
@@ -110,6 +110,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             st.comp.dmx.fixtures.push(Fixture { id, name: format!("Strip {}", n + 1), points: [[0.1, y], [0.9, y], [0.9, 0.9], [0.1, 0.9]], universe: next.0, channel: next.1, ..Default::default() });
             selected = Some(id);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::TABLE, "Import CSV…")).on_hover_text("Fixtures from a patch list: name, shape, pixels, universe, channel, x1, y1, x2, y2 (0–1 of the picture)").clicked() {
+            st.dialogs.pick_file(crate::dialogs::Purpose::ImportFixtures, Some(("Patch list", &["csv", "txt", "tsv"])));
+        }
         if ui.button(label(icon::GRID_FOUR, "LED matrix")).clicked() {
             let id = st.comp.new_id();
             let n = st.comp.dmx.fixtures.len();
@@ -149,13 +153,14 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal_wrapped(|ui| {
                     choice_buttons(ui, &mut f.shape, |_, _| {});
                     match f.shape {
-                        FixtureShape::Strip => {
+                        FixtureShape::Strip | FixtureShape::Ring | FixtureShape::Curve => {
                             guarded!(ui, f.cols, egui::DragValue::new(&mut f.cols).range(1..=4096).prefix("pixels "));
                         }
                         FixtureShape::Grid => {
                             guarded!(ui, f.cols, egui::DragValue::new(&mut f.cols).range(1..=512).suffix(" wide"));
                             guarded!(ui, f.rows, egui::DragValue::new(&mut f.rows).range(1..=512).suffix(" high"));
                             crate::ui::toggle(ui, &mut f.zigzag, "Zig-zag").on_hover_text("Every other row is wired backwards (most LED matrices)");
+                            crate::ui::toggle(ui, &mut f.by_columns, "By columns").on_hover_text("Wired column by column (top to bottom) instead of row by row");
                         }
                         FixtureShape::MovingHead => {
                             choice_combo(ui, ("head_layout", f.id), &mut f.head, 230.0, false).on_hover_text("Set the head to the DMX mode with these channels");
