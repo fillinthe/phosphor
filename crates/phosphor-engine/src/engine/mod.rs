@@ -226,6 +226,12 @@ pub struct Engine {
     output_targets: HashMap<u64, Option<Target>>,
     /// Outputs that are flipped or delayed: drawn here first, then mirrored / held back into `output_targets`.
     output_extra: HashMap<u64, OutputExtra>,
+    /// Look fade: the program as it was when a new look loaded (`fade_in_next`), faded out over the new mix
+    /// (started at, seconds). Only held while a fade runs.
+    look_hold: Option<Target>,
+    look_mix: Option<Target>,
+    look_fade: Option<(f32, f32)>,
+    look_fade_request: Option<f32>,
     /// Background pictures behind outputs' slices (`OutputConfig::background`), by output id.
     output_backgrounds: HashMap<u64, Target>,
     meshes: MeshCache,
@@ -290,6 +296,10 @@ impl Engine {
             frame_index: 0,
             output_targets: HashMap::new(),
             output_extra: HashMap::new(),
+            look_hold: None,
+            look_mix: None,
+            look_fade: None,
+            look_fade_request: None,
             output_backgrounds: HashMap::new(),
             meshes: MeshCache::default(),
             previews: Vec::new(),
@@ -476,6 +486,39 @@ impl Engine {
     /// `mods` carries this frame's audio/LFO signals for modulated parameters.
     /// Flipped / delayed outputs: the picture drawn this frame (mirrored as set) goes into a ring of `delay + 1`
     /// pictures, and the output shows the oldest; with no delay it's copied straight across.
+    /// The next frame fades in from the picture showing now over `secs` (a look or project loading).
+    pub fn fade_in_next(&mut self, secs: f32) {
+        self.look_fade_request = Some(secs).filter(|s| *s > 0.0);
+    }
+
+    /// The look fade: hold the last program picture when one is asked for, then blend it out over `master`.
+    fn look_fade(&mut self, master: wgpu::TextureView, output_view: &wgpu::TextureView, (w, h): (u32, u32), time: f32, passes: &mut Vec<Pass>) -> wgpu::TextureView {
+        let device = self.gpu.device.clone();
+        if let Some(secs) = self.look_fade_request.take() {
+            Target::ensure(&mut self.look_hold, &device, "look fade", w, h);
+            let mut u = Uniforms::with_params(&[]);
+            u.resolution = [w as f32, h as f32];
+            u.opacity = 1.0;
+            let target = self.look_hold.as_ref().unwrap().view.clone();
+            passes.push(Pass { entry: "fs_composite", target, tex0: output_view.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+            self.look_fade = Some((time, secs));
+        }
+        let Some((start, secs)) = self.look_fade else { return master };
+        let t = ((time - start) / secs).clamp(0.0, 1.0);
+        if t >= 1.0 || time < start {
+            (self.look_fade, self.look_hold, self.look_mix) = (None, None, None);
+            return master;
+        }
+        Target::ensure(&mut self.look_mix, &device, "look fade mix", w, h);
+        let mut u = Uniforms::with_params(&[]);
+        u.resolution = [w as f32, h as f32];
+        u.opacity = t;
+        let target = self.look_mix.as_ref().unwrap().view.clone();
+        let hold = self.look_hold.as_ref().unwrap().view.clone();
+        passes.push(Pass { entry: "fs_mix", target: target.clone(), tex0: master, tex1: Some(hold), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+        target
+    }
+
     fn finish_outputs(&mut self, comp: &Composition, device: &wgpu::Device, passes: &mut Vec<Pass>) {
         for o in comp.outputs.iter().filter(|o| o.enabled && !o.frozen) {
             let (Some(extra), Some(Some(out))) = (self.output_extra.get_mut(&o.id), self.output_targets.get(&o.id)) else { continue };
@@ -608,6 +651,7 @@ impl Engine {
                 master = view;
             }
         }
+        let master = self.look_fade(master, &output_view, (w, h), time, &mut passes);
         for (i, (src, mw, mh)) in monitors.iter().copied().enumerate() {
             if src == MASTER_ID {
                 Target::ensure(&mut self.monitor_targets[i], &self.gpu.device, "monitor", mw, mh);

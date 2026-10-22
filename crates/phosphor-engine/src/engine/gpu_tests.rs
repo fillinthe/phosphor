@@ -368,3 +368,26 @@ fn particles_draw_a_fountain() {
     let lit = px.chunks(4).filter(|p| p[0].max(p[1]).max(p[2]) > 60).count() as f32 / (px.len() / 4) as f32;
     assert!(lit > 0.002 && lit < 0.5, "{lit} of the pixels lit");
 }
+
+/// A look fade: the old picture shows first and gives way to the new one over the fade.
+#[test]
+fn a_new_look_fades_in() {
+    let Some(mut engine) = test_engine() else { return };
+    let solid = |v: f32| {
+        let mut comp = Composition { width: 32, height: 32, ..Default::default() };
+        comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![v, v, v], ..Default::default() });
+        comp
+    };
+    let red = |engine: &mut Engine, comp: &Composition, t: f32| {
+        engine.render(comp, t, &ModInputs { time: t, ..Default::default() });
+        let (_, _, px) = engine.read_output().expect("output");
+        px[0] as f32 / 255.0
+    };
+    let (white, black) = (solid(1.0), solid(0.0));
+    assert!(red(&mut engine, &white, 0.0) > 0.95);
+    engine.fade_in_next(2.0);
+    assert!(red(&mut engine, &black, 1.0) > 0.95, "starts from the old picture");
+    let mid = red(&mut engine, &black, 2.0);
+    assert!((0.3..0.7).contains(&mid), "halfway: {mid}");
+    assert!(red(&mut engine, &black, 3.5) < 0.05, "done");
+}
