@@ -122,7 +122,14 @@ pub struct StreamSettings {
     pub copy_path: String,
     /// YouTube / Twitch over RTMPS (TLS) instead of plain RTMP.
     pub secure: bool,
+    /// What's sent: 0 = the program (what the output shows), else one layer, group or comp's picture.
+    pub source: u64,
+    /// Start and stop on the next bar of the clock.
+    pub on_bar: bool,
 }
+
+/// The monitor key a recording of one layer / group / comp reads its frames from.
+pub const MONITOR_KEY: u8 = 253;
 
 impl Default for StreamSettings {
     fn default() -> Self {
@@ -146,6 +153,8 @@ impl Default for StreamSettings {
             copy_enabled: false,
             copy_path: String::new(),
             secure: true,
+            source: 0,
+            on_bar: false,
         }
     }
 }

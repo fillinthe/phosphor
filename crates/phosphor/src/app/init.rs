@@ -184,6 +184,7 @@ impl PhosphorApp {
                 maps_clipboard: Vec::new(),
                 snapshot_output: None,
                 clip_thumb_request: None,
+                stream_bar: None,
                 mouse_to_shaders: false,
                 templates_open: false,
                 #[cfg(not(target_arch = "wasm32"))]
@@ -441,6 +442,10 @@ impl PhosphorApp {
             }
             if app.bench.as_ref().is_some_and(|b| b.cfg.hevc) {
                 app.state.stream.settings.file_format = crate::stream::FileFormat::Hevc;
+            }
+            // Record one layer on its own (bench tests): PHOSPHOR_RECORD_LAYER=index, 0 = the bottom layer.
+            if let Some(l) = std::env::var("PHOSPHOR_RECORD_LAYER").ok().and_then(|v| v.parse::<usize>().ok()).and_then(|i| app.state.comp.layers.get(i)) {
+                app.state.stream.settings.source = l.id;
             }
             let (w, h) = (app.state.comp.width, app.state.comp.height);
             if let Err(e) = app.state.stream.start(w, h, now) {

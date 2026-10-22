@@ -197,6 +197,14 @@ impl PhosphorApp {
                 }
             }
         }
+        // Recording one layer / group / comp: its picture at the canvas size, read back when a frame is due.
+        let rec_src = Some(stream.settings.source).filter(|&id| id != 0 && stream.running() && (comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() || comp.comp(id).is_some()));
+        if let Some(id) = rec_src {
+            mwants.push((crate::stream::MONITOR_KEY, id, comp.width, comp.height));
+            if stream.frame_due(now) {
+                engine.read_monitor(mwants.len() - 1, crate::stream::MONITOR_KEY as u64);
+            }
+        }
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
         let held = std::mem::take(monitor_held);
@@ -232,6 +240,7 @@ impl PhosphorApp {
             match f.tag as u8 {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::tracking::MONITOR_KEY => tracker.give(f.rgba, f.width, f.height, &comp.tracking),
+                crate::stream::MONITOR_KEY => stream.push(f.width, f.height, f.rgba),
                 crate::scopes::MONITOR_KEY => {
                     scopes.give(&f.rgba, f.width, f.height, now);
                     for (id, img) in scopes.take_layer_pictures() {
@@ -275,7 +284,7 @@ impl PhosphorApp {
             syphon.publish(engine.device(), &frames);
         }
 
-        let stream_due = stream.frame_due(now);
+        let stream_due = rec_src.is_none() && stream.frame_due(now);
         let net_due = net.frame_due(now);
         #[cfg(any(target_os = "macos", windows))]
         let ndi_due = {
@@ -316,7 +325,7 @@ impl PhosphorApp {
             if net.running() {
                 net.push_frame(f.width, f.height, f.rgba.clone());
             }
-            if stream.running() {
+            if stream.running() && rec_src.is_none() {
                 stream.push(f.width, f.height, f.rgba);
             }
         }
