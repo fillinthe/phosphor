@@ -533,9 +533,11 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             }
         });
         ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
-        let mut c = egui::Color32::from_rgba_unmultiplied(style.color[0], style.color[1], style.color[2], style.color[3]);
-        if ui.color_edit_button_srgba(&mut c).changed() {
-            style.color = c.to_srgba_unmultiplied();
+        let mut rgb = [style.color[0], style.color[1], style.color[2]].map(|v| v as f32 / 255.0);
+        if crate::ui::colour_button(ui, &mut rgb) {
+            for k in 0..3 {
+                style.color[k] = (rgb[k] * 255.0).round() as u8;
+            }
         }
         let aligns = [(TextAlign::Left, icon::TEXT_ALIGN_LEFT.to_string()), (TextAlign::Center, icon::TEXT_ALIGN_CENTER.to_string()), (TextAlign::Right, icon::TEXT_ALIGN_RIGHT.to_string())];
         segmented(ui, &mut style.align, &aligns, |_, r, a| {

@@ -2,8 +2,45 @@
 
 use super::*;
 
+/// What macOS lets Phosphor use, each with a button to its System Settings page. Read every 2 s (it can change
+/// while Phosphor runs).
+#[cfg(target_os = "macos")]
+fn permissions(ui: &mut egui::Ui) {
+    let id = egui::Id::new("permissions");
+    let now = ui.ctx().input(|i| i.time);
+    let cached = ui.ctx().data(|d| d.get_temp::<(f64, std::sync::Arc<Vec<(String, String, crate::permissions::Status, String)>>)>(id));
+    let list = match cached {
+        Some((t, list)) if now - t < 2.0 => list,
+        _ => {
+            let list = std::sync::Arc::new(crate::permissions::all().into_iter().map(|p| (p.name.to_string(), p.why.to_string(), p.status, p.settings.to_string())).collect::<Vec<_>>());
+            ui.ctx().data_mut(|d| d.insert_temp(id, (now, list.clone())));
+            list
+        }
+    };
+    ui.label(RichText::new(format!("{} Permissions", icon::SHIELD_CHECK)).strong());
+    egui::Grid::new("permissions").num_columns(3).spacing([10.0, 4.0]).show(ui, |ui| {
+        use crate::permissions::Status;
+        for (name, why, status, settings) in list.iter() {
+            ui.label(name).on_hover_text(why.as_str());
+            let (glyph, color) = match status {
+                Status::Allowed => (icon::CHECK_CIRCLE, accent()),
+                Status::NotAsked => (icon::QUESTION, Color32::GRAY),
+                Status::Denied | Status::Restricted => (icon::WARNING, Color32::from_rgb(230, 160, 60)),
+            };
+            ui.label(RichText::new(format!("{glyph} {}", status.label())).color(color));
+            if *status != Status::Allowed && ui.small_button("System Settings…").on_hover_text("Open the page where you can allow it").clicked() {
+                crate::os::open(settings.as_str());
+            }
+            ui.end_row();
+        }
+    });
+    ui.separator();
+}
+
 pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        #[cfg(target_os = "macos")]
+        permissions(ui);
         // Phones, tablets and browsers on the session.
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("{} Phones & browsers", icon::DEVICE_MOBILE)).strong());

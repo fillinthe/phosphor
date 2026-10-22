@@ -93,6 +93,7 @@ impl<'a> Level<'a> {
         let locked = target.as_ref().is_some_and(|t| is_locked(ui, t));
         // Snap points as bar positions (0..1): the ends, the default, 100% / 1× when in range, then your own.
         let own_snaps = target.as_ref().map(|t| snap_points(ui, t)).unwrap_or_default();
+        let limits = target.as_ref().and_then(|t| super::locks::limits(ui, t));
         let mut snaps = vec![0.0, 1.0, to_t(default)];
         if min < 1.0 && max > 1.0 {
             snaps.push(to_t(1.0));
@@ -114,6 +115,9 @@ impl<'a> Level<'a> {
             let mut t = t.clamp(0.0, 1.0);
             if shift {
                 t = phosphor_engine::nearest_snap(t, &snaps).unwrap_or(t);
+            }
+            if let Some((lo, hi)) = limits {
+                t = t.clamp(lo, hi);
             }
             let v = from_t(t);
             if v != *value {
@@ -140,6 +144,19 @@ impl<'a> Level<'a> {
         }
         let base = if locked { Color32::from_gray(120) } else { accent() };
         p.rect_filled(fill, 0.0, base.gamma_multiply(if hovered { 0.75 } else { 0.55 }));
+        // Outside its limits: shaded (it can't go there).
+        if let Some((lo, hi)) = limits {
+            let shade = Color32::from_black_alpha(140);
+            for (a, b) in [(0.0, lo), (hi, 1.0)] {
+                if b > a {
+                    let part = match vertical {
+                        Some(_) => egui::Rect::from_min_max(egui::pos2(rect.left(), rect.bottom() - b * rect.height()), egui::pos2(rect.right(), rect.bottom() - a * rect.height())),
+                        None => egui::Rect::from_min_max(egui::pos2(rect.left() + a * rect.width(), rect.top()), egui::pos2(rect.left() + b * rect.width(), rect.bottom())),
+                    };
+                    p.rect_filled(part, 0.0, shade);
+                }
+            }
+        }
         // Snap points: your own as small ticks; all of them while Shift is held over the bar.
         let tick = |t: f32, strong: bool| {
             let stroke = Stroke::new(if strong { 1.5 } else { 1.0 }, if strong { ui_vis.strong_text_color() } else { ui_vis.weak_text_color() });
@@ -233,6 +250,7 @@ impl<'a> Level<'a> {
             }
             if let Some(t) = &target {
                 snap_items(ui, t, unit_now, &shown_unit);
+                super::locks::limit_items(ui, t, unit_now, &shown_unit);
             }
         };
         if control_menu_with(&r, target.as_ref(), m.as_deref_mut(), Some(&mut exact)) && !locked {

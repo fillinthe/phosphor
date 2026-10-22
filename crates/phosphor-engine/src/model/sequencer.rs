@@ -15,6 +15,9 @@ pub struct StepTrack {
     pub gate: bool,
     /// Slide from one step to the next instead of jumping (levels only).
     pub glide: bool,
+    /// Index track: each step picks one of this many choices (a clip, a blend mode, a direction…); its value is
+    /// the middle of that choice's slice of 0..1, the way pick-one controls read it. 0 = plain levels.
+    pub choices: u32,
     /// Gate tracks: what each lit step sets to its range's top as it starts, and back as it ends (clips play and
     /// let go, columns fire, anything else switches on and off with the steps).
     pub fires: Vec<super::Binding>,
@@ -22,7 +25,7 @@ pub struct StepTrack {
 
 impl Default for StepTrack {
     fn default() -> Self {
-        Self { steps: [1.0, 0.0, 0.5, 0.0].repeat(4), per_beat: 4.0, gate: false, glide: false, fires: Vec::new() }
+        Self { steps: [1.0, 0.0, 0.5, 0.0].repeat(4), per_beat: 4.0, gate: false, glide: false, choices: 0, fires: Vec::new() }
     }
 }
 
@@ -74,6 +77,10 @@ impl StepTrack {
         if self.gate {
             return if v >= 0.5 { 1.0 } else { 0.0 };
         }
+        if self.choices >= 2 {
+            let n = self.choices as usize;
+            return crate::pick_unit(crate::pick(v, n), n);
+        }
         if self.glide {
             let next = self.steps[(i + 1) % self.steps.len()];
             let f = pos - pos.floor();
@@ -113,6 +120,15 @@ impl StepTrack {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn index_steps_pick_whole_choices() {
+        let t = StepTrack { steps: vec![0.0, 0.4, 0.99], per_beat: 1.0, choices: 3, glide: true, ..Default::default() };
+        // 3 choices: slices 0–⅓, ⅓–⅔, ⅔–1; each step gives its slice's middle (no glide between).
+        let picks: Vec<usize> = (0..3).map(|b| crate::pick(t.value_at(b as f32 + 0.5), 3)).collect();
+        assert_eq!(picks, vec![0, 1, 2]);
+        assert!((t.value_at(1.5) - 0.5).abs() < 1e-6);
+    }
 
     #[test]
     fn lit_steps_start_and_end_once() {

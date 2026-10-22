@@ -74,6 +74,42 @@ impl State {
         }
     }
 
+    /// A random cue, never the one on now.
+    pub fn cue_random(&mut self, now: f64) {
+        let n = self.comp.cues.cues.len();
+        if n == 0 {
+            return;
+        }
+        let mut pick = super::quick::dice().below(n);
+        if n > 1 && Some(pick) == self.cue_run.current {
+            pick = (pick + 1) % n;
+        }
+        self.go_cue(pick, now);
+    }
+
+    /// The next cue that will fire by itself, and in how many seconds: a "then next" after the current cue, or the
+    /// next timecoded cue while the timecode runs.
+    pub fn next_cue_in(&self, now: f64) -> Option<(usize, f64)> {
+        let follow = self.cue_run.current.and_then(|c| {
+            let cue = self.comp.cues.cues.get(c)?;
+            (cue.follow > 0.0 && c + 1 < self.comp.cues.cues.len()).then_some(())?;
+            // Still fading in: the follow time starts once it lands.
+            let left = match (self.cue_run.landed, &self.cue_run.fade) {
+                (Some(landed), _) => cue.follow as f64 - (now - landed),
+                (None, Some(f)) => (f.secs - (now as f32 - f.start)).max(0.0) as f64 + cue.follow as f64,
+                (None, None) => return None,
+            };
+            Some((c + 1, left.max(0.0)))
+        });
+        let timed = self.timecode(now).and_then(|tc| {
+            self.comp.cues.cues.iter().enumerate().filter_map(|(i, c)| c.at.filter(|a| *a as f64 > tc).map(|a| (i, a as f64 - tc))).min_by(|a, b| a.1.total_cmp(&b.1))
+        });
+        match (follow, timed) {
+            (Some(a), Some(b)) => Some(if a.1 <= b.1 { a } else { b }),
+            (a, b) => a.or(b),
+        }
+    }
+
     /// The cue list's timecode now (seconds), if it follows one.
     pub fn timecode(&self, now: f64) -> Option<f64> {
         match self.comp.cues.timecode {

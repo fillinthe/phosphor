@@ -14,7 +14,10 @@ pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod video;
 
-const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
+const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "exr", "hdr", "tga", "qoi", "psd", "heic", "heif"];
+/// Pictures the image library can't read: FFmpeg turns them into a PNG first (`decode_still`).
+#[cfg(not(target_arch = "wasm32"))]
+const FFMPEG_STILLS: &[&str] = &["psd", "heic", "heif"];
 const MOVIE_EXTS: &[&str] = &["mov", "mp4", "m4v", "webm", "mkv", "avi", "gif", "mpg", "mpeg", "wmv", "flv", "3gp", "mxf", "ts", "m2ts"];
 /// Sound files play as clips with an empty picture (their sound can drive the visuals: Audio panel → Clip sound).
 const SOUND_EXTS: &[&str] = &["mp3", "wav", "aac", "m4a", "flac", "ogg", "aiff", "aif", "opus"];
@@ -43,6 +46,28 @@ pub fn is_movie(name: &str) -> bool {
 
 pub fn is_picture(name: &str) -> bool {
     IMAGE_EXTS.contains(&extension(name).as_str())
+}
+
+/// Opens any picture Phosphor takes: the image library for most, FFmpeg for Photoshop and HEIC files (and as a
+/// second try when the library can't read a file). Off the UI thread: it can take a moment.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn decode_still(path: &str) -> Result<image::DynamicImage, String> {
+    let ext = extension(path);
+    let direct = if FFMPEG_STILLS.contains(&ext.as_str()) { None } else { Some(image::open(path)) };
+    match direct {
+        Some(Ok(img)) => Ok(img),
+        other => {
+            let first = other.and_then(|r| r.err()).map(|e| e.to_string());
+            let ffmpeg = crate::stream::ffmpeg_path().ok_or_else(|| first.clone().unwrap_or_else(|| "FFmpeg not found".into()))?;
+            let out = std::process::Command::new(ffmpeg)
+                .args(["-v", "error", "-i", path, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"])
+                .stdin(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .output()
+                .map_err(|e| e.to_string())?;
+            image::load_from_memory(&out.stdout).map_err(|e| first.unwrap_or_else(|| e.to_string()))
+        }
+    }
 }
 
 pub fn is_supported(name: &str) -> bool {
@@ -228,7 +253,7 @@ impl MediaManager {
                         let tx = tx.clone();
                         let (id, spec, path) = (layer.id, layer.source.clone(), path.clone());
                         std::thread::spawn(move || {
-                            let result = image::open(&path).map(|i| i.to_rgba8()).map_err(|e| format!("Couldn't open {}: {e}", file_name(&path)));
+                            let result = decode_still(&path).map(|i| i.to_rgba8()).map_err(|e| format!("Couldn't open {}: {e}", file_name(&path)));
                             let _ = tx.send((id, spec, result));
                         });
                     }
@@ -589,4 +614,39 @@ mod appledouble_tests {
         assert!(!super::is_supported("/Volumes/X/._clip.mov"));
         assert!(!super::is_supported("._clip.mp4"));
     }
+}
+
+/// Photoshop, HEIC, EXR, HDR, TIFF and BMP pictures open (made here with macOS's `sips` and FFmpeg).
+#[cfg(all(test, target_os = "macos"))]
+#[test]
+fn every_picture_format_opens() {
+    let Some(ffmpeg) = crate::stream::ffmpeg_path() else { return };
+    let dir = std::env::temp_dir().join(format!("phosphor-pictures-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let png = dir.join("a.png");
+    image::RgbaImage::from_pixel(48, 32, image::Rgba([200, 40, 10, 255])).save(&png).unwrap();
+    let mut made = Vec::new();
+    for fmt in ["psd", "heic", "tiff", "bmp"] {
+        let out = dir.join(format!("a.{fmt}"));
+        let ok = std::process::Command::new("sips").args(["-s", "format", fmt]).arg(&png).arg("--out").arg(&out).output().is_ok_and(|o| o.status.success());
+        if ok {
+            made.push(out);
+        }
+    }
+    for fmt in ["exr", "hdr"] {
+        let out = dir.join(format!("a.{fmt}"));
+        let pix = if fmt == "exr" { "gbrapf32le" } else { "rgb48le" };
+        let ok = std::process::Command::new(&ffmpeg).args(["-v", "error", "-y", "-i"]).arg(&png).args(["-pix_fmt", pix]).arg(&out).output().is_ok_and(|o| o.status.success());
+        if ok {
+            made.push(out);
+        }
+    }
+    assert!(made.len() >= 5, "only made {made:?}");
+    for p in &made {
+        let img = decode_still(&p.to_string_lossy()).unwrap_or_else(|e| panic!("{}: {e}", p.display())).to_rgba8();
+        assert_eq!(img.dimensions(), (48, 32), "{}", p.display());
+        assert!(img.get_pixel(10, 10)[0] > 150, "{}: wrong colour {:?}", p.display(), img.get_pixel(10, 10));
+        assert!(is_picture(&p.to_string_lossy()));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -325,6 +325,14 @@ impl Engine {
         crate::shaders::register_custom(desc);
     }
 
+    /// An imported shader whose file changed: built again from `wgsl` (in the background, like a first use).
+    pub fn replace_lazy(&mut self, desc: &'static crate::shaders::ShaderDesc, wgsl: String) {
+        self.gpu.forget_custom(desc.entry);
+        self.failed_modules.remove(desc.entry);
+        self.pending_modules.insert(desc.entry, wgsl);
+        crate::shaders::register_custom(desc);
+    }
+
     /// Is an imported shader still waiting to be built (it draws blank until then)? Failures are in `failed_modules`.
     pub fn shader_pending(&self, entry: &str) -> bool {
         self.pending_modules.contains_key(entry) || self.compiling.contains(entry)

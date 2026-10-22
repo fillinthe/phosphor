@@ -1314,6 +1314,9 @@ pub struct Mapping {
     /// While lining up: only these slices are drawn (MadMapper's "show only selected"). Not saved.
     #[serde(skip)]
     pub solo: Vec<u64>,
+    /// Named sets of slices to show on their own while lining up (MadMapper's isolation groups). Saved.
+    #[serde(default)]
+    pub solo_sets: Vec<(String, Vec<u64>)>,
 }
 
 impl Mapping {

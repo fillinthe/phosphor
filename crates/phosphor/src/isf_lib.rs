@@ -42,9 +42,43 @@ fn load_images(shader_path: &std::path::Path, images: &[(usize, String)]) -> Vec
 }
 
 pub struct IsfLibrary {
-    rx: Option<Receiver<Result<Loaded, String>>>,
+    rx: Option<Receiver<Found>>,
     pub loaded: usize,
     pub skipped: usize,
+    /// The first scan is still running.
+    scanning: bool,
+    /// Shaders reloaded since start because their file changed (the Effects panel says so).
+    pub reloaded: Vec<String>,
+}
+
+/// From the scanner thread: a shader converted (or not), one converted again after its file changed, or the end of
+/// the first scan (the thread then keeps watching the folders).
+enum Found {
+    New(Result<Loaded, String>),
+    Changed(String, Result<Loaded, String>),
+    ScanDone,
+}
+
+/// The shader, LUT and GLSL files in an ISF folder, two levels deep (MadMapper keeps each material in a folder).
+fn shader_files(dir: std::path::PathBuf) -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    let mut stack = vec![(dir, 0u8)];
+    while let Some((d, depth)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else { continue };
+        for p in entries.flatten().map(|e| e.path()) {
+            if p.is_dir() && depth < 2 {
+                stack.push((p, depth + 1));
+            } else if p.extension().is_some_and(|e| e == "fs" || e == "glsl" || e == "cube") && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                files.push(p);
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+fn modified(p: &std::path::Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(p).and_then(|m| m.modified()).ok()
 }
 
 fn leak(s: String) -> &'static str {
@@ -117,24 +151,43 @@ fn lut_effect(slug: &str, stem: &str, lut: &crate::lut::Lut) -> Loaded {
 }
 
 /// VDMX's LUT Mixer: every LUT found, LUT A and LUT B picked by name, Mix between them, Amount over the picture.
+/// What decides where LUT Split changes from LUT A to LUT B.
+const SPLIT_BY: &[&str] = &["Brightness", "Left to right", "Top to bottom", "From the centre"];
+
 fn lut_mix_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
+    lut_mixer(luts, false)
+}
+
+/// LUT A in one part of the picture, LUT B in another: shadows and highlights, left and right, centre and edges.
+fn lut_split_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
+    lut_mixer(luts, true)
+}
+
+fn lut_mixer(luts: &[(String, crate::lut::Lut)], split: bool) -> Loaded {
     let names: Vec<&'static str> = luts.iter().map(|(n, _)| leak(n.clone())).collect();
     let names: &'static [&'static str] = Box::leak(names.into_boxed_slice());
     let last = (luts.len() - 1) as f32;
     let tables: Vec<crate::lut::Lut> = luts.iter().map(|(_, l)| l.resample(crate::lut::MIX_SIZE)).collect();
     let (w, h, rgba) = crate::lut::pack_all(&tables);
-    let entry = "isf_lut_mixer".to_string();
+    let key = if split { "lut_split" } else { "lut_mixer" };
+    let entry = format!("isf_{key}");
+    let pair = [Param { name: "LUT A", min: 0.0, max: last, default: 0.0, labels: names }, Param { name: "LUT B", min: 0.0, max: last, default: 1.0, labels: names }];
+    let params = if split {
+        let by = Param { name: "Split by", min: 0.0, max: (SPLIT_BY.len() - 1) as f32, default: 0.0, labels: SPLIT_BY };
+        [pair.to_vec(), vec![by, Param::new("Point", 0.0, 1.0, 0.5), Param::new("Softness", 0.0, 0.5, 0.15), Param::new("Amount", 0.0, 1.0, 1.0)]].concat()
+    } else {
+        [pair.to_vec(), vec![Param::new("Mix", 0.0, 1.0, 0.5), Param::new("Amount", 0.0, 1.0, 1.0)]].concat()
+    };
     Loaded {
-        id: format!("{}lut_mixer", shaders::ISF_EFFECT),
-        name: "LUT Mix".into(),
-        about: format!("Blend between two of your {} colour grades (LUT A to LUT B)", luts.len()),
-        params: vec![
-            Param { name: "LUT A", min: 0.0, max: last, default: 0.0, labels: names },
-            Param { name: "LUT B", min: 0.0, max: last, default: 1.0, labels: names },
-            Param::new("Mix", 0.0, 1.0, 0.5),
-            Param::new("Amount", 0.0, 1.0, 1.0),
-        ],
-        wgsl: crate::lut::wgsl_mix(&entry, luts.len()),
+        id: format!("{}{key}", shaders::ISF_EFFECT),
+        name: if split { "LUT Split".into() } else { "LUT Mix".into() },
+        about: if split {
+            format!("Two of your {} colour grades in different parts of the picture: shadows and highlights, left and right, centre and edges", luts.len())
+        } else {
+            format!("Blend between two of your {} colour grades (LUT A to LUT B)", luts.len())
+        },
+        params,
+        wgsl: crate::lut::wgsl_mix(&entry, luts.len(), split),
         entry,
         plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: 1, vars: Vec::new(), images: vec![0] }),
         images: vec![(0, w, h, rgba)],
@@ -157,6 +210,8 @@ pub fn folders() -> Vec<std::path::PathBuf> {
         // Colour-grading LUTs (.cube) you add.
         dirs.push(d.join("luts"));
     }
+    // The looks Phosphor ships (scripts/make-luts.py); yours of the same name win.
+    dirs.extend(bundled("luts"));
     dirs.extend(crate::show::shader_dir("isf"));
     // Last, so copies installed elsewhere win: the ISF collection Phosphor ships (assets/isf).
     dirs.extend(bundled_isf());
@@ -296,6 +351,15 @@ fn load(path: &std::path::Path, stem: &str, slug: &str, fs: String) -> Option<Re
 
 /// Hands a converted shader to the engine (compiled the first time it's drawn).
 fn register(engine: &mut Engine, l: Loaded) {
+    install(engine, l, false);
+}
+
+/// A shader whose file changed: the new version replaces the one built before.
+fn reload(engine: &mut Engine, l: Loaded) {
+    install(engine, l, true);
+}
+
+fn install(engine: &mut Engine, l: Loaded, replace: bool) {
     let desc: &'static ShaderDesc = Box::leak(Box::new(ShaderDesc {
         id: leak(l.id),
         name: leak(l.name),
@@ -319,7 +383,11 @@ fn register(engine: &mut Engine, l: Loaded) {
             phosphor_isf::Instances::Param(i) => shaders::Instances::Param(i),
         });
     }
-    engine.register_lazy(desc, l.wgsl);
+    if replace {
+        engine.replace_lazy(desc, l.wgsl);
+    } else {
+        engine.register_lazy(desc, l.wgsl);
+    }
 }
 
 impl IsfLibrary {
@@ -333,22 +401,10 @@ impl IsfLibrary {
                 let mut seen_loose = std::collections::HashSet::new();
                 // Every LUT found, for the LUT mixer (at most 32: the picture stays small).
                 let mut luts: Vec<(String, crate::lut::Lut)> = Vec::new();
+                // Every file loaded, with when it was last changed (watched after the first scan).
+                let mut watched: Vec<(std::path::PathBuf, String, String, Option<std::time::SystemTime>)> = Vec::new();
                 for dir in folders() {
-                    // Two levels deep: MadMapper keeps each material in its own folder.
-                    let mut files: Vec<std::path::PathBuf> = Vec::new();
-                    let mut stack = vec![(dir, 0u8)];
-                    while let Some((d, depth)) = stack.pop() {
-                        let Ok(entries) = std::fs::read_dir(&d) else { continue };
-                        for p in entries.flatten().map(|e| e.path()) {
-                            if p.is_dir() && depth < 2 {
-                                stack.push((p, depth + 1));
-                            } else if p.extension().is_some_and(|e| e == "fs" || e == "glsl" || e == "cube") && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
-                                files.push(p);
-                            }
-                        }
-                    }
-                    files.sort();
-                    for path in files {
+                    for path in shader_files(dir) {
                         let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
                         let slug = phosphor_engine::custom::slug(&stem);
                         // The same shader under a differently spelled name ("Bow Tie Horizontal" / "BowTieHorizontal").
@@ -357,6 +413,7 @@ impl IsfLibrary {
                             continue;
                         }
                         let Ok(fs) = std::fs::read_to_string(&path) else { continue };
+                        watched.push((path.clone(), stem.clone(), slug.clone(), modified(&path)));
                         // A colour-grading LUT (.cube): an effect of its own.
                         if path.extension().is_some_and(|e| e == "cube") {
                             let sent = match crate::lut::parse_cube(&fs) {
@@ -365,9 +422,9 @@ impl IsfLibrary {
                                     if luts.len() < 32 {
                                         luts.push((display_name(&stem), lut));
                                     }
-                                    tx.send(Ok(effect))
+                                    tx.send(Found::New(Ok(effect)))
                                 }
-                                Err(e) => tx.send(Err(format!("{stem}.cube: {e}"))),
+                                Err(e) => tx.send(Found::New(Err(format!("{stem}.cube: {e}")))),
                             };
                             if sent.is_err() {
                                 return;
@@ -375,18 +432,44 @@ impl IsfLibrary {
                             continue;
                         }
                         let Some(result) = load(&path, &stem, &slug, fs) else { continue };
-                        if tx.send(result).is_err() {
+                        if tx.send(Found::New(result)).is_err() {
                             return;
                         }
                     }
                 }
                 // Two or more LUTs: the LUT mixer too.
                 if luts.len() >= 2 {
-                    let _ = tx.send(Ok(lut_mix_effect(&luts)));
+                    let _ = tx.send(Found::New(Ok(lut_mix_effect(&luts))));
+                    let _ = tx.send(Found::New(Ok(lut_split_effect(&luts))));
+                }
+                if tx.send(Found::ScanDone).is_err() {
+                    return;
+                }
+                // Then watch: a file saved again (in an editor) is converted again and replaces the old one.
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    for (path, stem, slug, when) in &mut watched {
+                        let now = modified(path);
+                        if now == *when {
+                            continue;
+                        }
+                        *when = now;
+                        let Ok(fs) = std::fs::read_to_string(&*path) else { continue };
+                        let result = if path.extension().is_some_and(|e| e == "cube") {
+                            Some(crate::lut::parse_cube(&fs).map(|lut| lut_effect(slug, stem, &lut)).map_err(|e| format!("{stem}.cube: {e}")))
+                        } else {
+                            load(path, stem, slug, fs)
+                        };
+                        if let Some(result) = result
+                            && tx.send(Found::Changed(display_name(stem), result)).is_err()
+                        {
+                            return;
+                        }
+                    }
                 }
             })
             .ok();
-        Self { rx: Some(rx), loaded: 0, skipped: 0 }
+        Self { rx: Some(rx), loaded: 0, skipped: 0, scanning: true, reloaded: Vec::new() }
     }
 
     /// Registers whatever the scanner has converted so far. Call every frame.
@@ -394,11 +477,19 @@ impl IsfLibrary {
         let Some(rx) = &self.rx else { return };
         loop {
             match rx.try_recv() {
-                Ok(Ok(l)) => {
+                Ok(Found::New(Ok(l))) => {
                     register(engine, l);
                     self.loaded += 1;
                 }
-                Ok(Err(_)) => self.skipped += 1,
+                Ok(Found::New(Err(_))) => self.skipped += 1,
+                Ok(Found::ScanDone) => self.scanning = false,
+                Ok(Found::Changed(name, Ok(l))) => {
+                    log::info!("ISF: {name} changed on disk, reloaded");
+                    reload(engine, l);
+                    self.reloaded.retain(|n| *n != name);
+                    self.reloaded.push(name);
+                }
+                Ok(Found::Changed(name, Err(e))) => log::warn!("ISF: {name} changed but doesn't convert now: {e}"),
                 Err(std::sync::mpsc::TryRecvError::Empty) => return,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.rx = None;
@@ -409,7 +500,7 @@ impl IsfLibrary {
     }
 
     pub fn scanning(&self) -> bool {
-        self.rx.is_some()
+        self.rx.is_some() && self.scanning
     }
 }
 
@@ -538,4 +629,39 @@ fn isf_sheet() {
         tsv.push_str(&format!("{slug}\t{stem}\t\t{spread:.1}\t{change:.1}\t{motion:.1}\t{flicker:.1}\t{colour:.1}\t{thumb}{cost}\n"));
     }
     std::fs::write(out.join("sheet.tsv"), tsv).unwrap();
+}
+
+/// A shader file saved again replaces the one on screen (ISF hot reload): black, then red after the reload.
+#[cfg(all(test, not(windows)))]
+#[test]
+fn an_edited_shader_replaces_the_old_one() {
+    use phosphor_engine::{Composition, EffectState, LayerState, ModInputs, SourceSpec};
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else { return };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default())) else { return };
+    let mut engine = Engine::new(device, queue);
+    let fs = |colour: &str| format!("/*{{ \"INPUTS\": [ {{ \"NAME\": \"inputImage\", \"TYPE\": \"image\" }} ] }}*/\nvoid main() {{ gl_FragColor = vec4({colour}, 1.0) + IMG_THIS_PIXEL(inputImage) * 0.0; }}\n");
+    let path = std::path::Path::new("Reload Test.fs");
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    let mut red_at_middle = |engine: &mut Engine, loaded: Loaded, replace: bool| {
+        let (id, entry) = (loaded.id.clone(), loaded.entry.clone());
+        install(engine, loaded, replace);
+        comp.layers = vec![LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() }];
+        comp.layers[0].effects.push(EffectState { id: 2, effect: id, enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new() });
+        let started = std::time::Instant::now();
+        loop {
+            engine.render(&comp, 0.0, &ModInputs::default());
+            if !engine.shader_pending(&entry) || started.elapsed().as_secs() > 20 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        engine.render(&comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output().expect("output");
+        px[((h / 2 * w + w / 2) * 4) as usize]
+    };
+    let black = load(path, "Reload Test", "reload_test", fs("0.0, 0.0, 0.0")).unwrap().unwrap();
+    assert!(red_at_middle(&mut engine, black, false) < 10);
+    let red = load(path, "Reload Test", "reload_test", fs("1.0, 0.0, 0.0")).unwrap().unwrap();
+    assert!(red_at_middle(&mut engine, red, true) > 245, "the edited version draws");
 }

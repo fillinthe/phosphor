@@ -28,6 +28,12 @@ mod ltc;
 #[cfg(not(target_arch = "wasm32"))]
 mod os;
 #[cfg(not(target_arch = "wasm32"))]
+mod backups;
+#[cfg(not(target_arch = "wasm32"))]
+mod gpu_pick;
+#[cfg(target_os = "macos")]
+mod permissions;
+#[cfg(not(target_arch = "wasm32"))]
 mod session_log;
 #[cfg(not(target_arch = "wasm32"))]
 mod convert;
@@ -97,6 +103,8 @@ mod theme;
 fn gpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
     use eframe::egui_wgpu::{WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew};
     let mut setup = WgpuSetupCreateNew::without_display_handle();
+    // The graphics card chosen in the Output panel (machines with more than one).
+    setup.native_adapter_selector = gpu_pick::selector();
     let base = setup.device_descriptor.clone();
     setup.device_descriptor = std::sync::Arc::new(move |adapter| {
         let mut d = base(adapter);

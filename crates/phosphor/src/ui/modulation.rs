@@ -25,6 +25,17 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
         });
         return;
     }
+    // A colour (an ISF colour input: "Name R", "G", "B"…): a colour button and swatches above its sliders.
+    if let Some(name) = p.name.strip_suffix(" R")
+        && p.min == 0.0
+        && p.max == 1.0
+        && values.len() >= i + 3
+    {
+        ui.horizontal(|ui| {
+            crate::ui::colour_button(ui, &mut values[i..i + 3]);
+            ui.label(name);
+        });
+    }
     ui.horizontal(|ui| {
         let slot = mods.iter().position(|m| m.index == i);
         let mut m = slot.map(|k| mods[k].m);

@@ -410,3 +410,62 @@ pub(crate) fn step_bars(ui: &mut egui::Ui, steps: &mut [f32], playing: Option<us
     }
     changed
 }
+
+/// Saved colours, shared by every colour control (kept between launches in egui's saved memory).
+fn swatches_id() -> egui::Id {
+    egui::Id::new("phosphor_swatches")
+}
+
+/// A colour button (`rgb` = 3 floats 0..1, more are left alone) with the saved swatches beside it: click one to use
+/// it, or save the colour now. Returns true when the colour changed.
+pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
+    if rgb.len() < 3 {
+        return false;
+    }
+    let mut c = [rgb[0], rgb[1], rgb[2]];
+    let mut changed = ui.color_edit_button_rgb(&mut c).changed();
+    let mut saved: Vec<[f32; 3]> = ui.ctx().data_mut(|d| d.get_persisted(swatches_id())).unwrap_or_default();
+    let mut save = false;
+    ui.menu_button(egui::RichText::new(icon::PALETTE).small(), |ui| {
+        ui.label(egui::RichText::new("Swatches").strong());
+        if saved.is_empty() {
+            hint(ui, "None saved yet.");
+        }
+        let mut remove = None;
+        ui.horizontal_wrapped(|ui| {
+            for (k, s) in saved.iter().enumerate() {
+                let fill = egui::Color32::from_rgb((s[0] * 255.0) as u8, (s[1] * 255.0) as u8, (s[2] * 255.0) as u8);
+                let r = ui.add(egui::Button::new("").fill(fill).min_size(egui::vec2(22.0, 22.0))).on_hover_text("Use this colour · right-click to remove");
+                if r.clicked() {
+                    c = *s;
+                    changed = true;
+                    ui.close();
+                }
+                r.context_menu(|ui| {
+                    if ui.button(label(icon::TRASH, "Remove swatch")).clicked() {
+                        remove = Some(k);
+                        ui.close();
+                    }
+                });
+            }
+        });
+        if let Some(k) = remove {
+            saved.remove(k);
+            ui.ctx().data_mut(|d| d.insert_persisted(swatches_id(), saved.clone()));
+        }
+        if ui.button(label(icon::PLUS, "Save this colour")).clicked() {
+            save = true;
+            ui.close();
+        }
+    })
+    .response
+    .on_hover_text("Saved colours");
+    if save && !saved.contains(&c) {
+        saved.push(c);
+        ui.ctx().data_mut(|d| d.insert_persisted(swatches_id(), saved));
+    }
+    if changed {
+        rgb[..3].copy_from_slice(&c);
+    }
+    changed
+}

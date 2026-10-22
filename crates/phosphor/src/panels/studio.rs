@@ -266,7 +266,37 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         let mut solo = !o.mapping.solo.is_empty();
         toggle(ui, &mut solo, label(icon::CROSSHAIR, "Only selected")).on_hover_text("The output shows only the selected slice(s), so you can see which is which on the real object");
         let slices: Vec<u64> = many.iter().copied().filter(|id| o.mapping.surfaces.iter().any(|s| s.id == *id)).collect();
-        o.mapping.solo = if solo { if slices.is_empty() { o.mapping.solo.clone() } else { slices } } else { Vec::new() };
+        o.mapping.solo = if solo { if slices.is_empty() { o.mapping.solo.clone() } else { slices.clone() } } else { Vec::new() };
+        // Saved sets: pick one to select those slices and show only them.
+        ui.menu_button(label(icon::STACK, "Sets"), |ui| {
+            if o.mapping.solo_sets.is_empty() {
+                hint(ui, "Select some slices, then save them as a set to show on their own in one click.");
+            }
+            let mut remove = None;
+            for (k, (name, ids)) in o.mapping.solo_sets.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if ui.button(format!("{name} ({})", ids.len())).on_hover_text("Select these slices and show only them").clicked() {
+                        let ids: Vec<u64> = ids.iter().copied().filter(|id| o.mapping.surfaces.iter().any(|s| s.id == *id)).collect();
+                        o.mapping.solo = ids.clone();
+                        super::mapping_points::select_slices(ui.ctx(), selected_surface, ids);
+                        ui.close();
+                    }
+                    if ui.small_button(icon::TRASH).on_hover_text("Delete this set (the slices stay)").clicked() {
+                        remove = Some(k);
+                    }
+                });
+            }
+            if let Some(k) = remove {
+                o.mapping.solo_sets.remove(k);
+            }
+            ui.separator();
+            ui.add_enabled_ui(!slices.is_empty(), |ui| {
+                if let Some(name) = new_name_menu(ui, "solo_set_name", "Save the selection as a set", "Save") {
+                    let name = if name.trim().is_empty() { format!("Set {}", o.mapping.solo_sets.len() + 1) } else { name };
+                    o.mapping.solo_sets.push((name, slices.clone()));
+                }
+            });
+        });
         let now = ui.input(|i| i.time);
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(STUDIO_SHOWN), now));
         toggle(ui, &mut vs.snap, label(icon::MAGNET, "Snap")).on_hover_text("Dragged points land on other slices' points nearby, otherwise on a 1/64 grid");

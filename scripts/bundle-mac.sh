@@ -37,6 +37,7 @@ cp vendor/Syphon-LICENSE.txt "$APP/Contents/Resources/"
 # The free ISF collection (MIT), so every Mac has those effects without VDMX.
 cp -R assets/isf "$APP/Contents/Resources/isf"
 cp -R assets/gl-transitions "$APP/Contents/Resources/gl-transitions"
+cp -R assets/luts "$APP/Contents/Resources/luts"
 
 # The ffmpeg command (streaming, ProRes / H.264 recording) rides along; its libraries are relinked below.
 cp "$VENDOR_FFMPEG/bin/ffmpeg" "$APP/Contents/MacOS/ffmpeg"
