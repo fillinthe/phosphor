@@ -53,7 +53,7 @@ muda = { version = "0.21", default-features = false }
 screencapturekit = "11"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSGeometry", "NSArray", "NSEnumerator"] }
 objc2-metal = { version = "0.3", default-features = false, features = ["std", "MTLDevice", "MTLTexture", "MTLResource", "MTLCommandQueue", "MTLCommandBuffer", "MTLAllocation"] }
-objc2-vision = { version = "0.3", default-features = false, features = ["std", "VNRequest", "VNRequestHandler", "VNObservation", "VNDetectFaceRectanglesRequest", "VNDetectHumanHandPoseRequest", "VNDetectHumanBodyPoseRequest", "VNDetectedPoint", "VNGeometry", "VNTypes", "VNGeneratePersonSegmentationRequest", "VNStatefulRequest", "objc2-core-video", "objc2-core-foundation"] }
+objc2-vision = { version = "0.3", default-features = false, features = ["std", "VNRequest", "VNRequestHandler", "VNObservation", "VNDetectFaceRectanglesRequest", "VNDetectHumanHandPoseRequest", "VNDetectHumanBodyPoseRequest", "VNDetectedPoint", "VNGeometry", "VNTypes", "VNGeneratePersonSegmentationRequest", "VNStatefulRequest", "VNDetectBarcodesRequest", "VNRecognizeTextRequest", "objc2-core-video", "objc2-core-foundation"] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes"] }
 objc2-core-video = { version = "0.3", default-features = false, features = ["std", "CVPixelBuffer", "CVBuffer", "CVImageBuffer", "CVReturn", "CVBase"] }
 

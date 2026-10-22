@@ -25,6 +25,9 @@ const CUTOUT_RATE: f64 = 30.0;
 /// What one look found: modulator name → value (0..1). Missing names = not seen this time.
 pub type Found = Vec<(&'static str, f32)>;
 
+/// 1 while a QR code is in the picture (QR codes on).
+pub const CODE_FOUND: &str = "Track Code Found";
+
 struct Picture {
     rgba: Vec<u8>,
     width: u32,
@@ -35,11 +38,15 @@ enum Job {
     Track(Picture, Tracking),
     /// A matte for the Remove background effect on this layer / group.
     Cutout(Picture, u64),
+    /// Read QR codes and / or text in the picture.
+    Read(Picture, bool, bool),
 }
 
 enum Done {
     Track(Result<Found, String>),
     Matte(u64, Result<Matte, String>),
+    /// (a QR code's contents, the text read), for what was asked.
+    Read(Result<(Option<String>, Option<String>), String>),
 }
 
 /// A person matte: width, height, one byte per pixel (255 = person).
@@ -64,7 +71,7 @@ impl Tracker {
     /// The picture tracking watches (source, width, height), asked for every frame while tracking is on (a small
     /// copy; the Tracking panel shows it). None = off.
     pub fn picture(&mut self, cfg: &Tracking, canvas: (u32, u32)) -> Option<(u64, u32, u32)> {
-        if !cfg.enabled || cfg.outputs().is_empty() {
+        if !cfg.enabled || (cfg.outputs().is_empty() && !cfg.codes && !cfg.read_text) {
             self.busy_since = None;
             return None;
         }
@@ -105,6 +112,9 @@ impl Tracker {
 
     /// The tracking picture came back: hand it to the worker.
     pub fn give(&mut self, rgba: Vec<u8>, width: u32, height: u32, cfg: &Tracking) {
+        if cfg.codes || cfg.read_text {
+            self.send(Job::Read(Picture { rgba: rgba.clone(), width, height }, cfg.codes, cfg.read_text));
+        }
         self.send(Job::Track(Picture { rgba, width, height }, cfg.clone()));
     }
 
@@ -156,6 +166,24 @@ impl Tracker {
         while let Ok(done) = rx.try_recv() {
             let r = match done {
                 Done::Track(r) => r,
+                Done::Read(r) => {
+                    match r {
+                        Ok((code, text)) => {
+                            if comp.tracking.codes {
+                                comp.set_hand(CODE_FOUND, if code.is_some() { 1.0 } else { 0.0 });
+                                // The code stays up after it's gone (a sign, a ticket): new ones replace it.
+                                if let Some(c) = code {
+                                    comp.seen_code = c;
+                                }
+                            }
+                            if comp.tracking.read_text {
+                                comp.seen_text = text.unwrap_or_default();
+                            }
+                        }
+                        Err(e) => self.status = e,
+                    }
+                    continue;
+                }
                 Done::Matte(res, m) => {
                     self.cutout_busy_since = None;
                     match m {
@@ -216,6 +244,7 @@ fn work(job: Job) -> Done {
     match job {
         Job::Track(p, cfg) => Done::Track(vision::look(&p.rgba, p.width, p.height, &cfg)),
         Job::Cutout(p, res) => Done::Matte(res, vision::person_matte(&p.rgba, p.width, p.height)),
+        Job::Read(p, codes, text) => Done::Read(vision::read(&p.rgba, p.width, p.height, codes, text)),
     }
 }
 
@@ -225,6 +254,7 @@ fn work(job: Job) -> Done {
     match job {
         Job::Track(..) => Done::Track(Err(NOT_HERE.into())),
         Job::Cutout(_, res) => Done::Matte(res, Err(NOT_HERE.into())),
+        Job::Read(..) => Done::Read(Err(NOT_HERE.into())),
     }
 }
 

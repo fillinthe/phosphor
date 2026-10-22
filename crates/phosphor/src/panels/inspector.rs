@@ -619,7 +619,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     ui.horizontal_wrapped(|ui| {
         use phosphor_engine::LiveText;
         ui.label(RichText::new("Live").small());
-        let kinds = [(LiveText::Off, "Off"), (LiveText::Clock, "Clock"), (LiveText::Countdown(18 * 3600), "Countdown"), (LiveText::Stopwatch, "Stopwatch")];
+        let kinds = [(LiveText::Off, "Off"), (LiveText::Clock, "Clock"), (LiveText::Countdown(18 * 3600), "Countdown"), (LiveText::Stopwatch, "Stopwatch"), (LiveText::Code, "QR code seen"), (LiveText::Read, "Text seen")];
         for (k, name) in kinds {
             if ui.selectable_label(std::mem::discriminant(&style.live) == std::mem::discriminant(&k), name).clicked() {
                 style.live = k;

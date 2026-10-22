@@ -32,6 +32,8 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
             toggle(ui, &mut t.faces, "Faces").on_hover_text("The biggest face: Track Face X / Y / Size / Found");
             toggle(ui, &mut t.hands, "Hands").on_hover_text("The index fingertip: Track Hand X / Y, Track Pinch (thumb to index), Found");
             toggle(ui, &mut t.body, "Body").on_hover_text("The hips: Track Body X / Y, both wrists' height, Found");
+            toggle(ui, &mut t.codes, "QR codes").on_hover_text("Read QR codes and barcodes: a text layer shows the last one (Live › QR code seen); Track Code Found = 1 while one is in view");
+            toggle(ui, &mut t.read_text, "Text").on_hover_text("Read the words in the picture: a text layer shows them (Live › Text seen)");
         });
         ui.horizontal(|ui| Level::percent(&mut t.smoothing, "Smoothing").default(0.5).show(ui)).inner.on_hover_text("Higher = less jitter, a little more lag");
         if ui.button(label(icon::EYE_SLASH, "Hide faces")).on_hover_text("Adds a Hide Face effect to MASTER that follows the face it finds (pixelate, blur or black: change it in the effect)").clicked()
