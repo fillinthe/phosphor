@@ -467,3 +467,37 @@ fn hide_face_covers_only_the_face() {
     let (w, _, px) = engine.read_output().expect("output");
     assert!(px[((16 * w + 16) * 4) as usize] > 245, "no face found: nothing hidden");
 }
+
+/// Blur Background: where the matte says "person" (left half) the checkerboard stays sharp, the rest is blurred.
+#[test]
+fn blur_background_keeps_the_person_sharp() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 128, height: 64, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Generator("checker".into()), ..Default::default() };
+    layer.generator_values = crate::shaders::generator("checker").unwrap().defaults();
+    layer.generator_values[0] = 40.0;
+    if let Some(v) = layer.generator_values.get_mut(1) {
+        *v = 0.0;
+    }
+    layer.effects.push(EffectState { id: 5, effect: "blur_bg".into(), enabled: true, values: vec![1.0, 0.5, 0.05, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+    comp.layers.push(layer);
+    let mask: Vec<u8> = (0..32 * 16).map(|i| if i % 32 < 16 { 255 } else { 0 }).collect();
+    engine.set_matte(1, 32, 16, &mask);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, px) = engine.read_output().expect("output");
+    // How far each half's pixels are from mid-grey: sharp squares are far, blur pulls them in.
+    let spread = |x0: u32, x1: u32| {
+        let mut sum = 0.0;
+        let mut n = 0.0;
+        for y in 8..h - 8 {
+            for x in x0..x1 {
+                sum += (px[((y * w + x) * 4) as usize] as f32 / 255.0 - 0.5).abs();
+                n += 1.0;
+            }
+        }
+        sum / n
+    };
+    let (person, background) = (spread(8, 56), spread(72, 120));
+    assert!(person > 0.4, "sharp: {person}");
+    assert!(background < person - 0.15, "blurred: {background} vs {person}");
+}
