@@ -270,7 +270,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut row_midi: Option<(u64, RowAct)> = None;
     {
         let drag_at = crate::app::file_drag_point(ui.ctx());
-        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, .. } = st;
+        let adding = ui.input(|i| i.modifiers.shift || i.modifiers.command);
+        let selected_clip = st.selected_clip;
+        let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, also_clips, .. } = st;
         let ctx = ui.ctx().clone();
         let thumb_h = (crate::thumbs::THUMB_W as f32 / aspect).max(1.0) as u32;
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
@@ -319,10 +321,14 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                             clip_cells.push((rect, layer.id, c));
                         }
                         let active = clip.is_some_and(|k| !k.is_empty() && layer.active_clip == Some(k.id));
+                        let chosen = also_clips.contains(&(layer.id, c)) || (!also_clips.is_empty() && selected_clip == Some((layer.id, c)));
                         let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(cell.x, cell.x / aspect));
                         let p = ui.painter();
                         let empty = ui.visuals().extreme_bg_color;
                         p.rect_filled(rect, 4.0, if active { crate::theme::tint(empty, 0.14) } else { empty });
+                        if chosen {
+                            p.rect_stroke(rect, 4.0, Stroke::new(2.0, accent()), StrokeKind::Inside);
+                        }
                         match clip {
                             Some(k) if !k.is_empty() => {
                                 let chosen = (!k.thumb.is_empty()).then(|| thumbs.get(&k.thumb)).flatten();
@@ -407,7 +413,16 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                 picked = Some((layer.id, c));
                                 ui.ctx().data_mut(|d| d.insert_temp(held_id, (layer.id, c)));
                             }
+                        } else if resp.clicked() && adding && clip.is_some_and(|k| !k.is_empty()) && selected_clip.is_some_and(|s| s != (layer.id, c)) {
+                            // Shift / Cmd-click: one more clip to edit together (it doesn't play).
+                            match also_clips.iter().position(|x| *x == (layer.id, c)) {
+                                Some(k) => {
+                                    also_clips.remove(k);
+                                }
+                                None => also_clips.push((layer.id, c)),
+                            }
                         } else if resp.clicked() {
+                            also_clips.clear();
                             match clip {
                                 Some(k) if !k.is_empty() => {
                                     triggers.push(Trigger::Clip { layer: layer.id, slot: c });

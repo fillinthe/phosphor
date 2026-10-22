@@ -27,6 +27,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     };
     let clipboard_len = st.fx_clipboard.len();
     let also = st.also_selected.len();
+    let also_clips = st.also_clips.len();
     let mut fx_action: Option<FxAction> = None;
     // "Shows on": the outputs, and whether the selection already shows on each.
     let outs: Vec<(u64, String, bool)> = {
@@ -93,6 +94,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 let is_movie = matches!(k.source, SourceSpec::Movie { path: Some(_), .. });
                 let title = format!("{} Clip {} · column {}", icon::SQUARES_FOUR, k.name, c + 1);
                 egui::CollapsingHeader::new(title).id_salt("inspector_clip").default_open(true).show(ui, |ui| {
+                    if also_clips > 0 {
+                        hint(ui, &format!("Editing {} clips: how a press plays, sound and own settings go to all of them. Click a clip without Shift / Cmd to edit just one.", also_clips + 1));
+                    }
                     if let Some(a) = super::clip_editor(ui, layer, c, true, is_movie) {
                         clip_act = Some((c, a));
                     }

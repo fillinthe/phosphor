@@ -182,6 +182,7 @@ impl State {
     /// comparison per frame only while more than one layer is selected.
     pub(crate) fn run_multi_edit(&mut self) {
         self.also_selected.retain(|id| self.comp.layers.iter().any(|l| l.id == *id));
+        self.run_clip_multi_edit();
         let Some(sel) = self.selected.filter(|_| !self.also_selected.is_empty()) else {
             self.multi_before = None;
             return;
@@ -197,6 +198,25 @@ impl State {
                 }
             }
             _ => self.multi_before = Some(now.clone()),
+        }
+    }
+
+    /// Several clips selected: what changed in how the selected clip plays goes to the others too.
+    fn run_clip_multi_edit(&mut self) {
+        let Some(from) = self.selected_clip.filter(|_| !self.also_clips.is_empty()) else {
+            self.clip_before = None;
+            return;
+        };
+        let Some(now) = self.comp.layer(from.0).and_then(|l| l.clips.get(from.1)).cloned() else { return };
+        match &self.clip_before {
+            Some(before) if before.id == now.id => {
+                if *before != now {
+                    let (before, to) = (before.clone(), self.also_clips.clone());
+                    self.comp.copy_clip_changes(&before, from, &to);
+                    self.clip_before = Some(now);
+                }
+            }
+            _ => self.clip_before = Some(now),
         }
     }
 
