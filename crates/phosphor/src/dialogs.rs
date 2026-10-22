@@ -43,6 +43,9 @@ pub enum Purpose {
     ImportFixtures,
     /// A reference picture: this layer's colours are matched to it.
     MatchColour(u64),
+    /// Save / open a DMX recording.
+    SaveDmxTake,
+    OpenDmxTake,
     /// Save a layer's clip row as a bank file.
     ExportBank(u64),
     /// Replace a layer's clip row with a bank file.

@@ -280,6 +280,26 @@ impl PhosphorApp {
                         });
                     }
                 }
+                Purpose::SaveDmxTake => {
+                    if let (Some(p), Some(take)) = (paths.first(), st.dmx_rec.take.as_ref()) {
+                        let p = p.with_extension("phdmx");
+                        st.notice = Some(match std::fs::write(&p, take.to_bytes()) {
+                            Ok(()) => format!("DMX take saved: {}", p.display()),
+                            Err(e) => format!("Couldn't save the take: {e}"),
+                        });
+                    }
+                }
+                Purpose::OpenDmxTake => {
+                    if let Some(p) = paths.first() {
+                        match std::fs::read(p).map_err(|e| e.to_string()).and_then(|b| crate::dmx_record::Take::from_bytes(&b)) {
+                            Ok(t) => {
+                                st.notice = Some(format!("DMX take: {:.1} s from {} (press Play)", t.length(), name_of(p)));
+                                st.dmx_rec.take = Some(t);
+                            }
+                            Err(e) => st.notice = Some(format!("Couldn't open that take: {e}")),
+                        }
+                    }
+                }
                 Purpose::ExportBank(id) => {
                     if let (Some(p), Some(json)) = (paths.first(), st.comp.export_bank(id)) {
                         let p = p.with_extension("json");
