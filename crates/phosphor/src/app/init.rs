@@ -183,6 +183,7 @@ impl PhosphorApp {
                 open_tab: None,
                 maps_clipboard: Vec::new(),
                 snapshot_output: None,
+                clip_thumb_request: None,
                 mouse_to_shaders: false,
                 templates_open: false,
                 #[cfg(not(target_arch = "wasm32"))]

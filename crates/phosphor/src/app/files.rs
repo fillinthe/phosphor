@@ -20,12 +20,33 @@ impl PhosphorApp {
         self.state.dialogs.save_file(crate::dialogs::Purpose::SaveSnapshot, ("PNG", &["png"]), &format!("{name} snapshot.png"));
     }
 
+    /// The layer's thumbnail now, saved next to the settings (clip thumbnails/<clip id>.png) as the clip's picture.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn save_clip_thumbnail(&mut self, layer: u64, slot: usize) -> Result<(), String> {
+        let (w, h, px) = self.state.engine.as_ref().and_then(|e| e.read_layer_thumbnail(layer)).ok_or("the layer has no picture (is it on?)")?;
+        let dir = crate::show::storage_dir().ok_or("no settings folder")?.join("clip thumbnails");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let clip = self.state.comp.layer_mut(layer).and_then(|l| l.clips.get_mut(slot)).ok_or("that clip is gone")?;
+        let path = dir.join(format!("{}.png", clip.id));
+        image::save_buffer(&path, &px, w, h, image::ExtendedColorType::Rgba8).map_err(|e| e.to_string())?;
+        clip.thumb = path.to_string_lossy().to_string();
+        // The same file gets a new picture: drop the old one from the cache.
+        self.state.thumbs.forget(&clip.thumb);
+        Ok(())
+    }
+
     /// Answers from file dialogs, and files found in watched folders.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn handle_dialogs_and_folders(&mut self, now: f64) {
         use crate::dialogs::Purpose;
         if let Some(id) = self.state.snapshot_output.take() {
             self.save_output_snapshot(id);
+        }
+        if let Some((layer, slot)) = self.state.clip_thumb_request.take() {
+            self.state.notice = Some(match self.save_clip_thumbnail(layer, slot) {
+                Ok(()) => "The clip shows this picture in the grid now".into(),
+                Err(e) => format!("Couldn't keep the picture: {e}"),
+            });
         }
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
         // Watched folders first: this has to run every frame (it rescans every 10 s), not only when a dialog closes.

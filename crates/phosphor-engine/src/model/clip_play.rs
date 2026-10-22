@@ -147,6 +147,7 @@ impl LayerState {
                     // Speed, loop and effects come back too when the flash ends.
                     own: Some(self.clip_settings()),
                     muted: false,
+                    thumb: String::new(),
                 }));
                 self.trigger_clip(slot, now, secs)
             }

@@ -295,6 +295,8 @@ pub struct State {
     pub(crate) backgrounds: backgrounds::Backgrounds,
     /// A snapshot of this output was asked for (Output panel); the app saves it.
     pub snapshot_output: Option<u64>,
+    /// Make this clip's grid picture from its layer's picture now (layer, slot).
+    pub clip_thumb_request: Option<(u64, usize)>,
     /// Mappings copied from a control's menu (their target is replaced on paste).
     pub maps_clipboard: Vec<phosphor_engine::ControlMap>,
     pub fx_browser: Option<crate::explorer::FxBrowser>,

@@ -59,6 +59,8 @@ pub(crate) enum ClipAct {
     Trigger,
     MatchBeat,
     StoreCurrent,
+    /// The layer's picture now becomes the clip's picture in the grid.
+    Thumbnail,
     Clear,
 }
 
@@ -78,6 +80,10 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
                 && ui.button(label(icon::MAGIC_WAND, "Match the beat")).on_hover_text("Scan this movie's motion for its rhythm; the clip then starts on its first hit and is stretched so every hit lands on a beat").clicked()
             {
                 act = Some(ClipAct::MatchBeat);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if ui.button(label(icon::IMAGE, "Use this picture")).on_hover_text("The layer's picture right now becomes this clip's picture in the grid (right-click again for a new one)").clicked() {
+                act = Some(ClipAct::Thumbnail);
             }
         });
         let current = layer.clip_settings();
@@ -132,6 +138,7 @@ pub(crate) fn apply_clip_act(st: &mut State, layer: u64, c: usize, act: ClipAct,
                 l.active_clip = Some(slot.id);
             }
         }
+        ClipAct::Thumbnail => st.clip_thumb_request = Some((layer, c)),
         ClipAct::Clear => {
             if let Some(l) = st.comp.layer_mut(layer)
                 && c < l.clips.len()
@@ -256,6 +263,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     // A clip clicked: it plays and is selected (its layer too), so the Inspector shows its settings.
     let mut picked: Option<(u64, usize)> = None;
     let mut clear: Option<(usize, usize)> = None;
+    let mut thumb_req: Option<(u64, usize)> = None;
     let mut beat: Option<(u64, usize)> = None;
     let mut beat_row: Option<u64> = None;
     let mut fill_row: Option<u64> = None;
@@ -317,7 +325,8 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                         p.rect_filled(rect, 4.0, if active { crate::theme::tint(empty, 0.14) } else { empty });
                         match clip {
                             Some(k) if !k.is_empty() => {
-                                let tex = match &k.source {
+                                let chosen = (!k.thumb.is_empty()).then(|| thumbs.get(&k.thumb)).flatten();
+                                let tex = if chosen.is_some() { chosen } else { match &k.source {
                                     SourceSpec::Image { path: Some(pth), .. } | SourceSpec::Movie { path: Some(pth), .. } => thumbs.get(pth),
                                     // Generators render through the engine's preview slots: a still each, animated while hovered.
                                     SourceSpec::Generator(id) => {
@@ -333,7 +342,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                         })
                                     }
                                     _ => None,
-                                };
+                                } };
                                 match tex {
                                     Some(t) => paint_texture(p, t, thumb_rect),
                                     None => {
@@ -417,6 +426,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                                     ClipAct::MatchBeat => beat = Some((layer.id, c)),
                                     ClipAct::StoreCurrent => use_current = Some((idx, c)),
                                     ClipAct::Clear => clear = Some((idx, c)),
+                                    ClipAct::Thumbnail => thumb_req = Some((layer.id, c)),
                                 }
                                 ui.close();
                             }
@@ -477,6 +487,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     }
     if let Some(id) = fill_row {
         st.quick_on(crate::app::Quick::Fill, Some(id), now);
+    }
+    if thumb_req.is_some() {
+        st.clip_thumb_request = thumb_req;
     }
     if let Some((idx, c)) = clear
         && let Some(id) = st.comp.layers.get(idx).map(|l| l.id)
