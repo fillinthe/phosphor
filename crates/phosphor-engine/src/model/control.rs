@@ -324,11 +324,14 @@ pub struct ControlMap {
     /// smoothing. Applied in order, before the range.
     #[serde(default)]
     pub fx: Vec<ValueFx>,
+    /// Only while its control is on screen: one knob can drive different things on different pages / tabs.
+    #[serde(default)]
+    pub only_shown: bool,
 }
 
 impl ControlMap {
     pub fn new(source: ControlSource, target: ControlTarget) -> Self {
-        Self { source, target, range: ValueRange::default(), enabled: true, fx: Vec::new() }
+        Self { source, target, range: ValueRange::default(), enabled: true, fx: Vec::new(), only_shown: false }
     }
 
     /// The controller value (0..1) after the instant effects (curve, steps, formula); smoothing is the hub's.
