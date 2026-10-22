@@ -20,6 +20,11 @@ pub const MAPS_COPIED: &str = "phosphor_maps_copied";
 /// The project's sends (`Composition::control_sends`), published each frame; and add / remove requests.
 pub const SENDS: &str = "phosphor_sends";
 pub const SEND_REQUEST: &str = "phosphor_send_request";
+/// Mapped controls drawn this frame (`mapped_look`), for "only while on screen" mappings.
+pub const SHOWN_TARGETS: &str = "phosphor_shown_targets";
+/// Controls whose mappings work only while they're on screen (published by the app), and the request to change it.
+pub const ONLY_SHOWN: &str = "phosphor_only_shown";
+pub const ONLY_SHOWN_REQUEST: &str = "phosphor_only_shown_request";
 /// Key a control's value now on the timeline (`State::key_now`).
 pub const KEY_REQUEST: &str = "phosphor_key_request";
 
@@ -56,6 +61,13 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     if ui.button(label(icon::EAR, "Listen: move a knob, send OSC, or press a key")).clicked() {
         request(ui, LEARN_REQUEST, target.clone());
         ui.close();
+    }
+    if is_mapped(ui, target) {
+        let on = ui.ctx().data(|d| d.get_temp::<std::sync::Arc<Vec<ControlTarget>>>(egui::Id::new(ONLY_SHOWN))).is_some_and(|v| v.contains(target));
+        let mut want = on;
+        if crate::ui::toggle(ui, &mut want, "Only while it's on screen").on_hover_text("Its controller only moves it while this control is showing: one knob for different things on different tabs or pages").changed() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(ONLY_SHOWN_REQUEST), (target.clone(), want)));
+        }
     }
     if ui.button(label(icon::DIAMOND, "Key on the timeline")).on_hover_text("Keeps this value at the timeline's playhead (a track for it appears in the Timeline panel)").clicked() {
         request(ui, KEY_REQUEST, target.clone());
@@ -224,6 +236,7 @@ pub(crate) fn mapped_dot(ui: &egui::Ui, resp: &egui::Response, target: &ControlT
 fn mapped_look(ui: &egui::Ui, resp: &egui::Response, target: &ControlTarget, corners: egui::CornerRadius) {
     let mapped = is_mapped(ui, target);
     if mapped {
+        ui.ctx().data_mut(|d| d.get_temp_mut_or_default::<Vec<ControlTarget>>(egui::Id::new(SHOWN_TARGETS)).push(target.clone()));
         let painter = ui.painter();
         let rect = resp.rect.shrink(0.5);
         painter.rect_filled(rect, corners, MAPPED.gamma_multiply(0.16));

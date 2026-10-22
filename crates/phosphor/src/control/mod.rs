@@ -142,6 +142,8 @@ pub struct ControlHub {
     pub last: Option<Incoming>,
     /// Target waiting for the next message to bind to.
     pub learning: Option<ControlTarget>,
+    /// Controls on screen last frame (for mappings that only work while theirs is showing).
+    pub shown: Option<std::collections::HashSet<ControlTarget>>,
     /// Listen: catch the next input (any knob, pad, key or OSC message) into `heard`.
     pub listen_source: bool,
     pub heard: Option<ControlSource>,
@@ -344,6 +346,7 @@ impl ControlHub {
             local_ip: None,
             last: None,
             learning: None,
+            shown: None,
             listen_source: false,
             heard: None,
             triggers: Vec::new(),
@@ -658,6 +661,10 @@ impl ControlHub {
         }
         for map in comp.control_maps.clone() {
             if !map.enabled {
+                continue;
+            }
+            // "Only while on screen" and its control isn't: this message isn't for it.
+            if map.only_shown && self.shown.as_ref().is_some_and(|s| !s.contains(&map.target)) {
                 continue;
             }
             let v = match &map.source {

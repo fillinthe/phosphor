@@ -9,6 +9,21 @@ impl PhosphorApp {
         let st = &mut self.state;
         let mapped: panels::MappedList = std::sync::Arc::new(st.comp.control_maps.iter().map(|m| (m.target.clone(), m.source.label())).collect());
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::MAPPED_TARGETS), mapped));
+        // "Only while on screen": what was drawn last frame, which mappings want it, and changes asked for.
+        let shown = ctx.data_mut(|d| d.remove_temp::<Vec<phosphor_engine::ControlTarget>>(egui::Id::new(crate::ui::SHOWN_TARGETS))).unwrap_or_default();
+        st.control.shown = Some(shown.into_iter().collect());
+        if let Some((target, on)) = ctx.data_mut(|d| {
+            let id = egui::Id::new(crate::ui::ONLY_SHOWN_REQUEST);
+            let t = d.get_temp::<(phosphor_engine::ControlTarget, bool)>(id);
+            d.remove::<(phosphor_engine::ControlTarget, bool)>(id);
+            t
+        }) {
+            for m in st.comp.control_maps.iter_mut().filter(|m| m.target == target) {
+                m.only_shown = on;
+            }
+        }
+        let only: std::sync::Arc<Vec<phosphor_engine::ControlTarget>> = std::sync::Arc::new(st.comp.control_maps.iter().filter(|m| m.only_shown).map(|m| m.target.clone()).collect());
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(crate::ui::ONLY_SHOWN), only));
         // Locks and snap points: changes asked for last frame, then this frame's copy for the widgets.
         let changes = ctx.data_mut(|d| d.remove_temp::<Vec<crate::ui::PrefChange>>(egui::Id::new(crate::ui::PREFS_REQUEST)));
         for c in changes.unwrap_or_default() {

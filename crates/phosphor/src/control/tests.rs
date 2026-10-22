@@ -824,3 +824,23 @@ fn a_colour_comes_from_one_osc_message() {
     let vals = &comp.layer_mut(layer).unwrap().generator_values;
     assert!((vals[0] - 0.2).abs() < 1e-5 && (vals[1] - 0.5).abs() < 1e-5 && (vals[2] - 0.9).abs() < 1e-5, "{vals:?}");
 }
+
+/// A mapping "only while on screen" moves its control only while that control was drawn.
+#[test]
+fn only_while_on_screen() {
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = false;
+    let mut comp = Composition::starter();
+    let src = ControlSource::Osc { address: "/knob".into() };
+    let mut map = ControlMap::new(src.clone(), ControlTarget::MasterFade);
+    map.only_shown = true;
+    comp.control_maps.push(map);
+    hub.shown = Some(Default::default());
+    hub.inject(&mut comp, Incoming { source: src.clone(), value: 0.2 });
+    hub.apply(&mut comp, 1.0);
+    assert_eq!(comp.master_fade, 1.0, "hidden: ignored");
+    hub.shown = Some([ControlTarget::MasterFade].into_iter().collect());
+    hub.inject(&mut comp, Incoming { source: src, value: 0.2 });
+    hub.apply(&mut comp, 1.1);
+    assert!((comp.master_fade - 0.2).abs() < 1e-6, "on screen: it moves");
+}
