@@ -158,9 +158,23 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     let layer_now: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
     let mut add_layer: Option<(usize, u64)> = None;
     let progress = st.cue_run.fade.as_ref().map(|f| (f.cue, if f.secs > 0.0 { ((now as f32 - f.start) / f.secs).clamp(0.0, 1.0) } else { 1.0 }));
+    // Group names in use, for each cue's Group menu.
+    let mut group_names: Vec<String> = st.comp.cues.cues.iter().map(|c| c.group.clone()).filter(|g| !g.is_empty()).collect();
+    group_names.dedup();
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        let mut prev_group = String::new();
         for (i, cue) in st.comp.cues.cues.iter_mut().enumerate() {
             let is_current = current == Some(i);
+            // A group starts here: its name, and Go (its first cue).
+            if !cue.group.is_empty() && cue.group != prev_group {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("{} {}", icon::FOLDER_OPEN, cue.group)).strong());
+                    if ui.small_button(label(icon::PLAY, "Go")).on_hover_text("Start this group (its first cue)").clicked() {
+                        fire = Some(i);
+                    }
+                });
+            }
+            prev_group.clone_from(&cue.group);
             card_frame(ui, is_current).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal_wrapped(|ui| {
@@ -188,6 +202,17 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         }
                     }
                     daily_editor(ui, cue);
+                    let group_title = if cue.group.is_empty() { "Group".to_string() } else { cue.group.clone() };
+                    ui.menu_button(label(icon::FOLDER, &group_title), |ui| {
+                        hint(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
+                        crate::ui::text_field(ui, &mut cue.group, "group name (empty = none)", Some(180.0));
+                        for g in &group_names {
+                            if ui.selectable_label(cue.group == *g, g).clicked() {
+                                cue.group.clone_from(g);
+                                ui.close();
+                            }
+                        }
+                    });
                     ui.menu_button(label(icon::FUNNEL, "Changes"), |ui| {
                         ui.set_min_width(240.0);
                         hint(ui, "What going to this cue changes. Leave sources off to keep the media playing and only glide the numbers.");
