@@ -51,7 +51,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Flip left-right / top-bottom on each output (Output panel). Checked: GPU test. The output window's edit mode doesn't mirror its handles yet: map before flipping.
 - [x] 19. **Output delay** in frames, to line up mixed projectors and LED processors (M).
       Delay 0–10 frames per output. Checked: GPU test (2 frames late shows the frame from 2 frames before).
-- [~] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
+- [x] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
       Partly: a camera button on each output saves a picture of it after mapping (the mix snapshot already existed). Layers and comps on their own: not yet.
 - [x] 21. **Hide effects** you never use from the menus (V). Favourites exist.
       Right-click an effect or source › Hide from the lists; they show under "Hidden" (to bring back) and still work where used. Kept between launches.
@@ -127,7 +127,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
 - [~] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now. Done: each layer on a pair of channels of the sound output. Left: a different device per layer.
 - [x] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed, sound EQ (master volume was already there).
-- [~] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
+- [x] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
       MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC / LTC out: not yet. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
 - [x] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
 - [x] 64. **Schedules**: calendar (.ics) events trigger cues, an idle cue after N minutes of nothing, a startup cue (M). Daily times exist.
@@ -157,7 +157,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 ### Large
 - [ ] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one.
 - [ ] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
-- [ ] 88. **Record DMX** output and play it back (M).
+- [x] 88. **Record DMX** output and play it back (M).
 - [ ] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration exist.
 - [ ] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist.
 - [ ] 91. **Read text and QR codes** from video into data (V).
