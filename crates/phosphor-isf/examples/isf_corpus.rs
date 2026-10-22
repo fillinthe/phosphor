@@ -97,6 +97,10 @@ fn main() {
                         phosphor_isf::IsfError::Wgsl(m) => ("wgsl: ".to_string(), m.as_str()),
                     };
                     failed.entry(format!("{class}{}", error_class(msg))).or_default().push(fname);
+                    if let Some(d) = &dump {
+                        let _ = std::fs::create_dir_all(d);
+                        let _ = std::fs::write(d.join(format!("{slug}.FAILED.txt")), format!("{class}{msg}"));
+                    }
                 }
                 Ok(shader) => {
                     if let Some(reason) = shader.unsupported {
