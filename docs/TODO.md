@@ -126,22 +126,22 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       "Drawn wave" modulation source (a smooth loop through eight points). Checked: test.
 - [ ] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
 - [ ] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now.
-- [ ] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade.
+- [~] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed. Left: sound master, EQ.
 - [~] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
       MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC / LTC out: not yet. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
-- [ ] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
-- [ ] 64. **Schedules**: calendar (.ics) events trigger cues, an idle cue after N minutes of nothing, a startup cue (M). Daily times exist.
-- [ ] 65. **Combine controls**: mix several sources into one (max, add, multiply…) (M).
-- [ ] 66. **Readable OSC addresses** by name (`/layer/Intro/opacity`) and wildcards (M). Addresses use ids now.
-- [ ] 67. **Merge another project** into this one (M).
-- [ ] 68. **New project from a template** (simple player, mixer, 4 projectors…) (V, M).
-- [ ] 69. **Background picture on an output** (M).
-- [ ] 70. **Mapping**: drop a file on the stage to make a slice at its shape; draw a line slice freehand (M).
-- [ ] 71. **Automatic soft edges** from overlapping slices (M). Set by hand now.
-- [ ] 72. **One canvas across several displays** (2×2 etc.) and **one output shown on several displays** (V, M).
-- [ ] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M).
+- [x] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
+- [x] 64. **Schedules**: calendar (.ics) events trigger cues, an idle cue after N minutes of nothing, a startup cue (M). Daily times exist.
+- [x] 65. **Combine controls**: mix several sources into one (max, add, multiply…) (M).
+- [x] 66. **Readable OSC addresses** by name (`/layer/Intro/opacity`) and wildcards (M). Addresses use ids now.
+- [x] 67. **Merge another project** into this one (M).
+- [x] 68. **New project from a template** (simple player, mixer, 4 projectors…) (V, M).
+- [x] 69. **Background picture on an output** (M).
+- [x] 70. **Mapping**: drop a file on the stage to make a slice at its shape; draw a line slice freehand (M).
+- [x] 71. **Automatic soft edges** from overlapping slices (M). Set by hand now.
+- [x] 72. **One canvas across several displays** (2×2 etc.) and **one output shown on several displays** (V, M).
+- [~] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master. Left: average sampling, video-wall template.
 - [ ] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
-- [ ] 75. **Generators**: countdown, stopwatch, GPU particles (M).
+- [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
 - [ ] 76. **NDI sound** in and out (V).
 - [ ] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
 - [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
@@ -150,7 +150,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [ ] 81. **SVG and Lottie** (After Effects) animations as clips (M).
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
-- [ ] 83. **Interface colour themes** (V). Has a brightness slider.
+- [x] 83. **Interface colour themes** (V). Has a brightness slider.
 - [ ] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M).
 - [ ] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
 
