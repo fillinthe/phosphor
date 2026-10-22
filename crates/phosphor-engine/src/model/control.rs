@@ -371,11 +371,14 @@ pub enum SendTo {
     MidiCc { channel: u8, cc: u8 },
     /// A MIDI note: on (127) above half, off below.
     MidiNote { channel: u8, note: u8 },
+    /// An OSC float to another app (found with OSC Query): 0..1 scaled to its `min`..`max`.
+    OscTo { host: String, port: u16, address: String, min: f32, max: f32 },
 }
 
 impl SendTo {
     pub fn label(&self) -> String {
         match self {
+            SendTo::OscTo { host, port, address, .. } => format!("OSC {host}:{port}{address}"),
             SendTo::Osc { address } => format!("OSC {address}"),
             SendTo::MidiCc { channel, cc } => format!("MIDI ch {} CC {cc}", channel + 1),
             SendTo::MidiNote { channel, note } => format!("MIDI ch {} note {note}", channel + 1),

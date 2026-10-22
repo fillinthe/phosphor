@@ -144,6 +144,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
                     *channel = ch - 1;
                     guarded!(ui, *note, egui::DragValue::new(note).range(0..=127).prefix("note "));
                 }
+                SendTo::OscTo { .. } => {}
             }
             if ui.button("Add").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), draft.clone(), true)));
@@ -151,7 +152,54 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
             }
         });
         ui.ctx().data_mut(|d| d.insert_temp(id, draft));
+        #[cfg(not(target_arch = "wasm32"))]
+        oscquery_browser(ui, target);
     });
+}
+
+/// "Another app": read an app's OSC Query list (host:port of its OSC Query server) and send to one of its settings.
+#[cfg(not(target_arch = "wasm32"))]
+fn oscquery_browser(ui: &mut egui::Ui, target: &ControlTarget) {
+    use crate::control::oscquery_client::{Fetched, fetch};
+    type Shared = std::sync::Arc<std::sync::Mutex<Option<Fetched>>>;
+    let (addr_id, result_id, search_id) = (egui::Id::new("oscq_addr"), egui::Id::new("oscq_result"), egui::Id::new("oscq_search"));
+    ui.separator();
+    ui.label(RichText::new("Another app (OSC Query)").strong());
+    let mut addr: String = ui.ctx().data_mut(|d| d.get_persisted(addr_id)).unwrap_or_else(|| "127.0.0.1:".into());
+    let shared: Shared = ui.ctx().data_mut(|d| d.get_temp_mut_or_default::<Shared>(result_id).clone());
+    ui.horizontal(|ui| {
+        text_field(ui, &mut addr, "host:port", Some(150.0));
+        if ui.button("Read").on_hover_text("Ask the app at this address (its OSC Query port) what it can be sent").clicked() {
+            *shared.lock().unwrap() = None;
+            fetch(&addr, shared.clone(), ui.ctx().clone());
+        }
+    });
+    ui.ctx().data_mut(|d| d.insert_persisted(addr_id, addr));
+    let found = shared.lock().unwrap().clone();
+    match found {
+        None => {
+            hint(ui, "TouchOSC, Chataigne, Resolume, MadMapper, another Phosphor… show their OSC Query port in their settings.");
+        }
+        Some(Err(e)) => {
+            ui.colored_label(crate::theme::WARN, e);
+        }
+        Some(Ok((host, port, params))) => {
+            let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
+            text_field(ui, &mut search, &format!("search {} settings", params.len()), Some(240.0));
+            let q = search.to_lowercase();
+            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                for p in params.iter().filter(|p| q.is_empty() || p.address.to_lowercase().contains(&q) || p.description.to_lowercase().contains(&q)).take(80) {
+                    let text = if p.description.is_empty() { p.address.clone() } else { format!("{}  ·  {}", p.address, p.description) };
+                    if ui.button(text).on_hover_text(format!("Send to {host}:{port}{} ({} to {})", p.address, p.min, p.max)).clicked() {
+                        let to = phosphor_engine::SendTo::OscTo { host: host.clone(), port, address: p.address.clone(), min: p.min, max: p.max };
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), to, true)));
+                        ui.close();
+                    }
+                }
+            });
+            ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
+        }
+    }
 }
 
 /// Small badge on a control that has a MIDI/OSC/key mapping.

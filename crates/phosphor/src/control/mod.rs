@@ -490,6 +490,7 @@ impl ControlHub {
                     self.backend.send_osc(&[comp.surface.osc_host.trim().to_string()], comp.surface.osc_port, address, v);
                 }
                 phosphor_engine::SendTo::Osc { .. } => {}
+                phosphor_engine::SendTo::OscTo { host, port, address, min, max } => self.backend.send_osc(std::slice::from_ref(host), *port, address, min + v * (max - min)),
                 phosphor_engine::SendTo::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | (channel & 15), cc & 127, (v.clamp(0.0, 1.0) * 127.0).round() as u8]),
                 phosphor_engine::SendTo::MidiNote { channel, note } => {
                     let on = v > 0.5;
@@ -892,6 +893,8 @@ mod native;
 pub mod clock_out;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod oscquery;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod oscquery_client;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod discovery;
 #[cfg(test)]
