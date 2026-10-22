@@ -64,6 +64,8 @@ pub enum Action {
     Autosave,
     /// Shows the project's backups folder.
     ShowBackups,
+    /// Panels stay where they are (no dragging, closing or splitting off).
+    LockPanels,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -145,6 +147,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             D("Layouts"),
             I(A::SaveLayout, "Save Current Layout…", None),
             I(A::ResetLayout, "Reset Layout", None),
+            I(A::LockPanels, "Lock Panels On / Off", None),
             I(A::AddMonitor, "New Preview Window", None),
             I(A::Gather, "Gather Floating Windows", None),
             S,

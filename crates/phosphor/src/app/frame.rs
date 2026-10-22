@@ -184,7 +184,9 @@ impl PhosphorApp {
             let mut viewer = Viewer { st: &mut self.state, detach: None };
             DockArea::new(&mut self.dock)
                 .style(style)
-                .show_close_buttons(!self.lock.active)
+                .show_close_buttons(!self.lock.active && !self.panels_locked)
+                .draggable_tabs(!self.panels_locked)
+                .tab_context_menus(!self.panels_locked)
                 .show_leaf_close_all_buttons(false)
                 .show_leaf_collapse_buttons(false)
                 .show_inside(ui, &mut viewer);
