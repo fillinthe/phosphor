@@ -15,7 +15,8 @@ use objc2_vision::{
     VNDetectFaceRectanglesRequest, VNDetectHumanBodyPoseRequest, VNDetectHumanHandPoseRequest, VNGeneratePersonSegmentationRequest,
     VNGeneratePersonSegmentationRequestQualityLevel, VNHumanBodyPoseObservationJointNameLeftWrist,
     VNHumanBodyPoseObservationJointNameRightWrist, VNHumanBodyPoseObservationJointNameRoot, VNHumanHandPoseObservationJointNameIndexTip,
-    VNHumanHandPoseObservationJointNameThumbTip, VNImageRequestHandler, VNRecognizedPoint, VNRequest,
+    VNHumanHandPoseObservationJointNameThumbTip, VNImageRequestHandler, VNRecognizedPoint, VNRequest, VNDetectBarcodesRequest, VNRecognizeTextRequest,
+    VNRequestTextRecognitionLevel,
 };
 
 use super::{Found, Matte};
@@ -94,6 +95,55 @@ pub fn look(rgba: &[u8], width: u32, height: u32, cfg: &phosphor_engine::Trackin
     })
 }
 
+/// QR codes / barcodes and text in an RGBA picture: (the biggest code's contents, every line of text read, top to
+/// bottom), for what was asked.
+pub fn read(rgba: &[u8], width: u32, height: u32, codes: bool, text: bool) -> Result<(Option<String>, Option<String>), String> {
+    if rgba.len() < (width * height * 4) as usize {
+        return Err("Reading: picture too small".into());
+    }
+    autoreleasepool(|_| unsafe {
+        let pixels = pixel_buffer(rgba, width, height).ok_or("Reading: no picture buffer")?;
+        let handler = VNImageRequestHandler::initWithCVPixelBuffer_options(VNImageRequestHandler::alloc(), &pixels, &NSDictionary::new());
+        let code_req = codes.then(|| VNDetectBarcodesRequest::new());
+        let text_req = text.then(|| {
+            let r = VNRecognizeTextRequest::new();
+            r.setRecognitionLevel(VNRequestTextRecognitionLevel::Fast);
+            r.setUsesLanguageCorrection(true);
+            r
+        });
+        let mut requests: Vec<&VNRequest> = Vec::new();
+        if let Some(r) = &code_req {
+            requests.push(r);
+        }
+        if let Some(r) = &text_req {
+            requests.push(r);
+        }
+        handler.performRequests_error(&NSArray::from_slice(&requests)).map_err(|e| format!("Reading: {}", e.localizedDescription()))?;
+        let code = code_req.and_then(|r| {
+            r.results()?
+                .iter()
+                .filter_map(|o| Some((area(o.boundingBox()), o.payloadStringValue()?.to_string())))
+                .max_by(|a, b| a.0.total_cmp(&b.0))
+                .map(|(_, s)| s)
+        });
+        let read = text_req.and_then(|r| {
+            let mut lines: Vec<(f64, String)> = r
+                .results()?
+                .iter()
+                .filter_map(|o| {
+                    let best = o.topCandidates(1).firstObject()?;
+                    Some((o.boundingBox().origin.y, best.string().to_string()))
+                })
+                .collect();
+            // Vision's y counts up: highest first reads top to bottom.
+            lines.sort_by(|a, b| b.0.total_cmp(&a.0));
+            let all = lines.into_iter().map(|(_, s)| s).collect::<Vec<_>>().join("\n");
+            (!all.is_empty()).then_some(all)
+        });
+        Ok((code, read))
+    })
+}
+
 /// Where the people are in an RGBA picture (Vision person segmentation, balanced quality).
 pub fn person_matte(rgba: &[u8], width: u32, height: u32) -> Result<Matte, String> {
     if rgba.len() < (width * height * 4) as usize {
@@ -162,4 +212,33 @@ unsafe fn pixel_buffer(rgba: &[u8], width: u32, height: u32) -> Option<CFRetaine
     }
     unsafe { CVPixelBufferUnlockBaseAddress(&buffer, CVPixelBufferLockFlags(0)) };
     (!base.is_null()).then_some(buffer)
+}
+
+#[cfg(test)]
+mod read_tests {
+    /// A QR code drawn by Phosphor's own generator is read back by Vision.
+    #[test]
+    fn reads_a_qr_code() {
+        let qr = crate::ui::qr_image("https://phosphorfx.com/show/42", 320, [0, 0, 0, 255], [255, 255, 255, 255]).expect("a code");
+        let (code, _) = super::read(qr.as_raw(), qr.width(), qr.height(), true, false).expect("Vision ran");
+        assert_eq!(code.as_deref(), Some("https://phosphorfx.com/show/42"));
+    }
+
+    /// Words drawn by Phosphor's text layer are read back.
+    #[test]
+    fn reads_text() {
+        let style = phosphor_engine::TextStyle { text: "HELLO PHOSPHOR".into(), size: 0.2, color: [0, 0, 0, 255], ..Default::default() };
+        let img = crate::text::render(&style, 960, 540).expect("drawn");
+        // White behind the black words.
+        let mut px = img.into_raw();
+        for p in px.chunks_mut(4) {
+            let a = p[3] as f32 / 255.0;
+            for c in &mut p[..3] {
+                *c = (*c as f32 * a + 255.0 * (1.0 - a)) as u8;
+            }
+            p[3] = 255;
+        }
+        let (_, text) = super::read(&px, 960, 540, false, true).expect("Vision ran");
+        assert_eq!(text.as_deref().map(str::to_uppercase).as_deref(), Some("HELLO PHOSPHOR"), "{text:?}");
+    }
 }

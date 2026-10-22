@@ -168,12 +168,19 @@ impl State {
     /// redraws when its words change (once a second).
     pub(crate) fn run_live_text(&mut self, now: f64) {
         let (tod, _) = crate::clock::local_time();
+        let (code, read) = (&self.comp.seen_code, &self.comp.seen_text);
         for l in &mut self.comp.layers {
-            if let phosphor_engine::SourceSpec::Text(style) = &mut l.source
-                && let Some(words) = style.live.words(tod, now - style.live_start)
-                && style.text != words
-            {
-                style.text = words;
+            if let phosphor_engine::SourceSpec::Text(style) = &mut l.source {
+                let words = match style.live {
+                    phosphor_engine::LiveText::Code => Some(code.clone()).filter(|c| !c.is_empty()),
+                    phosphor_engine::LiveText::Read => Some(read.clone()).filter(|c| !c.is_empty()),
+                    live => live.words(tod, now - style.live_start),
+                };
+                if let Some(words) = words
+                    && style.text != words
+                {
+                    style.text = words;
+                }
             }
         }
     }

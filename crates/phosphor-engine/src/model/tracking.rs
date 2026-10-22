@@ -15,11 +15,16 @@ pub struct Tracking {
     pub body: bool,
     /// 0 = values jump to each new find, towards 1 = they glide (less jitter, more lag).
     pub smoothing: f32,
+    /// Read QR codes (and barcodes) in the picture: the newest one's contents (`Composition::seen_code`), and
+    /// "Track Code Found".
+    pub codes: bool,
+    /// Read text in the picture (`Composition::seen_text`).
+    pub read_text: bool,
 }
 
 impl Default for Tracking {
     fn default() -> Self {
-        Self { enabled: false, source: crate::MASTER_ID, faces: true, hands: false, body: false, smoothing: 0.5 }
+        Self { enabled: false, source: crate::MASTER_ID, faces: true, hands: false, body: false, smoothing: 0.5, codes: false, read_text: false }
     }
 }
 

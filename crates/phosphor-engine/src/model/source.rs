@@ -75,6 +75,10 @@ pub enum LiveText {
     Countdown(u32),
     /// Time since it was started (Restart sets it going from 0).
     Stopwatch,
+    /// The last QR code video tracking read (`Composition::seen_code`).
+    Code,
+    /// The text video tracking reads in the picture (`Composition::seen_text`).
+    Read,
 }
 
 impl LiveText {
@@ -86,6 +90,8 @@ impl LiveText {
             LiveText::Clock => Some(format!("{:02}:{:02}:{:02}", tod / 3600, tod / 60 % 60, tod % 60)),
             LiveText::Countdown(at) => Some(hms(if at > tod { (at - tod) as u64 } else { 0 })),
             LiveText::Stopwatch => Some(hms(running.max(0.0) as u64)),
+            // These come from the project (`run_live_text`).
+            LiveText::Code | LiveText::Read => None,
         }
     }
 }
