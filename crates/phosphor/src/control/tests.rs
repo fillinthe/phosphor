@@ -673,3 +673,22 @@ fn controls_send_their_value_out() {
     hub.sends(&comp);
     assert_eq!(read(), Some(("/lights/master".into(), vec![rosc::OscType::Float(0.9)])));
 }
+
+/// A Choices widget picks one of a pick-one control's options (here a layer's four play directions).
+#[test]
+fn choices_widgets_pick_options() {
+    let mut comp = Composition::starter();
+    let layer = comp.add_layer().id;
+    let id = comp.surface.add(phosphor_engine::WidgetKind::Choices);
+    let w = comp.surface.widget_mut(id).unwrap();
+    w.items = ["Fwd", "Rev", "Ping", "Rnd"].map(String::from).to_vec();
+    w.bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerDirection(layer), range: phosphor_engine::ValueRange::default() });
+    let pick = w.choice_value(3);
+    let mut out = Vec::new();
+    set_target(&mut comp, &ControlTarget::Surface(id), pick, &mut out);
+    assert_eq!(comp.layers.iter().find(|l| l.id == layer).unwrap().direction, phosphor_engine::PlayDirection::Random);
+    // A fader on it: anywhere in the second quarter = the second choice.
+    set_target(&mut comp, &ControlTarget::Surface(id), 0.3, &mut out);
+    assert_eq!(comp.layers.iter().find(|l| l.id == layer).unwrap().direction, phosphor_engine::PlayDirection::Reverse);
+    assert_eq!(comp.surface.widget(id).unwrap().picked(), 1);
+}

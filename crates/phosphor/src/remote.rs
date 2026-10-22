@@ -62,7 +62,7 @@ pub fn state_json(st: &mut State, now: f64) -> String {
             let [r, g, b] = w.color;
             json!({"id": w.id, "kind": format!("{:?}", w.kind), "x": w.x, "y": w.y, "w": w.w, "h": w.h, "label": w.label,
                 "color": format!("#{r:02x}{g:02x}{b:02x}"), "value": round(w.value), "value_y": round(w.value_y), "page": w.page,
-                "guests": w.guests, "lo": round(w.guest_range[0]), "hi": round(w.guest_range[1])})
+                "guests": w.guests, "lo": round(w.guest_range[0]), "hi": round(w.guest_range[1]), "items": w.items})
         })
         .collect();
     json!({

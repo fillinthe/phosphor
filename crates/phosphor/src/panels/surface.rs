@@ -164,6 +164,15 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                             }
                         }
                     }
+                    WidgetKind::Choices => {
+                        if resp.clicked()
+                            && let Some(p) = pointer
+                        {
+                            let n = w.choice_count();
+                            let (x, _) = pos(p);
+                            sets.push((target.clone(), w.choice_value(((x * n as f32) as usize).min(n - 1))));
+                        }
+                    }
                     WidgetKind::Label => {}
                 }
                 draw_widget(&painter, w, rect, false);
@@ -336,6 +345,18 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
             p.text(sq.left_top() + egui::vec2(6.0, 4.0), egui::Align2::LEFT_TOP, &w.label, font, Color32::WHITE);
         }
+        WidgetKind::Choices => {
+            let n = w.choice_count();
+            let picked = w.picked();
+            let seg = rect.width() / n as f32;
+            for i in 0..n {
+                let r = egui::Rect::from_min_size(egui::pos2(rect.left() + i as f32 * seg, rect.top()), egui::vec2(seg, rect.height())).shrink(1.5);
+                let on = i == picked;
+                p.rect_filled(r, 5.0, if on { c } else { c.gamma_multiply(0.15) });
+                let name = w.items.get(i).cloned().unwrap_or_else(|| (i + 1).to_string());
+                p.text(r.center(), egui::Align2::CENTER_CENTER, name, font.clone(), if on { Color32::BLACK } else { p.ctx().global_style().visuals.text_color() });
+            }
+        }
         WidgetKind::Label => {
             if edit {
                 p.rect_filled(rect, 4.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
@@ -395,6 +416,18 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             ui.add_space(4.0);
             ui.label(RichText::new("Vertical (Y) drives").strong());
             binding_list(ui, ("bindings_y", id), targets, &mut w.bindings_y);
+        }
+        if w.kind == WidgetKind::Choices {
+            ui.add_space(4.0);
+            let key = ui.id().with(("choice_items", id));
+            let mut text = ui.data_mut(|d| d.get_temp::<String>(key)).unwrap_or_else(|| w.items.join(", "));
+            if crate::ui::text_field(ui, &mut text, "Names, with commas: Normal, Add, Screen", None)
+                .on_hover_text("One button each. For a pick-one control (blend mode, direction…) give it the same number of choices it has.")
+                .changed()
+            {
+                w.items = text.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            }
+            ui.data_mut(|d| d.insert_temp(key, text));
         }
         ui.add_space(4.0);
         hint(ui, format!("OSC in: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));

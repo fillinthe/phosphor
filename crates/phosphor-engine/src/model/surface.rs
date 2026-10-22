@@ -22,10 +22,13 @@ pub enum WidgetKind {
     Label,
     /// A colour (hue across, saturation up, brightness strip); drives red, green and blue targets.
     Color,
+    /// A row of named buttons, one picked at a time (a blend mode, a clip, a direction): its value is the middle of
+    /// the picked one's slice of 0..1, the way pick-one controls read it.
+    Choices,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 7] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Label];
+    pub const ALL: [WidgetKind; 8] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Label];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -36,6 +39,7 @@ impl WidgetKind {
             WidgetKind::XyPad => "XY Pad",
             WidgetKind::Label => "Label",
             WidgetKind::Color => "Colour",
+            WidgetKind::Choices => "Choices",
         }
     }
 
@@ -48,6 +52,7 @@ impl WidgetKind {
             WidgetKind::XyPad => (4.0, 4.0),
             WidgetKind::Label => (3.0, 1.0),
             WidgetKind::Color => (4.0, 4.0),
+            WidgetKind::Choices => (6.0, 1.0),
         }
     }
 }
@@ -82,11 +87,13 @@ pub struct SurfaceWidget {
     pub guests: bool,
     /// Audience play: the part of its range guests can reach (low, high; 0..1), e.g. a strobe up to 30%.
     pub guest_range: [f32; 2],
+    /// Choices: the buttons' names, in order.
+    pub items: Vec<String>,
 }
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0] }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new() }
     }
 }
 
@@ -98,6 +105,19 @@ impl SurfaceWidget {
         }
         let [lo, hi] = self.guest_range;
         v.clamp(lo.min(hi), hi.max(lo))
+    }
+
+    /// Choices: how many there are (at least 2), the one picked, and the value that picks choice `i`.
+    pub fn choice_count(&self) -> usize {
+        self.items.len().max(2)
+    }
+
+    pub fn picked(&self) -> usize {
+        crate::pick(self.value, self.choice_count())
+    }
+
+    pub fn choice_value(&self, i: usize) -> f32 {
+        crate::pick_unit(i, self.choice_count())
     }
 
     /// A colour widget's colour, red / green / blue 0..1 (hue, saturation, brightness → RGB).

@@ -305,7 +305,7 @@ function renderSurface() {
   // Guests see only what they may use.
   const sf = { ...all, widgets: all.widgets.filter(w => (w.page || 0) === surfPage && (!guest || w.guests !== false)) };
   const box = $('#surface');
-  const sig = surfPage + '#' + sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color].join(',')).join('|');
+  const sig = surfPage + '#' + sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color, (w.items || []).join(';')].join(',')).join('|');
   if (box.dataset.sig !== sig) {
     box.dataset.sig = sig; box.innerHTML = '';
     const cell = Math.max(28, (box.clientWidth || window.innerWidth - 24) / sf.columns - 6);
@@ -323,6 +323,17 @@ function renderSurface() {
       } else {
         el = document.createElement('div'); el.dataset.key = 'sf' + w.id;
         if (w.kind === 'Label') { el.className = 'w lbl'; el.style.color = w.color; el.textContent = w.label; }
+        else if (w.kind === 'Choices') {
+          // A row of buttons, one picked: each sends the middle of its slice of 0..1.
+          el.className = 'w choices'; el.style.display = 'flex'; el.style.gap = '3px'; el.style.padding = '0';
+          const n = Math.max(2, (w.items || []).length);
+          for (let i = 0; i < n; i++) {
+            const b = document.createElement('button'); b.textContent = (w.items || [])[i] || String(i + 1); b.style.flex = '1';
+            b.onclick = () => setTarget(X, (i + 0.5) / n); el.appendChild(b);
+          }
+          el.setValue = v => { [...el.children].forEach((b, i) => { const on = i === Math.min(n - 1, Math.floor(v * n)); b.style.background = on ? w.color : '#1b1f22'; b.style.color = on ? '#000' : '#eee'; }); };
+          el.setValue(w.value);
+        }
         else if (w.kind === 'XyPad' || w.kind === 'Color') {
           el.className = 'w xy';
           // Colour: hue across, saturation up (grey at the bottom).
@@ -355,6 +366,7 @@ function renderSurface() {
     const el = box.querySelector(`[data-id="${w.id}"]`); if (!el || touching.has(el.dataset.key)) return;
     if (w.kind === 'Fader' || w.kind === 'Slider') el.setValue(w.value);
     else if (w.kind === 'XyPad' || w.kind === 'Color') el.setValue(w.value, w.value_y);
+    else if (w.kind === 'Choices') el.setValue(w.value);
     else if (w.kind === 'Button' || w.kind === 'Toggle') { const on = w.value > 0.5 || el.classList.contains('held'); el.style.background = on ? el.dataset.color : '#1b1f22'; el.style.color = on ? '#000' : '#eee'; el.style.borderColor = el.dataset.color; }
   });
 }
