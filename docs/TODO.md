@@ -81,7 +81,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       8 looks ship (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film, Night; made by scripts/make-luts.py), and LUT Split: two LUTs by brightness, left/right, top/bottom or from the centre. A mask from another layer: not done. Checked: tests.
 - [x] 34. **Saved "show only these" slice sets** while mapping (M).
       Mapping Studio › Sets: save the selected slices as a named set, pick it to select them and show only them. Saved with the project.
-- [~] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
+- [x] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
       Slider limits (right-click › Limits…): the mouse stays inside, a controller's whole travel covers just that part, outside is shaded. "Ignore while hidden": not done. Checked: tests.
 
 ### Medium
