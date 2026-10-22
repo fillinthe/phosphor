@@ -17,6 +17,10 @@ pub const PASTE_MAPS_REQUEST: &str = "phosphor_paste_maps_request";
 /// How many mappings are copied (set by the app each frame), so menus can offer Paste.
 pub const MAPS_COPIED: &str = "phosphor_maps_copied";
 
+/// The project's sends (`Composition::control_sends`), published each frame; and add / remove requests.
+pub const SENDS: &str = "phosphor_sends";
+pub const SEND_REQUEST: &str = "phosphor_send_request";
+
 /// A copied motion (modulation), for pasting onto another value.
 const MOTION_CLIPBOARD: &str = "phosphor_motion_clipboard";
 
@@ -94,6 +98,60 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
         request(ui, PASTE_MAPS_REQUEST, target.clone());
         ui.close();
     }
+    send_items(ui, target);
+}
+
+/// "Send out…": this control's value goes out as OSC or MIDI whenever it changes (lights, another app, a synth).
+fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
+    use phosphor_engine::SendTo;
+    let all: std::sync::Arc<Vec<phosphor_engine::ControlSend>> = ui.ctx().data(|d| d.get_temp(egui::Id::new(SENDS))).unwrap_or_default();
+    let mine: Vec<SendTo> = all.iter().filter(|s| s.target == *target).map(|s| s.to.clone()).collect();
+    let title = if mine.is_empty() { "Send out…".to_string() } else { format!("Send out ({})", mine.len()) };
+    ui.menu_button(label(icon::BROADCAST, &title), |ui| {
+        ui.set_min_width(280.0);
+        hint(ui, "Whenever this changes, its value goes out too. OSC goes to the host and port set in the Control Surface (OSC out).");
+        for to in &mine {
+            ui.horizontal(|ui| {
+                ui.label(to.label());
+                if ui.small_button(icon::X).on_hover_text("Stop sending").clicked() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), to.clone(), false)));
+                }
+            });
+        }
+        let id = egui::Id::new(("send_draft", format!("{target:?}")));
+        let mut draft: SendTo = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(SendTo::Osc { address: "/phosphor/out".into() });
+        ui.horizontal(|ui| {
+            for (name, make) in [("OSC", SendTo::Osc { address: "/phosphor/out".into() }), ("MIDI CC", SendTo::MidiCc { channel: 0, cc: 20 }), ("Note", SendTo::MidiNote { channel: 0, note: 60 })] {
+                if ui.selectable_label(std::mem::discriminant(&draft) == std::mem::discriminant(&make), name).clicked() {
+                    draft = make;
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            match &mut draft {
+                SendTo::Osc { address } => {
+                    text_field(ui, address, "/address", Some(180.0));
+                }
+                SendTo::MidiCc { channel, cc } => {
+                    let mut ch = *channel + 1;
+                    guarded!(ui, ch, egui::DragValue::new(&mut ch).range(1..=16).prefix("ch "));
+                    *channel = ch - 1;
+                    guarded!(ui, *cc, egui::DragValue::new(cc).range(0..=127).prefix("CC "));
+                }
+                SendTo::MidiNote { channel, note } => {
+                    let mut ch = *channel + 1;
+                    guarded!(ui, ch, egui::DragValue::new(&mut ch).range(1..=16).prefix("ch "));
+                    *channel = ch - 1;
+                    guarded!(ui, *note, egui::DragValue::new(note).range(0..=127).prefix("note "));
+                }
+            }
+            if ui.button("Add").clicked() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), draft.clone(), true)));
+                ui.close();
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(id, draft));
+    });
 }
 
 /// Small badge on a control that has a MIDI/OSC/key mapping.

@@ -125,17 +125,17 @@ impl Backend {
 
     /// Listens for OSC on `port` (announced over Zeroconf) and on each of `extra` (other apps that only send to
     /// their own port). Replaces any listeners already open. Returns the extra ports that couldn't open (and why).
-    pub fn open_osc(&mut self, port: u16, extra: &[u16], tx: mpsc::Sender<Incoming>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<Vec<String>, String> {
+    pub fn open_osc(&mut self, port: u16, extra: &[u16], tx: mpsc::Sender<Incoming>, text_tx: mpsc::Sender<(String, String)>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<Vec<String>, String> {
         if let Some(stop) = self.osc_stop.take() {
             stop.store(true, Ordering::Relaxed);
         }
         self.mdns = None;
         let stop = Arc::new(AtomicBool::new(false));
         self.osc_stop = Some(stop.clone());
-        listen_osc(port, stop.clone(), tx.clone(), activity.clone())?;
+        listen_osc(port, stop.clone(), tx.clone(), text_tx.clone(), activity.clone())?;
         let mut failed = Vec::new();
         for &p in extra.iter().filter(|p| **p != port) {
-            if let Err(e) = listen_osc(p, stop.clone(), tx.clone(), activity.clone()) {
+            if let Err(e) = listen_osc(p, stop.clone(), tx.clone(), text_tx.clone(), activity.clone()) {
                 failed.push(format!("{p}: {e}"));
             }
         }
@@ -166,7 +166,7 @@ fn parse_midi(msg: &[u8]) -> Option<Incoming> {
 }
 
 /// One OSC port's listener thread: every message is counted per sender (unless blocked) and delivered.
-fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
+fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, text_tx: mpsc::Sender<(String, String)>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
     let socket = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| e.to_string())?;
     socket.set_read_timeout(Some(Duration::from_millis(200))).map_err(|e| e.to_string())?;
     std::thread::Builder::new()
@@ -198,16 +198,20 @@ fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, acti
                     e.last_address = address;
                     e.last_seen = std::time::Instant::now();
                 }
-                deliver(packet, &tx);
+                deliver(packet, &tx, &text_tx);
             }
         })
         .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>) {
+fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>, text_tx: &mpsc::Sender<(String, String)>) {
     match packet {
         rosc::OscPacket::Message(m) => {
+            // Words (for text layers) go their own way, as well as counting as a press.
+            if let Some(words) = m.args.iter().find_map(|a| if let rosc::OscType::String(s) = a { Some(s.clone()) } else { None }) {
+                let _ = text_tx.send((m.addr.clone(), words));
+            }
             let value = m.args.iter().find_map(|a| match a {
                 rosc::OscType::Float(f) => Some(*f),
                 rosc::OscType::Double(d) => Some(*d as f32),
@@ -220,7 +224,7 @@ fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>) {
         }
         rosc::OscPacket::Bundle(b) => {
             for p in b.content {
-                deliver(p, tx);
+                deliver(p, tx, text_tx);
             }
         }
     }

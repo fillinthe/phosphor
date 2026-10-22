@@ -29,6 +29,8 @@ pub enum Purpose {
     /// Save the cue list's names and timings as CSV / read them back.
     ExportCues,
     ImportCues,
+    /// A text file for this text layer (shown a part at a time).
+    TextFile(u64),
 }
 
 pub struct Dialogs {

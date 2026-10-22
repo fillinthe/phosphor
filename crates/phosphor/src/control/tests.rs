@@ -625,3 +625,51 @@ fn a_fader_covers_only_a_limited_slider() {
         assert!((comp.master_fade - want).abs() < 1e-5, "{v} → {} (wanted {want})", comp.master_fade);
     }
 }
+
+#[test]
+fn osc_words_reach_text_layers() {
+    let mut hub = ControlHub::new();
+    let mut comp = Composition::starter();
+    let id = comp.add_layer().id;
+    comp.layer_mut(id).unwrap().source = phosphor_engine::SourceSpec::Text(crate::text::default_style());
+    let text = |c: &Composition| match &c.layers.iter().find(|l| l.id == id).unwrap().source {
+        phosphor_engine::SourceSpec::Text(t) => t.text.clone(),
+        _ => String::new(),
+    };
+    hub.inject_text(&format!("/phosphor/layer/{id}/text"), "Hello");
+    hub.apply(&mut comp, 1.0);
+    assert_eq!(text(&comp), "Hello", "built-in address");
+    comp.control_maps.push(phosphor_engine::ControlMap::new(ControlSource::Osc { address: "/lyrics/*".into() }, ControlTarget::LayerText(id)));
+    hub.inject_text("/lyrics/line", "Second line");
+    hub.apply(&mut comp, 1.1);
+    assert_eq!(text(&comp), "Second line", "a mapped (wildcard) address");
+}
+
+/// A control with a send goes out over OSC when it changes, once per change.
+#[test]
+fn controls_send_their_value_out() {
+    use std::net::UdpSocket;
+    let app = UdpSocket::bind("127.0.0.1:18593").unwrap();
+    app.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_594, feedback: false, soft_takeover: false, ..Default::default() });
+    let mut comp = Composition::starter();
+    comp.surface.osc_host = "127.0.0.1".into();
+    comp.surface.osc_port = 18_593;
+    comp.master_fade = 0.25;
+    comp.control_sends.push(phosphor_engine::ControlSend { target: ControlTarget::MasterFade, to: phosphor_engine::SendTo::Osc { address: "/lights/master".into() } });
+    let mut buf = [0u8; 1024];
+    let mut read = || {
+        let n = app.recv(&mut buf).ok()?;
+        match rosc::decoder::decode_udp(&buf[..n]).ok()?.1 {
+            rosc::OscPacket::Message(m) => Some((m.addr, m.args)),
+            _ => None,
+        }
+    };
+    hub.sends(&comp);
+    assert_eq!(read(), Some(("/lights/master".into(), vec![rosc::OscType::Float(0.25)])));
+    hub.sends(&comp);
+    assert_eq!(read(), None, "unchanged: not again");
+    comp.master_fade = 0.9;
+    hub.sends(&comp);
+    assert_eq!(read(), Some(("/lights/master".into(), vec![rosc::OscType::Float(0.9)])));
+}

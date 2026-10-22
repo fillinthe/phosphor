@@ -52,11 +52,82 @@ pub struct TextStyle {
     /// Dark outline width as a fraction of the letter height (0 = none).
     pub outline: f32,
     pub line_spacing: f32,
+    /// Text in parts (a file's lines, sentences or words), shown one at a time: `text` is the part showing.
+    pub parts: Vec<String>,
+    pub part: usize,
+    /// How text is cut into parts (from a file, or "Split").
+    pub chunk_by: ChunkBy,
 }
 
 impl Default for TextStyle {
     fn default() -> Self {
-        Self { text: "PHOSPHOR".into(), font: "builtin:sans".into(), size: 0.18, color: [255, 255, 255, 255], align: TextAlign::Center, outline: 0.0, line_spacing: 1.0 }
+        Self { text: "PHOSPHOR".into(), font: "builtin:sans".into(), size: 0.18, color: [255, 255, 255, 255], align: TextAlign::Center, outline: 0.0, line_spacing: 1.0, parts: Vec::new(), part: 0, chunk_by: ChunkBy::Line }
+    }
+}
+
+/// How text is cut into parts shown one at a time.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChunkBy {
+    #[default]
+    Line,
+    Sentence,
+    Word,
+    /// Blocks separated by an empty line (verses).
+    Paragraph,
+}
+
+impl ChunkBy {
+    pub const ALL: [ChunkBy; 4] = [ChunkBy::Line, ChunkBy::Sentence, ChunkBy::Word, ChunkBy::Paragraph];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ChunkBy::Line => "Lines",
+            ChunkBy::Sentence => "Sentences",
+            ChunkBy::Word => "Words",
+            ChunkBy::Paragraph => "Paragraphs",
+        }
+    }
+
+    /// The non-empty parts of `text`.
+    pub fn split(self, text: &str) -> Vec<String> {
+        let parts: Vec<String> = match self {
+            ChunkBy::Line => text.lines().map(str::to_string).collect(),
+            ChunkBy::Word => text.split_whitespace().map(str::to_string).collect(),
+            ChunkBy::Paragraph => text.replace("\r\n", "\n").split("\n\n").map(str::to_string).collect(),
+            ChunkBy::Sentence => {
+                let mut out = Vec::new();
+                let mut cur = String::new();
+                for c in text.chars() {
+                    cur.push(if c == '\n' { ' ' } else { c });
+                    if matches!(c, '.' | '!' | '?') {
+                        out.push(std::mem::take(&mut cur));
+                    }
+                }
+                out.push(cur);
+                out
+            }
+        };
+        parts.into_iter().map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect()
+    }
+}
+
+impl TextStyle {
+    /// Cuts `text` into parts and shows the first (no parts: shows `text` whole).
+    pub fn set_parts(&mut self, text: &str, by: ChunkBy) {
+        self.parts = by.split(text);
+        self.part = 0;
+        self.text = self.parts.first().cloned().unwrap_or_else(|| text.to_string());
+    }
+
+    /// The next (or previous) part, round at the ends. False when there are no parts.
+    pub fn step_part(&mut self, forward: bool) -> bool {
+        let n = self.parts.len();
+        if n == 0 {
+            return false;
+        }
+        self.part = if forward { (self.part + 1) % n } else { (self.part + n - 1) % n };
+        self.text = self.parts[self.part].clone();
+        true
     }
 }
 
@@ -110,5 +181,28 @@ pub struct ClipSettings {
 impl Clip {
     pub fn is_empty(&self) -> bool {
         self.source == SourceSpec::None
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    #[test]
+    fn text_in_parts_steps_round() {
+        let mut t = TextStyle::default();
+        let lyrics = "Hello there. How are you?\nFine!\n\nSecond verse";
+        assert_eq!(ChunkBy::Sentence.split(lyrics), vec!["Hello there.", "How are you?", "Fine!", "Second verse"]);
+        assert_eq!(ChunkBy::Paragraph.split(lyrics).len(), 2);
+        assert_eq!(ChunkBy::Word.split(lyrics).len(), 8);
+        t.set_parts(lyrics, ChunkBy::Line);
+        assert_eq!(t.text, "Hello there. How are you?");
+        assert!(t.step_part(true));
+        assert_eq!(t.text, "Fine!");
+        t.step_part(true);
+        t.step_part(true);
+        assert_eq!((t.part, t.text.as_str()), (0, "Hello there. How are you?"), "round at the end");
+        t.step_part(false);
+        assert_eq!(t.text, "Second verse");
     }
 }

@@ -103,6 +103,7 @@ impl PhosphorApp {
             control.apply(comp, now as f32);
             control.feedback(comp, now);
             control.surface_osc(comp);
+            control.sends(comp);
             control.publish_query(comp, now);
         }
         for d in std::mem::take(&mut self.state.control.triggers) {
