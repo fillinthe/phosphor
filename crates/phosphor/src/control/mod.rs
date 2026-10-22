@@ -139,6 +139,12 @@ pub struct ControlHub {
     clock_out: Option<clock_out::ClockOut>,
     /// Why clock out couldn't start (the port went away…).
     pub clock_out_error: Option<String>,
+    /// MIDI timecode goes out to this MIDI output ("" = none): the show clock, or the time of day.
+    pub mtc_out_port: String,
+    pub mtc_time_of_day: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    mtc_out: Option<mtc_out::MtcOut>,
+    pub mtc_out_error: Option<String>,
     /// The last messages that came in, newest last (the MIDI / OSC monitor): when, from what, value.
     pub recent: std::collections::VecDeque<(std::time::Instant, ControlSource, f32)>,
     /// The monitor is paused (messages still work; the list stops moving).
@@ -183,13 +189,15 @@ pub struct ControlSettings {
     pub takeover_glide: bool,
     pub clip_lights: [u8; 3],
     pub clock_out_port: String,
+    pub mtc_out_port: String,
+    pub mtc_time_of_day: bool,
     /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
     pub dmx_in: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), dmx_in: false }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, dmx_in: false }
     }
 }
 
@@ -237,13 +245,15 @@ impl ControlHub {
         hub.takeover_glide = s.takeover_glide;
         hub.clip_lights = s.clip_lights;
         hub.clock_out_port = s.clock_out_port;
+        hub.mtc_out_port = s.mtc_out_port;
+        hub.mtc_time_of_day = s.mtc_time_of_day;
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), dmx_in: self.dmx_in() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, dmx_in: self.dmx_in() }
     }
 
     /// Starts or stops listening for DMX (Art-Net on udp/6454, sACN on udp/5568) as controller input.
@@ -313,6 +323,11 @@ impl ControlHub {
             takeover_glide: false,
             clip_lights: CLIP_LIGHTS[0].1,
             clock_out_port: String::new(),
+            mtc_out_port: String::new(),
+            mtc_time_of_day: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            mtc_out: None,
+            mtc_out_error: None,
             #[cfg(not(target_arch = "wasm32"))]
             clock_out: None,
             clock_out_error: None,
@@ -469,6 +484,31 @@ impl ControlHub {
         }
         #[cfg(target_arch = "wasm32")]
         let _ = (beats, bpm);
+    }
+
+    /// MIDI timecode out: started / stopped as the chosen port changes, told the time. Call every frame with the
+    /// show clock (seconds, running) and the time of day (seconds since midnight).
+    pub fn tick_mtc_out(&mut self, show: f64, running: bool, time_of_day: f64) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if self.mtc_out_port.is_empty() {
+                self.mtc_out = None;
+                self.mtc_out_error = None;
+                return;
+            }
+            let (secs, run) = if self.mtc_time_of_day { (time_of_day, true) } else { (show, running) };
+            if self.mtc_out.as_ref().is_none_or(|m| m.port != self.mtc_out_port) && self.mtc_out_error.is_none() {
+                match mtc_out::MtcOut::start(&self.mtc_out_port, secs) {
+                    Ok(m) => self.mtc_out = Some(m),
+                    Err(e) => self.mtc_out_error = Some(e),
+                }
+            }
+            if let Some(m) = &self.mtc_out {
+                m.follow(secs, run);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (show, running, time_of_day);
     }
 
     /// Controls that send out (MIDI / OSC): the ones whose value changed since last time. Call every frame.
@@ -891,6 +931,8 @@ pub use targets::*;
 mod native;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod clock_out;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod mtc_out;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod oscquery;
 #[cfg(not(target_arch = "wasm32"))]

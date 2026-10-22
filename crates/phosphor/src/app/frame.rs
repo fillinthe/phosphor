@@ -114,10 +114,17 @@ impl PhosphorApp {
         self.remote_sync(now);
         self.sync_mapping_from_output();
         {
-            let State { control, comp, clock, .. } = &mut self.state;
+            let State { control, comp, clock, cue_run, .. } = &mut self.state;
             let heard = control.poll(comp);
             control.poll_clock(now);
             control.tick_clock_out(clock.beats(now), clock.bpm);
+            #[cfg(not(target_arch = "wasm32"))]
+            if !control.mtc_out_port.is_empty() {
+                // Time of day to the millisecond (the wall clock plus the local offset from UTC).
+                let utc = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
+                let tod = (utc + crate::calendar::local_now().1 as f64).rem_euclid(86_400.0);
+                control.tick_mtc_out(cue_run.clock.time(now), cue_run.clock.running(), tod);
+            }
             control.apply(comp, now as f32);
             control.feedback(comp, now);
             control.surface_osc(comp);
