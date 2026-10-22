@@ -49,6 +49,9 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     if let Some(msg) = notice {
         ui.colored_label(WARN, msg.as_str());
     }
+    if let Some(p) = audio.problem() {
+        ui.colored_label(WARN, p);
+    }
     ui.horizontal(|ui| {
         Level::range(&mut audio.gain, 0.1, 10.0, "Input gain").log().default(1.0).target(ControlTarget::App(phosphor_engine::AppControl::AudioGain)).tip("How much the input is boosted before the visuals hear it").show(ui);
     });

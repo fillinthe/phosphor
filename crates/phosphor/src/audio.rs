@@ -128,6 +128,9 @@ pub fn band_level(bins: &[f32], lo: f32, hi: f32) -> f32 {
     bins[a..b].iter().sum::<f32>() / (b - a) as f32
 }
 
+/// The input that listens to this Mac's own sound (every app but Phosphor, no loopback driver).
+pub const SYSTEM_SOUND: &str = "This Mac's sound (all apps)";
+
 pub const FFT_SIZE: usize = 2048;
 pub const SPECTRUM_BARS: usize = 32;
 /// Spectrum bins handed to shaders (ISF `audioFFT`).
@@ -182,6 +185,9 @@ mod native {
         network: bool,
         /// Analysing the sound Phosphor plays (movie clips) instead of an input device.
         clips: bool,
+        /// This Mac's sound (other apps), from ScreenCaptureKit.
+        #[cfg(target_os = "macos")]
+        system: Option<crate::screen_capture::SystemSound>,
         pub beats: BeatTracker,
         /// LTC (audio timecode) on the first two channels, decoded only while `ltc_on`.
         ltc: Arc<Mutex<Ltc>>,
@@ -221,6 +227,8 @@ mod native {
                 last_update: None,
                 network: false,
                 clips: false,
+                #[cfg(target_os = "macos")]
+                system: None,
                 beats: BeatTracker::default(),
                 ltc: Arc::new(Mutex::new(Ltc::new(48_000))),
                 ltc_on: Default::default(),
@@ -248,6 +256,10 @@ mod native {
         }
 
         pub fn is_open(&self) -> bool {
+            #[cfg(target_os = "macos")]
+            if self.system.is_some() {
+                return true;
+            }
             self.stream.is_some() || self.network
         }
 
@@ -333,6 +345,8 @@ mod native {
         pub fn refresh_devices(&mut self) {
             let host = cpal::default_host();
             self.devices = host.input_devices().map(|it| it.filter_map(|d| device_name(&d)).collect()).unwrap_or_default();
+            #[cfg(target_os = "macos")]
+            self.devices.push(super::SYSTEM_SOUND.into());
         }
 
         /// Starts listening on a device (`None` = system default input).
@@ -340,6 +354,21 @@ mod native {
             self.close();
             if name == Some("Session viewers") {
                 self.use_network();
+                return Ok(());
+            }
+            #[cfg(target_os = "macos")]
+            if name == Some(super::SYSTEM_SOUND) {
+                let ring = self.ring.clone();
+                self.system = Some(crate::screen_capture::SystemSound::start(move |frames| {
+                    let mut q = ring.lock().unwrap();
+                    q.extend(frames.iter().copied());
+                    while q.len() > FFT_SIZE * 2 {
+                        q.pop_front();
+                    }
+                }));
+                self.sample_rate = crate::screen_capture::SYSTEM_SOUND_RATE;
+                self.beats = BeatTracker::default();
+                self.current = name.map(str::to_string);
                 return Ok(());
             }
             let host = cpal::default_host();
@@ -401,8 +430,30 @@ mod native {
             Ok(())
         }
 
+        /// Why the input isn't hearing anything, if it knows (this Mac's sound without permission).
+        pub fn problem(&self) -> Option<String> {
+            #[cfg(target_os = "macos")]
+            if let Some(s) = &self.system {
+                return s.error();
+            }
+            None
+        }
+
+        /// Something to analyse: a device, the session, the clips or this Mac's sound.
+        fn live(&self) -> bool {
+            #[cfg(target_os = "macos")]
+            if self.system.is_some() {
+                return true;
+            }
+            self.stream.is_some() || self.network || self.clips
+        }
+
         pub fn close(&mut self) {
             self.stream = None;
+            #[cfg(target_os = "macos")]
+            {
+                self.system = None;
+            }
             self.network = false;
             self.clips = false;
             self.ring.lock().unwrap().clear();
@@ -413,7 +464,7 @@ mod native {
 
         /// Analyses the newest samples; call once per frame.
         pub fn update(&mut self) -> AudioAnalysis {
-            if self.stream.is_none() && !self.network && !self.clips {
+            if !self.live() {
                 return AudioAnalysis::default();
             }
             let now = web_time::Instant::now();
@@ -503,6 +554,9 @@ mod stub {
         }
         pub fn spectrum(&self) -> &[f32] {
             &[]
+        }
+        pub fn problem(&self) -> Option<String> {
+            None
         }
         pub fn bins(&self) -> &[f32] {
             &[]
