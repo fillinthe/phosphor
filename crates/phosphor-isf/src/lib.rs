@@ -269,9 +269,10 @@ pub fn import(name_slug: &str, fs_source: &str, vs_source: Option<&str>) -> Resu
     // ISF 1 files declare their inputs again (`uniform float amount;`) and use `vv_` names: Phosphor declares every
     // input itself, so drop those lines, and read the old names as the new ones.
     let input_names: Vec<&str> = header.inputs.iter().map(|i| i.name.as_str()).collect();
-    let body_owned = glsl::rename_reserved(&glsl::drop_input_uniforms(body, &input_names), &input_names);
+    // Functions that take a picture (`sampler2D` parameters) take the `texture2D` every picture is here.
+    let body_owned = glsl::picture_params(&glsl::rename_reserved(&glsl::drop_input_uniforms(body, &input_names), &input_names));
     let body = body_owned.as_str();
-    let vs_owned = vs_source.map(|vs| glsl::rename_reserved(&glsl::drop_input_uniforms(vs, &input_names), &input_names).replace("vv_vertShaderInit", "isf_vertShaderInit"));
+    let vs_owned = vs_source.map(|vs| glsl::picture_params(&glsl::rename_reserved(&glsl::drop_input_uniforms(vs, &input_names), &input_names)).replace("vv_vertShaderInit", "isf_vertShaderInit"));
     let vs_source = vs_owned.as_deref();
     let entry = format!("isf_{}", sanitize_slug(name_slug));
 
@@ -462,6 +463,13 @@ void phosphor_vs_user() {{
     if mad_shim::called_not_defined(&whole, "textureGrad") {
         full.push_str("#define textureGrad(img, nuv, gx, gy) textureLod(sampler2D(img, phosphor_samp), phosphor_flip(nuv), 0.0)\n");
     }
+    // `textureLod(img, uv, lod)` straight on a picture: renamed, since the read macros above are `textureLod` themselves.
+    let (vs_part, fs_part) = if mad_shim::called_not_defined(&whole, "textureLod") {
+        full.push_str("#define phosphor_lod(img, nuv, l) textureLod(sampler2D(img, phosphor_samp), phosphor_flip(nuv), l)\n");
+        (glsl::rename_ident(&vs_part, "textureLod", "phosphor_lod"), glsl::rename_ident(&fs_part, "textureLod", "phosphor_lod"))
+    } else {
+        (vs_part, fs_part)
+    };
     if includes.iter().any(|f| f == "MadCommon.glsl") {
         full.push_str(&glsl::mad_common_shim(&whole));
     }

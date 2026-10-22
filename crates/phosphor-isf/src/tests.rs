@@ -241,3 +241,41 @@ fn reserved_words_used_as_names() {
     assert!(sh.unsupported.is_none(), "{:?}", sh.unsupported);
     crate::validate_wgsl(&sh.wgsl).expect("valid WGSL");
 }
+
+#[test]
+fn functions_can_take_a_picture() {
+    let fs = r#"/*{ "INPUTS": [ { "NAME": "inputImage", "TYPE": "image" } ] }*/
+vec4 blur(sampler2D img, in vec2 uv, float r) {
+    vec2 px = r / vec2(textureSize(img, 0));
+    return (texture(img, uv + px) + texture2D(img, uv - px) + IMG_NORM_PIXEL(img, uv)) / 3.0;
+}
+vec4 twice(const sampler2D a, vec2 uv) { return blur(a, uv, 2.0); }
+void main() { gl_FragColor = twice(inputImage, isf_FragNormCoord); }
+"#;
+    let s = import("pics", fs, None).unwrap();
+    assert!(s.unsupported.is_none(), "{:?}", s.unsupported);
+    validate_wgsl(&s.wgsl).unwrap();
+}
+
+#[test]
+fn a_local_named_like_a_binding_does_not_hide_it() {
+    let fs = r#"/*{ "INPUTS": [ { "NAME": "inputImage", "TYPE": "image" } ] }*/
+void main() {
+    vec2 u = isf_FragNormCoord;
+    float tex0 = 0.5;
+    gl_FragColor = IMG_NORM_PIXEL(inputImage, u) * sin(TIME + tex0);
+}
+"#;
+    let s = import("shadow", fs, None).unwrap();
+    validate_wgsl(&s.wgsl).unwrap();
+}
+
+#[test]
+fn texture_lod_on_a_picture() {
+    let fs = r#"/*{ "INPUTS": [ { "NAME": "inputImage", "TYPE": "image" } ] }*/
+vec4 at(sampler2D tex, vec2 uv, float lod) { return textureLod(tex, uv, lod); }
+void main() { gl_FragColor = at(inputImage, isf_FragNormCoord, 1.0) + textureLod(inputImage, isf_FragNormCoord, 0.0); }
+"#;
+    let s = import("lod", fs, None).unwrap();
+    validate_wgsl(&s.wgsl).unwrap();
+}

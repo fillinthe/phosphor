@@ -308,33 +308,85 @@ pub(crate) fn rename_main(src: &str, name: &str) -> Option<String> {
 }
 
 /// Words reserved in GLSL 4.50 (what shaders are converted as) that older ISF / GLSL shaders use as plain names
-/// (`vec3 sample = …`, `float filter`, `vec4 input`).
-const RESERVED_SINCE_OLD_GLSL: [&str; 13] = ["sample", "input", "output", "filter", "buffer", "shared", "common", "partition", "active", "patch", "resource", "subroutine", "superp"];
+/// (`vec3 sample = …`, `float filter`, `vec4 input`). Also the names the converted WGSL gives Phosphor's own bindings
+/// (`u`, `samp`, `tex0`, `buf0`…): a local `vec2 u` would hide the uniforms (`TIME` reads `u.time`).
+const RESERVED_SINCE_OLD_GLSL: [&str; 31] = [
+    "sample", "input", "output", "filter", "buffer", "shared", "common", "partition", "active", "patch", "resource", "subroutine", "superp",
+    "u", "samp", "samp_mirror", "tex0", "tex1", "tex2", "buf0", "buf1", "buf2", "buf3", "buf4", "buf5", "buf6", "buf7", "buf8", "buf9", "buf10", "buf11",
+];
 
 /// Renames those words where a shader uses them as names (`sample` → `isf_sample`), except `keep` (the shader's own
 /// input names: Phosphor declares those itself).
 pub(crate) fn rename_reserved(src: &str, keep: &[&str]) -> String {
     let mut out = src.to_string();
     for word in RESERVED_SINCE_OLD_GLSL.iter().filter(|w| !keep.contains(w)) {
-        if !uses_ident(&out, word) {
-            continue;
-        }
-        let b = out.as_bytes();
-        let mut next = String::with_capacity(out.len() + 16);
-        let mut i = 0;
-        while let Some(pos) = out[i..].find(word) {
-            let s = i + pos;
-            let e = s + word.len();
-            next.push_str(&out[i..s]);
-            if (s == 0 || !is_ident(b[s - 1])) && (e >= b.len() || !is_ident(b[e])) {
-                next.push_str("isf_");
-            }
-            next.push_str(word);
-            i = e;
-        }
-        next.push_str(&out[i..]);
-        out = next;
+        out = rename_ident(&out, word, &format!("isf_{word}"));
     }
+    out
+}
+
+/// Every whole-identifier `word` in `src` → `to`.
+pub(crate) fn rename_ident(src: &str, word: &str, to: &str) -> String {
+    if !uses_ident(src, word) {
+        return src.to_string();
+    }
+    let b = src.as_bytes();
+    let mut out = String::with_capacity(src.len() + 16);
+    let mut i = 0;
+    while let Some(pos) = src[i..].find(word) {
+        let s = i + pos;
+        let e = s + word.len();
+        out.push_str(&src[i..s]);
+        let whole = (s == 0 || !is_ident(b[s - 1])) && (e >= b.len() || !is_ident(b[e]));
+        out.push_str(if whole { to } else { word });
+        i = e;
+    }
+    out.push_str(&src[i..]);
+    out
+}
+
+/// Function parameters that take a picture: `vec4 blur(in sampler2D img, …)` → `texture2D img`. Every picture here
+/// is a `texture2D` read with the shared sampler, so that's what callers pass and what the read macros expect.
+/// Uniform declarations and `sampler2D(tex, samp)` constructors are left alone.
+pub(crate) fn picture_params(src: &str) -> String {
+    const QUALIFIERS: [&str; 6] = ["in", "const", "highp", "mediump", "lowp", "uniform"];
+    let b = src.as_bytes();
+    let mut out = String::with_capacity(src.len());
+    let mut i = 0;
+    while let Some(pos) = src[i..].find("sampler2D") {
+        let s = i + pos;
+        let e = s + "sampler2D".len();
+        let whole = (s == 0 || !is_ident(b[s - 1])) && (e >= b.len() || !is_ident(b[e]));
+        // What comes before, skipping parameter qualifiers: a parameter starts after `(` or `,`.
+        let mut start = s;
+        let mut before = src[..s].trim_end();
+        while let Some(q) = QUALIFIERS.iter().find(|q| before.ends_with(**q) && before.len() > q.len() && !is_ident(before.as_bytes()[before.len() - q.len() - 1])) {
+            if *q == "uniform" {
+                break;
+            }
+            before = before[..before.len() - q.len()].trim_end();
+            start = before.len();
+        }
+        let in_params = before.ends_with('(') || before.ends_with(',');
+        // After: a name (or nothing, in a prototype), then `,` or `)`; a constructor has `(` straight after.
+        let after = src[e..].trim_start();
+        let name_len = after.bytes().take_while(|c| is_ident(*c)).count();
+        let next = after[name_len..].trim_start();
+        let is_param = in_params && (next.starts_with(',') || next.starts_with(')'));
+        if whole && is_param {
+            // Qualifiers go too (`const in texture2D` isn't something naga takes).
+            let keep = if start < s { &src[i..start] } else { &src[i..s] };
+            out.push_str(keep);
+            if start < s {
+                out.push(' ');
+            }
+            out.push_str("texture2D");
+        } else {
+            out.push_str(&src[i..e]);
+        }
+        i = e;
+    }
+    out.push_str(&src[i..]);
     out
 }
 
