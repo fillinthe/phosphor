@@ -5,7 +5,9 @@ use super::*;
 impl PhosphorApp {
     pub(crate) fn ui_frame(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let now = ctx.input(|i| i.time);
+        let wall = ctx.input(|i| i.time);
+        // Rendering offline, the show runs on the render's clock (a frame at a time, never ahead of real time).
+        let now = self.state.offline.as_ref().map_or(wall, |o| o.now());
 
         if !self.lock.active {
             self.handle_dropped_files(&ctx);
@@ -211,8 +213,16 @@ impl PhosphorApp {
                 self.state.preview_wants.push((format!("bench:{i}"), phosphor_engine::PreviewItem::Effect(fx), true));
             }
         }
-        if self.state.render_due(now) {
+        let due = match &self.state.offline {
+            Some(o) => o.now() <= wall,
+            None => self.state.render_due(now),
+        };
+        if due {
             self.render(now);
+        }
+        if self.state.offline.is_some() {
+            self.state.run_offline();
+            ctx.request_repaint();
         }
         if self.state.notice != self.logged_notice {
             if let Some(n) = &self.state.notice {

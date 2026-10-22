@@ -561,6 +561,15 @@ impl VideoPlayer {
         out
     }
 
+    /// Rendering offline: this movie hasn't got its picture for the current moment yet (still opening, or
+    /// playing and out of decoded frames).
+    pub fn behind(&self) -> bool {
+        if self.live || self.audio_only || self.error.is_some() {
+            return false;
+        }
+        self.opened_at.is_some() || (self.playing && self.end.is_none() && self.pending.is_none())
+    }
+
     /// Random frames: jump somewhere in the loop range once the last jump's frame is on screen and a frame time
     /// (1/30 s, shorter when faster) has gone by. Slow-to-seek files (long-GOP H.264) just jump less often.
     fn random_jump(&mut self, now: f64) {

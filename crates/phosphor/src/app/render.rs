@@ -41,6 +41,7 @@ impl PhosphorApp {
             mod_inputs,
             mod_phases,
             stream,
+            offline,
             clock,
             net,
             net_audio,
@@ -300,7 +301,11 @@ impl PhosphorApp {
             syphon.publish(engine.device(), &frames);
         }
 
-        let stream_due = rec_src.is_none() && stream.frame_due(now);
+        // Rendering offline: a frame goes in once every movie has its picture (else the same moment renders again).
+        let stream_due = match offline {
+            Some(o) => stream.running() && o.take(media.caught_up(comp)),
+            None => rec_src.is_none() && stream.frame_due(now),
+        };
         let net_due = net.frame_due(now);
         #[cfg(any(target_os = "macos", windows))]
         let ndi_due = {
@@ -322,8 +327,11 @@ impl PhosphorApp {
         let vcam_due = vcam.frame_due(now);
         #[cfg(not(target_os = "macos"))]
         let vcam_due = false;
-        if (stream_due || net_due || ndi_due || spout_due || vcam_due) && !engine.capture_frame() && stream_due {
-            stream.repeat_last();
+        let captured = (stream_due || net_due || ndi_due || spout_due || vcam_due) && engine.capture_frame();
+        match offline {
+            Some(o) if stream_due && captured => o.done += 1,
+            None if stream_due && !captured => stream.repeat_last(),
+            _ => {}
         }
         // NDI sound: the movie mix, while someone's receiving and it's on.
         #[cfg(any(target_os = "macos", windows))]

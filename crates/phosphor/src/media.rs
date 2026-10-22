@@ -392,6 +392,28 @@ impl MediaManager {
         self.preload.want(&list);
     }
 
+    /// Rendering offline: has every movie on a showing layer got its picture for this moment (none still opening
+    /// or waiting for its decoder)?
+    pub fn caught_up(&self, comp: &Composition) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let movies = comp.layers.iter().filter(|l| l.enabled && matches!(l.source, SourceSpec::Movie { .. }));
+            for l in movies {
+                match self.players.get(&l.id) {
+                    Some(p) if p.behind() => return false,
+                    None if !self.errors.contains_key(&l.id) => return false,
+                    _ => {}
+                }
+            }
+            !self.outgoing.values().any(|p| p.behind())
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = comp;
+            true
+        }
+    }
+
     pub fn update_video(&mut self, comp: &Composition, engine: &mut Engine, now: f64) {
         // Movies opened in the background: in place if the layer still wants them.
         #[cfg(not(target_arch = "wasm32"))]

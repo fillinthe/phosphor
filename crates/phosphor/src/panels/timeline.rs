@@ -35,7 +35,18 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
             let n = tl.markers.len() + 1;
             tl.markers.push(Marker { t: st.timeline_pos, name: format!("M{n}"), kind: MarkerKind::Label });
         }
+        render_menu(ui, st, now);
     });
+    if let Some((p, done, frames)) = st.offline.as_ref().map(|o| (o.progress(), o.done, o.frames)) {
+        let stop = ui.horizontal(|ui| {
+            ui.add(meter(p).desired_width(200.0));
+            ui.label(format!("Rendering {done} / {frames} frames"));
+            ui.button("Stop").clicked()
+        });
+        if stop.inner {
+            st.offline_stop();
+        }
+    }
     if st.comp.timeline.tracks.is_empty() {
         hint(ui, "Right-click any slider or button › Key on the timeline: it gets a track here with a key at the playhead. Move the playhead, change the value, key it again.");
     }
@@ -174,4 +185,47 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
     let x = x_of(st.timeline_pos);
     let area = ui.min_rect();
     ui.painter().line_segment([egui::pos2(x, ruler.top()), egui::pos2(x, area.bottom())], Stroke::new(1.5, crate::theme::WARN));
+}
+
+/// Render to a movie: the file, format, frame rate and length, then Render (frame by frame, never a dropped frame).
+fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
+    if st.offline.is_some() {
+        return;
+    }
+    ui.menu_button(label(icon::FILM_STRIP, "Render…"), |ui| {
+        let length = st.comp.timeline.length;
+        let o = &mut st.offline_setup;
+        ui.horizontal(|ui| {
+            crate::ui::text_field(ui, &mut o.path, "…/show.mp4 or .mov (ProRes)", Some(220.0));
+            #[cfg(not(target_arch = "wasm32"))]
+            if ui.button("Choose…").clicked() {
+                st.dialogs.save_file(crate::dialogs::Purpose::RenderFile, ("Video", &["mp4", "mov"]), "Phosphor render.mp4");
+            }
+        });
+        let o = &mut st.offline_setup;
+        ui.horizontal(|ui| {
+            ui.label("Format");
+            choice_combo(ui, "render_format", &mut o.format, 200.0, false);
+        });
+        ui.horizontal(|ui| {
+            ui.label("fps");
+            egui::ComboBox::from_id_salt("render_fps").width(60.0).selected_text(o.fps.to_string()).show_ui(ui, |ui| {
+                for f in [24, 25, 30, 50, 60] {
+                    ui.selectable_value(&mut o.fps, f, f.to_string());
+                }
+            });
+            ui.label("Length");
+            let mut secs = if o.secs > 0.0 { o.secs } else { length };
+            if guarded!(ui, secs, egui::DragValue::new(&mut secs).range(0.1..=36_000.0).speed(0.5).suffix(" s").max_decimals(1)).changed() {
+                o.secs = secs;
+            }
+        });
+        crate::ui::toggle(ui, &mut o.from_start, "Timeline from the start");
+        hint(ui, "Frame by frame: every movie waits for its picture, so a heavy show comes out smooth. No faster than real time. Picture only, no sound yet.");
+        if action_button(ui, Act::Record, label(icon::RECORD, "Render")).clicked() {
+            let setup = st.offline_setup.clone();
+            st.offline_start(&setup, now);
+            ui.close();
+        }
+    });
 }
