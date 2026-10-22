@@ -87,6 +87,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                     }
                 }
             }
+            let mut text_sets: Vec<(u64, String)> = Vec::new();
             let pointer = ui.ctx().input(|i| i.pointer.interact_pos());
             for w in st.comp.surface.on_page() {
                 let rect = egui::Rect::from_min_size(canvas.min + egui::vec2(w.x * cell, w.y * cell), egui::vec2(w.w * cell, w.h * cell)).shrink(3.0);
@@ -174,6 +175,17 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                         }
                     }
                     WidgetKind::Label => {}
+                    // Typed words go on the text layer when Enter is pressed (or the field is left).
+                    WidgetKind::Text => {
+                        let key = id.with("draft");
+                        let mut draft: String = ui.data_mut(|d| d.get_temp(key)).unwrap_or_else(|| w.text.clone());
+                        let field = ui.put(rect.shrink(4.0), egui::TextEdit::singleline(&mut draft).hint_text(if w.label.is_empty() { "type, then Enter" } else { &w.label }));
+                        if field.lost_focus() && draft != w.text {
+                            text_sets.push((w.id, draft.clone()));
+                        }
+                        ui.data_mut(|d| d.insert_temp(key, draft));
+                        continue;
+                    }
                 }
                 draw_widget(&painter, w, rect, false);
                 if w.kind == WidgetKind::Label {
@@ -198,6 +210,9 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                         ui.close();
                     }
                 });
+            }
+            for (wid, text) in text_sets {
+                st.comp.set_surface_text(wid, &text);
             }
             // Dragging in edit mode: snap to the grid.
             if let (Some(g), Some(p)) = (grab, pointer) {
@@ -357,6 +372,12 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
                 p.text(r.center(), egui::Align2::CENTER_CENTER, name, font.clone(), if on { Color32::BLACK } else { p.ctx().global_style().visuals.text_color() });
             }
         }
+        WidgetKind::Text => {
+            p.rect_stroke(rect, 4.0, Stroke::new(1.0, c), StrokeKind::Inside);
+            if edit {
+                p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, if w.text.is_empty() { &w.label } else { &w.text }, font, c);
+            }
+        }
         WidgetKind::Label => {
             if edit {
                 p.rect_filled(rect, 4.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
@@ -375,6 +396,7 @@ pub(crate) fn selected_widget(ctx: &egui::Context) -> Option<u64> {
 pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets: &[(ControlTarget, String)]) -> bool {
     let mut delete = false;
     let mut duplicate = false;
+    let text_layers: Vec<(u64, String)> = st.comp.layers.iter().filter(|l| matches!(l.source, phosphor_engine::SourceSpec::Text(_))).map(|l| (l.id, l.name.clone())).collect();
     let Some(w) = st.comp.surface.widget_mut(id) else { return false };
     ui.horizontal(|ui| {
         ui.label(RichText::new(w.kind.name()).strong().color(accent()));
@@ -393,7 +415,20 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             }
         }
     });
-    if w.kind != WidgetKind::Label {
+    if w.kind == WidgetKind::Text {
+        ui.add_space(4.0);
+        ui.label(RichText::new("Writes on").strong());
+        let current = w.text_layer.and_then(|t| text_layers.iter().find(|(id, _)| *id == t)).map_or("(pick a text layer)".to_string(), |(_, n)| n.clone());
+        ComboBox::from_id_salt(("text_layer", id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
+            for (lid, name) in &text_layers {
+                ui.selectable_value(&mut w.text_layer, Some(*lid), name);
+            }
+        });
+        if text_layers.is_empty() {
+            hint(ui, "Add a text layer first (a layer's source › Text).");
+        }
+    }
+    if !matches!(w.kind, WidgetKind::Label | WidgetKind::Text) {
         ui.add_space(4.0);
         let axis = match w.kind {
             WidgetKind::XyPad => "Horizontal (X) drives",
