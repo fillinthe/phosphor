@@ -68,6 +68,8 @@ pub enum Action {
     LockPanels,
     /// Bring another project's layers, media, cues and mappings into this one.
     MergeProject,
+    /// Pick a ready-made starting point.
+    NewFromTemplate,
 }
 
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
@@ -89,6 +91,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
         "File",
         &[
             I(A::NewProject, "New Project", Some((false, Key::N))),
+            I(A::NewFromTemplate, "New from Template…", None),
             I(A::Open, "Open Project…", Some((false, Key::O))),
             D("Open Recent"),
             I(A::MergeProject, "Merge Project…", None),

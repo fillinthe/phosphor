@@ -3,6 +3,35 @@
 use super::*;
 
 impl PhosphorApp {
+    /// File › New from Template: the ready-made starting points, one click each.
+    pub(crate) fn templates_window(&mut self, ctx: &egui::Context) {
+        if !self.state.templates_open {
+            return;
+        }
+        let mut open = true;
+        let mut pick: Option<usize> = None;
+        egui::Window::new("New from a template").collapsible(false).resizable(false).open(&mut open).anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0]).show(ctx, |ui| {
+            ui.set_width(420.0);
+            for (k, (name, about, _)) in phosphor_engine::TEMPLATES.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if ui.add(egui::Button::new(*name).min_size(egui::vec2(130.0, 0.0))).clicked() {
+                        pick = Some(k);
+                    }
+                    crate::ui::hint(ui, *about);
+                });
+            }
+            crate::ui::hint(ui, "Undo (⌘Z) brings back the project you had.");
+        });
+        if let Some(k) = pick {
+            let (name, _, make) = phosphor_engine::TEMPLATES[k];
+            self.state.load_composition(make());
+            self.state.project_path = None;
+            self.state.notice = Some(format!("New project from \"{name}\". Undo (⌘Z) brings the previous one back."));
+            open = false;
+        }
+        self.state.templates_open = open;
+    }
+
     /// The welcome card. `self.welcome_open` is set on the very first launch (no saved settings yet).
     pub(crate) fn welcome_window(&mut self, ctx: &egui::Context) {
         if !self.welcome_open {
