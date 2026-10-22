@@ -35,6 +35,9 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         {
             st.dialogs.save_file(crate::dialogs::Purpose::TouchOsc, ("TouchOSC layout", &["tosc"]), "Phosphor.tosc");
         }
+        if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import TouchOSC layout…")).on_hover_text("Bring a TouchOSC layout in as Control Surface pages: same controls in the same places, each control's OSC address already mapped").clicked() {
+            st.dialogs.pick_file(crate::dialogs::Purpose::ImportTouchOsc, Some(("TouchOSC layout", &["tosc", "xml"])));
+        }
     });
     let control = &mut st.control;
     ui.horizontal(|ui| {
