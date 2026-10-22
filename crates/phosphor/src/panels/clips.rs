@@ -259,6 +259,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut beat: Option<(u64, usize)> = None;
     let mut beat_row: Option<u64> = None;
     let mut fill_row: Option<u64> = None;
+    let mut row_midi: Option<(u64, RowMidi)> = None;
     {
         let drag_at = crate::app::file_drag_point(ui.ctx());
         let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, .. } = st;
@@ -293,7 +294,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
                     let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
-                    let (fill, beat_all) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, cell.y));
+                    let (fill, beat_all, midi) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, cell.y));
+                    if let Some(m) = midi {
+                        row_midi = Some((layer.id, m));
+                    }
                     if fill {
                         fill_row = Some(layer.id);
                     }
@@ -454,6 +458,14 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     {
         apply_clip_act(st, id, c, ClipAct::StoreCurrent, now);
     }
+    match row_midi {
+        Some((id, RowMidi::Map(ch, note))) => {
+            st.comp.map_clip_row(id, ch, note);
+            st.notice = Some(format!("Clip row on MIDI channel {} from note {note}", ch + 1));
+        }
+        Some((id, RowMidi::Shift(by))) => st.comp.shift_clip_row(id, by),
+        None => {}
+    }
     if let Some(id) = fill_row {
         st.quick_on(crate::app::Quick::Fill, Some(id), now);
     }
@@ -475,8 +487,15 @@ const ROW_HEADER_W: f32 = 176.0;
 
 /// The start of a clip row is the layer itself: its live picture (click = select it, the Inspector opens), its name
 /// (menu: autopilot, fill, match the beat), ON and opacity. Returns (fill the row, match every clip's beat).
-fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool) {
+/// A row's MIDI notes, asked for in its menu: map the row from a note (channel, first note), or shift it.
+enum RowMidi {
+    Map(u8, u8),
+    Shift(i32),
+}
+
+fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool, Option<RowMidi>) {
     use phosphor_engine::Autopilot;
+    let mut row_midi = None;
     let mut fill = false;
     let mut beat_all = false;
     let is_selected = *selected == Some(layer.id);
@@ -525,6 +544,32 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
                 ui.close();
             }
             ui.separator();
+            ui.label(RichText::new(format!("{} MIDI notes", icon::PIANO_KEYS)).strong());
+            hint(ui, "The whole row on a run of notes (a pad grid's row): clip 1 = the first note, clip 2 = the next…");
+            let key = ui.id().with(("row_midi", layer.id));
+            let (mut ch, mut note): (u8, u8) = ui.data(|d| d.get_temp(key)).unwrap_or((0, 36));
+            ui.horizontal(|ui| {
+                let mut c1 = ch + 1;
+                guarded!(ui, c1, egui::DragValue::new(&mut c1).range(1..=16).prefix("ch "));
+                ch = c1 - 1;
+                guarded!(ui, note, egui::DragValue::new(&mut note).range(0..=127).prefix("from note "));
+                if ui.button("Map the row").clicked() {
+                    row_midi = Some(RowMidi::Map(ch, note));
+                    ui.close();
+                }
+            });
+            ui.data_mut(|d| d.insert_temp(key, (ch, note)));
+            ui.horizontal(|ui| {
+                ui.label("Shift its notes");
+                for by in [-8, -1, 1, 8] {
+                    if ui.small_button(format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
+                        row_midi = Some(RowMidi::Shift(by));
+                    }
+                }
+            });
+            let pick = ui.button(label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
+            map_menu(ui, &pick, ControlTarget::LayerClipPick(layer.id));
+            ui.separator();
             ui.label(RichText::new(format!("{} Autopilot", icon::AIRPLANE_TILT)).strong());
             hint(ui, "When this clip is done: play another one by itself, or clear the layer.");
             for a in Autopilot::ALL {
@@ -568,7 +613,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(accent()));
         }
     });
-    (fill, beat_all)
+    (fill, beat_all, row_midi)
 }
 
 /// Bank letters: A–Z, then AA, AB…

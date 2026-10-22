@@ -72,6 +72,8 @@ pub enum ControlTarget {
     LayerVolume(u64),
     /// A text layer's words, from an OSC message that carries text (numbers do nothing here).
     LayerText(u64),
+    /// Picks one of a layer's clips by value (0..1 across its clips; a knob or fader), and launches it.
+    LayerClipPick(u64),
     /// A text layer in parts: the next / previous part (a press).
     LayerTextStep { layer: u64, forward: bool },
     /// Layer transform: position (0..1 = left/bottom..right/top), scale (0..1 = 0.05×..4×, log), rotation (0..1 = -180..180°).
@@ -379,6 +381,28 @@ pub struct ControlSend {
 }
 
 impl crate::Composition {
+    /// A layer's clip row on MIDI notes: slot 1 = `first`, slot 2 = `first + 1`… on `channel` (VDMX's detect range),
+    /// replacing the row's note mappings.
+    pub fn map_clip_row(&mut self, layer: u64, channel: u8, first: u8) {
+        let row = |t: &ControlTarget| matches!(t, ControlTarget::TriggerClip { layer: l, .. } if *l == layer);
+        self.control_maps.retain(|m| !(row(&m.target) && matches!(m.source, ControlSource::MidiNote { .. })));
+        for slot in 0..self.clip_columns.max(1) {
+            let Some(note) = (first as usize).checked_add(slot).filter(|n| *n <= 127) else { break };
+            self.control_maps.push(ControlMap::new(ControlSource::MidiNote { channel: channel & 15, note: note as u8 }, ControlTarget::TriggerClip { layer, slot }));
+        }
+    }
+
+    /// Moves a clip row's note mappings by `by` notes (a bank up / down on a grid controller).
+    pub fn shift_clip_row(&mut self, layer: u64, by: i32) {
+        for m in &mut self.control_maps {
+            if let (ControlTarget::TriggerClip { layer: l, .. }, ControlSource::MidiNote { note, .. }) = (&m.target, &mut m.source)
+                && *l == layer
+            {
+                *note = (*note as i32 + by).clamp(0, 127) as u8;
+            }
+        }
+    }
+
     /// Copies of `maps` (input, range, value effects) aimed at `target` too; one already the same isn't added twice.
     pub fn paste_mappings(&mut self, maps: &[ControlMap], target: &ControlTarget) {
         for m in maps {
@@ -499,6 +523,18 @@ fn jitter() -> f32 {
 #[cfg(test)]
 mod value_fx_tests {
     use super::*;
+
+    #[test]
+    fn clip_rows_map_to_runs_of_notes() {
+        let mut c = crate::Composition { clip_columns: 4, ..Default::default() };
+        c.map_clip_row(7, 0, 36);
+        c.map_clip_row(7, 0, 40);
+        let notes: Vec<u8> = c.control_maps.iter().filter_map(|m| if let ControlSource::MidiNote { note, .. } = m.source { Some(note) } else { None }).collect();
+        assert_eq!(notes, vec![40, 41, 42, 43], "replaced, not added");
+        assert_eq!(c.control_maps[3].target, ControlTarget::TriggerClip { layer: 7, slot: 3 });
+        c.shift_clip_row(7, -8);
+        assert!(matches!(c.control_maps[0].source, ControlSource::MidiNote { note: 32, .. }));
+    }
 
     #[test]
     fn mappings_paste_onto_another_control() {

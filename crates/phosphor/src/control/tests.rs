@@ -707,3 +707,18 @@ fn clip_pads_show_empty_loaded_and_playing() {
     assert_eq!(super::clip_light(&comp, layer, 5, lights), Some(0), "empty slot");
     assert_eq!(super::clip_light(&comp, 999, 0, lights), None);
 }
+
+#[test]
+fn a_value_picks_a_clip() {
+    let mut comp = Composition::starter();
+    let layer = comp.add_layer().id;
+    let movie = phosphor_engine::SourceSpec::Movie { name: "a".into(), path: Some("/x/a.mp4".into()) };
+    // Clips in slots 0, 2 and 3 (slot 1 empty): a value picks among the three.
+    comp.place_clips(layer, 0, vec![("a".into(), movie.clone())]);
+    comp.place_clips(layer, 2, vec![("b".into(), movie.clone()), ("c".into(), movie)]);
+    let mut out = Vec::new();
+    set_target(&mut comp, &ControlTarget::LayerClipPick(layer), 0.5, &mut out);
+    set_target(&mut comp, &ControlTarget::LayerClipPick(layer), 0.99, &mut out);
+    let slots: Vec<usize> = out.iter().filter_map(|d| if let Deferred::Clip(_, s) = d { Some(*s) } else { None }).collect();
+    assert_eq!(slots, vec![2, 3]);
+}

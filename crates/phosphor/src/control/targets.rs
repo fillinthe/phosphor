@@ -88,7 +88,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::SurfacePage => phosphor_engine::pick_unit(comp.surface.current_page(), comp.surface.pages.len()),
             _ => return None,
         },
-        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } => return None,
+        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) => return None,
     })
 }
 
@@ -210,6 +210,18 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::LayerScrub(id) => out.push(Deferred::Scrub(*id, v.clamp(0.0, 1.0))),
         // Words, not numbers: set by OSC text (`ControlHub::apply_texts`).
         ControlTarget::LayerText(_) => {}
+        ControlTarget::LayerClipPick(layer) => {
+            // Among the clips that are there; only when the pick changes (a fader sends many values).
+            if let Some(l) = comp.layers.iter().find(|l| l.id == *layer) {
+                let slots: Vec<usize> = l.clips.iter().enumerate().filter(|(_, c)| !c.is_empty()).map(|(i, _)| i).collect();
+                if !slots.is_empty() && v != FLIP {
+                    let slot = slots[phosphor_engine::pick(v.clamp(0.0, 1.0), slots.len())];
+                    if l.clips.get(slot).is_some_and(|c| l.active_clip != Some(c.id)) {
+                        out.push(Deferred::Clip(*layer, slot));
+                    }
+                }
+            }
+        }
         ControlTarget::LayerTextStep { layer, forward } => {
             if (v > 0.5 || v == FLIP)
                 && let Some(phosphor_engine::SourceSpec::Text(style)) = comp.layer_mut(*layer).map(|l| &mut l.source)
@@ -398,6 +410,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
             out.push((ControlTarget::LayerLoopOut(l.id), format!("{} · loop out", l.name)));
             out.push((ControlTarget::LayerDirection(l.id), format!("{} · direction", l.name)));
         }
+        if l.clips.iter().any(|c| !c.is_empty()) {
+            out.push((ControlTarget::LayerClipPick(l.id), format!("{} · pick a clip (by value)", l.name)));
+        }
         for (slot, clip) in l.clips.iter().enumerate() {
             if !clip.is_empty() {
                 out.push((ControlTarget::TriggerClip { layer: l.id, slot }, format!("{} · clip {} ({})", l.name, slot + 1, clip.name)));
@@ -440,6 +455,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerDirection(id) => format!("/phosphor/layer/{id}/direction"),
         ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
         ControlTarget::LayerText(id) => format!("/phosphor/layer/{id}/text"),
+        ControlTarget::LayerClipPick(id) => format!("/phosphor/layer/{id}/clip/pick"),
         ControlTarget::LayerTextStep { layer, forward } => format!("/phosphor/layer/{layer}/text/{}", if *forward { "next" } else { "previous" }),
         ControlTarget::LayerJump { layer, forward } => format!("/phosphor/layer/{layer}/jump/{}", if *forward { "forward" } else { "back" }),
         ControlTarget::LayerVolume(id) => format!("/phosphor/layer/{id}/volume"),
