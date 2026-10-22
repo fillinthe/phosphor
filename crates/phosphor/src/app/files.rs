@@ -178,6 +178,18 @@ impl PhosphorApp {
                         st.start_relink(p.clone());
                     }
                 }
+                Purpose::MergeProject => {
+                    if let Some(p) = paths.first() {
+                        let read = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string()));
+                        st.notice = Some(match read {
+                            Ok(other) => {
+                                let m = st.comp.merge(other);
+                                format!("Merged {}: {} layers, {} media files, {} cues, {} mappings (Undo takes it back out)", name_of(p), m.layers, m.media, m.cues, m.mappings)
+                            }
+                            Err(e) => format!("Couldn't merge that project: {e}"),
+                        });
+                    }
+                }
                 Purpose::CueCalendar => {
                     if let Some(p) = paths.first() {
                         st.comp.cues.calendar = p.to_string_lossy().into_owned();
