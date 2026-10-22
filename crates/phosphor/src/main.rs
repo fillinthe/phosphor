@@ -11,6 +11,8 @@ mod control;
 mod dialogs;
 #[cfg(not(target_arch = "wasm32"))]
 mod dmx;
+#[cfg(not(target_arch = "wasm32"))]
+mod dmx_record;
 mod explorer;
 #[cfg(not(target_arch = "wasm32"))]
 mod folders;

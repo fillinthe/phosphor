@@ -65,6 +65,8 @@ impl PhosphorApp {
             #[cfg(not(target_arch = "wasm32"))]
             dmx,
             #[cfg(not(target_arch = "wasm32"))]
+            dmx_rec,
+            #[cfg(not(target_arch = "wasm32"))]
             tracker,
             #[cfg(target_os = "macos")]
             ffgl,
@@ -212,10 +214,15 @@ impl PhosphorApp {
         // LED / DMX: sample the fixtures' pixels from this frame when the lights want one.
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let points = if comp.dmx.enabled { comp.dmx.sample_points() } else { Vec::new() };
+            // Playing a DMX recording: it goes out instead of the picture (nothing to sample).
+            let playback = dmx_rec.playback(now);
+            let points = if comp.dmx.enabled && playback.is_none() { comp.dmx.sample_points() } else { Vec::new() };
             engine.set_sample_points(&points);
             if dmx.frame_due(now, &comp.dmx) {
-                engine.request_samples();
+                match &playback {
+                    Some(unis) => dmx.send(&comp.dmx, unis),
+                    None => engine.request_samples(),
+                }
             }
         }
         // FFGL plugins draw what the last frame asked for, so this frame shows it.
@@ -235,6 +242,7 @@ impl PhosphorApp {
         {
             let universes = comp.dmx.universes(&colors, mod_inputs.beats as f64);
             dmx.send(&comp.dmx, &universes);
+            dmx_rec.sent(now, &universes);
         }
         for f in engine.take_monitor_reads() {
             match f.tag as u8 {

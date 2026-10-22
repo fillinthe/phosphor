@@ -39,6 +39,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
 
     #[cfg(not(target_arch = "wasm32"))]
     dmx_monitor(ui, st);
+    #[cfg(not(target_arch = "wasm32"))]
+    dmx_recorder(ui, st);
 
     // The picture with every fixture on it.
     let w = ui.available_width().max(160.0);
@@ -281,6 +283,40 @@ fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
             let (cx, cy) = (((pos.x - rect.left()) / cell) as usize, ((pos.y - rect.top()) / cell) as usize);
             let i = (cy * cols + cx).min(511);
             resp.on_hover_text(format!("Universe {uni} · channel {} = {}", i + 1, data[i]));
+        }
+    });
+}
+
+/// Record what the lights are sent and play it back (a chase you can reuse without the picture), save and open takes.
+#[cfg(not(target_arch = "wasm32"))]
+fn dmx_recorder(ui: &mut egui::Ui, st: &mut State) {
+    let now = ui.input(|i| i.time);
+    ui.horizontal_wrapped(|ui| {
+        let r = &mut st.dmx_rec;
+        if r.is_recording() {
+            if action_button(ui, Act::Record, label(icon::STOP, &format!("Stop ({:.0} s)", r.elapsed(now)))).clicked() {
+                r.stop();
+            }
+        } else if ui.button(label(icon::RECORD, "Record DMX")).on_hover_text("Keep everything the lights are sent from now on (Stop ends the take)").clicked() {
+            r.start_recording(now);
+        }
+        let has_take = r.take.as_ref().is_some_and(|t| !t.frames.is_empty());
+        if r.is_playing() {
+            if ui.button(label(icon::STOP, &format!("Stop playback ({:.0} s)", r.elapsed(now)))).clicked() {
+                r.stop();
+            }
+        } else if ui.add_enabled(has_take && !r.is_recording(), egui::Button::new(label(icon::PLAY, "Play"))).on_hover_text("Send the take to the lights instead of the picture").clicked() {
+            r.play(now);
+        }
+        crate::ui::toggle(ui, &mut r.looping, "Loop");
+        if let Some(t) = &r.take {
+            hint(ui, &format!("take: {:.1} s, {} frames", t.length(), t.frames.len()));
+        }
+        if ui.add_enabled(has_take, egui::Button::new(label(icon::FLOPPY_DISK, "Save…"))).clicked() {
+            st.dialogs.save_file(crate::dialogs::Purpose::SaveDmxTake, ("DMX take", &["phdmx"]), "Lights.phdmx");
+        }
+        if ui.button(label(icon::FOLDER_OPEN, "Open…")).on_hover_text("A saved take (.phdmx)").clicked() {
+            st.dialogs.pick_file(crate::dialogs::Purpose::OpenDmxTake, Some(("DMX take", &["phdmx"])));
         }
     });
 }

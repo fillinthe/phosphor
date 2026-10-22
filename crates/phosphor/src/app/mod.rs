@@ -156,6 +156,9 @@ pub struct State {
     /// LED / DMX sender (Art-Net, sACN).
     #[cfg(not(target_arch = "wasm32"))]
     pub dmx: crate::dmx::DmxOut,
+    /// Records what the lights were sent, and plays it back instead of the live picture.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub dmx_rec: crate::dmx_record::DmxRecorder,
     /// Projector control (PJLink) per output.
     #[cfg(not(target_arch = "wasm32"))]
     pub projectors: crate::pjlink::Projectors,
