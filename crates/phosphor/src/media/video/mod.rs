@@ -614,6 +614,13 @@ impl VideoPlayer {
         s.follow(f);
     }
 
+    /// Which pair of the sound output's channels this plays on (0 = 1-2).
+    pub fn set_sound_pair(&self, pair: u32) {
+        if let Some(s) = &self.sound {
+            s.set_pair(pair);
+        }
+    }
+
     /// Sound volume (0 = silent; 1 = as recorded).
     pub fn set_volume(&self, gain: f32) {
         if let Some(s) = &self.sound {
