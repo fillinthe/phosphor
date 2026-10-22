@@ -32,6 +32,8 @@ use crate::theme;
 
 
 mod auto_show;
+#[cfg(not(target_arch = "wasm32"))]
+mod backgrounds;
 mod welcome;
 mod autopilot;
 mod step_fires;
@@ -284,6 +286,8 @@ pub struct State {
     pub mouse_to_shaders: bool,
     /// File › New from Template is open.
     pub templates_open: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) backgrounds: backgrounds::Backgrounds,
     /// A snapshot of this output was asked for (Output panel); the app saves it.
     pub snapshot_output: Option<u64>,
     /// Mappings copied from a control's menu (their target is replaced on paste).

@@ -37,6 +37,8 @@ pub enum Purpose {
     CueCalendar,
     /// A project to merge into this one.
     MergeProject,
+    /// A background picture for this output.
+    OutputBackground(u64),
 }
 
 pub struct Dialogs {

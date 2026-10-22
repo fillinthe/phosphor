@@ -226,6 +226,8 @@ pub struct Engine {
     output_targets: HashMap<u64, Option<Target>>,
     /// Outputs that are flipped or delayed: drawn here first, then mirrored / held back into `output_targets`.
     output_extra: HashMap<u64, OutputExtra>,
+    /// Background pictures behind outputs' slices (`OutputConfig::background`), by output id.
+    output_backgrounds: HashMap<u64, Target>,
     meshes: MeshCache,
     previews: Vec<(PreviewItem, bool)>,
     /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
@@ -288,6 +290,7 @@ impl Engine {
             frame_index: 0,
             output_targets: HashMap::new(),
             output_extra: HashMap::new(),
+            output_backgrounds: HashMap::new(),
             meshes: MeshCache::default(),
             previews: Vec::new(),
             monitor_req: Vec::new(),
@@ -656,9 +659,16 @@ impl Engine {
                 self.push_scan(o.id, &view, (ow, oh), &mut passes);
                 continue;
             }
-            // Black, then each enabled surface blended on top.
+            // Black (or its background picture), then each enabled surface blended on top.
             u.opacity = 0.0;
             passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+            if let Some(bg) = self.output_backgrounds.get(&o.id).filter(|_| o.background_opacity > 0.0 && !o.background.is_empty()) {
+                let mut bu = Uniforms::with_params(&[]);
+                bu.resolution = [ow as f32, oh as f32];
+                bu.opacity = o.background_opacity.clamp(0.0, 1.0);
+                bu.uv_xform = fit::fit_transform((bg.width, bg.height), (ow, oh), FitMode::Fill);
+                passes.push(Pass { entry: "fs_composite", target: view.clone(), tex0: bg.view.clone(), tex1: None, tex2: None, uniforms: bu, mesh: None, bufs: Vec::new() });
+            }
             for s in mapping.shown() {
                 // A layer's, group's or comp's own picture (black while it's off); the mix if it's gone.
                 let src = match s.layer {

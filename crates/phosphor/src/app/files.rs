@@ -178,6 +178,11 @@ impl PhosphorApp {
                         st.start_relink(p.clone());
                     }
                 }
+                Purpose::OutputBackground(id) => {
+                    if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter_mut().find(|o| o.id == id)) {
+                        o.background = p.to_string_lossy().into_owned();
+                    }
+                }
                 Purpose::MergeProject => {
                     if let Some(p) = paths.first() {
                         let read = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string()));

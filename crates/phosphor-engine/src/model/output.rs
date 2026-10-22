@@ -94,6 +94,9 @@ pub struct OutputConfig {
     /// Hold the last picture while everything behind it keeps changing (not saved: a show opens live).
     #[serde(skip)]
     pub frozen: bool,
+    /// A picture behind this output's slices (a backdrop, a building's texture) and how strongly it shows. "" = none.
+    pub background: String,
+    pub background_opacity: f32,
 }
 
 impl crate::Composition {
@@ -185,7 +188,7 @@ impl GridOverlay {
 
 impl Default for OutputConfig {
     fn default() -> Self {
-        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None, flip_x: false, flip_y: false, delay_frames: 0, frozen: false }
+        Self { id: 0, name: "Output".into(), enabled: true, width: 0, height: 0, mapping: Mapping::default(), syphon: false, color: ColorGrade::default(), screen: String::new(), grid: GridOverlay::default(), stage_photo: String::new(), stage_photo_opacity: 0.5, projector: None, program: None, flip_x: false, flip_y: false, delay_frames: 0, frozen: false, background: String::new(), background_opacity: 1.0 }
     }
 }
 

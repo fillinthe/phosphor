@@ -30,6 +30,17 @@ impl Engine {
         );
     }
 
+    /// The picture behind an output's slices (None = none).
+    pub fn set_output_background(&mut self, output: u64, picture: Option<(u32, u32, &[u8])>) {
+        let Some((width, height, rgba)) = picture else {
+            self.output_backgrounds.remove(&output);
+            return;
+        };
+        let target = Target::new(&self.gpu.device, "output background", width, height);
+        self.gpu.queue.write_texture(target.texture.as_image_copy(), rgba, wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: None }, target.texture.size());
+        self.output_backgrounds.insert(output, target);
+    }
+
     /// A picture an ISF shader imports (`IMPORTED`): bound at buffer `slot` whenever `entry` runs.
     pub fn set_plan_image(&mut self, entry: &'static str, slot: usize, width: u32, height: u32, rgba: &[u8]) {
         let target = Target::new(&self.gpu.device, "plan image", width, height);
