@@ -60,7 +60,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
             Some(i) => crate::explorer::replace_source(st, i, source),
             None => crate::explorer::new_shader(st, source),
         }
-        st.notice = Some("the AI's shader is in the Shader Editor".into());
+        st.notice = Some("The AI's shader is in the Shader Editor".into());
     }
     let open_shader = st.editor.current.and_then(|i| st.editor.shaders.get(i)).map(|s| (s.slug.clone(), s.source.clone()));
     let a = &mut st.ai_shader;

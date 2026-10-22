@@ -3,7 +3,7 @@
 //! `ANTHROPIC_API_KEY`. Each answer is checked with the engine's own compiler (`custom::check`, no GPU) on the job's
 //! thread; if it doesn't compile, the error goes back to the AI to fix (up to `REPAIRS` times) before you see it.
 //!
-//! The conversation is only ever appended to (the AI's answers go back exactly as they came), so a fix keeps the
+//! The conversation is only ever appended to (its answers go back exactly as they came), so a fix keeps the
 //! reasoning behind the first try. `PHOSPHOR_AI_URL` points it at another server (tests use a local one).
 
 use std::process::{Command, Stdio};
@@ -12,8 +12,8 @@ use std::sync::mpsc;
 use phosphor_engine::custom;
 use serde_json::{Value, json};
 
-/// The model that writes shaders.
-pub const MODEL: &str = "ai-model";
+/// Which model writes shaders: `PHOSPHOR_AI_MODEL`, else the newest one the account offers (`pick_model`).
+const MODELS_URL: &str = "https://api.anthropic.com/v1/models";
 /// How many times a shader that doesn't compile goes back for a fix.
 pub const REPAIRS: usize = 2;
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -136,9 +136,9 @@ fn main(in: VOut) -> @location(0) vec4f { … }
 
 /// The request body: one model, adaptive thinking at medium effort (plenty for a shader), the instructions cached so
 /// a fix costs little, and the default refusal fallback.
-pub fn request_body(messages: &[Value]) -> Value {
+pub fn request_body(model: &str, messages: &[Value]) -> Value {
     json!({
-        "model": MODEL,
+        "model": model,
         "max_tokens": 16000,
         "system": [{"type": "text", "text": system_prompt(), "cache_control": {"type": "ephemeral"}}],
         "output_config": {"effort": "medium"},
@@ -173,12 +173,12 @@ pub fn read_response(status: u16, body: &[u8]) -> Result<Answer, String> {
             401 => "The API key wasn't accepted: check it at console.anthropic.com".into(),
             402 | 403 => format!("Your Anthropic account can't run this: {msg}"),
             429 => "Too many requests right now: try again in a minute".into(),
-            529 | 500..=599 => "the AI is busy: try again in a minute".into(),
-            _ => format!("the AI couldn't do that: {msg}"),
+            529 | 500..=599 => "The AI is busy: try again in a minute".into(),
+            _ => format!("The AI couldn't do that: {msg}"),
         });
     }
     if v["stop_reason"] == "refusal" {
-        return Err("the AI declined that description: try describing the look differently".into());
+        return Err("The AI declined that description: try describing the look differently".into());
     }
     let text: String = v["content"].as_array().into_iter().flatten().filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n");
     let (shader, note) = split_code(&text);
@@ -229,7 +229,7 @@ impl Job {
                     c.request_repaint();
                 }
             };
-            send(Status::Working("the AI is writing it…".into()));
+            send(Status::Working("The AI is writing it…".into()));
             send(run(&key, &description, generator, change.as_deref(), |m| send(Status::Working(m))));
         });
         Job { rx, status: Status::Working("starting…".into()) }
@@ -242,6 +242,30 @@ impl Job {
         }
         &self.status
     }
+}
+
+/// From the model list (newest first): the first Opus, else the first. None when the list is empty or unreadable.
+pub fn pick_model(list: &[u8]) -> Option<String> {
+    let v: Value = serde_json::from_slice(list).ok()?;
+    let ids: Vec<&str> = v.get("data")?.as_array()?.iter().filter_map(|m| m.get("id")?.as_str()).collect();
+    ids.iter().find(|id| id.contains("opus")).or(ids.first()).map(|s| s.to_string())
+}
+
+/// The model to ask: `PHOSPHOR_AI_MODEL`, a stand-in name for a test server, or the account's newest.
+fn model_for(key: &str) -> Result<String, String> {
+    if let Ok(m) = std::env::var("PHOSPHOR_AI_MODEL") {
+        return Ok(m);
+    }
+    if std::env::var("PHOSPHOR_AI_URL").is_ok() {
+        return Ok("test-model".into());
+    }
+    let mut req = ehttp::Request::get(MODELS_URL);
+    req.headers = ehttp::Headers::new(&[("x-api-key", key), ("anthropic-version", "2023-06-01")]);
+    let r = ehttp::fetch_blocking(&req).map_err(|e| format!("couldn't reach the AI: {e}"))?;
+    if r.status == 401 {
+        return Err("the API key wasn't accepted".into());
+    }
+    pick_model(&r.bytes).ok_or_else(|| "couldn't find a model to use".into())
 }
 
 fn post(key: &str, body: &Value) -> Result<(u16, Vec<u8>), String> {
@@ -261,9 +285,13 @@ fn post(key: &str, body: &Value) -> Result<(u16, Vec<u8>), String> {
 
 /// Ask, check it compiles, send any error back for a fix.
 fn run(key: &str, description: &str, generator: bool, change: Option<&str>, progress: impl Fn(String)) -> Status {
+    let model = match model_for(key) {
+        Ok(m) => m,
+        Err(e) => return Status::Failed(e),
+    };
     let mut messages = vec![first_message(description, generator, change)];
     for attempt in 0..=REPAIRS {
-        let answer = match post(key, &request_body(&messages)).and_then(|(status, body)| read_response(status, &body)) {
+        let answer = match post(key, &request_body(&model, &messages)).and_then(|(status, body)| read_response(status, &body)) {
             Ok(a) => a,
             Err(e) => return Status::Failed(e),
         };
@@ -276,7 +304,7 @@ fn run(key: &str, description: &str, generator: bool, change: Option<&str>, prog
             },
         };
         if attempt == REPAIRS {
-            return Status::Failed(format!("the AI's shader still doesn't compile ({problem})"));
+            return Status::Failed(format!("The AI's shader still doesn't compile ({problem})"));
         }
         progress(format!("fixing a compile error (try {} of {REPAIRS})…", attempt + 1));
         messages.push(json!({"role": "user", "content": problem}));
@@ -294,8 +322,12 @@ mod tests {
         for t in custom::TEMPLATES {
             assert!(s.contains(t.name));
         }
-        let b = request_body(&[first_message("plasma", true, None)]);
-        assert_eq!(b["model"], MODEL);
+        let b = request_body("m-1", &[first_message("plasma", true, None)]);
+        assert_eq!(b["model"], "m-1");
+        let list = br#"{"data":[{"id":"fast-2"},{"id":"big-opus-9"},{"id":"old-opus-1"}]}"#;
+        assert_eq!(pick_model(list).as_deref(), Some("big-opus-9"), "the newest Opus");
+        assert_eq!(pick_model(br#"{"data":[{"id":"only-1"}]}"#).as_deref(), Some("only-1"));
+        assert_eq!(pick_model(b"{}"), None);
         assert_eq!(b["messages"][0]["role"], "user");
         assert!(b["messages"][0]["content"].as_str().unwrap().contains("generator"));
         assert!(b.get("thinking").is_none() && b.get("temperature").is_none(), "Opus 5.5: adaptive by default, no sampling params");
