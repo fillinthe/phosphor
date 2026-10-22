@@ -1176,6 +1176,24 @@ impl Default for Surface {
 }
 
 impl Surface {
+    /// Reshapes the slice to its picture's proportions (no stretching): a straight rectangle around where it is
+    /// now, the same height, width to match. `canvas` = the picture it reads from, `output` = the output's size.
+    pub fn match_picture_shape(&mut self, canvas: (u32, u32), output: (u32, u32)) {
+        let picture = (self.input[2].abs() * canvas.0 as f32) / (self.input[3].abs() * canvas.1 as f32).max(1e-6);
+        let (ow, oh) = (output.0.max(1) as f32, output.1.max(1) as f32);
+        let xs = self.corners.map(|c| c[0]);
+        let ys = self.corners.map(|c| c[1]);
+        let (x0, x1) = (xs.iter().copied().fold(f32::MAX, f32::min), xs.iter().copied().fold(f32::MIN, f32::max));
+        let (y0, y1) = (ys.iter().copied().fold(f32::MAX, f32::min), ys.iter().copied().fold(f32::MIN, f32::max));
+        let (cx, h) = ((x0 + x1) / 2.0, (y1 - y0).max(0.01));
+        // Width as a share of the output, from the height in pixels.
+        let half_w = h * oh * picture / ow / 2.0;
+        self.corners = [[cx - half_w, y0], [cx + half_w, y0], [cx + half_w, y1], [cx - half_w, y1]];
+        if let Some(m) = &self.mesh {
+            self.mesh = Some(Mesh::from_corners(&self.corners, m.cols, m.rows));
+        }
+    }
+
     /// Takes `other`'s look (opacity, soft edges, edge curve, colour, blend, shape), not its place or source.
     pub fn copy_look_from(&mut self, other: &Surface) {
         self.opacity = other.opacity;
@@ -1509,6 +1527,27 @@ pub fn output_to_surface(corners: &[[f32; 2]; 4], p: [f32; 2]) -> Option<[f32; 2
         return None;
     }
     Some([(m[0] * p[0] + m[1] * p[1] + m[2]) / w, (m[3] * p[0] + m[4] * p[1] + m[5]) / w])
+}
+
+#[cfg(test)]
+mod shape_tests {
+    use super::*;
+
+    #[test]
+    fn a_slice_takes_its_pictures_shape() {
+        let mut s = Surface { id: 1, ..Default::default() };
+        s.corners = [[0.1, 0.2], [0.9, 0.2], [0.9, 0.6], [0.1, 0.6]];
+        // 16:9 picture on a 16:9 output: a slice 40% of the output high is 40% wide, centred where it was.
+        s.match_picture_shape((1920, 1080), (1920, 1080));
+        let w = s.corners[1][0] - s.corners[0][0];
+        assert!((w - 0.4).abs() < 1e-5 && (s.corners[0][0] + w / 2.0 - 0.5).abs() < 1e-5, "{:?}", s.corners);
+        assert_eq!((s.corners[0][1], s.corners[2][1]), (0.2, 0.6));
+        // Half the picture's width (input region) on a square output: 400 px high × (960/1080) wide.
+        s.input = [0.0, 0.0, 0.5, 1.0];
+        s.match_picture_shape((1920, 1080), (1000, 1000));
+        let w = s.corners[1][0] - s.corners[0][0];
+        assert!((w - 0.4 * 960.0 / 1080.0).abs() < 1e-5, "{w}");
+    }
 }
 
 #[cfg(test)]

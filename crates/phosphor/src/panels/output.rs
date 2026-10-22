@@ -137,6 +137,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     }
     let canvas = (st.comp.width, st.comp.height);
     let mut remove = None;
+    let mut snapshot = None;
     let count = st.comp.outputs.len();
     for i in 0..count {
         let id = st.comp.outputs[i].id;
@@ -168,6 +169,10 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         if ui.small_button(icon::MONITOR).on_hover_text("Preview this output (after mapping) in a window").clicked() {
                             request_preview(ui, MonitorSource::OneOutput(id));
                         }
+                        if ui.small_button(icon::CAMERA).on_hover_text("Save a picture of this output as it is now (after mapping)").clicked() {
+                            snapshot = Some(id);
+                        }
+                        crate::ui::toggle(ui, &mut o.frozen, "FREEZE").on_hover_text("Hold this output's picture while you change things behind it (not saved: a show opens live)");
                         #[cfg(target_os = "macos")]
                         crate::ui::toggle(ui, &mut o.syphon, "SYPHON")
                             .on_hover_text("Also publish this output (after mapping) as a Syphon source for MadMapper, Resolume, OBS…");
@@ -203,6 +208,12 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         if count > 1 && ui.small_button(icon::TRASH).on_hover_text("Remove output").clicked() {
                             remove = Some(i);
                         }
+                    });
+                    ui.horizontal(|ui| {
+                        crate::ui::toggle(ui, &mut o.flip_x, label(icon::ARROWS_LEFT_RIGHT, "Flip")).on_hover_text("Mirror left-right (rear projection)");
+                        crate::ui::toggle(ui, &mut o.flip_y, label(icon::ARROWS_DOWN_UP, "Flip")).on_hover_text("Mirror top-bottom (projector hung upside down)");
+                        guarded!(ui, o.delay_frames, egui::DragValue::new(&mut o.delay_frames).range(0..=phosphor_engine::MAX_OUTPUT_DELAY).prefix("delay ").suffix(" frames"))
+                            .on_hover_text("Show this output a few frames late, to line it up with a slower projector or LED processor");
                     });
                 });
             });
@@ -241,6 +252,9 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     if let Some(i) = remove {
         st.comp.outputs.remove(i);
         st.close_stale_outputs();
+    }
+    if snapshot.is_some() {
+        st.snapshot_output = snapshot;
     }
 }
 

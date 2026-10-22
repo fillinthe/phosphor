@@ -127,10 +127,12 @@ pub enum Tab {
     Scopes,
     /// Live inputs (Library): cameras, screens, Syphon, NDI, streams.
     Inputs,
+    /// Notes kept with the project (show running order, venue details…).
+    Notes,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 26] = [
+    pub const ALL: [Tab; 27] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -157,6 +159,7 @@ impl Tab {
         Tab::Studio,
         Tab::Scopes,
         Tab::Inputs,
+        Tab::Notes,
     ];
 
     pub fn title(self) -> String {
@@ -187,6 +190,7 @@ impl Tab {
             Tab::Account => "Account",
             Tab::Leds => "LED / DMX",
             Tab::Scopes => "Scopes",
+            Tab::Notes => "Notes",
             Tab::Cues => "Cues",
             Tab::LayerWindows => "Layer Windows",
             Tab::Studio => "Mapping Studio",
@@ -250,6 +254,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Library => crate::explorer::explorer(ui, st),
         Tab::Presets => presets(ui, st),
         Tab::Inputs => inputs_panel(ui, st),
+        Tab::Notes => notes_panel(ui, st),
         Tab::Audio => audio(ui, st),
         Tab::Modulators => modulators::modulators(ui, st),
         Tab::Control => control(ui, st),
@@ -270,4 +275,12 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Studio => studio(ui, st),
         Tab::Stage => stage(ui, st),
     }
+}
+
+/// Notes saved with the project: running order, venue contacts, what each cue is for.
+fn notes_panel(ui: &mut egui::Ui, st: &mut State) {
+    hint(ui, "Kept in the project file.");
+    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        ui.add(egui::TextEdit::multiline(&mut st.comp.notes).hint_text("Running order, venue details, reminders…").desired_width(f32::INFINITY).desired_rows(20));
+    });
 }

@@ -184,3 +184,41 @@ fn layer_and_group_opacity() {
     let px = middle(&mut engine, &comp);
     assert!((px[0] as i32 - 128).abs() <= 3, "group at 50%: {px:?}");
 }
+
+/// An output can be frozen (keeps its picture), held back N frames, and mirrored.
+#[test]
+fn outputs_freeze_delay_and_flip() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 16, next_id: 100, ..Default::default() };
+    let mut grey = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    grey.generator_values = vec![0.2, 0.2, 0.2];
+    comp.layers.push(grey);
+    let out = comp.add_output();
+    // (left quarter, right quarter) red of the output after one frame.
+    let mut frame = |engine: &mut Engine, comp: &Composition, v: f32| {
+        let mut c = comp.clone();
+        c.layers[0].generator_values = vec![v, v, v];
+        engine.render(&c, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output_of(out).expect("output");
+        let at = |x: u32| px[((h / 2 * w + x) * 4) as usize] as f32 / 255.0;
+        (at(w / 4), at(w * 3 / 4))
+    };
+    let near = |a: f32, b: f32| (a - b).abs() < 0.03;
+    assert!(near(frame(&mut engine, &comp, 0.2).0, 0.2));
+    comp.outputs[0].frozen = true;
+    assert!(near(frame(&mut engine, &comp, 0.8).0, 0.2), "frozen keeps the old picture");
+    comp.outputs[0].frozen = false;
+    assert!(near(frame(&mut engine, &comp, 0.8).0, 0.8), "live again");
+    // Two frames late: the third frame shows the first.
+    comp.outputs[0].delay_frames = 2;
+    let shown: Vec<f32> = [0.3, 0.5, 0.7, 0.9].iter().map(|v| frame(&mut engine, &comp, *v).0).collect();
+    assert!(near(shown[2], 0.3) && near(shown[3], 0.5), "delayed: {shown:?}");
+    // Mirrored: a picture on the left only ends up on the right.
+    comp.outputs[0].delay_frames = 0;
+    comp.layers[0].transform.crop = [0.0, 0.5, 0.0, 0.0];
+    let (l, r) = frame(&mut engine, &comp, 1.0);
+    assert!(near(l, 1.0) && near(r, 0.0), "cropped: left {l} right {r}");
+    comp.outputs[0].flip_x = true;
+    let (l, r) = frame(&mut engine, &comp, 1.0);
+    assert!(near(l, 0.0) && near(r, 1.0), "flipped: left {l} right {r}");
+}

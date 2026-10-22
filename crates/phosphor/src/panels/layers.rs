@@ -408,6 +408,30 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
         // Leave room for the Open and Live icon buttons so the row never runs off the card.
         let width = (ui.available_width() - 2.0 * (ui.spacing().interact_size.y + 2.0 * ui.spacing().item_spacing.x)).clamp(60.0, 180.0);
         ComboBox::from_id_salt(("source", layer.id)).width(width).selected_text(layer.source.label()).show_ui(ui, |ui| {
+            // Search: every generator (built in and imported) by name; typing goes straight here.
+            let id = ui.id().with(("source_search", layer.id));
+            let mut q = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_default();
+            let r = crate::ui::text_field(ui, &mut q, "Search generators…", Some(220.0));
+            if ui.memory(|m| m.focused().is_none()) {
+                r.request_focus();
+            }
+            ui.data_mut(|d| d.insert_temp(id, q.clone()));
+            let q = q.trim().to_lowercase();
+            if !q.is_empty() {
+                let found: Vec<_> = shaders::all_generators().into_iter().filter(|g| g.name.to_lowercase().contains(&q) || g.id.to_lowercase().contains(&q)).collect();
+                if found.is_empty() {
+                    hint(ui, "No generator by that name");
+                }
+                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                    for g in found {
+                        let active = matches!(&layer.source, SourceSpec::Generator(id) if id == g.id);
+                        if ui.selectable_label(active, g.name).clicked() {
+                            layer.set_generator(g.id);
+                        }
+                    }
+                });
+                return;
+            }
             if ui.selectable_label(layer.source == SourceSpec::None, "No source").clicked() {
                 layer.source = SourceSpec::None;
             }

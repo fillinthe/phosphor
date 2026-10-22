@@ -167,6 +167,7 @@ impl PhosphorApp {
                 folders: crate::folders::FolderWatcher::new(stored(KEY_WATCHED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()),
                 explorer: crate::explorer::ExplorerState {
                     favorites: stored(KEY_FAVORITES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+                    hidden: stored(KEY_HIDDEN_FX).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                     recent: stored(KEY_RECENT).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                     ..Default::default()
                 },
@@ -177,6 +178,8 @@ impl PhosphorApp {
                 preview_refreshed: 0.0,
                 preview_textures: Vec::new(),
                 open_tab: None,
+                maps_clipboard: Vec::new(),
+                snapshot_output: None,
                 fx_browser: None,
                 monitors: stored(KEY_MONITORS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 monitor_wants: Vec::new(),

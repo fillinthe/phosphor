@@ -11,6 +11,15 @@ pub const MAP_REQUEST: &str = "phosphor_map_request";
 
 pub const MAPPED_TARGETS: &str = "phosphor_mapped_targets";
 
+/// Copy this control's mappings / paste the copied ones onto this control (the app keeps the copy).
+pub const COPY_MAPS_REQUEST: &str = "phosphor_copy_maps_request";
+pub const PASTE_MAPS_REQUEST: &str = "phosphor_paste_maps_request";
+/// How many mappings are copied (set by the app each frame), so menus can offer Paste.
+pub const MAPS_COPIED: &str = "phosphor_maps_copied";
+
+/// A copied motion (modulation), for pasting onto another value.
+const MOTION_CLIPBOARD: &str = "phosphor_motion_clipboard";
+
 pub(crate) fn request(ui: &egui::Ui, key: &str, target: ControlTarget) {
     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(key), target));
 }
@@ -67,6 +76,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
         }
     });
     let sources = mapped_sources(ui, target);
+    let copied = ui.ctx().data(|d| d.get_temp::<usize>(egui::Id::new(MAPS_COPIED))).unwrap_or(0);
     if !sources.is_empty() {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("Mapped: {}", sources.join(", "))).small().color(MAPPED));
@@ -74,7 +84,15 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
                 request(ui, UNLEARN_REQUEST, target.clone());
                 ui.close();
             }
+            if ui.small_button(label(icon::COPY, "Copy")).on_hover_text("Copy these mappings (input, range, value effects) to paste onto another control").clicked() {
+                request(ui, COPY_MAPS_REQUEST, target.clone());
+                ui.close();
+            }
         });
+    }
+    if copied > 0 && ui.button(label(icon::CLIPBOARD_TEXT, &format!("Paste mapping{} here", if copied == 1 { "" } else { "s" }))).on_hover_text("The copied inputs drive this control too").clicked() {
+        request(ui, PASTE_MAPS_REQUEST, target.clone());
+        ui.close();
     }
 }
 
@@ -165,6 +183,19 @@ pub(crate) fn control_menu_with(resp: &egui::Response, target: Option<&ControlTa
             ui.menu_button(label(icon::WAVE_SINE, "Modulate…"), |ui| modulation_editor(ui, &mut *m));
             if moving && ui.button(label(icon::PAUSE, "Stop the motion")).on_hover_text("Keeps the value where it is set, without the modulation").clicked() {
                 *m = None;
+                ui.close();
+            }
+            let clip = egui::Id::new(MOTION_CLIPBOARD);
+            if let Some(motion) = m.as_ref().filter(|_| moving)
+                && ui.button(label(icon::COPY, "Copy the motion")).on_hover_text("To paste onto another value").clicked()
+            {
+                ui.ctx().data_mut(|d| d.insert_temp(clip, Some(motion.clone())));
+                ui.close();
+            }
+            if let Some(motion) = ui.ctx().data(|d| d.get_temp::<Option<Modulation>>(clip)).flatten()
+                && ui.button(label(icon::CLIPBOARD_TEXT, "Paste the motion")).on_hover_text("The copied modulation, on this value").clicked()
+            {
+                *m = Some(motion);
                 ui.close();
             }
             if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).on_hover_text("The default value, with no modulation").clicked() {
