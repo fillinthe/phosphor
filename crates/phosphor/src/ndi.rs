@@ -34,11 +34,32 @@ struct VideoFrameV2 {
     timestamp: i64,
 }
 
+/// NDI's `NDIlib_audio_frame_v3_t`: planar 32-bit float when `four_cc` is FLTP.
+#[repr(C)]
+struct AudioFrameV3 {
+    sample_rate: c_int,
+    no_channels: c_int,
+    no_samples: c_int,
+    timecode: i64,
+    four_cc: u32,
+    p_data: *const u8,
+    channel_stride_in_bytes: c_int,
+    p_metadata: *const c_char,
+    timestamp: i64,
+}
+
+/// Stereo interleaved (L R L R…) → planar (all L, then all R), as NDI wants it.
+fn to_planar(interleaved: &[f32]) -> Vec<f32> {
+    let n = interleaved.len() / 2;
+    (0..2).flat_map(|ch| (0..n).map(move |i| interleaved[i * 2 + ch])).collect()
+}
+
 const fn fourcc(a: u8, b: u8, c: u8, d: u8) -> u32 {
     a as u32 | (b as u32) << 8 | (c as u32) << 16 | (d as u32) << 24
 }
 /// RGBA with the alpha ignored: receivers always get an opaque picture.
 const FOURCC_RGBX: u32 = fourcc(b'R', b'G', b'B', b'X');
+const FOURCC_FLTP: u32 = fourcc(b'F', b'L', b'T', b'p');
 const FORMAT_PROGRESSIVE: c_int = 1;
 const TIMECODE_SYNTHESIZE: i64 = i64::MAX;
 
@@ -84,6 +105,8 @@ struct Lib {
     send_create: unsafe extern "C" fn(*const SendCreate) -> *mut c_void,
     send_destroy: unsafe extern "C" fn(*mut c_void),
     send_video: unsafe extern "C" fn(*mut c_void, *const VideoFrameV2),
+    /// Older NDI runtimes may not have it: then the picture goes without sound.
+    send_audio: Option<unsafe extern "C" fn(*mut c_void, *const AudioFrameV3)>,
     connections: unsafe extern "C" fn(*mut c_void, u32) -> c_int,
     recv: Option<RecvFns>,
 }
@@ -182,6 +205,7 @@ fn lib() -> Option<&'static Lib> {
                     send_create: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*const SendCreate) -> *mut c_void>(create),
                     send_destroy: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(destroy),
                     send_video: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *const VideoFrameV2)>(video),
+                    send_audio: sym(c"NDIlib_send_send_audio_v3").map(|a| std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *const AudioFrameV3)>(a)),
                     connections: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, u32) -> c_int>(conns),
                     recv,
                 });
@@ -199,9 +223,15 @@ struct Frame {
     fps: u32,
 }
 
+/// What the sender thread sends: a picture, or a block of sound (planar stereo).
+enum Out {
+    Video(Frame),
+    Audio { planar: Vec<f32>, rate: u32 },
+}
+
 struct Running {
     name: String,
-    tx: SyncSender<Frame>,
+    tx: SyncSender<Out>,
     stop: Arc<AtomicBool>,
     connections: Arc<AtomicI32>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -253,7 +283,8 @@ impl Ndi {
             self.error = Some("NDI isn't installed on this Mac".into());
             return;
         };
-        let (tx, rx) = sync_channel::<Frame>(2);
+        // Room for sound blocks between pictures.
+        let (tx, rx) = sync_channel::<Out>(8);
         let stop = Arc::new(AtomicBool::new(false));
         let connections = Arc::new(AtomicI32::new(0));
         let (stop2, conns2, sender_name) = (stop.clone(), connections.clone(), name.to_string());
@@ -271,7 +302,29 @@ impl Ndi {
             while !stop2.load(Ordering::Relaxed) {
                 // SAFETY: valid instance; timeout 0 just reads the count.
                 conns2.store(unsafe { (lib.connections)(inst, 0) }, Ordering::Relaxed);
-                let Ok(f) = rx.recv_timeout(std::time::Duration::from_millis(250)) else { continue };
+                let f = match rx.recv_timeout(std::time::Duration::from_millis(250)) {
+                    Ok(Out::Video(f)) => f,
+                    Ok(Out::Audio { planar, rate }) => {
+                        if let Some(send_audio) = lib.send_audio {
+                            let samples = planar.len() / 2;
+                            let audio = AudioFrameV3 {
+                                sample_rate: rate as c_int,
+                                no_channels: 2,
+                                no_samples: samples as c_int,
+                                timecode: TIMECODE_SYNTHESIZE,
+                                four_cc: FOURCC_FLTP,
+                                p_data: planar.as_ptr().cast(),
+                                channel_stride_in_bytes: (samples * 4) as c_int,
+                                p_metadata: std::ptr::null(),
+                                timestamp: 0,
+                            };
+                            // SAFETY: synchronous send; NDI is done with `planar` when this returns.
+                            unsafe { send_audio(inst, &audio) };
+                        }
+                        continue;
+                    }
+                    Err(_) => continue,
+                };
                 let frame = VideoFrameV2 {
                     xres: f.width as c_int,
                     yres: f.height as c_int,
@@ -317,10 +370,19 @@ impl Ndi {
     /// Hands a frame to the sender; skipped if it's still busy with the last one.
     pub fn push(&mut self, width: u32, height: u32, rgba: Vec<u8>, fps: u32) {
         let Some(r) = &self.running else { return };
-        if let Err(TrySendError::Disconnected(_)) = r.tx.try_send(Frame { width, height, rgba, fps }) {
+        if let Err(TrySendError::Disconnected(_)) = r.tx.try_send(Out::Video(Frame { width, height, rgba, fps })) {
             self.running = None;
             self.error = Some("NDI sender stopped".into());
         }
+    }
+
+    /// Hands a block of the movie sound (stereo interleaved at `rate`) to the sender.
+    pub fn push_audio(&mut self, interleaved: &[f32], rate: u32) {
+        let Some(r) = &self.running else { return };
+        if interleaved.len() < 2 || rate == 0 {
+            return;
+        }
+        let _ = r.tx.try_send(Out::Audio { planar: to_planar(interleaved), rate });
     }
 }
 
@@ -441,5 +503,21 @@ impl Drop for NdiReceiver {
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The audio frame matches NDI's C layout (64-bit), and sound goes planar.
+    #[test]
+    fn audio_frames_match_the_sdk() {
+        use std::mem::offset_of;
+        assert_eq!((offset_of!(AudioFrameV3, timecode), offset_of!(AudioFrameV3, four_cc), offset_of!(AudioFrameV3, p_data)), (16, 24, 32));
+        assert_eq!((offset_of!(AudioFrameV3, channel_stride_in_bytes), offset_of!(AudioFrameV3, p_metadata), offset_of!(AudioFrameV3, timestamp)), (40, 48, 56));
+        assert_eq!(std::mem::size_of::<AudioFrameV3>(), 64);
+        assert_eq!(to_planar(&[1.0, -1.0, 2.0, -2.0, 3.0, -3.0]), vec![1.0, 2.0, 3.0, -1.0, -2.0, -3.0]);
+        assert_eq!(FOURCC_FLTP, u32::from_le_bytes(*b"FLTp"));
     }
 }

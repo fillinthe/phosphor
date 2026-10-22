@@ -89,6 +89,18 @@ impl Tap {
 static TAP: Tap = Tap::new(2 * 48_000);
 /// The mix, stereo, for streams and recordings ("Movie sound" in the Stream panel).
 static PROGRAM: Tap = Tap::new(2 * 48_000);
+/// The mix, stereo, for NDI (its own copy: a stream and NDI can both run).
+static NDI_TAP: Tap = Tap::new(2 * 48_000);
+
+/// Keep (or stop keeping) the mix for NDI.
+pub fn set_ndi_tap(on: bool) {
+    NDI_TAP.set(on);
+}
+
+/// The stereo mix for NDI since the last call (interleaved L R, at `stats().0` Hz).
+pub fn take_ndi() -> Vec<f32> {
+    NDI_TAP.take()
+}
 
 /// Keep (or stop keeping) the mix for the analyser.
 pub fn set_tap(on: bool) {
@@ -596,6 +608,7 @@ fn run_output() -> Result<bool, String> {
         eq.process(&mut scratch, EQ_DB.each_ref().map(|d| f32::from_bits(d.load(Ordering::Relaxed))), rate as f32);
         TAP.push(scratch.iter().copied());
         PROGRAM.push(scratch.iter().copied());
+        NDI_TAP.push(scratch.iter().copied());
         if !LOCAL.load(Ordering::Relaxed) {
             scratch.iter_mut().for_each(|s| *s = 0.0);
         }

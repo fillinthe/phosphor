@@ -12,11 +12,13 @@ pub struct NdiSettings {
     /// Shown to receivers as "COMPUTER (name)".
     pub name: String,
     pub fps: u32,
+    /// The movie sound goes out with the picture.
+    pub sound: bool,
 }
 
 impl Default for NdiSettings {
     fn default() -> Self {
-        Self { enabled: false, name: "Phosphor".into(), fps: 60 }
+        Self { enabled: false, name: "Phosphor".into(), fps: 60, sound: true }
     }
 }
 

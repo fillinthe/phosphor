@@ -397,6 +397,7 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
                 ui.selectable_value(&mut st.comp.ndi.fps, f, format!("{f} fps"));
             }
         });
+        crate::ui::toggle(ui, &mut st.comp.ndi.sound, "Sound").on_hover_text("The movies' sound goes out with the picture");
         let status = match (&st.ndi.error, st.ndi.running(), st.ndi.connections()) {
             (Some(e), false, _) if st.comp.ndi.enabled => OutputStatus::Error(e),
             (_, true, 0) => OutputStatus::Waiting("on the network, nobody receiving yet"),

@@ -309,6 +309,16 @@ impl PhosphorApp {
         if (stream_due || net_due || ndi_due || spout_due || vcam_due) && !engine.capture_frame() && stream_due {
             stream.repeat_last();
         }
+        // NDI sound: the movie mix, while someone's receiving and it's on.
+        #[cfg(any(target_os = "macos", windows))]
+        {
+            let want = ndi.connections() > 0 && comp.ndi.sound;
+            crate::media::video::sound::set_ndi_tap(want);
+            if want {
+                let block = crate::media::video::sound::take_ndi();
+                ndi.push_audio(&block, crate::media::video::sound::stats().0);
+            }
+        }
         for f in engine.poll_captures() {
             #[cfg(any(target_os = "macos", windows))]
             if ndi.connections() > 0 {
