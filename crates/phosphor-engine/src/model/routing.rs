@@ -51,6 +51,45 @@ impl Composition {
         Some(sid)
     }
 
+    /// The picture split across `cols` × `rows` new outputs (a video wall of screens or projectors): each shows its
+    /// tile. Returns the new outputs' ids, left to right, top to bottom.
+    pub fn split_across(&mut self, cols: u32, rows: u32) -> Vec<u64> {
+        let (cols, rows) = (cols.max(1), rows.max(1));
+        let mut made = Vec::new();
+        for r in 0..rows {
+            for c in 0..cols {
+                let out = self.add_output();
+                let sid = self.new_id();
+                let o = self.outputs.iter_mut().find(|o| o.id == out).expect("just added");
+                o.name = format!("Screen {}", r * cols + c + 1);
+                (o.width, o.height) = (self.width / cols, self.height / rows);
+                o.mapping.enabled = true;
+                let s = o.mapping.add_surface(sid);
+                s.name = o.name.clone();
+                s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+                s.input = [c as f32 / cols as f32, r as f32 / rows as f32, 1.0 / cols as f32, 1.0 / rows as f32];
+                made.push(out);
+            }
+        }
+        made
+    }
+
+    /// A new output that shows `output`'s finished picture (one more screen or projector with the same image).
+    pub fn mirror_output(&mut self, output: u64) -> Option<u64> {
+        let (name, w, h) = self.outputs.iter().find(|o| o.id == output).map(|o| (o.name.clone(), o.width, o.height))?;
+        let out = self.add_output();
+        let sid = self.new_id();
+        let o = self.outputs.iter_mut().find(|o| o.id == out)?;
+        o.name = format!("{name} (copy)");
+        (o.width, o.height) = (w, h);
+        o.mapping.enabled = true;
+        let s = o.mapping.add_surface(sid);
+        s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        s.layer = Some(output);
+        s.name = name;
+        Some(out)
+    }
+
     /// Soft edges worked out from overlaps (MadMapper's Auto Setup): every slice showing the same picture gets a fade on
     /// each side where another one's part of the picture (its input area) overlaps it, as wide as the overlap, with
     /// the projector blend curve. Returns how many slices got edges.
@@ -142,6 +181,17 @@ impl Composition {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn split_and_mirrored_outputs() {
+        let mut c = Composition { width: 3840, height: 2160, ..Default::default() };
+        let tiles = c.split_across(2, 2);
+        assert_eq!(tiles.len(), 4);
+        let last = c.outputs.iter().find(|o| o.id == tiles[3]).unwrap();
+        assert_eq!((last.width, last.height, last.mapping.surfaces[0].input), (1920, 1080, [0.5, 0.5, 0.5, 0.5]));
+        let copy = c.mirror_output(tiles[0]).unwrap();
+        assert_eq!(c.outputs.iter().find(|o| o.id == copy).unwrap().mapping.surfaces[0].layer, Some(tiles[0]));
+    }
 
     #[test]
     fn soft_edges_come_from_the_overlaps() {
