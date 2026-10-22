@@ -800,3 +800,27 @@ fn midi_timecode_goes_out() {
     let tc = m.0.time(started.elapsed().as_secs_f64()).expect("decoded");
     assert!((tc - 3600.6).abs() < 0.3, "the time came through: {tc}");
 }
+
+/// Learning a colour's red from OSC maps green and blue to the same message's next values; a colour message sets all
+/// three.
+#[test]
+fn a_colour_comes_from_one_osc_message() {
+    let mut hub = ControlHub::new();
+    hub.soft_takeover = false;
+    let mut comp = Composition::starter();
+    let layer = comp.add_layer().id;
+    let desc = phosphor_engine::shaders::generator("solid").expect("solid");
+    assert_eq!(desc.params[0].name, "Red", "solid has a colour");
+    let l = comp.layer_mut(layer).unwrap();
+    l.source = phosphor_engine::SourceSpec::Generator("solid".into());
+    l.generator_values = desc.defaults();
+    hub.learning = Some(ControlTarget::GeneratorParam { layer, index: 0 });
+    hub.inject(&mut comp, Incoming { source: ControlSource::Osc { address: "/tint".into() }, value: 0.0 });
+    assert_eq!(comp.control_maps.len(), 3, "red, green and blue");
+    for (addr, v) in [("/tint", 0.2), ("/tint/1", 0.5), ("/tint/2", 0.9)] {
+        hub.inject(&mut comp, Incoming { source: ControlSource::Osc { address: addr.into() }, value: v });
+    }
+    hub.apply(&mut comp, 1.0);
+    let vals = &comp.layer_mut(layer).unwrap().generator_values;
+    assert!((vals[0] - 0.2).abs() < 1e-5 && (vals[1] - 0.5).abs() < 1e-5 && (vals[2] - 0.9).abs() < 1e-5, "{vals:?}");
+}
