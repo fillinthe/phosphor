@@ -114,6 +114,26 @@ impl TimecodeSource {
 pub struct CueList {
     pub cues: Vec<Cue>,
     pub timecode: TimecodeSource,
+    /// Installations: after this many minutes with nobody touching anything (mouse, keys, controllers), go to the
+    /// cue `idle_cue` (its id). 0 = off.
+    pub idle_minutes: f32,
+    pub idle_cue: u64,
+    /// Go to this cue (its id) when the project opens (0 = none).
+    pub open_cue: u64,
+    /// A calendar file (.ics): its events start the cues with the same name ("" = none).
+    pub calendar: String,
+}
+
+impl CueList {
+    /// The cue to go to after `quiet` seconds with nobody touching anything (when idle cues are on and it's time).
+    pub fn idle_cue_index(&self, quiet: f64) -> Option<usize> {
+        (self.idle_minutes > 0.0 && quiet >= self.idle_minutes as f64 * 60.0).then(|| self.cues.iter().position(|c| c.id == self.idle_cue)).flatten()
+    }
+
+    /// The cue to go to when the project opens.
+    pub fn open_cue_index(&self) -> Option<usize> {
+        (self.open_cue != 0).then(|| self.cues.iter().position(|c| c.id == self.open_cue)).flatten()
+    }
 }
 
 /// A cue being faded into: where every number started.
@@ -373,6 +393,16 @@ fn csv_row(line: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn idle_and_opening_cues() {
+        let mut list = CueList { cues: vec![Cue { id: 5, ..Default::default() }, Cue { id: 9, ..Default::default() }], ..Default::default() };
+        assert_eq!((list.idle_cue_index(1e9), list.open_cue_index()), (None, None), "off");
+        (list.idle_minutes, list.idle_cue, list.open_cue) = (2.0, 9, 5);
+        assert_eq!(list.idle_cue_index(119.0), None);
+        assert_eq!(list.idle_cue_index(120.0), Some(1));
+        assert_eq!(list.open_cue_index(), Some(0));
+    }
 
     #[test]
     fn a_cue_changes_only_what_it_says() {

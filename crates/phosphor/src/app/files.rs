@@ -178,6 +178,13 @@ impl PhosphorApp {
                         st.start_relink(p.clone());
                     }
                 }
+                Purpose::CueCalendar => {
+                    if let Some(p) = paths.first() {
+                        st.comp.cues.calendar = p.to_string_lossy().into_owned();
+                        let n = std::fs::read_to_string(p).map(|t| crate::calendar::parse(&t, 0).len()).unwrap_or(0);
+                        st.notice = Some(format!("Calendar: {n} timed events; each starts the cue with its name"));
+                    }
+                }
                 Purpose::TextFile(id) => {
                     if let Some(p) = paths.first() {
                         match std::fs::read_to_string(p) {

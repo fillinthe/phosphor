@@ -47,6 +47,17 @@ pub struct CueRun {
     tc_prev: Option<f32>,
     /// Local time of day when scheduled cues were last checked.
     sched_prev: Option<u32>,
+    /// When someone last touched anything (mouse, keys, controllers), and whether the idle cue has gone since.
+    pub(crate) last_input: f64,
+    idle_done: bool,
+    /// The project's opening cue has been gone to (cleared when a project loads).
+    pub(crate) opened: bool,
+    /// The calendar file's events, which file and when it changed (re-read when it does), and the last local time
+    /// checked (local wall-clock seconds).
+    #[cfg(not(target_arch = "wasm32"))]
+    calendar: Option<(String, Option<std::time::SystemTime>, Vec<crate::calendar::Event>)>,
+    calendar_prev: i64,
+    calendar_checked: f64,
     pub clock: ShowClock,
 }
 
@@ -120,8 +131,64 @@ impl State {
         }
     }
 
+    /// Calendar events start the cues with their names (checked once a second; the file re-read when it changes).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn run_calendar(&mut self, now: f64) {
+        let path = self.comp.cues.calendar.clone();
+        if path.is_empty() {
+            self.cue_run.calendar = None;
+            return;
+        }
+        if now - self.cue_run.calendar_checked < 1.0 {
+            return;
+        }
+        self.cue_run.calendar_checked = now;
+        let (local, offset) = crate::calendar::local_now();
+        let changed = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        if self.cue_run.calendar.as_ref().is_none_or(|(p, m, _)| *p != path || *m != changed) {
+            let events = std::fs::read_to_string(&path).map(|t| crate::calendar::parse(&t, offset)).unwrap_or_default();
+            self.cue_run.calendar = Some((path, changed, events));
+            self.cue_run.calendar_prev = local;
+            return;
+        }
+        let prev = std::mem::replace(&mut self.cue_run.calendar_prev, local);
+        // A jump (the Mac slept, the clock was set): nothing fires for the time in between.
+        if local < prev || local - prev > 120 {
+            return;
+        }
+        let due: Vec<String> = self.cue_run.calendar.as_ref().map_or(Vec::new(), |(_, _, ev)| ev.iter().filter(|e| e.starts_between(prev, local)).map(|e| e.title.to_lowercase()).collect());
+        for title in due {
+            if let Some(i) = self.comp.cues.cues.iter().position(|c| c.name.trim().to_lowercase() == title) {
+                self.go_cue(i, now);
+            }
+        }
+    }
+
+    /// Someone touched something (the idle cue waits again).
+    pub(crate) fn touched(&mut self, now: f64) {
+        self.cue_run.last_input = now;
+        self.cue_run.idle_done = false;
+    }
+
     /// Fades, follow-on cues and timecode. Call once per frame.
     pub(crate) fn run_cues(&mut self, now: f64) {
+        // The opening cue, once per project.
+        if !self.cue_run.opened {
+            self.cue_run.opened = true;
+            self.cue_run.last_input = now;
+            if let Some(i) = self.comp.cues.open_cue_index() {
+                self.go_cue(i, now);
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.run_calendar(now);
+        // The idle cue, once each time things go quiet.
+        if !self.cue_run.idle_done
+            && let Some(i) = self.comp.cues.idle_cue_index(now - self.cue_run.last_input)
+        {
+            self.cue_run.idle_done = true;
+            self.go_cue(i, now);
+        }
         self.audio.set_ltc(self.comp.cues.timecode == TimecodeSource::Ltc);
         if let Some(fade) = self.cue_run.fade.take() {
             self.comp.step_cue(&fade, now as f32);

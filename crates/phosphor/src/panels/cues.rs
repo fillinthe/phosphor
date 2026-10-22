@@ -105,6 +105,49 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     });
+    // Installations: a cue when the project opens, and one when nobody's touched anything for a while.
+    let names: Vec<(u64, String)> = st.comp.cues.cues.iter().map(|c| (c.id, c.name.clone())).collect();
+    let cue_pick = |ui: &mut egui::Ui, salt: &str, id: &mut u64| {
+        let shown = names.iter().find(|(i, _)| i == id).map_or("none".to_string(), |(_, n)| n.clone());
+        ComboBox::from_id_salt(salt).width(110.0).selected_text(shown).show_ui(ui, |ui| {
+            if ui.selectable_label(*id == 0, "none").clicked() {
+                *id = 0;
+            }
+            for (cid, n) in &names {
+                if ui.selectable_label(id == cid, n).clicked() {
+                    *id = *cid;
+                }
+            }
+        });
+    };
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("When the project opens").small());
+        cue_pick(ui, "open_cue", &mut st.comp.cues.open_cue);
+        ui.separator();
+        let mut idle = st.comp.cues.idle_minutes > 0.0;
+        if toggle(ui, &mut idle, "When nobody's touched anything for").on_hover_text("Installations: no mouse, keys or controller for a while → this cue (once, until someone's back)").changed() {
+            st.comp.cues.idle_minutes = if idle { 10.0 } else { 0.0 };
+        }
+        if idle {
+            guarded!(ui, st.comp.cues.idle_minutes, egui::DragValue::new(&mut st.comp.cues.idle_minutes).range(0.5..=600.0).speed(0.2).suffix(" min"));
+            cue_pick(ui, "idle_cue", &mut st.comp.cues.idle_cue);
+        }
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("Calendar").small());
+        if st.comp.cues.calendar.is_empty() {
+            if ui.small_button(label(icon::CALENDAR, "Choose a calendar (.ics)…")).on_hover_text("Events in a calendar (exported from Calendar, Google, Outlook) start the cue with the same name, on time; repeating events too").clicked() {
+                st.dialogs.pick_file(crate::dialogs::Purpose::CueCalendar, Some(("Calendar", &["ics"])));
+            }
+        } else {
+            let name = std::path::Path::new(&st.comp.cues.calendar).file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned());
+            hint(ui, format!("{} (events start the cues named like them)", name));
+            if ui.small_button(icon::X).on_hover_text("No calendar").clicked() {
+                st.comp.cues.calendar.clear();
+            }
+        }
+    });
     hint(ui, "Cues remember every layer and every mapping slice (on/off, opacity, corners). GO fades to the next one; sources change through each layer's transition, slices glide into place.");
     ui.add_space(4.0);
     let mut fire = None;

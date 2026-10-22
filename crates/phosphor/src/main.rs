@@ -27,6 +27,7 @@ mod link;
 mod ltc;
 #[cfg(not(target_arch = "wasm32"))]
 mod os;
+mod calendar;
 #[cfg(not(target_arch = "wasm32"))]
 mod backups;
 #[cfg(not(target_arch = "wasm32"))]

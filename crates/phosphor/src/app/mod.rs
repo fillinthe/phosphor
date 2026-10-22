@@ -455,6 +455,7 @@ impl State {
         self.comp = comp;
         self.comp.ensure_outputs();
         self.notice = None;
+        self.cue_run.opened = false;
         self.outputs_on_open();
     }
 

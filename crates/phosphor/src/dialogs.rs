@@ -33,6 +33,8 @@ pub enum Purpose {
     ImportCues,
     /// A text file for this text layer (shown a part at a time).
     TextFile(u64),
+    /// A calendar (.ics) whose events start cues.
+    CueCalendar,
 }
 
 pub struct Dialogs {
