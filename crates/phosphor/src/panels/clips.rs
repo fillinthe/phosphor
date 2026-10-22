@@ -259,7 +259,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let mut beat: Option<(u64, usize)> = None;
     let mut beat_row: Option<u64> = None;
     let mut fill_row: Option<u64> = None;
-    let mut row_midi: Option<(u64, RowMidi)> = None;
+    let mut row_midi: Option<(u64, RowAct)> = None;
     {
         let drag_at = crate::app::file_drag_point(ui.ctx());
         let State { comp, thumbs, clip_cells, preview_wants, preview_keys, preview_textures, layer_textures, selected, .. } = st;
@@ -459,12 +459,21 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         apply_clip_act(st, id, c, ClipAct::StoreCurrent, now);
     }
     match row_midi {
-        Some((id, RowMidi::Map(ch, note))) => {
+        Some((id, RowAct::Map(ch, note))) => {
             st.comp.map_clip_row(id, ch, note);
             st.notice = Some(format!("Clip row on MIDI channel {} from note {note}", ch + 1));
         }
-        Some((id, RowMidi::Shift(by))) => st.comp.shift_clip_row(id, by),
-        None => {}
+        Some((id, RowAct::Shift(by))) => st.comp.shift_clip_row(id, by),
+        #[cfg(not(target_arch = "wasm32"))]
+        Some((id, RowAct::ExportBank)) => {
+            let name = st.comp.layer(id).map_or_else(|| "Clips".to_string(), |l| format!("{} clips", l.name));
+            st.dialogs.save_file(crate::dialogs::Purpose::ExportBank(id), ("Clip bank", &["json"]), &format!("{name}.json"));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        Some((id, RowAct::ImportBank)) => st.dialogs.pick_file(crate::dialogs::Purpose::ImportBank(id), Some(("Clip bank", &["json"]))),
+        // (The web build has no file dialogs.)
+        #[allow(unreachable_patterns)]
+        _ => {}
     }
     if let Some(id) = fill_row {
         st.quick_on(crate::app::Quick::Fill, Some(id), now);
@@ -488,12 +497,15 @@ const ROW_HEADER_W: f32 = 176.0;
 /// The start of a clip row is the layer itself: its live picture (click = select it, the Inspector opens), its name
 /// (menu: autopilot, fill, match the beat), ON and opacity. Returns (fill the row, match every clip's beat).
 /// A row's MIDI notes, asked for in its menu: map the row from a note (channel, first note), or shift it.
-enum RowMidi {
+/// What a row's menu asked for (beyond fill / match the beat).
+enum RowAct {
     Map(u8, u8),
     Shift(i32),
+    ExportBank,
+    ImportBank,
 }
 
-fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool, Option<RowMidi>) {
+fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool, Option<RowAct>) {
     use phosphor_engine::Autopilot;
     let mut row_midi = None;
     let mut fill = false;
@@ -554,7 +566,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
                 ch = c1 - 1;
                 guarded!(ui, note, egui::DragValue::new(&mut note).range(0..=127).prefix("from note "));
                 if ui.button("Map the row").clicked() {
-                    row_midi = Some(RowMidi::Map(ch, note));
+                    row_midi = Some(RowAct::Map(ch, note));
                     ui.close();
                 }
             });
@@ -563,8 +575,19 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
                 ui.label("Shift its notes");
                 for by in [-8, -1, 1, 8] {
                     if ui.small_button(format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
-                        row_midi = Some(RowMidi::Shift(by));
+                        row_midi = Some(RowAct::Shift(by));
                     }
+                }
+            });
+            #[cfg(not(target_arch = "wasm32"))]
+            ui.horizontal(|ui| {
+                if ui.button(label(icon::EXPORT, "Export clips…")).on_hover_text("Save this row's clips and their settings as a bank file").clicked() {
+                    row_midi = Some(RowAct::ExportBank);
+                    ui.close();
+                }
+                if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import…")).on_hover_text("Replace this row's clips with a saved bank").clicked() {
+                    row_midi = Some(RowAct::ImportBank);
+                    ui.close();
                 }
             });
             let pick = ui.button(label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");

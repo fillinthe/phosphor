@@ -232,6 +232,24 @@ impl PhosphorApp {
                         }
                     }
                 }
+                Purpose::ExportBank(id) => {
+                    if let (Some(p), Some(json)) = (paths.first(), st.comp.export_bank(id)) {
+                        let p = p.with_extension("json");
+                        st.notice = Some(match std::fs::write(&p, json) {
+                            Ok(()) => format!("Clips saved: {}", p.display()),
+                            Err(e) => format!("Couldn't save the clips: {e}"),
+                        });
+                    }
+                }
+                Purpose::ImportBank(id) => {
+                    if let Some(p) = paths.first() {
+                        let read = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| st.comp.import_bank(id, &t));
+                        st.notice = Some(match read {
+                            Ok(n) => format!("{n} clips from {}", name_of(p)),
+                            Err(e) => format!("Couldn't read those clips: {e}"),
+                        });
+                    }
+                }
                 Purpose::ExportMappingSvg(id) => {
                     if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter().find(|o| o.id == id)) {
                         let p = p.with_extension("svg");
