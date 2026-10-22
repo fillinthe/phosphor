@@ -154,8 +154,96 @@ fn open(url: &str, latest: Arc<Mutex<Option<PixelBuffer>>>) -> Result<SCStream, 
     Ok(stream)
 }
 
+/// This Mac's sound, every app but Phosphor (ScreenCaptureKit audio): for the beat detector and the meters, with no
+/// loopback driver. Needs the same Screen & System Audio Recording permission as screen capture.
+pub struct SystemSound {
+    stream: Arc<Mutex<Option<SCStream>>>,
+    error: Arc<Mutex<Option<String>>>,
+}
+
+/// Sample rate the system sound arrives at.
+pub const SYSTEM_SOUND_RATE: u32 = 48_000;
+
+impl SystemSound {
+    /// Starts on a thread; each block of sound (left, right) goes to `push`.
+    pub fn start(push: impl Fn(&[[f32; 2]]) + Send + Sync + 'static) -> Self {
+        let s = Self { stream: Arc::default(), error: Arc::default() };
+        let (stream, error) = (s.stream.clone(), s.error.clone());
+        std::thread::spawn(move || match open_sound(push) {
+            Ok(st) => *stream.lock().unwrap_or_else(|e| e.into_inner()) = Some(st),
+            Err(e) => *error.lock().unwrap_or_else(|e| e.into_inner()) = Some(e),
+        });
+        s
+    }
+
+    pub fn error(&self) -> Option<String> {
+        self.error.lock().ok()?.clone()
+    }
+}
+
+impl Drop for SystemSound {
+    fn drop(&mut self) {
+        if let Some(s) = self.stream.lock().ok().and_then(|mut s| s.take()) {
+            std::thread::spawn(move || {
+                let _ = s.stop_capture();
+            });
+        }
+    }
+}
+
+/// Float sound buffers → (left, right) frames: one buffer per channel (planar), or one interleaved buffer.
+fn frames_of(buffers: &[(u32, &[u8])]) -> Vec<[f32; 2]> {
+    let floats = |b: &[u8]| -> Vec<f32> { b.chunks_exact(4).map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]])).collect() };
+    match buffers {
+        [(1, l), (1, r), ..] => floats(l).into_iter().zip(floats(r)).map(|(l, r)| [l, r]).collect(),
+        [(ch, b), ..] if *ch >= 2 => floats(b).chunks_exact(*ch as usize).map(|f| [f[0], f[1]]).collect(),
+        [(_, b), ..] => floats(b).into_iter().map(|v| [v, v]).collect(),
+        [] => Vec::new(),
+    }
+}
+
+fn open_sound(push: impl Fn(&[[f32; 2]]) + Send + Sync + 'static) -> Result<SCStream, String> {
+    let content = SCShareableContent::get().map_err(|_| NO_PERMISSION.to_string())?;
+    let display = content.displays().into_iter().next().ok_or("no display")?;
+    let filter = SCContentFilter::create().with_display(&display).with_excluding_windows(&[]).build().map_err(|e| e.to_string())?;
+    // The picture isn't used: the smallest, slowest one ScreenCaptureKit allows.
+    let config = SCStreamConfiguration::new()
+        .with_width(2)
+        .with_height(2)
+        .with_fps(1)
+        .with_captures_audio(true)
+        .with_excludes_current_process_audio(true)
+        .with_sample_rate(SYSTEM_SOUND_RATE as i32)
+        .with_channel_count(2);
+    let mut stream = SCStream::new(&filter, &config).map_err(|e| e.to_string())?;
+    stream
+        .add_output_handler(
+            move |sample: CMSampleBuffer, kind: SCStreamOutputType| {
+                if !matches!(kind, SCStreamOutputType::Audio) {
+                    return;
+                }
+                let Ok(list) = sample.audio_buffer_list() else { return };
+                let buffers: Vec<(u32, &[u8])> = (0..list.num_buffers()).filter_map(|i| list.get(i)).map(|b| (b.number_channels, b.data())).collect();
+                push(&frames_of(&buffers));
+            },
+            SCStreamOutputType::Audio,
+        )
+        .map_err(|e| e.to_string())?;
+    stream.start_capture().map_err(|e| e.to_string())?;
+    Ok(stream)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn system_sound_buffers_become_frames() {
+        let b = |v: &[f32]| v.iter().flat_map(|x| x.to_ne_bytes()).collect::<Vec<u8>>();
+        let (l, r, i) = (b(&[0.1, 0.2]), b(&[-0.1, -0.2]), b(&[0.5, -0.5, 0.25, -0.25]));
+        assert_eq!(super::frames_of(&[(1, &l), (1, &r)]), vec![[0.1, -0.1], [0.2, -0.2]], "planar");
+        assert_eq!(super::frames_of(&[(2, &i)]), vec![[0.5, -0.5], [0.25, -0.25]], "interleaved");
+        assert_eq!(super::frames_of(&[(1, &l)]), vec![[0.1, 0.1], [0.2, 0.2]], "mono");
+    }
+
     /// Needs the Screen Recording permission: `cargo test -p phosphor captures_a_window -- --ignored`.
     #[test]
     #[ignore]
