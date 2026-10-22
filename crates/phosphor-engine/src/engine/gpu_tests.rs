@@ -353,3 +353,18 @@ fn output_backgrounds_show_behind_slices() {
     assert!(slice[1] > 200 && slice[0] < 30, "the slice: {slice:?}");
     assert!((bg[0] as i32 - 128).abs() < 10 && bg[1] < 20, "half-strength red behind: {bg:?}");
 }
+
+/// The particle fountain draws: some pixels lit, most of the picture dark.
+#[test]
+fn particles_draw_a_fountain() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 128, height: 72, ..Default::default() };
+    let desc = crate::shaders::generator("particles").expect("built in");
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("particles".into()), generator_values: desc.defaults(), ..Default::default() });
+    for _ in 0..3 {
+        engine.render(&comp, 2.0, &ModInputs { time: 2.0, ..Default::default() });
+    }
+    let (_, _, px) = engine.read_output().expect("output");
+    let lit = px.chunks(4).filter(|p| p[0].max(p[1]).max(p[2]) > 60).count() as f32 / (px.len() / 4) as f32;
+    assert!(lit > 0.002 && lit < 0.5, "{lit} of the pixels lit");
+}
