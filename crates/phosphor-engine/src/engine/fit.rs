@@ -1,4 +1,4 @@
-//! Placing a frame on the canvas (fit / fill / stretch).
+//! Placing a frame on the canvas (fit / fill / stretch / 1:1 pixels).
 
 use super::*;
 
@@ -21,6 +21,7 @@ pub(super) fn fit_transform(source: (u32, u32), target: (u32, u32), mode: FitMod
         FitMode::Stretch => return [1.0, 1.0, 0.0, 0.0],
         FitMode::Fit => (tw / sw).min(th / sh),
         FitMode::Fill => (tw / sw).max(th / sh),
+        FitMode::Copy => 1.0,
     };
     let sx = tw / (sw * k);
     let sy = th / (sh * k);
@@ -39,5 +40,7 @@ mod tests {
         let fill = fit_transform((640, 480), (1920, 1080), FitMode::Fill);
         assert!((fill[0] - 1.0).abs() < 1e-6 && fill[1] < 1.0, "fill crops vertically: {fill:?}");
         assert_eq!(fit_transform((1, 1), (9, 9), FitMode::Stretch), [1.0, 1.0, 0.0, 0.0]);
+        // 1:1: a 960×540 picture fills the middle half of a 1920×1080 canvas.
+        assert_eq!(fit_transform((960, 540), (1920, 1080), FitMode::Copy), [2.0, 2.0, -0.5, -0.5]);
     }
 }

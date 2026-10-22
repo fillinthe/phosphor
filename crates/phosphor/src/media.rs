@@ -377,6 +377,10 @@ impl MediaManager {
             if let Some(frame) = player.poll_frame(now) {
                 show_frame(engine, &mut self.held, player, layer.id, false, frame);
             }
+            // "Black at the end": the last frame goes (the next frame shown, after a seek or restart, brings it back).
+            if layer.black_at_end && player.finished() {
+                engine.clear_media(layer.id);
+            }
             if let Some(err) = player.error() {
                 self.errors.entry(layer.id).or_insert_with(|| err.to_string());
             }
@@ -443,6 +447,22 @@ impl MediaManager {
 }
 
 impl MediaManager {
+    /// Opens `path` again from disk on every layer showing it (after it was edited), at the same place in a movie.
+    pub fn reload(&mut self, comp: &Composition, path: &str) {
+        #[cfg(not(target_arch = "wasm32"))]
+        drop(self.preload.take(path));
+        for l in &comp.layers {
+            if let SourceSpec::Image { path: Some(p), .. } | SourceSpec::Movie { path: Some(p), .. } = &l.source
+                && p == path
+            {
+                if let Some((pos, _)) = self.position(l.id) {
+                    self.pending_seek.insert(l.id, pos);
+                }
+                self.loaded.remove(&l.id);
+            }
+        }
+    }
+
     /// (position, duration) in seconds of a layer's video, for the scrub bar.
     pub fn position(&self, layer: u64) -> Option<(f64, f64)> {
         #[cfg(not(target_arch = "wasm32"))]
@@ -530,7 +550,8 @@ impl MediaManager {
             let decode = if s.hardware { "hardware decode" } else { "software decode" };
             let skipped = if s.frames_skipped > 0 { format!(" · {} skipped", s.frames_skipped) } else { String::new() };
             let skipped = if s.reverse_slow { format!("{skipped} · slow backwards (few keyframes): Media › right-click › Convert… makes it smooth") } else { skipped };
-            Some(format!("{} · {w}×{h}{dur} · {decode} · {} shown, {} decoded{skipped}", s.codec, s.frames_shown, s.frames_decoded))
+            let about = if p.about().is_empty() { String::new() } else { format!(" · {}", p.about()) };
+            Some(format!("{} · {w}×{h}{dur}{about} · {decode} · {} shown, {} decoded{skipped}", s.codec, s.frames_shown, s.frames_decoded))
         }
         #[cfg(target_arch = "wasm32")]
         {

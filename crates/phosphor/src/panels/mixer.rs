@@ -132,7 +132,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
         value_bubble(ui, &r, match comp.crossfader {
             x if x < 0.01 => "A".to_string(),
             x if x > 0.99 => "B".to_string(),
-            x => format!("A {:.0}% · B {:.0}%", phosphor_engine::CrossGroup::A.gain(x) * 100.0, phosphor_engine::CrossGroup::B.gain(x) * 100.0),
+            x => format!("A {:.0}% · B {:.0}%", phosphor_engine::CrossGroup::A.gain(x, comp.fader_curve) * 100.0, phosphor_engine::CrossGroup::B.gain(x, comp.fader_curve) * 100.0),
         });
         ui.label(RichText::new("B").strong());
         let towards = if comp.crossfader < 0.5 { "B" } else { "A" };
@@ -141,6 +141,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
         fade = auto.clicked();
         map_menu(ui, &auto, auto_target);
         guarded!(ui, comp.auto_fade_secs, egui::DragValue::new(&mut comp.auto_fade_secs).range(0.0..=60.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Auto-fade time");
+        choice_combo(ui, "fader_curve", &mut comp.fader_curve, 150.0, false).on_hover_text("How the crossfader shares out A and B");
     });
     if fade {
         st.auto_fade(now);

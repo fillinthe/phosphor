@@ -85,6 +85,8 @@ pub struct Composition {
     pub collection_folders: Vec<CollectionFolder>,
     /// Mixer crossfader: 0 = only A layers, 0.5 = both, 1 = only B (layers without a side ignore it).
     pub crossfader: f32,
+    /// How the crossfader shares out A and B.
+    pub fader_curve: FaderCurve,
     /// Auto-fade: seconds the crossfader takes to glide across.
     pub auto_fade_secs: f32,
     pub bpm: f32,
@@ -110,7 +112,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, fader_curve: FaderCurve::default(), auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 
@@ -173,6 +175,17 @@ impl Composition {
         paths
     }
 
+    /// How many layers and clips use each media file (path → count).
+    pub fn media_uses(&self) -> std::collections::HashMap<String, usize> {
+        let mut uses = std::collections::HashMap::new();
+        for s in self.sources() {
+            if let SourceSpec::Image { path: Some(p), .. } | SourceSpec::Movie { path: Some(p), .. } = s {
+                *uses.entry(p.clone()).or_insert(0) += 1;
+            }
+        }
+        uses
+    }
+
     /// Effect and generator ids in use (for packing shaders with a show).
     pub fn used_shader_ids(&self) -> Vec<String> {
         let effects = self.all_effects().map(|e| e.effect.clone());
@@ -207,7 +220,7 @@ impl Composition {
         }
         let mut g = layer.volume * self.volume;
         if layer.volume_follows_opacity {
-            g *= layer.opacity * layer.group.gain(self.crossfader) * group.map_or(1.0, |g| g.opacity);
+            g *= layer.opacity * layer.group.gain(self.crossfader, self.fader_curve) * group.map_or(1.0, |g| g.opacity);
         }
         g.max(0.0)
     }
@@ -529,6 +542,30 @@ mod media_memory_tests {
         let third = c.add_layer().id;
         c.set_layer_source(third, movie, Vec::new(), String::new(), 0.0);
         assert_eq!(c.layers.iter().find(|l| l.id == third).unwrap().rate, 0.5);
+    }
+
+    #[test]
+    fn media_uses_count_layers_and_clips() {
+        let mut c = Composition::default();
+        let movie = SourceSpec::Movie { name: "a.mp4".into(), path: Some("/x/a.mp4".into()) };
+        let id = c.add_layer().id;
+        c.set_layer_source(id, movie.clone(), Vec::new(), String::new(), 0.0);
+        c.place_clips(id, 0, vec![("a".into(), movie.clone()), ("a again".into(), movie)]);
+        let uses = c.media_uses();
+        assert_eq!(uses.get("/x/a.mp4"), Some(&3));
+        assert_eq!(uses.get("/x/b.mp4"), None);
+    }
+
+    #[test]
+    fn jump_steps_in_beats_or_seconds() {
+        let mut l = LayerState::default();
+        l.jump = 2.0;
+        // 2 beats at 120 BPM, normal speed = 1 s of movie; at half speed, half that.
+        assert!((l.jump_secs(Some(10.0), 120.0) - 1.0).abs() < 1e-9);
+        l.rate = 0.5;
+        assert!((l.jump_secs(Some(10.0), 120.0) - 0.5).abs() < 1e-9);
+        l.jump_in_seconds = true;
+        assert_eq!(l.jump_secs(Some(10.0), 120.0), 2.0);
     }
 }
 

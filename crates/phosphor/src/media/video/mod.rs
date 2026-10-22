@@ -158,6 +158,10 @@ pub struct VideoPlayer {
     shown_pts: f64,
     /// Times the movie reached its end (or its out point) and went round again; +1 when it stops at the end.
     passes: u64,
+    /// Random frames: when the next jump is due, and whether the last jump's frame is still on its way.
+    jumps: Jumps,
+    /// What the file is (frame rate, bit rate, format, colour space, sound), from when it opened.
+    about: String,
     /// The movie's sound (None = no audio track, or sound off).
     sound: Option<sound::ClipAudio>,
     /// A sound file with no picture: the clock runs, the sound follows it, no frames ever come.
@@ -207,6 +211,14 @@ struct Ctl {
     quit: bool,
     /// Jump to this media time (seconds) and tag following frames with `generation`.
     seek: Option<(f64, u64)>,
+}
+
+/// Random-frames play: one jump per frame time (at the speed), each waiting for the frame before it.
+#[derive(Default)]
+struct Jumps {
+    due: f64,
+    waiting: bool,
+    dice: Option<phosphor_engine::Dice>,
 }
 
 impl Shared {
@@ -294,6 +306,7 @@ impl VideoPlayer {
 
     fn start(name: String, dec: Decoder, live: bool) -> Result<Self, String> {
         let size = (dec.dec.width(), dec.dec.height());
+        let about = dec.about.clone();
         let duration = dec.duration;
         let shared = Arc::new(Shared {
             ctl: Mutex::new(Ctl {
@@ -344,6 +357,8 @@ impl VideoPlayer {
             shown: 0.0,
             shown_pts: 0.0,
             passes: 0,
+            jumps: Jumps::default(),
+            about,
             sound: None,
             audio_only: false,
             opened_at: Some(std::time::Instant::now()),
@@ -397,6 +412,8 @@ impl VideoPlayer {
             shown: 0.0,
             shown_pts: 0.0,
             passes: 0,
+            jumps: Jumps::default(),
+            about: String::new(),
             sound,
             audio_only: true,
             opened_at: None,
@@ -468,6 +485,9 @@ impl VideoPlayer {
             self.tick_audio_only();
             return None;
         }
+        if self.mode.direction == PlayDirection::Random {
+            self.random_jump(now);
+        }
         let rx = self.rx.as_ref()?;
         let mut out: Option<VideoFrame> = None;
         loop {
@@ -525,12 +545,29 @@ impl VideoPlayer {
             .clock
             .store(self.clock.to_bits(), Ordering::Relaxed);
         self.update_sound();
+        if out.is_some() {
+            self.jumps.waiting = false;
+        }
         if out.is_some()
             && let Some(t) = self.opened_at.take()
         {
             log::info!("first frame {:.0} ms after starting ({}x{})", t.elapsed().as_secs_f64() * 1000.0, self.size.0, self.size.1);
         }
         out
+    }
+
+    /// Random frames: jump somewhere in the loop range once the last jump's frame is on screen and a frame time
+    /// (1/30 s, shorter when faster) has gone by. Slow-to-seek files (long-GOP H.264) just jump less often.
+    fn random_jump(&mut self, now: f64) {
+        if !self.playing || self.jumps.waiting || now < self.jumps.due {
+            return;
+        }
+        let Some((lo, hi)) = self.mode.range.or(self.duration.map(|d| (0.0, d))) else { return };
+        let seed = now.to_bits() ^ self.generation;
+        let unit = self.jumps.dice.get_or_insert_with(|| phosphor_engine::Dice::new(seed)).unit() as f64;
+        self.jumps.due = now + 1.0 / (30.0 * self.rate.abs().max(0.05));
+        self.jumps.waiting = true;
+        self.seek(lo + unit * (hi - lo).max(0.0));
     }
 
     /// Sound-only clip: the clock is the position; loop (or stop) at the out point / end, count passes.
@@ -577,6 +614,11 @@ impl VideoPlayer {
         if let Some(s) = &self.sound {
             s.set_gain(gain);
         }
+    }
+
+    /// Not looping and played to the end (holding its last frame).
+    pub fn finished(&self) -> bool {
+        !self.looping && self.end.is_some_and(|end| self.clock >= end - 1e-3)
     }
 
     /// How many times the movie has played through (autopilot moves on when this changes).
@@ -664,6 +706,11 @@ impl VideoPlayer {
     /// Decode error that stopped playback, if any.
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
+    }
+
+    /// Frame rate, bit rate, pixel format, colour space and sound of the file ("" for sound-only clips).
+    pub fn about(&self) -> &str {
+        &self.about
     }
 
     pub fn stats(&self) -> VideoStats {

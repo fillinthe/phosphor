@@ -45,7 +45,30 @@ fn sample_source(st: vec2f) -> vec4f {
     return textureSampleLevel(tex0, samp, st, 0.0);
 }
 
+// Brightness and saturation as the Hue / Saturation / Colour / Luminosity modes use them (W3C compositing spec).
+fn blend_lum(c: vec3f) -> f32 { return dot(c, vec3f(0.3, 0.59, 0.11)); }
+fn blend_set_lum(c: vec3f, l: f32) -> vec3f {
+    let d = c + vec3f(l - blend_lum(c));
+    let y = blend_lum(d);
+    let n = min(d.r, min(d.g, d.b));
+    let x = max(d.r, max(d.g, d.b));
+    var o = d;
+    if (n < 0.0) { o = vec3f(y) + (o - vec3f(y)) * y / max(y - n, 1e-6); }
+    if (x > 1.0) { o = vec3f(y) + (o - vec3f(y)) * (1.0 - y) / max(x - y, 1e-6); }
+    return o;
+}
+fn blend_sat(c: vec3f) -> f32 { return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }
+fn blend_set_sat(c: vec3f, s: f32) -> vec3f {
+    let n = min(c.r, min(c.g, c.b));
+    let range = max(c.r, max(c.g, c.b)) - n;
+    if (range <= 1e-6) { return vec3f(0.0); }
+    return (c - vec3f(n)) * s / range;
+}
+fn color_burn(b: vec3f, s: vec3f) -> vec3f { return select(1.0 - min(vec3f(1.0), (1.0 - b) / max(s, vec3f(1e-6))), vec3f(1.0), b >= vec3f(1.0)); }
+fn color_dodge(b: vec3f, s: vec3f) -> vec3f { return select(min(vec3f(1.0), b / max(1.0 - s, vec3f(1e-6))), vec3f(0.0), b <= vec3f(0.0)); }
+
 fn blend(b: vec3f, s: vec3f, mode: u32) -> vec3f {
+    let low = s <= vec3f(0.5);
     switch mode {
         case 1u: { return b + s; }
         case 2u: { return b * s; }
@@ -56,6 +79,23 @@ fn blend(b: vec3f, s: vec3f, mode: u32) -> vec3f {
         case 7u: { return min(b, s); }
         case 8u: { return max(b - s, vec3f(0.0)); }
         case 9u: { return b + s - 2.0 * b * s; }
+        case 13u: {
+            // Soft light (W3C).
+            let d = select(sqrt(b), ((16.0 * b - 12.0) * b + 4.0) * b, b <= vec3f(0.25));
+            return select(b + (2.0 * s - 1.0) * (d - b), b - (1.0 - 2.0 * s) * b * (1.0 - b), low);
+        }
+        case 14u: { return select(1.0 - (1.0 - b) * (1.0 - (2.0 * s - 1.0)), b * 2.0 * s, low); }
+        case 15u: { return select(color_dodge(b, 2.0 * s - 1.0), color_burn(b, 2.0 * s), low); }
+        case 16u: { return b + 2.0 * s - 1.0; }
+        case 17u: { return select(max(b, 2.0 * s - 1.0), min(b, 2.0 * s), low); }
+        case 18u: { return step(vec3f(1.0), b + s); }
+        case 19u: { return color_burn(b, s); }
+        case 20u: { return color_dodge(b, s); }
+        case 21u: { return min(vec3f(1.0), b / max(s, vec3f(1e-6))); }
+        case 22u: { return blend_set_lum(blend_set_sat(s, blend_sat(b)), blend_lum(b)); }
+        case 23u: { return blend_set_lum(blend_set_sat(b, blend_sat(s)), blend_lum(b)); }
+        case 24u: { return blend_set_lum(s, blend_lum(b)); }
+        case 25u: { return blend_set_lum(b, blend_lum(s)); }
         default: { return s; }
     }
 }
@@ -91,7 +131,7 @@ fn fs_composite(in: VOut) -> @location(0) vec4f {
     if (any(st < vec2f(c.x, c.z)) || any(st > vec2f(1.0 - c.y, 1.0 - c.w))) {
         s = vec4f(0.0);
     }
-    if (u.mode >= 10u) {
+    if (u.mode >= 10u && u.mode <= 12u) {
         // Track matte: this layer's brightness / alpha keeps or cuts what's below; opacity = how much.
         var m = dot(s.rgb, vec3f(0.2126, 0.7152, 0.0722));
         if (u.mode == 11u) { m = 1.0 - m; }

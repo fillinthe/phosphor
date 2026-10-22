@@ -58,6 +58,8 @@ pub enum ControlTarget {
     LayerDirection(u64),
     /// Jump a movie to a point (0..1 of its length).
     LayerScrub(u64),
+    /// Jump a movie back or forward by its jump step (a press).
+    LayerJump { layer: u64, forward: bool },
     /// A widget on the Control Surface (its main value).
     Surface(u64),
     /// An XY pad's vertical value.
@@ -313,6 +315,21 @@ impl ControlMap {
         self.fx.iter().map(|f| if let ValueFx::Smooth(s) = f { *s } else { 0.0 }).fold(0.0, f32::max)
     }
 
+    /// Seconds a drop takes (rises land at once): peak hold / fall (0 = drops land at once too).
+    pub fn fall(&self) -> f32 {
+        self.fx.iter().map(|f| if let ValueFx::Fall(s) = f { *s } else { 0.0 }).fold(0.0, f32::max)
+    }
+
+    /// Endless knob: the value per click (None = the controller sends positions).
+    pub fn endless(&self) -> Option<f32> {
+        self.fx.iter().find_map(|f| if let ValueFx::Endless(s) = f { Some(*s) } else { None })
+    }
+
+    /// Changes smaller than this are ignored (0 = none).
+    pub fn dead_band(&self) -> f32 {
+        self.fx.iter().map(|f| if let ValueFx::DeadBand(d) = f { *d } else { 0.0 }).fold(0.0, f32::max)
+    }
+
     /// Seconds each move waits before it lands (0 = straight away).
     pub fn delay(&self) -> f32 {
         self.fx.iter().map(|f| if let ValueFx::Delay(s) = f { *s } else { 0.0 }).sum()
@@ -332,6 +349,23 @@ pub enum ValueFx {
     Formula(String),
     /// Each move lands this many seconds later (an echo of the hand).
     Delay(f32),
+    /// On (1) at or above this, off (0) below: a fader as a switch.
+    Threshold(f32),
+    /// Kept between these two (the rest of the fader does nothing).
+    Clamp(f32, f32),
+    /// The range repeats this many times along the fader (0→1, 0→1…).
+    Repeat(u32),
+    /// Up to this much random jitter on each value.
+    Randomize(f32),
+    /// Rises land at once; drops take this many seconds (peak hold, like a VU meter).
+    Fall(f32),
+    /// A drawn curve: the output at evenly spaced points from 0 to 1, straight lines between.
+    Lookup(Vec<f32>),
+    /// Endless knob (relative MIDI): each message turns the value up or down by its count × this (0..1 per click);
+    /// 1–63 = up, 65–127 = down (two's complement, the common encoder setting).
+    Endless(f32),
+    /// Ignore changes smaller than this (a jittery fader or sensor).
+    DeadBand(f32),
 }
 
 impl ValueFx {
@@ -342,13 +376,30 @@ impl ValueFx {
             ValueFx::Curve(_) => "Curve",
             ValueFx::Formula(_) => "Formula",
             ValueFx::Delay(_) => "Delay",
+            ValueFx::Threshold(_) => "Threshold",
+            ValueFx::Clamp(..) => "Limit",
+            ValueFx::Repeat(_) => "Repeat",
+            ValueFx::Randomize(_) => "Jitter",
+            ValueFx::Fall(_) => "Fall",
+            ValueFx::Lookup(_) => "Drawn curve",
+            ValueFx::Endless(_) => "Endless knob",
+            ValueFx::DeadBand(_) => "Dead band",
         }
     }
 
-    /// The instant ones; Smooth and Delay pass through here (they work over time).
+    /// The instant ones; Smooth, Delay and Fall pass through here (they work over time).
     pub fn apply(&self, v: f32) -> f32 {
         match self {
-            ValueFx::Smooth(_) | ValueFx::Delay(_) => v,
+            ValueFx::Smooth(_) | ValueFx::Delay(_) | ValueFx::Fall(_) | ValueFx::Endless(_) | ValueFx::DeadBand(_) => v,
+            ValueFx::Threshold(t) => if v >= *t { 1.0 } else { 0.0 },
+            ValueFx::Clamp(lo, hi) => v.clamp(lo.min(*hi), hi.max(*lo)),
+            ValueFx::Repeat(n) => {
+                let x = v * (*n).max(1) as f32;
+                // The top of each repeat stays 1 (not back to 0), so a full fader still reads full.
+                if v >= 1.0 { 1.0 } else { x.fract() }
+            }
+            ValueFx::Randomize(amount) => (v + (jitter() * 2.0 - 1.0) * amount.clamp(0.0, 1.0)).clamp(0.0, 1.0),
+            ValueFx::Lookup(points) => lookup(points, v),
             ValueFx::Steps(n) => {
                 let n = (*n).max(2) as f32 - 1.0;
                 (v * n).round() / n
@@ -357,6 +408,38 @@ impl ValueFx {
             ValueFx::Formula(f) => crate::expr::eval(f, &|name| matches!(name, "$VAL" | "VAL").then_some(v as f64)).map_or(v, |r| (r as f32).clamp(0.0, 1.0)),
         }
     }
+}
+
+/// An endless knob's message (0..1 = MIDI 0..127) as clicks: 1–63 up, 65–127 down (two's complement), 0 / 64 none.
+pub fn encoder_clicks(v: f32) -> i32 {
+    let raw = (v.clamp(0.0, 1.0) * 127.0).round() as i32;
+    if raw < 64 { raw } else { raw - 128 }
+}
+
+/// A drawn curve's value at `x` (0..1): straight lines between evenly spaced points (none = unchanged).
+fn lookup(points: &[f32], x: f32) -> f32 {
+    match points.len() {
+        0 => x,
+        1 => points[0].clamp(0.0, 1.0),
+        n => {
+            let at = x.clamp(0.0, 1.0) * (n - 1) as f32;
+            let i = (at as usize).min(n - 2);
+            let t = at - i as f32;
+            (points[i] + (points[i + 1] - points[i]) * t).clamp(0.0, 1.0)
+        }
+    }
+}
+
+/// 0..1, different every call (Jitter): a shared xorshift, so values need no random crate.
+fn jitter() -> f32 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static STATE: AtomicU64 = AtomicU64::new(0x2545_F491_4F6C_DD1D);
+    let mut x = STATE.load(Ordering::Relaxed);
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    STATE.store(x, Ordering::Relaxed);
+    (x >> 40) as f32 / (1u64 << 24) as f32
 }
 
 #[cfg(test)]
@@ -379,6 +462,26 @@ mod value_fx_tests {
         assert_eq!(m.shape(0.4), 0.4, "a broken formula passes the value through");
         m.fx = vec![ValueFx::Smooth(0.5), ValueFx::Curve(1.0)];
         assert_eq!(m.smoothing(), 0.5);
+    }
+
+    #[test]
+    fn switches_limits_repeats_jitter_and_drawn_curves() {
+        let mut m = ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 1 }, ControlTarget::MasterFade);
+        m.fx = vec![ValueFx::Threshold(0.6)];
+        assert_eq!((m.shape(0.59), m.shape(0.6)), (0.0, 1.0));
+        m.fx = vec![ValueFx::Clamp(0.2, 0.7)];
+        assert_eq!((m.shape(0.0), m.shape(0.5), m.shape(1.0)), (0.2, 0.5, 0.7));
+        m.fx = vec![ValueFx::Repeat(4)];
+        assert!((m.shape(0.3) - 0.2).abs() < 1e-6 && m.shape(1.0) == 1.0);
+        m.fx = vec![ValueFx::Randomize(0.1)];
+        let vals: Vec<f32> = (0..50).map(|_| m.shape(0.5)).collect();
+        assert!(vals.iter().all(|v| (0.4..=0.6).contains(v)), "within the amount");
+        assert!(vals.iter().any(|v| (v - 0.5).abs() > 0.01), "and it does move");
+        // A V shape: 1 at the ends, 0 in the middle.
+        m.fx = vec![ValueFx::Lookup(vec![1.0, 0.0, 1.0])];
+        assert_eq!((m.shape(0.0), m.shape(0.25), m.shape(0.5), m.shape(1.0)), (1.0, 0.5, 0.0, 1.0));
+        m.fx = vec![ValueFx::Fall(0.8)];
+        assert_eq!((m.shape(0.3), m.fall()), (0.3, 0.8));
     }
 }
 

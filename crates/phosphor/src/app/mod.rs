@@ -477,6 +477,12 @@ impl State {
                     self.media.seek(layer, v as f64 * dur);
                 }
             }
+            crate::control::Deferred::Jump(id, forward) => {
+                if let (Some((pos, dur)), Some(l)) = (self.media.position(id), self.comp.layers.iter().find(|l| l.id == id)) {
+                    let step = l.jump_secs(Some(dur), self.comp.bpm);
+                    self.media.seek(id, if forward { pos + step } else { pos - step });
+                }
+            }
         }
     }
 

@@ -107,6 +107,34 @@ fn loop_region_and_ping_pong() {
     assert_eq!(jumps, 0, "ping-pong jumped instead of turning: {pos:?}");
 }
 
+/// Random frames: jumps all over the loop region (not playing in order) and never leaves it.
+#[test]
+fn random_frames_jump_inside_the_range() {
+    let Some(path) = clip() else { return };
+    let mut p = VideoPlayer::open(path).unwrap();
+    p.set_mode(super::PlayDirection::Random, Some((0.5, 2.0)));
+    let pos = positions(&mut p, 3.0);
+    assert!(pos.len() > 20, "too few frames ({})", pos.len());
+    let late = &pos[2..];
+    assert!(late.iter().all(|t| (0.49..2.01).contains(t)), "left the range: {pos:?}");
+    let big = late.windows(2).filter(|w| (w[1] - w[0]).abs() > 0.2).count();
+    assert!(big * 3 >= late.len(), "not jumping around: {pos:?}");
+}
+
+/// Not looping: `finished` turns on once the movie has played to its end (Black at end uses it).
+#[test]
+fn stopping_at_the_end_is_finished() {
+    let Some(path) = clip() else { return };
+    let mut p = VideoPlayer::open(path).unwrap();
+    p.set_looping(false);
+    play(&mut p, 0.0, 1.0);
+    assert!(!p.finished(), "finished half way");
+    play(&mut p, 1.0, 3.5);
+    assert!(p.finished(), "not finished after the end (at {})", p.position());
+    p.seek(0.5);
+    assert!(!p.finished(), "still finished after seeking back");
+}
+
 /// Footage check (not run by default): every movie in `PHOSPHOR_FOOTAGE` plays forward, reverse and ping-pong for
 /// 5 s of real time, polled at 60 Hz like the app (zero-copy on). Prints one FOOTAGE line per clip and direction:
 /// frames shown vs the clip's own rate, the longest gap between new pictures (a visible hitch), frames dropped.

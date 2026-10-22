@@ -17,6 +17,20 @@ pub enum BlendMode {
     Darken,
     Subtract,
     Exclusion,
+    SoftLight,
+    HardLight,
+    VividLight,
+    LinearLight,
+    PinLight,
+    HardMix,
+    ColorBurn,
+    ColorDodge,
+    Divide,
+    /// The layer's hue / saturation / colour / brightness with the rest from below.
+    Hue,
+    Saturation,
+    Color,
+    Luminosity,
     /// Track mattes: the layer isn't shown; its brightness (or alpha) cuts out the layers below it.
     LumaMask,
     InverseLumaMask,
@@ -24,7 +38,7 @@ pub enum BlendMode {
 }
 
 impl BlendMode {
-    pub const ALL: [BlendMode; 13] = [
+    pub const ALL: [BlendMode; 26] = [
         BlendMode::Normal,
         BlendMode::Add,
         BlendMode::Multiply,
@@ -35,6 +49,19 @@ impl BlendMode {
         BlendMode::Darken,
         BlendMode::Subtract,
         BlendMode::Exclusion,
+        BlendMode::SoftLight,
+        BlendMode::HardLight,
+        BlendMode::VividLight,
+        BlendMode::LinearLight,
+        BlendMode::PinLight,
+        BlendMode::HardMix,
+        BlendMode::ColorBurn,
+        BlendMode::ColorDodge,
+        BlendMode::Divide,
+        BlendMode::Hue,
+        BlendMode::Saturation,
+        BlendMode::Color,
+        BlendMode::Luminosity,
         BlendMode::LumaMask,
         BlendMode::InverseLumaMask,
         BlendMode::AlphaMask,
@@ -52,6 +79,19 @@ impl BlendMode {
             BlendMode::Darken => "Darken",
             BlendMode::Subtract => "Subtract",
             BlendMode::Exclusion => "Exclusion",
+            BlendMode::SoftLight => "Soft light",
+            BlendMode::HardLight => "Hard light",
+            BlendMode::VividLight => "Vivid light",
+            BlendMode::LinearLight => "Linear light",
+            BlendMode::PinLight => "Pin light",
+            BlendMode::HardMix => "Hard mix",
+            BlendMode::ColorBurn => "Colour burn",
+            BlendMode::ColorDodge => "Colour dodge",
+            BlendMode::Divide => "Divide",
+            BlendMode::Hue => "Hue",
+            BlendMode::Saturation => "Saturation",
+            BlendMode::Color => "Colour",
+            BlendMode::Luminosity => "Luminosity",
             BlendMode::LumaMask => "Mask (brightness)",
             BlendMode::InverseLumaMask => "Mask (inverted)",
             BlendMode::AlphaMask => "Mask (alpha)",
@@ -63,9 +103,16 @@ impl BlendMode {
         matches!(self, BlendMode::LumaMask | BlendMode::InverseLumaMask | BlendMode::AlphaMask)
     }
 
-    /// Index understood by `blend()` / `fs_composite` in composite.wgsl (10–12 = masks).
+    /// Index understood by `blend()` / `fs_composite` in composite.wgsl (10–12 = masks; modes added later
+    /// take 13 on, so the first ones keep their numbers).
     pub(crate) fn shader_index(self) -> u32 {
-        self.index() as u32
+        match self {
+            BlendMode::LumaMask => 10,
+            BlendMode::InverseLumaMask => 11,
+            BlendMode::AlphaMask => 12,
+            m if m.index() >= 10 => m.index() as u32 + 3,
+            m => m.index() as u32,
+        }
     }
 }
 
@@ -75,16 +122,19 @@ pub enum FitMode {
     #[default]
     Fill,
     Stretch,
+    /// Pixel for pixel: the picture's own size, centred (cropped or bordered, never scaled).
+    Copy,
 }
 
 impl FitMode {
-    pub const ALL: [FitMode; 3] = [FitMode::Fit, FitMode::Fill, FitMode::Stretch];
+    pub const ALL: [FitMode; 4] = [FitMode::Fit, FitMode::Fill, FitMode::Stretch, FitMode::Copy];
 
     pub fn name(self) -> &'static str {
         match self {
             FitMode::Fit => "Fit",
             FitMode::Fill => "Fill",
             FitMode::Stretch => "Stretch",
+            FitMode::Copy => "1:1 pixels",
         }
     }
 }
@@ -109,13 +159,47 @@ impl CrossGroup {
         }
     }
 
-    /// Opacity multiplier at crossfader position `x` (0 = A, 1 = B).
-    pub fn gain(self, x: f32) -> f32 {
+    /// Opacity multiplier at crossfader position `x` (0 = A, 1 = B) with that curve.
+    pub fn gain(self, x: f32, curve: FaderCurve) -> f32 {
         let x = x.clamp(0.0, 1.0);
+        // How far towards the other side this side is (0 = at its own end, 1 = at the far end).
+        let away = match self {
+            CrossGroup::None => return 1.0,
+            CrossGroup::A => x,
+            CrossGroup::B => 1.0 - x,
+        };
+        match curve {
+            FaderCurve::FullInMiddle => (2.0 * (1.0 - away)).min(1.0),
+            FaderCurve::Straight => 1.0 - away,
+            FaderCurve::Smooth => (away * std::f32::consts::FRAC_PI_2).cos().max(0.0),
+            FaderCurve::Cut => if away < 0.5 || (away == 0.5 && self == CrossGroup::A) { 1.0 } else { 0.0 },
+        }
+    }
+}
+
+/// How the crossfader shares out A and B.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FaderCurve {
+    /// Both full at the centre; each fades over its far half.
+    #[default]
+    FullInMiddle,
+    /// Each fades the whole way across (both at half in the middle: a dip).
+    Straight,
+    /// Equal power: no dip in the middle (cos / sin).
+    Smooth,
+    /// A hard switch at the centre.
+    Cut,
+}
+
+impl FaderCurve {
+    pub const ALL: [FaderCurve; 4] = [FaderCurve::FullInMiddle, FaderCurve::Smooth, FaderCurve::Straight, FaderCurve::Cut];
+
+    pub fn name(self) -> &'static str {
         match self {
-            CrossGroup::None => 1.0,
-            CrossGroup::A => (2.0 * (1.0 - x)).min(1.0),
-            CrossGroup::B => (2.0 * x).min(1.0),
+            FaderCurve::FullInMiddle => "Both full in the middle",
+            FaderCurve::Smooth => "Smooth (no dip)",
+            FaderCurve::Straight => "Straight (dip in the middle)",
+            FaderCurve::Cut => "Cut at the middle",
         }
     }
 }
@@ -128,16 +212,19 @@ pub enum PlayDirection {
     Reverse,
     /// Forward to the out point, back to the in point, and again.
     PingPong,
+    /// A random frame (between the in and out points) each frame time; speed sets how often it jumps.
+    Random,
 }
 
 impl PlayDirection {
-    pub const ALL: [PlayDirection; 3] = [PlayDirection::Forward, PlayDirection::Reverse, PlayDirection::PingPong];
+    pub const ALL: [PlayDirection; 4] = [PlayDirection::Forward, PlayDirection::Reverse, PlayDirection::PingPong, PlayDirection::Random];
 
     pub fn name(self) -> &'static str {
         match self {
             PlayDirection::Forward => "Forward",
             PlayDirection::Reverse => "Reverse",
             PlayDirection::PingPong => "Ping-pong",
+            PlayDirection::Random => "Random frames",
         }
     }
 }
@@ -325,14 +412,25 @@ impl Default for LaunchSettings {
 
 #[cfg(test)]
 mod crossfader_tests {
-    use super::CrossGroup;
+    use super::{CrossGroup, FaderCurve};
 
     #[test]
     fn both_sides_full_at_the_centre_and_alone_at_the_ends() {
-        assert_eq!((CrossGroup::A.gain(0.0), CrossGroup::B.gain(0.0)), (1.0, 0.0));
-        assert_eq!((CrossGroup::A.gain(0.5), CrossGroup::B.gain(0.5)), (1.0, 1.0));
-        assert_eq!((CrossGroup::A.gain(1.0), CrossGroup::B.gain(1.0)), (0.0, 1.0));
-        assert_eq!(CrossGroup::None.gain(1.0), 1.0);
+        let c = FaderCurve::FullInMiddle;
+        assert_eq!((CrossGroup::A.gain(0.0, c), CrossGroup::B.gain(0.0, c)), (1.0, 0.0));
+        assert_eq!((CrossGroup::A.gain(0.5, c), CrossGroup::B.gain(0.5, c)), (1.0, 1.0));
+        assert_eq!((CrossGroup::A.gain(1.0, c), CrossGroup::B.gain(1.0, c)), (0.0, 1.0));
+        assert_eq!(CrossGroup::None.gain(1.0, c), 1.0);
+        // Every curve: full A at the left, full B at the right.
+        for c in FaderCurve::ALL {
+            assert_eq!((CrossGroup::A.gain(0.0, c), CrossGroup::B.gain(0.0, c)), (1.0, 0.0), "{c:?}");
+            assert!(CrossGroup::A.gain(1.0, c) < 1e-6 && CrossGroup::B.gain(1.0, c) == 1.0, "{c:?}");
+        }
+        assert_eq!(CrossGroup::A.gain(0.5, FaderCurve::Straight), 0.5);
+        let (a, b) = (CrossGroup::A.gain(0.5, FaderCurve::Smooth), CrossGroup::B.gain(0.5, FaderCurve::Smooth));
+        assert!((a * a + b * b - 1.0).abs() < 1e-5, "equal power");
+        assert_eq!((CrossGroup::A.gain(0.4, FaderCurve::Cut), CrossGroup::B.gain(0.4, FaderCurve::Cut)), (1.0, 0.0));
+        assert_eq!((CrossGroup::A.gain(0.6, FaderCurve::Cut), CrossGroup::B.gain(0.6, FaderCurve::Cut)), (0.0, 1.0));
     }
 }
 
