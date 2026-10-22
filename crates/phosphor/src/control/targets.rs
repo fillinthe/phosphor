@@ -143,7 +143,12 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 }
                 return;
             }
-            let value = if !y && w.kind == phosphor_engine::WidgetKind::Toggle { toggled(w.value > 0.5, v) as u8 as f32 } else { v.clamp(0.0, 1.0) };
+            let value = match w.kind {
+                phosphor_engine::WidgetKind::Toggle if !y => toggled(w.value > 0.5, v) as u8 as f32,
+                // A controller on a Choices widget lands on whole choices.
+                phosphor_engine::WidgetKind::Choices if !y => w.choice_value(phosphor_engine::pick(v.clamp(0.0, 1.0), w.choice_count())),
+                _ => v.clamp(0.0, 1.0),
+            };
             let bindings = if y {
                 w.value_y = value;
                 w.bindings_y.clone()
