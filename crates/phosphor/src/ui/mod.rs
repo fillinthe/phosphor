@@ -12,6 +12,7 @@ use crate::app::{State, Trigger};
 use crate::theme::{accent, WARN};
 
 mod binding;
+pub(crate) mod eyedropper;
 mod kit;
 mod learn;
 mod level;

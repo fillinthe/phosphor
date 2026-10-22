@@ -423,7 +423,15 @@ pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
         return false;
     }
     let mut c = [rgb[0], rgb[1], rgb[2]];
-    let mut changed = ui.color_edit_button_rgb(&mut c).changed();
+    let button = ui.color_edit_button_rgb(&mut c);
+    let mut changed = button.changed();
+    if let Some(picked) = super::eyedropper::take_result(ui.ctx(), button.id) {
+        c = picked;
+        changed = true;
+    }
+    if super::eyedropper::armed(ui.ctx()) == Some(button.id) {
+        button.clone().highlight();
+    }
     let mut saved: Vec<[f32; 3]> = ui.ctx().data_mut(|d| d.get_persisted(swatches_id())).unwrap_or_default();
     let mut save = false;
     ui.menu_button(egui::RichText::new(icon::PALETTE).small(), |ui| {
@@ -452,6 +460,10 @@ pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
         if let Some(k) = remove {
             saved.remove(k);
             ui.ctx().data_mut(|d| d.insert_persisted(swatches_id(), saved.clone()));
+        }
+        if ui.button(label(icon::EYEDROPPER, "Pick from the preview")).on_hover_text("Then click the picture in the Preview (Esc stops)").clicked() {
+            super::eyedropper::arm(ui.ctx(), Some(button.id));
+            ui.close();
         }
         if ui.button(label(icon::PLUS, "Save this colour")).clicked() {
             save = true;

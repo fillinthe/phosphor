@@ -279,7 +279,7 @@ fn faders_take_over_softly() {
     comp.master_fade = 0.5;
     let source = ControlSource::Osc { address: "/fader1".into() };
     comp.control_maps.push(phosphor_engine::ControlMap::new(source.clone(), ControlTarget::MasterFade));
-    let mut send = |hub: &mut ControlHub, comp: &mut Composition, v: f32| {
+    let send = |hub: &mut ControlHub, comp: &mut Composition, v: f32| {
         hub.fresh.insert(source.clone(), v);
         hub.apply(comp, 0.0);
     };

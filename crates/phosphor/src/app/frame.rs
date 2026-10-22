@@ -95,6 +95,13 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.state.sync_backgrounds();
         self.state.run_live_text(now);
+        // Eyedropper: one pixel of the program picture (read once, on the click).
+        if let Some(uv) = crate::ui::eyedropper::take_request(&ctx)
+            && let Some((w, h, px)) = self.state.engine.as_ref().and_then(|e| e.read_output())
+            && let Some(rgb) = crate::ui::eyedropper::pixel_at(w, h, &px, uv)
+        {
+            crate::ui::eyedropper::deliver(&ctx, rgb);
+        }
         self.state.run_multi_edit();
         #[cfg(not(target_arch = "wasm32"))]
         {
