@@ -2,7 +2,7 @@
 
 Date: 2026-10-20. Method: read-only look at `/Applications/VDMX6 Plus.app` (resource names, Core Image
 kernels, the tips-of-the-day file) plus Vidvox's online docs, compared against `docs/PARITY.md`, `ROADMAP.md`,
-the project instructions and a code search of `crates/`. VDMX was not launched. Items marked (?) are uncertain: I could
+The project instructions and a code search of `crates/`. VDMX was not launched. Items marked (?) are uncertain: I could
 not confirm the exact VDMX behaviour or whether Phosphor already has a hidden version of it.
 
 ## 1. Summary for the owner
