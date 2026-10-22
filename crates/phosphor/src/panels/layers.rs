@@ -20,6 +20,8 @@ pub(crate) enum LayerAction {
     Launch(SourceSpec),
     /// Into another comp.
     MoveToComp(u64),
+    /// Colours like a reference picture (a Colour Match effect).
+    MatchColour,
 }
 
 pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
@@ -380,6 +382,11 @@ pub(crate) fn layer_card(
             action = Some(LayerAction::GroupWithBelow);
             ui.close();
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::PALETTE, "Match colour to a picture…")).on_hover_text("Adds a Colour Match effect so this layer's colours look like a picture you choose (another camera, a grade, a still)").clicked() {
+            action = Some(LayerAction::MatchColour);
+            ui.close();
+        }
         ui.separator();
         if ui.button(label(icon::TRASH, "Delete (Backspace)")).clicked() {
             action = Some(LayerAction::Remove);
@@ -588,6 +595,10 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
         LayerAction::Up => st.comp.move_layer(id, true),
         LayerAction::Down => st.comp.move_layer(id, false),
         LayerAction::GroupWithBelow => group_with_below(&mut st.comp, &mut st.selected, id),
+        LayerAction::MatchColour => {
+            #[cfg(not(target_arch = "wasm32"))]
+            st.dialogs.pick_file(crate::dialogs::Purpose::MatchColour(id), Some(("Picture", &["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "heic", "psd", "exr"])));
+        }
         LayerAction::LeaveGroup => {
             if let Some(l) = st.comp.layer_mut(id) {
                 l.parent = None;

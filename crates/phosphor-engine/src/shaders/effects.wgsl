@@ -417,6 +417,14 @@ fn fx_cutout_blur(in: VOut) -> @location(0) vec4f {
     return mix(sum / 49.0, c, m);
 }
 
+// Colour Match: each channel × its gain + its offset (set from a reference picture's colours).
+@fragment
+fn fx_color_match(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    let v = c.rgb * vec3f(P(0u), P(1u), P(2u)) + vec3f(P(3u), P(4u), P(5u));
+    return vec4f(clamp(v, vec3f(0.0), vec3f(1.0)), c.a);
+}
+
 @fragment
 fn fx_gamma(in: VOut) -> @location(0) vec4f {
     let c = src(in.uv);

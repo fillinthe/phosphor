@@ -20,6 +20,8 @@ mod options;
 mod output;
 mod play;
 mod quick;
+mod color_match;
+pub use color_match::{color_stats, match_values};
 mod merge;
 mod multi_edit;
 mod templates;
