@@ -111,6 +111,12 @@ pub const EFFECTS: &[ShaderDesc] = &[
         params: &[p("Segments", 2.0, 16.0, 6.0), p("Rotation", 0.0, 1.0, 0.0), p("Zoom", 0.25, 4.0, 1.0)],
     },
     ShaderDesc { id: "pixelate", name: "Pixelate", entry: "fx_pixelate", params: &[p("Cell Size", 1.0, 128.0, 16.0)] },
+    ShaderDesc {
+        id: "hide_face",
+        name: "Hide Face",
+        entry: "fx_hide_face",
+        params: &[p("X", 0.0, 1.0, 0.5), p("Y", 0.0, 1.0, 0.5), p("Size", 0.0, 1.0, 0.3), p("Found", 0.0, 1.0, 1.0), p("Style", 0.0, 2.0, 0.0), p("Cells", 4.0, 64.0, 24.0)],
+    },
     ShaderDesc { id: "mirror", name: "Mirror", entry: "fx_mirror", params: &[p("Mode", 0.0, 2.0, 0.0)] },
     ShaderDesc { id: "posterize", name: "Posterize", entry: "fx_posterize", params: &[p("Levels", 2.0, 16.0, 4.0)] },
     ShaderDesc {
@@ -653,6 +659,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "plasma" | "gradient" | "noise" | "voronoi" => ("Patterns", "Animated pattern"),
         "rings" | "spiral" | "tunnel" => ("Patterns", "Hypnotic motion"),
         "checker" | "color_bars" | "solid" => ("Utility", "Test and fill"),
+        "hide_face" => ("Tracking", "Pixelates, blurs or blacks out a face: with face tracking on, it follows the face (Modulators › Video tracking › Hide faces)"),
         "starfield" | "lines" => ("Motion", "Moving lines and points"),
         "particles" => ("Motion", "A fountain of glowing particles from one point (map the emitter to a hand or the mouse)"),
         _ => ("Other", ""),

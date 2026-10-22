@@ -47,8 +47,46 @@ pub const HAND: [&str; 4] = ["Track Hand X", "Track Hand Y", "Track Pinch", "Tra
 /// Body: the hips' centre and both wrists' height.
 pub const BODY: [&str; 5] = ["Track Body X", "Track Body Y", "Track Left Wrist Y", "Track Right Wrist Y", "Track Body Found"];
 
+impl super::Composition {
+    /// Hides faces in the chain `owner` (a layer, group or `MASTER_ID`): face tracking on, and a Hide Face effect
+    /// whose X, Y, Size and Found follow the face. Returns the effect's id.
+    pub fn add_face_hider(&mut self, owner: u64) -> Option<u64> {
+        self.tracking.enabled = true;
+        self.tracking.faces = true;
+        let mut links = Vec::new();
+        for name in FACE {
+            if self.hand(name).is_none() {
+                self.set_hand(name, 0.0);
+            }
+            links.push(self.modulators.iter().find(|m| m.name == name)?.id);
+        }
+        let desc = crate::shaders::effect("hide_face")?;
+        let id = self.new_id();
+        // Each follows its modulator straight (range mode over the whole 0..1). Face order: X, Y, Size, Found.
+        let mods = links.iter().enumerate().map(|(index, &link)| super::ParamMod { index, m: super::Modulation { link, range: true, min: 0.0, max: 1.0, amount: 1.0, ..Default::default() } }).collect();
+        let fx = super::EffectState { id, effect: desc.id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods, blend: Default::default() };
+        self.effects_mut(owner)?.push(fx);
+        Some(id)
+    }
+}
+
 /// Glides `current` towards `found` by `smoothing` (0 = jump).
 pub fn smooth_toward(current: f32, found: f32, smoothing: f32) -> f32 {
     let k = 1.0 - smoothing.clamp(0.0, 0.95);
     current + (found - current) * k
+}
+
+#[cfg(test)]
+mod hider_tests {
+    #[test]
+    fn a_face_hider_follows_the_face() {
+        let mut c = crate::Composition::default();
+        let id = c.add_face_hider(crate::MASTER_ID).expect("added");
+        assert!(c.tracking.enabled && c.tracking.faces);
+        let fx = c.master_effects.iter().find(|e| e.id == id).unwrap();
+        let x = c.modulators.iter().find(|m| m.name == "Track Face X").unwrap().id;
+        assert_eq!((fx.mods[0].index, fx.mods[0].m.link, fx.mods.len()), (0, x, 4));
+        c.add_face_hider(crate::MASTER_ID);
+        assert_eq!(c.modulators.len(), 4, "the same four modulators");
+    }
 }

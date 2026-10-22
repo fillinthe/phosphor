@@ -447,3 +447,23 @@ fn a_user_blend_mode_blends() {
     let v = red(&mut engine, &comp);
     assert!((v - 0.65).abs() < 0.03, "half way back to 0.8: {v}");
 }
+
+/// Hide Face (black): the face's spot goes dark, the rest of the picture stays.
+#[test]
+fn hide_face_covers_only_the_face() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 64, height: 64, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
+    // Face at the top left quarter (Y counts up), black style.
+    let values = vec![0.25, 0.75, 0.3, 1.0, 2.0, 24.0];
+    comp.master_effects.push(EffectState { id: 9, effect: "hide_face".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, _, px) = engine.read_output().expect("output");
+    let at = |x: u32, y: u32| px[((y * w + x) * 4) as usize];
+    assert!(at(16, 16) < 10, "face hidden");
+    assert!(at(48, 48) > 245, "the rest untouched");
+    comp.master_effects[0].values[3] = 0.0;
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, _, px) = engine.read_output().expect("output");
+    assert!(px[((16 * w + 16) * 4) as usize] > 245, "no face found: nothing hidden");
+}
