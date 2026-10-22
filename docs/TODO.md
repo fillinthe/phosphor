@@ -125,7 +125,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
       "Drawn wave" modulation source (a smooth loop through eight points). Checked: test.
 - [x] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
-- [x] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now.
+- [~] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now. Done: each layer on a pair of channels of the sound output. Left: a different device per layer.
 - [x] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed, sound EQ (master volume was already there).
 - [~] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
       MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC / LTC out: not yet. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
@@ -146,7 +146,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
 - [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
 - [x] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
-- [x] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M).
+- [~] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG and PNG export, masks and lines from SVG. Left: PDF.
 - [~] 81. **SVG and Lottie** (After Effects) animations as clips (M). Done: SVG. Left: Lottie.
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
