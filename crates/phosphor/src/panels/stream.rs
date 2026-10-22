@@ -7,8 +7,17 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let (cw, ch) = (st.comp.width, st.comp.height);
     let mut choose_file = false;
-    // A finished recording goes into the media bin, ready to play.
-    let mut recorded: Option<String> = None;
+    let mut toggle_now = false;
+    // What can be recorded on its own: layers, groups and comps.
+    let sources: Vec<(u64, String)> = st
+        .comp
+        .layers
+        .iter()
+        .map(|l| (l.id, l.name.clone()))
+        .chain(st.comp.groups.iter().map(|g| (g.id, format!("Group: {}", g.name))))
+        .chain(st.comp.comps.iter().filter(|_| st.comp.comps.len() > 1).map(|c| (c.id, format!("Comp: {}", c.name))))
+        .collect();
+    let waiting = st.stream_bar.is_some();
     let State { stream, notice, stream_audio_devices, .. } = st;
     let running = stream.running();
     ui.add_enabled_ui(!running, |ui| {
@@ -140,20 +149,27 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         if running {
-            if ui.button(label(icon::STOP, "Stop")).clicked() {
-                stream.stop();
-                if stream.settings.destination == crate::stream::Destination::File {
-                    recorded = Some(stream.settings.recorded_path());
-                }
+            if ui.button(label(icon::STOP, if waiting { "Stopping on the bar…" } else { "Stop" })).clicked() {
+                toggle_now = true;
             }
             ui.colored_label(accent(), format!("{} LIVE {:02}:{:02}", icon::RECORD, (stream.elapsed(now) / 60.0) as u32, stream.elapsed(now) as u32 % 60));
             stream_health(ui, stream);
-        } else if ui.button(label(icon::BROADCAST, "Start")).clicked() {
-            match stream.start(cw, ch, now) {
-                Ok(()) => *notice = None,
-                Err(e) => *notice = Some(e),
-            }
+        } else if ui.button(label(icon::BROADCAST, if waiting { "Starting on the bar…" } else { "Start" })).on_hover_text(if waiting { "Press again to cancel" } else { "Start now (or on the next bar, if that's on)" }).clicked() {
+            toggle_now = true;
         }
+        ui.add_enabled_ui(!running, |ui| {
+            crate::ui::toggle(ui, &mut stream.settings.on_bar, "On the bar").on_hover_text("Start and stop on the next bar of the clock (4 beats)");
+            let s = &mut stream.settings;
+            let current = if s.source == 0 { "Program".to_string() } else { sources.iter().find(|(id, _)| *id == s.source).map_or("(gone)".into(), |x| x.1.clone()) };
+            ComboBox::from_id_salt("stream_source").width(150.0).selected_text(current).show_ui(ui, |ui| {
+                ui.selectable_value(&mut s.source, 0, "Program (what the output shows)");
+                for (id, name) in &sources {
+                    ui.selectable_value(&mut s.source, *id, name);
+                }
+            })
+            .response
+            .on_hover_text("What's sent: the program, or one layer, group or comp on its own");
+        });
     });
     let (status, error, sent, dropped, log) = stream.status();
     if !status.is_empty() {
@@ -176,10 +192,8 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = choose_file;
-    if let Some(path) = recorded {
-        let name = std::path::Path::new(&path).file_name().map_or(path.clone(), |n| n.to_string_lossy().to_string());
-        st.comp.add_media(&name, &path);
-        st.notice = Some(format!("Recording saved: {path} (in the media bin)"));
+    if toggle_now {
+        st.stream_toggle(now);
     }
 }
 

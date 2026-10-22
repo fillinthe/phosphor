@@ -55,6 +55,7 @@ mod outputs;
 pub(crate) mod play;
 mod quick;
 pub(crate) use quick::dice;
+mod recording;
 mod recovery;
 mod render;
 mod settings;
@@ -250,6 +251,8 @@ pub struct State {
     pub map_draft: Option<(phosphor_engine::ControlSource, Option<phosphor_engine::ControlTarget>)>,
     pub map_search: String,
     pub stream: Streamer,
+    /// Waiting to start (true) or stop the stream on the next bar: (start, the bar it was asked in).
+    pub stream_bar: Option<(bool, i64)>,
     pub stream_audio_devices: Vec<(i32, String)>,
     pub net: NetSession,
     net_audio: Vec<f32>,
