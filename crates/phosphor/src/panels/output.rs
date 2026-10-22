@@ -147,7 +147,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
             st.mapping_output = st.comp.add_output();
         }
         super::mapping::outputs_actions(ui, st);
-        if ui.small_button(label(icon::BLENDER, "Soft edges")).on_hover_text("Work out the soft-edge blends from where the slices' parts of the picture overlap (projectors side by side or stacked); replaces the edges set by hand").clicked() {
+        if ui.small_button(label(icon::GRADIENT, "Soft edges")).on_hover_text("Work out the soft-edge blends from where the slices' parts of the picture overlap (projectors side by side or stacked); replaces the edges set by hand").clicked() {
             let n = st.comp.auto_soft_edges();
             st.notice = Some(if n == 0 { "No overlaps found: give neighbouring slices overlapping parts of the picture (Input) first".into() } else { format!("Soft edges set on {n} slices from their overlaps") });
         }
