@@ -341,6 +341,12 @@ pub const GENERATORS: &[ShaderDesc] = &[
         params: &[p("Density", 2.0, 30.0, 10.0), p("Speed", 0.0, 10.0, 2.0), p("Brightness", 0.0, 2.0, 1.0)],
     },
     ShaderDesc {
+        id: "particles",
+        name: "Particles",
+        entry: "gen_particles",
+        params: &[p("Count", 10.0, 300.0, 120.0), p("Speed", 0.1, 3.0, 1.0), p("Gravity", -2.0, 2.0, 0.6), p("Spread", 0.0, 1.0, 0.35), p("Size", 0.002, 0.05, 0.012), p("Emitter X", 0.0, 1.0, 0.5), p("Emitter Y", 0.0, 1.0, 0.15)],
+    },
+    ShaderDesc {
         id: "spiral",
         name: "Spiral",
         entry: "gen_spiral",
@@ -646,6 +652,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "rings" | "spiral" | "tunnel" => ("Patterns", "Hypnotic motion"),
         "checker" | "color_bars" | "solid" => ("Utility", "Test and fill"),
         "starfield" | "lines" => ("Motion", "Moving lines and points"),
+        "particles" => ("Motion", "A fountain of glowing particles from one point (map the emitter to a hand or the mouse)"),
         _ => ("Other", ""),
     }
 }

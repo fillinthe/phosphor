@@ -94,6 +94,32 @@ fn gen_starfield(in: VOut) -> @location(0) vec4f {
     return vec4f(clamp(col, vec3f(0.0), vec3f(1.0)), 1.0);
 }
 
+// A fountain: particle i is thrown up from the emitter at its own speed and angle, falls with gravity, and fades over
+// its life; each restarts when its life ends (staggered, so the stream is steady). Nothing is kept between frames.
+@fragment
+fn gen_particles(in: VOut) -> @location(0) vec4f {
+    let aspect = u.resolution.x / max(u.resolution.y, 1.0);
+    let q = vec2f(in.uv.x * aspect, 1.0 - in.uv.y);
+    let origin = vec2f(P(5u) * aspect, P(6u));
+    let n = i32(clamp(P(0u), 1.0, 300.0));
+    var col = vec3f(0.0);
+    for (var i = 0; i < n; i = i + 1) {
+        let fi = f32(i);
+        let life = 1.5 + 2.0 * hash21(vec2f(fi, 1.3));
+        let age_total = u.time * P(1u) + fi / f32(n) * life;
+        let age = age_total - floor(age_total / life) * life;
+        let round_n = floor(age_total / life);
+        let a = (hash21(vec2f(fi, round_n + 7.1)) - 0.5) * P(3u) * TAU * 0.5 + TAU * 0.25;
+        let v = (0.35 + 0.5 * hash21(vec2f(fi, round_n + 2.9))) * vec2f(cos(a), sin(a));
+        let pos = origin + v * age - vec2f(0.0, 0.5 * P(2u) * age * age);
+        let d = length(q - pos);
+        let fade = 1.0 - age / life;
+        let glow = smoothstep(P(4u), 0.0, d) + 0.25 * smoothstep(P(4u) * 4.0, 0.0, d);
+        col = col + palette(hash21(vec2f(fi, 0.5)) * 0.4 + u.time * 0.02) * glow * fade;
+    }
+    return vec4f(clamp(col, vec3f(0.0), vec3f(1.0)), 1.0);
+}
+
 @fragment
 fn gen_spiral(in: VOut) -> @location(0) vec4f {
     let p = centered(in.uv);
