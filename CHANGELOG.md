@@ -4,6 +4,27 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.3.1 (2026-10-22)
+
+More from the VDMX and MadMapper list.
+
+- **Shaders reload when you save them:** edit an ISF file in any editor and Phosphor picks up the change in a couple
+  of seconds.
+- **8 colour looks built in** (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film,
+  Night), and **LUT Split**: one look in the shadows and another in the highlights (or left / right, centre / edges).
+- **More picture files:** Photoshop (PSD), HEIC, EXR, HDR, TGA and QOI. BMP and TIFF now open too (they were offered but
+  didn't load).
+- **Backups:** every save keeps the previous version in a "Backups" folder next to the project (the last 10).
+  File › Autosave saves a changed project every 5 minutes.
+- **Cues:** a Random button, a countdown to the next cue that fires by itself, and Save / Read CSV for names and timings.
+- **Sliders can be limited** to part of their range (right-click › Limits): a controller then covers just that part.
+- **Colour swatches:** save colours and reuse them on text and on shader colour settings.
+- **Index steps:** a step sequencer track can pick one of a few choices per step (a clip, a blend mode…).
+- **DMX monitor** in the LED / DMX panel: see the values going out.
+- **Permissions** in the Devices panel: camera, microphone and screen recording at a glance.
+- **Graphics card** choice on machines with more than one (Output panel).
+- Mapping Studio: save sets of slices to show on their own.
+
 ## 0.3.0 (2026-10-22)
 
 The first batch of what VDMX and MadMapper have that Phosphor didn't.
