@@ -58,6 +58,33 @@ pub struct Incoming {
     pub value: f32,
 }
 
+/// For a colour's red setting (an effect's or generator's "… R" with "… G", "… B" after it): its green and blue.
+pub fn colour_siblings(comp: &Composition, target: &ControlTarget) -> Option<[ControlTarget; 2]> {
+    let (desc, index, make): (&phosphor_engine::shaders::ShaderDesc, usize, Box<dyn Fn(usize) -> ControlTarget>) = match *target {
+        ControlTarget::EffectParam { effect, index } => {
+            let fx = comp.all_effects().find(|e| e.id == effect)?;
+            (phosphor_engine::shaders::effect(&fx.effect)?, index, Box::new(move |i| ControlTarget::EffectParam { effect, index: i }))
+        }
+        ControlTarget::GeneratorParam { layer, index } => {
+            let phosphor_engine::SourceSpec::Generator(g) = &comp.layers.iter().find(|l| l.id == layer)?.source else { return None };
+            (phosphor_engine::shaders::generator(g)?, index, Box::new(move |i| ControlTarget::GeneratorParam { layer, index: i }))
+        }
+        _ => return None,
+    };
+    // "Tint R, Tint G, Tint B" (ISF colours) or "Red, Green, Blue" (with any name in front).
+    let p = &desc.params;
+    let name = p.get(index)?.name;
+    let next = |k: usize, want: String| p.get(index + k).is_some_and(|q| q.name == want);
+    let ok = if let Some(base) = name.strip_suffix(" R") {
+        next(1, format!("{base} G")) && next(2, format!("{base} B"))
+    } else if let Some(base) = name.strip_suffix("Red") {
+        next(1, format!("{base}Green")) && next(2, format!("{base}Blue"))
+    } else {
+        false
+    };
+    ok.then(|| [make(index + 1), make(index + 2)])
+}
+
 /// An OSC sender seen on the network.
 #[derive(Clone, Debug)]
 pub struct OscSender {
@@ -434,8 +461,19 @@ impl ControlHub {
             self.listen_source = false;
             self.heard = Some(msg.source.clone());
         } else if let Some(target) = self.learning.take() {
+            // A colour's red learned from OSC: green and blue come from the same message's next values (`/1`, `/2`).
+            let siblings = match &msg.source {
+                ControlSource::Osc { address } => colour_siblings(comp, &target).map(|gb| (address.clone(), gb)),
+                _ => None,
+            };
             comp.control_maps.retain(|m| m.target != target);
             comp.control_maps.push(ControlMap::new(msg.source.clone(), target));
+            if let Some((address, [g, b])) = siblings {
+                for (k, t) in [(1, g), (2, b)] {
+                    comp.control_maps.retain(|m| m.target != t);
+                    comp.control_maps.push(ControlMap::new(ControlSource::Osc { address: format!("{address}/{k}") }, t));
+                }
+            }
         }
         if !self.monitor_paused {
             self.recent.push_back((std::time::Instant::now(), msg.source.clone(), msg.value));

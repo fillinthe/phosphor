@@ -220,7 +220,25 @@ fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>, text_tx: &mpsc:
                 rosc::OscType::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
                 _ => None,
             });
-            let _ = tx.send(Incoming { source: ControlSource::Osc { address: m.addr }, value: value.unwrap_or(1.0) });
+            // Several numbers (or an OSC colour): each also on `<address>/<k>`, so one message can set a colour.
+            let values: Vec<f32> = m
+                .args
+                .iter()
+                .flat_map(|a| match a {
+                    rosc::OscType::Float(f) => vec![*f],
+                    rosc::OscType::Double(d) => vec![*d as f32],
+                    rosc::OscType::Int(i) => vec![*i as f32],
+                    rosc::OscType::Color(c) => [c.red, c.green, c.blue, c.alpha].map(|v| v as f32 / 255.0).to_vec(),
+                    _ => Vec::new(),
+                })
+                .collect();
+            let first = values.first().copied().or(value).unwrap_or(1.0);
+            let _ = tx.send(Incoming { source: ControlSource::Osc { address: m.addr.clone() }, value: first });
+            if values.len() > 1 {
+                for (k, v) in values.iter().enumerate() {
+                    let _ = tx.send(Incoming { source: ControlSource::Osc { address: format!("{}/{k}", m.addr) }, value: *v });
+                }
+            }
         }
         rosc::OscPacket::Bundle(b) => {
             for p in b.content {
