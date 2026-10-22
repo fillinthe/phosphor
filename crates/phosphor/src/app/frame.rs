@@ -114,16 +114,30 @@ impl PhosphorApp {
         self.remote_sync(now);
         self.sync_mapping_from_output();
         {
-            let State { control, comp, clock, cue_run, .. } = &mut self.state;
+            let State { control, comp, clock, cue_run, ltc_out, .. } = &mut self.state;
             let heard = control.poll(comp);
             control.poll_clock(now);
             control.tick_clock_out(clock.beats(now), clock.bpm);
             #[cfg(not(target_arch = "wasm32"))]
-            if !control.mtc_out_port.is_empty() {
+            if !control.mtc_out_port.is_empty() || control.ltc_out_pair.is_some() || ltc_out.is_some() {
                 // Time of day to the millisecond (the wall clock plus the local offset from UTC).
                 let utc = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
                 let tod = (utc + crate::calendar::local_now().1 as f64).rem_euclid(86_400.0);
-                control.tick_mtc_out(cue_run.clock.time(now), cue_run.clock.running(), tod);
+                let (show, running) = (cue_run.clock.time(now), cue_run.clock.running());
+                control.tick_mtc_out(show, running, tod);
+                // LTC out: the same time as timecode audio on the chosen output pair.
+                match control.ltc_out_pair {
+                    None => *ltc_out = None,
+                    Some(pair) => {
+                        if ltc_out.is_none() {
+                            *ltc_out = timecode_out::LtcOut::start(pair);
+                        }
+                        if let Some(l) = ltc_out {
+                            l.set_pair(pair);
+                            if control.mtc_time_of_day { l.tick(tod, true) } else { l.tick(show, running) }
+                        }
+                    }
+                }
             }
             control.apply(comp, now as f32);
             control.feedback(comp, now);

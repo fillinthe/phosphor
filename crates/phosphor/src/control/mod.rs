@@ -145,6 +145,8 @@ pub struct ControlHub {
     #[cfg(not(target_arch = "wasm32"))]
     mtc_out: Option<mtc_out::MtcOut>,
     pub mtc_out_error: Option<String>,
+    /// LTC (timecode as audio) out on this pair of the sound output's channels (None = off); same time as MTC out.
+    pub ltc_out_pair: Option<u8>,
     /// The last messages that came in, newest last (the MIDI / OSC monitor): when, from what, value.
     pub recent: std::collections::VecDeque<(std::time::Instant, ControlSource, f32)>,
     /// The monitor is paused (messages still work; the list stops moving).
@@ -191,13 +193,14 @@ pub struct ControlSettings {
     pub clock_out_port: String,
     pub mtc_out_port: String,
     pub mtc_time_of_day: bool,
+    pub ltc_out_pair: Option<u8>,
     /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
     pub dmx_in: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, dmx_in: false }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false }
     }
 }
 
@@ -247,13 +250,14 @@ impl ControlHub {
         hub.clock_out_port = s.clock_out_port;
         hub.mtc_out_port = s.mtc_out_port;
         hub.mtc_time_of_day = s.mtc_time_of_day;
+        hub.ltc_out_pair = s.ltc_out_pair;
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, dmx_in: self.dmx_in() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in() }
     }
 
     /// Starts or stops listening for DMX (Art-Net on udp/6454, sACN on udp/5568) as controller input.
@@ -328,6 +332,7 @@ impl ControlHub {
             #[cfg(not(target_arch = "wasm32"))]
             mtc_out: None,
             mtc_out_error: None,
+            ltc_out_pair: None,
             #[cfg(not(target_arch = "wasm32"))]
             clock_out: None,
             clock_out_error: None,
