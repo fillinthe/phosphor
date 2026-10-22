@@ -20,6 +20,8 @@ pub const MAPS_COPIED: &str = "phosphor_maps_copied";
 /// The project's sends (`Composition::control_sends`), published each frame; and add / remove requests.
 pub const SENDS: &str = "phosphor_sends";
 pub const SEND_REQUEST: &str = "phosphor_send_request";
+/// Key a control's value now on the timeline (`State::key_now`).
+pub const KEY_REQUEST: &str = "phosphor_key_request";
 
 /// A copied motion (modulation), for pasting onto another value.
 const MOTION_CLIPBOARD: &str = "phosphor_motion_clipboard";
@@ -53,6 +55,10 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     lock_item(ui, target);
     if ui.button(label(icon::EAR, "Listen: move a knob, send OSC, or press a key")).clicked() {
         request(ui, LEARN_REQUEST, target.clone());
+        ui.close();
+    }
+    if ui.button(label(icon::DIAMOND, "Key on the timeline")).on_hover_text("Keeps this value at the timeline's playhead (a track for it appears in the Timeline panel)").clicked() {
+        request(ui, KEY_REQUEST, target.clone());
         ui.close();
     }
     let address = crate::control::default_osc_address(target);

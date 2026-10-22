@@ -1,0 +1,225 @@
+//! Keyframe timeline (MadMapper's Conductor, VDMX's timeline): tracks of keys over time, each driving one control
+//! (any `ControlTarget`), with markers that stop, loop or jump. The app plays it (`State::run_timeline`) through the
+//! same path every control takes.
+
+use serde::{Deserialize, Serialize};
+
+use super::ControlTarget;
+
+/// How the value travels from a key to the next one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Ease {
+    /// Stays until the next key, then jumps.
+    Hold,
+    /// A straight line.
+    #[default]
+    Linear,
+    /// Eases out of one key and into the next.
+    Smooth,
+}
+
+impl Ease {
+    pub const ALL: [Ease; 3] = [Ease::Hold, Ease::Linear, Ease::Smooth];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Ease::Hold => "Hold",
+            Ease::Linear => "Line",
+            Ease::Smooth => "Smooth",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Key {
+    /// Seconds from the start.
+    pub t: f64,
+    /// The control's value (0..1).
+    pub v: f32,
+    /// How it goes on to the next key.
+    #[serde(default)]
+    pub ease: Ease,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Track {
+    pub target: ControlTarget,
+    /// Kept in time order.
+    pub keys: Vec<Key>,
+    #[serde(default = "yes")]
+    pub enabled: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl Track {
+    /// The value at `t`: the first key's before it starts, the last key's after it ends.
+    pub fn value_at(&self, t: f64) -> Option<f32> {
+        let k = &self.keys;
+        let first = k.first()?;
+        if t <= first.t {
+            return Some(first.v);
+        }
+        let i = k.partition_point(|key| key.t <= t);
+        let a = k[i - 1];
+        let Some(b) = k.get(i) else { return Some(a.v) };
+        let x = ((t - a.t) / (b.t - a.t).max(1e-9)).clamp(0.0, 1.0) as f32;
+        Some(match a.ease {
+            Ease::Hold => a.v,
+            Ease::Linear => a.v + (b.v - a.v) * x,
+            Ease::Smooth => a.v + (b.v - a.v) * x * x * (3.0 - 2.0 * x),
+        })
+    }
+
+    /// Adds (or replaces, within 1/100 s) a key at `t`, keeping time order. Returns its index.
+    pub fn set_key(&mut self, t: f64, v: f32) -> usize {
+        let t = t.max(0.0);
+        if let Some(i) = self.keys.iter().position(|k| (k.t - t).abs() < 0.01) {
+            self.keys[i].v = v;
+            return i;
+        }
+        let i = self.keys.partition_point(|k| k.t < t);
+        let ease = self.keys.get(i.wrapping_sub(1)).map_or(Ease::Linear, |k| k.ease);
+        self.keys.insert(i, Key { t, v, ease });
+        i
+    }
+
+    /// Moves key `i` to `t` (stays in time order); returns its new index.
+    pub fn move_key(&mut self, i: usize, t: f64) -> usize {
+        if i >= self.keys.len() {
+            return i;
+        }
+        let mut key = self.keys.remove(i);
+        key.t = t.max(0.0);
+        let j = self.keys.partition_point(|k| k.t < key.t);
+        self.keys.insert(j, key);
+        j
+    }
+}
+
+/// What a marker does when the playhead reaches it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MarkerKind {
+    /// Just a name on the ruler.
+    #[default]
+    Label,
+    /// Stops there (press Play to go on).
+    Pause,
+    /// Jumps back to the marker before it (a loop between the two).
+    LoopBack,
+}
+
+impl MarkerKind {
+    pub const ALL: [MarkerKind; 3] = [MarkerKind::Label, MarkerKind::Pause, MarkerKind::LoopBack];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            MarkerKind::Label => "Label",
+            MarkerKind::Pause => "Pause here",
+            MarkerKind::LoopBack => "Loop back",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Marker {
+    pub t: f64,
+    pub name: String,
+    #[serde(default)]
+    pub kind: MarkerKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Timeline {
+    pub tracks: Vec<Track>,
+    pub markers: Vec<Marker>,
+    /// Seconds.
+    pub length: f64,
+    /// Back to the start at the end.
+    pub looping: bool,
+}
+
+impl Default for Timeline {
+    fn default() -> Self {
+        Self { tracks: Vec::new(), markers: Vec::new(), length: 60.0, looping: false }
+    }
+}
+
+/// What happens to the playhead going from `from` to `to` (seconds).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Step {
+    /// Carry on at this time.
+    At(f64),
+    /// Stop here (a Pause marker, or the end without looping).
+    Stop(f64),
+}
+
+impl Timeline {
+    /// The track for `target` (made if there isn't one).
+    pub fn track_mut(&mut self, target: &ControlTarget) -> &mut Track {
+        if let Some(i) = self.tracks.iter().position(|t| t.target == *target) {
+            return &mut self.tracks[i];
+        }
+        self.tracks.push(Track { target: target.clone(), keys: Vec::new(), enabled: true });
+        self.tracks.last_mut().expect("just pushed")
+    }
+
+    /// Every enabled track's value at `t`.
+    pub fn values_at(&self, t: f64) -> Vec<(&ControlTarget, f32)> {
+        self.tracks.iter().filter(|tr| tr.enabled).filter_map(|tr| Some((&tr.target, tr.value_at(t)?))).collect()
+    }
+
+    /// Moves the playhead from `from` to `to`, minding markers and the end.
+    pub fn advance(&self, from: f64, to: f64) -> Step {
+        let mut passed: Vec<&Marker> = self.markers.iter().filter(|m| m.t > from && m.t <= to && m.kind != MarkerKind::Label).collect();
+        passed.sort_by(|a, b| a.t.total_cmp(&b.t));
+        if let Some(m) = passed.first() {
+            match m.kind {
+                MarkerKind::Pause => return Step::Stop(m.t),
+                MarkerKind::LoopBack => {
+                    let back = self.markers.iter().filter(|o| o.t < m.t).map(|o| o.t).fold(0.0, f64::max);
+                    return Step::At(back + (to - m.t));
+                }
+                MarkerKind::Label => {}
+            }
+        }
+        if to >= self.length {
+            return if self.looping { Step::At((to - self.length).rem_euclid(self.length.max(0.01))) } else { Step::Stop(self.length) };
+        }
+        Step::At(to)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_ease_and_markers_steer() {
+        let mut tr = Track { target: ControlTarget::MasterFade, keys: Vec::new(), enabled: true };
+        tr.set_key(0.0, 0.0);
+        tr.set_key(2.0, 1.0);
+        assert_eq!(tr.value_at(1.0), Some(0.5), "linear half way");
+        tr.keys[0].ease = Ease::Hold;
+        assert_eq!(tr.value_at(1.9), Some(0.0), "held");
+        tr.keys[0].ease = Ease::Smooth;
+        assert!((tr.value_at(0.5).unwrap() - 0.15625).abs() < 1e-6, "eases in");
+        assert_eq!(tr.value_at(5.0), Some(1.0), "after the end: the last key");
+        assert_eq!(tr.set_key(2.004, 0.7), 1, "replaces the key at the same time");
+        assert_eq!(tr.move_key(0, 3.0), 1, "moved past the other key");
+        let mut tl = Timeline { length: 10.0, ..Default::default() };
+        tl.markers.push(Marker { t: 4.0, name: "A".into(), kind: MarkerKind::Label });
+        tl.markers.push(Marker { t: 6.0, name: "Loop".into(), kind: MarkerKind::LoopBack });
+        assert_eq!(tl.advance(5.9, 6.1), Step::At(4.1), "loops back to the marker before");
+        tl.markers.push(Marker { t: 5.0, name: "Wait".into(), kind: MarkerKind::Pause });
+        assert_eq!(tl.advance(4.9, 5.2), Step::Stop(5.0));
+        assert_eq!(tl.advance(9.9, 10.1), Step::Stop(10.0), "the end");
+        tl.looping = true;
+        assert!(matches!(tl.advance(9.9, 10.1), Step::At(t) if (t - 0.1).abs() < 1e-9));
+        tl.track_mut(&ControlTarget::MasterFade).set_key(1.0, 0.3);
+        assert_eq!(tl.values_at(1.0), vec![(&ControlTarget::MasterFade, 0.3)]);
+    }
+}

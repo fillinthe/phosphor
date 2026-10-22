@@ -23,6 +23,8 @@ mod quick;
 mod color_match;
 pub use color_match::{color_stats, match_values, palette_of};
 mod merge;
+mod timeline;
+pub use timeline::{Ease, Key, Marker, MarkerKind, Step, Timeline, Track};
 mod multi_edit;
 mod templates;
 pub use templates::TEMPLATES;
@@ -53,4 +55,4 @@ pub use source::*;
 pub use surface::*;
 pub use tracking::*;
 
-choice!(BlendMode, FitMode, CrossGroup, FaderCurve, ChunkBy, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, VoiceMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape, HeadLayout, HeadMotion, TimecodeSource, QrStyle, RenderRate, ChainMode, TestPattern);
+choice!(BlendMode, FitMode, CrossGroup, FaderCurve, ChunkBy, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, VoiceMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape, HeadLayout, HeadMotion, TimecodeSource, QrStyle, RenderRate, ChainMode, TestPattern, Ease, MarkerKind);
