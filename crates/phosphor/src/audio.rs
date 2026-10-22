@@ -116,6 +116,18 @@ impl BeatTracker {
     }
 }
 
+/// How loud the sound is between `lo` and `hi` Hz (0..1), from the analyser's log-spaced bins (30 Hz–16 kHz).
+pub fn band_level(bins: &[f32], lo: f32, hi: f32) -> f32 {
+    if bins.is_empty() {
+        return 0.0;
+    }
+    let n = bins.len() as f32;
+    let at = |hz: f32| ((hz.clamp(30.0, 16_000.0) / 30.0).ln() / (16_000.0f32 / 30.0).ln() * n) as usize;
+    let (a, b) = (at(lo.min(hi)).min(bins.len() - 1), at(lo.max(hi)));
+    let b = b.clamp(a + 1, bins.len());
+    bins[a..b].iter().sum::<f32>() / (b - a) as f32
+}
+
 pub const FFT_SIZE: usize = 2048;
 pub const SPECTRUM_BARS: usize = 32;
 /// Spectrum bins handed to shaders (ISF `audioFFT`).
@@ -532,6 +544,16 @@ mod stub {
 #[cfg(test)]
 mod tests {
     use super::BeatTracker;
+
+    #[test]
+    fn a_band_reads_only_its_frequencies() {
+        // Loud only in the bottom quarter of the bins (30 Hz to about 140 Hz).
+        let bins: Vec<f32> = (0..256).map(|i| if i < 64 { 1.0 } else { 0.0 }).collect();
+        assert!(super::band_level(&bins, 40.0, 100.0) > 0.99, "a kick band");
+        assert!(super::band_level(&bins, 2000.0, 6000.0) < 0.01, "hats");
+        assert_eq!(super::band_level(&[], 40.0, 100.0), 0.0);
+        assert!(super::band_level(&bins, 100.0, 40.0) > 0.99, "either way round");
+    }
 
     /// A kick every 0.5 s (120 BPM) at 60 fps should be found and timed.
     #[test]

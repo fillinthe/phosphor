@@ -100,6 +100,13 @@ impl PhosphorApp {
             }
         }
         let an = audio.update();
+        // Sound band modulators: up at once, down smoothly.
+        for m in comp.modulators.iter_mut() {
+            if let Some([lo, hi]) = m.band {
+                let v = crate::audio::band_level(audio.bins(), lo, hi);
+                m.value = if v > m.value { v } else { m.value + (v - m.value) * 0.15 };
+            }
+        }
         if phosphor_engine::shaders::any_audio_slots() && audio.is_open_or_clips() {
             engine.set_audio(&audio.waveform(), audio.bins());
         }

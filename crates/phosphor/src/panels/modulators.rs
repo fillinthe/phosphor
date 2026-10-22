@@ -20,6 +20,12 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Steps, ..Default::default() };
             st.comp.modulators.push(Modulator { id, name: format!("Track {n}"), signal, sequence: Some(super::sequencer::new_track()), ..Default::default() });
         }
+        if ui.button(label(icon::WAVEFORM, "Sound band")).on_hover_text("How loud the sound is between two frequencies (a kick, a snare, a voice): any control can follow it").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
+            let id = st.comp.new_id();
+            let n = st.comp.modulators.iter().filter(|m| m.band.is_some()).count() + 1;
+            let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() };
+            st.comp.modulators.push(Modulator { id, name: format!("Band {n}"), signal, band: Some([40.0, 120.0]), value: 0.0, ..Default::default() });
+        }
         hint(ui, "One source drives many controls: right-click any slider, Modulate, then pick it. Chain one into the next.");
     });
     #[cfg(not(target_arch = "wasm32"))]
@@ -48,7 +54,20 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     }
                 });
                 // Hand / MIDI knob: a fader that any knob, OSC message or the remote can move (right-click it: Learn).
-                if m.signal.source == phosphor_engine::ModSource::Hand {
+                if let Some(band) = &mut m.band {
+                    // A sound band: its value follows the sound (the audio input or the clips' sound).
+                    ui.horizontal(|ui| {
+                        ui.label("Sound from");
+                        guarded!(ui, band[0], egui::DragValue::new(&mut band[0]).range(20.0..=16_000.0).speed(2.0).suffix(" Hz"));
+                        ui.label("to");
+                        guarded!(ui, band[1], egui::DragValue::new(&mut band[1]).range(20.0..=16_000.0).speed(2.0).suffix(" Hz"));
+                        for (name, lo, hi) in [("Kick", 40.0, 120.0), ("Snare", 150.0, 400.0), ("Voice", 300.0, 3000.0), ("Hats", 6000.0, 14000.0)] {
+                            if ui.small_button(name).clicked() {
+                                *band = [lo, hi];
+                            }
+                        }
+                    });
+                } else if m.signal.source == phosphor_engine::ModSource::Hand {
                     ui.horizontal(|ui| {
                         Level::percent(&mut m.value, "Value").default(0.0).target(phosphor_engine::ControlTarget::Modulator(m.id)).show(ui);
                         hint(ui, "right-click: Learn a MIDI knob");
