@@ -51,6 +51,7 @@ impl PhosphorApp {
             selected,
             notice,
             monitor_wants,
+            monitor_held,
             monitor_textures,
             output_textures,
             #[cfg(target_os = "macos")]
@@ -190,6 +191,8 @@ impl PhosphorApp {
         }
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
+        let held = std::mem::take(monitor_held);
+        engine.hold_monitors(mwants.iter().enumerate().filter(|(_, m)| held.contains(&m.0)).map(|(i, _)| i).collect());
         // LED / DMX: sample the fixtures' pixels from this frame when the lights want one.
         #[cfg(not(target_arch = "wasm32"))]
         {

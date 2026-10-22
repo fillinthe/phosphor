@@ -301,6 +301,9 @@ pub struct State {
     pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
     /// Monitor pictures requested this frame: (monitor number, source, width, height).
     pub monitor_wants: Vec<(u8, u64, u32, u32)>,
+    /// Preview windows keeping last frame's picture this frame (frame-rate cap), and when each last drew.
+    pub monitor_held: Vec<u8>,
+    pub monitor_drawn: HashMap<u8, f64>,
     /// Preview windows' pictures by window number, with the engine texture each was made from (re-linked when that
     /// texture is replaced).
     monitor_textures: HashMap<u8, (egui::TextureId, egui_wgpu::wgpu::Texture)>,

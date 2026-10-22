@@ -102,6 +102,9 @@ pub const THUMBNAIL_WIDTH: u32 = 240;
 /// Resource slot for the master effect chain (never a real layer id).
 pub const MASTER_ID: u64 = u64::MAX;
 
+/// A monitor slot holding its last picture this frame (`hold_monitors`): matches no source, so nothing draws it.
+const HELD_MONITOR: u64 = u64::MAX - 2;
+
 /// Resource slots at or above this id belong to the engine (master chain, explorer previews).
 const RESERVED_IDS: u64 = u64::MAX - 100_000;
 
@@ -238,6 +241,8 @@ pub struct Engine {
     previews: Vec<(PreviewItem, bool)>,
     /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
     monitor_req: Vec<(u64, u32, u32)>,
+    /// Monitor slots that keep last frame's picture this frame (frame-rate capped previews).
+    monitor_hold: Vec<usize>,
     monitor_targets: Vec<Option<Target>>,
     /// What each monitor slot showed last frame (a slot whose source changes starts empty, never the old picture).
     monitor_sources: Vec<u64>,
@@ -304,6 +309,7 @@ impl Engine {
             meshes: MeshCache::default(),
             previews: Vec::new(),
             monitor_req: Vec::new(),
+            monitor_hold: Vec::new(),
             monitor_targets: Vec::new(),
             monitor_sources: Vec::new(),
             monitor_reads: Vec::new(),
@@ -435,6 +441,11 @@ impl Engine {
     /// rendered at the given size.
     pub fn request_monitors(&mut self, req: Vec<(u64, u32, u32)>) {
         self.monitor_req = req;
+    }
+
+    /// These monitor slots (as requested this frame) keep their last picture instead of drawing a new one.
+    pub fn hold_monitors(&mut self, slots: Vec<usize>) {
+        self.monitor_hold = slots;
     }
 
     /// Reads monitor slot `index` (as requested this frame) back to the CPU after the frame renders; it arrives a
@@ -593,6 +604,8 @@ impl Engine {
             }
         }
         self.monitor_sources = monitors.iter().map(|m| m.0).collect();
+        let hold = std::mem::take(&mut self.monitor_hold);
+        let monitors: Vec<(u64, u32, u32)> = monitors.into_iter().enumerate().map(|(i, m)| if hold.contains(&i) { (HELD_MONITOR, m.1, m.2) } else { m }).collect();
         let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
         // Layers shown on their own by a mapping surface, and their pictures this frame.
         // Full-size pictures kept for mapping surfaces and for layers that use another layer as their source.

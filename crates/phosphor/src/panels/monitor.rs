@@ -32,13 +32,19 @@ pub struct MonitorCfg {
     /// Click / drag on the picture = X/Y data (two Hand modulators any control can follow), like VDMX's preview.
     #[serde(default)]
     pub xy: bool,
+    /// Draw a new picture at most this often (0 = every frame): previews nobody needs smooth cost less.
+    #[serde(default)]
+    pub fps: f32,
 }
 
 impl Default for MonitorCfg {
     fn default() -> Self {
-        Self { source: MonitorSource::Mix, grid: false, xy: false }
+        Self { source: MonitorSource::Mix, grid: false, xy: false, fps: 0.0 }
     }
 }
+
+/// Frame-rate choices for a preview window (0 = every frame).
+const PREVIEW_RATES: [(f32, &str); 4] = [(0.0, "Every frame"), (30.0, "30 fps"), (15.0, "15 fps"), (5.0, "5 fps")];
 
 pub fn monitor_source_name(st: &State, n: u8) -> String {
     match st.monitors.get(&n).map(|c| c.source).unwrap_or(MonitorSource::Mix) {
@@ -85,6 +91,14 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
             }
         });
         toggle(ui, &mut cfg.grid, label(icon::GRID_FOUR, "Guides")).on_hover_text("Thirds and centre guides");
+        let rate = PREVIEW_RATES.iter().find(|r| r.0 == cfg.fps).map_or("Every frame", |r| r.1);
+        ComboBox::from_id_salt(("monitor_fps", n)).width(90.0).selected_text(rate).show_ui(ui, |ui| {
+            for (v, name) in PREVIEW_RATES {
+                ui.selectable_value(&mut cfg.fps, v, name);
+            }
+        })
+        .response
+        .on_hover_text("How often this preview draws a new picture (lower saves the graphics card)");
         toggle(ui, &mut cfg.xy, label(icon::CURSOR_CLICK, "XY")).on_hover_text(format!("Click or drag on the picture to set two modulators, \"Preview {n} X\" and \"Preview {n} Y\": any slider can follow them (right-click › Modulate)"));
         hint(ui, format!("Drag the tab anywhere, or right-click it {} Detach for its own window", icon::ARROW_RIGHT));
     });
@@ -103,6 +117,14 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
                 _ => MASTER_ID,
             };
             st.monitor_wants.push((n, src, w, h));
+            // Capped: keep the last picture until the next one is due.
+            let now = ui.input(|i| i.time);
+            let last = st.monitor_drawn.get(&n).copied().unwrap_or(f64::MIN);
+            if cfg.fps > 0.0 && now - last < 1.0 / cfg.fps as f64 && st.monitor_tex(n).is_some() {
+                st.monitor_held.push(n);
+            } else {
+                st.monitor_drawn.insert(n, now);
+            }
             st.monitor_tex(n)
         }
     };
@@ -145,6 +167,24 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
         if r.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
         }
+    }
+    // A movie layer (XY off): drag across the picture to scrub; its position shows along the bottom.
+    if let (MonitorSource::Layer(id), false) = (cfg.source, cfg.xy)
+        && let Some((pos, dur)) = st.media.position(id).filter(|(_, d)| *d > 0.0)
+    {
+        let r = ui.interact(frame, egui::Id::new(("monitor_scrub", n)), Sense::click_and_drag());
+        if (r.dragged() || r.clicked())
+            && let Some(p) = r.interact_pointer_pos()
+        {
+            st.media.seek(id, ((p.x - frame.left()) / frame.width()).clamp(0.0, 1.0) as f64 * dur);
+        }
+        let x = frame.left() + frame.width() * (pos / dur).clamp(0.0, 1.0) as f32;
+        let bar = egui::Rect::from_min_max(egui::pos2(frame.left(), frame.bottom() - 3.0), egui::pos2(x, frame.bottom()));
+        ui.painter().rect_filled(bar, 0.0, accent());
+        if r.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+        r.on_hover_text("Drag across the picture to scrub the movie");
     }
     ui.allocate_rect(rect, Sense::hover());
 }

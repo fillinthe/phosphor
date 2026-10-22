@@ -190,6 +190,8 @@ impl PhosphorApp {
                 fx_browser: None,
                 monitors: stored(KEY_MONITORS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 monitor_wants: Vec::new(),
+                monitor_held: Vec::new(),
+                monitor_drawn: HashMap::new(),
                 monitor_textures: HashMap::new(),
                 displays: crate::screens::displays(),
                 new_monitor: None,

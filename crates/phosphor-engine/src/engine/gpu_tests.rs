@@ -391,3 +391,22 @@ fn a_new_look_fades_in() {
     assert!((0.3..0.7).contains(&mid), "halfway: {mid}");
     assert!(red(&mut engine, &black, 3.5) < 0.05, "done");
 }
+
+/// A held monitor keeps its last picture while the layer changes; released, it follows again.
+#[test]
+fn held_monitors_keep_their_picture() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
+    let shown = |engine: &mut Engine, comp: &Composition, hold: bool| {
+        engine.request_monitors(vec![(1, 16, 16)]);
+        engine.hold_monitors(if hold { vec![0] } else { Vec::new() });
+        engine.render(comp, 0.0, &ModInputs::default());
+        let t = engine.monitor(0).expect("monitor");
+        engine.read_target(t).expect("read").2[0]
+    };
+    assert!(shown(&mut engine, &comp, false) > 240);
+    comp.layers[0].generator_values = vec![0.0, 0.0, 0.0];
+    assert!(shown(&mut engine, &comp, true) > 240, "held: still white");
+    assert!(shown(&mut engine, &comp, false) < 15, "released: black now");
+}
