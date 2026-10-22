@@ -57,11 +57,42 @@ pub struct TextStyle {
     pub part: usize,
     /// How text is cut into parts (from a file, or "Split").
     pub chunk_by: ChunkBy,
+    /// Live text: the time of day, a countdown or a stopwatch, kept up to date (replaces the words).
+    pub live: LiveText,
+    /// When the stopwatch was (re)started, in app seconds (not saved: it starts again with the app).
+    #[serde(skip)]
+    pub live_start: f64,
+}
+
+/// Text that keeps itself up to date.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub enum LiveText {
+    #[default]
+    Off,
+    /// The time of day (HH:MM:SS).
+    Clock,
+    /// Time left until a time of day (seconds since midnight), then 00:00.
+    Countdown(u32),
+    /// Time since it was started (Restart sets it going from 0).
+    Stopwatch,
+}
+
+impl LiveText {
+    /// The words at local time of day `tod` (seconds since midnight), `running` seconds since the stopwatch started.
+    pub fn words(self, tod: u32, running: f64) -> Option<String> {
+        let hms = |s: u64| if s >= 3600 { format!("{:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60) } else { format!("{:02}:{:02}", s / 60, s % 60) };
+        match self {
+            LiveText::Off => None,
+            LiveText::Clock => Some(format!("{:02}:{:02}:{:02}", tod / 3600, tod / 60 % 60, tod % 60)),
+            LiveText::Countdown(at) => Some(hms(if at > tod { (at - tod) as u64 } else { 0 })),
+            LiveText::Stopwatch => Some(hms(running.max(0.0) as u64)),
+        }
+    }
 }
 
 impl Default for TextStyle {
     fn default() -> Self {
-        Self { text: "PHOSPHOR".into(), font: "builtin:sans".into(), size: 0.18, color: [255, 255, 255, 255], align: TextAlign::Center, outline: 0.0, line_spacing: 1.0, parts: Vec::new(), part: 0, chunk_by: ChunkBy::Line }
+        Self { text: "PHOSPHOR".into(), font: "builtin:sans".into(), size: 0.18, color: [255, 255, 255, 255], align: TextAlign::Center, outline: 0.0, line_spacing: 1.0, parts: Vec::new(), part: 0, chunk_by: ChunkBy::Line, live: LiveText::Off, live_start: 0.0 }
     }
 }
 
@@ -187,6 +218,15 @@ impl Clip {
 #[cfg(test)]
 mod text_tests {
     use super::*;
+
+    #[test]
+    fn live_text_reads_the_time() {
+        assert_eq!(LiveText::Clock.words(3 * 3600 + 4 * 60 + 5, 0.0).as_deref(), Some("03:04:05"));
+        assert_eq!(LiveText::Countdown(18 * 3600).words(18 * 3600 - 75, 0.0).as_deref(), Some("01:15"));
+        assert_eq!(LiveText::Countdown(18 * 3600).words(18 * 3600 + 5, 0.0).as_deref(), Some("00:00"), "stays at zero");
+        assert_eq!(LiveText::Stopwatch.words(0, 3725.4).as_deref(), Some("01:02:05"));
+        assert_eq!(LiveText::Off.words(0, 0.0), None);
+    }
 
     #[test]
     fn text_in_parts_steps_round() {

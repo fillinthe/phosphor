@@ -591,6 +591,38 @@ pub(crate) fn volume_bar(ui: &mut egui::Ui, layer: &mut LayerState, width: f32) 
 /// Returns true when "From a file…" was pressed (the caller opens the file dialog).
 pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
     let mut from_file = false;
+    // Live: the words follow the clock.
+    ui.horizontal_wrapped(|ui| {
+        use phosphor_engine::LiveText;
+        ui.label(RichText::new("Live").small());
+        let kinds = [(LiveText::Off, "Off"), (LiveText::Clock, "Clock"), (LiveText::Countdown(18 * 3600), "Countdown"), (LiveText::Stopwatch, "Stopwatch")];
+        for (k, name) in kinds {
+            if ui.selectable_label(std::mem::discriminant(&style.live) == std::mem::discriminant(&k), name).clicked() {
+                style.live = k;
+                style.live_start = ui.input(|i| i.time);
+            }
+        }
+        match &mut style.live {
+            LiveText::Countdown(at) => {
+                let mut minutes = (*at / 60) as f64;
+                if guarded!(ui, minutes, egui::DragValue::new(&mut minutes).range(0.0..=1439.0).speed(1.0).prefix("to ").custom_formatter(|v, _| format!("{:02}:{:02}", v as u32 / 60, v as u32 % 60)).custom_parser(|s| {
+                    let (h, m) = s.trim().split_once(':')?;
+                    Some((h.trim().parse::<u32>().ok()?.min(23) * 60 + m.trim().parse::<u32>().ok()?.min(59)) as f64)
+                }))
+                .on_hover_text("Counts down to this time of day")
+                .changed()
+                {
+                    *at = minutes as u32 * 60;
+                }
+            }
+            LiveText::Stopwatch => {
+                if ui.small_button(label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
+                    style.live_start = ui.input(|i| i.time);
+                }
+            }
+            _ => {}
+        }
+    });
     // In parts: one line / sentence / word at a time, stepped by the buttons (or a controller).
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("Parts").small());
