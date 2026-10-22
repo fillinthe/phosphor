@@ -113,7 +113,8 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                     let outline = if selected == Some(w.id) { Stroke::new(2.0, accent()) } else { Stroke::new(1.0, Color32::from_gray(90)) };
                     painter.rect_stroke(rect, 6.0, outline, StrokeKind::Outside);
                     painter.text(handle.center(), egui::Align2::CENTER_CENTER, icon::ARROWS_OUT_SIMPLE, egui::FontId::proportional(11.0), Color32::from_gray(160));
-                    if w.bindings.is_empty() && w.bindings_y.is_empty() && w.kind != WidgetKind::Label {
+                    let wired = !w.bindings.is_empty() || !w.bindings_y.is_empty() || w.bars.iter().any(|b| !b.bindings.is_empty());
+                    if !wired && w.kind != WidgetKind::Label {
                         painter.text(rect.left_bottom() + egui::vec2(4.0, -3.0), egui::Align2::LEFT_BOTTOM, "not wired", egui::FontId::proportional(10.0), WARN);
                     }
                     continue;
@@ -146,6 +147,16 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                                     sets.push((ControlTarget::SurfaceY(w.id), y));
                                 }
                             }
+                        }
+                    }
+                    // Draw across the bars: each one under the pointer takes its height.
+                    WidgetKind::Multi => {
+                        if (resp.dragged_by(egui::PointerButton::Primary) || resp.clicked())
+                            && let Some(p) = pointer
+                            && !w.bars.is_empty()
+                        {
+                            let (x, y) = pos(p);
+                            sets.push((ControlTarget::SurfaceBar { widget: w.id, bar: w.bar_at(x) as u8 }, y));
                         }
                     }
                     WidgetKind::Color => {
@@ -372,6 +383,19 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
                 p.text(r.center(), egui::Align2::CENTER_CENTER, name, font.clone(), if on { Color32::BLACK } else { p.ctx().global_style().visuals.text_color() });
             }
         }
+        WidgetKind::Multi => {
+            p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
+            let n = w.bars.len().max(1);
+            let seg = rect.width() / n as f32;
+            for (i, b) in w.bars.iter().enumerate() {
+                let col = egui::Rect::from_min_size(egui::pos2(rect.left() + i as f32 * seg, rect.top()), egui::vec2(seg, rect.height())).shrink2(egui::vec2(1.5, 2.0));
+                let mut fill = col;
+                fill.set_top(col.bottom() - col.height() * b.value);
+                p.rect_filled(fill, 2.0, if b.bindings.is_empty() { c.gamma_multiply(0.4) } else { c.gamma_multiply(0.85) });
+            }
+            p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
+            p.text(rect.left_top() + egui::vec2(6.0, 4.0), egui::Align2::LEFT_TOP, &w.label, font, Color32::WHITE);
+        }
         WidgetKind::Text => {
             p.rect_stroke(rect, 4.0, Stroke::new(1.0, c), StrokeKind::Inside);
             if edit {
@@ -404,6 +428,9 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     });
     ui.horizontal(|ui| {
         choice_combo(ui, ("widget_kind", id), &mut w.kind, 90.0, false);
+        if w.kind == WidgetKind::Multi && w.bars.is_empty() {
+            w.set_bar_count(phosphor_engine::DEFAULT_BARS);
+        }
         for c in PALETTE {
             let (r, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::click());
             ui.painter().circle_filled(r.center(), 7.0, rgb(c));
@@ -435,9 +462,26 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             WidgetKind::Color => "Red drives",
             _ => "Drives",
         };
-        ui.label(RichText::new(axis).strong());
-        hint(ui, "Each target gets this widget's value, rescaled to its from–to range.");
-        binding_list(ui, ("bindings", id), targets, &mut w.bindings);
+        if w.kind == WidgetKind::Multi {
+            ui.horizontal(|ui| {
+                ui.label("Bars");
+                let mut n = w.bars.len();
+                if guarded!(ui, n, egui::DragValue::new(&mut n).range(1..=64)).changed() {
+                    w.set_bar_count(n);
+                }
+            });
+            hint(ui, "Each bar drives its own targets. Map a controller to the widget to move every bar at once, or to one bar (Surface › bar N in any target list).");
+            for (i, b) in w.bars.iter_mut().enumerate() {
+                let title = format!("Bar {} drives{}", i + 1, if b.bindings.is_empty() { "" } else { " ·" });
+                egui::CollapsingHeader::new(title).id_salt(("bar", id, i)).default_open(i == 0).show(ui, |ui| {
+                    binding_list(ui, ("bar_bindings", id, i), targets, &mut b.bindings);
+                });
+            }
+        } else {
+            ui.label(RichText::new(axis).strong());
+            hint(ui, "Each target gets this widget's value, rescaled to its from–to range.");
+            binding_list(ui, ("bindings", id), targets, &mut w.bindings);
+        }
         if w.kind == WidgetKind::Color {
             ui.add_space(4.0);
             ui.label(RichText::new("Green drives").strong());
@@ -493,7 +537,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     if delete {
         st.comp.surface.widgets.retain(|w| w.id != id);
         // Mappings that pointed at it go too.
-        st.comp.control_maps.retain(|m| !matches!(m.target, ControlTarget::Surface(i) | ControlTarget::SurfaceY(i) if i == id));
+        st.comp.control_maps.retain(|m| !matches!(m.target, ControlTarget::Surface(i) | ControlTarget::SurfaceY(i) | ControlTarget::SurfaceBar { widget: i, .. } if i == id));
         return false;
     }
     true

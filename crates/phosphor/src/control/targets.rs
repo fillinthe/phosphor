@@ -67,6 +67,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::EffectEnabled(id) => on(effect(id)?.enabled),
         ControlTarget::Surface(id) => comp.surface.widgets.iter().find(|w| w.id == *id)?.value,
         ControlTarget::SurfaceY(id) => comp.surface.widgets.iter().find(|w| w.id == *id)?.value_y,
+        ControlTarget::SurfaceBar { widget, bar } => comp.surface.widgets.iter().find(|w| w.id == *widget)?.bars.get(*bar as usize)?.value,
         ControlTarget::Modulator(id) => comp.modulators.iter().find(|m| m.id == *id)?.value,
         ControlTarget::App(a) => match a {
             AppControl::LaunchFade => on(comp.launch.fade),
@@ -126,9 +127,25 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 m.value = v.clamp(0.0, 1.0);
             }
         }
+        ControlTarget::SurfaceBar { widget, bar } => {
+            let Some(b) = comp.surface.widget_mut(*widget).and_then(|w| w.bars.get_mut(*bar as usize)) else { return };
+            b.value = v.clamp(0.0, 1.0);
+            let (value, bindings) = (b.value, b.bindings.clone());
+            for b in bindings {
+                set_target_depth(comp, &b.target, b.range.apply(value), out, depth + 1);
+            }
+        }
         ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => {
             let y = matches!(target, ControlTarget::SurfaceY(_));
             let Some(w) = comp.surface.widget_mut(*id) else { return };
+            if w.kind == phosphor_engine::WidgetKind::Multi && !y {
+                // The widget itself (a controller on it): every bar at once.
+                w.value = v.clamp(0.0, 1.0);
+                for bar in 0..w.bars.len() as u8 {
+                    set_target_depth(comp, &ControlTarget::SurfaceBar { widget: *id, bar }, v, out, depth + 1);
+                }
+                return;
+            }
             if w.kind == phosphor_engine::WidgetKind::Color {
                 // Hue (X) or saturation (Y) moved: red, green and blue go to their targets.
                 if y {
@@ -340,6 +357,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         if matches!(w.kind, phosphor_engine::WidgetKind::XyPad | phosphor_engine::WidgetKind::Color) {
             out.push((ControlTarget::SurfaceY(w.id), format!("Surface · {} (Y)", w.label)));
         }
+        for i in 0..w.bars.len() {
+            out.push((ControlTarget::SurfaceBar { widget: w.id, bar: i as u8 }, format!("Surface · {} · bar {}", w.label, i + 1)));
+        }
     }
     for m in comp.modulators.iter().filter(|m| m.signal.source == phosphor_engine::ModSource::Hand) {
         out.push((ControlTarget::Modulator(m.id), format!("Modulator · {}", m.name)));
@@ -470,6 +490,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerCorner { layer, point } => format!("/phosphor/layer/{layer}/corner/{}/{}", point / 2 + 1, if point % 2 == 0 { "x" } else { "y" }),
         ControlTarget::Surface(id) => format!("/phosphor/surface/{id}"),
         ControlTarget::SurfaceY(id) => format!("/phosphor/surface/{id}/y"),
+        ControlTarget::SurfaceBar { widget, bar } => format!("/phosphor/surface/{widget}/bar/{}", bar + 1),
         ControlTarget::Modulator(id) => format!("/phosphor/modulator/{id}"),
         ControlTarget::App(a) => format!("/phosphor/{}", a.osc()),
     }

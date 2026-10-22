@@ -62,7 +62,8 @@ pub fn state_json(st: &mut State, now: f64) -> String {
             let [r, g, b] = w.color;
             json!({"id": w.id, "kind": format!("{:?}", w.kind), "x": w.x, "y": w.y, "w": w.w, "h": w.h, "label": w.label,
                 "color": format!("#{r:02x}{g:02x}{b:02x}"), "value": round(w.value), "value_y": round(w.value_y), "page": w.page,
-                "guests": w.guests, "lo": round(w.guest_range[0]), "hi": round(w.guest_range[1]), "items": w.items, "text": w.text})
+                "guests": w.guests, "lo": round(w.guest_range[0]), "hi": round(w.guest_range[1]), "items": w.items, "text": w.text,
+                "bars": w.bars.iter().map(|b| round(b.value)).collect::<Vec<_>>()})
         })
         .collect();
     json!({
@@ -155,7 +156,7 @@ pub fn apply(st: &mut State, cmd: &Value, now: f64) {
             if let Some(t) = cmd.get("target").and_then(|t| serde_json::from_value::<phosphor_engine::ControlTarget>(t.clone()).ok()) {
                 // Guests only reach the part of a control's range the show allows.
                 let v = match (&t, guest) {
-                    (ControlTarget::Surface(id) | ControlTarget::SurfaceY(id), true) => st.comp.surface.widgets.iter().find(|w| w.id == *id).map_or(v, |w| w.guest_value(v)),
+                    (ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) | ControlTarget::SurfaceBar { widget: id, .. }, true) => st.comp.surface.widgets.iter().find(|w| w.id == *id).map_or(v, |w| w.guest_value(v)),
                     _ => v,
                 };
                 st.set_control(&t, v, now);

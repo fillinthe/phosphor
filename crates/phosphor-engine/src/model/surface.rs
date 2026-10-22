@@ -27,10 +27,13 @@ pub enum WidgetKind {
     Choices,
     /// Words you type, shown on a text layer (messages on screen during a show).
     Text,
+    /// A row of bars side by side, each with its own value and targets (draw across them in one stroke): eight
+    /// layer levels, an EQ, a step pattern.
+    Multi,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 9] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Text, WidgetKind::Label];
+    pub const ALL: [WidgetKind; 10] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::Multi, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Text, WidgetKind::Label];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -43,6 +46,7 @@ impl WidgetKind {
             WidgetKind::Color => "Colour",
             WidgetKind::Choices => "Choices",
             WidgetKind::Text => "Text field",
+            WidgetKind::Multi => "Multi-slider",
         }
     }
 
@@ -57,6 +61,7 @@ impl WidgetKind {
             WidgetKind::Color => (4.0, 4.0),
             WidgetKind::Choices => (6.0, 1.0),
             WidgetKind::Text => (6.0, 1.0),
+            WidgetKind::Multi => (6.0, 3.0),
         }
     }
 }
@@ -96,11 +101,24 @@ pub struct SurfaceWidget {
     /// Text field: the words, and the text layer they go on.
     pub text: String,
     pub text_layer: Option<u64>,
+    /// Multi-slider: its bars, left to right.
+    pub bars: Vec<SurfaceBar>,
 }
+
+/// One bar of a multi-slider: its value and what it drives.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SurfaceBar {
+    pub value: f32,
+    pub bindings: Vec<Binding>,
+}
+
+/// Bars a new multi-slider starts with.
+pub const DEFAULT_BARS: usize = 8;
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None, bars: Vec::new() }
     }
 }
 
@@ -112,6 +130,16 @@ impl SurfaceWidget {
         }
         let [lo, hi] = self.guest_range;
         v.clamp(lo.min(hi), hi.max(lo))
+    }
+
+    /// Multi-slider: makes it `n` bars (1..=64), keeping the ones it has.
+    pub fn set_bar_count(&mut self, n: usize) {
+        self.bars.resize_with(n.clamp(1, 64), Default::default);
+    }
+
+    /// Multi-slider: the bar under `x` (0..1 across the widget).
+    pub fn bar_at(&self, x: f32) -> usize {
+        ((x.clamp(0.0, 1.0) * self.bars.len() as f32) as usize).min(self.bars.len().saturating_sub(1))
     }
 
     /// Choices: how many there are (at least 2), the one picked, and the value that picks choice `i`.
@@ -173,6 +201,7 @@ impl ControlSurface {
                 let values = match w.kind {
                     WidgetKind::XyPad => vec![w.value, w.value_y],
                     WidgetKind::Color => w.rgb().to_vec(),
+                    WidgetKind::Multi => w.bars.iter().map(|b| b.value).collect(),
                     _ => vec![w.value],
                 };
                 (w.id, w.osc_out.clone(), values)
@@ -188,7 +217,11 @@ impl ControlSurface {
         let (x, y) = self.free_spot(w, h);
         let label = format!("{} {id}", kind.name());
         let page = self.current_page();
-        self.widgets.push(SurfaceWidget { id, kind, x, y, w, h, label, page, ..Default::default() });
+        let mut widget = SurfaceWidget { id, kind, x, y, w, h, label, page, ..Default::default() };
+        if kind == WidgetKind::Multi {
+            widget.set_bar_count(DEFAULT_BARS);
+        }
+        self.widgets.push(widget);
         id
     }
 

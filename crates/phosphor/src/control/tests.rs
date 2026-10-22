@@ -693,6 +693,40 @@ fn choices_widgets_pick_options() {
     assert_eq!(comp.surface.widget(id).unwrap().picked(), 1);
 }
 
+/// A multi-slider: each bar drives its own target; a controller on the widget moves every bar; the phone's
+/// target reads back.
+#[test]
+fn multi_slider_bars_drive_their_own_targets() {
+    let mut comp = Composition::starter();
+    let (a, b) = (comp.add_layer().id, comp.add_layer().id);
+    let id = comp.surface.add(phosphor_engine::WidgetKind::Multi);
+    let w = comp.surface.widget_mut(id).unwrap();
+    assert_eq!(w.bars.len(), phosphor_engine::DEFAULT_BARS);
+    w.set_bar_count(2);
+    assert_eq!((w.bar_at(0.2), w.bar_at(0.7), w.bar_at(1.0)), (0, 1, 1));
+    for (bar, layer) in [(0, a), (1, b)] {
+        w.bars[bar].bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(layer), range: phosphor_engine::ValueRange::default() });
+    }
+    let opacity = |comp: &Composition, id| comp.layers.iter().find(|l| l.id == id).unwrap().opacity;
+    let mut out = Vec::new();
+    let bar1 = ControlTarget::SurfaceBar { widget: id, bar: 1 };
+    set_target(&mut comp, &bar1, 0.25, &mut out);
+    assert_eq!(opacity(&comp, b), 0.25);
+    assert_ne!(opacity(&comp, a), 0.25, "the other bar's target is left alone");
+    assert_eq!(get_target(&comp, &bar1), Some(0.25));
+    set_target(&mut comp, &ControlTarget::Surface(id), 0.6, &mut out);
+    assert_eq!((opacity(&comp, a), opacity(&comp, b)), (0.6, 0.6), "the widget moves every bar");
+    let names = all_targets(&comp);
+    assert!(names.iter().any(|(t, n)| *t == bar1 && n.ends_with("bar 2")), "bars are in the target lists");
+    // What the phone sends.
+    let sent: ControlTarget = serde_json::from_str(r#"{"SurfaceBar":{"widget":1,"bar":1}}"#).unwrap();
+    assert_eq!(sent, ControlTarget::SurfaceBar { widget: 1, bar: 1 });
+    // OSC out sends every bar.
+    comp.surface.osc_host = "127.0.0.1".into();
+    comp.surface.widget_mut(id).unwrap().osc_out = "/eq".into();
+    assert_eq!(comp.surface.osc_messages()[0].2, vec![0.6, 0.6]);
+}
+
 #[test]
 fn clip_pads_show_empty_loaded_and_playing() {
     let mut comp = Composition::starter();

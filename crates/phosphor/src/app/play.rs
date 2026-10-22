@@ -306,7 +306,7 @@ impl State {
             "set" => {
                 let Some(t) = cmd.get("target").and_then(|t| serde_json::from_value::<ControlTarget>(t.clone()).ok()) else { return false };
                 let widget = match t {
-                    ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => id,
+                    ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) | ControlTarget::SurfaceBar { widget: id, .. } => id,
                     _ => return false,
                 };
                 self.comp.surface.widgets.iter().any(|w| w.id == widget && w.guests && page.is_none_or(|pg| w.page == pg))

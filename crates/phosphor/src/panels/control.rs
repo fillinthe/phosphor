@@ -214,7 +214,7 @@ fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Opti
             Some((Tab::Mapping, None, Some(slice.id)))
         }
         T::SliceOpacity(id) | T::SliceEnabled(id) => Some((Tab::Mapping, None, Some(*id))),
-        T::Surface(_) | T::SurfaceY(_) => Some((Tab::Surface, None, None)),
+        T::Surface(_) | T::SurfaceY(_) | T::SurfaceBar { .. } => Some((Tab::Surface, None, None)),
         T::Modulator(_) => Some((Tab::Modulators, None, None)),
         T::Fixture { .. } => Some((Tab::Leds, None, None)),
         T::App(_) => None,
