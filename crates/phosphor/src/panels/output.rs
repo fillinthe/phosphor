@@ -147,6 +147,16 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
             st.mapping_output = st.comp.add_output();
         }
         super::mapping::outputs_actions(ui, st);
+        ui.menu_button(label(icon::GRID_FOUR, "Split across"), |ui| {
+            hint(ui, "New outputs that each show one part of the picture (a wall of screens or projectors side by side)");
+            for (c, r) in [(2, 1), (3, 1), (4, 1), (2, 2), (3, 3)] {
+                if ui.button(format!("{c} × {r}")).clicked() {
+                    let n = st.comp.split_across(c, r).len();
+                    st.notice = Some(format!("{n} new outputs, one tile each: send each to its screen"));
+                    ui.close();
+                }
+            }
+        });
         if ui.small_button(label(icon::GRADIENT, "Soft edges")).on_hover_text("Work out the soft-edge blends from where the slices' parts of the picture overlap (projectors side by side or stacked); replaces the edges set by hand").clicked() {
             let n = st.comp.auto_soft_edges();
             st.notice = Some(if n == 0 { "No overlaps found: give neighbouring slices overlapping parts of the picture (Input) first".into() } else { format!("Soft edges set on {n} slices from their overlaps") });
@@ -180,6 +190,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     let mut remove = None;
     let mut snapshot = None;
     let mut background: Option<u64> = None;
+    let mut mirror: Option<u64> = None;
     let count = st.comp.outputs.len();
     for i in 0..count {
         let id = st.comp.outputs[i].id;
@@ -213,6 +224,9 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         }
                         if ui.small_button(icon::CAMERA).on_hover_text("Save a picture of this output as it is now (after mapping)").clicked() {
                             snapshot = Some(id);
+                        }
+                        if ui.small_button(icon::COPY).on_hover_text("Another output showing exactly this one (the same picture on one more screen)").clicked() {
+                            mirror = Some(id);
                         }
                         crate::ui::toggle(ui, &mut o.frozen, "FREEZE").on_hover_text("Hold this output's picture while you change things behind it (not saved: a show opens live)");
                         #[cfg(target_os = "macos")]
@@ -308,6 +322,11 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     }
     if snapshot.is_some() {
         st.snapshot_output = snapshot;
+    }
+    if let Some(id) = mirror
+        && st.comp.mirror_output(id).is_some()
+    {
+        st.notice = Some("New output showing the same picture: send it to its screen".into());
     }
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(id) = background {
