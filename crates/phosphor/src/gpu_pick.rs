@@ -27,12 +27,12 @@ pub fn set(name: Option<&str>) -> std::io::Result<()> {
 }
 
 /// The card named `wanted` if it's there, else the best one: a separate GPU, then the built-in one, then anything.
-pub fn pick<'a, T>(adapters: &'a [T], wanted: &str, info: impl Fn(&T) -> (String, wgpu::DeviceType)) -> Option<&'a T> {
+pub fn pick<'a, T>(adapters: &'a [T], wanted: &str, info: impl Fn(&T) -> (String, eframe::wgpu::DeviceType)) -> Option<&'a T> {
     adapters.iter().find(|a| info(a).0 == wanted).or_else(|| {
-        let rank = |t: wgpu::DeviceType| match t {
-            wgpu::DeviceType::DiscreteGpu => 0,
-            wgpu::DeviceType::IntegratedGpu => 1,
-            wgpu::DeviceType::VirtualGpu => 2,
+        let rank = |t: eframe::wgpu::DeviceType| match t {
+            eframe::wgpu::DeviceType::DiscreteGpu => 0,
+            eframe::wgpu::DeviceType::IntegratedGpu => 1,
+            eframe::wgpu::DeviceType::VirtualGpu => 2,
             _ => 3,
         };
         adapters.iter().min_by_key(|a| rank(info(a).1))
@@ -42,7 +42,7 @@ pub fn pick<'a, T>(adapters: &'a [T], wanted: &str, info: impl Fn(&T) -> (String
 /// For eframe: picks the saved card (when one was saved).
 pub fn selector() -> Option<eframe::egui_wgpu::NativeAdapterSelectorMethod> {
     let wanted = wanted()?;
-    Some(std::sync::Arc::new(move |adapters: &[wgpu::Adapter], _surface: Option<&wgpu::Surface<'_>>| {
+    Some(std::sync::Arc::new(move |adapters: &[eframe::wgpu::Adapter], _surface: Option<&eframe::wgpu::Surface<'_>>| {
         pick(adapters, &wanted, |a| {
             let i = a.get_info();
             (i.name, i.device_type)
@@ -56,7 +56,7 @@ pub fn selector() -> Option<eframe::egui_wgpu::NativeAdapterSelectorMethod> {
 mod tests {
     #[test]
     fn the_named_card_else_the_strongest() {
-        use wgpu::DeviceType as D;
+        use eframe::wgpu::DeviceType as D;
         let cards = [("Intel UHD", D::IntegratedGpu), ("Radeon Pro", D::DiscreteGpu), ("Software", D::Cpu)];
         let info = |c: &(&str, D)| (c.0.to_string(), c.1);
         assert_eq!(super::pick(&cards, "Intel UHD", info).map(|c| c.0), Some("Intel UHD"));
