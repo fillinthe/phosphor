@@ -232,6 +232,34 @@ impl PhosphorApp {
                         }
                     }
                 }
+                Purpose::ExportMappingSvg(id) => {
+                    if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter().find(|o| o.id == id)) {
+                        let p = p.with_extension("svg");
+                        st.notice = Some(match std::fs::write(&p, crate::mapping_svg::export(&o.mapping, o.width, o.height)) {
+                            Ok(()) => format!("Mapping saved: {}", p.display()),
+                            Err(e) => format!("Couldn't save the drawing: {e}"),
+                        });
+                    }
+                }
+                Purpose::ImportMasksSvg(id) => {
+                    if let Some(p) = paths.first() {
+                        match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| crate::mapping_svg::import(&t)) {
+                            Ok(shapes) => {
+                                let ids: Vec<u64> = shapes.iter().map(|_| st.comp.new_id()).collect();
+                                if let Some(o) = st.comp.outputs.iter_mut().find(|o| o.id == id) {
+                                    o.mapping.enabled = true;
+                                    for (k, (shape, mid)) in shapes.iter().zip(ids).enumerate() {
+                                        let m = o.mapping.add_mask(mid);
+                                        m.points.clone_from(shape);
+                                        m.name = format!("{} {}", name_of(p), k + 1);
+                                    }
+                                }
+                                st.notice = Some(format!("{} masks from {}", shapes.len(), name_of(p)));
+                            }
+                            Err(e) => st.notice = Some(format!("Couldn't read that drawing: {e}")),
+                        }
+                    }
+                }
                 Purpose::ExportCues => {
                     if let Some(p) = paths.first() {
                         let p = p.with_extension("csv");

@@ -105,6 +105,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
     let mut action = None;
     ui.horizontal_wrapped(|ui| {
         venue_menu(ui, st);
+        super::mapping::svg_menu(ui, st);
         outputs_actions(ui, st);
     });
     ui.separator();
