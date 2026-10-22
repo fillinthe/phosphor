@@ -12,6 +12,7 @@ impl PhosphorApp {
         theme::apply(&cc.egui_ctx);
 
         let stored = |key: &str| if bench.is_none() { cc.storage.and_then(|s| s.get_string(key)) } else { None };
+        let accent = stored(KEY_ACCENT).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
         #[cfg(not(target_arch = "wasm32"))]
         let snapshot = if bench.is_none() { crate::recovery::begin_session() } else { None };
         #[cfg(target_arch = "wasm32")]
@@ -297,7 +298,8 @@ impl PhosphorApp {
         app.install_native_menu();
         // A fresh install (nothing saved yet): say hello once.
         app.welcome_open = fresh_install;
-        if app.ui_brightness != theme::DEFAULT_BRIGHTNESS {
+        theme::set_accent(accent);
+        if app.ui_brightness != theme::DEFAULT_BRIGHTNESS || accent != 0 {
             theme::set_brightness(&cc.egui_ctx, app.ui_brightness);
         }
         if let Some(name) = app.bench.as_ref().and_then(|b| b.cfg.layout.clone()) {

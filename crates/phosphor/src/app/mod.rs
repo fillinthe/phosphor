@@ -113,6 +113,7 @@ const KEY_AREAS: &str = "areas_v2";
 const KEY_AREA_DOCKS: &str = "area_docks";
 const KEY_AREA: &str = "area";
 const KEY_BRIGHTNESS: &str = "ui_brightness";
+const KEY_ACCENT: &str = "ui_accent";
 
 /// State one output window (a separate OS window) reads each frame.
 #[derive(Default)]

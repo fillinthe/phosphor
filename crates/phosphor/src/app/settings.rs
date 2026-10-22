@@ -68,6 +68,7 @@ impl PhosphorApp {
         }
         storage.set_string(KEY_AREA, self.workspace.unwrap_or(0).to_string());
         storage.set_string(KEY_BRIGHTNESS, self.ui_brightness.to_string());
+        storage.set_string(KEY_ACCENT, theme::accent_index().to_string());
         if let Ok(json) = serde_json::to_string(&self.state.control.settings()) {
             storage.set_string(KEY_CONTROL, json);
         }
