@@ -31,6 +31,13 @@ pub enum BlendMode {
     Saturation,
     Color,
     Luminosity,
+    /// Wipes: the layer comes in by a shape as its opacity goes from 0 to 1 (a transition you play with the fader).
+    WipeRight,
+    WipeDown,
+    WipeRadial,
+    WipeDiamond,
+    WipeBlocks,
+    Dissolve,
     /// Track mattes: the layer isn't shown; its brightness (or alpha) cuts out the layers below it.
     LumaMask,
     InverseLumaMask,
@@ -38,7 +45,7 @@ pub enum BlendMode {
 }
 
 impl BlendMode {
-    pub const ALL: [BlendMode; 26] = [
+    pub const ALL: [BlendMode; 32] = [
         BlendMode::Normal,
         BlendMode::Add,
         BlendMode::Multiply,
@@ -62,6 +69,12 @@ impl BlendMode {
         BlendMode::Saturation,
         BlendMode::Color,
         BlendMode::Luminosity,
+        BlendMode::WipeRight,
+        BlendMode::WipeDown,
+        BlendMode::WipeRadial,
+        BlendMode::WipeDiamond,
+        BlendMode::WipeBlocks,
+        BlendMode::Dissolve,
         BlendMode::LumaMask,
         BlendMode::InverseLumaMask,
         BlendMode::AlphaMask,
@@ -92,10 +105,21 @@ impl BlendMode {
             BlendMode::Saturation => "Saturation",
             BlendMode::Color => "Colour",
             BlendMode::Luminosity => "Luminosity",
+            BlendMode::WipeRight => "Wipe (left to right)",
+            BlendMode::WipeDown => "Wipe (top down)",
+            BlendMode::WipeRadial => "Wipe (from the centre)",
+            BlendMode::WipeDiamond => "Wipe (diamond)",
+            BlendMode::WipeBlocks => "Wipe (blocks)",
+            BlendMode::Dissolve => "Dissolve",
             BlendMode::LumaMask => "Mask (brightness)",
             BlendMode::InverseLumaMask => "Mask (inverted)",
             BlendMode::AlphaMask => "Mask (alpha)",
         }
+    }
+
+    /// Comes in by a shape as the opacity rises (opacity = how far the wipe has gone).
+    pub fn is_wipe(self) -> bool {
+        (26..=31).contains(&self.shader_index())
     }
 
     /// Cuts the layers below instead of drawing itself.

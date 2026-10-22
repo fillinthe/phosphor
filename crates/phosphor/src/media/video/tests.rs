@@ -205,3 +205,30 @@ fn footage_plays_every_way() {
         println!("FOOTAGE_WORST {:.0} ms {what}", g * 1000.0);
     }
 }
+
+/// Chapters stored in a movie are read with their times and titles (made here with FFmpeg).
+#[test]
+fn chapters_are_read() {
+    let Some(ffmpeg) = crate::stream::ffmpeg_path() else { return };
+    let dir = std::env::temp_dir().join(format!("phosphor-chapters-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let meta = dir.join("meta.txt");
+    std::fs::write(&meta, ";FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=1000\ntitle=Intro\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=1000\nEND=2000\ntitle=Drop\n").unwrap();
+    let movie = dir.join("c.mp4");
+    let ok = std::process::Command::new(ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=30:duration=2", "-i"])
+        .arg(&meta)
+        .args(["-map_metadata", "1", "-map_chapters", "1", "-c:v", "mpeg4"])
+        .arg(&movie)
+        .status()
+        .is_ok_and(|s| s.success());
+    if !ok {
+        return;
+    }
+    let p = VideoPlayer::open(&movie.to_string_lossy()).unwrap();
+    let ch = p.chapters().to_vec();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(ch.len(), 2, "{ch:?}");
+    assert_eq!(ch[1].1, "Drop");
+    assert!((ch[1].0 - 1.0).abs() < 0.05, "{ch:?}");
+}

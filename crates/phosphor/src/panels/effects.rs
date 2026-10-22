@@ -101,7 +101,12 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                     param_slider(ui, &mut fx.values, &mut fx.mods, pi, p, Some(ControlTarget::EffectParam { effect: fx.id, index: pi }));
                 }
                 ui.horizontal(|ui| {
-                    Level::percent(&mut fx.mix, "Mix").target(ControlTarget::EffectMix(fx.id)).tip("How much of this effect: 0% = bypassed").show(ui);
+                    Level::percent(&mut fx.mix, "Mix").target(ControlTarget::EffectMix(fx.id)).width((ui.available_width() - 110.0).max(80.0)).tip("How much of this effect: 0% = bypassed").show(ui);
+                    choice_combo(ui, ("fx_blend", fx.id), &mut fx.blend, 96.0, true).on_hover_text("How the effect's result lands on the picture it was given (Normal = a plain mix)");
+                    // The masks are for layers (they cut what's below), not effects.
+                    if fx.blend.is_mask() || fx.blend.is_wipe() {
+                        fx.blend = phosphor_engine::BlendMode::Normal;
+                    }
                 });
             });
         });

@@ -162,6 +162,8 @@ pub struct VideoPlayer {
     jumps: Jumps,
     /// What the file is (frame rate, bit rate, format, colour space, sound), from when it opened.
     about: String,
+    /// Chapters stored in the file (start in seconds, title).
+    chapters: Vec<(f64, String)>,
     /// The movie's sound (None = no audio track, or sound off).
     sound: Option<sound::ClipAudio>,
     /// A sound file with no picture: the clock runs, the sound follows it, no frames ever come.
@@ -307,6 +309,7 @@ impl VideoPlayer {
     fn start(name: String, dec: Decoder, live: bool) -> Result<Self, String> {
         let size = (dec.dec.width(), dec.dec.height());
         let about = dec.about.clone();
+        let chapters = dec.chapters.clone();
         let duration = dec.duration;
         let shared = Arc::new(Shared {
             ctl: Mutex::new(Ctl {
@@ -359,6 +362,7 @@ impl VideoPlayer {
             passes: 0,
             jumps: Jumps::default(),
             about,
+            chapters,
             sound: None,
             audio_only: false,
             opened_at: Some(std::time::Instant::now()),
@@ -414,6 +418,7 @@ impl VideoPlayer {
             passes: 0,
             jumps: Jumps::default(),
             about: String::new(),
+            chapters: Vec::new(),
             sound,
             audio_only: true,
             opened_at: None,
@@ -706,6 +711,11 @@ impl VideoPlayer {
     /// Decode error that stopped playback, if any.
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
+    }
+
+    /// Chapters stored in the file: (start in seconds, title).
+    pub fn chapters(&self) -> &[(f64, String)] {
+        &self.chapters
     }
 
     /// Frame rate, bit rate, pixel format, colour space and sound of the file ("" for sound-only clips).

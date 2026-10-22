@@ -20,6 +20,8 @@ pub(super) struct Decoder {
     pub(super) codec: String,
     /// Frame rate, bit rate, pixel format, colour space, sound: for the Inspector (`describe`).
     pub(super) about: String,
+    /// Chapters stored in the file: (start, seconds into the movie; title).
+    pub(super) chapters: Vec<(f64, String)>,
     pub(super) dec: ff::decoder::Video,
     /// VideoToolbox was attached; cleared if it fails before the first frame.
     hw: bool,
@@ -124,6 +126,15 @@ impl Decoder {
         };
         let (dec, codec, hw) = open_decoder(&input, stream, true)?;
         let about = describe(&input, stream, fps);
+        let start_secs = if st.start_time() != NOPTS { st.start_time() as f64 * tb } else { 0.0 };
+        let chapters = input
+            .chapters()
+            .enumerate()
+            .map(|(k, c)| {
+                let at = (c.start() as f64 * f64::from(c.time_base()) - start_secs).max(0.0);
+                (at, c.metadata().get("title").map_or_else(|| format!("Chapter {}", k + 1), str::to_string))
+            })
+            .collect();
         // SAFETY: a static table lookup by codec id.
         let intra = unsafe {
             let d = ffi::avcodec_descriptor_get(dec.id().into());
@@ -147,6 +158,7 @@ impl Decoder {
             duration,
             codec,
             about,
+            chapters,
             dec,
             hw,
             intra,

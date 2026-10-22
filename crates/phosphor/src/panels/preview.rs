@@ -44,6 +44,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             ui.label(RichText::new("MASTER").small().strong());
             let w = (ui.available_width() - 140.0).max(80.0);
             Level::percent(&mut st.comp.master_fade, "Fade").modulation(&mut st.comp.master_fade_mod).target(ControlTarget::MasterFade).width(w - 26.0).tip("Master fade: everything that goes out").show(ui);
+            crate::ui::icon_toggle(ui, &mut st.mouse_to_shaders, icon::CURSOR_CLICK).on_hover_text("Mouse into shaders: drag in the preview to move the selected layer's points (ISF point settings: centres, positions)");
             let r = super::inspector::mute_button(ui, &mut st.comp.sound_muted, "all sound");
             map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MuteSound));
             if ui.button(icon::PLUS).on_hover_text("New preview window: the mix, a layer, a group or one output, as many as you like").clicked() {
@@ -64,7 +65,15 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "GPU unavailable", egui::FontId::proportional(16.0), Color32::GRAY);
         }
     }
-    let resp = ui.interact(rect, egui::Id::new("preview_area"), Sense::click());
+    let resp = ui.interact(rect, egui::Id::new("preview_area"), if st.mouse_to_shaders { Sense::click_and_drag() } else { Sense::click() });
+    if st.mouse_to_shaders
+        && (resp.dragged() || resp.clicked())
+        && ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released())
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let uv = [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
+        mouse_into_shaders(st, uv);
+    }
     corner_pin_handles(ui, st, frame);
     resp.right_menu(|ui| {
         let open = st.output_open();
@@ -122,5 +131,21 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             st.set_web_control(false);
         }
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+    }
+}
+
+/// Puts the selected layer's shader points (its generator's and effects') where the mouse is in the picture.
+fn mouse_into_shaders(st: &mut State, uv: [f32; 2]) {
+    use phosphor_engine::shaders;
+    let Some(layer) = st.selected.and_then(|id| st.comp.layer_mut(id)) else { return };
+    if let SourceSpec::Generator(g) = &layer.source
+        && let Some(d) = shaders::generator(g)
+    {
+        shaders::set_points(d.params, &mut layer.generator_values, uv);
+    }
+    for fx in &mut layer.effects {
+        if let Some(d) = shaders::effect(&fx.effect) {
+            shaders::set_points(d.params, &mut fx.values, uv);
+        }
     }
 }

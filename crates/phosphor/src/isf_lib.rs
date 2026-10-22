@@ -554,7 +554,7 @@ fn isf_sheet() {
         let layer_id = 1000 + n as u64;
         let mut comp = Composition { width: w, height: h, ..Default::default() };
         let mut layer = LayerState { id: layer_id, source: SourceSpec::Movie { name: "p".into(), path: Some("p.png".into()) }, ..Default::default() };
-        layer.effects.push(EffectState { id: 1, effect: id, enabled: true, values, mix: 1.0, mods: Vec::new() });
+        layer.effects.push(EffectState { id: 1, effect: id, enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
         comp.layers.push(layer);
         engine.upload_rgba(layer_id, w, h, &picture);
         // Built on a worker thread: draw until it's ready.
@@ -647,7 +647,7 @@ fn an_edited_shader_replaces_the_old_one() {
         let (id, entry) = (loaded.id.clone(), loaded.entry.clone());
         install(engine, loaded, replace);
         comp.layers = vec![LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() }];
-        comp.layers[0].effects.push(EffectState { id: 2, effect: id, enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new() });
+        comp.layers[0].effects.push(EffectState { id: 2, effect: id, enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() });
         let started = std::time::Instant::now();
         loop {
             engine.render(&comp, 0.0, &ModInputs::default());

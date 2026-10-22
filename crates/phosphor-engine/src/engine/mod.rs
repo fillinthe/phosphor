@@ -71,6 +71,11 @@ struct LayerResources {
     thumbnail: Option<Target>,
     /// Full-size picture of the layer alone, while a mapping surface shows it.
     feed: Option<Target>,
+    /// Its picture before its effects, while another layer shows that (`SourceSpec::Feed { before_fx }`).
+    feed_pre: Option<Target>,
+    /// A layer with its own frame rate: its last finished picture, and when it was drawn.
+    held: Option<Target>,
+    held_at: f32,
 }
 
 /// A multi-pass shader's buffers: two textures each (read one, write the other), and which is
@@ -547,7 +552,8 @@ impl Engine {
         // Full-size pictures kept for mapping surfaces and for layers that use another layer as their source.
         let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.effective_mapping().layer_feeds().collect::<Vec<_>>()).chain(comp.feed_sources()).collect();
         let mut feeds: HashMap<u64, wgpu::TextureView> = HashMap::new();
-        let ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, layers: &comp.layers, monitors: &monitors };
+        let pre_wanted: HashSet<u64> = comp.pre_fx_feed_sources().collect();
+        let ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, pre_wanted: &pre_wanted, layers: &comp.layers, monitors: &monitors };
         // Comps: one that mixes in plainly is drawn straight into the master's stack (as with no comps); otherwise
         // each comp is drawn at its own size, through its effects, then mixed into the master like a layer.
         let plain = comp.comps.len() <= 1 && comp.comps.first().is_none_or(|c| c.is_plain());
@@ -832,6 +838,8 @@ struct MixCtx<'a> {
     pub thumb_h: u32,
     /// Layer/group ids a mapping surface shows on their own.
     pub wanted: &'a HashSet<u64>,
+    /// Layers another layer shows before their effects.
+    pub pre_wanted: &'a HashSet<u64>,
     pub layers: &'a [LayerState],
     /// Preview windows: (source id, width, height).
     pub monitors: &'a [(u64, u32, u32)],
@@ -865,44 +873,80 @@ impl Engine {
             if !layer.enabled {
                 continue;
             }
-            let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, w, h, time, mods, passes);
-            // A stopped clip fades out to nothing over its transition.
-            let fading_out = incoming.is_none() && layer.transition.as_ref().is_some_and(|t| t.progress(time) < 1.0);
-            let Some(mut frame) = incoming.or_else(|| fading_out.then(|| Frame::Rgb { view: self.gpu.blank.clone(), w: 1, h: 1 })) else {
-                continue;
+            // Its own frame rate: between its frames, the picture it drew last (source and effects skipped).
+            let held = (layer.render_fps > 0.0 && layer.transition.is_none())
+                .then(|| self.layers.get(&layer.id).and_then(|r| r.held.as_ref().filter(|_| time >= r.held_at && time - r.held_at < 1.0 / layer.render_fps)))
+                .flatten()
+                .map(|t| Frame::Rgb { view: t.view.clone(), w: t.width, h: t.height });
+            let frame = if let Some(frame) = held {
+                frame
+            } else {
+                // A generator at a lower render size (then scaled up by the layer's fit).
+                let (gw, gh) = match &layer.source {
+                    SourceSpec::Generator(_) if layer.render_scale < 0.999 => {
+                        let s = layer.render_scale.clamp(0.1, 1.0);
+                        (((w as f32 * s) as u32).max(16), ((h as f32 * s) as u32).max(16))
+                    }
+                    _ => (w, h),
+                };
+                let incoming = self.resolve_spec(layer.id, &layer.source, &layer.generator_values, &layer.generator_mods, false, gw, gh, time, mods, passes);
+                // A stopped clip fades out to nothing over its transition.
+                let fading_out = incoming.is_none() && layer.transition.as_ref().is_some_and(|t| t.progress(time) < 1.0);
+                let Some(mut frame) = incoming.or_else(|| fading_out.then(|| Frame::Rgb { view: self.gpu.blank.clone(), w: 1, h: 1 })) else {
+                    continue;
+                };
+                match &layer.transition {
+                    Some(t) if t.progress(time) < 1.0 => {
+                        if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, passes) {
+                            // A shader transition (ISF): old → new in one pass, once it's compiled (crossfade until then).
+                            let shader = (t.kind == crate::model::TransitionKind::Shader)
+                                .then(|| crate::shaders::transition(&t.effect))
+                                .flatten()
+                                .filter(|d| crate::shaders::pass_plan(d.entry).is_none() && self.ensure_module(d.entry));
+                            if let Some(d) = shader {
+                                frame = self.shader_transition(layer.id, frame, out, t, d, time, layer.fit, (w, h), passes);
+                            } else {
+                            // "Through an effect": both pictures run through the effect, strongest half-way.
+                            if t.kind == crate::model::TransitionKind::Effect
+                                && let Some(d) = crate::shaders::effect(&t.effect)
+                            {
+                                let p = t.progress(time);
+                                let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new(), blend: Default::default() };
+                                frame = self.apply_effects(layer.id ^ TRANSITION_IN, std::slice::from_ref(&fx), frame, time, mods, &comp.layers, passes);
+                                out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, passes);
+                            }
+                            frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), passes);
+                            }
+                        }
+                    }
+                    _ => {
+                        if let Some(res) = self.layers.get_mut(&layer.id) {
+                            res.generator_out = None;
+                            res.media_out = None;
+                        }
+                    }
+                }
+                if ctx.pre_wanted.contains(&layer.id) {
+                    let res = self.layers.entry(layer.id).or_default();
+                    Target::ensure(&mut res.feed_pre, &device, "layer feed before effects", w, h);
+                    let view = res.feed_pre.as_ref().unwrap().view.clone();
+                    push_fit_copy(view, &frame, (w, h), layer.fit, (w, h), passes);
+                } else if let Some(res) = self.layers.get_mut(&layer.id) {
+                    res.feed_pre = None;
+                }
+                let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &comp.layers, passes) };
+                if layer.render_fps > 0.0 {
+                    let (fw, fh) = frame.size();
+                    let res = self.layers.entry(layer.id).or_default();
+                    Target::ensure(&mut res.held, &device, "held layer", fw, fh);
+                    res.held_at = time;
+                    let view = res.held.as_ref().unwrap().view.clone();
+                    push_fit_copy(view, &frame, (fw, fh), FitMode::Stretch, (fw, fh), passes);
+                } else if let Some(res) = self.layers.get_mut(&layer.id) {
+                    res.held = None;
+                }
+                frame
             };
-            match &layer.transition {
-                Some(t) if t.progress(time) < 1.0 => {
-                    if let Some(mut out) = self.resolve_spec(layer.id, &t.from, &t.from_values, &[], true, w, h, time, mods, passes) {
-                        // A shader transition (ISF): old → new in one pass, once it's compiled (crossfade until then).
-                        let shader = (t.kind == crate::model::TransitionKind::Shader)
-                            .then(|| crate::shaders::transition(&t.effect))
-                            .flatten()
-                            .filter(|d| crate::shaders::pass_plan(d.entry).is_none() && self.ensure_module(d.entry));
-                        if let Some(d) = shader {
-                            frame = self.shader_transition(layer.id, frame, out, t, d, time, layer.fit, (w, h), passes);
-                        } else {
-                        // "Through an effect": both pictures run through the effect, strongest half-way.
-                        if t.kind == crate::model::TransitionKind::Effect
-                            && let Some(d) = crate::shaders::effect(&t.effect)
-                        {
-                            let p = t.progress(time);
-                            let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new() };
-                            frame = self.apply_effects(layer.id ^ TRANSITION_IN, std::slice::from_ref(&fx), frame, time, mods, &comp.layers, passes);
-                            out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, passes);
-                        }
-                        frame = self.crossfade(layer.id, frame, out, t, time, layer.fit, (w, h), passes);
-                        }
-                    }
-                }
-                _ => {
-                    if let Some(res) = self.layers.get_mut(&layer.id) {
-                        res.generator_out = None;
-                        res.media_out = None;
-                    }
-                }
-            }
-            let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &comp.layers, passes) };
             self.push_thumbnail(layer.id, layer.fit, &frame, (w, h), thumb_h, passes);
             if wanted.contains(&layer.id) {
                 let res = self.layers.entry(layer.id).or_default();

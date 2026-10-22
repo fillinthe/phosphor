@@ -45,6 +45,46 @@ impl ShaderDesc {
     }
 }
 
+/// A shader's point settings (ISF point2D: a "Name X" slider followed by its "Name Y"), as (x index, y index).
+pub fn point_pairs(params: &[Param]) -> Vec<(usize, usize)> {
+    params
+        .windows(2)
+        .enumerate()
+        .filter_map(|(i, w)| {
+            let (x, y) = (w[0].name.strip_suffix(" X")?, w[1].name.strip_suffix(" Y")?);
+            (x == y && w[0].labels.is_empty()).then_some((i, i + 1))
+        })
+        .collect()
+}
+
+/// Puts every point setting of `params` at `uv` (0..1 across the picture, top-left origin; shaders count Y upward).
+pub fn set_points(params: &[Param], values: &mut Vec<f32>, uv: [f32; 2]) -> bool {
+    let pairs = point_pairs(params);
+    while values.len() < params.len() {
+        values.push(params[values.len()].default);
+    }
+    for &(x, y) in &pairs {
+        let (px, py) = (&params[x], &params[y]);
+        values[x] = px.min + uv[0].clamp(0.0, 1.0) * (px.max - px.min);
+        values[y] = py.min + (1.0 - uv[1].clamp(0.0, 1.0)) * (py.max - py.min);
+    }
+    !pairs.is_empty()
+}
+
+#[cfg(test)]
+mod point_tests {
+    use super::*;
+
+    #[test]
+    fn points_follow_the_mouse() {
+        let params = [p("Amount", 0.0, 1.0, 0.5), p("Centre X", 0.0, 1.0, 0.5), p("Centre Y", 0.0, 1.0, 0.5), p("Size X", 0.0, 2.0, 1.0)];
+        assert_eq!(point_pairs(&params), vec![(1, 2)]);
+        let mut v = vec![0.3];
+        assert!(set_points(&params, &mut v, [0.25, 0.25]));
+        assert_eq!(v, vec![0.3, 0.25, 0.75, 1.0], "Y counts up; the rest keep their defaults");
+    }
+}
+
 pub const EFFECTS: &[ShaderDesc] = &[
     ShaderDesc { id: "invert", name: "Invert", entry: "fx_invert", params: &[p("Amount", 0.0, 1.0, 1.0)] },
     ShaderDesc {

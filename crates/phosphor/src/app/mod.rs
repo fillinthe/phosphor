@@ -279,6 +279,8 @@ pub struct State {
     pub(crate) preview_textures: Vec<(egui::TextureId, (u32, u32))>,
     /// A panel to bring to the front (set by explorer actions and the palette).
     pub open_tab: Option<Tab>,
+    /// Dragging in the Preview moves the selected layer's shader points (ISF point inputs).
+    pub mouse_to_shaders: bool,
     /// A snapshot of this output was asked for (Output panel); the app saves it.
     pub snapshot_output: Option<u64>,
     /// Mappings copied from a control's menu (their target is replaced on paste).

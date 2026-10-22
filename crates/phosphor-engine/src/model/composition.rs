@@ -230,7 +230,15 @@ impl Composition {
     /// Layers and groups whose finished picture another layer uses as its source.
     pub fn feed_sources(&self) -> impl Iterator<Item = u64> + '_ {
         self.layers.iter().filter_map(|l| match &l.source {
-            SourceSpec::Feed { id, .. } if *id != crate::MASTER_ID => Some(*id),
+            SourceSpec::Feed { id, before_fx: false, .. } if *id != crate::MASTER_ID => Some(*id),
+            _ => None,
+        })
+    }
+
+    /// Layers whose picture before their effects another layer shows.
+    pub fn pre_fx_feed_sources(&self) -> impl Iterator<Item = u64> + '_ {
+        self.layers.iter().filter_map(|l| match &l.source {
+            SourceSpec::Feed { id, before_fx: true, .. } => Some(*id),
             _ => None,
         })
     }
@@ -280,7 +288,7 @@ impl Composition {
 
     pub fn new_effect(&mut self, effect_id: &str) -> Option<EffectState> {
         let desc = shaders::effect(effect_id)?;
-        Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new() })
+        Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new(), blend: Default::default() })
     }
 
     /// Makes sure there is at least one output (older projects kept a single mapping instead).

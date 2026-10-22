@@ -139,6 +139,23 @@ fn fs_composite(in: VOut) -> @location(0) vec4f {
         let k = mix(1.0, clamp(m, 0.0, 1.0), u.opacity);
         return vec4f(dst.rgb * k, dst.a * k);
     }
+    // Wipes (26–31): opacity is how far the layer has come in, by a shape; where it's in, it's fully there.
+    if (u.mode >= 26u && u.mode <= 31u) {
+        let q = in.pos.xy / u.resolution;
+        var m = q.x;
+        var soft = 0.04;
+        switch u.mode {
+            case 27u: { m = q.y; }
+            case 28u: { m = length((q - vec2f(0.5)) * vec2f(u.resolution.x / max(u.resolution.y, 1.0), 1.0)) / 0.9; }
+            case 29u: { m = (abs(q.x - 0.5) + abs(q.y - 0.5)); }
+            case 30u: { m = hash21(floor(q * vec2f(16.0, 9.0))); soft = 0.001; }
+            case 31u: { m = hash21(floor(in.pos.xy)); soft = 0.001; }
+            default: {}
+        }
+        let shown = clamp((u.opacity * (1.0 + soft) - m) / soft, 0.0, 1.0);
+        let wa = s.a * shown;
+        return vec4f(mix(dst.rgb, s.rgb, wa), wa + dst.a * (1.0 - wa));
+    }
     let a = s.a * u.opacity;
     let blended = clamp(blend(dst.rgb, s.rgb, u.mode), vec3f(0.0), vec3f(1.0));
     return vec4f(mix(dst.rgb, blended, a), a + dst.a * (1.0 - a));
@@ -197,6 +214,11 @@ fn fs_crossfade(in: VOut) -> @location(0) vec4f {
 fn fs_mix(in: VOut) -> @location(0) vec4f {
     let wet = textureSampleLevel(tex0, samp, in.uv, 0.0);
     let dry = textureSampleLevel(tex1, samp, in.uv, 0.0);
+    // An effect with a blend mode: its result blended onto the dry picture, then dry / wet.
+    if (u.mode != 0u) {
+        let blended = clamp(blend(dry.rgb, wet.rgb, u.mode), vec3f(0.0), vec3f(1.0));
+        return vec4f(mix(dry.rgb, blended, u.opacity * wet.a), dry.a);
+    }
     return mix(dry, wet, u.opacity);
 }
 
