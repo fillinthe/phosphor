@@ -159,8 +159,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [ ] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
 - [x] 88. **Record DMX** output and play it back (M).
 - [ ] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration exist.
-- [ ] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist.
-- [ ] 91. **Read text and QR codes** from video into data (V).
+- [~] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view). Left: handles on each point.
+- [x] 91. **Read text and QR codes** from video into data (V).
 - [ ] 92. **LED scanner**: a camera finds each LED and places the fixtures (M).
 - [ ] 93. **MilkDrop visualiser** (projectM) (V).
 - [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
