@@ -133,6 +133,12 @@ pub struct ControlHub {
     /// Pads mapped to clips light up: the note velocity for an empty slot, a loaded clip and a playing one (grid
     /// controllers pick a colour by velocity).
     pub clip_lights: [u8; 3],
+    /// MIDI clock goes out to this MIDI output ("" = none).
+    pub clock_out_port: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    clock_out: Option<clock_out::ClockOut>,
+    /// Why clock out couldn't start (the port went away…).
+    pub clock_out_error: Option<String>,
     /// The last messages that came in, newest last (the MIDI / OSC monitor): when, from what, value.
     pub recent: std::collections::VecDeque<(std::time::Instant, ControlSource, f32)>,
     /// The monitor is paused (messages still work; the list stops moving).
@@ -176,13 +182,14 @@ pub struct ControlSettings {
     pub pickup_near: f32,
     pub takeover_glide: bool,
     pub clip_lights: [u8; 3],
+    pub clock_out_port: String,
     /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
     pub dmx_in: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, dmx_in: false }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), dmx_in: false }
     }
 }
 
@@ -229,13 +236,14 @@ impl ControlHub {
         hub.pickup_near = s.pickup_near.clamp(0.005, 0.5);
         hub.takeover_glide = s.takeover_glide;
         hub.clip_lights = s.clip_lights;
+        hub.clock_out_port = s.clock_out_port;
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, dmx_in: self.dmx_in() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), dmx_in: self.dmx_in() }
     }
 
     /// Starts or stops listening for DMX (Art-Net on udp/6454, sACN on udp/5568) as controller input.
@@ -304,6 +312,10 @@ impl ControlHub {
             pickup_near: PICKUP_NEAR,
             takeover_glide: false,
             clip_lights: CLIP_LIGHTS[0].1,
+            clock_out_port: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            clock_out: None,
+            clock_out_error: None,
             recent: std::collections::VecDeque::new(),
             monitor_paused: false,
             pickups: HashMap::new(),
@@ -430,6 +442,29 @@ impl ControlHub {
                 }
             }
         }
+    }
+
+    /// MIDI clock out: started / stopped as the chosen port changes, told where the beat is. Call every frame.
+    pub fn tick_clock_out(&mut self, beats: f64, bpm: f32) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if self.clock_out_port.is_empty() {
+                self.clock_out = None;
+                self.clock_out_error = None;
+                return;
+            }
+            if self.clock_out.as_ref().is_none_or(|c| c.port != self.clock_out_port) && self.clock_out_error.is_none() {
+                match clock_out::ClockOut::start(&self.clock_out_port, beats, bpm as f64) {
+                    Ok(c) => self.clock_out = Some(c),
+                    Err(e) => self.clock_out_error = Some(e),
+                }
+            }
+            if let Some(c) = &self.clock_out {
+                c.follow(beats, bpm as f64);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (beats, bpm);
     }
 
     /// Controls that send out (MIDI / OSC): the ones whose value changed since last time. Call every frame.
@@ -803,6 +838,8 @@ mod targets;
 pub use targets::*;
 #[cfg(not(target_arch = "wasm32"))]
 mod native;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod clock_out;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod oscquery;
 #[cfg(not(target_arch = "wasm32"))]

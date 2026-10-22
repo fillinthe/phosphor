@@ -97,9 +97,10 @@ impl PhosphorApp {
         self.remote_sync(now);
         self.sync_mapping_from_output();
         {
-            let State { control, comp, .. } = &mut self.state;
+            let State { control, comp, clock, .. } = &mut self.state;
             control.poll(comp);
             control.poll_clock(now);
+            control.tick_clock_out(clock.beats(now), clock.bpm);
             control.apply(comp, now as f32);
             control.feedback(comp, now);
             control.surface_osc(comp);

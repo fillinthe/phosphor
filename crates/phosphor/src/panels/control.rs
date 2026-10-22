@@ -43,6 +43,26 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         crate::ui::toggle(ui, &mut control.soft_takeover, "Soft takeover")
             .on_hover_text("A fader or knob only takes over once it reaches the value on screen (moves it past it), so the picture never jumps when the hardware was left somewhere else");
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let shown = if control.clock_out_port.is_empty() { "Off".to_string() } else { control.clock_out_port.clone() };
+            ComboBox::from_id_salt("clock_out").width(140.0).selected_text(format!("Clock out: {shown}")).show_ui(ui, |ui| {
+                if ui.selectable_label(control.clock_out_port.is_empty(), "Off").clicked() {
+                    control.clock_out_port.clear();
+                }
+                for p in crate::control::clock_out::outputs() {
+                    if ui.selectable_label(control.clock_out_port == p, &p).clicked() {
+                        control.clock_out_port = p;
+                        control.clock_out_error = None;
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Send MIDI clock (24 a beat, with Start) to a MIDI output: drum machines, sequencers and other apps follow Phosphor's tempo");
+            if let Some(e) = &control.clock_out_error {
+                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(Color32::from_rgb(230, 160, 60)));
+            }
+        }
         ui.menu_button(label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
             ui.set_min_width(260.0);
             hint(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
