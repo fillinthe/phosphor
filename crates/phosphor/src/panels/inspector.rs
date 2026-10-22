@@ -26,6 +26,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         return;
     };
     let clipboard_len = st.fx_clipboard.len();
+    let also = st.also_selected.len();
     let mut fx_action: Option<FxAction> = None;
     // "Shows on": the outputs, and whether the selection already shows on each.
     let outs: Vec<(u64, String, bool)> = {
@@ -96,6 +97,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                         clip_act = Some((c, a));
                     }
                 });
+            }
+            if also > 0 {
+                hint(ui, &format!("Editing {} layers: changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one.", also + 1));
             }
             ui.separator();
             let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default() };

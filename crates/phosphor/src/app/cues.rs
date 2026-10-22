@@ -178,6 +178,28 @@ impl State {
         }
     }
 
+    /// Several layers selected: whatever changed on the selected one this frame goes to the others too. Costs a
+    /// comparison per frame only while more than one layer is selected.
+    pub(crate) fn run_multi_edit(&mut self) {
+        self.also_selected.retain(|id| self.comp.layers.iter().any(|l| l.id == *id));
+        let Some(sel) = self.selected.filter(|_| !self.also_selected.is_empty()) else {
+            self.multi_before = None;
+            return;
+        };
+        let Some(now) = self.comp.layer(sel) else { return };
+        match &self.multi_before {
+            Some(before) if before.id == sel => {
+                if before != now {
+                    let before = self.multi_before.take().expect("checked");
+                    let to = self.also_selected.clone();
+                    self.comp.copy_layer_changes(&before, &to);
+                    self.multi_before = self.comp.layer(sel).cloned();
+                }
+            }
+            _ => self.multi_before = Some(now.clone()),
+        }
+    }
+
     /// Someone touched something (the idle cue waits again).
     pub(crate) fn touched(&mut self, now: f64) {
         self.cue_run.last_input = now;

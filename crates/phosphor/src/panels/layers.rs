@@ -36,7 +36,10 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo && st.comp.in_open_comp(l));
     let feeds = feed_choices(&st.comp);
     let others = other_comps(&st.comp);
-    let State { comp, selected, media, layer_textures, .. } = st;
+    let State { comp, selected, also_selected, media, layer_textures, .. } = st;
+    // Shift or Cmd adds a layer to the selection (edits then go to all of them).
+    let adding = ui.input(|i| i.modifiers.shift || i.modifiers.command);
+    let sel_is_layer = selected.is_some_and(|s| comp.layers.iter().any(|l| l.id == s));
     let count = comp.layers.len();
     let mut action = None;
     let mut drop: Option<(u64, u64)> = None;
@@ -85,7 +88,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             let layer = &mut comp.layers[idx];
             let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
             let err = media.errors.get(&layer.id).cloned();
-            let is_selected = *selected == Some(layer.id);
+            let is_selected = *selected == Some(layer.id) || also_selected.contains(&layer.id);
             let muted = any_solo && !layer.solo;
             let out = if parent.is_some() {
                 ui.horizontal(|ui| {
@@ -97,7 +100,16 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
                 layer_card(ui, layer, thumb, aspect, is_selected, muted, err.as_deref(), &feeds, &others)
             };
             if out.select {
-                *selected = Some(layer.id);
+                if adding && sel_is_layer && *selected != Some(layer.id) {
+                    if let Some(k) = also_selected.iter().position(|id| *id == layer.id) {
+                        also_selected.remove(k);
+                    } else {
+                        also_selected.push(layer.id);
+                    }
+                } else {
+                    also_selected.clear();
+                    *selected = Some(layer.id);
+                }
             }
             if let Some(a) = out.action {
                 action = Some((idx, a));
