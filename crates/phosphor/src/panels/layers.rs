@@ -348,6 +348,11 @@ pub(crate) fn layer_card(
             action = Some(LayerAction::Monitor);
             ui.close();
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::CAMERA, "Save a picture…")).on_hover_text("This layer's picture now, at the canvas size, as a PNG").clicked() {
+            super::request_snapshot(ui, layer.id);
+            ui.close();
+        }
         ui.separator();
         learn_items(ui, &ControlTarget::LayerEnabled(layer.id));
         if ui.button(label(icon::BROADCAST, "Learn opacity")).clicked() {

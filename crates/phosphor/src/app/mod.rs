@@ -326,6 +326,9 @@ pub struct State {
     /// Set by panels: open a new monitor with this source.
     pub new_monitor: Option<panels::MonitorSource>,
     pub snapshot_requested: bool,
+    /// A layer / group / comp to save a picture of (read back next frame), and the picture once it's here.
+    pub snapshot_source: Option<u64>,
+    pub snapshot_ready: Option<(u32, u32, Vec<u8>)>,
     #[cfg(not(target_arch = "wasm32"))]
     pub isf: crate::isf_lib::IsfLibrary,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.

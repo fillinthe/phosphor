@@ -52,6 +52,8 @@ impl PhosphorApp {
             notice,
             monitor_wants,
             monitor_held,
+            snapshot_source,
+            snapshot_ready,
             monitor_textures,
             output_textures,
             #[cfg(target_os = "macos")]
@@ -199,6 +201,11 @@ impl PhosphorApp {
                 }
             }
         }
+        // A picture of one layer / group / comp: read through a monitor slot this frame.
+        if let Some(id) = snapshot_source.take() {
+            mwants.push((crate::panels::SNAPSHOT_KEY, id, comp.width, comp.height));
+            engine.read_monitor(mwants.len() - 1, crate::panels::SNAPSHOT_KEY as u64);
+        }
         // Recording one layer / group / comp: its picture at the canvas size, read back when a frame is due.
         let rec_src = Some(stream.settings.source).filter(|&id| id != 0 && stream.running() && (comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() || comp.comp(id).is_some()));
         if let Some(id) = rec_src {
@@ -249,6 +256,7 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::tracking::MONITOR_KEY => tracker.give(f.rgba, f.width, f.height, &comp.tracking),
                 crate::stream::MONITOR_KEY => stream.push(f.width, f.height, f.rgba),
+                crate::panels::SNAPSHOT_KEY => *snapshot_ready = Some((f.width, f.height, f.rgba)),
                 crate::scopes::MONITOR_KEY => {
                     scopes.give(&f.rgba, f.width, f.height, now);
                     for (id, img) in scopes.take_layer_pictures() {

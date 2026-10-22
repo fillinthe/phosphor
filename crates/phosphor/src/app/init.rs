@@ -202,6 +202,8 @@ impl PhosphorApp {
                 displays: crate::screens::displays(),
                 new_monitor: None,
                 snapshot_requested: false,
+                snapshot_source: None,
+                snapshot_ready: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 isf: crate::isf_lib::IsfLibrary::scan(),
                 fx_clipboard: Vec::new(),

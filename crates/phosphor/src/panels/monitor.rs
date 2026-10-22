@@ -19,6 +19,15 @@ pub enum MonitorSource {
 }
 
 pub const PREVIEW_REQUEST: &str = "phosphor_preview_request";
+pub const SNAPSHOT_REQUEST: &str = "phosphor_snapshot_request";
+
+/// Saves a picture of one layer, group or comp at the canvas size (from any panel; the app asks where to save it).
+pub(crate) fn request_snapshot(ui: &egui::Ui, id: u64) {
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SNAPSHOT_REQUEST), id));
+}
+
+/// The monitor key a layer / group / comp snapshot is read through.
+pub const SNAPSHOT_KEY: u8 = 254;
 
 /// Opens a new preview window showing `source` (from any panel; the app opens it after this frame).
 pub(crate) fn request_preview(ui: &egui::Ui, source: MonitorSource) {
