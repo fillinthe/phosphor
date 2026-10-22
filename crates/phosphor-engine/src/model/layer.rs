@@ -216,6 +216,11 @@ pub struct LayerState {
     /// A shader transition's own settings (one value per parameter; empty or a different length = its defaults).
     #[serde(default)]
     pub transition_values: Vec<f32>,
+    /// Where this row's clips play (this layer, or shared over the layers beside it).
+    pub voices: VoiceMode,
+    /// Whose turn it is next (`VoiceMode::NextLayer`).
+    #[serde(skip)]
+    pub voice_turn: usize,
     /// Plays the next / previous / a random clip by itself.
     pub autopilot: Autopilot,
     /// Autopilot moves on after this many beats (0 = when the clip ends).
@@ -314,6 +319,8 @@ impl Default for LayerState {
             transition_kind: TransitionKind::Crossfade,
             transition_effect: default_transition_effect(),
             transition_values: Vec::new(),
+            voices: VoiceMode::Own,
+            voice_turn: 0,
             autopilot: Autopilot::Off,
             autopilot_beats: 0.0,
             collection: None,
@@ -377,6 +384,11 @@ impl LayerState {
     /// Puts clip `slot` on this layer with a `secs` transition. Returns false for an empty slot.
     pub fn trigger_clip(&mut self, slot: usize, now: f32, secs: f32) -> bool {
         let Some(clip) = self.clips.get(slot).filter(|c| !c.is_empty()).cloned() else { return false };
+        self.play_clip(clip, now, secs)
+    }
+
+    /// Puts `clip` (from any layer's row) on this layer with a `secs` transition.
+    pub fn play_clip(&mut self, clip: Clip, now: f32, secs: f32) -> bool {
         if self.active_clip == Some(clip.id) && self.source == clip.source {
             return true;
         }

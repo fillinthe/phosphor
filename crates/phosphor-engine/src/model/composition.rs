@@ -263,6 +263,10 @@ impl Composition {
         }
     }
 
+    pub fn layer(&self, id: u64) -> Option<&LayerState> {
+        self.layers.iter().find(|l| l.id == id)
+    }
+
     pub fn layer_mut(&mut self, id: u64) -> Option<&mut LayerState> {
         self.layers.iter_mut().find(|l| l.id == id)
     }
@@ -365,12 +369,48 @@ impl Composition {
         }
     }
 
-    /// A clip button went down (its trigger mode decides: play, toggle off, flash…).
+    /// A clip button went down (its trigger mode decides: play, toggle off, flash…). A row with voices plays
+    /// normal clips on the layer `voice_for` picks.
     pub fn press_clip(&mut self, layer: u64, slot: usize, now: f32) {
         let secs = self.launch_secs();
-        if let Some(l) = self.layer_mut(layer) {
+        let shared = self.layer(layer).and_then(|l| {
+            let c = l.clips.get(slot).filter(|c| !c.is_empty() && c.trigger == TriggerMode::Normal)?;
+            (l.voices != VoiceMode::Own).then(|| c.clone())
+        });
+        if let Some(clip) = shared {
+            let to = self.voice_for(layer);
+            if let Some(l) = self.layer_mut(to) {
+                l.play_clip(clip, now, secs);
+            }
+        } else if let Some(l) = self.layer_mut(layer) {
             l.press_clip(slot, now, secs);
         }
+    }
+
+    /// The layer a clip from `layer`'s row plays on (its voice mode; the pool is the layers in the same group and
+    /// comp, top to bottom). Moves the turn on.
+    pub fn voice_for(&mut self, layer: u64) -> u64 {
+        let Some(row) = self.layer(layer) else { return layer };
+        let (mode, parent, comp, turn) = (row.voices, row.parent, row.comp, row.voice_turn);
+        let pool: Vec<(u64, bool)> = self
+            .layers
+            .iter()
+            .filter(|l| l.parent == parent && l.comp == comp)
+            .map(|l| (l.id, l.source == SourceSpec::None || !l.playing || !l.enabled))
+            .collect();
+        if mode == VoiceMode::Own || pool.is_empty() {
+            return layer;
+        }
+        let at = turn % pool.len();
+        // Free: the first idle layer from this turn on; none free = the next in turn.
+        let pick = match mode {
+            VoiceMode::NextFree => (0..pool.len()).map(|k| (at + k) % pool.len()).find(|&k| pool[k].1).unwrap_or(at),
+            _ => at,
+        };
+        if let Some(l) = self.layer_mut(layer) {
+            l.voice_turn = pick + 1;
+        }
+        pool[pick].0
     }
 
     pub fn release_clip(&mut self, layer: u64, slot: usize, now: f32) {
@@ -528,6 +568,37 @@ impl Composition {
         if self.version < 1 {
             self.version = 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod voice_tests {
+    use super::*;
+
+    #[test]
+    fn clips_share_out_over_the_layers() {
+        let mut c = Composition::default();
+        for id in 1..=3 {
+            c.layers.push(LayerState { id, ..Default::default() });
+        }
+        c.layers[0].voices = VoiceMode::NextLayer;
+        c.layers[0].clips = vec![Clip { id: 50, name: "Kick".into(), source: SourceSpec::Generator("plasma".into()), ..Default::default() }];
+        let played: Vec<u64> = (0..4)
+            .map(|_| {
+                c.press_clip(1, 0, 0.0);
+                c.layers.iter().filter(|l| l.active_clip == Some(50)).map(|l| l.id).last().unwrap()
+            })
+            .collect();
+        assert_eq!(&played[..3], &[1, 2, 3], "each on the next layer");
+        // Free: layer 1 stops, so it's the one picked.
+        for l in &mut c.layers {
+            l.active_clip = None;
+        }
+        c.layers[0].voices = VoiceMode::NextFree;
+        c.layers[0].playing = false;
+        c.layers[0].voice_turn = 1;
+        c.press_clip(1, 0, 0.0);
+        assert_eq!(c.layers[0].active_clip, Some(50), "the free layer");
     }
 }
 

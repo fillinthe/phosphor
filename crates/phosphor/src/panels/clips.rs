@@ -570,6 +570,10 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             let pick = ui.button(label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
             map_menu(ui, &pick, ControlTarget::LayerClipPick(layer.id));
             ui.separator();
+            ui.label(RichText::new(format!("{} Plays on", icon::STACK)).strong());
+            hint(ui, "Share this row's clips over the layers beside it (same group): each clip on the next layer, or on one with nothing playing.");
+            choice_buttons(ui, &mut layer.voices, |_, _| {});
+            ui.separator();
             ui.label(RichText::new(format!("{} Autopilot", icon::AIRPLANE_TILT)).strong());
             hint(ui, "When this clip is done: play another one by itself, or clear the layer.");
             for a in Autopilot::ALL {
