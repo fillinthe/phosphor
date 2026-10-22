@@ -310,6 +310,8 @@ pub struct Streamer {
     retries: u32,
     /// Mute all sound is on: streams and recordings start without the audio device.
     pub mute_audio: bool,
+    /// Rendering offline: every frame is kept (waits for the encoder instead of dropping one).
+    pub offline: bool,
     /// Feeding Phosphor's own sound to FFmpeg (dropped = stopped).
     #[cfg(not(target_arch = "wasm32"))]
     program_feed: Option<crate::stream_audio::ProgramFeed>,
@@ -372,6 +374,7 @@ impl Streamer {
             retry_at: None,
             retries: 0,
             mute_audio: false,
+            offline: false,
             #[cfg(not(target_arch = "wasm32"))]
             program_feed: None,
         }
@@ -379,6 +382,11 @@ impl Streamer {
 
     pub fn running(&self) -> bool {
         self.tx.is_some()
+    }
+
+    /// Frames handed to the encoder so far.
+    pub fn sent(&self) -> u64 {
+        self.shared.lock().unwrap().sent
     }
 
     pub fn status(&self) -> (String, bool, u64, u64, Vec<String>) {
@@ -735,6 +743,13 @@ impl Streamer {
 
     fn send(&mut self, msg: Msg) {
         let Some(tx) = &self.tx else { return };
+        if self.offline {
+            if tx.send(msg).is_err() {
+                self.tx = None;
+                self.started = None;
+            }
+            return;
+        }
         match tx.try_send(msg) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => self.shared.lock().unwrap().dropped += 1,

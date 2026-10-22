@@ -190,6 +190,8 @@ impl PhosphorApp {
                 timeline_play: None,
                 timeline_record: false,
                 timeline_set: Vec::new(),
+                offline: None,
+                offline_setup: Default::default(),
                 // Opening a project changes nothing: the timeline sets values once it plays or the playhead moves.
                 timeline_applied: Some(0.0),
                 #[cfg(not(target_arch = "wasm32"))]
@@ -440,6 +442,11 @@ impl PhosphorApp {
             if let Err(e) = app.state.stream.start(w, h, now) {
                 eprintln!("stream: {e}");
             }
+        }
+        if let Some(path) = app.bench.as_ref().and_then(|b| b.cfg.render.clone()) {
+            let secs = std::env::var("PHOSPHOR_RENDER_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(2.0);
+            let setup = super::offline::OfflineSetup { path, secs, ..Default::default() };
+            app.state.offline_start(&setup, now);
         }
         if let Some(path) = app.bench.as_ref().and_then(|b| b.cfg.record.clone()) {
             app.state.stream.settings.destination = crate::stream::Destination::File;

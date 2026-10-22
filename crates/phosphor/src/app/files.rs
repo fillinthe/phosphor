@@ -400,6 +400,11 @@ impl PhosphorApp {
                         st.stream.settings.file_path = p.to_string_lossy().to_string();
                     }
                 }
+                Purpose::RenderFile => {
+                    if let Some(p) = paths.first() {
+                        st.offline_setup.path = p.to_string_lossy().to_string();
+                    }
+                }
             }
         }
     }

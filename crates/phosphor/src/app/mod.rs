@@ -56,6 +56,7 @@ pub(crate) mod play;
 mod quick;
 pub(crate) use quick::dice;
 mod recording;
+pub(crate) mod offline;
 mod timeline;
 #[cfg(not(target_arch = "wasm32"))]
 mod timecode_out;
@@ -318,6 +319,9 @@ pub struct State {
     /// (a different value now = moved by hand).
     pub timeline_record: bool,
     pub timeline_set: Vec<(phosphor_engine::ControlTarget, f32)>,
+    /// Rendering the show to a movie offline (the show's clock steps frame by frame), and its settings.
+    pub offline: Option<offline::Offline>,
+    pub offline_setup: offline::OfflineSetup,
     /// LTC out (timecode audio), while it's switched on.
     #[cfg(not(target_arch = "wasm32"))]
     pub ltc_out: Option<timecode_out::LtcOut>,
@@ -868,7 +872,13 @@ impl eframe::App for PhosphorApp {
         let idle = at.elapsed().as_secs_f64();
         if idle > 0.05 {
             let now = time + idle;
-            if self.hidden_pacer.due(now, self.state.render_rate.fps().unwrap_or(60).min(60)) {
+            // Rendering offline: the render's own clock, never ahead of real time.
+            if let Some(t) = self.state.offline.as_ref().map(|o| o.now()) {
+                if t <= now {
+                    self.render(t);
+                }
+                self.state.run_offline();
+            } else if self.hidden_pacer.due(now, self.state.render_rate.fps().unwrap_or(60).min(60)) {
                 self.render(now);
                 // A bench whose window is covered gets no UI frames: it still has to finish.
                 if self.bench.is_some() {

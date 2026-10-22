@@ -52,7 +52,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 19. **Output delay** in frames, to line up mixed projectors and LED processors (M).
       Delay 0–10 frames per output. Checked: GPU test (2 frames late shows the frame from 2 frames before).
 - [x] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
-      Partly: a camera button on each output saves a picture of it after mapping (the mix snapshot already existed). Layers and comps on their own: not yet.
+      Partly: a camera button on each output saves a picture of it after mapping (the mix snapshot already existed). Layers, groups and comps: right-click › Save a picture….
 - [x] 21. **Hide effects** you never use from the menus (V). Favourites exist.
       Right-click an effect or source › Hide from the lists; they show under "Hidden" (to bring back) and still work where used. Kept between launches.
 - [x] 22. **Slice: match the media's size / shape** (M).
@@ -128,7 +128,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [~] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now. Done: each layer on a pair of channels of the sound output. Left: a different device per layer.
 - [x] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed, sound EQ (master volume was already there).
 - [x] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
-      MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC / LTC out: not yet. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
+      MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC out (MIDI) and LTC out (audio on a chosen pair), from the show clock or time of day. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
 - [x] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
 - [x] 64. **Schedules**: calendar (.ics) events trigger cues, an idle cue after N minutes of nothing, a startup cue (M). Daily times exist.
 - [x] 65. **Combine controls**: mix several sources into one (max, add, multiply…) (M).
@@ -155,8 +155,9 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
 
 ### Large
-- [~] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one. Done: tracks for any control, keys (hold / line / smooth), markers (pause, loop back), Timeline panel. Left: record by moving controls, sound track, OSC / MIDI tracks, clip track.
-- [ ] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
+- [~] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one. Done: tracks for any control, keys (hold / line / smooth), markers (pause, loop back), Timeline panel. Record by moving controls: done. Left: sound track, OSC / MIDI tracks, clip track.
+- [~] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
+      Timeline › Render…: file, format (H.264, ProRes, Hap, HEVC), fps, length; the show's clock steps a frame at a time and every movie waits for its picture, so nothing drops or repeats. No faster than real time. Left: the sound mix. Checked: bench `--render` with a counting movie (1080p H.264 and 4K ProRes: all 60 frames, in order, 5 runs out of 5).
 - [x] 88. **Record DMX** output and play it back (M).
 - [ ] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration exist.
 - [~] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view). Left: handles on each point.

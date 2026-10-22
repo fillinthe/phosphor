@@ -14,6 +14,8 @@ pub enum Purpose {
     SaveProject,
     SaveSnapshot,
     StreamFile,
+    /// Where Timeline › Render to a movie writes.
+    RenderFile,
     ExportShow,
     TouchOsc,
     /// A TouchOSC layout to bring in as Control Surface pages.

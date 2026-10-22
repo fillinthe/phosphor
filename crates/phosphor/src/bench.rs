@@ -73,6 +73,8 @@ pub struct BenchConfig {
     pub project: Option<String>,
     /// Record the run to this file (.mp4 = H.264, .mov = ProRes) to exercise the streaming path.
     pub record: Option<String>,
+    /// `--render x.mp4`: render the show offline (frame by frame) for `PHOSPHOR_RENDER_SECS` (default 2) seconds.
+    pub render: Option<String>,
     /// Trigger clip column N (1-based) at `trigger_at` seconds, to exercise transitions.
     pub trigger_column: Option<usize>,
     pub trigger_at: f64,
@@ -127,6 +129,7 @@ impl BenchConfig {
                 ("--send-output", Some(v)) => cfg.send_output = Some(v),
                 ("--project", Some(v)) => cfg.project = Some(v),
                 ("--record", Some(v)) => cfg.record = Some(v),
+                ("--render", Some(v)) => cfg.render = Some(v),
                 ("--remote-password", Some(v)) => cfg.remote_password = Some(v),
                 ("--watch", Some(v)) => cfg.watch = Some(v),
                 ("--previews", Some(v)) => cfg.previews = v.parse().unwrap_or(0),
