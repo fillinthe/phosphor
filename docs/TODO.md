@@ -57,7 +57,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Right-click an effect or source › Hide from the lists; they show under "Hidden" (to bring back) and still work where used. Kept between launches.
 - [x] 22. **Slice: match the media's size / shape** (M).
       Mapping Studio: "Match the picture's shape" (keeps the height and centre, sets the width). Checked: test.
-- [~] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
+- [x] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
       Random cue (button + mappable), a countdown to the next cue that fires by itself, CSV out and in (names and timings; the looks stay recorded). Cue groups: not done. Checked: CSV test, bench run (countdown right, random never repeats), screenshot.
 - [x] 24. **Permissions panel** (Mac): camera, microphone, screen recording, network at a glance (V).
       Devices panel: camera, microphone and screen recording, each with a System Settings button. Checked: screenshot (all three read right here).
