@@ -36,9 +36,45 @@ impl Composition {
     }
 }
 
+impl Composition {
+    /// Copies how a clip plays (its trigger mode, mute and own settings) from `before` → the clip at `from` now, onto
+    /// the clips at `to` (layer, slot), for whatever changed. Returns how many settings changed.
+    pub fn copy_clip_changes(&mut self, before: &Clip, from: (u64, usize), to: &[(u64, usize)]) -> usize {
+        let Some(after) = self.layer(from.0).and_then(|l| l.clips.get(from.1)).cloned() else { return 0 };
+        let (trigger, muted, own) = (after.trigger != before.trigger, after.muted != before.muted, after.own != before.own);
+        for &(layer, slot) in to.iter().filter(|t| **t != from) {
+            if let Some(k) = self.layer_mut(layer).and_then(|l| l.clips.get_mut(slot)).filter(|k| !k.is_empty()) {
+                if trigger {
+                    k.trigger = after.trigger;
+                }
+                if muted {
+                    k.muted = after.muted;
+                }
+                if own {
+                    k.own.clone_from(&after.own);
+                }
+            }
+        }
+        [trigger, muted, own].iter().filter(|c| **c).count()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clip_changes_go_to_the_selected_clips() {
+        let mut c = Composition::default();
+        let clip = |id| Clip { id, name: format!("C{id}"), source: SourceSpec::Generator("plasma".into()), ..Default::default() };
+        c.layers.push(LayerState { id: 1, clips: vec![clip(10), clip(11), Clip::default()], ..Default::default() });
+        let before = c.layers[0].clips[0].clone();
+        c.layers[0].clips[0].trigger = TriggerMode::Flash;
+        c.layers[0].clips[0].name = "Renamed".into();
+        assert_eq!(c.copy_clip_changes(&before, (1, 0), &[(1, 1), (1, 2)]), 1);
+        assert_eq!((c.layers[0].clips[1].trigger, c.layers[0].clips[1].name.as_str()), (TriggerMode::Flash, "C11"), "names stay");
+        assert!(c.layers[0].clips[2].is_empty(), "empty slots stay empty");
+    }
 
     #[test]
     fn a_change_goes_to_every_selected_layer() {

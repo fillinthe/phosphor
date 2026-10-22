@@ -212,6 +212,10 @@ pub struct State {
     pub multi_before: Option<phosphor_engine::LayerState>,
     /// The clip last clicked in the grid (layer, slot): the Inspector shows its settings while that layer is selected.
     pub selected_clip: Option<(u64, usize)>,
+    /// More clips selected with Shift / Cmd-click: changes to the selected clip's play settings go to these too.
+    pub also_clips: Vec<(u64, usize)>,
+    /// The selected clip as of the last frame (`run_multi_edit`).
+    pub clip_before: Option<phosphor_engine::Clip>,
     pub selected_surface: Option<u64>,
     /// Output windows by output id.
     pub output: Arc<Mutex<std::collections::HashMap<u64, OutputShared>>>,
