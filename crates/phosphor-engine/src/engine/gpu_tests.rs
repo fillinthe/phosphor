@@ -410,3 +410,16 @@ fn held_monitors_keep_their_picture() {
     assert!(shown(&mut engine, &comp, true) > 240, "held: still white");
     assert!(shown(&mut engine, &comp, false) < 15, "released: black now");
 }
+
+/// A layer's thumbnail reads back (a clip's chosen picture comes from it).
+#[test]
+fn a_layer_thumbnail_reads_back() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 64, height: 36, ..Default::default() };
+    comp.layers.push(LayerState { id: 3, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 1.0, 0.0], ..Default::default() });
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, px) = engine.read_layer_thumbnail(3).expect("thumbnail");
+    assert!(w > 0 && h > 0);
+    assert!(px[1] > 240 && px[0] < 15, "green: {:?}", &px[..4]);
+    assert!(engine.read_layer_thumbnail(99).is_none());
+}

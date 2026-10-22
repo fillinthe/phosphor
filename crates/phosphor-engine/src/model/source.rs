@@ -194,6 +194,8 @@ pub struct Clip {
     pub own: Option<ClipSettings>,
     /// This clip plays without sound (wherever it's triggered).
     pub muted: bool,
+    /// A picture chosen for its cell in the grid (a PNG path); empty = from the source.
+    pub thumb: String,
 }
 
 /// What a clip remembers when it keeps its own settings.

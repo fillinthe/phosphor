@@ -197,6 +197,11 @@ impl Engine {
         self.read_target(self.output.as_ref()?)
     }
 
+    /// A layer's thumbnail picture now (blocking: for a one-off, like a clip's chosen picture).
+    pub fn read_layer_thumbnail(&self, layer: u64) -> Option<(u32, u32, Vec<u8>)> {
+        self.read_target(self.layer_thumbnail(layer)?)
+    }
+
     /// Same as `read_output`, for one configured output (after its mapping).
     pub fn read_output_of(&self, id: u64) -> Option<(u32, u32, Vec<u8>)> {
         self.read_target(self.output_texture(id)?)
