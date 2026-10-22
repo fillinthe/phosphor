@@ -264,6 +264,12 @@ pub const EFFECTS: &[ShaderDesc] = &[
         params: &[p("Edge", 0.0, 1.0, 0.5), p("Softness", 0.0, 0.5, 0.15), p("Invert", 0.0, 1.0, 0.0)],
     },
     ShaderDesc {
+        id: "blur_bg",
+        name: "Blur Background",
+        entry: "fx_cutout_blur",
+        params: &[p("Blur", 0.0, 1.0, 0.5), p("Edge", 0.0, 1.0, 0.5), p("Softness", 0.0, 0.5, 0.15), p("Invert", 0.0, 1.0, 0.0)],
+    },
+    ShaderDesc {
         id: "gamma",
         name: "Gamma / Lift / Gain",
         entry: "fx_gamma",
@@ -656,6 +662,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "rutt_etra_points" => ("3D", "Scan-processor points (v002)"),
         "chroma_key" => ("Key", "Make a colour transparent"),
         "remove_bg" => ("Key", "Keep the people, lose the background (Mac)"),
+        "blur_bg" => ("Key", "People sharp, the background blurred (or the other way round) (Mac)"),
         "plasma" | "gradient" | "noise" | "voronoi" => ("Patterns", "Animated pattern"),
         "rings" | "spiral" | "tunnel" => ("Patterns", "Hypnotic motion"),
         "checker" | "color_bars" | "solid" => ("Utility", "Test and fill"),

@@ -433,7 +433,7 @@ impl Engine {
                     if k == last_index && entry == "fx_glow_add" {
                         tex1 = Some(dry.clone());
                     }
-                    if entry == "fx_cutout" {
+                    if entry == "fx_cutout" || entry == "fx_cutout_blur" {
                         // Remove background: the matte from the app on tex2; p[14].w says one is there yet.
                         tex2 = self.cutout_matte(res_id, &input, (w, h), passes);
                         u.p[14][3] = if tex2.is_some() { 1.0 } else { 0.0 };

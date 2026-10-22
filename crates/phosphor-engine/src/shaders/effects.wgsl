@@ -396,6 +396,27 @@ fn fx_cutout(in: VOut) -> @location(0) vec4f {
     return vec4f(c.rgb, c.a * mix(1.0, m, step(0.5, u.p[14].w)));
 }
 
+// Blur Background: the same person matte as Remove Background (tex2); the background blurred, the person sharp
+// (Invert: the other way round). Sharp everywhere until the first matte arrives.
+@fragment
+fn fx_cutout_blur(in: VOut) -> @location(0) vec4f {
+    let c = src(in.uv);
+    if (u.p[14].w < 0.5) {
+        return c;
+    }
+    var m = textureSampleLevel(tex2, samp, in.uv, 0.0).r;
+    m = smoothstep(P(1u) - P(2u), P(1u) + P(2u) + 0.001, m);
+    m = mix(m, 1.0 - m, step(0.5, P(3u)));
+    let step_uv = vec2f(P(0u) * 0.006) * vec2f(u.resolution.y / max(u.resolution.x, 1.0), 1.0);
+    var sum = vec4f(0.0);
+    for (var y = -3; y <= 3; y = y + 1) {
+        for (var x = -3; x <= 3; x = x + 1) {
+            sum = sum + src(in.uv + vec2f(f32(x), f32(y)) * step_uv);
+        }
+    }
+    return mix(sum / 49.0, c, m);
+}
+
 @fragment
 fn fx_gamma(in: VOut) -> @location(0) vec4f {
     let c = src(in.uv);
