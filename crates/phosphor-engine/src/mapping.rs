@@ -560,6 +560,10 @@ pub struct Mesh {
     pub cols: u32,
     pub rows: u32,
     pub points: Vec<[f32; 2]>,
+    /// The input mesh: for each point, which spot of the slice's input picture lands there (0..1 of the input).
+    /// Empty = the regular grid (the picture spread evenly).
+    #[serde(default)]
+    pub input: Vec<[f32; 2]>,
 }
 
 impl Mesh {
@@ -575,7 +579,7 @@ impl Mesh {
                 points.push([(h[0] * s + h[1] * t + h[2]) / w, (h[3] * s + h[4] * t + h[5]) / w]);
             }
         }
-        Self { cols, rows, points }
+        Self { cols, rows, points, input: Vec::new() }
     }
 
     pub fn point(&self, i: u32, j: u32) -> [f32; 2] {
@@ -591,17 +595,41 @@ impl Mesh {
 
     /// Where surface coordinate (s, t) in 0..1 lands, on a smooth curve through the points.
     pub fn eval(&self, s: f32, t: f32) -> [f32; 2] {
-        let fx = s.clamp(0.0, 1.0) * self.cols as f32;
-        let fy = t.clamp(0.0, 1.0) * self.rows as f32;
-        let (i, j) = ((fx.floor() as i32).min(self.cols as i32 - 1), (fy.floor() as i32).min(self.rows as i32 - 1));
-        let (u, v) = (fx - i as f32, fy - j as f32);
-        let p = |a: i32, b: i32| self.point(a.clamp(0, self.cols as i32) as u32, b.clamp(0, self.rows as i32) as u32);
-        let row = |b: i32| {
-            let q = [p(i - 1, b), p(i, b), p(i + 1, b), p(i + 2, b)];
-            [catmull(q[0][0], q[1][0], q[2][0], q[3][0], u), catmull(q[0][1], q[1][1], q[2][1], q[3][1], u)]
-        };
-        let r = [row(j - 1), row(j), row(j + 1), row(j + 2)];
-        [catmull(r[0][0], r[1][0], r[2][0], r[3][0], v), catmull(r[0][1], r[1][1], r[2][1], r[3][1], v)]
+        eval_grid(&self.points, self.cols, self.rows, s, t)
+    }
+
+    /// Which spot of the input picture (0..1) surface coordinate (s, t) shows: on the input mesh's curve, or (s, t).
+    pub fn eval_input(&self, s: f32, t: f32) -> [f32; 2] {
+        if self.has_input() { eval_grid(&self.input, self.cols, self.rows, s, t) } else { [s, t] }
+    }
+
+    /// The input mesh has been changed from the regular grid.
+    pub fn has_input(&self) -> bool {
+        self.input.len() == self.points.len()
+    }
+
+    /// The input mesh's points (the regular grid until it's been changed).
+    pub fn input_points(&self) -> Vec<[f32; 2]> {
+        if self.has_input() {
+            return self.input.clone();
+        }
+        (0..self.points.len())
+            .map(|k| {
+                let (i, j) = self.grid_pos(k);
+                [i as f32 / self.cols as f32, j as f32 / self.rows as f32]
+            })
+            .collect()
+    }
+
+    /// The input mesh on a new grid shape: each new point at (s, t) of the old grid (none while it's regular).
+    fn input_at(&self, cols: u32, rows: u32, st: impl Fn(u32, u32) -> (f32, f32)) -> Vec<[f32; 2]> {
+        if !self.has_input() {
+            return Vec::new();
+        }
+        (0..=rows).flat_map(|j| (0..=cols).map(move |i| (i, j))).map(|(i, j)| {
+            let (s, t) = st(i, j);
+            self.eval_input(s, t)
+        }).collect()
     }
 
     /// The same shape on a finer or coarser grid.
@@ -613,7 +641,8 @@ impl Mesh {
                 points.push(self.eval(i as f32 / cols as f32, j as f32 / rows as f32));
             }
         }
-        Self { cols, rows, points }
+        let input = self.input_at(cols, rows, |i, j| (i as f32 / cols as f32, j as f32 / rows as f32));
+        Self { cols, rows, points, input }
     }
 
     /// (column, row) of point `k`.
@@ -637,7 +666,10 @@ impl Mesh {
                 }
             }
         }
-        Some(Self { cols: self.cols + 1, rows: self.rows, points })
+        // The new column sits half way through cell `i`, so new column c maps back to old (c, or c - 0.5 past i).
+        let old = |c: u32| if c <= i { c as f32 } else if c == i + 1 { i as f32 + 0.5 } else { c as f32 - 1.0 };
+        let input = self.input_at(self.cols + 1, self.rows, |c, j| (old(c) / self.cols as f32, j as f32 / self.rows as f32));
+        Some(Self { cols: self.cols + 1, rows: self.rows, points, input })
     }
 
     /// One more row of points, through the middle of the cells below row `j`.
@@ -656,7 +688,9 @@ impl Mesh {
                 }
             }
         }
-        Some(Self { cols: self.cols, rows: self.rows + 1, points })
+        let old = |r: u32| if r <= j { r as f32 } else if r == j + 1 { j as f32 + 0.5 } else { r as f32 - 1.0 };
+        let input = self.input_at(self.cols, self.rows + 1, |c, r| (c as f32 / self.cols as f32, old(r) / self.rows as f32));
+        Some(Self { cols: self.cols, rows: self.rows + 1, points, input })
     }
 
     /// Without column `i` (an inner one: the outer edges stay).
@@ -664,8 +698,10 @@ impl Mesh {
         if i == 0 || i >= self.cols {
             return None;
         }
-        let points = self.points.iter().enumerate().filter(|(k, _)| self.grid_pos(*k).0 != i).map(|(_, p)| *p).collect();
-        Some(Self { cols: self.cols - 1, rows: self.rows, points })
+        let keep = |k: &usize| self.grid_pos(*k).0 != i;
+        let points = self.points.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
+        let input = self.input.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
+        Some(Self { cols: self.cols - 1, rows: self.rows, points, input })
     }
 
     /// Without row `j` (an inner one).
@@ -673,8 +709,10 @@ impl Mesh {
         if j == 0 || j >= self.rows {
             return None;
         }
-        let points = self.points.iter().enumerate().filter(|(k, _)| self.grid_pos(*k).1 != j).map(|(_, p)| *p).collect();
-        Some(Self { cols: self.cols, rows: self.rows - 1, points })
+        let keep = |k: &usize| self.grid_pos(*k).1 != j;
+        let points = self.points.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
+        let input = self.input.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
+        Some(Self { cols: self.cols, rows: self.rows - 1, points, input })
     }
 
     /// Triangles for drawing: each vertex is (x, y, s, t). Subdivided finely enough to look smooth.
@@ -686,7 +724,8 @@ impl Mesh {
             for i in 0..=nx {
                 let (s, t) = (i as f32 / nx as f32, j as f32 / ny as f32);
                 let [x, y] = self.eval(s, t);
-                grid.push([x, y, s, t]);
+                let [u, v] = self.eval_input(s, t);
+                grid.push([x, y, u, v]);
             }
         }
         let at = |i: u32, j: u32| grid[(j * (nx + 1) + i) as usize];
@@ -699,6 +738,24 @@ impl Mesh {
         }
         out
     }
+}
+
+/// (s, t) in 0..1 on a smooth (Catmull-Rom) surface through a `(cols + 1) × (rows + 1)` grid of points.
+fn eval_grid(pts: &[[f32; 2]], cols: u32, rows: u32, s: f32, t: f32) -> [f32; 2] {
+    let fx = s.clamp(0.0, 1.0) * cols as f32;
+    let fy = t.clamp(0.0, 1.0) * rows as f32;
+    let (i, j) = ((fx.floor() as i32).min(cols as i32 - 1), (fy.floor() as i32).min(rows as i32 - 1));
+    let (u, v) = (fx - i as f32, fy - j as f32);
+    let p = |a: i32, b: i32| {
+        let (a, b) = (a.clamp(0, cols as i32) as u32, b.clamp(0, rows as i32) as u32);
+        pts.get((b * (cols + 1) + a) as usize).copied().unwrap_or([0.0, 0.0])
+    };
+    let row = |b: i32| {
+        let q = [p(i - 1, b), p(i, b), p(i + 1, b), p(i + 2, b)];
+        [catmull(q[0][0], q[1][0], q[2][0], q[3][0], u), catmull(q[0][1], q[1][1], q[2][1], q[3][1], u)]
+    };
+    let r = [row(j - 1), row(j), row(j + 1), row(j + 2)];
+    [catmull(r[0][0], r[1][0], r[2][0], r[3][0], v), catmull(r[0][1], r[1][1], r[2][1], r[3][1], v)]
 }
 
 fn catmull(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
@@ -1845,5 +1902,34 @@ mod calibration_tests {
         assert!((m.fov - truth.fov).abs() < 1.0, "fov {}", m.fov);
         // Fewer than four pins: nothing to solve.
         assert!(Model3d { pins: pins[..3].to_vec(), ..Default::default() }.solve(aspect).is_none());
+    }
+}
+
+#[cfg(test)]
+mod input_mesh_tests {
+    use super::*;
+
+    #[test]
+    fn the_input_mesh_chooses_what_each_point_shows() {
+        let corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let mut m = Mesh::from_corners(&corners, 2, 2);
+        assert_eq!(m.eval_input(0.3, 0.7), [0.3, 0.7], "regular until changed");
+        // The middle point shows the input's (0.25, 0.25) instead of its middle.
+        let mut input = m.input_points();
+        input[4] = [0.25, 0.25];
+        m.input = input;
+        let at = m.eval_input(0.5, 0.5);
+        assert!((at[0] - 0.25).abs() < 1e-5 && (at[1] - 0.25).abs() < 1e-5);
+        let tri = m.triangles();
+        assert!(tri.iter().any(|v| (v[0] - 0.5).abs() < 1e-4 && (v[1] - 0.5).abs() < 1e-4 && (v[2] - 0.25).abs() < 1e-4), "drawn with it");
+        // Grid changes keep it.
+        let more = m.with_column_after(0).unwrap();
+        assert_eq!(more.input.len(), more.points.len());
+        // The old middle point is new column 2 of 3: the same spot of the picture there.
+        assert!((more.eval_input(2.0 / 3.0, 0.5)[0] - 0.25).abs() < 1e-4, "the same picture where it was");
+        assert_eq!(more.point(2, 1), m.point(1, 1));
+        let fewer = more.without_column(1).unwrap();
+        assert_eq!(fewer.input.len(), fewer.points.len());
+        assert_eq!(m.resized(4, 4).input.len(), 25);
     }
 }

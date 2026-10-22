@@ -749,6 +749,35 @@ fn input_view(
             s.input[0] = (s.input[0] + d[0]).clamp(0.0, 1.0 - s.input[2]);
             s.input[1] = (s.input[1] + d[1]).clamp(0.0, 1.0 - s.input[3]);
         }
+        // A mesh slice: its input mesh (which part of the picture lands at each mesh point), point by point.
+        let [ix, iy, iw, ih] = s.input;
+        if let Some(mesh) = &mut s.mesh {
+            let pts = mesh.input_points();
+            let at = |p: [f32; 2]| to_screen(ix + p[0] * iw, iy + p[1] * ih);
+            let line = Stroke::new(1.0, color.gamma_multiply(0.5));
+            for (k, q) in pts.iter().enumerate() {
+                let (i, j) = mesh.grid_pos(k);
+                if i < mesh.cols {
+                    p.line_segment([at(*q), at(pts[k + 1])], line);
+                }
+                if j < mesh.rows {
+                    p.line_segment([at(*q), at(pts[k + mesh.cols as usize + 1])], line);
+                }
+            }
+            let mut moved = None;
+            for (k, pt) in pts.iter().enumerate() {
+                let mut d = [0.0, 0.0];
+                point_handle(ui, ui.id().with(("in_mesh", s.id, k)), at(*pt), frame, color.gamma_multiply(0.8), false, &mut d);
+                if d != [0.0, 0.0] {
+                    moved = Some((k, [(pt[0] + d[0] / iw.max(0.01)).clamp(0.0, 1.0), (pt[1] + d[1] / ih.max(0.01)).clamp(0.0, 1.0)]));
+                }
+            }
+            if let Some((k, to)) = moved {
+                let mut input = pts.clone();
+                input[k] = to;
+                mesh.input = input;
+            }
+        }
     }
 }
 

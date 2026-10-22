@@ -89,7 +89,8 @@ impl Surface {
             for i in 0..=n {
                 let (s, t) = (i as f32 / n as f32, j as f32 / n as f32);
                 let [x, y] = self.warp_at(s, t);
-                grid.push([x, y, s, t]);
+                let [u, v] = self.mesh.as_ref().map_or([s, t], |m| m.eval_input(s, t));
+                grid.push([x, y, u, v]);
             }
         }
         let at = |i: u32, j: u32| grid[(j * (n + 1) + i) as usize];
