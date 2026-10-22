@@ -525,8 +525,8 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
                 level.show(ui);
             });
         };
-        row(ui, &mut t.x, -1.0..=1.0, "X", ControlTarget::LayerX(id), None, false, 0.0);
-        row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), None, false, 0.0);
+        row(ui, &mut t.x, -1.0..=1.0, "X", ControlTarget::LayerX(id), Some(&mut t.x_mod), false, 0.0);
+        row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), Some(&mut t.y_mod), false, 0.0);
         row(ui, &mut t.scale, 0.05..=4.0, "Scale", ControlTarget::LayerScale(id), Some(&mut t.scale_mod), true, 1.0);
         row(ui, &mut t.rotation, -180.0..=180.0, "Rotation °", ControlTarget::LayerRotation(id), Some(&mut t.rotation_mod), false, 0.0);
         // Corner pin: the picture into any four points (drag them on the preview, or type them here).

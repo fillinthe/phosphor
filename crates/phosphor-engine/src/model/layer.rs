@@ -255,6 +255,9 @@ pub struct LayerTransform {
     pub flip_y: bool,
     pub scale_mod: Option<Modulation>,
     pub rotation_mod: Option<Modulation>,
+    /// Movement on the position (a face to follow, an LFO sway…).
+    pub x_mod: Option<Modulation>,
+    pub y_mod: Option<Modulation>,
     /// Cut off the picture's edges (left, right, top, bottom; fractions of the picture), before it's placed.
     pub crop: [f32; 4],
     /// Corner pin (VDMX's quad mode): the picture stretched into these four points of the canvas (top-left,
@@ -265,7 +268,7 @@ pub struct LayerTransform {
 
 impl Default for LayerTransform {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, scale: 1.0, stretch_x: 1.0, stretch_y: 1.0, rotation: 0.0, flip_x: false, flip_y: false, scale_mod: None, rotation_mod: None, crop: [0.0; 4], corners: None }
+        Self { x: 0.0, y: 0.0, scale: 1.0, stretch_x: 1.0, stretch_y: 1.0, rotation: 0.0, flip_x: false, flip_y: false, scale_mod: None, rotation_mod: None, x_mod: None, y_mod: None, crop: [0.0; 4], corners: None }
     }
 }
 
