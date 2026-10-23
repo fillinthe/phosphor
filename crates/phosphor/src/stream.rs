@@ -126,6 +126,10 @@ pub struct StreamSettings {
     pub source: u64,
     /// Start and stop on the next bar of the clock.
     pub on_bar: bool,
+    /// A sound file mixed in from its own timing, starting this many seconds into the movie (negative = from
+    /// partway into the sound): an offline render's soundtrack. Not saved.
+    #[serde(skip)]
+    pub sound_file: Option<(String, f64)>,
 }
 
 /// The monitor key a recording of one layer / group / comp reads its frames from.
@@ -155,6 +159,7 @@ impl Default for StreamSettings {
             secure: true,
             source: 0,
             on_bar: false,
+            sound_file: None,
         }
     }
 }
@@ -533,7 +538,17 @@ impl Streamer {
         let whip = s.destination == Destination::Whip;
         let audio_device = if self.mute_audio { -1 } else { s.audio_device };
         let program = s.program_sound && !self.mute_audio;
-        let has_audio = audio_device >= 0 || program;
+        // A sound file (an offline render's soundtrack), when nothing live is recorded.
+        let file_sound = s.sound_file.clone().filter(|_| audio_device < 0 && !program);
+        let has_audio = audio_device >= 0 || program || file_sound.is_some();
+        if let Some((path, offset)) = &file_sound {
+            if *offset >= 0.0 {
+                args.extend(["-itsoffset".to_string(), format!("{offset:.3}")]);
+            } else {
+                args.extend(["-ss".to_string(), format!("{:.3}", -offset)]);
+            }
+            args.extend(["-i".to_string(), path.clone()]);
+        }
         if audio_device >= 0 {
             // Program audio from a capture device (a mic, or a loopback like BlackHole for the DJ feed).
             args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-i", &format!(":{audio_device}")].map(String::from));
@@ -555,6 +570,10 @@ impl Streamer {
             let codec: &[&str] = if whip { &["-c:a", "opus", "-strict", "-2", "-b:a", "128k", "-ac", "2"] } else { &["-c:a", "aac", "-b:a", "160k"] };
             args.extend(codec.iter().map(|a| a.to_string()));
             args.extend(["-ar", "48000"].map(String::from));
+            if file_sound.is_some() {
+                // The movie is as long as its pictures.
+                args.push("-shortest".into());
+            }
         } else {
             args.push("-an".into());
         }

@@ -1,6 +1,7 @@
 //! Render the show to a movie offline: the show's clock steps one frame at a time and each frame waits for every
 //! movie's picture, so a show too heavy to play smoothly still comes out smooth (no dropped or repeated frames).
-//! It never runs ahead of real time, so the app's clock just carries on afterwards. Picture only (no sound yet).
+//! It never runs ahead of real time, so the app's clock just carries on afterwards. The timeline's sound track goes
+//! in (not movie sounds; Hap files get no sound).
 
 use super::State;
 use crate::stream::{Destination, FileFormat, StreamSettings};
@@ -93,6 +94,9 @@ impl State {
             kbps: saved.0.kbps.max(20_000),
             ..Default::default()
         };
+        // The timeline's sound track, in step: it starts `start` seconds into the timeline.
+        let from = if setup.from_start { 0.0 } else { self.timeline_pos };
+        self.stream.settings.sound_file = self.comp.timeline.sound.as_ref().filter(|s| !s.path.is_empty()).map(|s| (s.path.clone(), s.start - from));
         self.stream.mute_audio = true;
         self.stream.offline = true;
         if setup.from_start {

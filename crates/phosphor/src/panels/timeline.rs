@@ -237,7 +237,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
             }
         });
         crate::ui::toggle(ui, &mut o.from_start, "Timeline from the start");
-        hint(ui, "Frame by frame: every movie waits for its picture, so a heavy show comes out smooth. No faster than real time. Picture only, no sound yet.");
+        hint(ui, "Frame by frame: every movie waits for its picture, so a heavy show comes out smooth. No faster than real time. The timeline's sound track goes in (not the movies' own sound; Hap files have no sound).");
         if action_button(ui, Act::Record, label(icon::RECORD, "Render")).clicked() {
             let setup = st.offline_setup.clone();
             st.offline_start(&setup, now);
