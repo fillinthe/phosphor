@@ -72,7 +72,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
         && let Some(p) = resp.interact_pointer_pos()
     {
         let uv = [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
-        mouse_into_shaders(st, uv);
+        mouse_into_shaders(st, uv, ui.input(|i| i.pointer.primary_down()));
     }
     // Eyedropper: a colour button is waiting for a click on the picture.
     if crate::ui::eyedropper::armed(ui.ctx()).is_some() {
@@ -149,18 +149,21 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
-/// Puts the selected layer's shader points (its generator's and effects') where the mouse is in the picture.
-fn mouse_into_shaders(st: &mut State, uv: [f32; 2]) {
+/// Puts the selected layer's shader points (its generator's and effects') where the mouse is in the picture, and
+/// holds their Mouse down button while it's pressed (Shadertoy's iMouse).
+fn mouse_into_shaders(st: &mut State, uv: [f32; 2], down: bool) {
     use phosphor_engine::shaders;
     let Some(layer) = st.selected.and_then(|id| st.comp.layer_mut(id)) else { return };
     if let SourceSpec::Generator(g) = &layer.source
         && let Some(d) = shaders::generator(g)
     {
         shaders::set_points(d.params, &mut layer.generator_values, uv);
+        shaders::set_mouse_down(d.params, &mut layer.generator_values, down);
     }
     for fx in &mut layer.effects {
         if let Some(d) = shaders::effect(&fx.effect) {
             shaders::set_points(d.params, &mut fx.values, uv);
+            shaders::set_mouse_down(d.params, &mut fx.values, down);
         }
     }
 }

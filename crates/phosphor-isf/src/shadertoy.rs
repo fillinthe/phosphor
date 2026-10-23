@@ -1,7 +1,7 @@
 //! Shadertoy (single pass) → ISF, so a shader pasted from shadertoy.com plays in Phosphor.
 //!
 //! Shadertoy's `void mainImage(out vec4 fragColor, in vec2 fragCoord)` with `iTime`, `iResolution`, `iFrame`,
-//! `iTimeDelta`, `iDate`, `iMouse` and `iChannel0..3` becomes an ISF shader: a generator, or an effect on the
+//! `iTimeDelta`, `iDate`, `iMouse` (a Mouse point + Mouse down, moved from the preview) and `iChannel0..3` becomes an ISF shader: a generator, or an effect on the
 //! layer's picture when it reads `iChannel0`. Other channels are blank pictures (their textures aren't part of the
 //! code). Shaders with several buffers (Buffer A…D) need each pass pasted separately; only the Image pass is read.
 
@@ -21,14 +21,26 @@ pub fn to_isf(source: &str, credit: &str) -> Result<String, String> {
             inputs.push(format!(r#"{{"NAME": "iChannel{n}", "TYPE": "image"}}"#));
         }
     }
+    // iMouse: a point the preview's mouse moves (Mouse X / Y) and a button held while dragging (Mouse down).
+    let mouse = uses("iMouse");
+    if mouse {
+        inputs.push(r#"{"NAME": "phosphorMouse", "LABEL": "Mouse", "TYPE": "point2D", "DEFAULT": [0.5, 0.5], "MIN": [0.0, 0.0], "MAX": [1.0, 1.0]}"#.into());
+        inputs.push(r#"{"NAME": "phosphorMouseDown", "LABEL": "Mouse down", "TYPE": "bool", "DEFAULT": false}"#.into());
+    }
     let header = format!(
         "/*{{\n\"DESCRIPTION\": \"Imported from Shadertoy\",\n\"CREDIT\": {},\n\"ISFVSN\": \"2\",\n\"CATEGORIES\": [\"Shadertoy\"],\n\"INPUTS\": [\n{}\n]\n}}*/\n",
         json_str(credit),
         inputs.join(",\n")
     );
     let mut defines = String::from(
-        "#define iTime TIME\n#define iResolution vec3(RENDERSIZE, 1.0)\n#define iFrame FRAMEINDEX\n#define iTimeDelta TIMEDELTA\n#define iDate DATE\n#define iMouse vec4(0.0)\n#define iSampleRate 44100.0\n#define iChannelResolution (vec3[4](vec3(RENDERSIZE, 1.0), vec3(RENDERSIZE, 1.0), vec3(RENDERSIZE, 1.0), vec3(RENDERSIZE, 1.0)))\n",
+        "#define iTime TIME\n#define iResolution vec3(RENDERSIZE, 1.0)\n#define iFrame FRAMEINDEX\n#define iTimeDelta TIMEDELTA\n#define iDate DATE\n#define iSampleRate 44100.0\n#define iChannelResolution (vec3[4](vec3(RENDERSIZE, 1.0), vec3(RENDERSIZE, 1.0), vec3(RENDERSIZE, 1.0), vec3(RENDERSIZE, 1.0)))\n",
     );
+    // Shadertoy's iMouse: xy = where the mouse is (pixels), zw = where it was pressed, negative once let go.
+    defines.push_str(if mouse {
+        "#define iMouse vec4(phosphorMouse * RENDERSIZE, (phosphorMouseDown ? 1.0 : -1.0) * phosphorMouse * RENDERSIZE)\n"
+    } else {
+        "#define iMouse vec4(0.0)\n"
+    });
     if effect {
         defines.push_str("#define iChannel0 inputImage\n");
     }
@@ -75,6 +87,19 @@ mod tests {
         let sh = crate::import("st_ray", &isf, None).expect("imports");
         assert!(!sh.is_filter && sh.unsupported.is_none(), "{:?}", sh.unsupported);
         crate::validate_wgsl(&sh.wgsl).expect("valid WGSL");
+    }
+
+    /// iMouse: the shader gets a Mouse point and a Mouse down button (the preview moves and holds them).
+    #[test]
+    fn imouse_becomes_a_mouse_point_and_button() {
+        const MOUSE: &str = "void mainImage(out vec4 o, in vec2 p) {\n    vec2 m = iMouse.xy / iResolution.xy;\n    o = vec4(m, iMouse.z > 0.0 ? 1.0 : 0.0, 1.0);\n}\n";
+        let isf = super::to_isf(MOUSE, "test").unwrap();
+        let sh = crate::import("st_mouse", &isf, None).expect("imports");
+        assert!(sh.unsupported.is_none(), "{:?}", sh.unsupported);
+        crate::validate_wgsl(&sh.wgsl).expect("valid WGSL");
+        let labels: Vec<&str> = sh.inputs.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Mouse", "Mouse down"]);
+        assert!(!super::to_isf(DEFAULT, "").unwrap().contains("phosphorMouse"), "only shaders that use it get one");
     }
 
     #[test]

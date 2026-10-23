@@ -71,6 +71,16 @@ pub fn set_points(params: &[Param], values: &mut Vec<f32>, uv: [f32; 2]) -> bool
     !pairs.is_empty()
 }
 
+/// Holds (or lets go of) every "Mouse down" setting of `params` (Shadertoy's iMouse button).
+pub fn set_mouse_down(params: &[Param], values: &mut Vec<f32>, down: bool) {
+    while values.len() < params.len() {
+        values.push(params[values.len()].default);
+    }
+    for (i, p) in params.iter().enumerate().filter(|(_, p)| p.name == "Mouse down") {
+        values[i] = if down { p.max } else { p.min };
+    }
+}
+
 #[cfg(test)]
 mod point_tests {
     use super::*;
