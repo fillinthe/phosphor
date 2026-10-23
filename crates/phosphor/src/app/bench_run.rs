@@ -84,6 +84,11 @@ impl PhosphorApp {
             println!("VCAM connected={} status={:?}", self.state.vcam.connected(), crate::virtual_camera::status());
         }
         #[cfg(not(target_arch = "wasm32"))]
+        if !self.state.comp.live_data.readings().is_empty() {
+            let vals: Vec<String> = self.state.comp.live_data.readings().iter().map(|n| format!("{n}={:?}", self.state.comp.hand(n))).collect();
+            println!("LIVEDATA {} problems={:?}", vals.join(" "), self.state.feeds.problems);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(line) = self.state.online.bench_line() {
             let credits = self.state.comp.media_bin.iter().filter(|m| m.credit.is_some()).count();
             let layer = self.state.comp.layers.last().map(|l| l.source.label()).unwrap_or_default();
@@ -641,6 +646,14 @@ impl PhosphorApp {
                 self.state.timeline_seek(0.0, now);
                 self.state.timeline_toggle(now);
                 println!("QUICK timeline: {} events", self.state.comp.timeline.events.len());
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "livedata" {
+                // Live data: weather in Reykjavik, the ISS and earthquakes on (a LIVEDATA line at the end).
+                let d = &mut self.state.comp.live_data;
+                (d.weather, d.place, d.latitude, d.longitude, d.iss, d.quakes) = (true, "Reykjavik".into(), 64.135, -21.895, true, true);
+                println!("QUICK livedata");
                 continue;
             }
             #[cfg(not(target_arch = "wasm32"))]
