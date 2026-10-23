@@ -30,6 +30,8 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     });
     #[cfg(not(target_arch = "wasm32"))]
     super::tracking::tracking_section(ui, st);
+    #[cfg(not(target_arch = "wasm32"))]
+    super::live_data::live_data_section(ui, st);
     let mut remove = None;
     let mut moves: Option<(usize, usize)> = None;
     let earlier: Vec<(u64, String)> = st.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();

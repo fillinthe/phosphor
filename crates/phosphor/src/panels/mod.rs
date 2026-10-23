@@ -31,6 +31,8 @@ mod inputs;
 #[cfg(not(target_arch = "wasm32"))]
 mod online;
 #[cfg(not(target_arch = "wasm32"))]
+mod live_data;
+#[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;
 mod modulators;
 mod sequencer;

@@ -33,6 +33,8 @@ mod remap;
 mod source;
 mod surface;
 mod tracking;
+mod live_data;
+pub use live_data::*;
 
 pub use choice::*;
 pub use clip_play::*;

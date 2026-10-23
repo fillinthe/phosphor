@@ -179,6 +179,9 @@ pub struct State {
     /// Library › Online: searches and downloads from free media libraries.
     #[cfg(not(target_arch = "wasm32"))]
     pub online: crate::panels::Online,
+    /// Modulators › Live data: weather, the ISS, earthquakes.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub feeds: crate::live_data::Feeds,
     /// Shader Editor › Describe it… (the AI writes a shader).
     #[cfg(not(target_arch = "wasm32"))]
     pub ai_shader: crate::panels::AiShader,

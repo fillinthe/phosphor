@@ -212,7 +212,7 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
 - [ ] O9. **DMX fixture definitions**: Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving
   head / LED bar by name instead of typing channels.
 - [x] O10. **MilkDrop presets** (Online › Visualizers: the whole Cream of the Crop pack, searchable): projectM's preset packs ("cream of the crop") once #93 lands.
-- [ ] O11. **Live data that moves visuals** (as modulators): weather (Open-Meteo, no key), earthquakes (USGS), the ISS
+- [~] O11. **Live data that moves visuals** (weather, ISS and earthquakes done as modulators; RSS/news into text layers and a world clock still to do) (as modulators): weather (Open-Meteo, no key), earthquakes (USGS), the ISS
   position, RSS / news headlines into text layers, a clock in any city.
 - [ ] O12. **Live pictures**: public webcams and space feeds (NASA / ISS live streams) as live layers; GIFs from
   Giphy / Tenor (keys). The "From a link" yt-dlp route already covers pasted video links.
