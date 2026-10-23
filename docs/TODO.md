@@ -160,7 +160,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Timeline › Render…: file, format (H.264, ProRes, Hap, HEVC), fps, length; the show's clock steps a frame at a time and every movie waits for its picture, so nothing drops or repeats. No faster than real time. Left: the sound mix. Checked: bench `--render` with a counting movie (1080p H.264 and 4K ProRes: all 60 frames, in order, 5 runs out of 5).
 - [x] 88. **Record DMX** output and play it back (M).
 - [ ] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration exist.
-- [~] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view). Left: handles on each point.
+- [x] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view); handles on each mesh point (select a point: drag its tips across and down; right-click › Straighten). Checked: tests (no handles = the same surface as before; GPU: a handle moves the picture, straightening restores it).
 - [x] 91. **Read text and QR codes** from video into data (V).
 - [ ] 92. **LED scanner**: a camera finds each LED and places the fixtures (M).
 - [ ] 93. **MilkDrop visualiser** (projectM) (V).

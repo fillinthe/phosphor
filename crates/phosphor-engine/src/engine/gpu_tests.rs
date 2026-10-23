@@ -576,3 +576,35 @@ fn averaged_led_pixels_sample_on_the_gpu() {
         assert!(px[0].abs_diff(128) < 3 && px[1].abs_diff(64) < 3 && px[2] > 250, "{px:?}");
     }
 }
+
+/// Mesh handles reach the output: bending a mesh point's curve moves the picture between the points (and the
+/// cached mesh is rebuilt for it), straightening it puts the picture back.
+#[test]
+fn mesh_handles_bend_the_output() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 64, height: 64, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
+    let out = comp.add_output();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    (o.width, o.height) = (64, 64);
+    o.mapping.enabled = true;
+    let s = o.mapping.add_surface(50);
+    s.corners = [[0.2, 0.2], [0.8, 0.2], [0.8, 0.8], [0.2, 0.8]];
+    s.mesh = Some(crate::mapping::Mesh::from_corners(&s.corners, 2, 2));
+    let lit = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (_, _, px) = engine.read_output_of(out).expect("output");
+        px.chunks(4).map(|p| p[0] > 128).collect::<Vec<_>>()
+    };
+    let flat = lit(&mut engine, &comp);
+    // The top edge's middle point: its curve across pulled steeply up and down (an S along the edge).
+    fn mesh(comp: &mut Composition) -> &mut crate::mapping::Mesh {
+        comp.outputs[0].mapping.surfaces[0].mesh.as_mut().unwrap()
+    }
+    mesh(&mut comp).set_direction(1, 0, [0.3, 0.4]);
+    let bent = lit(&mut engine, &comp);
+    let moved = flat.iter().zip(&bent).filter(|(a, b)| a != b).count();
+    assert!(moved > 20, "{moved} pixels changed");
+    mesh(&mut comp).reset_handles(1);
+    assert_eq!(lit(&mut engine, &comp), flat, "straightened: as before");
+}

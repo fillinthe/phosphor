@@ -112,10 +112,24 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         let locked = s.locked;
         let sid = s.id;
         let picked = super::mapping_points::selected_point(ui.ctx()).filter(|(p, _)| *p == sid).map(|(_, i)| i);
+        // Mesh points bent by hand get a Straighten item.
+        let bent: Vec<bool> = match (&s.line, &s.mesh) {
+            (None, Some(m)) => (0..m.points.len()).map(|k| m.has_handles(k)).collect(),
+            _ => Vec::new(),
+        };
+        let mut straighten = None;
         let points = if locked { Vec::new() } else { super::mapping_points::points_mut(s) };
         for (i, p) in points.into_iter().enumerate() {
             let mut d = [0.0, 0.0];
             let r = point_handle(ui, id.with(i), to_screen(*p), frame, base, false, &mut d);
+            if bent.get(i).copied().unwrap_or(false) {
+                r.clone().right_menu(|ui| {
+                    if ui.button("Straighten").on_hover_text("This point's handles back to the automatic smooth curve").clicked() {
+                        straighten = Some(i);
+                        ui.close();
+                    }
+                });
+            }
             if r.clicked() || r.drag_started() {
                 *selected = Some(sid);
                 super::mapping_points::select_point(ui.ctx(), Some((sid, i)));
@@ -128,6 +142,34 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             p[0] += d[0];
             p[1] += d[1];
             touched |= d != [0.0, 0.0];
+        }
+        if let (Some(k), Some(m)) = (straighten, s.mesh.as_mut()) {
+            m.reset_handles(k);
+            touched = true;
+        }
+        // Mesh handles (the selected mesh point): across and down, a tip each side; dragging one bends the mesh's
+        // curve through the point (the other side mirrors it).
+        if is_selected
+            && !locked
+            && s.line.is_none()
+            && let (Some(k), Some(m)) = (picked, s.mesh.as_mut())
+            && k < m.points.len()
+        {
+            let p = m.points[k];
+            let dirs = m.direction(k);
+            for (dir, m_dir) in dirs.iter().enumerate() {
+                for sign in [1.0f32, -1.0] {
+                    let tip = [p[0] + m_dir[0] * sign / 3.0, p[1] + m_dir[1] * sign / 3.0];
+                    ui.painter().line_segment([to_screen(p), to_screen(tip)], Stroke::new(1.0, base.gamma_multiply(0.6)));
+                    let mut d = [0.0, 0.0];
+                    let hr = bezier_handle(ui, id.with(("mesh_handle", k, dir, sign as i8)), to_screen(tip), frame, base, &mut d);
+                    if d != [0.0, 0.0] {
+                        m.set_direction(k, dir, [(tip[0] + d[0] - p[0]) * 3.0 * sign, (tip[1] + d[1] - p[1]) * 3.0 * sign]);
+                        touched = true;
+                    }
+                    hr.on_hover_text("Drag to bend the mesh through this point (the other side mirrors it). Right-click the point › Straighten to undo.");
+                }
+            }
         }
         // Curved edges (selected slice): two handles per edge, each joined to its corner.
         if is_selected
