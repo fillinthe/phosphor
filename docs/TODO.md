@@ -202,9 +202,9 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
   effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label
   them). Overlaps #94.
 - [ ] O4. **Lottie animations**: LottieFiles' free animations (once Lottie clips land, #81).
-- [ ] O5. **Icons and vector shapes**: Iconify (200,000+ open-licence SVG icons, one API, no key), Phosphor icons,
+- [~] O5. **Icons and vector shapes** (Iconify done: every open icon set, white SVG; emoji sets come with it): Iconify (200,000+ open-licence SVG icons, one API, no key), Phosphor icons,
   OpenMoji / Twemoji (emoji as SVG): as SVG clips or text-layer symbols.
-- [ ] O6. **3D models, textures, HDRIs**: Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
+- [~] O6. **3D models, textures, HDRIs** (Poly Haven textures done; models and HDRIs next): Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
   models, Smithsonian 3D: for 3D-model slices and textures.
 - [ ] O7. **Music and sound**: Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
   audio, Pixabay music: clip sound, timeline sound tracks, and something for the beat detection to follow.

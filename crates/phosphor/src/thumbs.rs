@@ -141,7 +141,12 @@ mod native {
         };
         let name = path.to_ascii_lowercase();
         let img = if path.starts_with("https://") {
-            image::load_from_memory(&crate::online::get_bytes(path).ok()?).ok()?.thumbnail(size, size)
+            let bytes = crate::online::get_bytes(path).ok()?;
+            if path.split('?').next().is_some_and(|p| p.ends_with(".svg")) {
+                image::DynamicImage::ImageRgba8(crate::media::render_svg_sized(&bytes, size as f32).ok()?)
+            } else {
+                image::load_from_memory(&bytes).ok()?.thumbnail(size, size)
+            }
         } else if crate::media::is_movie(&name) {
             let ffmpeg = crate::stream::ffmpeg_path()?;
             // An image sequence: where its numbers start and its frame rate, before the input.

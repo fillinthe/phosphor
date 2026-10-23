@@ -17,10 +17,12 @@ pub enum Source {
     Commons,
     Archive,
     Artic,
+    Iconify,
+    PolyHaven,
 }
 
 impl Source {
-    pub const ALL: [Source; 5] = [Source::Nasa, Source::Commons, Source::Archive, Source::Openverse, Source::Artic];
+    pub const ALL: [Source; 7] = [Source::Nasa, Source::Commons, Source::Archive, Source::Openverse, Source::Artic, Source::Iconify, Source::PolyHaven];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -29,6 +31,8 @@ impl Source {
             Source::Commons => "Wikimedia Commons",
             Source::Archive => "Internet Archive",
             Source::Artic => "Art Institute of Chicago",
+            Source::Iconify => "Iconify",
+            Source::PolyHaven => "Poly Haven",
         }
     }
 
@@ -39,6 +43,8 @@ impl Source {
             Source::Commons => "Wikipedia's media library: photos and videos under open licences.",
             Source::Archive => "Old films from the Prelinger Archives (ads, educational and industrial films). Public domain.",
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
+            Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
+            Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
         }
     }
 
@@ -48,6 +54,8 @@ impl Source {
             Source::Nasa | Source::Commons => &[Kind::Video, Kind::Picture],
             Source::Archive => &[Kind::Video],
             Source::Openverse | Source::Artic => &[Kind::Picture],
+            Source::Iconify => &[Kind::Icon],
+            Source::PolyHaven => &[Kind::Texture],
         }
     }
 
@@ -77,10 +85,23 @@ impl Source {
                 let search = url_encode(&format!("({}) AND mediatype:movies AND collection:prelinger", query.trim()));
                 format!("https://archive.org/advancedsearch.php?q={search}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=year&rows={PAGE}&page={page}&output=json")
             }
+            // Iconify pages hold at least 32.
+            Source::Iconify => format!("https://api.iconify.design/search?query={q}&limit=32&start={}", (page - 1) * 32),
+            // Poly Haven has no search: the whole list (filtered here, `poly_haven`).
+            Source::PolyHaven => "https://api.polyhaven.com/assets?type=textures".to_string(),
             Source::Artic => format!(
                 "https://api.artic.edu/api/v1/artworks/search?q={q}&query%5Bterm%5D%5Bis_public_domain%5D=true&fields=id,title,artist_title,image_id&limit={PAGE}&page={page}"
             ),
         }
+    }
+
+    /// The items in a search answer (for a library without its own search: the matches for `query` on `page`).
+    pub fn parse_page(self, kind: Kind, query: &str, page: usize, body: &[u8]) -> Result<Vec<Item>, String> {
+        if self == Source::PolyHaven {
+            let v: Value = serde_json::from_slice(body).map_err(|_| format!("{} sent something unreadable", self.name()))?;
+            return Ok(poly_haven(&v, query, page));
+        }
+        self.parse(kind, body)
     }
 
     /// The items in a search answer.
@@ -92,6 +113,8 @@ impl Source {
             Source::Commons => commons(&v, kind),
             Source::Archive => archive(&v),
             Source::Artic => artic(&v),
+            Source::Iconify => iconify(&v),
+            Source::PolyHaven => poly_haven(&v, "", 1),
         })
     }
 }
@@ -314,6 +337,85 @@ fn artic(v: &Value) -> Vec<Item> {
         .collect()
 }
 
+fn iconify(v: &Value) -> Vec<Item> {
+    let sets = &v["collections"];
+    v["icons"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|i| {
+            let id = text(i);
+            let (prefix, name) = id.split_once(':')?;
+            let set = &sets[prefix];
+            let svg = format!("https://api.iconify.design/{prefix}/{name}.svg?color=white");
+            Some(Item {
+                source: Source::Iconify,
+                kind: Kind::Icon,
+                title: format!("{} ({})", name.replace('-', " "), text(&set["name"])),
+                thumb: format!("{svg}&height=192"),
+                file: Some(format!("{svg}&height=1024")),
+                list: String::new(),
+                size: None,
+                credit: phosphor_engine::Credit {
+                    title: name.replace('-', " "),
+                    author: text(&set["author"]["name"]),
+                    licence: text(&set["license"]["title"]),
+                    licence_url: text(&set["license"]["url"]),
+                    page: format!("https://icon-sets.iconify.design/{prefix}/{name}/"),
+                    source: format!("Iconify ({})", text(&set["name"])),
+                },
+                id: id.clone(),
+            })
+        })
+        .collect()
+}
+
+/// Poly Haven's texture list, matched against every word of `query` (name, tags, categories), most downloaded first.
+fn poly_haven(v: &Value, query: &str, page: usize) -> Vec<Item> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let Some(all) = v.as_object() else { return Vec::new() };
+    let mut found: Vec<(&String, &Value)> = all
+        .iter()
+        .filter(|(id, a)| {
+            let mut hay = format!("{id} {}", text(&a["name"])).to_lowercase();
+            for list in ["tags", "categories"] {
+                for t in a[list].as_array().into_iter().flatten() {
+                    hay.push(' ');
+                    hay.push_str(&text(t).to_lowercase());
+                }
+            }
+            words.iter().all(|w| hay.contains(w.as_str()))
+        })
+        .collect();
+    found.sort_by_key(|(_, a)| std::cmp::Reverse(a["download_count"].as_u64().unwrap_or(0)));
+    found
+        .into_iter()
+        .skip((page.max(1) - 1) * PAGE)
+        .take(PAGE)
+        .map(|(id, a)| {
+            let author = a["authors"].as_object().map(|m| m.keys().cloned().collect::<Vec<_>>().join(", ")).unwrap_or_default();
+            Item {
+                source: Source::PolyHaven,
+                kind: Kind::Texture,
+                id: id.clone(),
+                title: text(&a["name"]),
+                thumb: format!("https://cdn.polyhaven.com/asset_img/thumbs/{id}.png?width=256&height=256"),
+                file: None,
+                list: format!("https://api.polyhaven.com/files/{id}"),
+                size: None,
+                credit: phosphor_engine::Credit {
+                    title: text(&a["name"]),
+                    author,
+                    licence: "CC0".into(),
+                    licence_url: "https://creativecommons.org/publicdomain/zero/1.0/".into(),
+                    page: format!("https://polyhaven.com/a/{id}"),
+                    source: "Poly Haven".into(),
+                },
+            }
+        })
+        .collect()
+}
+
 /// For sources that list an item's files separately (NASA, Internet Archive): the file to download from that list,
 /// and its size when known.
 pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), String> {
@@ -351,6 +453,18 @@ pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), Stri
                 (format!("https://archive.org/download/{}/{}", url_encode(&id), path.join("/")), (*size > 0).then_some(*size))
             })
             .ok_or_else(|| "The Internet Archive has no MP4 of this film".into())
+        }
+        Source::PolyHaven => {
+            // The colour picture at 2K (a few MB; 4K and up are for close-ups).
+            let diffuse = &v["Diffuse"];
+            ["2k", "1k", "4k"]
+                .iter()
+                .find_map(|res| {
+                    let f = &diffuse[*res]["jpg"];
+                    let url = text(&f["url"]);
+                    (!url.is_empty()).then(|| (url, f["size"].as_u64()))
+                })
+                .ok_or_else(|| "Poly Haven has no colour picture for this texture".into())
         }
         _ => item.file.clone().map(|f| (f, item.size)).ok_or_else(|| "no file".into()),
     }
@@ -401,6 +515,19 @@ mod tests {
         assert_eq!(w.len(), 1);
         assert_eq!(w[0].file.as_deref(), Some("https://www.artic.edu/iiif/2/99af/full/1686,/0/default.jpg"));
         assert_eq!(w[0].credit.page, "https://www.artic.edu/artworks/282");
+
+        let ic = br#"{"icons":["ph:star-fill","bad"],"collections":{"ph":{"name":"Phosphor","author":{"name":"Phosphor Icons"},"license":{"title":"MIT","url":"https://x/LICENSE"}}}}"#;
+        let i = Source::Iconify.parse(Kind::Icon, ic).unwrap();
+        assert_eq!(i.len(), 1);
+        assert_eq!(i[0].file.as_deref(), Some("https://api.iconify.design/ph/star-fill.svg?color=white&height=1024"));
+        assert_eq!((i[0].credit.licence.as_str(), i[0].credit.source.as_str()), ("MIT", "Iconify (Phosphor)"));
+
+        let ph = br#"{"rock_wall":{"name":"Rock Wall","tags":["stone"],"categories":["rock"],"download_count":5,"authors":{"Rob":"All"}},"red_brick":{"name":"Red Brick","tags":["wall"],"categories":["brick"],"download_count":50,"authors":{}},"oak":{"name":"Oak","tags":["wood"],"download_count":9}}"#;
+        let found = Source::PolyHaven.parse_page(Kind::Texture, "wall", 1, ph).unwrap();
+        assert_eq!(found.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["red_brick", "rock_wall"], "matches, most downloaded first");
+        assert!(Source::PolyHaven.parse_page(Kind::Texture, "wall", 2, ph).unwrap().is_empty());
+        let files = br#"{"Diffuse":{"2k":{"jpg":{"size":2802005,"url":"https://dl.polyhaven.org/x_diff_2k.jpg"}}}}"#;
+        assert_eq!(pick_file(&found[0], files).unwrap(), ("https://dl.polyhaven.org/x_diff_2k.jpg".into(), Some(2802005)));
     }
 
     #[test]
