@@ -231,8 +231,7 @@ impl PhosphorApp {
 
     pub(crate) fn top_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("top_bar").show(ui, |ui| {
-            ui.add_space(2.0);
-            ui.horizontal(|ui| {
+            crate::ui::bar_row(ui, |ui| {
                 ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(theme::accent()));
                 let now = ui.ctx().input(|i| i.time);
                 // On the Mac the menus live in the macOS menu bar; the in-window copy is for the browser build.
@@ -378,7 +377,6 @@ impl PhosphorApp {
                     // Frame rate and CPU live in the status line (bottom right), where there's room.
                 });
             });
-            ui.add_space(2.0);
         });
     }
 

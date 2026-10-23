@@ -33,6 +33,19 @@ pub(crate) fn eye_toggle(ui: &mut egui::Ui, shown: &mut bool) -> egui::Response 
     r
 }
 
+/// A bar's row of buttons (the top bar): as tall as its tallest button from the start, every item centred on the
+/// same line. (`ui.horizontal` starts one button high and grows when a taller one comes, leaving the earlier items
+/// high.)
+pub(crate) fn bar_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    // The action buttons' height plus a little air above and below.
+    const HEIGHT: f32 = 26.0;
+    ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), HEIGHT), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        ui.set_min_height(HEIGHT);
+        add(ui)
+    })
+    .inner
+}
+
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
 pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: Option<f32>) -> egui::Response {
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
