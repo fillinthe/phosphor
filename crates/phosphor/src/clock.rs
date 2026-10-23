@@ -381,8 +381,8 @@ pub fn local_time() -> (u32, u8) {
     utc_time()
 }
 
-#[allow(dead_code)]
-fn utc_time() -> (u32, u8) {
+/// Seconds since midnight UTC, and the weekday there (0 = Sunday).
+pub fn utc_time() -> (u32, u8) {
     let secs = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     // 1 January 1970 was a Thursday.
     ((secs % 86_400) as u32, ((secs / 86_400 + 4) % 7) as u8)

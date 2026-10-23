@@ -74,6 +74,8 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         crate::panels::light_window(&ctx, &mut self.state);
         #[cfg(not(target_arch = "wasm32"))]
+        crate::panels::zone_requests(&ctx, &mut self.state);
+        #[cfg(not(target_arch = "wasm32"))]
         crate::panels::ai_shader_window(&ctx, &mut self.state);
         // Something dropped onto a slice on the mapping canvas: a file or input gets a layer of its own there, a
         // layer is shown there.
