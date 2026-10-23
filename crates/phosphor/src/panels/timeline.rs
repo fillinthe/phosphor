@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use phosphor_engine::{Marker, MarkerKind};
+use phosphor_engine::{Event, Marker, MarkerKind, SendTo};
 
 use super::*;
 
@@ -34,6 +34,10 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         if ui.button(label(icon::FLAG, "Marker")).on_hover_text("A marker at the playhead (right-click it: pause or loop there)").clicked() {
             let n = tl.markers.len() + 1;
             tl.markers.push(Marker { t: st.timeline_pos, name: format!("M{n}"), kind: MarkerKind::Label });
+        }
+        if ui.button(label(icon::LIGHTNING, "Event")).on_hover_text("An event at the playhead: plays a clip, fires a column or cue, sets anything, or sends OSC / MIDI as the playhead passes (right-click it)").clicked() {
+            let n = tl.events.len() + 1;
+            tl.events.push(Event { t: st.timeline_pos, name: format!("E{n}"), ..Default::default() });
         }
         render_menu(ui, st, now);
     });
@@ -103,6 +107,10 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
     }
     if let Some(k) = remove_marker {
         st.comp.timeline.markers.remove(k);
+    }
+
+    if !st.comp.timeline.events.is_empty() {
+        events_lane(ui, st, &names, lane_x, lane_w, full);
     }
 
     // One row per track.
@@ -228,4 +236,58 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
             ui.close();
         }
     });
+}
+
+/// The events: a flag each on their own lane; drag to move, right-click for what it does.
+fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget, String>, lane_x: f32, lane_w: f32, full: f32) {
+    let length = st.comp.timeline.length.max(0.1);
+    let (row, _) = ui.allocate_exact_size(egui::vec2(full, 24.0), Sense::hover());
+    let p = ui.painter_at(row);
+    let lane = egui::Rect::from_min_max(egui::pos2(lane_x, row.top() + 2.0), egui::pos2(row.right(), row.bottom() - 2.0));
+    p.rect_filled(lane, 2.0, ui.visuals().faint_bg_color);
+    p.text(egui::pos2(row.left() + 4.0, row.center().y), egui::Align2::LEFT_CENTER, "Events", egui::FontId::proportional(11.0), ui.visuals().text_color());
+    let targets: Vec<(ControlTarget, String)> = names.iter().map(|(t, n)| (t.clone(), n.clone())).collect();
+    let mut remove = None;
+    for (k, e) in st.comp.timeline.events.iter_mut().enumerate() {
+        let x = lane_x + (e.t / length) as f32 * lane_w;
+        let at = egui::pos2(x, lane.center().y);
+        let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(12.0, 16.0)), ui.id().with(("event", k)), Sense::click_and_drag());
+        let wired = e.target.is_some() || e.send.is_some();
+        let c = if r.hovered() || r.dragged() { Color32::WHITE } else if wired { accent() } else { Color32::GRAY };
+        p.add(egui::Shape::convex_polygon(vec![at + egui::vec2(0.0, -7.0), at + egui::vec2(5.0, 0.0), at + egui::vec2(0.0, 7.0), at + egui::vec2(-5.0, 0.0)], c, Stroke::NONE));
+        p.text(at + egui::vec2(7.0, 0.0), egui::Align2::LEFT_CENTER, &e.name, egui::FontId::proportional(9.5), c);
+        if r.dragged() {
+            e.t = (e.t + (r.drag_delta().x / lane_w) as f64 * length).clamp(0.0, length);
+        }
+        let what = [e.target.as_ref().map(|t| format!("sets {}", names.get(t).map_or("(gone)", |n| n.as_str()))), e.send.as_ref().map(|s| format!("sends {}", s.label()))].into_iter().flatten().collect::<Vec<_>>().join(", ");
+        r.on_hover_text(format!("{} · {}", clock(e.t), if what.is_empty() { "does nothing yet (right-click)".to_string() } else { what })).context_menu(|ui| {
+            ui.set_min_width(300.0);
+            crate::ui::text_field(ui, &mut e.name, "name", Some(140.0));
+            ui.label(RichText::new("Sets").strong());
+            ui.horizontal(|ui| {
+                if let Some(t) = target_picker(ui, ("event_target", k), &targets, e.target.as_ref(), 200.0) {
+                    e.target = Some(t);
+                }
+                if e.target.is_some() && ui.small_button(icon::X).on_hover_text("Set nothing").clicked() {
+                    e.target = None;
+                }
+            });
+            Level::percent(&mut e.value, "to").default(1.0).width(200.0).show(ui);
+            hint(ui, "A clip or column: on plays it. A pick-one setting: the value picks.");
+            let mut sends = e.send.is_some();
+            if crate::ui::toggle(ui, &mut sends, "Sends").on_hover_text("Also sends the value out (OSC to the Control Surface's OSC out, or MIDI)").changed() {
+                e.send = sends.then(|| SendTo::Osc { address: "/phosphor/event".into() });
+            }
+            if let Some(to) = &mut e.send {
+                ui.horizontal(|ui| crate::ui::send_to_editor(ui, to));
+            }
+            if danger_button(ui, label(icon::TRASH, "Remove")).clicked() {
+                remove = Some(k);
+                ui.close();
+            }
+        });
+    }
+    if let Some(k) = remove {
+        st.comp.timeline.events.remove(k);
+    }
 }

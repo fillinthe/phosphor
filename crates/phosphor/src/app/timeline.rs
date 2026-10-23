@@ -15,6 +15,8 @@ impl State {
                 if self.timeline_pos >= self.comp.timeline.length {
                     self.timeline_pos = 0.0;
                 }
+                // Events right at the playhead fire as it starts.
+                self.timeline_fresh = true;
                 Some((now, self.timeline_pos))
             }
         };
@@ -25,13 +27,18 @@ impl State {
         self.timeline_pos = t.clamp(0.0, self.comp.timeline.length.max(0.0));
         if self.timeline_play.is_some() {
             self.timeline_play = Some((now, self.timeline_pos));
+            self.timeline_fresh = true;
         }
     }
 
     /// Every frame: moves the playhead while playing, and sets the tracks' controls when it has moved.
     pub(crate) fn run_timeline(&mut self, now: f64) {
+        let mut events: Vec<phosphor_engine::Event> = Vec::new();
         if let Some((start, from)) = self.timeline_play {
             let want = from + (now - start);
+            if !self.comp.timeline.events.is_empty() {
+                events = self.comp.timeline.passed_events(self.timeline_pos, want, std::mem::take(&mut self.timeline_fresh)).into_iter().cloned().collect();
+            }
             match self.comp.timeline.advance(self.timeline_pos, want) {
                 Step::At(t) => {
                     if (t - want).abs() > 1e-6 {
@@ -44,6 +51,14 @@ impl State {
                     self.timeline_pos = t;
                     self.timeline_play = None;
                 }
+            }
+        }
+        for e in events {
+            if let Some(t) = &e.target {
+                self.set_control(t, e.value, now);
+            }
+            if let Some(to) = &e.send {
+                self.control.send_to(&self.comp, to, e.value);
             }
         }
         if self.comp.timeline.tracks.is_empty() || self.timeline_applied == Some(self.timeline_pos) {
