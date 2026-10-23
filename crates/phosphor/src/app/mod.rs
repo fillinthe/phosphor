@@ -182,6 +182,9 @@ pub struct State {
     /// Modulators › Live data: weather, the ISS, earthquakes.
     #[cfg(not(target_arch = "wasm32"))]
     pub feeds: crate::live_data::Feeds,
+    /// LED / DMX › A real light…: the Open Fixture Library.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub ofl: crate::ofl::Library,
     /// Shader Editor › Describe it… (the AI writes a shader).
     #[cfg(not(target_arch = "wasm32"))]
     pub ai_shader: crate::panels::AiShader,

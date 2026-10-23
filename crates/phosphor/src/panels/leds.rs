@@ -135,7 +135,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         }
     }
 
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.button(label(icon::PLUS, "LED strip")).clicked() {
             let id = st.comp.new_id();
             let n = st.comp.dmx.fixtures.len();
@@ -166,6 +166,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             selected = Some(id);
         }
         video_wall_menu(ui, st);
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::LIGHTBULB, "A real light…")).on_hover_text("Pick your light by name from the Open Fixture Library (moving heads, pars, bars…): its channels are set up for you").clicked() {
+            open_light_window(ui.ctx());
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if ui.button(label(icon::SCAN, "Find with a camera…")).on_hover_text("The lights blink codes while a camera watches; each light is placed where the camera sees it").clicked() {
             open_led_scan_window(ui.ctx());
@@ -204,6 +208,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                             crate::ui::toggle(ui, &mut f.zigzag, "Zig-zag").on_hover_text("Every other row is wired backwards (most LED matrices)");
                             crate::ui::toggle(ui, &mut f.by_columns, "By columns").on_hover_text("Wired column by column (top to bottom) instead of row by row");
                         }
+                        FixtureShape::MovingHead if f.head == phosphor_engine::HeadLayout::Custom => {
+                            let names: Vec<String> = f.roles.iter().enumerate().map(|(i, r)| format!("{}: {}", i + 1, custom_channel_name(f, *r))).collect();
+                            ui.label(format!("{} channels (its own mode)", f.roles.len())).on_hover_text(names.join("\n"));
+                        }
                         FixtureShape::MovingHead => {
                             choice_combo(ui, ("head_layout", f.id), &mut f.head, 230.0, false).on_hover_text("Set the head to the DMX mode with these channels");
                         }
@@ -239,7 +247,15 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     hint(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
                     // Channels after the layout's (gobo, prism, zoom, strobe…), each a control of its own.
                     let mut gone = None;
+                    let custom = f.head == phosphor_engine::HeadLayout::Custom;
                     for (i, e) in f.extra.iter_mut().enumerate() {
+                        if custom {
+                            // A library light's own settings: named by the library, in its channel order.
+                            ui.horizontal(|ui| {
+                                Level::percent(&mut e.value, &e.name).width(240.0).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
+                            });
+                            continue;
+                        }
                         ui.horizontal(|ui| {
                             crate::ui::text_field(ui, &mut e.name, &format!("channel {}", f.head.channels() + i + 1), Some(80.0));
                             let name = if e.name.is_empty() { format!("Ch {}", f.head.channels() + i + 1) } else { e.name.clone() };
@@ -252,7 +268,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     if let Some(i) = gone {
                         f.extra.remove(i);
                     }
-                    if f.extra.len() < 32 && ui.small_button(label(icon::PLUS, "Channel")).on_hover_text("A channel after the layout's: gobo, prism, zoom, strobe… (in the order your light's manual lists them)").clicked() {
+                    if !custom && f.extra.len() < 32 && ui.small_button(label(icon::PLUS, "Channel")).on_hover_text("A channel after the layout's: gobo, prism, zoom, strobe… (in the order your light's manual lists them)").clicked() {
                         f.extra.push(phosphor_engine::ExtraChannel::default());
                     }
                 }
@@ -316,7 +332,15 @@ fn video_wall_menu(ui: &mut egui::Ui, st: &mut State) {
     ui.data_mut(|d| d.insert_temp(key, v));
 }
 
-fn next_free(fixtures: &[Fixture]) -> (u16, u16) {
+/// A library light's channel, as its role or its setting's name.
+fn custom_channel_name(f: &Fixture, role: phosphor_engine::Role) -> String {
+    match role {
+        phosphor_engine::Role::Extra(i) => f.extra.get(i as usize).map_or_else(|| "?".into(), |e| e.name.clone()),
+        r => r.name().to_string(),
+    }
+}
+
+pub(crate) fn next_free(fixtures: &[Fixture]) -> (u16, u16) {
     fixtures.last().map_or((0, 1), |f| f.next_free())
 }
 

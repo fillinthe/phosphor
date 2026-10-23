@@ -33,6 +33,10 @@ mod online;
 #[cfg(not(target_arch = "wasm32"))]
 mod live_data;
 #[cfg(not(target_arch = "wasm32"))]
+mod light_library;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use light_library::*;
+#[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;
 mod modulators;
 mod sequencer;

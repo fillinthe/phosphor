@@ -89,7 +89,7 @@ pub fn get_bytes(url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// `get_bytes` once per session for each address (a library's whole list, searched here).
-fn get_cached(url: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn get_cached(url: &str) -> Result<Vec<u8>, String> {
     static KEPT: OnceLock<Mutex<std::collections::HashMap<String, Arc<Vec<u8>>>>> = OnceLock::new();
     let kept = KEPT.get_or_init(Default::default);
     if let Some(b) = kept.lock().ok().and_then(|k| k.get(url).cloned()) {
