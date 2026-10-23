@@ -218,6 +218,9 @@ pub struct LayerState {
     pub transition_values: Vec<f32>,
     /// Which pair of the sound output's channels its sound plays on (0 = 1-2, 1 = 3-4…; a multichannel interface).
     pub sound_pair: u8,
+    /// Another sound device its sound plays on (by name; None = the main sound output).
+    #[serde(default)]
+    pub sound_device: Option<String>,
     /// Where this row's clips play (this layer, or shared over the layers beside it).
     pub voices: VoiceMode,
     /// Whose turn it is next (`VoiceMode::NextLayer`).
@@ -325,6 +328,7 @@ impl Default for LayerState {
             transition_effect: default_transition_effect(),
             transition_values: Vec::new(),
             sound_pair: 0,
+            sound_device: None,
             voices: VoiceMode::Own,
             voice_turn: 0,
             autopilot: Autopilot::Off,

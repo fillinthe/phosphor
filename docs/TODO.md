@@ -125,7 +125,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
       "Drawn wave" modulation source (a smooth loop through eight points). Checked: test.
 - [x] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
-- [~] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now. Done: each layer on a pair of channels of the sound output. Left: a different device per layer.
+- [x] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now. Done: each layer on a pair of channels of the sound output, and a different sound device per layer (Inspector › Sound device: its own output, mixing only those layers). Checked: tests (routing, stretching to the device's rate). Not heard: tests stay silent.
 - [x] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed, sound EQ (master volume was already there).
 - [x] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
       MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC out (MIDI) and LTC out (audio on a chosen pair), from the show clock or time of day. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).

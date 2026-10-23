@@ -596,6 +596,21 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
         volume_bar(ui, layer, w);
     });
     crate::ui::toggle(ui, &mut layer.volume_follows_opacity, "Sound follows opacity").on_hover_text("Fading the layer (or its group, or the crossfader) fades its sound too");
+    // Another sound device (headphones for cueing, a second interface…): the device list is asked for only when the
+    // menu opens.
+    #[cfg(not(target_arch = "wasm32"))]
+    ui.horizontal(|ui| {
+        ui.label("Sound device");
+        let current = layer.sound_device.clone().unwrap_or_else(|| "Main output".into());
+        ComboBox::from_id_salt(("sound_device", layer.id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
+            ui.selectable_value(&mut layer.sound_device, None, "Main output");
+            for d in crate::media::video::sound::output_devices() {
+                ui.selectable_value(&mut layer.sound_device, Some(d.clone()), d);
+            }
+        })
+        .response
+        .on_hover_text("Play this layer's sound on another device (cue headphones, a second interface). Streams and recordings only hear the main output.");
+    });
     // A multichannel sound output: which pair of its outputs this layer plays on.
     #[cfg(not(target_arch = "wasm32"))]
     {

@@ -623,6 +623,13 @@ impl VideoPlayer {
         s.follow(f);
     }
 
+    /// Another sound device this plays on (None = the main output).
+    pub fn set_sound_device(&self, name: Option<&str>) {
+        if let Some(s) = &self.sound {
+            s.set_device(name);
+        }
+    }
+
     /// Which pair of the sound output's channels this plays on (0 = 1-2).
     pub fn set_sound_pair(&self, pair: u32) {
         if let Some(s) = &self.sound {
