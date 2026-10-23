@@ -155,7 +155,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
 /// Query settings are picked from `oscquery_browser`; they show as their label here.)
 pub(crate) fn send_to_editor(ui: &mut egui::Ui, to: &mut phosphor_engine::SendTo) {
     use phosphor_engine::SendTo;
-    for (name, make) in [("OSC", SendTo::Osc { address: "/phosphor/out".into() }), ("MIDI CC", SendTo::MidiCc { channel: 0, cc: 20 }), ("Note", SendTo::MidiNote { channel: 0, note: 60 })] {
+    for (name, make) in [("OSC", SendTo::Osc { address: "/phosphor/out".into() }), ("MIDI CC", SendTo::MidiCc { channel: 0, cc: 20 }), ("Note", SendTo::MidiNote { channel: 0, note: 60 }), ("Arduino", SendTo::Arduino { pin: 9 })] {
         if ui.selectable_label(std::mem::discriminant(to) == std::mem::discriminant(&make), name).clicked() && std::mem::discriminant(to) != std::mem::discriminant(&make) {
             *to = make;
         }
@@ -175,6 +175,9 @@ pub(crate) fn send_to_editor(ui: &mut egui::Ui, to: &mut phosphor_engine::SendTo
             guarded!(ui, ch, egui::DragValue::new(&mut ch).range(1..=16).prefix("ch "));
             *channel = ch - 1;
             guarded!(ui, *note, egui::DragValue::new(note).range(0..=127).prefix("note "));
+        }
+        SendTo::Arduino { pin } => {
+            guarded!(ui, *pin, egui::DragValue::new(pin).range(0..=63).prefix("PWM pin ")).on_hover_text("A PWM pin of the Arduino chosen in the MIDI / OSC panel (Uno: 3, 5, 6, 9, 10, 11)");
         }
         SendTo::OscTo { .. } => {
             ui.label(to.label());

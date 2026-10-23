@@ -15,6 +15,10 @@ mod dmx;
 mod dmx_record;
 #[cfg(not(target_arch = "wasm32"))]
 mod usb_dmx;
+#[cfg(not(target_arch = "wasm32"))]
+mod serial;
+#[cfg(not(target_arch = "wasm32"))]
+mod arduino;
 mod explorer;
 #[cfg(not(target_arch = "wasm32"))]
 mod folders;

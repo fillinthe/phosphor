@@ -141,6 +141,26 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, control.dmx_status());
             }
         });
+        // An Arduino board (StandardFirmata): its pins map like MIDI; PWM pins can be sent to (Send out).
+        ui.horizontal(|ui| {
+            ui.label("Arduino");
+            let current = control.arduino_port();
+            let mut pick = current.clone();
+            ComboBox::from_id_salt("arduino_port").width(200.0).selected_text(if current.is_empty() { "(none)".to_string() } else { current.clone() }).show_ui(ui, |ui| {
+                ui.selectable_value(&mut pick, String::new(), "(none)");
+                for p in crate::serial::ports() {
+                    ui.selectable_value(&mut pick, p.clone(), p);
+                }
+            })
+            .response
+            .on_hover_text("A board running StandardFirmata (Arduino IDE › File › Examples › Firmata). Its analog inputs and pins then map like MIDI (right-click a control › Learn, turn the knob); Send out › Arduino drives its PWM pins.");
+            if pick != current {
+                control.set_arduino(&pick);
+            }
+            if !current.is_empty() {
+                hint(ui, control.arduino_status());
+            }
+        });
     }
     monitor(ui, st);
     ui.separator();
