@@ -63,8 +63,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Devices panel: camera, microphone and screen recording, each with a System Settings button. Checked: screenshot (all three read right here).
 - [x] 25. **Choose the graphics card** on machines with more than one (V).
       Output panel › Graphics card (shown when there's more than one, or one was chosen); used from the next start. Checked: test of the choice. Not tried on a Mac with two GPUs (none here).
-- [~] 26. **Step sequencer colour and index tracks** (V). Has value and gate tracks.
-      Index tracks: "Choices" on a level track, each step picks one of N (a clip, blend mode, direction). Colour tracks: not done (mappings carry numbers, not colours). Checked: test.
+- [x] 26. **Step sequencer colour and index tracks** (V). Has value and gate tracks.
+      Index tracks: "Choices" on a level track, each step picks one of N (a clip, blend mode, direction). Colour tracks: a colour on each step (rainbow to start; Glide fades between them), painted into any colour settings (pick the colour; its red, green and blue all follow). Checked: tests; the real app (a white solid layer painted blue by a track).
 - [x] 27. **DMX monitor**: live view of the channels being sent (M).
       LED / DMX panel › Monitor: one universe's 512 channels as a grid, value on hover; copied only while it's open. Checked: test.
 - [x] 28. **Colour swatches** saved and usable on every colour control (M).

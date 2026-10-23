@@ -206,6 +206,8 @@ pub struct State {
     pub(crate) autopilot: HashMap<u64, autopilot::AutoRun>,
     /// The step each firing step track was on last frame (`run_step_fires`).
     pub(crate) step_fired: HashMap<u64, usize>,
+    /// Colour tracks: the colour each last painted (only a change is sent).
+    pub(crate) step_painted: HashMap<u64, [f32; 3]>,
     pub(crate) render_state: Option<egui_wgpu::RenderState>,
     pub texture: Option<egui::TextureId>,
     texture_generation: u64,
