@@ -196,6 +196,8 @@ struct Clip {
     loudness: AtomicU32,
     /// Which pair of the output's channels it plays on (0 = 1-2, 1 = 3-4…).
     pair: AtomicU32,
+    /// Another sound device it plays on (None = the main output).
+    device: Mutex<Option<String>>,
     follow: Mutex<Follow>,
     quit: AtomicBool,
 }
@@ -239,6 +241,7 @@ impl PlayThrough {
             applied: AtomicU32::new(0f32.to_bits()),
             loudness: AtomicU32::new(0),
             pair: AtomicU32::new(0),
+            device: Mutex::new(None),
             follow: Mutex::new(Follow::default()),
             quit: AtomicBool::new(false),
         });
@@ -301,6 +304,7 @@ impl ClipAudio {
             applied: AtomicU32::new(0f32.to_bits()),
             loudness: AtomicU32::new(0),
             pair: AtomicU32::new(0),
+            device: Mutex::new(None),
             follow: Mutex::new(Follow { rate: 1.0, looping: true, ..Default::default() }),
             quit: AtomicBool::new(false),
         });
@@ -326,6 +330,148 @@ impl ClipAudio {
     pub fn set_pair(&self, pair: u32) {
         self.clip.pair.store(pair, Ordering::Relaxed);
     }
+
+    /// Plays on another sound device (by name), or the main output (None). That device's output starts by itself.
+    pub fn set_device(&self, name: Option<&str>) {
+        let Ok(mut d) = self.clip.device.lock() else { return };
+        if d.as_deref() == name {
+            return;
+        }
+        *d = name.map(str::to_string);
+        if let Some(n) = name {
+            ensure_device_output(n);
+        }
+    }
+}
+
+/// Extra sound outputs running (by device name), and devices that couldn't be opened (their clips play on the main
+/// output instead).
+static DEVICE_OUTPUTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static FAILED_DEVICES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Which output plays a clip set to `device`: None = the main one (also for the main device by name, and for
+/// devices that couldn't be opened), else that device.
+fn output_for(device: Option<&str>) -> Option<String> {
+    let d = device?;
+    if output_device().as_deref() == Some(d) || FAILED_DEVICES.lock().is_ok_and(|f| f.iter().any(|x| x == d)) {
+        return None;
+    }
+    Some(d.to_string())
+}
+
+/// Starts an output on `name` for the clips set to it (once; it stops by itself when none are left).
+fn ensure_device_output(name: &str) {
+    if output_for(Some(name)).is_none() {
+        return;
+    }
+    {
+        let Ok(mut running) = DEVICE_OUTPUTS.lock() else { return };
+        if running.iter().any(|r| r == name) {
+            return;
+        }
+        running.push(name.to_string());
+    }
+    let n = name.to_string();
+    let spawned = std::thread::Builder::new().name(format!("sound out: {name}")).spawn(move || {
+        if let Err(e) = run_device_output(&n) {
+            log::warn!("sound output {n}: {e} (its layers play on the main output)");
+            if let Ok(mut f) = FAILED_DEVICES.lock() {
+                f.push(n.clone());
+            }
+        }
+        if let Ok(mut running) = DEVICE_OUTPUTS.lock() {
+            running.retain(|r| *r != n);
+        }
+    });
+    if spawned.is_err()
+        && let Ok(mut running) = DEVICE_OUTPUTS.lock()
+    {
+        running.retain(|r| r != name);
+    }
+}
+
+/// An extra output: mixes only the clips set to `name`, taking their sound at the main output's rate and stretching
+/// it to this device's. Returns when no clip uses it any more.
+fn run_device_output(name: &str) -> Result<(), String> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    let host = cpal::default_host();
+    let device = host.output_devices().map_err(|e| e.to_string())?.find(|d| d.description().ok().is_some_and(|n| n.name() == name)).ok_or("not found")?;
+    let supported = device.default_output_config().map_err(|e| e.to_string())?;
+    let channels = supported.channels().max(1) as usize;
+    let rate = supported.sample_rate();
+    let config: cpal::StreamConfig = supported.config();
+    let pairs = (channels / 2).max(1);
+    let who = name.to_string();
+    let (mut blocks, mut stretched, mut carry) = (Vec::<f32>::new(), Vec::<f32>::new(), 0.0f64);
+    let mut mix = move |out: &mut [f32]| {
+        let frames = out.len() / channels;
+        // As many frames of the clips' sound (at the main rate) as this device plays in the same time.
+        let main = OUT_RATE.load(Ordering::Relaxed).max(1) as f64;
+        carry += frames as f64 * main / rate.max(1) as f64;
+        let take = carry.floor() as usize;
+        carry -= take as f64;
+        blocks.clear();
+        blocks.resize(take * 2 * pairs, 0.0);
+        mix_clips_for(&mut blocks, pairs, Some(&who));
+        stretched.clear();
+        for block in blocks.chunks(take.max(1) * 2) {
+            stretched.extend(stretch(block, frames));
+        }
+        stretched.resize(frames * 2 * pairs, 0.0);
+        to_device(&stretched, frames, out, channels);
+    };
+    let err_fn = |e: cpal::Error| log::warn!("sound output: {e}");
+    let stream = match supported.sample_format() {
+        cpal::SampleFormat::F32 => device.build_output_stream(config, move |d: &mut [f32], _| mix(d), err_fn, None),
+        cpal::SampleFormat::I16 => {
+            let mut tmp = Vec::new();
+            device.build_output_stream(
+                config,
+                move |d: &mut [i16], _| {
+                    tmp.resize(d.len(), 0.0);
+                    mix(&mut tmp);
+                    for (o, s) in d.iter_mut().zip(&tmp) {
+                        *o = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+                    }
+                },
+                err_fn,
+                None,
+            )
+        }
+        other => return Err(format!("unsupported output format {other:?}")),
+    }
+    .map_err(|e| e.to_string())?;
+    stream.play().map_err(|e| e.to_string())?;
+    log::info!("sound output (extra): {name} at {rate} Hz");
+    let mut idle = 0;
+    loop {
+        std::thread::sleep(Duration::from_millis(250));
+        let used = CLIPS.lock().is_ok_and(|c| c.iter().filter_map(Weak::upgrade).any(|clip| clip.device.lock().is_ok_and(|d| output_for(d.as_deref()).as_deref() == Some(name))));
+        idle = if used { 0 } else { idle + 1 };
+        if idle >= 8 {
+            return Ok(());
+        }
+    }
+}
+
+/// A stereo block (interleaved) stretched or squeezed to exactly `frames` frames (linear).
+fn stretch(block: &[f32], frames: usize) -> Vec<f32> {
+    let n = block.len() / 2;
+    if n == frames || n == 0 {
+        let mut v = block.to_vec();
+        v.resize(frames * 2, 0.0);
+        return v;
+    }
+    let mut out = Vec::with_capacity(frames * 2);
+    for i in 0..frames {
+        let pos = i as f64 * (n - 1) as f64 / (frames.max(2) - 1) as f64;
+        let (k, f) = (pos.floor() as usize, (pos - pos.floor()) as f32);
+        let k1 = (k + 1).min(n - 1);
+        for c in 0..2 {
+            out.push(block[k * 2 + c] + (block[k1 * 2 + c] - block[k * 2 + c]) * f);
+        }
+    }
+    out
 }
 
 impl Drop for ClipAudio {
@@ -798,10 +944,16 @@ fn to_device(blocks: &[f32], frames: usize, out: &mut [f32], channels: usize) {
     }
 }
 
-/// Adds every clip's next samples into its pair's block of `out` (`pairs` stereo blocks), ramping gain changes.
+/// Adds the main output's clips' next samples into their pair's block of `out` (`pairs` stereo blocks).
 fn mix_clips(out: &mut [f32], pairs: usize) {
+    mix_clips_for(out, pairs, None);
+}
+
+/// Adds the next samples of the clips that play on output `device` (None = the main one) into their pair's block
+/// of `out` (`pairs` stereo blocks), ramping gain changes.
+fn mix_clips_for(out: &mut [f32], pairs: usize, device: Option<&str>) {
     let clips: Vec<Arc<Clip>> = match CLIPS.try_lock() {
-        Ok(c) => c.iter().filter_map(Weak::upgrade).collect(),
+        Ok(c) => c.iter().filter_map(Weak::upgrade).filter(|clip| clip.device.lock().is_ok_and(|d| output_for(d.as_deref()).as_deref() == device)).collect(),
         Err(_) => return,
     };
     let frames = out.len() / 2 / pairs.max(1);
@@ -830,6 +982,40 @@ fn mix_clips(out: &mut [f32], pairs: usize) {
 
 #[cfg(test)]
 mod level_tests {
+    /// Layers on another device: the main output skips their clips, that device's output takes only them; a block
+    /// stretches to the device's frame count.
+    #[test]
+    fn clips_go_to_their_own_device() {
+        use super::*;
+        let dev = "Phosphor test device (not real)";
+        assert_eq!(output_for(None), None);
+        assert_eq!(output_for(Some(dev)).as_deref(), Some(dev));
+        let clip = |device: Option<&str>, v: f32| {
+            Arc::new(Clip {
+                buf: Mutex::new(std::iter::repeat_n(v, 64).collect()),
+                gain: AtomicU32::new(1f32.to_bits()),
+                applied: AtomicU32::new(1f32.to_bits()),
+                loudness: AtomicU32::new(0),
+                pair: AtomicU32::new(0),
+                device: Mutex::new(device.map(str::to_string)),
+                follow: Mutex::new(Follow::default()),
+                quit: AtomicBool::new(false),
+            })
+        };
+        let (mine, other) = (clip(Some(dev), 0.5), clip(Some("Another test device (not real)"), 0.25));
+        CLIPS.lock().unwrap().extend([Arc::downgrade(&mine), Arc::downgrade(&other)]);
+        let mut out = vec![0.0; 8];
+        mix_clips_for(&mut out, 1, Some(dev));
+        assert_eq!(out, vec![0.5; 8], "only its own clip");
+        assert_eq!(other.buf.lock().unwrap().len(), 64, "the other device's clip is left for its output");
+        // Stretching keeps the ends and makes exactly the frames asked for.
+        let block = [0.0, 0.0, 1.0, 1.0];
+        let s = stretch(&block, 3);
+        assert_eq!(s, vec![0.0, 0.0, 0.5, 0.5, 1.0, 1.0]);
+        assert_eq!(stretch(&block, 2), block.to_vec());
+        drop((mine, other));
+    }
+
     /// A waveform: a second of silence then a second of full-scale sound reads as 50 quiet peaks then 50 loud ones.
     #[test]
     fn peaks_outline_a_sound() {
@@ -893,7 +1079,7 @@ mod level_tests {
         assert!((0.04 * quiet - LEVEL_TARGET).abs() < 1e-4, "{quiet}");
         assert_eq!(level_gain(0.0), 1.0);
         assert_eq!(level_gain(0.0001 * 0.0001), LEVEL_MAX);
-        let clip = Clip { buf: Mutex::new(VecDeque::new()), gain: AtomicU32::new(0), applied: AtomicU32::new(0), loudness: AtomicU32::new(0), pair: AtomicU32::new(0), follow: Mutex::new(Follow::default()), quit: AtomicBool::new(false) };
+        let clip = Clip { buf: Mutex::new(VecDeque::new()), gain: AtomicU32::new(0), applied: AtomicU32::new(0), loudness: AtomicU32::new(0), pair: AtomicU32::new(0), device: Mutex::new(None), follow: Mutex::new(Follow::default()), quit: AtomicBool::new(false) };
         clip.measure(&[0.0001; 4800], 48_000.0);
         assert_eq!(f32::from_bits(clip.loudness.load(Ordering::Relaxed)), 0.0, "silence doesn't count");
         clip.measure(&[0.2; 4800], 48_000.0);
@@ -919,6 +1105,7 @@ mod tests {
             applied: AtomicU32::new(0),
             loudness: AtomicU32::new(0),
             pair: AtomicU32::new(0),
+            device: Mutex::new(None),
             follow: Mutex::new(Follow { pos: 0.9, playing: true, rate: 1.0, looping: true, range: None, generation: 1 }),
             quit: AtomicBool::new(false),
         });
