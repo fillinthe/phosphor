@@ -24,6 +24,8 @@ pub enum Kind {
     Texture,
     /// MilkDrop presets (they move to the music).
     Visualizer,
+    /// Font families for text layers.
+    Font,
 }
 
 /// One search result.
@@ -203,7 +205,8 @@ impl Search {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Fetch {
     Working { done: u64, total: Option<u64> },
-    Done(String),
+    /// The files (the first is the one to use).
+    Done(Vec<String>),
     Failed(String),
 }
 
@@ -227,7 +230,7 @@ impl Download {
                 }
             };
             let end = match fetch(&it, |done, total| set(Fetch::Working { done, total })) {
-                Ok(path) => Fetch::Done(path.to_string_lossy().into_owned()),
+                Ok(paths) => Fetch::Done(paths.iter().map(|p| p.to_string_lossy().into_owned()).collect()),
                 Err(e) => Fetch::Failed(e),
             };
             set(end);
@@ -255,6 +258,7 @@ pub fn file_name(item: &Item, url: &str) -> String {
             Kind::Video => "mp4",
             Kind::Icon => "svg",
             Kind::Visualizer => "milk",
+            Kind::Font => "ttf",
             Kind::Picture | Kind::Texture => "jpg",
         }
         .into()
@@ -290,8 +294,26 @@ pub fn saved_credit(path: &Path) -> Option<Credit> {
     serde_json::from_slice(&std::fs::read(sidecar(path)).ok()?).ok()
 }
 
-/// Downloads an item's file (streamed to disk, `progress` as it goes) and saves its credit beside it.
-fn fetch(item: &Item, progress: impl Fn(u64, Option<u64>)) -> Result<PathBuf, String> {
+/// Downloads an item's files (streamed to disk, `progress` as it goes) and saves its credit beside the first.
+/// Most items are one file; a font family is a few (regular, bold), saved where text layers find fonts.
+fn fetch(item: &Item, progress: impl Fn(u64, Option<u64>)) -> Result<Vec<PathBuf>, String> {
+    if item.kind == Kind::Font {
+        let dir = crate::text::fonts_dir().ok_or("no fonts folder")?;
+        std::fs::create_dir_all(&dir).map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
+        let files = sources::font_files(&get_bytes(&item.list)?)?;
+        let mut out = Vec::new();
+        for (name, url) in files {
+            let path = dir.join(name);
+            if !path.exists() {
+                download_to(&url, &path, None, &progress)?;
+            }
+            out.push(path);
+        }
+        if let Some(first) = out.first() {
+            let _ = std::fs::write(sidecar(first), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
+        }
+        return Ok(out);
+    }
     let (url, size) = match &item.file {
         Some(f) => (f.clone(), item.size),
         None => sources::pick_file(item, &get_bytes(&item.list)?)?,
@@ -300,10 +322,16 @@ fn fetch(item: &Item, progress: impl Fn(u64, Option<u64>)) -> Result<PathBuf, St
     std::fs::create_dir_all(&dir).map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
     sweep_parts(&dir);
     let path = dir.join(file_name(item, &url));
-    if path.exists() && saved_credit(&path).is_some() {
-        return Ok(path);
+    if !(path.exists() && saved_credit(&path).is_some()) {
+        download_to(&url, &path, size, &progress)?;
+        let _ = std::fs::write(sidecar(&path), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
     }
-    let response = request(&url)?;
+    Ok(vec![path])
+}
+
+/// One file streamed to `path` (through a `.part` file, so a stopped download never looks finished).
+fn download_to(url: &str, path: &Path, size: Option<u64>, progress: &impl Fn(u64, Option<u64>)) -> Result<(), String> {
+    let response = request(url)?;
     let total = response.header("content-length").and_then(|l| l.parse().ok()).or(size);
     if total.is_some_and(|t| t > MAX_FILE) {
         return Err("That file is over 2 GB: too big to bring in".into());
@@ -332,9 +360,7 @@ fn fetch(item: &Item, progress: impl Fn(u64, Option<u64>)) -> Result<PathBuf, St
         let _ = std::fs::remove_file(&part);
         return Err(e);
     }
-    std::fs::rename(&part, &path).map_err(|e| e.to_string())?;
-    let _ = std::fs::write(sidecar(&path), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
-    Ok(path)
+    std::fs::rename(&part, path).map_err(|e| e.to_string())
 }
 
 /// The show's credits: every media bin file that has one, as lines to paste into a programme or a video's notes.
@@ -413,7 +439,7 @@ mod tests {
         assert!(s.errors.is_empty(), "{:?}", s.errors);
         // A NASA picture's file is found through its list and downloads with its credit.
         let pic = s.items.iter().find(|i| i.source == Source::Nasa && i.kind == Kind::Picture).expect("a NASA picture").clone();
-        let path = fetch(&pic, |_, _| {}).expect("download");
+        let path = fetch(&pic, |_, _| {}).expect("download").remove(0);
         assert!(saved_credit(&path).is_some());
         assert!(crate::media::decode_still(&path.to_string_lossy()).is_ok(), "a picture that opens");
         let thumb = get_bytes(&pic.thumb).expect("thumbnail");
@@ -452,5 +478,17 @@ mod tests {
         let body = get_bytes(milk.file.as_deref().unwrap()).expect("preset");
         println!("ONLINE milkdrop {} presets, first {} ({} bytes)", s.items.len(), milk.title, body.len());
         assert!(String::from_utf8_lossy(&body).contains("per_frame") || String::from_utf8_lossy(&body).contains("[preset"), "a preset file");
+        // A font family: its files are found and one draws text.
+        let mut s = Search::start("bebas", &[Source::GoogleFonts], &[Kind::Font], false, None);
+        while s.busy() {
+            std::thread::sleep(Duration::from_millis(100));
+            s.poll();
+        }
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        let font = s.items.first().expect("a font").clone();
+        let files = sources::font_files(&get_bytes(&font.list).expect("file list")).expect("files");
+        let bytes = get_bytes(&files[0].1).expect("font");
+        println!("ONLINE font {} files {:?} ({} bytes)", font.id, files.iter().map(|f| &f.0).collect::<Vec<_>>(), bytes.len());
+        assert!(ttf_parser::Face::parse(&bytes, 0).is_ok(), "a font file");
     }
 }

@@ -18,6 +18,7 @@ enum Want {
     Icons,
     Textures,
     Visualizers,
+    Fonts,
 }
 
 impl Want {
@@ -29,6 +30,7 @@ impl Want {
             Want::Icons => &[Kind::Icon],
             Want::Textures => &[Kind::Texture],
             Want::Visualizers => &[Kind::Visualizer],
+            Want::Fonts => &[Kind::Font],
         }
     }
 }
@@ -63,7 +65,7 @@ impl Online {
     /// Bench `--quick online` (PHOSPHOR_ONLINE_QUERY): searches like the panel does.
     pub fn bench_search(&mut self, query: &str) {
         self.query = query.to_string();
-        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer];
+        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font];
         self.search = Some(Search::start(query, &Source::ALL, &kinds, false, None));
         self.bench = true;
     }
@@ -91,10 +93,19 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             "icon" => i.kind == Kind::Icon,
             "texture" => i.kind == Kind::Texture,
             "visualizer" => i.kind == Kind::Visualizer,
+            "font" => i.kind == Kind::Font,
             _ => i.kind == Kind::Picture,
         };
         if let Some(item) = s.items.iter().find(wanted).cloned() {
             st.online.bench = false;
+            if item.kind == Kind::Font {
+                // A text layer to put it on.
+                let id = st.add_layer();
+                if let Some(l) = st.comp.layer_mut(id) {
+                    l.source = SourceSpec::Text(phosphor_engine::TextStyle { text: "PHOSPHOR".into(), ..crate::text::default_style() });
+                }
+                st.selected = Some(id);
+            }
             st.online.downloads.push((Download::start(item, None), Then::NewLayer));
         }
     }
@@ -105,8 +116,8 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
     let mut finished = Vec::new();
     st.online.downloads.retain(|(d, then)| match d.status() {
         Fetch::Working { .. } => true,
-        Fetch::Done(path) => {
-            finished.push((d.item.clone(), path, *then));
+        Fetch::Done(paths) => {
+            finished.push((d.item.clone(), paths, *then));
             false
         }
         Fetch::Failed(e) => {
@@ -114,7 +125,12 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             false
         }
     });
-    for (item, path, then) in finished {
+    for (item, paths, then) in finished {
+        let Some(path) = paths.first().cloned() else { continue };
+        if item.kind == Kind::Font {
+            font_arrived(st, &item, &paths);
+            continue;
+        }
         let name = crate::media::clip_name(&path);
         st.comp.add_media(&name, &path);
         if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
@@ -130,6 +146,24 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             st.selected = Some(layer);
             st.launch_source(layer, crate::media::spec_for_path(&path), Vec::new(), name, now);
         }
+    }
+}
+
+/// A downloaded font family joins the font list; the selected text layer (if any) takes it on.
+fn font_arrived(st: &mut State, item: &Item, paths: &[String]) {
+    let faces: Vec<String> = paths.iter().flat_map(|p| crate::text::add_font_file(std::path::Path::new(p))).collect();
+    st.online.here.insert(item.key(), paths[0].clone());
+    let all = crate::text::fonts();
+    let first = faces.first().and_then(|n| all.iter().find(|f| &f.name == n)).map(|f| f.id.clone());
+    let layer = st.selected.and_then(|id| st.comp.layers.iter_mut().find(|l| l.id == id));
+    match (layer, first) {
+        (Some(l), Some(font)) if matches!(l.source, SourceSpec::Text(_)) => {
+            if let SourceSpec::Text(style) = &mut l.source {
+                style.font = font;
+            }
+            st.notice = Some(format!("{} is on the selected text layer (more styles in its Font list)", item.credit.title));
+        }
+        _ => st.notice = Some(format!("Added the font {}: pick it in any text layer's Font list", item.credit.title)),
     }
 }
 
@@ -149,6 +183,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::Icons, "Icons".to_string()),
             (Want::Textures, "Textures".to_string()),
             (Want::Visualizers, "Visualizers".to_string()),
+            (Want::Fonts, "Fonts".to_string()),
         ];
         let before = o.want;
         ComboBox::from_id_salt("online_want").selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
@@ -230,6 +265,8 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         let now = ui.ctx().input(|i| i.time);
         match o.here.get(&item.key()).cloned() {
             // Already here: straight onto the layer.
+            // A font that's here: onto the selected text layer again.
+            Some(path) if item.kind == Kind::Font => font_arrived(st, &item, &[path]),
             Some(path) => {
                 let layer = match then {
                     Then::Layer(id) => Some(id),
@@ -283,7 +320,9 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
     }
     p.text(egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, name, egui::FontId::proportional(11.0), Color32::LIGHT_GRAY);
     if let Some(path) = local {
-        resp.dnd_set_drag_payload(SourceDrag { name: crate::media::clip_name(path), source: crate::media::spec_for_path(path) });
+        if item.kind != Kind::Font {
+            resp.dnd_set_drag_payload(SourceDrag { name: crate::media::clip_name(path), source: crate::media::spec_for_path(path) });
+        }
     }
     let size = item.size.map_or(String::new(), |s| format!("\n{:.1} MB", s as f64 / 1e6));
     let doing = match (local, progress) {
@@ -334,6 +373,7 @@ fn kind_icon(kind: Kind) -> &'static str {
         Kind::Icon => icon::SHAPES,
         Kind::Texture => icon::CHECKERBOARD,
         Kind::Visualizer => icon::WAVEFORM,
+        Kind::Font => icon::TEXT_AA,
     }
 }
 

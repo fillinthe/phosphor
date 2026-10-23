@@ -13,27 +13,68 @@ pub struct FontChoice {
 
 pub const BUILTIN: [(&str, &str); 2] = [("Phosphor Sans (light)", "builtin:sans"), ("Phosphor Mono", "builtin:mono")];
 
-/// Built-in fonts plus the ones installed on this Mac, sorted by name. The first call scans the font
-/// folders (a fraction of a second); later calls are free.
-pub fn fonts() -> &'static [FontChoice] {
-    static FONTS: std::sync::OnceLock<Vec<FontChoice>> = std::sync::OnceLock::new();
-    FONTS.get_or_init(|| {
-        let mut out: Vec<FontChoice> = BUILTIN.iter().map(|(n, id)| FontChoice { name: n.to_string(), id: id.to_string() }).collect();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let mut found = system_fonts();
-            found.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-            found.dedup_by(|a, b| a.name == b.name);
-            out.extend(found);
-        }
-        out
-    })
+type FontList = std::sync::Arc<Vec<FontChoice>>;
+
+fn font_list() -> &'static std::sync::RwLock<Option<FontList>> {
+    static FONTS: std::sync::RwLock<Option<FontList>> = std::sync::RwLock::new(None);
+    &FONTS
+}
+
+/// Built-in fonts plus the ones installed on this computer and the ones downloaded into Phosphor (`fonts_dir`),
+/// sorted by name. The first call scans the font folders (a fraction of a second); later calls are free.
+pub fn fonts() -> FontList {
+    if let Some(list) = font_list().read().ok().and_then(|l| l.clone()) {
+        return list;
+    }
+    let mut out: Vec<FontChoice> = BUILTIN.iter().map(|(n, id)| FontChoice { name: n.to_string(), id: id.to_string() }).collect();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut found = system_fonts();
+        sort_fonts(&mut found);
+        out.extend(found);
+    }
+    let list = std::sync::Arc::new(out);
+    if let Ok(mut l) = font_list().write() {
+        // Another thread may have finished first: keep its list.
+        return l.get_or_insert(list).clone();
+    }
+    list
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn sort_fonts(list: &mut Vec<FontChoice>) {
+    list.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    list.dedup_by(|a, b| a.name == b.name);
+}
+
+/// Where fonts brought in from online libraries go (scanned with the installed ones).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn fonts_dir() -> Option<std::path::PathBuf> {
+    crate::show::storage_dir().map(|d| d.join("fonts"))
+}
+
+/// Adds a newly downloaded font file's faces to the list (no rescan). Returns their names.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn add_font_file(path: &std::path::Path) -> Vec<String> {
+    let new = faces_in(path);
+    let names = new.iter().map(|f| f.name.clone()).collect();
+    let mut all: Vec<FontChoice> = fonts().iter().filter(|f| !new.iter().any(|n| n.name == f.name)).cloned().collect();
+    let builtin = all.len().min(BUILTIN.len());
+    let mut rest = all.split_off(builtin);
+    rest.extend(new);
+    sort_fonts(&mut rest);
+    all.extend(rest);
+    if let Ok(mut l) = font_list().write() {
+        *l = Some(std::sync::Arc::new(all));
+    }
+    names
 }
 
 /// A new text layer's look: a bold installed font when there is one (titles read better bold).
 pub fn default_style() -> TextStyle {
     let bold = ["Avenir Next Bold", "Helvetica Neue Bold", "Arial Bold", "Futura Bold"];
-    let font = bold.iter().find_map(|want| fonts().iter().find(|f| f.name == *want)).map_or_else(|| "builtin:sans".to_string(), |f| f.id.clone());
+    let all = fonts();
+    let font = bold.iter().find_map(|want| all.iter().find(|f| f.name == *want)).map_or_else(|| "builtin:sans".to_string(), |f| f.id.clone());
     TextStyle { font, outline: 0.03, ..Default::default() }
 }
 
@@ -48,28 +89,36 @@ fn system_fonts() -> Vec<FontChoice> {
     if let Some(home) = std::env::var_os("HOME") {
         dirs.push(std::path::PathBuf::from(home).join("Library/Fonts"));
     }
+    dirs.extend(fonts_dir());
     let mut out = Vec::new();
     for dir in dirs {
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
         for e in entries.flatten() {
-            let path = e.path();
-            let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
-            if !matches!(ext.as_str(), "ttf" | "otf" | "ttc") {
-                continue;
-            }
             // Skip huge CJK collections: slow to read and rarely what a title wants.
             if e.metadata().is_ok_and(|m| m.len() > 30 << 20) {
                 continue;
             }
-            let Ok(bytes) = std::fs::read(&path) else { continue };
-            let count = ttf_parser::fonts_in_collection(&bytes).unwrap_or(1);
-            for index in 0..count.min(24) {
-                let Ok(face) = ttf_parser::Face::parse(&bytes, index) else { continue };
-                let Some(name) = face_name(&face) else { continue };
-                let id = if count > 1 { format!("{}#{index}", path.display()) } else { path.display().to_string() };
-                out.push(FontChoice { name, id });
-            }
+            out.extend(faces_in(&e.path()));
         }
+    }
+    out
+}
+
+/// The faces in one font file (a collection holds several).
+#[cfg(not(target_arch = "wasm32"))]
+fn faces_in(path: &std::path::Path) -> Vec<FontChoice> {
+    let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
+    if !matches!(ext.as_str(), "ttf" | "otf" | "ttc") {
+        return Vec::new();
+    }
+    let Ok(bytes) = std::fs::read(path) else { return Vec::new() };
+    let count = ttf_parser::fonts_in_collection(&bytes).unwrap_or(1);
+    let mut out = Vec::new();
+    for index in 0..count.min(24) {
+        let Ok(face) = ttf_parser::Face::parse(&bytes, index) else { continue };
+        let Some(name) = face_name(&face) else { continue };
+        let id = if count > 1 { format!("{}#{index}", path.display()) } else { path.display().to_string() };
+        out.push(FontChoice { name, id });
     }
     out
 }

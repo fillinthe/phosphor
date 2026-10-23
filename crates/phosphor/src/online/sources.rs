@@ -20,14 +20,16 @@ pub enum Source {
     Iconify,
     PolyHaven,
     MilkDrop,
+    GoogleFonts,
 }
 
 impl Source {
-    pub const ALL: [Source; 8] = [Source::Nasa, Source::Commons, Source::Archive, Source::Openverse, Source::Artic, Source::Iconify, Source::PolyHaven, Source::MilkDrop];
+    pub const ALL: [Source; 9] =
+        [Source::Nasa, Source::Commons, Source::Archive, Source::Openverse, Source::Artic, Source::Iconify, Source::PolyHaven, Source::MilkDrop, Source::GoogleFonts];
 
     /// The search answer is the library's whole list, the same every time (kept for the session, `super::get_cached`).
     pub fn whole_list(self) -> bool {
-        matches!(self, Source::PolyHaven | Source::MilkDrop)
+        matches!(self, Source::PolyHaven | Source::MilkDrop | Source::GoogleFonts)
     }
 
     pub fn name(self) -> &'static str {
@@ -40,6 +42,7 @@ impl Source {
             Source::Iconify => "Iconify",
             Source::PolyHaven => "Poly Haven",
             Source::MilkDrop => "MilkDrop presets",
+            Source::GoogleFonts => "Google Fonts",
         }
     }
 
@@ -52,6 +55,7 @@ impl Source {
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
             Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
+            Source::GoogleFonts => "About 1,900 open-licence font families for text layers.",
             Source::MilkDrop => "Nearly 10,000 MilkDrop visualisers (projectM's \"Cream of the Crop\" pack, sorted by Isosceles) that move to the music.",
         }
     }
@@ -65,6 +69,7 @@ impl Source {
             Source::Iconify => &[Kind::Icon],
             Source::PolyHaven => &[Kind::Texture],
             Source::MilkDrop => &[Kind::Visualizer],
+            Source::GoogleFonts => &[Kind::Font],
         }
     }
 
@@ -99,6 +104,8 @@ impl Source {
             // Poly Haven has no search: the whole list (filtered here, `poly_haven`).
             Source::PolyHaven => "https://api.polyhaven.com/assets?type=textures".to_string(),
             Source::MilkDrop => format!("https://api.github.com/repos/{MILK_REPO}/git/trees/master?recursive=1"),
+            // Every family (the list behind fonts.google.com; no key), searched here.
+            Source::GoogleFonts => "https://fonts.google.com/metadata/fonts".to_string(),
             Source::Artic => format!(
                 "https://api.artic.edu/api/v1/artworks/search?q={q}&query%5Bterm%5D%5Bis_public_domain%5D=true&fields=id,title,artist_title,image_id&limit={PAGE}&page={page}"
             ),
@@ -108,15 +115,19 @@ impl Source {
     /// The items in a search answer (for a library without its own search: the matches for `query` on `page`).
     pub fn parse_page(self, kind: Kind, query: &str, page: usize, body: &[u8]) -> Result<Vec<Item>, String> {
         if self.whole_list() {
-            let v: Value = serde_json::from_slice(body).map_err(|_| format!("{} sent something unreadable", self.name()))?;
-            return Ok(if self == Source::PolyHaven { poly_haven(&v, query, page) } else { milkdrop(&v, query, page) });
+            let v: Value = serde_json::from_slice(unguard(body)).map_err(|_| format!("{} sent something unreadable", self.name()))?;
+            return Ok(match self {
+                Source::PolyHaven => poly_haven(&v, query, page),
+                Source::GoogleFonts => google_fonts(&v, query, page),
+                _ => milkdrop(&v, query, page),
+            });
         }
         self.parse(kind, body)
     }
 
     /// The items in a search answer.
     pub fn parse(self, kind: Kind, body: &[u8]) -> Result<Vec<Item>, String> {
-        let v: Value = serde_json::from_slice(body).map_err(|_| format!("{} sent something unreadable", self.name()))?;
+        let v: Value = serde_json::from_slice(unguard(body)).map_err(|_| format!("{} sent something unreadable", self.name()))?;
         Ok(match self {
             Source::Nasa => nasa(&v, kind),
             Source::Openverse => openverse(&v),
@@ -126,6 +137,7 @@ impl Source {
             Source::Iconify => iconify(&v),
             Source::PolyHaven => poly_haven(&v, "", 1),
             Source::MilkDrop => milkdrop(&v, "", 1),
+            Source::GoogleFonts => google_fonts(&v, "", 1),
         })
     }
 }
@@ -427,6 +439,74 @@ fn poly_haven(v: &Value, query: &str, page: usize) -> Vec<Item> {
         .collect()
 }
 
+/// Google's answers can start with `)]}'` (a guard against being run as a script).
+fn unguard(body: &[u8]) -> &[u8] {
+    let start = body.iter().position(|b| *b == b'{' || *b == b'[').unwrap_or(0);
+    &body[start..]
+}
+
+/// Font families whose name or category holds every word of `query`, most popular first.
+fn google_fonts(v: &Value, query: &str, page: usize) -> Vec<Item> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let mut found: Vec<&Value> = v["familyMetadataList"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|f| {
+            let hay = format!("{} {}", text(&f["family"]), text(&f["category"])).to_lowercase();
+            words.iter().all(|w| hay.contains(w.as_str()))
+        })
+        .collect();
+    found.sort_by_key(|f| f["popularity"].as_u64().unwrap_or(u64::MAX));
+    found
+        .into_iter()
+        .skip((page.max(1) - 1) * PAGE)
+        .take(PAGE)
+        .map(|f| {
+            let family = text(&f["family"]);
+            let designers = f["designers"].as_array().map(|d| d.iter().map(text).collect::<Vec<_>>().join(", ")).unwrap_or_default();
+            Item {
+                source: Source::GoogleFonts,
+                kind: Kind::Font,
+                id: family.clone(),
+                title: format!("{family} ({})", text(&f["category"]).to_lowercase()),
+                thumb: String::new(),
+                file: None,
+                list: format!("https://fonts.google.com/download/list?family={}", url_encode(&family)),
+                size: None,
+                credit: phosphor_engine::Credit {
+                    title: family.clone(),
+                    author: designers,
+                    licence: "Open font licence (OFL, Apache or Ubuntu)".into(),
+                    licence_url: "https://fonts.google.com/attribution".into(),
+                    page: format!("https://fonts.google.com/specimen/{}", family.replace(' ', "+")),
+                    source: "Google Fonts".into(),
+                },
+            }
+        })
+        .collect()
+}
+
+/// A font family's files to download (file name, address): the regular and bold styles when it has them (else its
+/// first font, often one variable font holding every weight), at most four.
+pub fn font_files(list: &[u8]) -> Result<Vec<(String, String)>, String> {
+    let v: Value = serde_json::from_slice(unguard(list)).map_err(|_| "couldn't read the font's file list".to_string())?;
+    let all: Vec<(String, String)> = v["manifest"]["fileRefs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|f| (text(&f["filename"]), text(&f["url"])))
+        .filter(|(n, u)| (n.ends_with(".ttf") || n.ends_with(".otf")) && u.starts_with("https://"))
+        .map(|(n, u)| (n.rsplit('/').next().unwrap_or(&n).to_string(), u))
+        .collect();
+    let styles: Vec<(String, String)> = ["-Regular.", "-Bold.", "-Italic.", "-Black."].iter().filter_map(|s| all.iter().find(|(n, _)| n.contains(s)).cloned()).collect();
+    let pick = if styles.is_empty() { all.into_iter().take(1).collect::<Vec<_>>() } else { styles };
+    if pick.is_empty() {
+        return Err("Google Fonts listed no font file for this family".into());
+    }
+    Ok(pick.into_iter().take(4).collect())
+}
+
 /// The MilkDrop preset pack on GitHub.
 const MILK_REPO: &str = "projectM-visualizer/presets-cream-of-the-crop";
 
@@ -594,6 +674,16 @@ mod tests {
         assert_eq!(m[0].file.as_deref(), Some("https://raw.githubusercontent.com/projectM-visualizer/presets-cream-of-the-crop/master/Dancer/Aurora/%24%24%24%20Royal%20-%20Mashup%20%28257%29.milk"));
         assert!(m[0].credit.commercial());
         assert_eq!(Source::MilkDrop.parse_page(Kind::Visualizer, "", 1, tree).unwrap().len(), 2, "no words: every preset");
+
+        let meta = br#"{"familyMetadataList":[{"family":"Roboto","category":"Sans Serif","popularity":1,"designers":["Christian Robertson"]},{"family":"Bebas Neue","category":"Display","popularity":30,"designers":["Ryoichi Tsunekawa"]},{"family":"Lobster","category":"Display","popularity":20}]}"#;
+        let f = Source::GoogleFonts.parse_page(Kind::Font, "display", 1, meta).unwrap();
+        assert_eq!(f.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["Lobster", "Bebas Neue"], "most popular first");
+        assert_eq!(f[1].list, "https://fonts.google.com/download/list?family=Bebas%20Neue");
+        let list = br#")]}'
+{"manifest":{"files":[{"filename":"OFL.txt"}],"fileRefs":[{"filename":"static/Roboto-Bold.ttf","url":"https://fonts.gstatic.com/b.ttf"},{"filename":"Roboto[wdth,wght].ttf","url":"https://fonts.gstatic.com/v.ttf"},{"filename":"static/Roboto-Regular.ttf","url":"https://fonts.gstatic.com/r.ttf"}]}}"#;
+        assert_eq!(font_files(list).unwrap(), [("Roboto-Regular.ttf".to_string(), "https://fonts.gstatic.com/r.ttf".to_string()), ("Roboto-Bold.ttf".into(), "https://fonts.gstatic.com/b.ttf".into())]);
+        let variable = br#"{"manifest":{"fileRefs":[{"filename":"Inter[opsz,wght].ttf","url":"https://fonts.gstatic.com/i.ttf"}]}}"#;
+        assert_eq!(font_files(variable).unwrap().len(), 1, "a variable font alone");
     }
 
     #[test]
