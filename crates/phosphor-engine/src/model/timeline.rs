@@ -151,11 +151,35 @@ impl Default for Event {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+pub struct SoundTrack {
+    pub path: String,
+    pub start: f64,
+    pub volume: f32,
+}
+
+impl Default for SoundTrack {
+    fn default() -> Self {
+        Self { path: String::new(), start: 0.0, volume: 1.0 }
+    }
+}
+
+impl SoundTrack {
+    /// Where in the sound the playhead at `t` is (None before it starts).
+    pub fn position(&self, t: f64) -> Option<f64> {
+        (t >= self.start).then(|| t - self.start)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Timeline {
     pub tracks: Vec<Track>,
     pub markers: Vec<Marker>,
     /// Events, in no particular order.
     pub events: Vec<Event>,
+    /// A sound that plays along (music, a voice-over): the file, where it starts on the timeline (seconds) and how
+    /// loud (1 = as it is).
+    pub sound: Option<SoundTrack>,
     /// Seconds.
     pub length: f64,
     /// Back to the start at the end.
@@ -164,7 +188,7 @@ pub struct Timeline {
 
 impl Default for Timeline {
     fn default() -> Self {
-        Self { tracks: Vec::new(), markers: Vec::new(), events: Vec::new(), length: 60.0, looping: false }
+        Self { tracks: Vec::new(), markers: Vec::new(), events: Vec::new(), sound: None, length: 60.0, looping: false }
     }
 }
 

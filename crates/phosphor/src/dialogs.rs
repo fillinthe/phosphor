@@ -18,6 +18,8 @@ pub enum Purpose {
     RenderFile,
     /// Where extra recorder `i` writes.
     RecorderFile(usize),
+    /// The timeline's sound track.
+    TimelineSound,
     ExportShow,
     TouchOsc,
     /// A TouchOSC layout to bring in as Control Surface pages.
