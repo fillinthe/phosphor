@@ -185,7 +185,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                             sets.push((target.clone(), w.choice_value(((x * n as f32) as usize).min(n - 1))));
                         }
                     }
-                    WidgetKind::Label => {}
+                    WidgetKind::Label | WidgetKind::Computed => {}
                     // Typed words go on the text layer when Enter is pressed (or the field is left).
                     WidgetKind::Text => {
                         let key = id.with("draft");
@@ -383,6 +383,16 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
                 p.text(r.center(), egui::Align2::CENTER_CENTER, name, font.clone(), if on { Color32::BLACK } else { p.ctx().global_style().visuals.text_color() });
             }
         }
+        WidgetKind::Computed => {
+            p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
+            let mut fill = rect;
+            fill.set_right(rect.left() + rect.width() * w.value);
+            p.rect_filled(fill, 6.0, c.gamma_multiply(0.35));
+            p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
+            let shown = if w.formula.trim().is_empty() { "(no formula)" } else { w.formula.trim() };
+            p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, format!("{} = {shown}", w.label), font.clone(), Color32::WHITE);
+            p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), Color32::from_gray(220));
+        }
         WidgetKind::Multi => {
             p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);
             let n = w.bars.len().max(1);
@@ -462,6 +472,35 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             WidgetKind::Color => "Red drives",
             _ => "Drives",
         };
+        if w.kind == WidgetKind::Computed {
+            ui.label(RichText::new("Formula").strong());
+            crate::ui::text_field(ui, &mut w.formula, "a * b, max(a, b), sin(beat)…", Some(280.0))
+                .on_hover_text("a, b, c… = the controls below (0..1); t = seconds, beat = beats, val = its own value. + - * / %, min, max, clamp, mix, pow, sin, cos (a turn per 1.0), abs, floor, fract. The answer is kept in 0..1.");
+            let mut remove = None;
+            for (i, t) in w.inputs.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(((b'a' + i as u8) as char).to_string()).monospace().strong());
+                    if let Some(picked) = target_picker(ui, ("computed_in", id, i), targets, Some(t), 220.0) {
+                        *t = picked;
+                    }
+                    if ui.small_button(icon::X).on_hover_text("Remove").clicked() {
+                        remove = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = remove {
+                w.inputs.remove(i);
+            }
+            if w.inputs.len() < 8 {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(((b'a' + w.inputs.len() as u8) as char).to_string()).monospace().color(Color32::GRAY));
+                    if let Some(picked) = target_picker(ui, ("computed_new", id), targets, None, 220.0) {
+                        w.inputs.push(picked);
+                    }
+                });
+            }
+            ui.add_space(4.0);
+        }
         if w.kind == WidgetKind::Multi {
             ui.horizontal(|ui| {
                 ui.label("Bars");

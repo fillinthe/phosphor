@@ -56,6 +56,7 @@ pub(crate) mod play;
 mod quick;
 pub(crate) use quick::dice;
 mod recording;
+mod computed;
 pub(crate) mod offline;
 mod timeline;
 #[cfg(not(target_arch = "wasm32"))]

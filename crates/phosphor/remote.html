@@ -323,6 +323,12 @@ function renderSurface() {
       } else {
         el = document.createElement('div'); el.dataset.key = 'sf' + w.id;
         if (w.kind === 'Label') { el.className = 'w lbl'; el.style.color = w.color; el.textContent = w.label; }
+        else if (w.kind === 'Computed') {
+          // Worked out on the Mac: shown, not touched.
+          el.className = 'w lbl'; el.style.color = w.color;
+          el.setValue = v => { el.textContent = `${w.label} ${Math.round(v * 100)}%`; };
+          el.setValue(w.value);
+        }
         else if (w.kind === 'Text') {
           // Words for a text layer: sent on Enter or when the box is left.
           el.className = 'w'; el.style.borderColor = w.color;
@@ -390,6 +396,7 @@ function renderSurface() {
     else if (w.kind === 'XyPad' || w.kind === 'Color') el.setValue(w.value, w.value_y);
     else if (w.kind === 'Choices') el.setValue(w.value);
     else if (w.kind === 'Multi') el.setValue(w.bars);
+    else if (w.kind === 'Computed') el.setValue(w.value);
     else if (w.kind === 'Button' || w.kind === 'Toggle') { const on = w.value > 0.5 || el.classList.contains('held'); el.style.background = on ? el.dataset.color : '#1b1f22'; el.style.color = on ? '#000' : '#eee'; el.style.borderColor = el.dataset.color; }
   });
 }

@@ -30,10 +30,13 @@ pub enum WidgetKind {
     /// A row of bars side by side, each with its own value and targets (draw across them in one stroke): eight
     /// layer levels, an EQ, a step pattern.
     Multi,
+    /// A value worked out from other controls by a formula (`a * b`, `max(a, b)`, `sin(beat)`…), kept up to date
+    /// by itself; it drives its targets like a fader.
+    Computed,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 10] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::Multi, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Text, WidgetKind::Label];
+    pub const ALL: [WidgetKind; 11] = [WidgetKind::Button, WidgetKind::Toggle, WidgetKind::Fader, WidgetKind::Slider, WidgetKind::Multi, WidgetKind::XyPad, WidgetKind::Color, WidgetKind::Choices, WidgetKind::Computed, WidgetKind::Text, WidgetKind::Label];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -47,6 +50,7 @@ impl WidgetKind {
             WidgetKind::Choices => "Choices",
             WidgetKind::Text => "Text field",
             WidgetKind::Multi => "Multi-slider",
+            WidgetKind::Computed => "Computed value",
         }
     }
 
@@ -62,6 +66,7 @@ impl WidgetKind {
             WidgetKind::Choices => (6.0, 1.0),
             WidgetKind::Text => (6.0, 1.0),
             WidgetKind::Multi => (6.0, 3.0),
+            WidgetKind::Computed => (4.0, 1.0),
         }
     }
 }
@@ -103,6 +108,9 @@ pub struct SurfaceWidget {
     pub text_layer: Option<u64>,
     /// Multi-slider: its bars, left to right.
     pub bars: Vec<SurfaceBar>,
+    /// Computed value: the formula, and the controls it reads (`a`, `b`, `c`… in order).
+    pub formula: String,
+    pub inputs: Vec<super::ControlTarget>,
 }
 
 /// One bar of a multi-slider: its value and what it drives.
@@ -118,7 +126,7 @@ pub const DEFAULT_BARS: usize = 8;
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None, bars: Vec::new() }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None, bars: Vec::new(), formula: String::new(), inputs: Vec::new() }
     }
 }
 
@@ -130,6 +138,25 @@ impl SurfaceWidget {
         }
         let [lo, hi] = self.guest_range;
         v.clamp(lo.min(hi), hi.max(lo))
+    }
+
+    /// Computed value: the formula worked out with its inputs' values (`a`, `b`… 0..1), the show's time in seconds
+    /// (`t`), the beat count (`beat`) and its own value (`val`); clamped to 0..1. None when it doesn't add up.
+    pub fn compute(&self, inputs: &[f32], time: f64, beats: f64) -> Option<f32> {
+        let var = |name: &str| -> Option<f64> {
+            match name {
+                "t" => Some(time),
+                "beat" => Some(beats),
+                "val" | "$VAL" | "VAL" => Some(self.value as f64),
+                _ => {
+                    let mut c = name.chars();
+                    let (Some(ch @ 'a'..='h'), None) = (c.next(), c.next()) else { return None };
+                    Some(inputs.get(ch as usize - 'a' as usize).copied().unwrap_or(0.0) as f64)
+                }
+            }
+        };
+        let v = crate::expr::eval(self.formula.trim(), &var)?;
+        v.is_finite().then(|| (v as f32).clamp(0.0, 1.0))
     }
 
     /// Multi-slider: makes it `n` bars (1..=64), keeping the ones it has.
@@ -358,5 +385,25 @@ mod text_tests {
         let crate::SourceSpec::Text(s) = &c.layers[0].source else { panic!() };
         assert_eq!(s.text, "Happy birthday Sam");
         assert_eq!(c.surface.widgets[0].text, "Happy birthday Sam");
+    }
+}
+
+#[cfg(test)]
+mod computed_tests {
+    use super::*;
+
+    #[test]
+    fn a_computed_value_works_out_its_formula() {
+        let w = |f: &str| SurfaceWidget { kind: WidgetKind::Computed, formula: f.into(), value: 0.3, ..Default::default() };
+        assert_eq!(w("a * b").compute(&[0.5, 0.5], 0.0, 0.0), Some(0.25));
+        assert_eq!(w("max(a, b)").compute(&[0.2, 0.7], 0.0, 0.0), Some(0.7));
+        assert_eq!(w("1 - c").compute(&[0.0], 0.0, 0.0), Some(1.0), "a missing input reads 0");
+        assert_eq!(w("a + b").compute(&[0.9, 0.9], 0.0, 0.0), Some(1.0), "kept in 0..1");
+        assert_eq!(w("val").compute(&[], 0.0, 0.0), Some(0.3));
+        assert_eq!(w("sin(beat)").compute(&[], 0.0, 0.25), Some(1.0), "a quarter turn");
+        assert_eq!(w("fract(t / 4)").compute(&[], 5.0, 0.0), Some(0.25));
+        assert_eq!(w("a / 0").compute(&[1.0], 0.0, 0.0), Some(0.0), "dividing by 0 gives 0");
+        assert_eq!(w("nonsense(").compute(&[], 0.0, 0.0), None);
+        assert_eq!(w("i").compute(&[], 0.0, 0.0), None, "only a..h are inputs");
     }
 }
