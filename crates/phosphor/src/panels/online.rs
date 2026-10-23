@@ -20,6 +20,7 @@ enum Want {
     Visualizers,
     Fonts,
     Music,
+    Shaders,
 }
 
 impl Want {
@@ -33,6 +34,7 @@ impl Want {
             Want::Visualizers => &[Kind::Visualizer],
             Want::Fonts => &[Kind::Font],
             Want::Music => &[Kind::Music],
+            Want::Shaders => &[Kind::Shader],
         }
     }
 }
@@ -72,6 +74,8 @@ pub struct Online {
     here: HashMap<(Source, String), String>,
     /// Bench: put the first picture found on a new layer.
     bench: bool,
+    /// A shader just downloaded, to put on a layer once it's loaded: (slug, layer, give up at).
+    apply: Option<(String, Option<u64>, f64)>,
     /// A starter show being built.
     filling: Vec<Filling>,
     starter: Option<&'static str>,
@@ -81,7 +85,7 @@ impl Online {
     /// Bench `--quick online` (PHOSPHOR_ONLINE_QUERY): searches like the panel does.
     pub fn bench_search(&mut self, query: &str) {
         self.query = query.to_string();
-        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font, Kind::Music];
+        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font, Kind::Music, Kind::Shader];
         self.search = Some(Search::start(query, &Source::ALL, &kinds, false, None));
         self.bench = true;
     }
@@ -111,6 +115,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             "visualizer" => i.kind == Kind::Visualizer,
             "font" => i.kind == Kind::Font,
             "music" => i.kind == Kind::Music,
+            "shader" => i.kind == Kind::Shader,
             _ => i.kind == Kind::Picture,
         };
         if let Some(item) = s.items.iter().find(wanted).cloned() {
@@ -127,6 +132,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
         }
     }
     fill_starter(st);
+    apply_shader(st, ctx.input(|i| i.time));
     if st.online.downloads.is_empty() {
         return;
     }
@@ -156,6 +162,10 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
         let Some(path) = paths.first().cloned() else { continue };
         if item.kind == Kind::Font {
             font_arrived(st, &item, &paths);
+            continue;
+        }
+        if item.kind == Kind::Shader {
+            shader_arrived(st, &item, &path, then, now);
             continue;
         }
         // Its title from the library reads better than the file name.
@@ -246,6 +256,44 @@ fn fill_starter(st: &mut State) {
     }
 }
 
+/// A downloaded ISF shader: the library scans again (it takes a few seconds to appear), and once it's in it goes on
+/// the layer it was meant for (an effect added, or a generator as its source; `apply_shader`).
+fn shader_arrived(st: &mut State, item: &Item, path: &str, then: Then, now: f64) {
+    st.online.here.insert(item.key(), path.to_string());
+    st.isf = crate::isf_lib::IsfLibrary::scan();
+    let stem = std::path::Path::new(path).file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+    let layer = match then {
+        Then::Layer(id) => Some(id),
+        Then::NewLayer => Some(st.add_layer()),
+        Then::Bin | Then::Cell(..) => st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id)),
+    };
+    st.online.apply = Some((phosphor_engine::custom::slug(&stem), layer, now + 30.0));
+    st.notice = Some(format!("{} is loading: it appears in Effects / Sources (ISF) in a few seconds", item.title));
+}
+
+/// Puts a just-downloaded shader on its layer once the ISF scan has it (gives up after 30 s).
+fn apply_shader(st: &mut State, now: f64) {
+    let Some((slug, layer, until)) = st.online.apply.clone() else { return };
+    if now > until {
+        st.online.apply = None;
+        return;
+    }
+    let effect = format!("{}{slug}", phosphor_engine::shaders::ISF_EFFECT);
+    let generator = format!("{}{slug}", phosphor_engine::shaders::ISF_GENERATOR);
+    if phosphor_engine::shaders::effect(&effect).is_some() {
+        st.online.apply = None;
+        if let Some(id) = layer {
+            super::effects::add_effect_to(st, id, &effect);
+            st.notice = Some(format!("Added the {slug} effect to {}", crate::ui::layer_name(&st.comp.layers, id)));
+        }
+    } else if let Some(desc) = phosphor_engine::shaders::generator(&generator) {
+        st.online.apply = None;
+        if let Some(id) = layer {
+            st.launch_source(id, SourceSpec::Generator(generator.clone()), Vec::new(), desc.name.to_string(), now);
+        }
+    }
+}
+
 /// A downloaded font family joins the font list; the selected text layer (if any) takes it on.
 fn font_arrived(st: &mut State, item: &Item, paths: &[String]) {
     let faces: Vec<String> = paths.iter().flat_map(|p| crate::text::add_font_file(std::path::Path::new(p))).collect();
@@ -286,6 +334,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::Visualizers, "Visualizers".to_string()),
             (Want::Fonts, "Fonts".to_string()),
             (Want::Music, "Music".to_string()),
+            (Want::Shaders, "Shaders (ISF)".to_string()),
         ];
         let before = o.want;
         ComboBox::from_id_salt("online_want").selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
@@ -494,6 +543,7 @@ fn kind_icon(kind: Kind) -> &'static str {
         Kind::Visualizer => icon::WAVEFORM,
         Kind::Font => icon::TEXT_AA,
         Kind::Music => icon::MUSIC_NOTES,
+        Kind::Shader => icon::SPARKLE,
     }
 }
 

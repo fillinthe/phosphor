@@ -105,7 +105,8 @@ impl PhosphorApp {
             let credits = self.state.comp.media_bin.iter().filter(|m| m.credit.is_some()).count();
             let layer = self.state.comp.layers.last().map(|l| l.source.label()).unwrap_or_default();
             let font = self.state.comp.layers.iter().find_map(|l| if let phosphor_engine::SourceSpec::Text(t) = &l.source { Some(crate::text::font_name(&t.font)) } else { None }).unwrap_or_default();
-            println!("{line} credited_files={credits} top_layer={layer} text_font={font:?} notice={:?}", self.state.notice);
+            let fx: Vec<String> = self.state.comp.layers.last().map(|l| l.effects.iter().map(|e| e.effect.clone()).collect()).unwrap_or_default();
+            println!("{line} credited_files={credits} top_layer={layer} top_effects={fx:?} text_font={font:?} notice={:?}", self.state.notice);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(s) = self.state.link_import.status() {

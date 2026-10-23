@@ -29,6 +29,8 @@ pub enum Kind {
     Font,
     /// Songs (clips with sound and no picture: the visuals can follow them).
     Music,
+    /// ISF effects and generators (they join the Effects / Sources lists).
+    Shader,
 }
 
 /// One search result.
@@ -268,6 +270,7 @@ pub fn file_name(item: &Item, url: &str) -> String {
             Kind::Visualizer => "milk",
             Kind::Font => "ttf",
             Kind::Music => "mp3",
+            Kind::Shader => "fs",
             Kind::Picture | Kind::Texture => "jpg",
         }
         .into()
@@ -306,6 +309,9 @@ pub fn saved_credit(path: &Path) -> Option<Credit> {
 /// Downloads an item's files (streamed to disk, `progress` as it goes) and saves its credit beside the first.
 /// Most items are one file; a font family is a few (regular, bold), saved where text layers find fonts.
 fn fetch(item: &Item, max: u64, progress: impl Fn(u64, Option<u64>)) -> Result<Vec<PathBuf>, String> {
+    if item.kind == Kind::Shader {
+        return fetch_shader(item).map(|p| vec![p]);
+    }
     if item.kind == Kind::Font {
         let dir = crate::text::fonts_dir().ok_or("no fonts folder")?;
         std::fs::create_dir_all(&dir).map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
@@ -349,6 +355,43 @@ fn fetch(item: &Item, max: u64, progress: impl Fn(u64, Option<u64>)) -> Result<V
         let _ = std::fs::write(sidecar(&path), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
     }
     Ok(vec![path])
+}
+
+/// An ISF shader from isf.video: checked with Phosphor's converter first (so only ones that work are kept), then
+/// saved where the ISF scan finds it (`isf/online/`; its vertex stage beside it when it has its own).
+fn fetch_shader(item: &Item) -> Result<PathBuf, String> {
+    let v: serde_json::Value = serde_json::from_slice(&get_bytes(&item.list)?).map_err(|_| "couldn't read the shader".to_string())?;
+    let fs = v["rawFragmentSource"].as_str().unwrap_or("").to_string();
+    let vs = v["rawVertexSource"].as_str().map(str::to_string).filter(|s| s.contains("void main") && !is_default_vertex(s));
+    if fs.trim().is_empty() {
+        return Err("the shader is empty".into());
+    }
+    let name = item.title.replace(['/', '\\', ':'], "-");
+    let slug = phosphor_engine::custom::slug(&name);
+    match std::panic::catch_unwind(|| phosphor_isf::import(&slug, &fs, vs.as_deref())) {
+        Ok(Ok(sh)) if sh.unsupported.is_none() && !sh.wgsl.is_empty() => {}
+        Ok(Ok(sh)) => return Err(format!("Phosphor can't run this one yet: {}", sh.unsupported.unwrap_or_else(|| "nothing to draw".into()))),
+        Ok(Err(e)) => return Err(format!("Phosphor can't run this one: {e:?}")),
+        Err(_) => return Err("Phosphor's converter couldn't read this one".into()),
+    }
+    let dir = crate::show::storage_dir().ok_or("no settings folder")?.join("isf").join("online");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("{name}.fs"));
+    std::fs::write(&path, fs).map_err(|e| e.to_string())?;
+    match vs {
+        Some(vs) => std::fs::write(path.with_extension("vs"), vs).map_err(|e| e.to_string())?,
+        None => {
+            let _ = std::fs::remove_file(path.with_extension("vs"));
+        }
+    }
+    let _ = std::fs::write(sidecar(&path), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
+    Ok(path)
+}
+
+/// The vertex stage the ISF editor gives every shader (nothing of its own).
+fn is_default_vertex(vs: &str) -> bool {
+    let body: String = vs.chars().filter(|c| !c.is_whitespace()).collect();
+    body == "voidmain(){isf_vertShaderInit();}"
 }
 
 /// How a download that's too big starts its error.
@@ -515,6 +558,26 @@ mod tests {
         let (url, size) = sources::pick_file(&song, &get_bytes(&song.list).expect("files")).expect("a track");
         println!("ONLINE music {} ({}) {url} {size:?}", song.title, song.credit.licence);
         assert!(url.ends_with(".mp3"));
+        // ISF shaders: the first one Phosphor can run is saved where the ISF scan looks.
+        let mut s = Search::start("tunnel", &[Source::IsfOnline], &[Kind::Shader], false, None);
+        while s.busy() {
+            std::thread::sleep(Duration::from_millis(100));
+            s.poll();
+        }
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        let mut tried = Vec::new();
+        let saved = s.items.iter().take(8).find_map(|i| match fetch_shader(i) {
+            Ok(p) => Some(p),
+            Err(e) => {
+                tried.push(format!("{}: {e}", i.title));
+                None
+            }
+        });
+        println!("ONLINE isf {} found; saved {saved:?}; couldn't: {tried:?}", s.items.len());
+        let saved = saved.expect("one that runs");
+        let _ = std::fs::remove_file(sidecar(&saved));
+        let _ = std::fs::remove_file(saved.with_extension("vs"));
+        let _ = std::fs::remove_file(&saved);
         // A font family: its files are found and one draws text.
         let mut s = Search::start("bebas", &[Source::GoogleFonts], &[Kind::Font], false, None);
         while s.busy() {

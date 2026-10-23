@@ -63,6 +63,10 @@ impl Credit {
 /// A licence name allows commercial use: anything without a non-commercial clause.
 pub fn licence_commercial(licence: &str) -> bool {
     let l = licence.to_ascii_uppercase().replace(['-', '_'], " ");
+    // No licence stated: not safe for paid work.
+    if l.starts_with("UNKNOWN") {
+        return false;
+    }
     !l.split_whitespace().any(|w| w == "NC" || w.starts_with("NONCOMMERCIAL")) && !l.contains("NON COMMERCIAL")
 }
 
