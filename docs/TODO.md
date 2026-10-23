@@ -146,7 +146,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
 - [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
 - [x] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
-- [~] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG and PNG export, masks and lines from SVG. Left: PDF.
+- [x] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG, PNG and PDF export (Save as › .pdf: a vector page the output's size), masks and lines from SVG. Checked: tests; the PDF passes qpdf's check and was looked at.
 - [~] 81. **SVG and Lottie** (After Effects) animations as clips (M). Done: SVG. Left: Lottie.
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
