@@ -662,3 +662,49 @@ fn deep_colour_keeps_every_look() {
         assert!(diff < 2.0, "{}: mean difference {diff:.2}", path.display());
     }
 }
+
+/// A 3D model's light and edges reach the output: shaded, its grey faces come out at different brightnesses;
+/// with edges, bright lines appear.
+#[test]
+fn model_light_and_edges_draw() {
+    let Some(mut engine) = test_engine() else { return };
+    let cube = "v -1 -1 1\nv 1 -1 1\nv 1 1 1\nv -1 1 1\nv -1 -1 -1\nv 1 -1 -1\nv 1 1 -1\nv -1 1 -1\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n\
+f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/1 3/2 7/3 8/4\nf 5/1 6/2 2/3 1/4\n";
+    let path = std::env::temp_dir().join("phosphor-gpu-lit-cube.obj");
+    std::fs::write(&path, cube).unwrap();
+    let mut comp = Composition { width: 64, height: 64, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.5, 0.5, 0.5], ..Default::default() });
+    let out = comp.add_output();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    (o.width, o.height) = (128, 128);
+    o.mapping.enabled = true;
+    o.mapping.add_surface(50).model = Some(crate::mapping::Model3d { path: path.to_string_lossy().to_string(), yaw: 0.08, pitch: 0.06, ..Default::default() });
+    let levels = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (_, _, px) = engine.read_output_of(out).expect("output");
+        let lit: Vec<u8> = px.chunks(4).map(|p| p[0]).filter(|v| *v > 8).collect();
+        let mut kinds: Vec<u8> = lit.iter().map(|v| v / 16).collect();
+        kinds.sort();
+        kinds.dedup();
+        (kinds.len(), lit.iter().filter(|v| **v > 200).count())
+    };
+    let model = |comp: &mut Composition| comp.outputs[0].mapping.surfaces[0].model.as_mut().unwrap().clone();
+    let (flat_kinds, flat_bright) = levels(&mut engine, &comp);
+    let mut m = model(&mut comp);
+    m.shade = 1.0;
+    m.light = [0.05, 0.0];
+    comp.outputs[0].mapping.surfaces[0].model = Some(m.clone());
+    let (lit_kinds, _) = levels(&mut engine, &comp);
+    m.edges = 3.0;
+    comp.outputs[0].mapping.surfaces[0].model = Some(m);
+    let (_, edge_bright) = levels(&mut engine, &comp);
+    if let Ok(dump) = std::env::var("PHOSPHOR_DUMP_PPM") {
+        let (w, h, px) = engine.read_output_of(out).unwrap();
+        let mut ppm = format!("P6 {w} {h} 255\n").into_bytes();
+        ppm.extend(px.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
+        std::fs::write(dump, ppm).unwrap();
+    }
+    let _ = std::fs::remove_file(&path);
+    assert!(lit_kinds >= flat_kinds + 2, "shaded faces: {flat_kinds} brightness bands flat, {lit_kinds} lit");
+    assert!(edge_bright > flat_bright + 100, "edges: {flat_bright} bright pixels before, {edge_bright} after");
+}

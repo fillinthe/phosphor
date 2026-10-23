@@ -797,6 +797,21 @@ impl Engine {
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
                     passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    // Its light (faces shaded, multiplied over the picture) and glowing edges (added on top).
+                    let plain = Uniforms { resolution: [ow as f32, oh as f32], ..Uniforms::with_params(&[]) };
+                    if m.shade > 0.001 {
+                        let hash = hash_points(key.iter().chain([&[m.shade, 0.0], &m.light]), &[ow, oh, 1]);
+                        if let Some(shade) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id | 1 << 62), hash, || m.shade_triangles(aspect)) {
+                            passes.push(Pass { entry: "fs_mesh_shade_mul", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: plain, mesh: Some(shade), bufs: Vec::new() });
+                        }
+                    }
+                    if m.edges > 0.0 && m.edge_glow > 0.0 {
+                        let hash = hash_points(key.iter().chain([&[m.edges, 0.0]]), &[ow, oh, 2]);
+                        if let Some(edges) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id | 1 << 61), hash, || m.edge_triangles(aspect, m.edges, (ow, oh))) {
+                            let glow = Uniforms { opacity: m.edge_glow * s.opacity * fade, ..plain };
+                            passes.push(Pass { entry: "fs_mesh_glow_add", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: glow, mesh: Some(edges), bufs: Vec::new() });
+                        }
+                    }
                     continue;
                 }
                 // Line slice: a strip along a polyline, drawn like a mesh.
