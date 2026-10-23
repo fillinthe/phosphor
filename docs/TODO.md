@@ -172,7 +172,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 97. **Arduino** (Firmata): sensors in, LEDs / servos out (M). Hardware.
       MIDI / OSC panel › Arduino › its port (StandardFirmata): analog inputs and digital pins map like MIDI (Learn works); Send out › Arduino drives PWM pins. Checked: tests (Firmata in and out; a pretend board on a pseudo-terminal). Not tried with a real board.
 - [ ] 98. **Depth cameras** (Kinect v2, RealSense) (M). Hardware.
-- [ ] 99. **Lasers** (ILDA files, Ether Dream, Helios) (M). Hardware, and laser safety.
+- [~] 99. **Lasers** (ILDA files, Ether Dream, Helios) (M). Done: ILDA files play as clips. Left: sending to a real laser (Ether Dream, Helios): hardware, and laser safety.
 
 ### Not planned (say if you want any)
 Quartz Composer / Vuo / TouchDesigner hosting (QC is dead, the others need their own apps), Core Image filters,

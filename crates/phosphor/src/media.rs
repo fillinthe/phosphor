@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use phosphor_engine::{Composition, Engine, SourceSpec};
 
 #[cfg(not(target_arch = "wasm32"))]
+pub mod ilda;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod live;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod preload;
@@ -48,7 +50,8 @@ pub fn render_svg_sized(data: &[u8], longest: f32) -> Result<image::RgbaImage, S
 /// Pictures the image library can't read: FFmpeg turns them into a PNG first (`decode_still`).
 #[cfg(not(target_arch = "wasm32"))]
 const FFMPEG_STILLS: &[&str] = &["psd", "heic", "heif"];
-const MOVIE_EXTS: &[&str] = &["mov", "mp4", "m4v", "webm", "mkv", "avi", "gif", "mpg", "mpeg", "wmv", "flv", "3gp", "mxf", "ts", "m2ts"];
+/// "ild" = a laser show (`ilda`): drawn into a movie the first time it opens.
+const MOVIE_EXTS: &[&str] = &["ild", "mov", "mp4", "m4v", "webm", "mkv", "avi", "gif", "mpg", "mpeg", "wmv", "flv", "3gp", "mxf", "ts", "m2ts"];
 /// Sound files play as clips with an empty picture (their sound can drive the visuals: Audio panel → Clip sound).
 const SOUND_EXTS: &[&str] = &["mp3", "wav", "aac", "m4a", "flac", "ogg", "aiff", "aif", "opus"];
 
