@@ -1,6 +1,7 @@
 //! Tiny arithmetic for multi-pass buffer sizes (ISF `WIDTH` / `HEIGHT`): numbers, variables
 //! (`$WIDTH`, `$HEIGHT`, input names), `+ - * / %`, parentheses, unary minus, comparisons and
-//! `floor ceil round abs min max pow sqrt`.
+//! `floor ceil round abs min max pow sqrt`, and for control formulas `sin cos` (a turn per 1.0, 0..1 out),
+//! `fract clamp mix`.
 
 pub fn eval(src: &str, var: &dyn Fn(&str) -> Option<f64>) -> Option<f64> {
     let mut p = Parser { s: src.as_bytes(), i: 0, var };
@@ -128,6 +129,12 @@ impl Parser<'_> {
                     "min" => Some(a(0)?.min(a(1)?)),
                     "max" => Some(a(0)?.max(a(1)?)),
                     "pow" => Some(a(0)?.powf(a(1)?)),
+                    // One turn per 1.0 (so `sin(beat)` goes round once a beat), 0..1 out.
+                    "sin" => a(0).map(|v| (v * std::f64::consts::TAU).sin() * 0.5 + 0.5),
+                    "cos" => a(0).map(|v| (v * std::f64::consts::TAU).cos() * 0.5 + 0.5),
+                    "fract" => a(0).map(|v| v.rem_euclid(1.0)),
+                    "clamp" => Some(a(0)?.clamp(a(1)?, a(2)?.max(a(1)?))),
+                    "mix" => Some(a(0)? + (a(1)? - a(0)?) * a(2)?),
                     _ => None,
                 };
             }

@@ -106,6 +106,7 @@ impl PhosphorApp {
         }
         self.state.run_multi_edit();
         self.state.run_timeline(now);
+        self.state.run_computed(now);
         if let Some(target) = ctx.data_mut(|d| {
             let id = egui::Id::new(crate::ui::KEY_REQUEST);
             let t = d.get_temp::<phosphor_engine::ControlTarget>(id);

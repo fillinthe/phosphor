@@ -385,7 +385,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
                         guarded!(ui, *c, egui::DragValue::new(c).range(0.1..=8.0).speed(0.02)).on_hover_text("Above 1: slow then fast; below 1: fast then slow");
                     }
                     ValueFx::Formula(f) => {
-                        text_field(ui, f, "1 - $VAL", Some(140.0)).on_hover_text("$VAL is the value (0..1); + - * / ^, sin, cos, abs, min, max, clamp…");
+                        text_field(ui, f, "1 - $VAL", Some(140.0)).on_hover_text("$VAL is the value (0..1); + - * / %, pow, sin, cos (a turn per 1.0), abs, min, max, clamp, mix, fract, floor…");
                     }
                     ValueFx::Delay(s) => {
                         guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=30.0).speed(0.01).suffix(" s")).on_hover_text("Each move lands this much later");
