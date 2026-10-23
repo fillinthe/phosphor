@@ -67,6 +67,12 @@ impl Thumbs {
         self.cache.get(key).and_then(|h| h.as_ref().map(|h| h.id()))
     }
 
+    /// A loaded thumbnail's width / height (to fit it in a tile without stretching).
+    pub fn aspect(&self, path: &str) -> Option<f32> {
+        let size = self.cache.get(path)?.as_ref()?.size();
+        (size[1] > 0).then(|| size[0] as f32 / size[1] as f32)
+    }
+
     pub fn is_pending(&self, path: &str) -> bool {
         self.pending.contains(path)
     }
