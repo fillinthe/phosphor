@@ -555,6 +555,17 @@ fn milkdrop(v: &Value, query: &str, page: usize) -> Vec<Item> {
 
 /// For sources that list an item's files separately (NASA, Internet Archive): the file to download from that list,
 /// and its size when known.
+/// Smaller copies to fall back on when `pick_file`'s is too big (NASA's medium and mobile versions), biggest first.
+pub fn smaller_files(item: &Item, list: &[u8]) -> Vec<String> {
+    if item.source != Source::Nasa {
+        return Vec::new();
+    }
+    let Ok(v) = serde_json::from_slice::<Value>(list) else { return Vec::new() };
+    let urls: Vec<String> = v.as_array().into_iter().flatten().map(|u| https(&text(u))).collect();
+    let order: &[&str] = if item.kind == Kind::Video { &["~medium.mp4", "~mobile.mp4"] } else { &["~medium.jpg", "~small.jpg"] };
+    order.iter().filter_map(|end| urls.iter().find(|u| u.to_ascii_lowercase().ends_with(end)).cloned()).collect()
+}
+
 pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), String> {
     let v: Value = serde_json::from_slice(list).map_err(|_| "couldn't read the list of files".to_string())?;
     match item.source {
@@ -622,6 +633,7 @@ mod tests {
         assert_eq!((n[0].credit.author.as_str(), n[0].credit.licence.as_str()), ("NASA", "Public domain"));
         let files = br#"["http://images-assets.nasa.gov/video/x1/x1~orig.mp4","http://images-assets.nasa.gov/video/x1/x1~mobile.mp4","http://images-assets.nasa.gov/video/x1/x1~thumb.jpg"]"#;
         assert_eq!(pick_file(&n[0], files).unwrap().0, "https://images-assets.nasa.gov/video/x1/x1~orig.mp4");
+        assert_eq!(smaller_files(&n[0], files), ["https://images-assets.nasa.gov/video/x1/x1~mobile.mp4"], "the fallback");
 
         let ov = br#"{"results":[{"id":"a","title":"neon","url":"https://live.staticflickr.com/1/a_b.jpg","creator":"ranjit","license":"by-nc","license_version":"2.0","license_url":"https://creativecommons.org/licenses/by-nc/2.0/","provider":"flickr","foreign_landing_url":"https://www.flickr.com/photos/x/1","thumbnail":"https://api.openverse.org/v1/images/a/thumb/"},{"id":"b","title":"no file"}]}"#;
         let o = Source::Openverse.parse(Kind::Picture, ov).unwrap();

@@ -83,6 +83,11 @@ impl PhosphorApp {
         if self.state.vcam.on {
             println!("VCAM connected={} status={:?}", self.state.vcam.connected(), crate::virtual_camera::status());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if std::env::var_os("PHOSPHOR_STARTER").is_some() {
+            let rows: Vec<String> = self.state.comp.layers.iter().map(|l| format!("{}={} playing={:?}", l.name, l.clips.iter().filter(|c| !c.is_empty()).count(), l.source.label())).collect();
+            println!("STARTER {} credits={}", rows.join(" "), self.state.comp.media_bin.iter().filter(|m| m.credit.is_some()).count());
+        }
         for l in &self.state.comp.layers {
             if let phosphor_engine::SourceSpec::Text(t) = &l.source
                 && t.live != phosphor_engine::LiveText::Off
@@ -654,6 +659,13 @@ impl PhosphorApp {
                 self.state.timeline_seek(0.0, now);
                 self.state.timeline_toggle(now);
                 println!("QUICK timeline: {} events", self.state.comp.timeline.events.len());
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "starter" {
+                // A starter show (PHOSPHOR_STARTER, default Club): STARTER line at the end with each layer's clips.
+                let mood = std::env::var("PHOSPHOR_STARTER").unwrap_or_else(|_| "Club".into());
+                println!("QUICK starter {mood}: {}", crate::panels::bench_starter(&mut self.state, &mood, ctx));
                 continue;
             }
             #[cfg(not(target_arch = "wasm32"))]

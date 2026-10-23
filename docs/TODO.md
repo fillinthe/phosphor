@@ -216,7 +216,7 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
   position, RSS / news headlines into text layers, a clock in any city.
 - [ ] O12. **Live pictures**: public webcams and space feeds (NASA / ISS live streams) as live layers; GIFs from
   Giphy / Tenor (keys). The "From a link" yt-dlp route already covers pasted video links.
-- [ ] O13. **Starter shows**: one click makes a ready show from these sources (a few clip banks, effects, a sound
+- [x] O13. **Starter shows** (Online › Start a show: Space, Nature, Retro, Club, Gallery): one click makes a ready show from these sources (a few clip banks, effects, a sound
   track), by mood ("club", "ambient", "corporate").
 
 ## Next round (2026-10-21, "keep going on the large stuff"), quickest first
