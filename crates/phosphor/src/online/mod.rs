@@ -4,6 +4,7 @@
 //! one folder per library) with a `.credit.json` beside each file, and a file already downloaded isn't fetched again.
 
 pub mod sources;
+pub mod starter;
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -218,6 +219,11 @@ pub struct Download {
 
 impl Download {
     pub fn start(item: Item, ctx: Option<eframe::egui::Context>) -> Download {
+        Self::start_limited(item, MAX_FILE, ctx)
+    }
+
+    /// `start`, refusing a file bigger than `max` bytes (as soon as the size is known).
+    pub fn start_limited(item: Item, max: u64, ctx: Option<eframe::egui::Context>) -> Download {
         let status = Arc::new(Mutex::new(Fetch::Working { done: 0, total: item.size }));
         let (shared, it) = (status.clone(), item.clone());
         let _ = std::thread::Builder::new().name("online download".into()).spawn(move || {
@@ -229,7 +235,7 @@ impl Download {
                     c.request_repaint();
                 }
             };
-            let end = match fetch(&it, |done, total| set(Fetch::Working { done, total })) {
+            let end = match fetch(&it, max, |done, total| set(Fetch::Working { done, total })) {
                 Ok(paths) => Fetch::Done(paths.iter().map(|p| p.to_string_lossy().into_owned()).collect()),
                 Err(e) => Fetch::Failed(e),
             };
@@ -296,7 +302,7 @@ pub fn saved_credit(path: &Path) -> Option<Credit> {
 
 /// Downloads an item's files (streamed to disk, `progress` as it goes) and saves its credit beside the first.
 /// Most items are one file; a font family is a few (regular, bold), saved where text layers find fonts.
-fn fetch(item: &Item, progress: impl Fn(u64, Option<u64>)) -> Result<Vec<PathBuf>, String> {
+fn fetch(item: &Item, max: u64, progress: impl Fn(u64, Option<u64>)) -> Result<Vec<PathBuf>, String> {
     if item.kind == Kind::Font {
         let dir = crate::text::fonts_dir().ok_or("no fonts folder")?;
         std::fs::create_dir_all(&dir).map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
@@ -305,7 +311,7 @@ fn fetch(item: &Item, progress: impl Fn(u64, Option<u64>)) -> Result<Vec<PathBuf
         for (name, url) in files {
             let path = dir.join(name);
             if !path.exists() {
-                download_to(&url, &path, None, &progress)?;
+                download_to(&url, &path, None, max, &progress)?;
             }
             out.push(path);
         }
@@ -314,32 +320,48 @@ fn fetch(item: &Item, progress: impl Fn(u64, Option<u64>)) -> Result<Vec<PathBuf
         }
         return Ok(out);
     }
-    let (url, size) = match &item.file {
-        Some(f) => (f.clone(), item.size),
-        None => sources::pick_file(item, &get_bytes(&item.list)?)?,
+    let (list, (url, size)) = match &item.file {
+        Some(f) => (Vec::new(), (f.clone(), item.size)),
+        None => {
+            let list = get_bytes(&item.list)?;
+            let pick = sources::pick_file(item, &list)?;
+            (list, pick)
+        }
     };
     let dir = folder().ok_or("no downloads folder")?.join(crate::show::slug(item.source.name()));
     std::fs::create_dir_all(&dir).map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
     sweep_parts(&dir);
     let path = dir.join(file_name(item, &url));
     if !(path.exists() && saved_credit(&path).is_some()) {
-        download_to(&url, &path, size, &progress)?;
+        // Too big: a smaller copy when the library has one.
+        let mut tries = std::iter::once((url, size)).chain(sources::smaller_files(item, &list).into_iter().map(|u| (u, None)));
+        loop {
+            let Some((url, size)) = tries.next() else { return Err(format!("every copy is over {} MB", max >> 20)) };
+            match download_to(&url, &path, size, max, &progress) {
+                Err(e) if e.starts_with(TOO_BIG) => continue,
+                r => r?,
+            }
+            break;
+        }
         let _ = std::fs::write(sidecar(&path), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
     }
     Ok(vec![path])
 }
 
+/// How a download that's too big starts its error.
+const TOO_BIG: &str = "That file is over";
+
 /// One file streamed to `path` (through a `.part` file, so a stopped download never looks finished).
-fn download_to(url: &str, path: &Path, size: Option<u64>, progress: &impl Fn(u64, Option<u64>)) -> Result<(), String> {
+fn download_to(url: &str, path: &Path, size: Option<u64>, max: u64, progress: &impl Fn(u64, Option<u64>)) -> Result<(), String> {
     let response = request(url)?;
     let total = response.header("content-length").and_then(|l| l.parse().ok()).or(size);
-    if total.is_some_and(|t| t > MAX_FILE) {
-        return Err("That file is over 2 GB: too big to bring in".into());
+    if total.is_some_and(|t| t > max) {
+        return Err(format!("{TOO_BIG} {} MB: too big to bring in", max >> 20));
     }
     let part = path.with_extension("part");
     let result = (|| {
         let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
-        let mut reader = response.into_reader().take(MAX_FILE);
+        let mut reader = response.into_reader().take(max);
         let mut buf = vec![0u8; 256 << 10];
         let mut done = 0u64;
         loop {
@@ -439,7 +461,7 @@ mod tests {
         assert!(s.errors.is_empty(), "{:?}", s.errors);
         // A NASA picture's file is found through its list and downloads with its credit.
         let pic = s.items.iter().find(|i| i.source == Source::Nasa && i.kind == Kind::Picture).expect("a NASA picture").clone();
-        let path = fetch(&pic, |_, _| {}).expect("download").remove(0);
+        let path = fetch(&pic, MAX_FILE, |_, _| {}).expect("download").remove(0);
         assert!(saved_credit(&path).is_some());
         assert!(crate::media::decode_still(&path.to_string_lossy()).is_ok(), "a picture that opens");
         let thumb = get_bytes(&pic.thumb).expect("thumbnail");

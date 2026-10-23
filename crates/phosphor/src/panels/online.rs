@@ -42,6 +42,17 @@ enum Then {
     Bin,
     Layer(u64),
     NewLayer,
+    /// A starter show's clip cell (the first column also starts playing).
+    Cell(u64, usize),
+}
+
+/// A starter show's layer being filled: its search, how many results were tried, and the cells still to fill (a
+/// download that fails or is too big gives its cell back).
+struct Filling {
+    layer: u64,
+    search: Search,
+    tried: usize,
+    free: Vec<usize>,
 }
 
 /// The panel's state (in `State::online`).
@@ -59,6 +70,9 @@ pub struct Online {
     here: HashMap<(Source, String), String>,
     /// Bench: put the first picture found on a new layer.
     bench: bool,
+    /// A starter show being built.
+    filling: Vec<Filling>,
+    starter: Option<&'static str>,
 }
 
 impl Online {
@@ -109,6 +123,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             st.online.downloads.push((Download::start(item, None), Then::NewLayer));
         }
     }
+    fill_starter(st);
     if st.online.downloads.is_empty() {
         return;
     }
@@ -121,7 +136,16 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             false
         }
         Fetch::Failed(e) => {
-            st.notice = Some(format!("Couldn't download \"{}\": {e}", d.item.title));
+            match then {
+                // A starter cell tries the next result instead.
+                Then::Cell(layer, slot) => {
+                    if let Some(f) = st.online.filling.iter_mut().find(|f| f.layer == *layer) {
+                        f.free.push(*slot);
+                        f.free.sort();
+                    }
+                }
+                _ => st.notice = Some(format!("Couldn't download \"{}\": {e}", d.item.title)),
+            }
             false
         }
     });
@@ -131,14 +155,28 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             font_arrived(st, &item, &paths);
             continue;
         }
-        let name = crate::media::clip_name(&path);
+        // Its title from the library reads better than the file name.
+        let name = if item.credit.title.trim().is_empty() { crate::media::clip_name(&path) } else { item.credit.title.chars().take(60).collect() };
         st.comp.add_media(&name, &path);
         if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
             m.credit = Some(item.credit.clone());
         }
         st.online.here.insert(item.key(), path.clone());
+        if let Then::Cell(layer, slot) = then {
+            let spec = crate::media::spec_for_path(&path);
+            st.comp.place_clips(layer, slot, vec![(name.clone(), spec.clone())]);
+            // The first clip to arrive on a layer starts playing (so every layer shows something soon).
+            if let Some(keep) = st.comp.layer(layer).filter(|l| l.source == SourceSpec::None).map(|l| l.name.clone()) {
+                st.trigger(crate::app::Trigger::Clip { layer, slot }, now);
+                // The layer keeps its starter name ("Nebulas"), not the clip's.
+                if let Some(l) = st.comp.layer_mut(layer) {
+                    l.name = keep;
+                }
+            }
+            continue;
+        }
         let layer = match then {
-            Then::Bin => None,
+            Then::Bin | Then::Cell(..) => None,
             Then::Layer(id) => st.comp.layers.iter().any(|l| l.id == id).then_some(id),
             Then::NewLayer => Some(st.add_layer()),
         };
@@ -146,6 +184,62 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             st.selected = Some(layer);
             st.launch_source(layer, crate::media::spec_for_path(&path), Vec::new(), name, now);
         }
+    }
+}
+
+/// Builds a starter show: replaces the layers with the starter's three (outputs, mapping and controls stay) and
+/// starts their searches; `fill_starter` downloads into their cells as results come.
+fn start_show(st: &mut State, starter: &crate::online::starter::Starter, ctx: &egui::Context) {
+    st.comp.layers.clear();
+    st.comp.groups.clear();
+    st.comp.launch.fade = true;
+    st.online.filling.clear();
+    for row in &starter.rows {
+        let l = st.comp.add_layer();
+        l.name = row.layer.to_string();
+        (l.blend, l.opacity) = (row.blend, row.opacity);
+        let layer = l.id;
+        let search = Search::start(row.query, &[row.source], &[row.kind], false, Some(ctx.clone()));
+        st.online.filling.push(Filling { layer, search, tried: 0, free: (0..crate::online::starter::CLIPS).collect() });
+    }
+    st.comp.clip_columns = st.comp.clip_columns.max(crate::online::starter::CLIPS);
+    st.online.starter = Some(starter.name);
+    st.notice = Some(format!("Building the {} show: clips arrive in the Clips grid as they download", starter.name));
+}
+
+/// Bench `--quick starter` (PHOSPHOR_STARTER = a mood's name): builds that starter show.
+pub(crate) fn bench_starter(st: &mut State, name: &str, ctx: &egui::Context) -> bool {
+    let Some(s) = crate::online::starter::STARTERS.iter().find(|s| s.name.eq_ignore_ascii_case(name)) else { return false };
+    start_show(st, s, ctx);
+    true
+}
+
+/// Starts downloads for a starter show's cells as search results come in.
+fn fill_starter(st: &mut State) {
+    use crate::online::starter::{CLIPS, MAX_SIZE};
+    let o = &mut st.online;
+    for f in &mut o.filling {
+        f.search.poll();
+        while !f.free.is_empty() && f.tried < f.search.items.len() {
+            let item = f.search.items[f.tried].clone();
+            f.tried += 1;
+            // Too big (when the library says) or already coming: the next one.
+            if item.size.is_some_and(|s| s > MAX_SIZE) || o.downloads.iter().any(|(d, _)| d.item.key() == item.key()) {
+                continue;
+            }
+            let slot = f.free.remove(0);
+            o.downloads.push((Download::start_limited(item, MAX_SIZE, None), Then::Cell(f.layer, slot)));
+        }
+        // More results when this page ran out.
+        if !f.free.is_empty() && f.tried >= f.search.items.len() && f.search.has_more() && f.tried < CLIPS * 6 {
+            f.search.more();
+        }
+    }
+    // Kept while its downloads run (a failed one gives its cell back) or it has cells to fill and results to try.
+    let coming: Vec<u64> = o.downloads.iter().filter_map(|(_, t)| if let Then::Cell(l, _) = t { Some(*l) } else { None }).collect();
+    o.filling.retain(|f| coming.contains(&f.layer) || (!f.free.is_empty() && (f.search.busy() || f.tried < f.search.items.len() || f.search.has_more())));
+    if o.filling.is_empty() && !o.downloads.iter().any(|(_, t)| matches!(t, Then::Cell(..))) {
+        o.starter = None;
     }
 }
 
@@ -171,9 +265,13 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let o = &mut st.online;
     let mut go = false;
     ui.horizontal(|ui| {
-        let r = crate::ui::text_field(ui, &mut o.query, "Search: aurora, city lights, waves, fire…", Some((ui.available_width() - 34.0).max(80.0)));
+        let r = crate::ui::text_field(ui, &mut o.query, "Search: aurora, city lights, waves, fire…", Some((ui.available_width() - if o.search.is_some() { 64.0 } else { 34.0 }).max(80.0)));
         go |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         go |= ui.add_enabled(!o.query.trim().is_empty(), egui::Button::new(icon::MAGNIFYING_GLASS)).on_hover_text("Search every library that's on").clicked();
+        if o.search.is_some() && ui.button(icon::X).on_hover_text("Clear the results (back to Start a show)").clicked() {
+            o.search = None;
+            o.query.clear();
+        }
     });
     ui.horizontal_wrapped(|ui| {
         let opts = [
@@ -212,6 +310,23 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let selected = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let o = &mut st.online;
     let Some(search) = o.search.as_mut() else {
+        ui.label(RichText::new(label(icon::SPARKLE, "Start a show")).strong());
+        hint(ui, "One click fills three layers of clips from these libraries for a mood (replaces the layers; outputs and mapping stay).");
+        ui.horizontal_wrapped(|ui| {
+            for s in &crate::online::starter::STARTERS {
+                if ui.add_enabled(st.online.starter.is_none(), egui::Button::new(s.name)).on_hover_text(s.about).clicked() {
+                    start_show(st, s, ui.ctx());
+                }
+            }
+        });
+        if let Some(name) = st.online.starter {
+            let coming = st.online.downloads.iter().filter(|(_, t)| matches!(t, Then::Cell(..))).count();
+            ui.horizontal(|ui| {
+                ui.spinner();
+                hint(ui, format!("Building {name}: {coming} clips downloading"));
+            });
+        }
+        ui.add_space(6.0);
         hint(ui, "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualisers. Downloads go into the media bin with their credit (Credits, below).");
         credits(ui, &st.comp);
         return;
@@ -271,7 +386,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
                 let layer = match then {
                     Then::Layer(id) => Some(id),
                     Then::NewLayer => None,
-                    Then::Bin => return,
+                    Then::Bin | Then::Cell(..) => return,
                 };
                 let layer = layer.unwrap_or_else(|| st.add_layer());
                 st.selected = Some(layer);
