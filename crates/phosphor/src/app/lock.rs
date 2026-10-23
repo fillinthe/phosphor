@@ -123,8 +123,7 @@ impl PhosphorApp {
     /// Top bar while locked: just what a show needs.
     pub(crate) fn locked_top_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("top_bar").show(ui, |ui| {
-            ui.add_space(2.0);
-            ui.horizontal(|ui| {
+            crate::ui::bar_row(ui, |ui| {
                 ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(crate::theme::accent()));
                 ui.label(egui::RichText::new(format!("{} Locked", icon::LOCK)).color(crate::theme::accent()));
                 ui.separator();
@@ -143,7 +142,6 @@ impl PhosphorApp {
                     }
                 });
             });
-            ui.add_space(2.0);
         });
     }
 }
