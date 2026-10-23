@@ -205,6 +205,9 @@ pub struct ControlHub {
     /// DMX in (Art-Net / sACN) while it's switched on.
     #[cfg(not(target_arch = "wasm32"))]
     dmx_listener: Option<crate::dmx::DmxListener>,
+    /// An Arduino board (Firmata) while one is chosen.
+    #[cfg(not(target_arch = "wasm32"))]
+    arduino: Option<crate::arduino::Arduino>,
 }
 
 /// Controller settings kept between launches.
@@ -225,11 +228,13 @@ pub struct ControlSettings {
     pub ltc_out_pair: Option<u8>,
     /// Listen for DMX (Art-Net / sACN) from a lighting desk as controller input.
     pub dmx_in: bool,
+    /// An Arduino board's USB port ("" = none).
+    pub arduino_port: String,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false, arduino_port: String::new() }
     }
 }
 
@@ -282,11 +287,46 @@ impl ControlHub {
         hub.ltc_out_pair = s.ltc_out_pair;
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
+        hub.set_arduino(&s.arduino_port);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in(), arduino_port: self.arduino_port() }
+    }
+
+    /// Connects to an Arduino board on this USB port ("" = none); its pins become controller input.
+    pub fn set_arduino(&mut self, port: &str) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if self.arduino.as_ref().map_or("", |a| a.path.as_str()) == port {
+                return;
+            }
+            self.arduino = None;
+            if !port.is_empty() {
+                match crate::arduino::Arduino::open(port, self.tx.clone()) {
+                    Ok(a) => self.arduino = Some(a),
+                    Err(e) => log::warn!("Arduino: {e}"),
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = port;
+    }
+
+    pub fn arduino_port(&self) -> String {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.arduino.as_ref().map_or_else(String::new, |a| a.path.clone());
+        #[cfg(target_arch = "wasm32")]
+        String::new()
+    }
+
+    /// How the board is doing ("connected", "waiting for the board…", or what went wrong).
+    pub fn arduino_status(&self) -> String {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.arduino.as_ref().map_or_else(String::new, |a| a.status());
+        #[cfg(target_arch = "wasm32")]
+        String::new()
     }
 
     /// Starts or stops listening for DMX (Art-Net on udp/6454, sACN on udp/5568) as controller input.
@@ -374,6 +414,8 @@ impl ControlHub {
             delayed: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             dmx_listener: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            arduino: None,
             fresh: HashMap::new(),
             sent: HashMap::new(),
             feedback_ips: Vec::new(),
@@ -588,6 +630,11 @@ impl ControlHub {
                 let on = v > 0.5;
                 self.backend.send_midi(&[if on { 0x90 } else { 0x80 } | (channel & 15), note & 127, if on { 127 } else { 0 }]);
             }
+            phosphor_engine::SendTo::Arduino { pin } => {
+                if let Some(a) = &mut self.arduino {
+                    a.send(*pin, v);
+                }
+            }
         }
         #[cfg(target_arch = "wasm32")]
         let _ = (comp, to, v);
@@ -649,7 +696,7 @@ impl ControlHub {
                     // (Clip lights carry their own velocity, marked by `CLIP_LIGHT`.)
                     ControlSource::MidiNote { channel, note } if v >= CLIP_LIGHT => self.backend.send_midi(&[0x90 | channel, *note, ((v - CLIP_LIGHT) * 127.0).round() as u8]),
                     ControlSource::MidiNote { channel, note } => self.backend.send_midi(&[0x90 | channel, *note, if v > 0.5 { 127 } else { 0 }]),
-                    ControlSource::Key { .. } | ControlSource::Gamepad { .. } | ControlSource::Dmx { .. } => {}
+                    ControlSource::Key { .. } | ControlSource::Gamepad { .. } | ControlSource::Dmx { .. } | ControlSource::Arduino { .. } => {}
                 }
             }
         }

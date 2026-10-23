@@ -13,6 +13,8 @@ pub enum ControlSource {
     Gamepad { input: String },
     /// A DMX channel (1–512) of a universe coming in over Art-Net or sACN (a lighting desk).
     Dmx { universe: u16, channel: u16 },
+    /// An Arduino board's pin (Firmata): an analog input (A0…, a knob or sensor, 0..1) or a digital pin (a button).
+    Arduino { pin: u8, analog: bool },
 }
 
 impl ControlSource {
@@ -24,13 +26,15 @@ impl ControlSource {
             ControlSource::Key { key } => format!("Key {key}"),
             ControlSource::Gamepad { input } => format!("Gamepad {input}"),
             ControlSource::Dmx { universe, channel } => format!("DMX u{universe} ch{channel}"),
+            ControlSource::Arduino { pin, analog: true } => format!("Arduino A{pin}"),
+            ControlSource::Arduino { pin, analog: false } => format!("Arduino pin {pin}"),
         }
     }
 
     /// Press / release (pads, keys, gamepad buttons) rather than a value that moves (knobs, sticks, triggers).
     pub fn is_momentary(&self) -> bool {
         match self {
-            ControlSource::MidiNote { .. } | ControlSource::Key { .. } => true,
+            ControlSource::MidiNote { .. } | ControlSource::Key { .. } | ControlSource::Arduino { analog: false, .. } => true,
             ControlSource::Gamepad { input } => !(input.contains("Stick") || input.ends_with('Z') || input.ends_with("Trigger2") || input.starts_with("DPadX") || input.starts_with("DPadY")),
             _ => false,
         }
@@ -378,6 +382,8 @@ pub enum SendTo {
     MidiNote { channel: u8, note: u8 },
     /// An OSC float to another app (found with OSC Query): 0..1 scaled to its `min`..`max`.
     OscTo { host: String, port: u16, address: String, min: f32, max: f32 },
+    /// An Arduino board's PWM pin (an LED's brightness, a servo…): 0..1 → 0..255.
+    Arduino { pin: u8 },
 }
 
 impl SendTo {
@@ -387,6 +393,7 @@ impl SendTo {
             SendTo::Osc { address } => format!("OSC {address}"),
             SendTo::MidiCc { channel, cc } => format!("MIDI ch {} CC {cc}", channel + 1),
             SendTo::MidiNote { channel, note } => format!("MIDI ch {} note {note}", channel + 1),
+            SendTo::Arduino { pin } => format!("Arduino pin {pin}"),
         }
     }
 }

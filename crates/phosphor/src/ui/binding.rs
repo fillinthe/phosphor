@@ -28,7 +28,7 @@ pub(crate) fn target_picker(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
     picked
 }
 
-const SOURCE_KINDS: [&str; 6] = ["MIDI CC", "MIDI Note", "OSC", "Key", "Gamepad", "DMX"];
+const SOURCE_KINDS: [&str; 7] = ["MIDI CC", "MIDI Note", "OSC", "Key", "Gamepad", "DMX", "Arduino"];
 
 fn source_kind(s: &ControlSource) -> usize {
     match s {
@@ -38,6 +38,7 @@ fn source_kind(s: &ControlSource) -> usize {
         ControlSource::Key { .. } => 3,
         ControlSource::Gamepad { .. } => 4,
         ControlSource::Dmx { .. } => 5,
+        ControlSource::Arduino { .. } => 6,
     }
 }
 
@@ -64,7 +65,8 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             2 => ControlSource::Osc { address: "/".into() },
             3 => ControlSource::Key { key: "Q".into() },
             4 => ControlSource::Gamepad { input: "South".into() },
-            _ => ControlSource::Dmx { universe: 1, channel: 1 },
+            5 => ControlSource::Dmx { universe: 1, channel: 1 },
+            _ => ControlSource::Arduino { pin: 0, analog: true },
         };
     }
     match source {
@@ -90,6 +92,10 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             guarded!(ui, *universe, egui::DragValue::new(universe).range(0..=32767).prefix("universe "))
                 .on_hover_text("The universe number your desk sends (Art-Net counts from 0, sACN from 1)");
             guarded!(ui, *channel, egui::DragValue::new(channel).range(1..=512).prefix("ch "));
+        }
+        ControlSource::Arduino { pin, analog } => {
+            crate::ui::toggle(ui, analog, "Analog").on_hover_text("On: an analog input (A0…, a knob or sensor). Off: a digital pin (a button)");
+            guarded!(ui, *pin, egui::DragValue::new(pin).range(0..=63).prefix(if *analog { "A" } else { "pin " }));
         }
     }
     *source != before

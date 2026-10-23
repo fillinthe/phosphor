@@ -19,14 +19,7 @@ pub fn pro_packet(data: &[u8; 512]) -> Vec<u8> {
 
 /// USB serial ports that might be a DMX interface (asks the system: call when a menu opens).
 pub fn ports() -> Vec<String> {
-    let Ok(dir) = std::fs::read_dir("/dev") else { return Vec::new() };
-    let mut v: Vec<String> = dir
-        .filter_map(|e| e.ok())
-        .map(|e| format!("/dev/{}", e.file_name().to_string_lossy()))
-        .filter(|p| ["/dev/cu.usbserial", "/dev/cu.usbmodem", "/dev/ttyUSB", "/dev/ttyACM"].iter().any(|k| p.starts_with(k)))
-        .collect();
-    v.sort();
-    v
+    crate::serial::ports()
 }
 
 /// An open interface: frames go to its worker thread.
@@ -39,8 +32,7 @@ pub struct ProOut {
 
 impl ProOut {
     pub fn open(path: &str) -> Result<Self, String> {
-        let mut file = std::fs::OpenOptions::new().write(true).open(path).map_err(|e| format!("can't open {path} ({e})"))?;
-        raw(&file);
+        let mut file = crate::serial::open(path, 57_600)?;
         let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(1);
         let error: Arc<Mutex<Option<String>>> = Arc::default();
         let err = error.clone();
@@ -63,28 +55,6 @@ impl ProOut {
         !matches!(self.tx.try_send(pro_packet(data)), Err(TrySendError::Disconnected(_)))
     }
 }
-
-/// A serial port in raw mode (bytes go out as they are; no newline translation). Plain files are left alone.
-#[cfg(unix)]
-fn raw(file: &std::fs::File) {
-    use std::os::fd::AsRawFd;
-    let fd = file.as_raw_fd();
-    // SAFETY: plain termios calls on a file descriptor we own, with a zeroed struct filled by tcgetattr.
-    unsafe {
-        if libc::isatty(fd) != 1 {
-            return;
-        }
-        let mut t: libc::termios = std::mem::zeroed();
-        if libc::tcgetattr(fd, &mut t) == 0 {
-            libc::cfmakeraw(&mut t);
-            libc::cfsetspeed(&mut t, libc::B57600);
-            libc::tcsetattr(fd, libc::TCSANOW, &t);
-        }
-    }
-}
-
-#[cfg(not(unix))]
-fn raw(_file: &std::fs::File) {}
 
 #[cfg(test)]
 mod tests {

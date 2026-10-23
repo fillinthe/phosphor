@@ -169,7 +169,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [~] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Hardware.
       Done: Enttec DMX USB Pro and compatibles (LEDs panel › USB (Enttec Pro) › its port; one universe). Checked: tests (packet; a pseudo-terminal gets the bytes unchanged). Not tried with the real box. Open DMX (the cheap kind without its own timing): not done.
 - [ ] 96. **Blackmagic** capture and SDI / HDMI output (V, M). Hardware + SDK.
-- [ ] 97. **Arduino** (Firmata): sensors in, LEDs / servos out (M). Hardware.
+- [x] 97. **Arduino** (Firmata): sensors in, LEDs / servos out (M). Hardware.
+      MIDI / OSC panel › Arduino › its port (StandardFirmata): analog inputs and digital pins map like MIDI (Learn works); Send out › Arduino drives PWM pins. Checked: tests (Firmata in and out; a pretend board on a pseudo-terminal). Not tried with a real board.
 - [ ] 98. **Depth cameras** (Kinect v2, RealSense) (M). Hardware.
 - [ ] 99. **Lasers** (ILDA files, Ether Dream, Helios) (M). Hardware, and laser safety.
 
