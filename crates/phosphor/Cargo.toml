@@ -36,6 +36,8 @@ velato = { version = "0.12", default-features = false }
 kurbo = "0.13"
 peniko = "0.6"
 base64 = "0.22"
+# Elgato Stream Deck keys / dials as controller input, key pictures as feedback (HID).
+elgato-streamdeck = "0.14"
 ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling", "device"] }
 cpal = "0.18.2"
 rustfft = "6.4.1"

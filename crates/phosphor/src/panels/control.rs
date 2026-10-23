@@ -141,6 +141,19 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, control.dmx_status());
             }
         });
+        // Elgato Stream Deck: keys and dials map like MIDI pads and knobs; mapped keys show their control's name.
+        ui.horizontal(|ui| {
+            let mut on = control.stream_deck_on();
+            if crate::ui::toggle(ui, &mut on, "Stream Deck")
+                .on_hover_text("Use an Elgato Stream Deck: right-click any control › Learn, press a key (or turn a Stream Deck + dial). Each mapped key shows the control's name, lit while it's on. Quit Elgato's own Stream Deck app first.")
+                .changed()
+            {
+                control.set_stream_deck(on);
+            }
+            if on {
+                hint(ui, control.stream_deck_status());
+            }
+        });
         // An Arduino board (StandardFirmata): its pins map like MIDI; PWM pins can be sent to (Send out).
         ui.horizontal(|ui| {
             ui.label("Arduino");
