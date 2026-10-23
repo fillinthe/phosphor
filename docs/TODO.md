@@ -144,7 +144,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
 - [~] 76. **NDI sound** in and out (V). Done: NDI sound out. Left: NDI sound in.
 - [x] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
-- [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
+- [x] 78. **Stream Deck** buttons for cues, clips and settings (M). Keys + Stream Deck + dials as input, key pictures; not tried with a real deck.
 - [x] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
 - [x] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG, PNG and PDF export (Save as › .pdf: a vector page the output's size), masks and lines from SVG. Checked: tests; the PDF passes qpdf's check and was looked at.
 - [x] 81. **SVG and Lottie** (After Effects) animations as clips (M). SVG; Lottie .json (not yet .lottie zips).

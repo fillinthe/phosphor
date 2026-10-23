@@ -28,7 +28,7 @@ pub(crate) fn target_picker(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
     picked
 }
 
-const SOURCE_KINDS: [&str; 7] = ["MIDI CC", "MIDI Note", "OSC", "Key", "Gamepad", "DMX", "Arduino"];
+const SOURCE_KINDS: [&str; 9] = ["MIDI CC", "MIDI Note", "OSC", "Key", "Gamepad", "DMX", "Arduino", "Stream Deck", "Deck dial"];
 
 fn source_kind(s: &ControlSource) -> usize {
     match s {
@@ -39,6 +39,8 @@ fn source_kind(s: &ControlSource) -> usize {
         ControlSource::Gamepad { .. } => 4,
         ControlSource::Dmx { .. } => 5,
         ControlSource::Arduino { .. } => 6,
+        ControlSource::StreamDeck { .. } => 7,
+        ControlSource::StreamDeckDial { .. } => 8,
     }
 }
 
@@ -66,7 +68,9 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             3 => ControlSource::Key { key: "Q".into() },
             4 => ControlSource::Gamepad { input: "South".into() },
             5 => ControlSource::Dmx { universe: 1, channel: 1 },
-            _ => ControlSource::Arduino { pin: 0, analog: true },
+            6 => ControlSource::Arduino { pin: 0, analog: true },
+            7 => ControlSource::StreamDeck { key: 0 },
+            _ => ControlSource::StreamDeckDial { dial: 0 },
         };
     }
     match source {
@@ -96,6 +100,18 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
         ControlSource::Arduino { pin, analog } => {
             crate::ui::toggle(ui, analog, "Analog").on_hover_text("On: an analog input (A0…, a knob or sensor). Off: a digital pin (a button)");
             guarded!(ui, *pin, egui::DragValue::new(pin).range(0..=63).prefix(if *analog { "A" } else { "pin " }));
+        }
+        ControlSource::StreamDeck { key } => {
+            // Shown from 1, as on the deck (left to right, top to bottom).
+            let mut k = *key as u32 + 1;
+            guarded!(ui, k, egui::DragValue::new(&mut k).range(1..=200).prefix("key "))
+                .on_hover_text("Keys count from 1, left to right, top to bottom; a Stream Deck + dial's press is key 101, 102…");
+            *key = (k - 1) as u8;
+        }
+        ControlSource::StreamDeckDial { dial } => {
+            let mut d = *dial as u32 + 1;
+            guarded!(ui, d, egui::DragValue::new(&mut d).range(1..=8).prefix("dial "));
+            *dial = (d - 1) as u8;
         }
     }
     *source != before

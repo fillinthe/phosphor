@@ -208,6 +208,9 @@ pub struct ControlHub {
     /// An Arduino board (Firmata) while one is chosen.
     #[cfg(not(target_arch = "wasm32"))]
     arduino: Option<crate::arduino::Arduino>,
+    /// Stream Decks while switched on.
+    #[cfg(not(target_arch = "wasm32"))]
+    stream_deck: Option<crate::streamdeck::Decks>,
 }
 
 /// Controller settings kept between launches.
@@ -230,11 +233,13 @@ pub struct ControlSettings {
     pub dmx_in: bool,
     /// An Arduino board's USB port ("" = none).
     pub arduino_port: String,
+    /// Use an Elgato Stream Deck (keys as input, key pictures as feedback).
+    pub stream_deck: bool,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false, arduino_port: String::new() }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false, arduino_port: String::new(), stream_deck: false }
     }
 }
 
@@ -288,11 +293,12 @@ impl ControlHub {
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
         hub.set_arduino(&s.arduino_port);
+        hub.set_stream_deck(s.stream_deck);
         hub
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in(), arduino_port: self.arduino_port() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in(), arduino_port: self.arduino_port(), stream_deck: self.stream_deck_on() }
     }
 
     /// Connects to an Arduino board on this USB port ("" = none); its pins become controller input.
@@ -312,6 +318,31 @@ impl ControlHub {
         }
         #[cfg(target_arch = "wasm32")]
         let _ = port;
+    }
+
+    /// Starts / stops using Stream Decks.
+    pub fn set_stream_deck(&mut self, on: bool) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if on != self.stream_deck.is_some() {
+            self.stream_deck = on.then(|| crate::streamdeck::Decks::start(self.tx.clone()));
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = on;
+    }
+
+    pub fn stream_deck_on(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.stream_deck.is_some();
+        #[cfg(target_arch = "wasm32")]
+        false
+    }
+
+    /// What the deck connection is doing ("Stream Deck MK.2: 15 keys", "no Stream Deck found…").
+    pub fn stream_deck_status(&self) -> String {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.stream_deck.as_ref().map_or_else(String::new, |d| d.status());
+        #[cfg(target_arch = "wasm32")]
+        String::new()
     }
 
     pub fn arduino_port(&self) -> String {
@@ -416,6 +447,8 @@ impl ControlHub {
             dmx_listener: None,
             #[cfg(not(target_arch = "wasm32"))]
             arduino: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            stream_deck: None,
             fresh: HashMap::new(),
             sent: HashMap::new(),
             feedback_ips: Vec::new(),
@@ -647,6 +680,8 @@ impl ControlHub {
         }
         self.next_feedback = now + FEEDBACK_EVERY;
         #[cfg(not(target_arch = "wasm32"))]
+        self.deck_feedback(comp);
+        #[cfg(not(target_arch = "wasm32"))]
         {
             let (ips, builtin): (Vec<String>, bool) = {
                 let a = self.activity.lock().unwrap();
@@ -696,12 +731,27 @@ impl ControlHub {
                     // (Clip lights carry their own velocity, marked by `CLIP_LIGHT`.)
                     ControlSource::MidiNote { channel, note } if v >= CLIP_LIGHT => self.backend.send_midi(&[0x90 | channel, *note, ((v - CLIP_LIGHT) * 127.0).round() as u8]),
                     ControlSource::MidiNote { channel, note } => self.backend.send_midi(&[0x90 | channel, *note, if v > 0.5 { 127 } else { 0 }]),
-                    ControlSource::Key { .. } | ControlSource::Gamepad { .. } | ControlSource::Dmx { .. } | ControlSource::Arduino { .. } => {}
+                    ControlSource::Key { .. } | ControlSource::Gamepad { .. } | ControlSource::Dmx { .. } | ControlSource::Arduino { .. } | ControlSource::StreamDeck { .. } | ControlSource::StreamDeckDial { .. } => {}
                 }
             }
         }
         #[cfg(target_arch = "wasm32")]
         let _ = comp;
+    }
+
+    /// Stream Deck keys show what they're mapped to: the control's name, lit while it's on (a clip key while its clip
+    /// plays).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn deck_feedback(&mut self, comp: &Composition) {
+        let Some(deck) = self.stream_deck.as_mut().filter(|d| d.connected()) else { return };
+        for map in comp.control_maps.iter().filter(|m| m.enabled) {
+            let ControlSource::StreamDeck { key } = map.source else { continue };
+            let on = match &map.target {
+                ControlTarget::TriggerClip { layer, slot } => clip_light(comp, *layer, *slot, [0, 1, 127]).is_some_and(|v| v == 127),
+                t => get_target(comp, t).is_some_and(|v| map.range.unapply(v) > 0.5),
+            };
+            deck.show(key, crate::streamdeck::Look { label: crate::control::target_label(comp, &map.target), on });
+        }
     }
 
     /// Writes this frame's values into their targets, then forgets them so the UI stays in charge

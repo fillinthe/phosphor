@@ -15,6 +15,10 @@ pub enum ControlSource {
     Dmx { universe: u16, channel: u16 },
     /// An Arduino board's pin (Firmata): an analog input (A0…, a knob or sensor, 0..1) or a digital pin (a button).
     Arduino { pin: u8, analog: bool },
+    /// An Elgato Stream Deck key (from 0, left to right, top to bottom; the Stream Deck +'s dial presses from 100).
+    StreamDeck { key: u8 },
+    /// A Stream Deck + dial turned (its own value, 0..1).
+    StreamDeckDial { dial: u8 },
 }
 
 impl ControlSource {
@@ -28,13 +32,16 @@ impl ControlSource {
             ControlSource::Dmx { universe, channel } => format!("DMX u{universe} ch{channel}"),
             ControlSource::Arduino { pin, analog: true } => format!("Arduino A{pin}"),
             ControlSource::Arduino { pin, analog: false } => format!("Arduino pin {pin}"),
+            ControlSource::StreamDeck { key } if *key >= 100 => format!("Stream Deck dial {} press", key - 99),
+            ControlSource::StreamDeck { key } => format!("Stream Deck key {}", key + 1),
+            ControlSource::StreamDeckDial { dial } => format!("Stream Deck dial {}", dial + 1),
         }
     }
 
     /// Press / release (pads, keys, gamepad buttons) rather than a value that moves (knobs, sticks, triggers).
     pub fn is_momentary(&self) -> bool {
         match self {
-            ControlSource::MidiNote { .. } | ControlSource::Key { .. } | ControlSource::Arduino { analog: false, .. } => true,
+            ControlSource::MidiNote { .. } | ControlSource::Key { .. } | ControlSource::Arduino { analog: false, .. } | ControlSource::StreamDeck { .. } => true,
             ControlSource::Gamepad { input } => !(input.contains("Stick") || input.ends_with('Z') || input.ends_with("Trigger2") || input.starts_with("DPadX") || input.starts_with("DPadY")),
             _ => false,
         }
