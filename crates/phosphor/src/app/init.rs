@@ -288,6 +288,8 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 feeds: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
+                ofl: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 ai_shader: Default::default(),
                 clip_page: 0,
                 media_memory_at: 0.0,

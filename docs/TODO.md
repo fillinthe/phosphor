@@ -209,7 +209,7 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
 - [ ] O7. **Music and sound**: Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
   audio, Pixabay music: clip sound, timeline sound tracks, and something for the beat detection to follow.
 - [x] O8. **Fonts** (Online › Fonts: Google Fonts families, regular + bold into Phosphor's fonts folder): Google Fonts (open licences; the GitHub repo or the API) for text layers.
-- [ ] O9. **DMX fixture definitions**: Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving
+- [x] O9. **DMX fixture definitions** (LED / DMX › A real light…: any Open Fixture Library light and mode): Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving
   head / LED bar by name instead of typing channels.
 - [x] O10. **MilkDrop presets** (Online › Visualizers: the whole Cream of the Crop pack, searchable): projectM's preset packs ("cream of the crop") once #93 lands.
 - [~] O11. **Live data that moves visuals** (weather, ISS and earthquakes done as modulators; RSS/news into text layers and a world clock still to do) (as modulators): weather (Open-Meteo, no key), earthquakes (USGS), the ISS

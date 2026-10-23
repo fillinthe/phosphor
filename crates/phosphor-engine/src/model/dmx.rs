@@ -121,6 +121,8 @@ pub enum HeadLayout {
     Rgbw9,
     /// Pan, pan fine, tilt, tilt fine, shutter (open), dimmer, red, green, blue, white.
     ShutterRgbw10,
+    /// Its own channels, in order (`Fixture::roles`): a light from the fixture library.
+    Custom,
 }
 
 impl HeadLayout {
@@ -131,6 +133,7 @@ impl HeadLayout {
             HeadLayout::Rgb8 => "8 ch: pan/tilt 16-bit, dim, RGB",
             HeadLayout::Rgbw9 => "9 ch: pan/tilt 16-bit, dim, RGBW",
             HeadLayout::ShutterRgbw10 => "10 ch: pan/tilt 16-bit, shutter, dim, RGBW",
+            HeadLayout::Custom => "Its own channels (from the library)",
         }
     }
 
@@ -139,7 +142,59 @@ impl HeadLayout {
             HeadLayout::Rgb8 => 8,
             HeadLayout::Rgbw9 => 9,
             HeadLayout::ShutterRgbw10 => 10,
+            HeadLayout::Custom => 0,
         }
+    }
+}
+
+/// What one channel of a light with its own layout (`HeadLayout::Custom`) carries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Role {
+    Pan,
+    PanFine,
+    Tilt,
+    TiltFine,
+    Dimmer,
+    /// Colour from the picture (white = the part all three share; cyan / magenta / yellow mix by taking away).
+    Red,
+    Green,
+    Blue,
+    White,
+    Amber,
+    Uv,
+    Cyan,
+    Magenta,
+    Yellow,
+    /// One of `Fixture::extra` (gobo, strobe, prism…): a setting of its own.
+    Extra(u16),
+    /// Held at 0 (a fine channel nothing drives).
+    Zero,
+}
+
+impl Role {
+    pub fn name(self) -> &'static str {
+        match self {
+            Role::Pan => "Pan",
+            Role::PanFine => "Pan fine",
+            Role::Tilt => "Tilt",
+            Role::TiltFine => "Tilt fine",
+            Role::Dimmer => "Dimmer",
+            Role::Red => "Red",
+            Role::Green => "Green",
+            Role::Blue => "Blue",
+            Role::White => "White",
+            Role::Amber => "Amber",
+            Role::Uv => "UV",
+            Role::Cyan => "Cyan",
+            Role::Magenta => "Magenta",
+            Role::Yellow => "Yellow",
+            Role::Extra(_) => "Setting",
+            Role::Zero => "(unused)",
+        }
+    }
+
+    fn colour(self) -> bool {
+        matches!(self, Role::Red | Role::Green | Role::Blue | Role::White | Role::Cyan | Role::Magenta | Role::Yellow)
     }
 }
 
@@ -229,6 +284,8 @@ pub struct Fixture {
     pub average: bool,
     /// `Scanned`: where each pixel is (0..1, y down), in wiring order.
     pub positions: Vec<[f32; 2]>,
+    /// `HeadLayout::Custom`: what each of its channels carries, in order.
+    pub roles: Vec<Role>,
 }
 
 impl Default for Fixture {
@@ -258,6 +315,7 @@ impl Default for Fixture {
             extra: Vec::new(),
             average: false,
             positions: Vec::new(),
+            roles: Vec::new(),
         }
     }
 }
@@ -314,7 +372,11 @@ impl Fixture {
 
     /// DMX channels one "pixel" takes (a moving head is one pixel with all its channels).
     fn channels_per_pixel(&self) -> usize {
-        if self.shape == FixtureShape::MovingHead { (self.head.channels() + self.extra.len()).min(512) } else { self.order.channels() }
+        match (self.shape, self.head) {
+            (FixtureShape::MovingHead, HeadLayout::Custom) => self.roles.len().clamp(1, 512),
+            (FixtureShape::MovingHead, _) => (self.head.channels() + self.extra.len()).min(512),
+            _ => self.order.channels(),
+        }
     }
 
     /// A moving head's pan and tilt (0..1) at `beats`: its centre plus its movement.
@@ -442,14 +504,17 @@ impl Fixture {
             let [r, g, b] = [lut[c[0] as usize], lut[c[1] as usize], lut[c[2] as usize]];
             let w = r.min(g).min(b);
             let dim = (self.dimmer.clamp(0.0, 1.0) * 255.0).round() as u8;
-            let mut v: Vec<u8> = vec![(pan >> 8) as u8, pan as u8, (tilt >> 8) as u8, tilt as u8];
+            let mut v: Vec<u8> = if self.head == HeadLayout::Custom { self.custom_channels([r, g, b], dim, pan, tilt) } else { vec![(pan >> 8) as u8, pan as u8, (tilt >> 8) as u8, tilt as u8] };
             match self.head {
+                HeadLayout::Custom => {}
                 HeadLayout::Rgb8 => v.extend([dim, r, g, b]),
                 HeadLayout::Rgbw9 => v.extend([dim, r - w, g - w, b - w, w]),
                 HeadLayout::ShutterRgbw10 => v.extend([255, dim, r - w, g - w, b - w, w]),
             }
-            v.extend(self.extra.iter().map(|e| (e.value.clamp(0.0, 1.0) * 255.0).round() as u8));
-            v.truncate(per);
+            if self.head != HeadLayout::Custom {
+                v.extend(self.extra.iter().map(|e| (e.value.clamp(0.0, 1.0) * 255.0).round() as u8));
+            }
+            v.resize(per, 0);
             let data = universes.entry(uni).or_insert([0; 512]);
             data[ch..ch + per].copy_from_slice(&v);
             return;
@@ -466,6 +531,35 @@ impl Fixture {
             self.order.write(rgb, &mut data[ch..ch + per]);
             ch += per;
         }
+    }
+
+    /// A `Custom` light's channel values: colour from the picture (a light with no colour channels shows the
+    /// picture's brightness on its dimmer), position, dimmer and its own settings.
+    fn custom_channels(&self, [r, g, b]: [u8; 3], dim: u8, pan: u16, tilt: u16) -> Vec<u8> {
+        let has_white = self.roles.contains(&Role::White);
+        let w = if has_white { r.min(g).min(b) } else { 0 };
+        let coloured = self.roles.iter().any(|r| r.colour());
+        let dim = if coloured { dim } else { ((dim as u16 * r.max(g).max(b) as u16) / 255) as u8 };
+        let extra = |i: u16| self.extra.get(i as usize).map_or(0, |e| (e.value.clamp(0.0, 1.0) * 255.0).round() as u8);
+        self.roles
+            .iter()
+            .map(|role| match role {
+                Role::Pan => (pan >> 8) as u8,
+                Role::PanFine => pan as u8,
+                Role::Tilt => (tilt >> 8) as u8,
+                Role::TiltFine => tilt as u8,
+                Role::Dimmer => dim,
+                Role::Red => r - w,
+                Role::Green => g - w,
+                Role::Blue => b - w,
+                Role::White => w,
+                Role::Cyan => 255 - r,
+                Role::Magenta => 255 - g,
+                Role::Yellow => 255 - b,
+                Role::Amber | Role::Uv | Role::Zero => 0,
+                Role::Extra(i) => extra(*i),
+            })
+            .collect()
     }
 
     /// Where the next fixture can start: (universe, channel) just after this one's last pixel.
@@ -687,6 +781,33 @@ mod tests {
     }
 
     use super::*;
+
+    /// A light from the fixture library sends each channel what its role says, in its own order.
+    #[test]
+    fn custom_lights_follow_their_roles() {
+        let head = Fixture {
+            shape: FixtureShape::MovingHead,
+            head: HeadLayout::Custom,
+            roles: vec![Role::Dimmer, Role::Red, Role::Green, Role::Blue, Role::White, Role::Extra(0), Role::Pan, Role::PanFine, Role::Tilt, Role::Zero],
+            extra: vec![ExtraChannel { name: "Strobe".into(), value: 10.0 / 255.0 }],
+            gamma: 1.0,
+            pan: 1.0,
+            tilt: 0.0,
+            dimmer: 1.0,
+            ..Default::default()
+        };
+        let d = DmxSettings { fixtures: vec![head.clone()], ..Default::default() };
+        let u = d.universes(&[[200, 100, 50, 255]], 0.0);
+        assert_eq!(&u[&0][..11], &[255, 150, 50, 0, 50, 10, 255, 255, 0, 0, 0], "white takes the shared part; ten channels, no more");
+        assert_eq!(head.span(), "U0 ch 1 – U0 ch 10");
+        // A plain dimmer (no colour channels) shows how bright the picture is.
+        let dimmer = Fixture { roles: vec![Role::Dimmer], extra: Vec::new(), ..head };
+        let d = DmxSettings { fixtures: vec![dimmer], ..Default::default() };
+        assert_eq!(d.universes(&[[100, 60, 20, 255]], 0.0)[&0][0], 100);
+        // Old projects (no roles) open unchanged.
+        let old: Fixture = serde_json::from_str(r#"{"name":"Spot","shape":"MovingHead","head":"Rgb8"}"#).unwrap();
+        assert!(old.roles.is_empty() && old.head == HeadLayout::Rgb8);
+    }
 
     #[test]
     fn the_dmx_master_dims_everything() {

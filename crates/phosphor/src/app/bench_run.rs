@@ -650,6 +650,17 @@ impl PhosphorApp {
                 continue;
             }
             #[cfg(not(target_arch = "wasm32"))]
+            if name == "lights" {
+                // A real light…: the window open on PHOSPHOR_LIGHT_QUERY (default "intimidator spot"), its first match
+                // looked at (with --ui-shot: a picture of the window).
+                let q = std::env::var("PHOSPHOR_LIGHT_QUERY").unwrap_or_else(|_| "intimidator spot".into());
+                crate::panels::open_light_window(ctx);
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("light_query"), q.clone()));
+                self.state.ofl.bench_pick = Some(q);
+                println!("QUICK lights");
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
             if name == "livedata" {
                 // Live data: weather in Reykjavik, the ISS and earthquakes on (a LIVEDATA line at the end).
                 let d = &mut self.state.comp.live_data;
