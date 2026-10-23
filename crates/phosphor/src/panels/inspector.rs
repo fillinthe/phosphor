@@ -635,6 +635,20 @@ pub(crate) fn volume_bar(ui: &mut egui::Ui, layer: &mut LayerState, width: f32) 
     Level::percent(&mut layer.volume, "Volume").max(2.0).target(ControlTarget::LayerVolume(layer.id)).width(width).tip(tip).show(ui);
 }
 
+/// Temp-data key: a text layer's city clock asks for a place, `(layer, name)` (the app looks it up: `zone_requests`).
+pub(crate) const ZONE_REQUEST: &str = "phosphor_zone_request";
+
+/// Starts any city-clock lookup a text editor asked for. Once a frame.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn zone_requests(ctx: &egui::Context, st: &mut State) {
+    if let Some((layer, name)) = ctx.data_mut(|d| d.remove_temp::<(u64, String)>(egui::Id::new(ZONE_REQUEST))) {
+        st.feeds.find_zone(layer, &name);
+    }
+    if let Some(p) = st.feeds.take_problems().pop() {
+        st.notice = Some(p);
+    }
+}
+
 /// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, colour,
 /// alignment, outline and line spacing. Changes redraw the layer in the background.
 /// Returns true when "From a file…" was pressed (the caller opens the file dialog).
@@ -644,7 +658,16 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     ui.horizontal_wrapped(|ui| {
         use phosphor_engine::LiveText;
         ui.label(RichText::new("Live").small());
-        let kinds = [(LiveText::Off, "Off"), (LiveText::Clock, "Clock"), (LiveText::Countdown(18 * 3600), "Countdown"), (LiveText::Stopwatch, "Stopwatch"), (LiveText::Code, "QR code seen"), (LiveText::Read, "Text seen")];
+        let kinds = [
+            (LiveText::Off, "Off"),
+            (LiveText::Clock, "Clock"),
+            (LiveText::ClockAt(0), "City clock"),
+            (LiveText::Countdown(18 * 3600), "Countdown"),
+            (LiveText::Stopwatch, "Stopwatch"),
+            (LiveText::Headlines(8), "Headlines"),
+            (LiveText::Code, "QR code seen"),
+            (LiveText::Read, "Text seen"),
+        ];
         for (k, name) in kinds {
             if ui.selectable_label(std::mem::discriminant(&style.live) == std::mem::discriminant(&k), name).clicked() {
                 style.live = k;
@@ -668,6 +691,35 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
                 if ui.small_button(label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
                     style.live_start = ui.input(|i| i.time);
                 }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            LiveText::ClockAt(_) => {
+                // A town's name: looked up (where it is, then its time zone) by the app (`ZONE_REQUEST`).
+                let key = egui::Id::new(("zone_name", id));
+                let mut name: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+                let shown = if style.live_source.is_empty() { "A town or city".to_string() } else { style.live_source.clone() };
+                let r = crate::ui::text_field(ui, &mut name, &shown, Some(140.0));
+                if ((r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || ui.small_button(icon::MAGNIFYING_GLASS).on_hover_text("Find this place and its time").clicked()) && !name.trim().is_empty() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(ZONE_REQUEST), (id, name.trim().to_string())));
+                    name.clear();
+                }
+                ui.ctx().data_mut(|d| d.insert_temp(key, name));
+                if !style.live_source.is_empty() {
+                    hint(ui, format!("Time in {}", style.live_source));
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            LiveText::Headlines(secs) => {
+                let current = crate::live_data::NEWS.iter().find(|(_, u)| *u == style.live_source).map_or_else(|| if style.live_source.is_empty() { "Pick a news feed".to_string() } else { "Your feed".to_string() }, |(n, _)| n.to_string());
+                ComboBox::from_id_salt(("news_feed", id)).width(150.0).selected_text(current).show_ui(ui, |ui| {
+                    for (name, url) in crate::live_data::NEWS {
+                        if ui.selectable_label(style.live_source == url, name).clicked() {
+                            style.live_source = url.to_string();
+                        }
+                    }
+                });
+                crate::ui::text_field(ui, &mut style.live_source, "or a feed address (RSS / Atom)", Some(180.0));
+                guarded!(ui, *secs, egui::DragValue::new(secs).range(2..=120).suffix(" s each")).on_hover_text("How long each headline shows");
             }
             _ => {}
         }

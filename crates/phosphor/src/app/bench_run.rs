@@ -83,6 +83,13 @@ impl PhosphorApp {
         if self.state.vcam.on {
             println!("VCAM connected={} status={:?}", self.state.vcam.connected(), crate::virtual_camera::status());
         }
+        for l in &self.state.comp.layers {
+            if let phosphor_engine::SourceSpec::Text(t) = &l.source
+                && t.live != phosphor_engine::LiveText::Off
+            {
+                println!("LIVETEXT {:?} source={:?} text={:?}", t.live, t.live_source, t.text);
+            }
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if !self.state.comp.live_data.readings().is_empty() {
             let vals: Vec<String> = self.state.comp.live_data.readings().iter().map(|n| format!("{n}={:?}", self.state.comp.hand(n))).collect();
@@ -647,6 +654,16 @@ impl PhosphorApp {
                 self.state.timeline_seek(0.0, now);
                 self.state.timeline_toggle(now);
                 println!("QUICK timeline: {} events", self.state.comp.timeline.events.len());
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "cityclock" {
+                // The top text layer becomes a clock in PHOSPHOR_CITY (default Tokyo), looked up like the Inspector does.
+                let city = std::env::var("PHOSPHOR_CITY").unwrap_or_else(|_| "Tokyo".into());
+                if let Some(l) = self.state.comp.layers.iter().rev().find(|l| matches!(l.source, phosphor_engine::SourceSpec::Text(_))) {
+                    self.state.feeds.find_zone(l.id, &city);
+                }
+                println!("QUICK cityclock: {city}");
                 continue;
             }
             #[cfg(not(target_arch = "wasm32"))]

@@ -167,13 +167,26 @@ impl State {
     /// Live text layers (clock, countdown, stopwatch): their words follow the time. Every frame; a layer only
     /// redraws when its words change (once a second).
     pub(crate) fn run_live_text(&mut self, now: f64) {
+        use phosphor_engine::LiveText;
         let (tod, _) = crate::clock::local_time();
+        let (utc, _) = crate::clock::utc_time();
         let (code, read) = (&self.comp.seen_code, &self.comp.seen_text);
+        let aspect = self.comp.width as f32 / self.comp.height.max(1) as f32;
         for l in &mut self.comp.layers {
             if let phosphor_engine::SourceSpec::Text(style) = &mut l.source {
                 let words = match style.live {
-                    phosphor_engine::LiveText::Code => Some(code.clone()).filter(|c| !c.is_empty()),
-                    phosphor_engine::LiveText::Read => Some(read.clone()).filter(|c| !c.is_empty()),
+                    LiveText::Code => Some(code.clone()).filter(|c| !c.is_empty()),
+                    LiveText::Read => Some(read.clone()).filter(|c| !c.is_empty()),
+                    LiveText::ClockAt(offset) => Some(LiveText::clock_at(utc, offset)),
+                    // One headline after another, each for `secs`.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    LiveText::Headlines(secs) if !style.live_source.is_empty() => {
+                        let titles = self.feeds.headlines(&style.live_source, now);
+                        let i = ((now - style.live_start).max(0.0) / secs.max(1) as f64) as usize;
+                        // Letters are about half as wide as they're tall: as many as fit across, with a margin.
+                        let fit = (aspect / (style.size.max(0.01) * 0.55) * 0.9) as usize;
+                        titles.get(i % titles.len().max(1)).map(|t| wrap_words(t, fit))
+                    }
                     live => live.words(tod, now - style.live_start),
                 };
                 if let Some(words) = words
@@ -297,4 +310,30 @@ impl State {
 pub fn format_tc(secs: f64) -> String {
     let s = secs.max(0.0);
     format!("{:02}:{:02}:{:04.1}", (s / 3600.0) as u32, ((s / 60.0) as u32) % 60, s % 60.0)
+}
+
+/// `text` cut into lines of at most `width` characters at spaces (a longer word gets a line of its own).
+pub(crate) fn wrap_words(text: &str, width: usize) -> String {
+    let width = width.max(8);
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if line.chars().count() + 1 + word.chars().count() <= width => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            _ => lines.push(word.to_string()),
+        }
+    }
+    lines.join("\n")
+}
+
+#[cfg(test)]
+mod wrap_tests {
+    #[test]
+    fn long_text_wraps_at_spaces() {
+        assert_eq!(super::wrap_words("one two three four", 9), "one two\nthree\nfour");
+        assert_eq!(super::wrap_words("short", 40), "short");
+        assert_eq!(super::wrap_words("a verylongwordindeed b", 8), "a\nverylongwordindeed\nb");
+    }
 }

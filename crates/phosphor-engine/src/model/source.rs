@@ -62,6 +62,8 @@ pub struct TextStyle {
     /// When the stopwatch was (re)started, in app seconds (not saved: it starts again with the app).
     #[serde(skip)]
     pub live_start: f64,
+    /// `ClockAt`: the place's name; `Headlines`: the news feed's address.
+    pub live_source: String,
 }
 
 /// Text that keeps itself up to date.
@@ -79,6 +81,10 @@ pub enum LiveText {
     Code,
     /// The text video tracking reads in the picture (`Composition::seen_text`).
     Read,
+    /// The time of day somewhere else: its offset from UTC in seconds (the place is `TextStyle::live_source`).
+    ClockAt(i32),
+    /// A news feed's headlines (`TextStyle::live_source`), each shown for this many seconds.
+    Headlines(u32),
 }
 
 impl LiveText {
@@ -91,14 +97,24 @@ impl LiveText {
             LiveText::Countdown(at) => Some(hms(if at > tod { (at - tod) as u64 } else { 0 })),
             LiveText::Stopwatch => Some(hms(running.max(0.0) as u64)),
             // These come from the project (`run_live_text`).
-            LiveText::Code | LiveText::Read => None,
+            LiveText::Code | LiveText::Read | LiveText::Headlines(_) => None,
+            // (Given the time in UTC: `clock_at`.)
+            LiveText::ClockAt(_) => None,
         }
+    }
+}
+
+impl LiveText {
+    /// `ClockAt`'s words at `utc` (seconds since midnight UTC).
+    pub fn clock_at(utc: u32, offset: i32) -> String {
+        let t = (utc as i64 + offset as i64).rem_euclid(86_400) as u32;
+        format!("{:02}:{:02}:{:02}", t / 3600, t / 60 % 60, t % 60)
     }
 }
 
 impl Default for TextStyle {
     fn default() -> Self {
-        Self { text: "PHOSPHOR".into(), font: "builtin:sans".into(), size: 0.18, color: [255, 255, 255, 255], align: TextAlign::Center, outline: 0.0, line_spacing: 1.0, parts: Vec::new(), part: 0, chunk_by: ChunkBy::Line, live: LiveText::Off, live_start: 0.0 }
+        Self { text: "PHOSPHOR".into(), font: "builtin:sans".into(), size: 0.18, color: [255, 255, 255, 255], align: TextAlign::Center, outline: 0.0, line_spacing: 1.0, parts: Vec::new(), part: 0, chunk_by: ChunkBy::Line, live: LiveText::Off, live_start: 0.0, live_source: String::new() }
     }
 }
 
@@ -249,6 +265,8 @@ mod text_tests {
         assert_eq!(LiveText::Countdown(18 * 3600).words(18 * 3600 + 5, 0.0).as_deref(), Some("00:00"), "stays at zero");
         assert_eq!(LiveText::Stopwatch.words(0, 3725.4).as_deref(), Some("01:02:05"));
         assert_eq!(LiveText::Off.words(0, 0.0), None);
+        assert_eq!(LiveText::clock_at(23 * 3600, 2 * 3600), "01:00:00", "past midnight there");
+        assert_eq!(LiveText::clock_at(3600, -5 * 3600), "20:00:00", "before midnight there");
     }
 
     #[test]
