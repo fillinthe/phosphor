@@ -709,14 +709,14 @@ f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/
     assert!(edge_bright > flat_bright + 100, "edges: {flat_bright} bright pixels before, {edge_bright} after");
 }
 
-/// Shadows reach the output: a box over a floor under a light from above darkens part of the lit floor (the floor
-/// has texture coordinates: without them a flat floor would get one row of the picture).
+/// Shadows reach the output: a box over a floor under a light from above darkens part of the lit floor. The model
+/// has no texture coordinates: Box wrapping spreads the picture over the floor (from the front it gets one row).
 #[test]
 fn model_shadows_draw() {
     let Some(mut engine) = test_engine() else { return };
-    let obj = "v -3 -1 -3\nv -3 -1 3\nv 3 -1 3\nv 3 -1 -3\nvt 0 0\nvt 0 1\nvt 1 1\nvt 1 0\n\
+    let obj = "v -3 -1 -3\nv -3 -1 3\nv 3 -1 3\nv 3 -1 -3\n\
 v -0.5 0 0.5\nv 0.5 0 0.5\nv 0.5 1 0.5\nv -0.5 1 0.5\nv -0.5 0 -0.5\nv 0.5 0 -0.5\nv 0.5 1 -0.5\nv -0.5 1 -0.5\n\
-f 1/1 2/2 3/3 4/4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12\nf 9 10 6 5\n";
+f 1 2 3 4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12\nf 9 10 6 5\n";
     let path = std::env::temp_dir().join("phosphor-gpu-shadow.obj");
     std::fs::write(&path, obj).unwrap();
     let mut comp = Composition { width: 64, height: 64, ..Default::default() };
@@ -725,7 +725,7 @@ f 1/1 2/2 3/3 4/4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12
     let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
     (o.width, o.height) = (160, 160);
     o.mapping.enabled = true;
-    let model = crate::mapping::Model3d { path: path.to_string_lossy().to_string(), yaw: 0.05, pitch: 0.08, cull: false, light: [0.03, 0.22], ..Default::default() };
+    let model = crate::mapping::Model3d { path: path.to_string_lossy().to_string(), yaw: 0.05, pitch: 0.08, cull: false, light: [0.03, 0.22], uv_mode: crate::mapping::UvMode::Box, ..Default::default() };
     o.mapping.add_surface(50).model = Some(model.clone());
     let dark = |engine: &mut Engine, comp: &Composition| {
         engine.render(comp, 0.0, &ModInputs::default());

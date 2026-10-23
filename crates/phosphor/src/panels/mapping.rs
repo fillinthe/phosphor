@@ -915,6 +915,24 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             });
             crate::ui::toggle(ui, &mut m.cull, "Hide back faces");
         });
+        // How the picture wraps the model (MadMapper's UV), then moved / sized / turned on it.
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Picture");
+            choice_combo(ui, ("model_uv", s.id), &mut m.uv_mode, 130.0, false)
+                .on_hover_text("How the picture wraps the model: the model's own texture coordinates, thrown from one side, or Box (each face from the side it faces)");
+            ui.horizontal(|ui| {
+                Level::range(&mut m.uv_offset[0], -1.0, 1.0, "Move across").default(0.0).width(150.0).show(ui);
+            });
+            ui.horizontal(|ui| {
+                Level::range(&mut m.uv_offset[1], -1.0, 1.0, "Move up").default(0.0).width(150.0).show(ui);
+            });
+            ui.horizontal(|ui| {
+                Level::range(&mut m.uv_scale, 0.1, 10.0, "Picture size").default(1.0).log().width(150.0).show(ui);
+            });
+            ui.horizontal(|ui| {
+                Level::range(&mut m.uv_turn, -0.5, 0.5, "Picture turn").default(0.0).width(150.0).show(ui);
+            });
+        });
         // Light on the faces and glowing edges (a building's corners and outline drawn in light).
         ui.horizontal_wrapped(|ui| {
             ui.horizontal(|ui| {
