@@ -246,6 +246,7 @@ impl PhosphorApp {
                 pending_triggers: Vec::new(),
                 autopilot: HashMap::new(),
                 step_fired: HashMap::new(),
+                step_painted: HashMap::new(),
                 cue_run: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 link: None,

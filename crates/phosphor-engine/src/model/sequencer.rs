@@ -21,11 +21,15 @@ pub struct StepTrack {
     /// Gate tracks: what each lit step sets to its range's top as it starts, and back as it ends (clips play and
     /// let go, columns fire, anything else switches on and off with the steps).
     pub fires: Vec<super::Binding>,
+    /// Colour track: each step's colour (empty = not a colour track), and the colours it sets (each one a colour's
+    /// red setting; its green and blue follow). Its own value is the step's brightness.
+    pub colours: Vec<[f32; 3]>,
+    pub paint: Vec<super::ControlTarget>,
 }
 
 impl Default for StepTrack {
     fn default() -> Self {
-        Self { steps: [1.0, 0.0, 0.5, 0.0].repeat(4), per_beat: 4.0, gate: false, glide: false, choices: 0, fires: Vec::new() }
+        Self { steps: [1.0, 0.0, 0.5, 0.0].repeat(4), per_beat: 4.0, gate: false, glide: false, choices: 0, fires: Vec::new(), colours: Vec::new(), paint: Vec::new() }
     }
 }
 
@@ -66,8 +70,41 @@ impl StepTrack {
         (last.is_some_and(|l| self.lit(l)), self.lit(now))
     }
 
+    pub fn is_colour(&self) -> bool {
+        !self.colours.is_empty()
+    }
+
+    /// Makes it a colour track: a rainbow across its steps (or plain levels again).
+    pub fn set_colour(&mut self, on: bool) {
+        self.colours = if on { (0..self.len()).map(|i| hue(i as f32 / self.len() as f32)).collect() } else { Vec::new() };
+        if on {
+            self.gate = false;
+            self.choices = 0;
+        }
+    }
+
+    /// A colour track's colour at this beat (red, green, blue 0..1); gliding into the next step's.
+    pub fn colour_at(&self, beats: f32) -> [f32; 3] {
+        if self.colours.is_empty() {
+            return [0.0; 3];
+        }
+        let i = self.step_at(beats) % self.colours.len();
+        let c = self.colours[i];
+        if !self.glide {
+            return c;
+        }
+        let next = self.colours[(i + 1) % self.colours.len()];
+        let pos = beats * self.rate();
+        let f = pos - pos.floor();
+        [0, 1, 2].map(|k| c[k] + (next[k] - c[k]) * f)
+    }
+
     /// The track's value at this beat (0..1).
     pub fn value_at(&self, beats: f32) -> f32 {
+        if self.is_colour() {
+            let [r, g, b] = self.colour_at(beats);
+            return (0.2126 * r + 0.7152 * g + 0.0722 * b).clamp(0.0, 1.0);
+        }
         if self.steps.is_empty() {
             return 0.0;
         }
@@ -94,6 +131,10 @@ impl StepTrack {
         let n = n.clamp(1, 64);
         let old = if self.steps.is_empty() { vec![0.0] } else { self.steps.clone() };
         self.steps = (0..n).map(|i| old[i % old.len()]).collect();
+        if !self.colours.is_empty() {
+            let old = self.colours.clone();
+            self.colours = (0..n).map(|i| old[i % old.len()]).collect();
+        }
     }
 
     /// Rotates the pattern by `by` steps (positive = later).
@@ -101,6 +142,10 @@ impl StepTrack {
         let n = self.steps.len() as i32;
         if n > 0 {
             self.steps.rotate_right(by.rem_euclid(n) as usize);
+        }
+        let n = self.colours.len() as i32;
+        if n > 0 {
+            self.colours.rotate_right(by.rem_euclid(n) as usize);
         }
     }
 
@@ -114,12 +159,46 @@ impl StepTrack {
             let r = (x >> 40) as f32 / (1u64 << 24) as f32;
             *s = if self.gate { (r < 0.4) as u8 as f32 } else { r };
         }
+        // Colour tracks: a random hue on each step.
+        for (c, s) in self.colours.iter_mut().zip(&self.steps) {
+            *c = hue(*s);
+        }
     }
+}
+
+/// A fully saturated colour around the colour wheel (0..1).
+fn hue(h: f32) -> [f32; 3] {
+    let h = h.rem_euclid(1.0) * 6.0;
+    let f = |n: f32| {
+        let k = (n + h) % 6.0;
+        1.0 - k.min(4.0 - k).clamp(0.0, 1.0)
+    };
+    [f(5.0), f(3.0), f(1.0)]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_colour_track_plays_its_colours() {
+        let mut t = StepTrack { steps: vec![0.0; 4], per_beat: 1.0, ..Default::default() };
+        t.set_colour(true);
+        assert_eq!(t.colours.len(), 4);
+        assert_eq!(t.colour_at(0.0), [1.0, 0.0, 0.0], "a rainbow from red");
+        t.colours[1] = [0.0, 0.0, 1.0];
+        assert_eq!(t.colour_at(1.5), [0.0, 0.0, 1.0]);
+        assert!((t.value_at(1.5) - 0.0722).abs() < 1e-4, "its value is the brightness");
+        t.glide = true;
+        t.colours[2] = [1.0, 1.0, 1.0];
+        assert_eq!(t.colour_at(1.5), [0.5, 0.5, 1.0], "halfway to the next step");
+        t.resize(8);
+        assert_eq!((t.colours.len(), t.colours[5]), (8, [0.0, 0.0, 1.0]), "a longer track repeats its colours");
+        t.shift(1);
+        assert_eq!(t.colours[2], [0.0, 0.0, 1.0]);
+        t.set_colour(false);
+        assert!(!t.is_colour());
+    }
 
     #[test]
     fn index_steps_pick_whole_choices() {

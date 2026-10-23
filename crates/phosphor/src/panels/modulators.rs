@@ -35,6 +35,16 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let earlier: Vec<(u64, String)> = st.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();
     // What gate tracks can fire (only worked out when there's a gate track to show).
     let targets = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.gate)) { crate::control::all_targets(&st.comp) } else { Vec::new() };
+    // Colour tracks paint colour settings: every colour's red (its green and blue follow).
+    let colour_reds: Vec<(phosphor_engine::ControlTarget, String)> = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.is_colour())) {
+        let all = if targets.is_empty() { crate::control::all_targets(&st.comp) } else { targets.clone() };
+        all.into_iter()
+            .filter(|(t, _)| crate::control::colour_siblings(&st.comp, t).is_some())
+            .map(|(t, n)| (t, n.trim_end_matches(" R").trim_end_matches("Red").trim_end_matches(" · ").to_string()))
+            .collect()
+    } else {
+        Vec::new()
+    };
     let n = st.comp.modulators.len();
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (i, m) in st.comp.modulators.iter_mut().enumerate() {
@@ -80,6 +90,9 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     if ui.push_id(("seq", m.id), |ui| super::sequencer::track_editor(ui, track, beats, seed)).inner {
                         m.sequence = None;
                         m.signal.source = phosphor_engine::ModSource::LfoSine;
+                    } else if track.is_colour() {
+                        ui.label(RichText::new("Paints its colour into:").small());
+                        super::sequencer::colour_targets(ui, ("paint", m.id), &colour_reds, &mut track.paint);
                     } else if track.gate {
                         // Lit steps fire clips, columns or anything else.
                         ui.label(RichText::new("Each lit step fires (a clip plays and lets go, a column fires, a control switches on):").small());

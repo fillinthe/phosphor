@@ -29,8 +29,16 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
         }
     });
     ui.horizontal_wrapped(|ui| {
-        toggle(ui, &mut track.gate, "Gates").on_hover_text("On/off steps (pads) instead of levels");
-        if !track.gate {
+        let mut colour = track.is_colour();
+        if toggle(ui, &mut colour, "Colours").on_hover_text("A colour on each step, painted into colour settings (a solid colour, a tint…)").changed() {
+            track.set_colour(colour);
+        }
+        if !colour {
+            toggle(ui, &mut track.gate, "Gates").on_hover_text("On/off steps (pads) instead of levels");
+        }
+        if colour {
+            toggle(ui, &mut track.glide, "Glide").on_hover_text("Fade from one step's colour to the next");
+        } else if !track.gate {
             let mut index = track.choices >= 2;
             if toggle(ui, &mut index, "Choices").on_hover_text("Each step picks one of a few choices (a clip, blend mode, direction…) instead of a level").changed() {
                 track.choices = if index { 4 } else { 0 };
@@ -58,6 +66,10 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
         }
     });
     let playing = track.step_at(beats);
+    if track.is_colour() {
+        colour_steps(ui, &mut track.colours, playing);
+        return back_to_signal;
+    }
     if step_bars(ui, &mut track.steps, Some(playing), track.gate, if track.gate { 26.0 } else { 48.0 }) && track.choices >= 2 {
         // Drawn steps land on whole choices, so the bars show what will be picked.
         let n = track.choices as usize;
@@ -66,7 +78,42 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
     back_to_signal
 }
 
+/// A colour track's steps: a colour button each (the playing one outlined).
+fn colour_steps(ui: &mut egui::Ui, colours: &mut [[f32; 3]], playing: usize) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        for (i, c) in colours.iter_mut().enumerate() {
+            let r = ui.color_edit_button_rgb(c);
+            if i == playing {
+                ui.painter().rect_stroke(r.rect.expand(1.5), 2.0, Stroke::new(1.5, Color32::WHITE), StrokeKind::Outside);
+            }
+        }
+    });
+}
+
 /// A new step track on the beat: four on the floor as gates.
 pub(crate) fn new_track() -> StepTrack {
     StepTrack { gate: true, steps: [1.0, 0.0, 0.0, 0.0].repeat(4), ..Default::default() }
+}
+
+/// The colour settings a colour track paints: each picked one with a remove button, and a picker to add one.
+/// `reds` = every colour setting (its red), named.
+pub(crate) fn colour_targets(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug + Copy, reds: &[(ControlTarget, String)], paint: &mut Vec<ControlTarget>) {
+    let mut remove = None;
+    for (i, t) in paint.iter().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(reds.iter().find(|(r, _)| r == t).map_or("(removed)", |(_, n)| n.as_str()));
+            if ui.small_button(icon::X).on_hover_text("Stop painting this one").clicked() {
+                remove = Some(i);
+            }
+        });
+    }
+    if let Some(i) = remove {
+        paint.remove(i);
+    }
+    if reds.is_empty() {
+        hint(ui, "Nothing with a colour yet: add a Solid colour layer, or an effect with a colour (Tint, Colorize…).");
+    } else if let Some(t) = target_picker(ui, (id, "add"), reds, None, 220.0) {
+        paint.push(t);
+    }
 }
