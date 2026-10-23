@@ -51,3 +51,68 @@ fn raw(file: &std::fs::File, baud: u32) {
 
 #[cfg(not(unix))]
 fn raw(_file: &std::fs::File, _baud: u32) {}
+
+/// Opens `path` the way DMX's wire wants it: raw, 250 kbit/s, 8 data bits, 2 stop bits (an FTDI chip with no timing
+/// of its own, like the Enttec Open DMX; `send_break` starts each frame).
+pub fn open_dmx(path: &str) -> Result<std::fs::File, String> {
+    let file = open(path, 57_600)?;
+    dmx_line(&file)?;
+    Ok(file)
+}
+
+#[cfg(target_os = "macos")]
+fn dmx_line(file: &std::fs::File) -> Result<(), String> {
+    use std::os::fd::AsRawFd;
+    let fd = file.as_raw_fd();
+    // IOSSIOSPEED = _IOW('T', 2, speed_t): any speed the driver can make (termios only knows the standard ones).
+    const IOSSIOSPEED: libc::c_ulong = 0x8008_5402;
+    // SAFETY: termios calls and the IOSSIOSPEED ioctl (which reads one speed_t) on a descriptor we own.
+    unsafe {
+        if libc::isatty(fd) != 1 {
+            return Ok(());
+        }
+        let mut t: libc::termios = std::mem::zeroed();
+        if libc::tcgetattr(fd, &mut t) == 0 {
+            t.c_cflag |= libc::CSTOPB;
+            t.c_cflag &= !(libc::PARENB | libc::CRTSCTS);
+            libc::tcsetattr(fd, libc::TCSANOW, &t);
+        }
+        let speed: libc::speed_t = 250_000;
+        if libc::ioctl(fd, IOSSIOSPEED, &speed) != 0 {
+            return Err("the port can't run at DMX speed (250 kbit/s)".into());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn dmx_line(_file: &std::fs::File) -> Result<(), String> {
+    Err("Open DMX interfaces work on the Mac only for now".into())
+}
+
+/// Holds the line low for `micros` (a DMX "break"), then lets it go; the bytes written next follow the "mark".
+#[cfg(unix)]
+pub fn send_break(file: &std::fs::File, micros: u64) {
+    use std::os::fd::AsRawFd;
+    let fd = file.as_raw_fd();
+    // SAFETY: break on / off ioctls on a descriptor we own (they fail harmlessly on things that aren't ports).
+    unsafe {
+        libc::ioctl(fd, libc::TIOCSBRK as _);
+        std::thread::sleep(std::time::Duration::from_micros(micros));
+        libc::ioctl(fd, libc::TIOCCBRK as _);
+    }
+}
+
+#[cfg(not(unix))]
+pub fn send_break(_file: &std::fs::File, _micros: u64) {}
+
+/// Waits until everything written has left the port.
+#[cfg(unix)]
+pub fn drain(file: &std::fs::File) {
+    use std::os::fd::AsRawFd;
+    // SAFETY: tcdrain on a descriptor we own.
+    unsafe { libc::tcdrain(file.as_raw_fd()) };
+}
+
+#[cfg(not(unix))]
+pub fn drain(_file: &std::fs::File) {}

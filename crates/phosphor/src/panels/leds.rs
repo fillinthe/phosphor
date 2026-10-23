@@ -17,9 +17,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         let hint_text = match d.protocol {
             phosphor_engine::DmxProtocol::ArtNet => "everyone (broadcast)",
             phosphor_engine::DmxProtocol::Sacn => "multicast",
-            phosphor_engine::DmxProtocol::UsbPro => "its port",
+            phosphor_engine::DmxProtocol::UsbPro | phosphor_engine::DmxProtocol::OpenDmx => "its port",
         };
-        if d.protocol == phosphor_engine::DmxProtocol::UsbPro {
+        let usb = matches!(d.protocol, phosphor_engine::DmxProtocol::UsbPro | phosphor_engine::DmxProtocol::OpenDmx);
+        if usb {
             // The interface's USB serial port (the list is read when the menu opens).
             #[cfg(not(target_arch = "wasm32"))]
             ComboBox::from_id_salt("dmx_usb_port").width(180.0).selected_text(if d.target.is_empty() { "(choose the port)".to_string() } else { d.target.clone() }).show_ui(ui, |ui| {
@@ -32,7 +33,11 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 }
             })
             .response
-            .on_hover_text("An Enttec DMX USB Pro or a compatible (DMXking ultraDMX…): one universe, the first your fixtures use");
+            .on_hover_text(if d.protocol == phosphor_engine::DmxProtocol::OpenDmx {
+                "An Enttec Open DMX or another plain FTDI DMX cable: one universe, the first your fixtures use. Phosphor makes the DMX signal itself (40 frames a second)"
+            } else {
+                "An Enttec DMX USB Pro or a compatible (DMXking ultraDMX…): one universe, the first your fixtures use"
+            });
         } else {
             ui.add(egui::TextEdit::singleline(&mut d.target).desired_width(120.0).hint_text(hint_text))
                 .on_hover_text("The controller's IP address (e.g. 2.0.0.10), or leave empty to send to the whole network");

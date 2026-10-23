@@ -13,16 +13,19 @@ pub enum DmxProtocol {
     Sacn,
     /// A USB interface speaking the Enttec DMX USB Pro protocol (one universe; `target` = its serial port).
     UsbPro,
+    /// A plain FTDI cable with no timing of its own (Enttec Open DMX…): the app makes the DMX signal.
+    OpenDmx,
 }
 
 impl DmxProtocol {
-    pub const ALL: [DmxProtocol; 3] = [DmxProtocol::ArtNet, DmxProtocol::Sacn, DmxProtocol::UsbPro];
+    pub const ALL: [DmxProtocol; 4] = [DmxProtocol::ArtNet, DmxProtocol::Sacn, DmxProtocol::UsbPro, DmxProtocol::OpenDmx];
 
     pub fn name(self) -> &'static str {
         match self {
             DmxProtocol::ArtNet => "Art-Net",
             DmxProtocol::Sacn => "sACN (E1.31)",
             DmxProtocol::UsbPro => "USB (Enttec Pro)",
+            DmxProtocol::OpenDmx => "USB (Open DMX)",
         }
     }
 }
