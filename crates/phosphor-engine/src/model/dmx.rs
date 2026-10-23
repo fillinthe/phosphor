@@ -215,6 +215,9 @@ pub struct Fixture {
     pub dimmer: f32,
     /// Moving heads: channels after the layout's, in order (gobo, prism, zoom…), each a control of its own.
     pub extra: Vec<ExtraChannel>,
+    /// Each pixel takes the average of its own patch of the picture (9 samples across its cell) instead of the one
+    /// point at its centre: steadier on detailed or moving pictures.
+    pub average: bool,
 }
 
 impl Default for Fixture {
@@ -242,6 +245,7 @@ impl Default for Fixture {
             motion_beats: 8.0,
             dimmer: 1.0,
             extra: Vec::new(),
+            average: false,
         }
     }
 }
@@ -363,6 +367,49 @@ impl Fixture {
         }
     }
 
+    /// Samples the picture takes for each pixel: 9 when averaging (not moving heads), else 1.
+    pub fn taps(&self) -> usize {
+        if self.average && self.shape != FixtureShape::MovingHead { 9 } else { 1 }
+    }
+
+    /// Every point the picture is sampled at, in wiring order: `taps()` per pixel, together. Averaging spreads a
+    /// pixel's 3 × 3 samples across its cell (the step to its neighbours along the line, and as much across; a
+    /// grid's column and row steps).
+    pub fn sample_taps(&self) -> Vec<[f32; 2]> {
+        let centres = self.sample_points();
+        if self.taps() == 1 || centres.is_empty() {
+            return centres;
+        }
+        let p = &self.points;
+        let n = centres.len();
+        let sub = |a: [f32; 2], b: [f32; 2]| [a[0] - b[0], a[1] - b[1]];
+        let steps: Vec<([f32; 2], [f32; 2])> = if self.shape == FixtureShape::Grid {
+            let (cols, rows) = (self.cols.clamp(1, 512) as f32, self.rows.clamp(1, 512) as f32);
+            let along = sub(p[1], p[0]).map(|v| v / cols);
+            let down = sub(p[3], p[0]).map(|v| v / rows);
+            vec![(along, down); n]
+        } else {
+            (0..n)
+                .map(|i| {
+                    let (a, b) = (centres[i.saturating_sub(1)], centres[(i + 1).min(n - 1)]);
+                    let span = ((i + 1).min(n - 1) - i.saturating_sub(1)).max(1) as f32;
+                    let along = sub(b, a).map(|v| v / span);
+                    (along, [-along[1], along[0]])
+                })
+                .collect()
+        };
+        let mut out = Vec::with_capacity(n * 9);
+        for (c, (u, v)) in centres.iter().zip(steps) {
+            for b in [-1.0f32, 0.0, 1.0] {
+                for a in [-1.0f32, 0.0, 1.0] {
+                    let (a, b) = (a / 3.0, b / 3.0);
+                    out.push([(c[0] + u[0] * a + v[0] * b).clamp(0.0, 1.0), (c[1] + u[1] * a + v[1] * b).clamp(0.0, 1.0)]);
+                }
+            }
+        }
+        out
+    }
+
     /// Writes this fixture's pixels (`colors`, one per sample point) into DMX universes. `beats` times a moving
     /// head's movement.
     pub fn write(&self, colors: &[[u8; 4]], universes: &mut BTreeMap<u16, [u8; 512]>, beats: f64) {
@@ -468,7 +515,39 @@ impl Default for DmxSettings {
 impl DmxSettings {
     /// Every enabled fixture's sample points, in order (the engine samples these).
     pub fn sample_points(&self) -> Vec<[f32; 2]> {
-        self.fixtures.iter().filter(|f| f.enabled).flat_map(|f| f.sample_points()).collect()
+        self.fixtures.iter().filter(|f| f.enabled).flat_map(|f| f.sample_taps()).collect()
+    }
+
+    /// A video wall: `across` × `down` LED tiles of `w` × `h` pixels covering the whole picture, wired one after
+    /// another from `start` (universe, channel), each tile's own universes following the last. Returns their ids.
+    pub fn add_video_wall(&mut self, across: u32, down: u32, w: u32, h: u32, start: (u16, u16), mut new_id: impl FnMut() -> u64) -> Vec<u64> {
+        let (across, down) = (across.clamp(1, 32), down.clamp(1, 32));
+        let mut at = start;
+        let mut ids = Vec::new();
+        for r in 0..down {
+            for c in 0..across {
+                let (x0, x1) = (c as f32 / across as f32, (c + 1) as f32 / across as f32);
+                let (y0, y1) = (r as f32 / down as f32, (r + 1) as f32 / down as f32);
+                let tile = Fixture {
+                    id: new_id(),
+                    name: format!("Tile {}", r * across + c + 1),
+                    shape: FixtureShape::Grid,
+                    points: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
+                    cols: w.clamp(1, 512),
+                    rows: h.clamp(1, 512),
+                    zigzag: false,
+                    universe: at.0,
+                    channel: at.1,
+                    ..Default::default()
+                };
+                // Each tile starts on a fresh universe after the one before (the way tiles are usually patched).
+                let (uni, ch) = tile.next_free();
+                at = if ch == 1 { (uni, 1) } else { (uni.saturating_add(1), 1) };
+                ids.push(tile.id);
+                self.fixtures.push(tile);
+            }
+        }
+        ids
     }
 
     /// Fixtures from a table (a patch list from a spreadsheet): a header row naming the columns, then one fixture a
@@ -528,8 +607,18 @@ impl DmxSettings {
         let mut at = 0;
         let master = self.master.clamp(0.0, 1.0);
         for f in self.fixtures.iter().filter(|f| f.enabled) {
-            let n = f.pixel_count();
-            if let Some(c) = colors.get(at..(at + n).min(colors.len())) {
+            let taps = f.taps();
+            let n = f.pixel_count() * taps;
+            let averaged: Vec<[u8; 4]>;
+            let mut c = colors.get(at..(at + n).min(colors.len()));
+            if taps > 1
+                && let Some(all) = c
+            {
+                // Each pixel's samples, averaged.
+                averaged = all.chunks(taps).map(|t| [0, 1, 2, 3].map(|k| (t.iter().map(|p| p[k] as u32).sum::<u32>() as f32 / t.len() as f32).round() as u8)).collect();
+                c = Some(&averaged);
+            }
+            if let Some(c) = c {
                 if master < 1.0 {
                     let dimmed: Vec<[u8; 4]> = c.iter().map(|p| [0, 1, 2, 3].map(|k| if k < 3 { (p[k] as f32 * master).round() as u8 } else { p[k] })).collect();
                     let f = Fixture { dimmer: f.dimmer * master, ..f.clone() };
@@ -546,6 +635,43 @@ impl DmxSettings {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn averaging_pixels_read_their_whole_cell() {
+        // A 2-pixel strip across the picture: each pixel's 9 samples stay inside its own half.
+        let f = Fixture { cols: 2, points: [[0.0, 0.5], [1.0, 0.5], [0.0; 2], [0.0; 2]], average: true, order: PixelOrder::Rgb, ..Default::default() };
+        let taps = f.sample_taps();
+        assert_eq!(taps.len(), 18);
+        assert!(taps[..9].iter().all(|p| p[0] < 0.5) && taps[9..].iter().all(|p| p[0] > 0.5), "{taps:?}");
+        assert_eq!(taps[4], [0.25, 0.5], "the middle sample is the centre");
+        // Half the first pixel's samples white, half black: it sends the average.
+        let settings = DmxSettings { fixtures: vec![Fixture { gamma: 1.0, ..f.clone() }], ..Default::default() };
+        let mut colors = vec![[0u8, 0, 0, 255]; 18];
+        for c in &mut colors[..9].iter_mut().step_by(2) {
+            *c = [255, 255, 255, 255];
+        }
+        let u = settings.universes(&colors, 0.0);
+        let data = u.values().next().unwrap();
+        assert_eq!(&data[..6], &[142, 142, 142, 0, 0, 0], "5 of 9 white = 142");
+        // Moving heads never average.
+        assert_eq!(Fixture { shape: FixtureShape::MovingHead, average: true, ..Default::default() }.taps(), 1);
+    }
+
+    #[test]
+    fn a_video_wall_covers_the_picture_in_patched_tiles() {
+        let mut d = DmxSettings::default();
+        let mut next = 10;
+        let ids = d.add_video_wall(2, 2, 16, 16, (0, 1), || {
+            next += 1;
+            next
+        });
+        assert_eq!(ids, vec![11, 12, 13, 14]);
+        let t = &d.fixtures;
+        assert_eq!((t[0].points[0], t[3].points[2]), ([0.0, 0.0], [1.0, 1.0]), "corner to corner");
+        assert_eq!(t[1].points[0], [0.5, 0.0]);
+        // 256 RGB pixels = 768 channels: two universes a tile (170 pixels fit in one), the next tile on a fresh one.
+        assert_eq!(t.iter().map(|f| (f.universe, f.channel)).collect::<Vec<_>>(), vec![(0, 1), (2, 1), (4, 1), (6, 1)]);
+    }
+
     use super::*;
 
     #[test]

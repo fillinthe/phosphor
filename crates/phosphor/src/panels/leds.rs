@@ -134,6 +134,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             });
             selected = Some(id);
         }
+        video_wall_menu(ui, st);
         hint(ui, "Drag the dots on the picture to place lights; the square moves the whole fixture.");
     });
 
@@ -171,6 +172,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     }
                     if f.shape != FixtureShape::MovingHead {
                         choice_combo(ui, ("led_order", f.id), &mut f.order, 90.0, false);
+                        crate::ui::toggle(ui, &mut f.average, "Average").on_hover_text("Each light takes the average of its own patch of the picture (9 samples) instead of the one point at its centre: steadier on detailed or moving pictures");
                     }
                 });
                 if f.shape == FixtureShape::MovingHead {
@@ -243,6 +245,37 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// The first universe / channel after the last fixture, so new fixtures don't overlap.
+/// Video wall: a grid of LED tiles covering the whole picture, patched one after another (each on fresh universes).
+fn video_wall_menu(ui: &mut egui::Ui, st: &mut State) {
+    let key = ui.id().with("video_wall");
+    let mut v: [u32; 4] = ui.data_mut(|d| d.get_temp(key)).unwrap_or([4, 3, 32, 32]);
+    ui.menu_button(label(icon::SQUARES_FOUR, "Video wall…"), |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Tiles");
+            guarded!(ui, v[0], egui::DragValue::new(&mut v[0]).range(1..=32).suffix(" across"));
+            guarded!(ui, v[1], egui::DragValue::new(&mut v[1]).range(1..=32).suffix(" down"));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Each tile");
+            guarded!(ui, v[2], egui::DragValue::new(&mut v[2]).range(1..=512).suffix(" px wide"));
+            guarded!(ui, v[3], egui::DragValue::new(&mut v[3]).range(1..=512).suffix(" px high"));
+        });
+        let start = next_free(&st.comp.dmx.fixtures);
+        hint(ui, format!("{} tiles of {} pixels, from universe {} (each tile starts a fresh universe). Set the wiring (zig-zag, order) on each after.", v[0] * v[1], v[2] * v[3], start.0));
+        if ui.button(label(icon::PLUS, "Add the wall")).clicked() {
+            let comp = &mut st.comp;
+            let mut ids = Vec::new();
+            for _ in 0..v[0] * v[1] {
+                ids.push(comp.new_id());
+            }
+            let mut ids = ids.into_iter();
+            comp.dmx.add_video_wall(v[0], v[1], v[2], v[3], start, || ids.next().unwrap_or_default());
+            ui.close();
+        }
+    });
+    ui.data_mut(|d| d.insert_temp(key, v));
+}
+
 fn next_free(fixtures: &[Fixture]) -> (u16, u16) {
     fixtures.last().map_or((0, 1), |f| f.next_free())
 }
