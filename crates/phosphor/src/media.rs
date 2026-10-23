@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use phosphor_engine::{Composition, Engine, SourceSpec};
 
 #[cfg(not(target_arch = "wasm32"))]
+pub mod baked;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod ilda;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod lottie;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod live;
 #[cfg(not(target_arch = "wasm32"))]
@@ -62,7 +66,8 @@ pub fn is_sound_file(name: &str) -> bool {
 
 /// Extensions offered in the Open… dialog.
 pub fn dialog_extensions() -> Vec<&'static str> {
-    IMAGE_EXTS.iter().chain(MOVIE_EXTS).chain(SOUND_EXTS).copied().collect()
+    // "json": Lottie animations (other .json files are refused when opened).
+    IMAGE_EXTS.iter().chain(MOVIE_EXTS).chain(SOUND_EXTS).copied().chain(["json"]).collect()
 }
 
 fn extension(name: &str) -> String {
@@ -74,7 +79,16 @@ fn file_name(path: &str) -> String {
 }
 
 pub fn is_movie(name: &str) -> bool {
-    MOVIE_EXTS.contains(&extension(name).as_str()) || sequence::is_sequence(name)
+    MOVIE_EXTS.contains(&extension(name).as_str()) || sequence::is_sequence(name) || is_lottie_file(name)
+}
+
+/// A Lottie animation: a .json with an animation in it (other .json files aren't media). Given only a name (no file
+/// to look in), a .json counts: it's never a picture.
+fn is_lottie_file(name: &str) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    return extension(name) == "json" && (!std::path::Path::new(name).is_file() || lottie::is_lottie(name));
+    #[cfg(target_arch = "wasm32")]
+    return false;
 }
 
 pub fn is_picture(name: &str) -> bool {
@@ -114,7 +128,7 @@ pub fn is_supported(name: &str) -> bool {
         return false;
     }
     let ext = extension(name);
-    IMAGE_EXTS.contains(&ext.as_str()) || MOVIE_EXTS.contains(&ext.as_str())
+    IMAGE_EXTS.contains(&ext.as_str()) || MOVIE_EXTS.contains(&ext.as_str()) || is_lottie_file(name)
 }
 
 /// A clip's label for a file: its name without the extension.
