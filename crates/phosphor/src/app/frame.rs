@@ -107,6 +107,13 @@ impl PhosphorApp {
         self.state.run_multi_edit();
         self.state.run_timeline(now);
         self.state.run_computed(now);
+        // Layer names for settings that pick a layer (mask layers), rebuilt only when they change.
+        let id = egui::Id::new(crate::ui::LAYER_NAMES);
+        let names = ctx.data(|d| d.get_temp::<std::sync::Arc<Vec<String>>>(id));
+        if names.as_ref().is_none_or(|n| n.len() != self.state.comp.layers.len() || n.iter().zip(&self.state.comp.layers).any(|(a, l)| *a != l.name)) {
+            let fresh: Vec<String> = self.state.comp.layers.iter().map(|l| l.name.clone()).collect();
+            ctx.data_mut(|d| d.insert_temp(id, std::sync::Arc::new(fresh)));
+        }
         if let Some(target) = ctx.data_mut(|d| {
             let id = egui::Id::new(crate::ui::KEY_REQUEST);
             let t = d.get_temp::<phosphor_engine::ControlTarget>(id);

@@ -42,7 +42,7 @@ impl Engine {
                     let params = resolve_params(desc, values, value_mods, mods);
                     let key = if outgoing { GENERATOR_OUT_KEY } else { GENERATOR_KEY };
                     let blank = tex0.unwrap_or_else(|| self.gpu.blank.clone());
-                    let view = self.run_plan(layer_id, key, desc.entry, &plan, &params, blank, out, (w, h), time, passes);
+                    let view = self.run_plan(layer_id, key, desc.entry, &plan, &params, blank, out, (w, h), time, &[], passes);
                     return Some(Frame::Rgb { view, w, h });
                 }
                 let mut u = Uniforms::with_params(&resolve_params(desc, values, value_mods, mods));
@@ -257,6 +257,7 @@ impl Engine {
         out: wgpu::TextureView,
         (w, h): (u32, u32),
         time: f32,
+        layer_views: &[(usize, wgpu::TextureView)],
         passes: &mut Vec<Pass>,
     ) -> wgpu::TextureView {
         let device = self.gpu.device.clone();
@@ -279,6 +280,9 @@ impl Engine {
         for (k, pp) in plan.passes.iter().enumerate() {
             let views: Vec<wgpu::TextureView> = (0..n)
                 .map(|b| {
+                    if let Some((_, v)) = layer_views.iter().find(|(slot, _)| *slot == b) {
+                        return v.clone();
+                    }
                     if plan.images.contains(&b) {
                         return self.plan_images.get(&(entry, b)).map_or_else(|| blank.clone(), |t| t.view.clone());
                     }
@@ -379,7 +383,17 @@ impl Engine {
             } else if let Some(plan) = shaders::pass_plan(desc.entry) {
                 // Multi-pass shader (ISF PASSES): its own buffers, output into a free chain view.
                 let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
-                let result = self.run_plan(res_id, fx_id, desc.entry, &plan, &params, input.clone(), views[i].clone(), (w, h), time, passes);
+                // Another layer's picture (a mask layer): its feed, picked by number; blank when there's none.
+                let layer_views: Vec<(usize, wgpu::TextureView)> = plan
+                    .layer_images
+                    .iter()
+                    .map(|&(slot, param)| {
+                        let n = params.get(param).copied().unwrap_or(0.0).round() as usize;
+                        let feed = n.checked_sub(1).and_then(|k| all_layers.get(k)).and_then(|l| self.layers.get(&l.id)).and_then(|r| r.feed.as_ref());
+                        (slot, feed.map_or_else(|| self.gpu.blank.clone(), |t| t.view.clone()))
+                    })
+                    .collect();
+                let result = self.run_plan(res_id, fx_id, desc.entry, &plan, &params, input.clone(), views[i].clone(), (w, h), time, &layer_views, passes);
                 input_idx = (result == views[i]).then_some(i);
                 input = result;
             } else {

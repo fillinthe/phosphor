@@ -140,7 +140,7 @@ pub fn plan_for(header: &Header) -> Option<shaders::PassPlan> {
         buffers += 1;
     }
     passes.push(shaders::PlanPass::default());
-    Some(shaders::PassPlan { passes, buffers, vars: Vec::new(), images: Vec::new() })
+    Some(shaders::PassPlan { passes, buffers, vars: Vec::new(), images: Vec::new(), layer_images: Vec::new() })
 }
 
 /// Checks a user shader the way the engine compiles it, without a GPU (any thread): its header, then the WGSL.
@@ -527,6 +527,7 @@ pub fn feedback_plan() -> shaders::PassPlan {
         buffers: 1,
         vars: Vec::new(),
         images: Vec::new(),
+        layer_images: Vec::new(),
     }
 }
 

@@ -244,10 +244,28 @@ impl Composition {
 
     /// Layers and groups whose finished picture another layer uses as its source.
     pub fn feed_sources(&self) -> impl Iterator<Item = u64> + '_ {
-        self.layers.iter().filter_map(|l| match &l.source {
-            SourceSpec::Feed { id, before_fx: false, .. } if *id != crate::MASTER_ID => Some(*id),
-            _ => None,
-        })
+        self.layers
+            .iter()
+            .filter_map(|l| match &l.source {
+                SourceSpec::Feed { id, before_fx: false, .. } if *id != crate::MASTER_ID => Some(*id),
+                _ => None,
+            })
+            .chain(self.effect_layer_picks())
+    }
+
+    /// Layers an effect reads as a picture (a mask layer, `shaders::PassPlan::layer_images`).
+    pub fn effect_layer_picks(&self) -> Vec<u64> {
+        let mut out = Vec::new();
+        for fx in self.all_effects() {
+            let Some(plan) = crate::shaders::effect(&fx.effect).and_then(|d| crate::shaders::pass_plan(d.entry)) else { continue };
+            for &(_, param) in &plan.layer_images {
+                let n = fx.values.get(param).copied().unwrap_or(0.0).round() as usize;
+                if let Some(l) = n.checked_sub(1).and_then(|i| self.layers.get(i)) {
+                    out.push(l.id);
+                }
+            }
+        }
+        out
     }
 
     /// Layers whose picture before their effects another layer shows.
