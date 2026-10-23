@@ -486,6 +486,10 @@ impl Engine {
         &self.gpu.device
     }
 
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.gpu.queue
+    }
+
     /// Shows a stage-scanner pattern on output `output` instead of its picture (None = back to normal).
     /// `pattern` = (kind 0 black / 1 white / 2 Gray-code bit, bit, axis 0 columns / 1 rows, inverse).
     pub fn set_scan(&mut self, scan: Option<(u64, [f32; 4])>) {
