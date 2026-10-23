@@ -18,6 +18,10 @@ pub use sources::Source;
 pub enum Kind {
     Video,
     Picture,
+    /// SVG icons and symbols.
+    Icon,
+    /// Surface textures (for 3D models and backgrounds).
+    Texture,
 }
 
 /// One search result.
@@ -133,10 +137,10 @@ impl Search {
         for &source in &self.sources {
             for &kind in source.kinds().iter().filter(|k| self.kinds.contains(k)) {
                 let url = source.search_url(&self.query, kind, self.page, self.commercial);
-                let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+                let (tx, ctx, query, page) = (self.tx.clone(), self.ctx.clone(), self.query.clone(), self.page);
                 self.pending += 1;
                 let _ = std::thread::Builder::new().name("online search".into()).spawn(move || {
-                    let msg = match get_bytes(&url).and_then(|b| source.parse(kind, &b)) {
+                    let msg = match get_bytes(&url).and_then(|b| source.parse_page(kind, &query, page, &b)) {
                         Ok(items) => Msg::Found { kind, items },
                         Err(e) => Msg::Failed(format!("{}: {e}", source.name())),
                     };
@@ -393,5 +397,19 @@ mod tests {
             println!("ONLINE {} video {url}", src.name());
             assert!(url.starts_with("https://") && url.to_ascii_lowercase().ends_with(".mp4"), "{url}");
         }
+        // Icons and textures: an icon opens as an SVG picture; a texture finds its 2K colour picture.
+        let mut s = Search::start("stone", &[Source::Iconify, Source::PolyHaven], &[Kind::Icon, Kind::Texture], false, None);
+        while s.busy() {
+            std::thread::sleep(Duration::from_millis(100));
+            s.poll();
+        }
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        let icon = s.items.iter().find(|i| i.kind == Kind::Icon).expect("an icon").clone();
+        let svg = get_bytes(icon.file.as_deref().unwrap()).expect("svg");
+        assert!(crate::media::render_svg(&svg).is_ok(), "the icon draws");
+        let tex = s.items.iter().find(|i| i.kind == Kind::Texture).expect("a texture").clone();
+        let (url, size) = sources::pick_file(&tex, &get_bytes(&tex.list).expect("files")).expect("a picture");
+        println!("ONLINE icon {} texture {url} {size:?}", icon.id);
+        assert!(url.ends_with(".jpg"));
     }
 }

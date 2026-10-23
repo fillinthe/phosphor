@@ -15,6 +15,8 @@ enum Want {
     Both,
     Videos,
     Pictures,
+    Icons,
+    Textures,
 }
 
 impl Want {
@@ -23,6 +25,8 @@ impl Want {
             Want::Both => &[Kind::Video, Kind::Picture],
             Want::Videos => &[Kind::Video],
             Want::Pictures => &[Kind::Picture],
+            Want::Icons => &[Kind::Icon],
+            Want::Textures => &[Kind::Texture],
         }
     }
 }
@@ -57,7 +61,8 @@ impl Online {
     /// Bench `--quick online` (PHOSPHOR_ONLINE_QUERY): searches like the panel does.
     pub fn bench_search(&mut self, query: &str) {
         self.query = query.to_string();
-        self.search = Some(Search::start(query, &Source::ALL, Want::Both.kinds(), false, None));
+        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture];
+        self.search = Some(Search::start(query, &Source::ALL, &kinds, false, None));
         self.bench = true;
     }
 
@@ -77,9 +82,15 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
         && let Some(s) = st.online.search.as_mut()
     {
         s.poll();
-        // PHOSPHOR_ONLINE_PICK=video: the first video from the Internet Archive (small files) instead.
-        let video = std::env::var("PHOSPHOR_ONLINE_PICK").is_ok_and(|k| k == "video");
-        if let Some(item) = s.items.iter().find(|i| if video { i.source == Source::Archive } else { i.kind == Kind::Picture }).cloned() {
+        // PHOSPHOR_ONLINE_PICK=video (an Internet Archive film: small files), icon or texture instead of a picture.
+        let pick = std::env::var("PHOSPHOR_ONLINE_PICK").unwrap_or_default();
+        let wanted = |i: &&Item| match pick.as_str() {
+            "video" => i.source == Source::Archive,
+            "icon" => i.kind == Kind::Icon,
+            "texture" => i.kind == Kind::Texture,
+            _ => i.kind == Kind::Picture,
+        };
+        if let Some(item) = s.items.iter().find(wanted).cloned() {
             st.online.bench = false;
             st.online.downloads.push((Download::start(item, None), Then::NewLayer));
         }
@@ -128,7 +139,13 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         go |= ui.add_enabled(!o.query.trim().is_empty(), egui::Button::new(icon::MAGNIFYING_GLASS)).on_hover_text("Search every library that's on").clicked();
     });
     ui.horizontal_wrapped(|ui| {
-        let opts = [(Want::Both, "Both".to_string()), (Want::Videos, "Videos".to_string()), (Want::Pictures, "Pictures".to_string())];
+        let opts = [
+            (Want::Both, "Videos & pictures".to_string()),
+            (Want::Videos, "Videos".to_string()),
+            (Want::Pictures, "Pictures".to_string()),
+            (Want::Icons, "Icons".to_string()),
+            (Want::Textures, "Textures".to_string()),
+        ];
         go |= segmented(ui, &mut o.want, &opts, |_, _, _| {}) && o.search.is_some();
         go |= toggle(ui, &mut o.commercial, "Paid work OK").on_hover_text("Only results whose licence allows use in paid work (no \"NC\" licences)").changed() && o.search.is_some();
         ui.menu_button(label(icon::BOOKS, "Libraries"), |ui| {
@@ -150,7 +167,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let selected = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let o = &mut st.online;
     let Some(search) = o.search.as_mut() else {
-        hint(ui, "Free videos and pictures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos and the Art Institute of Chicago. Downloads go into the media bin with their credit (Credits, below).");
+        hint(ui, "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons and Poly Haven's textures. Downloads go into the media bin with their credit (Credits, below).");
         credits(ui, &st.comp);
         return;
     };
@@ -229,7 +246,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
     match (item.thumb.starts_with("https://")).then(|| thumbs.get(&item.thumb)).flatten() {
         Some(tex) => paint_texture(p, tex, thumb_rect),
         None => {
-            let text = if thumbs.is_pending(&item.thumb) { "…" } else if item.kind == Kind::Video { icon::FILM_STRIP } else { icon::IMAGE };
+            let text = if thumbs.is_pending(&item.thumb) { "…" } else { kind_icon(item.kind) };
             p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
         }
     }
@@ -237,7 +254,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
     // Kind, and a tick once it's in the media bin.
     let corner = thumb_rect.left_top() + egui::vec2(4.0, 3.0);
-    let badge = if local.is_some() { format!("{} {}", icon::CHECK, if item.kind == Kind::Video { icon::FILM_STRIP } else { icon::IMAGE }) } else if item.kind == Kind::Video { icon::FILM_STRIP.to_string() } else { String::new() };
+    let badge = if local.is_some() { format!("{} {}", icon::CHECK, kind_icon(item.kind)) } else if item.kind == Kind::Picture { String::new() } else { kind_icon(item.kind).to_string() };
     p.text(corner, egui::Align2::LEFT_TOP, badge, egui::FontId::proportional(12.0), Color32::from_white_alpha(220));
     if !item.credit.commercial() {
         p.text(thumb_rect.right_top() + egui::vec2(-4.0, 3.0), egui::Align2::RIGHT_TOP, "NC", egui::FontId::proportional(10.0), WARN);
@@ -295,6 +312,15 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
         }
     });
     out
+}
+
+fn kind_icon(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Video => icon::FILM_STRIP,
+        Kind::Picture => icon::IMAGE,
+        Kind::Icon => icon::SHAPES,
+        Kind::Texture => icon::CHECKERBOARD,
+    }
 }
 
 /// Every credit in the show, to paste into a programme or a video's description.
