@@ -141,7 +141,7 @@ fn lut_effect(slug: &str, stem: &str, lut: &crate::lut::Lut) -> Loaded {
         params: vec![Param::new("Amount", 0.0, 1.0, 1.0)],
         wgsl: crate::lut::wgsl(&entry, lut.size),
         entry,
-        plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: 1, vars: Vec::new(), images: vec![0] }),
+        plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: 1, vars: Vec::new(), images: vec![0], layer_images: Vec::new() }),
         images: vec![(0, w, h, rgba)],
         audio_slots: Vec::new(),
         vertex_entry: None,
@@ -152,7 +152,7 @@ fn lut_effect(slug: &str, stem: &str, lut: &crate::lut::Lut) -> Loaded {
 
 /// VDMX's LUT Mixer: every LUT found, LUT A and LUT B picked by name, Mix between them, Amount over the picture.
 /// What decides where LUT Split changes from LUT A to LUT B.
-const SPLIT_BY: &[&str] = &["Brightness", "Left to right", "Top to bottom", "From the centre"];
+const SPLIT_BY: &[&str] = &["Brightness", "Left to right", "Top to bottom", "From the centre", "Mask layer"];
 
 fn lut_mix_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
     lut_mixer(luts, false)
@@ -174,7 +174,8 @@ fn lut_mixer(luts: &[(String, crate::lut::Lut)], split: bool) -> Loaded {
     let pair = [Param { name: "LUT A", min: 0.0, max: last, default: 0.0, labels: names }, Param { name: "LUT B", min: 0.0, max: last, default: 1.0, labels: names }];
     let params = if split {
         let by = Param { name: "Split by", min: 0.0, max: (SPLIT_BY.len() - 1) as f32, default: 0.0, labels: SPLIT_BY };
-        [pair.to_vec(), vec![by, Param::new("Point", 0.0, 1.0, 0.5), Param::new("Softness", 0.0, 0.5, 0.15), Param::new("Amount", 0.0, 1.0, 1.0)]].concat()
+        // (The mask layer comes last: saved settings keep their places.)
+        [pair.to_vec(), vec![by, Param::new("Point", 0.0, 1.0, 0.5), Param::new("Softness", 0.0, 0.5, 0.15), Param::new("Amount", 0.0, 1.0, 1.0), Param::new("Mask layer #", 0.0, 64.0, 0.0)]].concat()
     } else {
         [pair.to_vec(), vec![Param::new("Mix", 0.0, 1.0, 0.5), Param::new("Amount", 0.0, 1.0, 1.0)]].concat()
     };
@@ -182,14 +183,14 @@ fn lut_mixer(luts: &[(String, crate::lut::Lut)], split: bool) -> Loaded {
         id: format!("{}{key}", shaders::ISF_EFFECT),
         name: if split { "LUT Split".into() } else { "LUT Mix".into() },
         about: if split {
-            format!("Two of your {} colour grades in different parts of the picture: shadows and highlights, left and right, centre and edges", luts.len())
+            format!("Two of your {} colour grades in different parts of the picture: shadows and highlights, left and right, centre and edges, or where another layer is bright (Mask layer)", luts.len())
         } else {
             format!("Blend between two of your {} colour grades (LUT A to LUT B)", luts.len())
         },
         params,
         wgsl: crate::lut::wgsl_mix(&entry, luts.len(), split),
         entry,
-        plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: 1, vars: Vec::new(), images: vec![0] }),
+        plan: Some(shaders::PassPlan { passes: vec![shaders::PlanPass::default()], buffers: if split { 2 } else { 1 }, vars: Vec::new(), images: vec![0], layer_images: if split { vec![(1, 6)] } else { Vec::new() } }),
         images: vec![(0, w, h, rgba)],
         audio_slots: Vec::new(),
         vertex_entry: None,
@@ -292,6 +293,7 @@ fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
             buffers: sh.buffers.len(),
             vars: Vec::new(),
             images: sh.images.iter().map(|(slot, _)| *slot).collect(),
+            layer_images: Vec::new(),
         });
     }
     let index = |t: &Option<String>| t.as_ref().and_then(|t| sh.buffers.iter().position(|b| b == t));
@@ -304,6 +306,7 @@ fn pass_plan(sh: &phosphor_isf::IsfShader) -> Option<shaders::PassPlan> {
         buffers: sh.buffers.len(),
         vars: sh.inputs.iter().filter_map(|i| Some((i.name.clone(), i.offset?))).collect(),
         images: sh.images.iter().map(|(slot, _)| *slot).collect(),
+        layer_images: Vec::new(),
     })
 }
 
@@ -703,4 +706,46 @@ fn shadertoy_mouse_reaches_the_shader() {
     assert!(r.abs_diff(64) < 4 && g.abs_diff(191) < 4 && b > 250, "{r} {g} {b}");
     shaders::set_mouse_down(params, &mut v, false);
     assert!(middle(&mut engine, &v)[2] < 5, "let go: z is negative");
+}
+
+/// LUT Split by a mask layer: where the layer picked as the mask is bright, LUT B; where it's dark, LUT A.
+#[cfg(all(test, not(windows)))]
+#[test]
+fn lut_split_follows_a_mask_layer() {
+    use phosphor_engine::{Composition, EffectState, LayerState, ModInputs, SourceSpec};
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else { return };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default())) else { return };
+    let mut engine = Engine::new(device, queue);
+    let corners = |f: fn(f32) -> f32| crate::lut::Lut { size: 2, data: (0..8).map(|i| [f((i & 1) as f32), f(((i >> 1) & 1) as f32), f(((i >> 2) & 1) as f32)]).collect() };
+    let luts = vec![("Same".to_string(), corners(|v| v)), ("Inverted".to_string(), corners(|v| 1.0 - v))];
+    let loaded = lut_split_effect(&luts);
+    let (id, entry) = (loaded.id.clone(), loaded.entry.clone());
+    install(&mut engine, loaded, false);
+    let solid = |id: u64, grey: f32| {
+        let mut l = LayerState { id, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+        l.generator_values = vec![grey; 3];
+        l
+    };
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    let mut middle = |engine: &mut Engine, mask: f32| {
+        // The mask (layer 1, underneath) and a 20% grey on top graded by LUT Split › Mask layer = layer 1.
+        let mut top = solid(2, 0.2);
+        // LUT A, LUT B, Split by (4 = Mask layer), Point, Softness, Amount, Mask layer #.
+        top.effects.push(EffectState { id: 3, effect: id.clone(), enabled: true, values: vec![0.0, 1.0, 4.0, 0.5, 0.05, 1.0, 1.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        comp.layers = vec![solid(1, mask), top];
+        assert_eq!(comp.effect_layer_picks(), vec![1], "the mask layer's picture is wanted");
+        let started = std::time::Instant::now();
+        while engine.shader_pending(&entry) && started.elapsed().as_secs() < 20 {
+            engine.render(&comp, 0.0, &ModInputs::default());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        engine.render(&comp, 0.0, &ModInputs::default());
+        engine.render(&comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output().expect("output");
+        px[((h / 2 * w + w / 2) * 4) as usize]
+    };
+    let dark = middle(&mut engine, 0.0);
+    let bright = middle(&mut engine, 1.0);
+    assert!(dark < 80 && bright > 170, "black mask = LUT A (the same grey), white mask = LUT B (inverted): {dark} {bright}");
 }

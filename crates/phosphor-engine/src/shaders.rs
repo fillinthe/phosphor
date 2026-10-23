@@ -459,6 +459,15 @@ pub struct PassPlan {
     pub vars: Vec<(String, usize)>,
     /// Buffer slots that are pictures the app provides (`Engine::set_plan_image`), not render targets.
     pub images: Vec<usize>,
+    /// Buffer slots that show another layer's picture: (buffer, the parameter that picks the layer by number,
+    /// 1 = the first layer, 0 = none). See `is_layer_pick`.
+    pub layer_images: Vec<(usize, usize)>,
+}
+
+/// A setting that picks a layer by number (0 = none / this one): its name ends in "layer #". The app shows a list
+/// of layer names for it.
+pub fn is_layer_pick(p: &Param) -> bool {
+    p.labels.is_empty() && p.name.ends_with("layer #")
 }
 
 #[derive(Clone, Debug, Default)]

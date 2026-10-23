@@ -2,9 +2,32 @@
 
 use super::*;
 
+/// The project's layer names, in order (published by the app each frame) for settings that pick a layer.
+pub(crate) const LAYER_NAMES: &str = "phosphor_layer_names";
+
 pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut Vec<ParamMod>, i: usize, p: &shaders::Param, target: Option<ControlTarget>) {
     if values.len() <= i {
         values.resize(i + 1, p.default);
+    }
+    // A setting that picks a layer by number (a mask layer): the layers' names.
+    if shaders::is_layer_pick(p) {
+        let names = ui.ctx().data(|d| d.get_temp::<std::sync::Arc<Vec<String>>>(egui::Id::new(LAYER_NAMES))).unwrap_or_default();
+        let n = values[i].round().max(0.0) as usize;
+        let name_of = |k: usize| if k == 0 { "(none)".to_string() } else { names.get(k - 1).cloned().unwrap_or_else(|| format!("Layer {k} (gone)")) };
+        ui.horizontal(|ui| {
+            ui.label(p.name.trim_end_matches(" #"));
+            let r = egui::ComboBox::from_id_salt(("param_layer", p.name, i)).selected_text(name_of(n)).show_ui(ui, |ui| {
+                for k in 0..=names.len().min(p.max as usize) {
+                    if ui.selectable_label(n == k, name_of(k)).clicked() {
+                        values[i] = k as f32;
+                    }
+                }
+            });
+            if let Some(t) = target {
+                map_menu(ui, &r.response, t);
+            }
+        });
+        return;
     }
     // A menu (ISF "long" inputs, the LUT mixer's LUTs): pick a name instead of sliding a number.
     if !p.labels.is_empty() {

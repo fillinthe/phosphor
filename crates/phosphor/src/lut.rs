@@ -128,6 +128,8 @@ pub fn wgsl_mix(entry: &str, count: usize, split: bool) -> String {
     if (by == 1.0) { m = in.uv.x; }
     if (by == 2.0) { m = in.uv.y; }
     if (by == 3.0) { m = length(in.uv - vec2f(0.5)) * 1.4142; }
+    // Mask layer: another layer's brightness (buf1; black while none is picked).
+    if (by == 4.0) { m = dot(textureSampleLevel(buf1, samp, in.uv, 0.0).rgb, vec3f(0.2126, 0.7152, 0.0722)); }
     let soft = max(P(4u), 0.001);
     let graded = mix(a, b, smoothstep(P(3u) - soft, P(3u) + soft, m));
     return vec4f(mix(c.rgb, graded, P(5u)), c.a);"

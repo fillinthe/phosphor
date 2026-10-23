@@ -77,8 +77,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Every save first copies the old file into "<name> Backups" (last 10 kept); File › Autosave On / Off (every 5 minutes when changed), File › Show Backups. Checked: tests.
 - [x] 32. **ISF files reload when edited** on disk (V). Loaded once at start now.
       Shader files are watched (every 2 s): a saved edit replaces the shader on screen. Checked: GPU test (black → red after the edit) and a bench run with a file edited mid-run.
-- [~] 33. **LUT mask mixer** (two LUTs mixed by a mask) and a few **built-in LUT looks** (V). LUT Mix exists.
-      8 looks ship (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film, Night; made by scripts/make-luts.py), and LUT Split: two LUTs by brightness, left/right, top/bottom or from the centre. A mask from another layer: not done. Checked: tests.
+- [x] 33. **LUT mask mixer** (two LUTs mixed by a mask) and a few **built-in LUT looks** (V). LUT Mix exists.
+      8 looks ship (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film, Night; made by scripts/make-luts.py), and LUT Split: two LUTs by brightness, left/right, top/bottom or from the centre. LUT Split › Split by › Mask layer: another layer's brightness picks LUT B (bright) or LUT A (dark). Checked: tests; GPU test (a black mask gives LUT A, a white one LUT B).
 - [x] 34. **Saved "show only these" slice sets** while mapping (M).
       Mapping Studio › Sets: save the selected slices as a named set, pick it to select them and show only them. Saved with the project.
 - [x] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
