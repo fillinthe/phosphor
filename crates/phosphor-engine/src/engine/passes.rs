@@ -339,8 +339,9 @@ impl Engine {
         let (w, h) = frame.size();
         let device = &self.gpu.device;
         let res = self.layers.entry(res_id).or_default();
+        let format = self.mix_format;
         for slot in &mut res.fx {
-            Target::ensure(slot, device, "fx", w, h);
+            Target::ensure_format(slot, device, "fx", w, h, format);
         }
         let views: Vec<_> = res.fx.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
         let mut base = Uniforms::with_params(&[]);

@@ -86,6 +86,9 @@ pub struct Composition {
     /// Folders whose files belong to a collection (see `model::collections`).
     pub collection_folders: Vec<CollectionFolder>,
     /// Mixer crossfader: 0 = only A layers, 0.5 = both, 1 = only B (layers without a side ignore it).
+    /// Deep colour: layers are mixed and effects worked out at 16 bits a channel instead of 8 (no banding in dark
+    /// gradients, feedback and long effect chains; more GPU memory). Outputs stay 8-bit.
+    pub deep_color: bool,
     pub crossfader: f32,
     /// How the crossfader shares out A and B.
     pub fader_curve: FaderCurve,
@@ -127,7 +130,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, sound_eq: [0.0; 3], timeline: Timeline::default(), seen_code: String::new(), seen_text: String::new(), web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), deep_color: false, crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, sound_eq: [0.0; 3], timeline: Timeline::default(), seen_code: String::new(), seen_text: String::new(), web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 

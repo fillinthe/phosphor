@@ -113,6 +113,12 @@ fn gpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
     setup.device_descriptor = std::sync::Arc::new(move |adapter| {
         let mut d = base(adapter);
         d.required_features |= adapter.features() & (eframe::wgpu::Features::TEXTURE_COMPRESSION_BC | eframe::wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | eframe::wgpu::Features::TIMESTAMP_QUERY);
+        // Deep colour (16 bits a channel in the mix) where the card can draw into 16-bit textures.
+        let deep = phosphor_engine::deep_colour_usable(adapter);
+        if deep {
+            d.required_features |= phosphor_engine::deep_colour_features();
+        }
+        phosphor_engine::set_deep_colour(deep);
         d
     });
     WgpuConfiguration { wgpu_setup: WgpuSetup::CreateNew(setup), ..Default::default() }

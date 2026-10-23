@@ -12,7 +12,12 @@ pub(crate) fn test_engine() -> Option<Engine> {
     }
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
-    let required_features = adapter.features() & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM);
+    let deep = crate::gpu::deep_colour_usable(&adapter);
+    let mut required_features = adapter.features() & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM);
+    if deep {
+        required_features |= crate::gpu::deep_colour_features();
+    }
+    crate::gpu::set_deep_colour(deep);
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { required_features, ..Default::default() })).ok()?;
     Some(Engine::new(device, queue))
 }
@@ -607,4 +612,53 @@ fn mesh_handles_bend_the_output() {
     assert!(moved > 20, "{moved} pixels changed");
     mesh(&mut comp).reset_handles(1);
     assert_eq!(lit(&mut engine, &comp), flat, "straightened: as before");
+}
+
+/// Deep colour keeps detail 8 bits lose: white under black at 99.8% leaves 0.2% (8-bit rounds that up to 1/255),
+/// then three gain effects multiply it 64 times. Deep colour shows about 13%, 8-bit about 25%.
+#[test]
+fn deep_colour_keeps_fine_detail() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
+    comp.layers.push(LayerState { id: 2, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 0.0, 0.0], opacity: 0.998, ..Default::default() });
+    for id in 10..13 {
+        comp.master_effects.push(crate::EffectState { id, effect: "color_match".into(), enabled: true, values: vec![4.0, 4.0, 4.0, 0.0, 0.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+    }
+    if !crate::gpu::deep_colour() {
+        return;
+    }
+    let shallow = middle(&mut engine, &comp)[0];
+    comp.deep_color = true;
+    let deep = middle(&mut engine, &comp)[0];
+    assert!(shallow > 55 && deep < 45 && deep > 20, "8-bit {shallow}, deep {deep}");
+}
+
+/// Deep colour changes no look: every saved test project renders the same at the same moment with it on and off
+/// (only rounding differs).
+#[test]
+fn deep_colour_keeps_every_look() {
+    let Some(mut engine) = test_engine() else { return };
+    if !crate::gpu::deep_colour() {
+        return;
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/old_projects");
+    let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
+    files.sort();
+    for path in files {
+        let Ok(mut comp) = Composition::from_json(&std::fs::read_to_string(&path).unwrap()) else { continue };
+        (comp.width, comp.height) = (160, 90);
+        let mut picture = |engine: &mut Engine, comp: &Composition| {
+            for _ in 0..3 {
+                engine.render(comp, 1.5, &ModInputs::default());
+            }
+            engine.read_output().expect("output").2
+        };
+        comp.deep_color = false;
+        let flat = picture(&mut engine, &comp);
+        comp.deep_color = true;
+        let deep = picture(&mut engine, &comp);
+        let diff = flat.iter().zip(&deep).map(|(a, b)| a.abs_diff(*b) as u64).sum::<u64>() as f64 / flat.len().max(1) as f64;
+        assert!(diff < 2.0, "{}: mean difference {diff:.2}", path.display());
+    }
 }

@@ -64,6 +64,15 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         });
         ui.end_row();
 
+        ui.label("Colour depth");
+        ui.horizontal(|ui| {
+            if st.comp.deep_color && !phosphor_engine::deep_colour() {
+                crate::ui::hint(ui, "This graphics card can't: mixing stays 8-bit.");
+            }
+            crate::ui::toggle(ui, &mut st.comp.deep_color, "Deep colour").on_hover_text("Layers mixed and effects worked out at 16 bits a channel instead of 8: no banding in dark gradients, feedback or long effect chains. Uses more GPU memory. Outputs stay 8-bit.");
+        });
+        ui.end_row();
+
         ui.label("All output windows");
         let text = if st.output_open() { "Close" } else { "Open" };
         if ui.button(text).clicked() {

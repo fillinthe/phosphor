@@ -207,6 +207,8 @@ pub struct Engine {
     layers: HashMap<u64, LayerResources>,
     /// Mixing targets, ping-ponged: 0–1 the main stack, 2–3 the layer group being mixed (only while groups exist).
     accum: [Option<Target>; 4],
+    /// What the mix and effect chains draw into: 8-bit, or 16-bit with deep colour.
+    mix_format: wgpu::TextureFormat,
     /// Each comp's own stack (at its size) when comps are drawn apart; swapped into `accum` while it's mixed.
     comp_accum: HashMap<u64, [Option<Target>; 4]>,
     output: Option<Target>,
@@ -289,6 +291,7 @@ impl Engine {
             gpu,
             layers: HashMap::new(),
             accum: [None, None, None, None],
+            mix_format: crate::gpu::FORMAT,
             comp_accum: HashMap::new(),
             output: None,
             output_generation: 0,
@@ -590,9 +593,13 @@ impl Engine {
         let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).chain(comp.comps.iter().map(|c| c.id)).chain(slice_fx).collect();
         self.layers.retain(|id, _| *id >= RESERVED_IDS || live.contains(id));
 
+        // Deep colour: mixing and effects at 16 bits a channel, still 0..1 like 8-bit (so every look stays the same,
+        // just finer). On graphics cards that can't draw into those it stays 8-bit.
+        self.mix_format = if comp.deep_color && crate::gpu::deep_colour() { crate::gpu::DEEP_FORMAT } else { crate::gpu::FORMAT };
+        let mix_format = self.mix_format;
         for (i, slot) in self.accum.iter_mut().enumerate() {
             if i < 2 || !comp.groups.is_empty() {
-                Target::ensure(slot, &device, "accum", w, h);
+                Target::ensure_format(slot, &device, "accum", w, h, mix_format);
             } else {
                 *slot = None;
             }
@@ -647,7 +654,7 @@ impl Engine {
                 std::mem::swap(&mut self.accum, &mut set);
                 for (i, slot) in self.accum.iter_mut().enumerate() {
                     if i < 2 || !comp.groups.is_empty() {
-                        Target::ensure(slot, &device, "comp accum", size.0, size.1);
+                        Target::ensure_format(slot, &device, "comp accum", size.0, size.1, mix_format);
                     } else {
                         *slot = None;
                     }
