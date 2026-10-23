@@ -17,6 +17,7 @@ enum Want {
     Pictures,
     Icons,
     Textures,
+    Visualizers,
 }
 
 impl Want {
@@ -27,6 +28,7 @@ impl Want {
             Want::Pictures => &[Kind::Picture],
             Want::Icons => &[Kind::Icon],
             Want::Textures => &[Kind::Texture],
+            Want::Visualizers => &[Kind::Visualizer],
         }
     }
 }
@@ -61,7 +63,7 @@ impl Online {
     /// Bench `--quick online` (PHOSPHOR_ONLINE_QUERY): searches like the panel does.
     pub fn bench_search(&mut self, query: &str) {
         self.query = query.to_string();
-        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture];
+        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer];
         self.search = Some(Search::start(query, &Source::ALL, &kinds, false, None));
         self.bench = true;
     }
@@ -88,6 +90,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             "video" => i.source == Source::Archive,
             "icon" => i.kind == Kind::Icon,
             "texture" => i.kind == Kind::Texture,
+            "visualizer" => i.kind == Kind::Visualizer,
             _ => i.kind == Kind::Picture,
         };
         if let Some(item) = s.items.iter().find(wanted).cloned() {
@@ -145,6 +148,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::Pictures, "Pictures".to_string()),
             (Want::Icons, "Icons".to_string()),
             (Want::Textures, "Textures".to_string()),
+            (Want::Visualizers, "Visualizers".to_string()),
         ];
         go |= segmented(ui, &mut o.want, &opts, |_, _, _| {}) && o.search.is_some();
         go |= toggle(ui, &mut o.commercial, "Paid work OK").on_hover_text("Only results whose licence allows use in paid work (no \"NC\" licences)").changed() && o.search.is_some();
@@ -167,7 +171,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let selected = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let o = &mut st.online;
     let Some(search) = o.search.as_mut() else {
-        hint(ui, "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons and Poly Haven's textures. Downloads go into the media bin with their credit (Credits, below).");
+        hint(ui, "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualisers. Downloads go into the media bin with their credit (Credits, below).");
         credits(ui, &st.comp);
         return;
     };
@@ -320,6 +324,7 @@ fn kind_icon(kind: Kind) -> &'static str {
         Kind::Picture => icon::IMAGE,
         Kind::Icon => icon::SHAPES,
         Kind::Texture => icon::CHECKERBOARD,
+        Kind::Visualizer => icon::WAVEFORM,
     }
 }
 

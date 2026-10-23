@@ -198,7 +198,7 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
   Commons (CC, no key).
 - [~] O2. **Art and photos** (Openverse and the Art Institute of Chicago done; Unsplash needs a key; other museums next): Openverse (search across CC collections, no key), Unsplash (key), museum open-access
   collections with APIs and CC0 pictures: the Met, Art Institute of Chicago, Smithsonian, Rijksmuseum, Europeana.
-- [ ] O3. **Shaders**: the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
+- [~] O3. **Shaders** (Vidvox's ISF-Files already ship with Phosphor; isf.video, glslsandbox, Shadertoy still to do): the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
   effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label
   them). Overlaps #94.
 - [ ] O4. **Lottie animations**: LottieFiles' free animations (once Lottie clips land, #81).
@@ -211,7 +211,7 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
 - [ ] O8. **Fonts**: Google Fonts (open licences; the GitHub repo or the API) for text layers.
 - [ ] O9. **DMX fixture definitions**: Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving
   head / LED bar by name instead of typing channels.
-- [ ] O10. **MilkDrop presets**: projectM's preset packs ("cream of the crop") once #93 lands.
+- [x] O10. **MilkDrop presets** (Online › Visualizers: the whole Cream of the Crop pack, searchable): projectM's preset packs ("cream of the crop") once #93 lands.
 - [ ] O11. **Live data that moves visuals** (as modulators): weather (Open-Meteo, no key), earthquakes (USGS), the ISS
   position, RSS / news headlines into text layers, a clock in any city.
 - [ ] O12. **Live pictures**: public webcams and space feeds (NASA / ISS live streams) as live layers; GIFs from
