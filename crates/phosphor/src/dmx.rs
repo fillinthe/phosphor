@@ -25,8 +25,8 @@ pub struct DmxOut {
     /// The DMX monitor is on screen: keep a copy of what goes out (`sent`). The panel sets it each frame it draws.
     pub watching: bool,
     pub sent: BTreeMap<u16, [u8; 512]>,
-    /// A USB interface (`DmxProtocol::UsbPro`), opened on its port.
-    usb: Option<crate::usb_dmx::ProOut>,
+    /// A USB interface (`DmxProtocol::UsbPro` / `OpenDmx`), opened on its port.
+    usb: Option<crate::usb_dmx::UsbOut>,
 }
 
 impl DmxOut {
@@ -42,8 +42,8 @@ impl DmxOut {
 
     /// Sends one frame of universes.
     pub fn send(&mut self, s: &DmxSettings, universes: &BTreeMap<u16, [u8; 512]>) {
-        if s.protocol == DmxProtocol::UsbPro {
-            self.send_usb(s, universes);
+        if let Some(kind) = usb_interface(s.protocol) {
+            self.send_usb(s, kind, universes);
             return;
         }
         self.usb = None;
@@ -84,7 +84,7 @@ impl DmxOut {
                     let multicast = Ipv4Addr::new(239, 255, (uni >> 8) as u8, uni as u8);
                     (sacn_packet(&self.cid, uni, self.seq, data), SocketAddr::from((target.unwrap_or(multicast), SACN_PORT)))
                 }
-                DmxProtocol::UsbPro => continue,
+                DmxProtocol::UsbPro | DmxProtocol::OpenDmx => continue,
             };
             match sock.send_to(&packet, addr) {
                 Ok(_) => self.packets += 1,
@@ -102,16 +102,26 @@ impl DmxOut {
     }
 }
 
+/// Which USB interface a protocol talks to (None = the network).
+pub fn usb_interface(p: DmxProtocol) -> Option<crate::usb_dmx::Interface> {
+    match p {
+        DmxProtocol::UsbPro => Some(crate::usb_dmx::Interface::Pro),
+        DmxProtocol::OpenDmx => Some(crate::usb_dmx::Interface::Open),
+        DmxProtocol::ArtNet | DmxProtocol::Sacn => None,
+    }
+}
+
 impl DmxOut {
     /// A USB interface: its one universe (the lowest the fixtures use), to the port in `target`.
-    fn send_usb(&mut self, s: &DmxSettings, universes: &BTreeMap<u16, [u8; 512]>) {
+    fn send_usb(&mut self, s: &DmxSettings, kind: crate::usb_dmx::Interface, universes: &BTreeMap<u16, [u8; 512]>) {
         let path = s.target.trim();
         if path.is_empty() {
             self.error = Some("choose the interface's port".into());
             return;
         }
-        if self.usb.as_ref().is_none_or(|u| u.path != path) {
-            match crate::usb_dmx::ProOut::open(path) {
+        if self.usb.as_ref().is_none_or(|u| u.path != path || u.kind != kind) {
+            self.usb = None;
+            match crate::usb_dmx::UsbOut::open(path, kind) {
                 Ok(u) => self.usb = Some(u),
                 Err(e) => {
                     self.usb = None;

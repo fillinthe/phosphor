@@ -166,7 +166,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [ ] 92. **LED scanner**: a camera finds each LED and places the fixtures (M).
 - [ ] 93. **MilkDrop visualiser** (projectM) (V).
 - [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
-- [~] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Hardware.
+- [x] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Both built; not tried on real hardware yet.
       Done: Enttec DMX USB Pro and compatibles (LEDs panel › USB (Enttec Pro) › its port; one universe). Checked: tests (packet; a pseudo-terminal gets the bytes unchanged). Not tried with the real box. Open DMX (the cheap kind without its own timing): not done.
 - [ ] 96. **Blackmagic** capture and SDI / HDMI output (V, M). Hardware + SDK.
 - [x] 97. **Arduino** (Firmata): sensors in, LEDs / servos out (M). Hardware.

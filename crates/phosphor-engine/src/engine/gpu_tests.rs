@@ -648,7 +648,7 @@ fn deep_colour_keeps_every_look() {
     for path in files {
         let Ok(mut comp) = Composition::from_json(&std::fs::read_to_string(&path).unwrap()) else { continue };
         (comp.width, comp.height) = (160, 90);
-        let mut picture = |engine: &mut Engine, comp: &Composition| {
+        let picture = |engine: &mut Engine, comp: &Composition| {
             for _ in 0..3 {
                 engine.render(comp, 1.5, &ModInputs::default());
             }
