@@ -920,7 +920,10 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             ui.horizontal(|ui| {
                 Level::percent(&mut m.shade, "Light").default(0.0).width(150.0).tip("Shades the faces by a light, so the object looks solid (0 = the picture as it is)").show(ui);
             });
-            if m.shade > 0.0 {
+            ui.horizontal(|ui| {
+                Level::percent(&mut m.shadows, "Shadows").default(0.0).width(150.0).tip("Darkens the parts of the model its other parts hide from the light (0 = none)").show(ui);
+            });
+            if m.shade > 0.0 || m.shadows > 0.0 {
                 ui.horizontal(|ui| {
                     Level::range(&mut m.light[0], -0.5, 0.5, "Light from side").default(0.12).width(150.0).show(ui);
                 });

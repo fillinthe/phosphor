@@ -159,7 +159,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
       Timeline › Render…: file, format (H.264, ProRes, Hap, HEVC), fps, length; the show's clock steps a frame at a time and every movie waits for its picture, so nothing drops or repeats. No faster than real time. Sound: the timeline's sound track goes in, in step (movies' own sound doesn't; Hap renders have none). Checked: bench `--render` with a counting movie (1080p H.264 and 4K ProRes: all 60 frames, in order, 5 runs out of 5).
 - [x] 88. **Record DMX** output and play it back (M).
-- [~] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration exist.
+- [~] 89. **3D models**: lights, shadows, wireframe, UV editing (M). Done: OBJ + calibration, Light, glowing Edges, Shadows. Left: UV editing.
       Done: Light (faces shaded by a light you place: the object looks solid) and Edges (glowing lines along its corners and outline, any width: the wireframe look). Left: shadows, UV editing. Checked: tests (a turned cube: three faces, three brightnesses, nine edges) and a GPU test (looked at the render).
 - [x] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view); handles on each mesh point (select a point: drag its tips across and down; right-click › Straighten). Checked: tests (no handles = the same surface as before; GPU: a handle moves the picture, straightening restores it).
 - [x] 91. **Read text and QR codes** from video into data (V).

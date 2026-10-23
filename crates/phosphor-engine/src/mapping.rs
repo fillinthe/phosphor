@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 mod bend;
 mod groups;
+mod shadow;
 pub use bend::{Bend, inside};
 pub use groups::SliceGroup;
 
@@ -98,6 +99,8 @@ pub struct Model3d {
     /// how bright.
     pub edges: f32,
     pub edge_glow: f32,
+    /// Shadows: how dark the parts the model hides from the light go (0 = none).
+    pub shadows: f32,
 }
 
 /// A point of the model (in the model's unit-cube space) and where it must land on the output (0..1).
@@ -109,7 +112,7 @@ pub struct Pin {
 
 impl Default for Model3d {
     fn default() -> Self {
-        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true, pins: Vec::new(), calibrating: false, shade: 0.0, light: [0.12, 0.15], edges: 0.0, edge_glow: 1.0 }
+        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true, pins: Vec::new(), calibrating: false, shade: 0.0, light: [0.12, 0.15], edges: 0.0, edge_glow: 1.0, shadows: 0.0 }
     }
 }
 
@@ -442,17 +445,50 @@ impl Model3d {
     }
 
     /// Light on the faces: (x, y, brightness, 0) for `fs_mesh_shade_mul` (multiplied over the projected picture).
-    /// Brightness = (1 - shade) + shade × how squarely the face meets the light.
+    /// Brightness = (1 - shade) + shade × how squarely the face meets the light, darkened by `shadows` at corners
+    /// another part of the model hides from the light (blended across each face).
     pub fn shade_triangles(&self, aspect: f32) -> Vec<[f32; 4]> {
         let tau = std::f32::consts::TAU;
         let (a, b) = (self.light[0] * tau, self.light[1] * tau);
         let l = [a.sin() * b.cos(), b.sin(), a.cos() * b.cos()];
         let shade = self.shade.clamp(0.0, 1.0);
+        let shadows = self.shadows.clamp(0.0, 1.0);
+        let occluders = (shadows > 0.0).then(|| {
+            let mesh = obj_mesh(&self.path);
+            let tris = mesh.as_ref().as_ref().map(|m| m.tris.iter().map(|t| t.map(|(p, _)| self.view(p))).collect()).unwrap_or_default();
+            shadow::Occluders::new(tris, l)
+        });
         let mut out = Vec::new();
-        for (pts, n, _) in self.seen_faces(aspect) {
+        for (pts, n, model) in self.seen_faces(aspect) {
             let lit = (n[0] * l[0] + n[1] * l[1] + n[2] * l[2]).max(0.0);
             let v = 1.0 - shade + shade * lit;
-            out.extend(pts.map(|p| [p[0], p[1], v, 0.5]));
+            let Some(o) = occluders.as_ref().filter(|_| lit > 0.0) else {
+                out.extend(pts.map(|p| [p[0], p[1], v, 0.5]));
+                continue;
+            };
+            // Shadows are found at corners and blended across: split big faces so a shadow falling across one
+            // shows (a floor of two triangles under a box), in 3D so the pieces follow perspective.
+            let mut stack = vec![(model, 0u8)];
+            while let Some((tri, depth)) = stack.pop() {
+                let Some(flat) = tri.iter().map(|p| self.project_point(*p, aspect).map(|(xy, _)| xy)).collect::<Option<Vec<_>>>() else { continue };
+                let d = |a: [f32; 2], b: [f32; 2]| ((a[0] - b[0]) * aspect).hypot(a[1] - b[1]);
+                let span = d(flat[0], flat[1]).max(d(flat[1], flat[2])).max(d(flat[2], flat[0]));
+                if span > 0.03 && depth < 5 && out.len() < 600_000 {
+                    let mid = |a: [f32; 3], b: [f32; 3]| [0, 1, 2].map(|k| (a[k] + b[k]) * 0.5);
+                    let [a, b, c] = tri;
+                    let (ab, bc, ca) = (mid(a, b), mid(b, c), mid(c, a));
+                    stack.extend([[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]].map(|t| (t, depth + 1)));
+                    continue;
+                }
+                let corners = tri.map(|p| self.view(p));
+                let centre = [0, 1, 2].map(|k| (corners[0][k] + corners[1][k] + corners[2][k]) / 3.0);
+                for (p, c) in flat.iter().zip(corners) {
+                    // Start a hair inside the face and off its surface, so the face and its neighbours don't count.
+                    let start = [0, 1, 2].map(|k| c[k] + (centre[k] - c[k]) * 0.02 + n[k] * 1e-4);
+                    let dark = o.shadowed(start);
+                    out.push([p[0], p[1], if dark { v * (1.0 - shadows) } else { v }, 0.5]);
+                }
+            }
         }
         out
     }
@@ -2044,6 +2080,30 @@ f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/
         let edges = m.edge_triangles(16.0 / 9.0, 3.0, (1920, 1080));
         assert_eq!(edges.len(), 9 * 6);
         assert!(m.edge_triangles(16.0 / 9.0, 0.0, (1920, 1080)).is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A box floating over a floor, light from above: with Shadows the floor under the box goes dark and the rest of
+    /// the floor stays lit; without, nothing is darkened.
+    #[test]
+    fn a_box_casts_a_shadow_on_the_floor() {
+        let obj = "v -3 -1 -3\nv -3 -1 3\nv 3 -1 3\nv 3 -1 -3\n\
+v -0.5 0 0.5\nv 0.5 0 0.5\nv 0.5 1 0.5\nv -0.5 1 0.5\nv -0.5 0 -0.5\nv 0.5 0 -0.5\nv 0.5 1 -0.5\nv -0.5 1 -0.5\n\
+f 1 2 3 4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12\nf 9 10 6 5\n";
+        let path = std::env::temp_dir().join("phosphor-test-shadow.obj");
+        std::fs::write(&path, obj).unwrap();
+        let p = path.to_string_lossy().to_string();
+        forget_obj(&p);
+        let m = Model3d { path: p.clone(), yaw: 0.05, pitch: 0.08, cull: false, shade: 0.0, light: [0.0, 0.25], shadows: 1.0, ..Default::default() };
+        let shaded = m.shade_triangles(1.0);
+        let dark = shaded.iter().filter(|v| v[2] == 0.0).count();
+        let lit = shaded.iter().filter(|v| v[2] == 1.0).count();
+        assert!(dark > 20 && lit > dark, "{dark} dark corners, {lit} lit");
+        // The dark part sits where the box is seen from above: near the floor's middle.
+        let (sx, sy) = shaded.iter().filter(|v| v[2] == 0.0).fold((0.0, 0.0), |a, v| (a.0 + v[0], a.1 + v[1]));
+        let (cx, cy) = (sx / dark as f32, sy / dark as f32);
+        assert!((cx - 0.5).abs() < 0.15 && (cy - 0.5).abs() < 0.25, "shadow centre {cx}, {cy}");
+        assert!(Model3d { shadows: 0.0, ..m }.shade_triangles(1.0).iter().all(|v| v[2] == 1.0));
         let _ = std::fs::remove_file(&path);
     }
 
