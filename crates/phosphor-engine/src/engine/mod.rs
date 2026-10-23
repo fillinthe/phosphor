@@ -799,8 +799,8 @@ impl Engine {
                     passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     // Its light (faces shaded, multiplied over the picture) and glowing edges (added on top).
                     let plain = Uniforms { resolution: [ow as f32, oh as f32], ..Uniforms::with_params(&[]) };
-                    if m.shade > 0.001 {
-                        let hash = hash_points(key.iter().chain([&[m.shade, 0.0], &m.light]), &[ow, oh, 1]);
+                    if m.shade > 0.001 || m.shadows > 0.001 {
+                        let hash = hash_points(key.iter().chain([&[m.shade, m.shadows], &m.light]), &[ow, oh, 1]);
                         if let Some(shade) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id | 1 << 62), hash, || m.shade_triangles(aspect)) {
                             passes.push(Pass { entry: "fs_mesh_shade_mul", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: plain, mesh: Some(shade), bufs: Vec::new() });
                         }

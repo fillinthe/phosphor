@@ -708,3 +708,39 @@ f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/
     assert!(lit_kinds >= flat_kinds + 2, "shaded faces: {flat_kinds} brightness bands flat, {lit_kinds} lit");
     assert!(edge_bright > flat_bright + 100, "edges: {flat_bright} bright pixels before, {edge_bright} after");
 }
+
+/// Shadows reach the output: a box over a floor under a light from above darkens part of the lit floor (the floor
+/// has texture coordinates: without them a flat floor would get one row of the picture).
+#[test]
+fn model_shadows_draw() {
+    let Some(mut engine) = test_engine() else { return };
+    let obj = "v -3 -1 -3\nv -3 -1 3\nv 3 -1 3\nv 3 -1 -3\nvt 0 0\nvt 0 1\nvt 1 1\nvt 1 0\n\
+v -0.5 0 0.5\nv 0.5 0 0.5\nv 0.5 1 0.5\nv -0.5 1 0.5\nv -0.5 0 -0.5\nv 0.5 0 -0.5\nv 0.5 1 -0.5\nv -0.5 1 -0.5\n\
+f 1/1 2/2 3/3 4/4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12\nf 9 10 6 5\n";
+    let path = std::env::temp_dir().join("phosphor-gpu-shadow.obj");
+    std::fs::write(&path, obj).unwrap();
+    let mut comp = Composition { width: 64, height: 64, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.8, 0.8, 0.8], ..Default::default() });
+    let out = comp.add_output();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    (o.width, o.height) = (160, 160);
+    o.mapping.enabled = true;
+    let model = crate::mapping::Model3d { path: path.to_string_lossy().to_string(), yaw: 0.05, pitch: 0.08, cull: false, light: [0.03, 0.22], ..Default::default() };
+    o.mapping.add_surface(50).model = Some(model.clone());
+    let dark = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (_, _, px) = engine.read_output_of(out).expect("output");
+        (px.chunks(4).filter(|p| p[0] > 0 && p[0] < 60).count(), px.chunks(4).filter(|p| p[0] > 150).count())
+    };
+    let (before, _) = dark(&mut engine, &comp);
+    comp.outputs[0].mapping.surfaces[0].model = Some(crate::mapping::Model3d { shadows: 0.9, ..model });
+    let (after, bright) = dark(&mut engine, &comp);
+    if let Ok(dump) = std::env::var("PHOSPHOR_DUMP_PPM") {
+        let (w, h, px) = engine.read_output_of(out).unwrap();
+        let mut ppm = format!("P6 {w} {h} 255\n").into_bytes();
+        ppm.extend(px.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
+        std::fs::write(dump, ppm).unwrap();
+    }
+    let _ = std::fs::remove_file(&path);
+    assert!(after > before + 100 && bright > after, "dark pixels {before} then {after}, still lit {bright}");
+}
