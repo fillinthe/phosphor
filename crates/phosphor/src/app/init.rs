@@ -33,6 +33,7 @@ impl PhosphorApp {
             }
         };
         let stream_settings = stored(KEY_STREAM).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let recorder_settings: Vec<crate::stream::StreamSettings> = stored(KEY_RECORDERS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let mut detached: Vec<Tab> = stored(KEY_DETACHED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let mut dock = stored(KEY_DOCK).and_then(|s| from_text(&s)).unwrap_or_else(default_layout);
         #[cfg(not(target_arch = "wasm32"))]
@@ -191,6 +192,7 @@ impl PhosphorApp {
                 timeline_record: false,
                 timeline_set: Vec::new(),
                 offline: None,
+                recorders: recorder_settings.into_iter().take(recorders::MAX).map(Streamer::new).collect(),
                 offline_setup: Default::default(),
                 // Opening a project changes nothing: the timeline sets values once it plays or the playhead moves.
                 timeline_applied: Some(0.0),
@@ -442,6 +444,21 @@ impl PhosphorApp {
             let (w, h) = (app.state.comp.width, app.state.comp.height);
             if let Err(e) = app.state.stream.start(w, h, now) {
                 eprintln!("stream: {e}");
+            }
+        }
+        // Bench: more recorders, PHOSPHOR_BENCH_RECORDERS="file[@layer index];…" (no index = the program).
+        if app.bench.is_some()
+            && let Ok(list) = std::env::var("PHOSPHOR_BENCH_RECORDERS")
+        {
+            app.state.recorders.clear();
+            for item in list.split(';').filter(|s| !s.is_empty()) {
+                let (path, layer) = item.split_once('@').map_or((item, None), |(p, l)| (p, l.parse::<usize>().ok()));
+                app.state.recorder_add();
+                let i = app.state.recorders.len() - 1;
+                let source = layer.and_then(|k| app.state.comp.layers.get(k)).map_or(0, |l| l.id);
+                let s = &mut app.state.recorders[i].settings;
+                (s.file_path, s.source) = (path.to_string(), source);
+                app.state.recorder_toggle(i, now);
             }
         }
         if let Some(path) = app.bench.as_ref().and_then(|b| b.cfg.render.clone()) {

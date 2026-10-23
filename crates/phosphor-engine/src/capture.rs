@@ -34,9 +34,16 @@ struct Slot {
 #[derive(Default)]
 pub(crate) struct Capture {
     slots: Vec<Slot>,
+    /// Most copies in flight at once (0 = `SLOTS`); slots are only made when needed.
+    max: usize,
 }
 
 impl Capture {
+    /// A ring that can have up to `n` copies in flight (several readers sharing it).
+    pub fn with_slots(n: usize) -> Self {
+        Self { slots: Vec::new(), max: n }
+    }
+
     /// Enqueues a copy of `out`; returns false (and copies nothing) if every slot is still busy.
     pub fn enqueue(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, out: &Target) -> bool {
         self.enqueue_tagged(device, queue, out, 0)
@@ -51,7 +58,7 @@ impl Capture {
         let free = self.slots.iter().position(|s| s.state.load(Ordering::Acquire) == FREE);
         let idx = match free {
             Some(i) => i,
-            None if self.slots.len() < SLOTS => {
+            None if self.slots.len() < if self.max > 0 { self.max } else { SLOTS } => {
                 self.slots.push(Slot {
                     tag,
                     buffer: device.create_buffer(&wgpu::BufferDescriptor {

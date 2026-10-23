@@ -405,6 +405,11 @@ impl PhosphorApp {
                         st.offline_setup.path = p.to_string_lossy().to_string();
                     }
                 }
+                Purpose::RecorderFile(i) => {
+                    if let (Some(p), Some(r)) = (paths.first(), st.recorders.get_mut(i)) {
+                        r.settings.file_path = p.to_string_lossy().to_string();
+                    }
+                }
             }
         }
     }

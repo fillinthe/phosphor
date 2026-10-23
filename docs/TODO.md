@@ -120,7 +120,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 54. **Map a whole row of clips at once** (first and last note), bank / transpose the mapping, pick a clip by index or value (V).
       Clip row name menu › MIDI notes: map the row from a note, shift by ±1 / ±8; "Pick a clip by value" (mappable). Checked: tests.
 - [x] 55. **Export / import a bank of clips** with settings; **set a clip's thumbnail** from the current frame (V).
-- [~] 56. **Recorder**: record any layer, comp or camera (not only an output), start/stop on the beat, several recorders at once (V). Done: record a layer / group / comp, start and stop on the bar. Left: several recorders at once.
+- [x] 56. **Recorder**: record any layer, comp or camera (not only an output), start/stop on the beat, several recorders at once (V). Done: record a layer / group / comp, start and stop on the bar, and up to 8 more recorders at once (Stream panel › More recorders: each its own source, file, format and frame rate). Checked: bench (main + 2 more recorders at once: 177 frames each).
 - [x] 57. **Scopes as a layer source** (V).
 - [x] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
       "Drawn wave" modulation source (a smooth loop through eight points). Checked: test.

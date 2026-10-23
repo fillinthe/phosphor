@@ -138,8 +138,7 @@ impl State {
             self.notice = Some(format!("Rendering stopped: {}", self.stream.status().0));
             return;
         }
-        let name = std::path::Path::new(&path).file_name().map_or(path.clone(), |n| n.to_string_lossy().to_string());
-        self.comp.add_media(&name, &path);
+        self.recording_saved(&path);
         let late = if o.late > 0 { format!(" ({} frames didn't wait for a slow movie)", o.late) } else { String::new() };
         self.notice = Some(format!("Rendered {} frames to {path} (in the media bin){late}", o.done));
     }

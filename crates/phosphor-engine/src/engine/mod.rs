@@ -251,6 +251,8 @@ pub struct Engine {
     /// Monitor slots to read back to the CPU after this frame (slot, tag), and the ring they come back in.
     monitor_reads: Vec<(usize, u64)>,
     monitor_capture: crate::capture::Capture,
+    /// Tags of monitor reads that found the readback ring full (`take_monitor_skips`).
+    monitor_skipped: Vec<u64>,
     /// Remove background mattes and the pictures read back to make them.
     cutouts: cutout::Cutouts,
     /// Stage scanner: the output showing a pattern instead of its picture, and the pattern (`fs_scan` p[0]).
@@ -315,7 +317,9 @@ impl Engine {
             monitor_targets: Vec::new(),
             monitor_sources: Vec::new(),
             monitor_reads: Vec::new(),
-            monitor_capture: Default::default(),
+            // Shared by every monitor reader (tracking, scopes, recorders…): room for several at once.
+            monitor_capture: crate::capture::Capture::with_slots(8),
+            monitor_skipped: Vec::new(),
             cutouts: Default::default(),
             scan: None,
             externals: Default::default(),
@@ -459,6 +463,12 @@ impl Engine {
     /// Finished monitor readbacks (non-blocking): the tag given to `read_monitor`, RGBA8.
     pub fn take_monitor_reads(&mut self) -> Vec<crate::capture::CapturedFrame> {
         self.monitor_capture.poll(&self.gpu.device)
+    }
+
+    /// Tags of monitor reads that were skipped (the readback ring was full) since the last call: a recorder repeats
+    /// its last frame for each, so its movie keeps time.
+    pub fn take_monitor_skips(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.monitor_skipped)
     }
 
     pub fn monitor(&self, index: usize) -> Option<&Target> {
@@ -863,8 +873,10 @@ impl Engine {
         self.finish_cutouts();
         self.sweep_externals();
         for (i, tag) in std::mem::take(&mut self.monitor_reads) {
-            if let Some(t) = self.monitor_targets.get(i).and_then(|t| t.as_ref()) {
-                self.monitor_capture.enqueue_tagged(&self.gpu.device, &self.gpu.queue, t, tag);
+            if let Some(t) = self.monitor_targets.get(i).and_then(|t| t.as_ref())
+                && !self.monitor_capture.enqueue_tagged(&self.gpu.device, &self.gpu.queue, t, tag)
+            {
+                self.monitor_skipped.push(tag);
             }
         }
         self.frame_index += 1;

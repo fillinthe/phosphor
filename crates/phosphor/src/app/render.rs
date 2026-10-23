@@ -42,6 +42,7 @@ impl PhosphorApp {
             mod_phases,
             stream,
             offline,
+            recorders,
             clock,
             net,
             net_audio,
@@ -215,6 +216,19 @@ impl PhosphorApp {
                 engine.read_monitor(mwants.len() - 1, crate::stream::MONITOR_KEY as u64);
             }
         }
+        // More recorders: each its source's picture at the canvas size, read back when its frame is due.
+        for (i, r) in recorders.iter_mut().enumerate().filter(|(_, r)| r.running()) {
+            let src = match r.settings.source {
+                0 => phosphor_engine::MASTER_ID,
+                id if comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() || comp.comp(id).is_some() => id,
+                _ => continue,
+            };
+            let key = crate::app::recorders::FIRST_KEY + i as u8;
+            mwants.push((key, src, comp.width, comp.height));
+            if r.frame_due(now) {
+                engine.read_monitor(mwants.len() - 1, key as u64);
+            }
+        }
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
         let held = std::mem::take(monitor_held);
@@ -252,11 +266,25 @@ impl PhosphorApp {
             dmx.send(&comp.dmx, &universes);
             dmx_rec.sent(now, &universes);
         }
+        // A recorder's read that didn't fit in the readback ring: its last frame again (the movie keeps time).
+        for tag in engine.take_monitor_skips() {
+            let k = tag as u8;
+            if k == crate::stream::MONITOR_KEY {
+                stream.repeat_last();
+            } else if let Some(r) = k.checked_sub(crate::app::recorders::FIRST_KEY).and_then(|i| recorders.get_mut(i as usize)) {
+                r.repeat_last();
+            }
+        }
         for f in engine.take_monitor_reads() {
             match f.tag as u8 {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::tracking::MONITOR_KEY => tracker.give(f.rgba, f.width, f.height, &comp.tracking),
                 crate::stream::MONITOR_KEY => stream.push(f.width, f.height, f.rgba),
+                k if (crate::app::recorders::FIRST_KEY..crate::app::recorders::FIRST_KEY + crate::app::recorders::MAX as u8).contains(&k) => {
+                    if let Some(r) = recorders.get_mut((k - crate::app::recorders::FIRST_KEY) as usize) {
+                        r.push(f.width, f.height, f.rgba);
+                    }
+                }
                 crate::panels::SNAPSHOT_KEY => *snapshot_ready = Some((f.width, f.height, f.rgba)),
                 crate::scopes::MONITOR_KEY => {
                     scopes.give(&f.rgba, f.width, f.height, now);

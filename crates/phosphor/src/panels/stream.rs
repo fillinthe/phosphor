@@ -195,6 +195,77 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     if toggle_now {
         st.stream_toggle(now);
     }
+    ui.add_space(8.0);
+    more_recorders(ui, st, &sources, now);
+}
+
+/// More recorders: each records its own source (the program, a layer, group or comp) to its own file, all at once.
+fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], now: f64) {
+    use crate::app::recorders::MAX;
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("More recorders").strong());
+        if st.recorders.len() < MAX && ui.button(label(icon::PLUS, "Recorder")).on_hover_text("Record another picture to its own file at the same time (a layer on its own, a comp, the program)").clicked() {
+            st.recorder_add();
+        }
+    });
+    let (mut toggle, mut remove, mut choose) = (None, None, None);
+    for (i, r) in st.recorders.iter_mut().enumerate() {
+        let running = r.running();
+        card_frame(ui, false).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                let s = &mut r.settings;
+                ui.add_enabled_ui(!running, |ui| {
+                    let current = if s.source == 0 { "Program".to_string() } else { sources.iter().find(|(id, _)| *id == s.source).map_or("(gone)".into(), |x| x.1.clone()) };
+                    ComboBox::from_id_salt(("rec_source", i)).width(130.0).selected_text(current).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut s.source, 0, "Program (the mix)");
+                        for (id, name) in sources {
+                            ui.selectable_value(&mut s.source, *id, name);
+                        }
+                    });
+                    crate::ui::text_field(ui, &mut s.file_path, "…/take.mp4 or .mov", Some(180.0));
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button("Choose…").clicked() {
+                        choose = Some(i);
+                    }
+                    choice_combo(ui, ("rec_format", i), &mut s.file_format, 150.0, false);
+                    ComboBox::from_id_salt(("rec_fps", i)).width(50.0).selected_text(format!("{} fps", s.fps)).show_ui(ui, |ui| {
+                        for f in [24, 25, 30, 50, 60] {
+                            ui.selectable_value(&mut s.fps, f, f.to_string());
+                        }
+                    });
+                });
+                if running {
+                    if action_button(ui, Act::Record, label(icon::STOP, "Stop")).clicked() {
+                        toggle = Some(i);
+                    }
+                    ui.colored_label(accent(), format!("{} {:02}:{:02}", icon::RECORD, (r.elapsed(now) / 60.0) as u32, r.elapsed(now) as u32 % 60));
+                } else {
+                    if action_button(ui, Act::Record, label(icon::RECORD, "Record")).clicked() {
+                        toggle = Some(i);
+                    }
+                    if ui.small_button(icon::TRASH).on_hover_text("Remove this recorder").clicked() {
+                        remove = Some(i);
+                    }
+                }
+            });
+            let (status, error, ..) = r.status();
+            if running && !status.is_empty() {
+                ui.colored_label(if error { WARN } else { Color32::GRAY }, status);
+            }
+        });
+    }
+    if let Some(i) = toggle {
+        st.recorder_toggle(i, now);
+    }
+    if let Some(i) = remove {
+        st.recorders.remove(i);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(i) = choose {
+        st.dialogs.save_file(crate::dialogs::Purpose::RecorderFile(i), ("Video", &["mp4", "mov"]), "Phosphor take.mp4");
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = choose;
 }
 
 /// Beside LIVE: the last two minutes (bitrate line, red where frames were dropped) and a short verdict.

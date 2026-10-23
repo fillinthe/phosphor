@@ -222,6 +222,10 @@ impl PhosphorApp {
             self.state.stream.stop_and_wait();
             println!("RECORDED {}", self.state.stream.settings.file_path);
         }
+        for r in self.state.recorders.iter_mut().filter(|r| r.running()) {
+            r.stop_and_wait();
+            println!("RECORDED {}", r.settings.file_path);
+        }
         if let (Some(path), Some(engine)) = (&run.cfg.snapshot, &self.state.engine)
             && let Some((w, h, pixels)) = engine.read_output()
         {
