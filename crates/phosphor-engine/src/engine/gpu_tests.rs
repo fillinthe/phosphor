@@ -544,3 +544,35 @@ fn smooth_outputs_soften_slice_edges() {
     let (w, h, _) = engine.read_output_of(out).unwrap();
     assert_eq!((w, h), (64, 64), "the output keeps its size");
 }
+
+/// LED pixels that average their cell: 9 samples each go to the GPU and come back, and every pixel gets its colour.
+#[test]
+fn averaged_led_pixels_sample_on_the_gpu() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, ..Default::default() };
+    let mut grey = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    grey.generator_values = vec![0.5, 0.25, 1.0];
+    comp.layers.push(grey);
+    let strip = crate::Fixture { cols: 3, points: [[0.1, 0.5], [0.9, 0.5], [0.0; 2], [0.0; 2]], average: true, gamma: 1.0, ..Default::default() };
+    comp.dmx.fixtures.push(strip);
+    let points = comp.dmx.sample_points();
+    assert_eq!(points.len(), 27);
+    engine.set_sample_points(&points);
+    let mut colors = None;
+    for _ in 0..20 {
+        engine.request_samples();
+        engine.render(&comp, 0.0, &ModInputs::default());
+        if let Some(c) = engine.take_samples() {
+            colors = Some(c);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let colors = colors.expect("samples came back");
+    assert_eq!(colors.len(), 27);
+    let u = comp.dmx.universes(&colors, 0.0);
+    let data = u.values().next().unwrap();
+    for px in data[..9].chunks(3) {
+        assert!(px[0].abs_diff(128) < 3 && px[1].abs_diff(64) < 3 && px[2] > 250, "{px:?}");
+    }
+}

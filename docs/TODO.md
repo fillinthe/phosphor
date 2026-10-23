@@ -139,7 +139,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 70. **Mapping**: drop a file on the stage to make a slice at its shape; draw a line slice freehand (M).
 - [x] 71. **Automatic soft edges** from overlapping slices (M). Set by hand now.
 - [x] 72. **One canvas across several displays** (2×2 etc.) and **one output shown on several displays** (V, M).
-- [~] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master. Left: average sampling, video-wall template.
+- [x] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master, Average (each light averages its own patch: 9 samples), Video wall… (tiles across × down covering the picture, each patched on fresh universes). Checked: tests (CPU and GPU).
 - [x] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
 - [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
 - [~] 76. **NDI sound** in and out (V). Done: NDI sound out. Left: NDI sound in.
