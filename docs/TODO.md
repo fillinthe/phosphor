@@ -198,7 +198,7 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
   Commons (CC, no key).
 - [~] O2. **Art and photos** (Openverse and the Art Institute of Chicago done; Unsplash needs a key; other museums next): Openverse (search across CC collections, no key), Unsplash (key), museum open-access
   collections with APIs and CC0 pictures: the Met, Art Institute of Chicago, Smithsonian, Rijksmuseum, Europeana.
-- [~] O3. **Shaders** (Vidvox's ISF-Files already ship with Phosphor; isf.video, glslsandbox, Shadertoy still to do): the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
+- [~] O3. **Shaders** (Online › Shaders (ISF): isf.video's shared shaders, checked and loaded; Vidvox's ISF-Files ship with Phosphor; Shadertoy needs a key): the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
   effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label
   them). Overlaps #94.
 - [ ] O4. **Lottie animations**: LottieFiles' free animations (once Lottie clips land, #81).

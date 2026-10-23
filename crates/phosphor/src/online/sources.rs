@@ -21,11 +21,22 @@ pub enum Source {
     PolyHaven,
     MilkDrop,
     GoogleFonts,
+    IsfOnline,
 }
 
 impl Source {
-    pub const ALL: [Source; 9] =
-        [Source::Nasa, Source::Commons, Source::Archive, Source::Openverse, Source::Artic, Source::Iconify, Source::PolyHaven, Source::MilkDrop, Source::GoogleFonts];
+    pub const ALL: [Source; 10] = [
+        Source::Nasa,
+        Source::Commons,
+        Source::Archive,
+        Source::Openverse,
+        Source::Artic,
+        Source::Iconify,
+        Source::PolyHaven,
+        Source::MilkDrop,
+        Source::GoogleFonts,
+        Source::IsfOnline,
+    ];
 
     /// The search answer is the library's whole list, the same every time (kept for the session, `super::get_cached`).
     pub fn whole_list(self) -> bool {
@@ -43,6 +54,7 @@ impl Source {
             Source::PolyHaven => "Poly Haven",
             Source::MilkDrop => "MilkDrop presets",
             Source::GoogleFonts => "Google Fonts",
+            Source::IsfOnline => "ISF shaders",
         }
     }
 
@@ -55,6 +67,7 @@ impl Source {
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
             Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
+            Source::IsfOnline => "Thousands of effects and generators people shared on isf.video (licences vary: check the credit).",
             Source::GoogleFonts => "About 1,900 open-licence font families for text layers.",
             Source::MilkDrop => "Nearly 10,000 MilkDrop visualisers (projectM's \"Cream of the Crop\" pack, sorted by Isosceles) that move to the music.",
         }
@@ -70,6 +83,7 @@ impl Source {
             Source::PolyHaven => &[Kind::Texture],
             Source::MilkDrop => &[Kind::Visualizer],
             Source::GoogleFonts => &[Kind::Font],
+            Source::IsfOnline => &[Kind::Shader],
         }
     }
 
@@ -112,6 +126,8 @@ impl Source {
             // Poly Haven has no search: the whole list (filtered here, `poly_haven`).
             Source::PolyHaven => "https://api.polyhaven.com/assets?type=textures".to_string(),
             Source::MilkDrop => format!("https://api.github.com/repos/{MILK_REPO}/git/trees/master?recursive=1"),
+            // The ISF editor's own search (18 a page).
+            Source::IsfOnline => format!("https://editor.isf.video/api/search?q={q}&page={}&from={}", page - 1, (page - 1) * ISF_PAGE),
             // Every family (the list behind fonts.google.com; no key), searched here.
             Source::GoogleFonts => "https://fonts.google.com/metadata/fonts".to_string(),
             Source::Artic => format!(
@@ -146,6 +162,7 @@ impl Source {
             Source::PolyHaven => poly_haven(&v, "", 1),
             Source::MilkDrop => milkdrop(&v, "", 1),
             Source::GoogleFonts => google_fonts(&v, "", 1),
+            Source::IsfOnline => isf_online(&v),
         })
     }
 }
@@ -466,6 +483,44 @@ fn poly_haven(v: &Value, query: &str, page: usize) -> Vec<Item> {
         .collect()
 }
 
+/// Shaders per page of the ISF editor's search.
+const ISF_PAGE: usize = 18;
+
+/// isf.video's shaders (public ones). Their licences aren't stated, so they count as not for paid work.
+fn isf_online(v: &Value) -> Vec<Item> {
+    v["shaders"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|s| s["private"] != true)
+        .filter_map(|s| {
+            let id = text(&s["id"]);
+            let title = text(&s["title"]).trim_end_matches(".fs").to_string();
+            (!id.is_empty() && !title.is_empty()).then(|| {
+                let thumb = text(&s["thumbnailCloudinaryId"]);
+                Item {
+                    source: Source::IsfOnline,
+                    kind: Kind::Shader,
+                    title: title.clone(),
+                    thumb: if thumb.is_empty() { String::new() } else { format!("https://res.cloudinary.com/hrlz5rsqo/image/upload/w_256/{thumb}.jpg") },
+                    file: None,
+                    list: format!("https://editor.isf.video/api/shaders/{id}"),
+                    size: None,
+                    credit: phosphor_engine::Credit {
+                        title,
+                        author: text(&s["username"]),
+                        licence: "Unknown (shared on isf.video)".into(),
+                        licence_url: String::new(),
+                        page: format!("https://editor.isf.video/shaders/{id}"),
+                        source: "isf.video".into(),
+                    },
+                    id,
+                }
+            })
+        })
+        .collect()
+}
+
 /// Google's answers can start with `)]}'` (a guard against being run as a script).
 fn unguard(body: &[u8]) -> &[u8] {
     let start = body.iter().position(|b| *b == b'{' || *b == b'[').unwrap_or(0);
@@ -752,6 +807,12 @@ mod tests {
         assert_eq!(font_files(list).unwrap(), [("Roboto-Regular.ttf".to_string(), "https://fonts.gstatic.com/r.ttf".to_string()), ("Roboto-Bold.ttf".into(), "https://fonts.gstatic.com/b.ttf".into())]);
         let variable = br#"{"manifest":{"fileRefs":[{"filename":"Inter[opsz,wght].ttf","url":"https://fonts.gstatic.com/i.ttf"}]}}"#;
         assert_eq!(font_files(variable).unwrap().len(), 1, "a variable font alone");
+
+        let isf = br#"{"numberOfResults":2,"shaders":[{"id":"5e7a","title":"Square Tunnel.fs","username":"joshpbatty","thumbnailCloudinaryId":"z9tk","private":false},{"id":"x","title":"Mine","private":true}]}"#;
+        let sh = Source::IsfOnline.parse(Kind::Shader, isf).unwrap();
+        assert_eq!(sh.len(), 1, "private ones are left out");
+        assert_eq!((sh[0].title.as_str(), sh[0].thumb.as_str()), ("Square Tunnel", "https://res.cloudinary.com/hrlz5rsqo/image/upload/w_256/z9tk.jpg"));
+        assert!(!sh[0].credit.commercial(), "no licence stated: not for paid work");
     }
 
     #[test]
