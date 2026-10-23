@@ -185,6 +185,9 @@ pub struct State {
     /// LED scanner (the lights blink codes, a camera watches): places LED fixtures where their lights really are.
     #[cfg(not(target_arch = "wasm32"))]
     pub led_scan: crate::led_scan::LedScanner,
+    /// MilkDrop layers' engines.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub milkdrop: crate::milkdrop::Visualizers,
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,

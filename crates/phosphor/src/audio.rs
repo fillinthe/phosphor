@@ -350,6 +350,14 @@ mod native {
             self.analysis
         }
 
+        /// The newest `frames` stereo samples, interleaved (gain applied), and their sample rate: what came in during
+        /// the last frame or so, for visualisers that do their own analysis (MilkDrop).
+        pub fn recent(&self, frames: usize) -> (Vec<f32>, u32) {
+            let g = self.gain;
+            let n = frames.min(FFT_SIZE);
+            (self.stereo[FFT_SIZE - n..].iter().flat_map(|s| s.map(|v| (v * g).clamp(-1.0, 1.0))).collect(), self.sample_rate)
+        }
+
         pub fn refresh_devices(&mut self) {
             let host = cpal::default_host();
             self.devices = host.input_devices().map(|it| it.filter_map(|d| device_name(&d)).collect()).unwrap_or_default();

@@ -164,7 +164,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view); handles on each mesh point (select a point: drag its tips across and down; right-click › Straighten). Checked: tests (no handles = the same surface as before; GPU: a handle moves the picture, straightening restores it).
 - [x] 91. **Read text and QR codes** from video into data (V).
 - [x] 92. **LED scanner**: a camera finds each LED and places the fixtures (M). Built; not tried with real lights and a camera yet.
-- [ ] 93. **MilkDrop visualiser** (projectM) (V).
+- [x] 93. **MilkDrop visualiser** (projectM) (V). .milk / .milk2 presets as layers (lactea, on our wgpu device). Presets not bundled (O10).
 - [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
 - [x] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Both built; not tried on real hardware yet.
       Done: Enttec DMX USB Pro and compatibles (LEDs panel › USB (Enttec Pro) › its port; one universe). Checked: tests (packet; a pseudo-terminal gets the bytes unchanged). Not tried with the real box. Open DMX (the cheap kind without its own timing): not done.

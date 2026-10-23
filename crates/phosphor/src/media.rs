@@ -66,8 +66,8 @@ pub fn is_sound_file(name: &str) -> bool {
 
 /// Extensions offered in the Open… dialog.
 pub fn dialog_extensions() -> Vec<&'static str> {
-    // "json": Lottie animations (other .json files are refused when opened).
-    IMAGE_EXTS.iter().chain(MOVIE_EXTS).chain(SOUND_EXTS).copied().chain(["json"]).collect()
+    // "json": Lottie animations (other .json files are refused when opened); "milk": MilkDrop presets.
+    IMAGE_EXTS.iter().chain(MOVIE_EXTS).chain(SOUND_EXTS).copied().chain(["json", "milk", "milk2"]).collect()
 }
 
 fn extension(name: &str) -> String {
@@ -128,7 +128,7 @@ pub fn is_supported(name: &str) -> bool {
         return false;
     }
     let ext = extension(name);
-    IMAGE_EXTS.contains(&ext.as_str()) || MOVIE_EXTS.contains(&ext.as_str()) || is_lottie_file(name)
+    IMAGE_EXTS.contains(&ext.as_str()) || MOVIE_EXTS.contains(&ext.as_str()) || is_lottie_file(name) || ext == "milk" || ext == "milk2"
 }
 
 /// A clip's label for a file: its name without the extension.
@@ -144,6 +144,10 @@ pub fn spec_for_path(path: &str) -> SourceSpec {
 }
 
 pub fn spec_for(name: &str, path: Option<String>) -> SourceSpec {
+    #[cfg(not(target_arch = "wasm32"))]
+    if crate::milkdrop::is_preset(name) {
+        return crate::milkdrop::source(path.as_deref().unwrap_or(name));
+    }
     if is_movie(name) || is_sound_file(name) {
         SourceSpec::Movie { name: name.to_string(), path }
     } else {
@@ -361,6 +365,9 @@ impl MediaManager {
                     // Connected (with retries) in update_video.
                     self.syphon_waiting.insert(layer.id, 0.0);
                 }
+                // Drawn by `milkdrop::Visualizers` each frame.
+                #[cfg(not(target_arch = "wasm32"))]
+                SourceSpec::Live { format, .. } if format == crate::milkdrop::FORMAT => {}
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Live { name, format, url } => match live::open(name, format, url) {
                     Ok(player) => {

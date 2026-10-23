@@ -38,6 +38,8 @@ peniko = "0.6"
 base64 = "0.22"
 # Elgato Stream Deck keys / dials as controller input, key pictures as feedback (HID).
 elgato-streamdeck = "0.14"
+# MilkDrop presets (.milk) as layers: a MilkDrop engine on wgpu, rendering on Phosphor's own GPU device.
+lactea = "0.2"
 ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling", "device"] }
 cpal = "0.18.2"
 rustfft = "6.4.1"

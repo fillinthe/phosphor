@@ -280,6 +280,8 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 led_scan: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
+                milkdrop: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 link_import: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 ai_shader: Default::default(),
