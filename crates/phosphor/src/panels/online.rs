@@ -150,7 +150,13 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::Textures, "Textures".to_string()),
             (Want::Visualizers, "Visualizers".to_string()),
         ];
-        go |= segmented(ui, &mut o.want, &opts, |_, _, _| {}) && o.search.is_some();
+        let before = o.want;
+        ComboBox::from_id_salt("online_want").selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
+            for (w, text) in &opts {
+                ui.selectable_value(&mut o.want, *w, text);
+            }
+        });
+        go |= o.want != before && o.search.is_some();
         go |= toggle(ui, &mut o.commercial, "Paid work OK").on_hover_text("Only results whose licence allows use in paid work (no \"NC\" licences)").changed() && o.search.is_some();
         ui.menu_button(label(icon::BOOKS, "Libraries"), |ui| {
             for s in Source::ALL {
@@ -199,7 +205,10 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         })
         .collect();
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-        let w = 150.0f32.min(ui.available_width());
+        // As many columns of at least 120 points as fit, filling the width.
+        let (gap, room) = (6.0, ui.available_width() - 2.0);
+        let cols = ((room + gap) / (120.0 + gap)).floor().max(1.0);
+        let w = ((room - gap * (cols - 1.0)) / cols).floor();
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
             for item in &search.items {
@@ -248,7 +257,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
     let p = ui.painter();
     p.rect_filled(thumb_rect, 4.0, Color32::from_gray(14));
     match (item.thumb.starts_with("https://")).then(|| thumbs.get(&item.thumb)).flatten() {
-        Some(tex) => paint_texture(p, tex, thumb_rect),
+        Some(tex) => paint_texture(p, tex, fit_rect(thumb_rect.shrink(1.0), thumbs.aspect(&item.thumb).unwrap_or(16.0 / 9.0))),
         None => {
             let text = if thumbs.is_pending(&item.thumb) { "…" } else { kind_icon(item.kind) };
             p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);

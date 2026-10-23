@@ -453,7 +453,7 @@ pub(crate) fn media_tile(
     let p = ui.painter();
     p.rect_filled(thumb_rect, 4.0, Color32::from_gray(14));
     match thumbs.get(&item.path) {
-        Some(tex) => paint_texture(p, tex, thumb_rect),
+        Some(tex) => paint_texture(p, tex, fit_rect(thumb_rect.shrink(1.0), thumbs.aspect(&item.path).unwrap_or(16.0 / 9.0))),
         None => {
             let glyph = if crate::media::is_movie(&item.name) { icon::FILM_STRIP } else { icon::IMAGE };
             let text = if thumbs.is_pending(&item.path) { "…" } else { glyph };
