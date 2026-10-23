@@ -12,6 +12,16 @@ mod video;
 mod media {
     pub mod sequence;
 
+    /// Laser files aren't probed here.
+    pub mod ilda {
+        pub fn is_ilda(_: &str) -> bool {
+            false
+        }
+        pub fn movie_for(path: &str) -> Result<String, String> {
+            Ok(path.to_string())
+        }
+    }
+
     pub fn is_picture(name: &str) -> bool {
         name.rsplit_once('.').is_some_and(|(_, e)| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "webp"))
     }

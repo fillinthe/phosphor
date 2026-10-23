@@ -278,6 +278,9 @@ impl VideoPlayer {
     /// Opens the file and starts decoding in the background. Errors are human-readable (shown in the UI).
     pub fn open(path: &str) -> Result<Self, String> {
         init();
+        if crate::media::ilda::is_ilda(path) {
+            return Self::open(&crate::media::ilda::movie_for(path)?);
+        }
         let started = std::time::Instant::now();
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
         let _timing = TimingLog { name: name.clone(), started };
