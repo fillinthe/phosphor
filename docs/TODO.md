@@ -163,7 +163,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Done: Light (faces shaded by a light you place: the object looks solid) and Edges (glowing lines along its corners and outline, any width: the wireframe look). Left: shadows, UV editing. Checked: tests (a turned cube: three faces, three brightnesses, nine edges) and a GPU test (looked at the render).
 - [x] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view); handles on each mesh point (select a point: drag its tips across and down; right-click › Straighten). Checked: tests (no handles = the same surface as before; GPU: a handle moves the picture, straightening restores it).
 - [x] 91. **Read text and QR codes** from video into data (V).
-- [ ] 92. **LED scanner**: a camera finds each LED and places the fixtures (M).
+- [x] 92. **LED scanner**: a camera finds each LED and places the fixtures (M). Built; not tried with real lights and a camera yet.
 - [ ] 93. **MilkDrop visualiser** (projectM) (V).
 - [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
 - [x] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Both built; not tried on real hardware yet.

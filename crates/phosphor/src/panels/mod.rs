@@ -52,6 +52,8 @@ mod stage;
 mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
 mod scanner;
+#[cfg(not(target_arch = "wasm32"))]
+mod led_scan;
 mod slice_tree;
 mod inspect;
 mod studio;
@@ -86,6 +88,8 @@ pub(crate) use network::*;
 pub(crate) use output::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use scanner::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use led_scan::*;
 pub(crate) use patch::*;
 pub(crate) use preset_list::*;
 pub(crate) use preview::*;

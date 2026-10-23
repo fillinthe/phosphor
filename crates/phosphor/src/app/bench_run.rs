@@ -123,6 +123,10 @@ impl PhosphorApp {
         if self.state.scanner.status != crate::scanner::Status::Idle {
             println!("SCAN {:?}", self.state.scanner.status);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.state.led_scan.status != crate::led_scan::Status::Idle {
+            println!("LEDSCAN {:?} dmx_packets={}", self.state.led_scan.status, self.state.dmx.packets);
+        }
         for l in self.state.comp.layers.iter().filter(|l| l.collection.is_some()) {
             let file = match &l.source {
                 phosphor_engine::SourceSpec::Movie { name, .. } | phosphor_engine::SourceSpec::Image { name, .. } => name.clone(),
@@ -346,6 +350,24 @@ impl PhosphorApp {
                     self.state.scanner.start(o.id, size, o.id, size.0 as f32 / size.1.max(1) as f32);
                     println!("QUICK scan: output {} at {}x{}", o.id, size.0, size.1);
                 }
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "ledscan" {
+                // LED scanner on a 10-light strip, the first layer standing in for the camera, Art-Net to this Mac
+                // only (a LEDSCAN line at the end: it runs through every picture; a test picture finds no lights).
+                let id = self.state.comp.new_id();
+                let d = &mut self.state.comp.dmx;
+                d.target = "127.0.0.1".into();
+                d.fixtures.push(phosphor_engine::Fixture { id, name: "Scan test".into(), cols: 10, ..Default::default() });
+                let camera = self.state.comp.layers.first().map_or(0, |l| l.id);
+                self.state.led_scan.settle = 0.05;
+                let aspect = self.state.comp.width as f32 / self.state.comp.height.max(1) as f32;
+                match self.state.led_scan.start(&self.state.comp.dmx, Some(id), camera, aspect) {
+                    Ok(()) => self.state.comp.dmx.enabled = true,
+                    Err(e) => println!("QUICK ledscan failed: {e}"),
+                }
+                println!("QUICK ledscan: layer {camera} as the camera");
                 continue;
             }
             if name == "tracking" {

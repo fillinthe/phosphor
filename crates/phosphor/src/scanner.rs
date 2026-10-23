@@ -193,18 +193,63 @@ pub enum Status {
     Failed(String),
 }
 
+/// Showing pictures one at a time and reading the camera once each has settled: the stepping both scanners share
+/// (the stage scanner's stripes, the LED scanner's lights). Frames are kept as luma, in step order.
+pub struct Steps {
+    /// Monitor source id the camera picture is read from (a camera layer, or an output for a test).
+    pub camera: u64,
+    /// Size the camera picture is read back at.
+    pub cam: (u32, u32),
+    pub count: usize,
+    pub step: usize,
+    shown_at: f64,
+    asked: bool,
+    pub frames: Vec<Vec<u8>>,
+}
+
+impl Steps {
+    /// `count` pictures, read from monitor source `camera` whose picture is `aspect` (width / height).
+    pub fn new(camera: u64, aspect: f32, count: usize) -> Self {
+        let cam = (READ_WIDTH, ((READ_WIDTH as f32 / aspect.max(0.1)).round() as u32).clamp(16, 2048));
+        Steps { camera, cam, count, step: 0, shown_at: f64::NAN, asked: false, frames: Vec::new() }
+    }
+
+    /// Read the camera this frame? (Once per picture, `settle` seconds after it went up.)
+    pub fn due(&mut self, now: f64, settle: f64) -> bool {
+        if self.shown_at.is_nan() {
+            self.shown_at = now;
+        }
+        if self.asked || self.done() || now - self.shown_at < settle {
+            return false;
+        }
+        self.asked = true;
+        true
+    }
+
+    /// A camera frame came back: keep it and move to the next picture. False when it wasn't asked for (or is the
+    /// wrong size).
+    pub fn take(&mut self, rgba: &[u8], width: u32, height: u32) -> bool {
+        if !self.asked || (width, height) != self.cam {
+            return false;
+        }
+        self.frames.push(luma(rgba));
+        self.step += 1;
+        self.asked = false;
+        self.shown_at = f64::NAN;
+        true
+    }
+
+    pub fn done(&self) -> bool {
+        self.step >= self.count
+    }
+}
+
 /// What feeds the scan.
 pub struct Scan {
     pub output: u64,
-    /// Monitor source id the camera picture is read from (a camera layer, or an output for a test).
-    pub camera: u64,
     projector: (u32, u32),
-    cam: (u32, u32),
     patterns: Vec<Pattern>,
-    step: usize,
-    shown_at: f64,
-    asked: bool,
-    frames: Vec<Vec<u8>>,
+    steps: Steps,
     white_rgba: Vec<u8>,
 }
 
@@ -231,10 +276,10 @@ impl Scanner {
     /// Starts scanning output `output` (`projector` = its size in pixels) with the camera picture from monitor
     /// source `camera` (`aspect` = its width / height).
     pub fn start(&mut self, output: u64, projector: (u32, u32), camera: u64, aspect: f32) {
-        let cam = (READ_WIDTH, ((READ_WIDTH as f32 / aspect.max(0.1)).round() as u32).clamp(16, 2048));
-        let patterns = patterns(projector, cam.0);
+        let steps = Steps::new(camera, aspect, 0);
+        let patterns = patterns(projector, steps.cam.0);
         self.status = Status::Scanning { step: 0, of: patterns.len() };
-        self.scan = Some(Scan { output, camera, projector, cam, patterns, step: 0, shown_at: f64::NAN, asked: false, frames: Vec::new(), white_rgba: Vec::new() });
+        self.scan = Some(Scan { output, projector, steps: Steps { count: patterns.len(), ..steps }, patterns, white_rgba: Vec::new() });
     }
 
     pub fn cancel(&mut self) {
@@ -245,43 +290,32 @@ impl Scanner {
     /// This frame: the pattern to show (for `Engine::set_scan`).
     pub fn pattern(&self) -> Option<(u64, [f32; 4])> {
         let s = self.scan.as_ref()?;
-        Some((s.output, s.patterns.get(s.step)?.uniforms()))
+        Some((s.output, s.patterns.get(s.steps.step)?.uniforms()))
     }
 
     /// The camera picture to read back (monitor source, width, height) while scanning.
     pub fn picture(&self) -> Option<(u64, u32, u32)> {
-        self.scan.as_ref().map(|s| (s.camera, s.cam.0, s.cam.1))
+        self.scan.as_ref().map(|s| (s.steps.camera, s.steps.cam.0, s.steps.cam.1))
     }
 
     /// Read the camera this frame? (Once per pattern, after it has settled.)
     pub fn due(&mut self, now: f64) -> bool {
         let settle = self.settle;
-        let Some(s) = self.scan.as_mut() else { return false };
-        if s.shown_at.is_nan() {
-            s.shown_at = now;
-        }
-        if s.asked || now - s.shown_at < settle {
-            return false;
-        }
-        s.asked = true;
-        true
+        self.scan.as_mut().is_some_and(|s| s.steps.due(now, settle))
     }
 
     /// A camera frame came back: keep it, show the next pattern; after the last one, decode (worker thread).
     pub fn give(&mut self, rgba: Vec<u8>, width: u32, height: u32) {
         let Some(s) = self.scan.as_mut() else { return };
-        if !s.asked || (width, height) != s.cam {
+        let white = s.patterns.get(s.steps.step) == Some(&Pattern::White);
+        if !s.steps.take(&rgba, width, height) {
             return;
         }
-        if s.patterns.get(s.step) == Some(&Pattern::White) {
-            s.white_rgba = rgba.clone();
+        if white {
+            s.white_rgba = rgba;
         }
-        s.frames.push(luma(&rgba));
-        s.step += 1;
-        s.asked = false;
-        s.shown_at = f64::NAN;
-        if s.step < s.patterns.len() {
-            self.status = Status::Scanning { step: s.step, of: s.patterns.len() };
+        if !s.steps.done() {
+            self.status = Status::Scanning { step: s.steps.step, of: s.patterns.len() };
             return;
         }
         let s = self.scan.take().unwrap();
@@ -289,18 +323,19 @@ impl Scanner {
         let (tx, rx) = mpsc::channel();
         let output = s.output;
         let spawned = std::thread::Builder::new().name("stage scan".into()).spawn(move || {
-            let photo_size = (s.cam.0.min(s.projector.0), (s.cam.0.min(s.projector.0) * s.projector.1 / s.projector.0.max(1)).max(1));
-            let d = decode(&s.patterns, &s.frames, &s.white_rgba, s.cam, s.projector, photo_size);
+            let cam = s.steps.cam;
+            let photo_size = (cam.0.min(s.projector.0), (cam.0.min(s.projector.0) * s.projector.1 / s.projector.0.max(1)).max(1));
+            let d = decode(&s.patterns, &s.steps.frames, &s.white_rgba, cam, s.projector, photo_size);
             // Scanning an output with itself: every camera pixel must land on the projector pixel under it.
-            let error = (s.camera == s.output).then(|| {
-                let sx = s.projector.0 as f32 / s.cam.0 as f32;
-                let sy = s.projector.1 as f32 / s.cam.1 as f32;
+            let error = (s.steps.camera == s.output).then(|| {
+                let sx = s.projector.0 as f32 / cam.0 as f32;
+                let sy = s.projector.1 as f32 / cam.1 as f32;
                 d.map
                     .iter()
                     .enumerate()
                     .filter_map(|(i, m)| {
                         let (x, y) = (*m)?;
-                        let (cx, cy) = ((i as u32 % s.cam.0) as f32 + 0.5, (i as u32 / s.cam.0) as f32 + 0.5);
+                        let (cx, cy) = ((i as u32 % cam.0) as f32 + 0.5, (i as u32 / cam.0) as f32 + 0.5);
                         Some((x as f32 - cx * sx).abs().max((y as f32 - cy * sy).abs()))
                     })
                     .fold(0.0f32, f32::max)

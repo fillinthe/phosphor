@@ -83,13 +83,18 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         let is_sel = selected == Some(f.id);
         let color = if !f.enabled { Color32::GRAY } else if is_sel { accent() } else { accent().gamma_multiply(0.6) };
         let corners = match f.shape {
+            // Found by camera: no ends or corners, just its lights (the middle moves them all).
+            FixtureShape::Scanned if !f.positions.is_empty() => 0,
             FixtureShape::MovingHead => 1,
-            FixtureShape::Strip | FixtureShape::Ring => 2,
+            FixtureShape::Strip | FixtureShape::Ring | FixtureShape::Scanned => 2,
             FixtureShape::Grid | FixtureShape::Curve => 4,
         };
         let pts: Vec<egui::Pos2> = f.points[..corners].iter().map(|p| to_screen(*p)).collect();
         let p = ui.painter();
-        if corners == 2 {
+        if corners == 0 {
+            let line: Vec<egui::Pos2> = f.positions.iter().map(|p| to_screen(*p)).collect();
+            p.add(egui::Shape::line(line, Stroke::new(if is_sel { 1.5 } else { 0.75 }, color.gamma_multiply(0.6))));
+        } else if corners == 2 {
             p.line_segment([pts[0], pts[1]], Stroke::new(if is_sel { 2.0 } else { 1.0 }, color));
         } else {
             p.add(egui::Shape::closed_line(pts.clone(), Stroke::new(if is_sel { 2.0 } else { 1.0 }, color)));
@@ -113,14 +118,18 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 moved = true;
             }
         }
-        let centre = pts.iter().fold(egui::Vec2::ZERO, |a, p| a + p.to_vec2()) / pts.len() as f32;
+        let centre = if corners == 0 {
+            samples.iter().fold(egui::Vec2::ZERO, |a, p| a + to_screen(*p).to_vec2()) / samples.len().max(1) as f32
+        } else {
+            pts.iter().fold(egui::Vec2::ZERO, |a, p| a + p.to_vec2()) / pts.len() as f32
+        };
         let mut d = [0.0, 0.0];
         let r = point_handle(ui, ui.id().with(("led_mid", f.id)), centre.to_pos2(), frame, color, true, &mut d);
         if r.drag_started() || r.clicked() {
             selected = Some(f.id);
         }
         if !moved && d != [0.0, 0.0] {
-            for p in f.points.iter_mut() {
+            for p in f.points.iter_mut().chain(f.positions.iter_mut()) {
                 *p = [(p[0] + d[0]).clamp(0.0, 1.0), (p[1] + d[1]).clamp(0.0, 1.0)];
             }
         }
@@ -157,6 +166,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             selected = Some(id);
         }
         video_wall_menu(ui, st);
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::SCAN, "Find with a camera…")).on_hover_text("The lights blink codes while a camera watches; each light is placed where the camera sees it").clicked() {
+            open_led_scan_window(ui.ctx());
+        }
         hint(ui, "Drag the dots on the picture to place lights; the square moves the whole fixture.");
     });
 
@@ -179,7 +192,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal_wrapped(|ui| {
                     choice_buttons(ui, &mut f.shape, |_, _| {});
                     match f.shape {
-                        FixtureShape::Strip | FixtureShape::Ring | FixtureShape::Curve => {
+                        FixtureShape::Scanned if !f.positions.is_empty() => {
+                            hint(ui, format!("{} lights where the camera saw them", f.positions.len()));
+                        }
+                        FixtureShape::Strip | FixtureShape::Ring | FixtureShape::Curve | FixtureShape::Scanned => {
                             guarded!(ui, f.cols, egui::DragValue::new(&mut f.cols).range(1..=4096).prefix("pixels "));
                         }
                         FixtureShape::Grid => {
@@ -264,6 +280,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         st.comp.dmx.fixtures.remove(i);
     }
     ui.ctx().data_mut(|d| d.insert_temp(selected_id, selected));
+    #[cfg(not(target_arch = "wasm32"))]
+    led_scan_window(&ui.ctx().clone(), st);
 }
 
 /// The first universe / channel after the last fixture, so new fixtures don't overlap.

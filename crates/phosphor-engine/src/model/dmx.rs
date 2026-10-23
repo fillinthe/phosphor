@@ -92,10 +92,12 @@ pub enum FixtureShape {
     Ring,
     /// `cols` pixels along a curve: a Bézier from `points[0]` to `points[3]`, bent towards `points[1]` and `points[2]`.
     Curve,
+    /// Each pixel where it really is (`Fixture::positions`, in wiring order), found by the LED scanner's camera.
+    Scanned,
 }
 
 impl FixtureShape {
-    pub const ALL: [FixtureShape; 5] = [FixtureShape::Strip, FixtureShape::Curve, FixtureShape::Ring, FixtureShape::Grid, FixtureShape::MovingHead];
+    pub const ALL: [FixtureShape; 6] = [FixtureShape::Strip, FixtureShape::Curve, FixtureShape::Ring, FixtureShape::Grid, FixtureShape::MovingHead, FixtureShape::Scanned];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -104,6 +106,7 @@ impl FixtureShape {
             FixtureShape::MovingHead => "Moving head",
             FixtureShape::Ring => "Ring",
             FixtureShape::Curve => "Curve",
+            FixtureShape::Scanned => "Found by camera",
         }
     }
 }
@@ -224,6 +227,8 @@ pub struct Fixture {
     /// Each pixel takes the average of its own patch of the picture (9 samples across its cell) instead of the one
     /// point at its centre: steadier on detailed or moving pictures.
     pub average: bool,
+    /// `Scanned`: where each pixel is (0..1, y down), in wiring order.
+    pub positions: Vec<[f32; 2]>,
 }
 
 impl Default for Fixture {
@@ -252,6 +257,7 @@ impl Default for Fixture {
             dimmer: 1.0,
             extra: Vec::new(),
             average: false,
+            positions: Vec::new(),
         }
     }
 }
@@ -299,7 +305,8 @@ impl Fixture {
 
     pub fn pixel_count(&self) -> usize {
         match self.shape {
-            FixtureShape::Strip | FixtureShape::Ring | FixtureShape::Curve => self.cols.clamp(1, 4096) as usize,
+            FixtureShape::Scanned if !self.positions.is_empty() => self.positions.len().min(4096),
+            FixtureShape::Strip | FixtureShape::Ring | FixtureShape::Curve | FixtureShape::Scanned => self.cols.clamp(1, 4096) as usize,
             FixtureShape::Grid => (self.cols.clamp(1, 512) * self.rows.clamp(1, 512)) as usize,
             FixtureShape::MovingHead => 1,
         }
@@ -326,7 +333,8 @@ impl Fixture {
         let centre = |i: u32, n: u32| if n <= 1 { 0.5 } else { (i as f32 + 0.5) / n as f32 };
         match self.shape {
             FixtureShape::MovingHead => vec![p[0]],
-            FixtureShape::Strip => {
+            FixtureShape::Scanned if !self.positions.is_empty() => self.positions.iter().take(4096).copied().collect(),
+            FixtureShape::Strip | FixtureShape::Scanned => {
                 let n = self.cols.clamp(1, 4096);
                 (0..n).map(|i| lerp(p[0], p[1], centre(i, n))).collect()
             }

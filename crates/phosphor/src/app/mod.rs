@@ -182,6 +182,9 @@ pub struct State {
     /// Stage scanner (patterns on an output, a camera watching): makes stage photos.
     #[cfg(not(target_arch = "wasm32"))]
     pub scanner: crate::scanner::Scanner,
+    /// LED scanner (the lights blink codes, a camera watches): places LED fixtures where their lights really are.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub led_scan: crate::led_scan::LedScanner,
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,

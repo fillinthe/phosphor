@@ -13,6 +13,24 @@ pub(crate) fn open_scan_window(ctx: &egui::Context, output: u64) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(SCAN_WINDOW), Some(output)));
 }
 
+/// Layers showing a camera (or any live input): what a scanner can watch the stage through.
+pub(crate) fn camera_layers(st: &State) -> Vec<(u64, String)> {
+    st.comp.layers.iter().filter(|l| matches!(l.source, SourceSpec::Live { .. })).map(|l| (l.id, l.name.clone())).collect()
+}
+
+/// "Camera [list]": pick one of `cameras` (id, name).
+pub(crate) fn camera_combo(ui: &mut egui::Ui, salt: &str, cameras: &[(u64, String)], camera: &mut u64) {
+    ui.horizontal(|ui| {
+        ui.label("Camera");
+        let current = cameras.iter().find(|(id, _)| id == camera).map(|(_, n)| n.clone()).unwrap_or_else(|| "(none)".into());
+        ComboBox::from_id_salt(salt).width(260.0).selected_text(current).show_ui(ui, |ui| {
+            for (id, n) in cameras {
+                ui.selectable_value(camera, *id, n);
+            }
+        });
+    });
+}
+
 /// The window, while open.
 pub(crate) fn scan_window(ctx: &egui::Context, st: &mut State) {
     let Some(oid) = ctx.data(|d| d.get_temp::<Option<u64>>(egui::Id::new(SCAN_WINDOW))).flatten() else { return };
@@ -23,29 +41,15 @@ pub(crate) fn scan_window(ctx: &egui::Context, st: &mut State) {
     let (name, size) = (o.name.clone(), o.size((st.comp.width, st.comp.height)));
     let camera_key = egui::Id::new("phosphor_scan_camera");
     // Layers that show a camera (or any live input), and the output itself for a test without one.
-    let cameras: Vec<(u64, String)> = st
-        .comp
-        .layers
-        .iter()
-        .filter(|l| matches!(l.source, SourceSpec::Live { .. }))
-        .map(|l| (l.id, l.name.clone()))
-        .chain(std::iter::once((oid, format!("{name} itself (a test: no camera needed)"))))
-        .collect();
+    let mut cameras = camera_layers(st);
+    cameras.push((oid, format!("{name} itself (a test: no camera needed)")));
     let mut camera: u64 = ctx.data(|d| d.get_temp(camera_key)).filter(|c| cameras.iter().any(|(id, _)| id == c)).unwrap_or(cameras[0].0);
     let mut open = true;
     let busy = st.scanner.scan.is_some() || st.scanner.status == Status::Decoding;
     egui::Window::new(label(icon::SCAN, &format!("Scan the stage: {name}"))).open(&mut open).default_width(420.0).show(ctx, |ui| {
         hint(ui, "The projector shows black, white and striped pictures while a camera watches the stage. Phosphor works out which projector pixel lit each point the camera sees and draws the stage as the projector sees it: that becomes this output's stage photo, to line slices up with. Darken the room; keep the camera still.");
         ui.add_enabled_ui(!busy, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Camera");
-                let current = cameras.iter().find(|(id, _)| *id == camera).map(|(_, n)| n.clone()).unwrap_or_default();
-                ComboBox::from_id_salt("scan_camera").width(260.0).selected_text(current).show_ui(ui, |ui| {
-                    for (id, n) in &cameras {
-                        ui.selectable_value(&mut camera, *id, n);
-                    }
-                });
-            });
+            camera_combo(ui, "scan_camera", &cameras, &mut camera);
             if cameras.len() == 1 {
                 hint(ui, "Add a layer showing your camera first (Live input), aimed at the stage. It can stay hidden.");
             }
