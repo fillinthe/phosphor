@@ -9,6 +9,34 @@ use crate::shaders;
 /// Format for every intermediate and output texture.
 pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
+/// The graphics card can draw into 16-bit textures (deep colour); the app says so when it makes the device (see
+/// `deep_colour_usable`).
+static DEEP_COLOUR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What deep colour draws into: 16 bits a channel, still 0..1 like 8-bit (looks stay the same, only finer).
+pub const DEEP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Unorm;
+
+/// Can this adapter draw into `DEEP_FORMAT`? Then the device must also be made with `deep_colour_features`.
+pub fn deep_colour_usable(adapter: &wgpu::Adapter) -> bool {
+    let needed = wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+    let usages = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
+    adapter.features().contains(needed) && adapter.get_texture_format_features(DEEP_FORMAT).allowed_usages.contains(usages)
+}
+
+/// The device features deep colour needs (when `deep_colour_usable`).
+pub fn deep_colour_features() -> wgpu::Features {
+    wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+}
+
+/// Tells the engine the device was made with deep colour's features.
+pub fn set_deep_colour(on: bool) {
+    DEEP_COLOUR.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn deep_colour() -> bool {
+    DEEP_COLOUR.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Uniform block shared by all passes; mirrors `struct U` in common.wgsl.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Pod, Zeroable)]

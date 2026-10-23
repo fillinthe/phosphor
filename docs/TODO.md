@@ -151,7 +151,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
 - [x] 83. **Interface colour themes** (V). Has a brightness slider.
-- [~] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M). Done: smooth edges (anti-aliasing) per output. Left: float buffers.
+- [x] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M). Done: smooth edges (anti-aliasing) per output; Deep colour (Output panel): layers mixed and effects worked out at 16 bits a channel, same looks, no banding (on cards that can draw into 16-bit textures). Checked: GPU tests (fine detail kept: 33 vs 8-bit's 64 for a true 33; every saved test project looks the same with it on).
 - [x] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
 
 ### Large
