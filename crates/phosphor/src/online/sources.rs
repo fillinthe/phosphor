@@ -19,10 +19,16 @@ pub enum Source {
     Artic,
     Iconify,
     PolyHaven,
+    MilkDrop,
 }
 
 impl Source {
-    pub const ALL: [Source; 7] = [Source::Nasa, Source::Commons, Source::Archive, Source::Openverse, Source::Artic, Source::Iconify, Source::PolyHaven];
+    pub const ALL: [Source; 8] = [Source::Nasa, Source::Commons, Source::Archive, Source::Openverse, Source::Artic, Source::Iconify, Source::PolyHaven, Source::MilkDrop];
+
+    /// The search answer is the library's whole list, the same every time (kept for the session, `super::get_cached`).
+    pub fn whole_list(self) -> bool {
+        matches!(self, Source::PolyHaven | Source::MilkDrop)
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -33,6 +39,7 @@ impl Source {
             Source::Artic => "Art Institute of Chicago",
             Source::Iconify => "Iconify",
             Source::PolyHaven => "Poly Haven",
+            Source::MilkDrop => "MilkDrop presets",
         }
     }
 
@@ -45,6 +52,7 @@ impl Source {
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
             Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
+            Source::MilkDrop => "Nearly 10,000 MilkDrop visualisers (projectM's \"Cream of the Crop\" pack, sorted by Isosceles) that move to the music.",
         }
     }
 
@@ -56,6 +64,7 @@ impl Source {
             Source::Openverse | Source::Artic => &[Kind::Picture],
             Source::Iconify => &[Kind::Icon],
             Source::PolyHaven => &[Kind::Texture],
+            Source::MilkDrop => &[Kind::Visualizer],
         }
     }
 
@@ -89,6 +98,7 @@ impl Source {
             Source::Iconify => format!("https://api.iconify.design/search?query={q}&limit=32&start={}", (page - 1) * 32),
             // Poly Haven has no search: the whole list (filtered here, `poly_haven`).
             Source::PolyHaven => "https://api.polyhaven.com/assets?type=textures".to_string(),
+            Source::MilkDrop => format!("https://api.github.com/repos/{MILK_REPO}/git/trees/master?recursive=1"),
             Source::Artic => format!(
                 "https://api.artic.edu/api/v1/artworks/search?q={q}&query%5Bterm%5D%5Bis_public_domain%5D=true&fields=id,title,artist_title,image_id&limit={PAGE}&page={page}"
             ),
@@ -97,9 +107,9 @@ impl Source {
 
     /// The items in a search answer (for a library without its own search: the matches for `query` on `page`).
     pub fn parse_page(self, kind: Kind, query: &str, page: usize, body: &[u8]) -> Result<Vec<Item>, String> {
-        if self == Source::PolyHaven {
+        if self.whole_list() {
             let v: Value = serde_json::from_slice(body).map_err(|_| format!("{} sent something unreadable", self.name()))?;
-            return Ok(poly_haven(&v, query, page));
+            return Ok(if self == Source::PolyHaven { poly_haven(&v, query, page) } else { milkdrop(&v, query, page) });
         }
         self.parse(kind, body)
     }
@@ -115,6 +125,7 @@ impl Source {
             Source::Artic => artic(&v),
             Source::Iconify => iconify(&v),
             Source::PolyHaven => poly_haven(&v, "", 1),
+            Source::MilkDrop => milkdrop(&v, "", 1),
         })
     }
 }
@@ -416,6 +427,52 @@ fn poly_haven(v: &Value, query: &str, page: usize) -> Vec<Item> {
         .collect()
 }
 
+/// The MilkDrop preset pack on GitHub.
+const MILK_REPO: &str = "projectM-visualizer/presets-cream-of-the-crop";
+
+/// The pack's presets whose folder or name holds every word of `query` ("Dancer/Aurora/Royal - Mashup.milk").
+fn milkdrop(v: &Value, query: &str, page: usize) -> Vec<Item> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    v["tree"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|f| text(&f["path"]))
+        .filter(|p| p.to_ascii_lowercase().ends_with(".milk"))
+        .filter(|p| {
+            let hay = p.to_lowercase();
+            words.iter().all(|w| hay.contains(w.as_str()))
+        })
+        .skip((page.max(1) - 1) * PAGE)
+        .take(PAGE)
+        .map(|path| {
+            let (folder, file) = path.rsplit_once('/').unwrap_or(("", &path));
+            let name = file.trim_end_matches(".milk").trim_end_matches(".MILK").to_string();
+            // Preset names are mostly "Author - Title".
+            let author = name.split_once(" - ").map(|(a, _)| a.trim().to_string()).unwrap_or_default();
+            let encoded: Vec<String> = path.split('/').map(url_encode).collect();
+            Item {
+                source: Source::MilkDrop,
+                kind: Kind::Visualizer,
+                title: if folder.is_empty() { name.clone() } else { format!("{name} ({})", folder.replace('/', " › ")) },
+                thumb: String::new(),
+                file: Some(format!("https://raw.githubusercontent.com/{MILK_REPO}/master/{}", encoded.join("/"))),
+                list: String::new(),
+                size: None,
+                credit: phosphor_engine::Credit {
+                    title: name,
+                    author,
+                    licence: "Public domain (freely shared preset)".into(),
+                    licence_url: format!("https://github.com/{MILK_REPO}/blob/master/LICENSE.md"),
+                    page: format!("https://github.com/{MILK_REPO}/blob/master/{}", encoded.join("/")),
+                    source: "projectM Cream of the Crop (Isosceles)".into(),
+                },
+                id: path,
+            }
+        })
+        .collect()
+}
+
 /// For sources that list an item's files separately (NASA, Internet Archive): the file to download from that list,
 /// and its size when known.
 pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), String> {
@@ -528,6 +585,15 @@ mod tests {
         assert!(Source::PolyHaven.parse_page(Kind::Texture, "wall", 2, ph).unwrap().is_empty());
         let files = br#"{"Diffuse":{"2k":{"jpg":{"size":2802005,"url":"https://dl.polyhaven.org/x_diff_2k.jpg"}}}}"#;
         assert_eq!(pick_file(&found[0], files).unwrap(), ("https://dl.polyhaven.org/x_diff_2k.jpg".into(), Some(2802005)));
+
+        let tree = br#"{"tree":[{"path":"Dancer/Aurora","type":"tree"},{"path":"Dancer/Aurora/$$$ Royal - Mashup (257).milk"},{"path":"Fractal/Geiss - Spiral.milk"},{"path":"README.md"}]}"#;
+        let m = Source::MilkDrop.parse_page(Kind::Visualizer, "aurora", 1, tree).unwrap();
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].title, "$$$ Royal - Mashup (257) (Dancer › Aurora)");
+        assert_eq!(m[0].credit.author, "$$$ Royal");
+        assert_eq!(m[0].file.as_deref(), Some("https://raw.githubusercontent.com/projectM-visualizer/presets-cream-of-the-crop/master/Dancer/Aurora/%24%24%24%20Royal%20-%20Mashup%20%28257%29.milk"));
+        assert!(m[0].credit.commercial());
+        assert_eq!(Source::MilkDrop.parse_page(Kind::Visualizer, "", 1, tree).unwrap().len(), 2, "no words: every preset");
     }
 
     #[test]

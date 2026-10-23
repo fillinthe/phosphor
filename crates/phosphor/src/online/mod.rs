@@ -22,6 +22,8 @@ pub enum Kind {
     Icon,
     /// Surface textures (for 3D models and backgrounds).
     Texture,
+    /// MilkDrop presets (they move to the music).
+    Visualizer,
 }
 
 /// One search result.
@@ -84,6 +86,20 @@ pub fn get_bytes(url: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// `get_bytes` once per session for each address (a library's whole list, searched here).
+fn get_cached(url: &str) -> Result<Vec<u8>, String> {
+    static KEPT: OnceLock<Mutex<std::collections::HashMap<String, Arc<Vec<u8>>>>> = OnceLock::new();
+    let kept = KEPT.get_or_init(Default::default);
+    if let Some(b) = kept.lock().ok().and_then(|k| k.get(url).cloned()) {
+        return Ok(b.to_vec());
+    }
+    let b = get_bytes(url)?;
+    if let Ok(mut k) = kept.lock() {
+        k.insert(url.to_string(), Arc::new(b.clone()));
+    }
+    Ok(b)
+}
+
 // ---- searching ----
 
 enum Msg {
@@ -140,7 +156,8 @@ impl Search {
                 let (tx, ctx, query, page) = (self.tx.clone(), self.ctx.clone(), self.query.clone(), self.page);
                 self.pending += 1;
                 let _ = std::thread::Builder::new().name("online search".into()).spawn(move || {
-                    let msg = match get_bytes(&url).and_then(|b| source.parse_page(kind, &query, page, &b)) {
+                    let body = if source.whole_list() { get_cached(&url) } else { get_bytes(&url) };
+                    let msg = match body.and_then(|b| source.parse_page(kind, &query, page, &b)) {
                         Ok(items) => Msg::Found { kind, items },
                         Err(e) => Msg::Failed(format!("{}: {e}", source.name())),
                     };
@@ -233,12 +250,22 @@ pub fn file_name(item: &Item, url: &str) -> String {
     let path = url.split(['?', '#']).next().unwrap_or(url);
     let last = path.rsplit('/').next().unwrap_or("");
     let ext = last.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).filter(|e| (2..=4).contains(&e.len()) && e.chars().all(|c| c.is_ascii_alphanumeric()));
-    let ext = ext.unwrap_or_else(|| if item.kind == Kind::Video { "mp4".into() } else { "jpg".into() });
+    let ext = ext.unwrap_or_else(|| {
+        match item.kind {
+            Kind::Video => "mp4",
+            Kind::Icon => "svg",
+            Kind::Visualizer => "milk",
+            Kind::Picture | Kind::Texture => "jpg",
+        }
+        .into()
+    });
     let title: String = crate::show::slug(&item.title).chars().take(48).collect();
     // The id's end tells files apart (ids can be long; their ends differ).
-    let id = crate::show::slug(&item.id);
+    // (An id that's a file path loses its extension; an id the title already holds isn't repeated.)
+    let bare = item.id.rsplit_once('.').filter(|(_, e)| e.len() <= 5 && !e.contains('/')).map_or(item.id.as_str(), |(b, _)| b);
+    let id = crate::show::slug(bare);
     let id = id.get(id.len().saturating_sub(24)..).unwrap_or(&id).trim_start_matches('-');
-    format!("{title}-{id}.{ext}")
+    if title.contains(id) { format!("{title}.{ext}") } else { format!("{title}-{id}.{ext}") }
 }
 
 fn sidecar(path: &Path) -> PathBuf {
@@ -342,6 +369,9 @@ mod tests {
         assert_eq!(file_name(&v, "https://upload.wikimedia.org/a/b/Clip.WEBM?utm=1"), "trifid-nebula-seen-by-hubble-ksc-061404-t-nebula.webm");
         assert!(file_name(&item(Kind::Picture), "https://live.staticflickr.com/thumb/").ends_with(".jpg"), "no extension: one for the kind");
         assert!(file_name(&item(Kind::Picture), "https://www.artic.edu/iiif/2/99af/full/1686,/0/default.jpg").ends_with(".jpg"));
+        let mut milk = item(Kind::Visualizer);
+        (milk.id, milk.title) = ("Dancer/Geiss - Spiral.milk".into(), "Geiss - Spiral (Dancer)".into());
+        assert_eq!(file_name(&milk, "https://raw.githubusercontent.com/x/master/Dancer/Geiss%20-%20Spiral.milk"), "geiss-spiral-dancer-dancer-geiss-spiral.milk");
     }
 
     #[test]
@@ -411,5 +441,16 @@ mod tests {
         let (url, size) = sources::pick_file(&tex, &get_bytes(&tex.list).expect("files")).expect("a picture");
         println!("ONLINE icon {} texture {url} {size:?}", icon.id);
         assert!(url.ends_with(".jpg"));
+        // A MilkDrop preset from the pack.
+        let mut s = Search::start("aurora", &[Source::MilkDrop], &[Kind::Visualizer], false, None);
+        while s.busy() {
+            std::thread::sleep(Duration::from_millis(100));
+            s.poll();
+        }
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        let milk = s.items.first().expect("a preset").clone();
+        let body = get_bytes(milk.file.as_deref().unwrap()).expect("preset");
+        println!("ONLINE milkdrop {} presets, first {} ({} bytes)", s.items.len(), milk.title, body.len());
+        assert!(String::from_utf8_lossy(&body).contains("per_frame") || String::from_utf8_lossy(&body).contains("[preset"), "a preset file");
     }
 }
