@@ -13,6 +13,8 @@ mod dialogs;
 mod dmx;
 #[cfg(not(target_arch = "wasm32"))]
 mod dmx_record;
+#[cfg(not(target_arch = "wasm32"))]
+mod usb_dmx;
 mod explorer;
 #[cfg(not(target_arch = "wasm32"))]
 mod folders;
