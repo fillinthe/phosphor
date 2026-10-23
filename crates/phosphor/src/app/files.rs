@@ -321,13 +321,13 @@ impl PhosphorApp {
                 Purpose::ExportMappingSvg(id) => {
                     if let (Some(p), Some(o)) = (paths.first(), st.comp.outputs.iter().find(|o| o.id == id)) {
                         let svg = crate::mapping_svg::export(&o.mapping, o.width, o.height);
-                        // .png = the drawing as a picture at the output's size; anything else = SVG.
-                        let png = p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"));
-                        let p = if png { p.clone() } else { p.with_extension("svg") };
-                        let written = if png {
-                            crate::media::render_svg_sized(svg.as_bytes(), o.width.max(o.height) as f32).and_then(|img| img.save(&p).map_err(|e| e.to_string()))
-                        } else {
-                            std::fs::write(&p, svg).map_err(|e| e.to_string())
+                        // .png = the drawing as a picture at the output's size; .pdf = a vector page; else SVG.
+                        let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+                        let p = if ext == "png" || ext == "pdf" { p.clone() } else { p.with_extension("svg") };
+                        let written = match ext.as_str() {
+                            "png" => crate::media::render_svg_sized(svg.as_bytes(), o.width.max(o.height) as f32).and_then(|img| img.save(&p).map_err(|e| e.to_string())),
+                            "pdf" => std::fs::write(&p, crate::mapping_svg::export_pdf(&o.mapping, o.width, o.height)).map_err(|e| e.to_string()),
+                            _ => std::fs::write(&p, svg).map_err(|e| e.to_string()),
                         };
                         st.notice = Some(match written {
                             Ok(()) => format!("Mapping saved: {}", p.display()),
