@@ -1,6 +1,6 @@
 //! Sends LED / DMX universes over the network: Art-Net (ArtDmx, UDP 6454; broadcast when no address is
-//! set) or sACN / E1.31 (UDP 5568; multicast per universe when no address is set). Does nothing while
-//! LED output is off; paced to its own frame rate.
+//! set) or sACN / E1.31 (UDP 5568; multicast per universe when no address is set), or to a USB interface
+//! (`usb_dmx`). Does nothing while LED output is off; paced to its own frame rate.
 
 use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
@@ -25,6 +25,8 @@ pub struct DmxOut {
     /// The DMX monitor is on screen: keep a copy of what goes out (`sent`). The panel sets it each frame it draws.
     pub watching: bool,
     pub sent: BTreeMap<u16, [u8; 512]>,
+    /// A USB interface (`DmxProtocol::UsbPro`), opened on its port.
+    usb: Option<crate::usb_dmx::ProOut>,
 }
 
 impl DmxOut {
@@ -32,6 +34,7 @@ impl DmxOut {
     pub fn frame_due(&mut self, now: f64, s: &DmxSettings) -> bool {
         if !s.enabled || s.fixtures.iter().all(|f| !f.enabled) {
             self.socket = None;
+            self.usb = None;
             return false;
         }
         self.pacer.due(now, s.fps.clamp(1.0, 120.0) as u32)
@@ -39,6 +42,11 @@ impl DmxOut {
 
     /// Sends one frame of universes.
     pub fn send(&mut self, s: &DmxSettings, universes: &BTreeMap<u16, [u8; 512]>) {
+        if s.protocol == DmxProtocol::UsbPro {
+            self.send_usb(s, universes);
+            return;
+        }
+        self.usb = None;
         if self.socket.is_none() {
             match UdpSocket::bind(("0.0.0.0", 0)).and_then(|sock| {
                 sock.set_broadcast(true)?;
@@ -76,6 +84,7 @@ impl DmxOut {
                     let multicast = Ipv4Addr::new(239, 255, (uni >> 8) as u8, uni as u8);
                     (sacn_packet(&self.cid, uni, self.seq, data), SocketAddr::from((target.unwrap_or(multicast), SACN_PORT)))
                 }
+                DmxProtocol::UsbPro => continue,
             };
             match sock.send_to(&packet, addr) {
                 Ok(_) => self.packets += 1,
@@ -87,6 +96,43 @@ impl DmxOut {
         self.universes = universes.len();
         if std::mem::take(&mut self.watching) {
             self.sent.clone_from(universes);
+        } else if !self.sent.is_empty() {
+            self.sent.clear();
+        }
+    }
+}
+
+impl DmxOut {
+    /// A USB interface: its one universe (the lowest the fixtures use), to the port in `target`.
+    fn send_usb(&mut self, s: &DmxSettings, universes: &BTreeMap<u16, [u8; 512]>) {
+        let path = s.target.trim();
+        if path.is_empty() {
+            self.error = Some("choose the interface's port".into());
+            return;
+        }
+        if self.usb.as_ref().is_none_or(|u| u.path != path) {
+            match crate::usb_dmx::ProOut::open(path) {
+                Ok(u) => self.usb = Some(u),
+                Err(e) => {
+                    self.usb = None;
+                    self.error = Some(e);
+                    return;
+                }
+            }
+        }
+        let Some(usb) = &self.usb else { return };
+        let empty = [0u8; 512];
+        let data = universes.values().next().unwrap_or(&empty);
+        if !usb.send(data) {
+            self.usb = None;
+            self.error = Some("the interface stopped".into());
+            return;
+        }
+        self.packets += 1;
+        self.error = usb.error.lock().ok().and_then(|e| e.clone());
+        self.universes = universes.len().min(1);
+        if std::mem::take(&mut self.watching) {
+            self.sent = universes.iter().take(1).map(|(u, d)| (*u, *d)).collect();
         } else if !self.sent.is_empty() {
             self.sent.clear();
         }

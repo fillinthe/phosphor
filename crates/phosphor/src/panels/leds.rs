@@ -17,9 +17,26 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         let hint_text = match d.protocol {
             phosphor_engine::DmxProtocol::ArtNet => "everyone (broadcast)",
             phosphor_engine::DmxProtocol::Sacn => "multicast",
+            phosphor_engine::DmxProtocol::UsbPro => "its port",
         };
-        ui.add(egui::TextEdit::singleline(&mut d.target).desired_width(120.0).hint_text(hint_text))
-            .on_hover_text("The controller's IP address (e.g. 2.0.0.10), or leave empty to send to the whole network");
+        if d.protocol == phosphor_engine::DmxProtocol::UsbPro {
+            // The interface's USB serial port (the list is read when the menu opens).
+            #[cfg(not(target_arch = "wasm32"))]
+            ComboBox::from_id_salt("dmx_usb_port").width(180.0).selected_text(if d.target.is_empty() { "(choose the port)".to_string() } else { d.target.clone() }).show_ui(ui, |ui| {
+                let ports = crate::usb_dmx::ports();
+                if ports.is_empty() {
+                    ui.label("No USB interface found: plug it in (FTDI driver on older Macs)");
+                }
+                for p in ports {
+                    ui.selectable_value(&mut d.target, p.clone(), p);
+                }
+            })
+            .response
+            .on_hover_text("An Enttec DMX USB Pro or a compatible (DMXking ultraDMX…): one universe, the first your fixtures use");
+        } else {
+            ui.add(egui::TextEdit::singleline(&mut d.target).desired_width(120.0).hint_text(hint_text))
+                .on_hover_text("The controller's IP address (e.g. 2.0.0.10), or leave empty to send to the whole network");
+        }
         guarded!(ui, d.fps, egui::DragValue::new(&mut d.fps).range(1.0..=60.0).speed(0.2).suffix(" fps"));
         Level::percent(&mut d.master, "Master").default(1.0).width(120.0).target(ControlTarget::App(phosphor_engine::AppControl::DmxMaster)).tip("Every fixture's level at once").show(ui);
         #[cfg(not(target_arch = "wasm32"))]

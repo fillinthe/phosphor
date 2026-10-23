@@ -11,15 +11,18 @@ pub enum DmxProtocol {
     #[default]
     ArtNet,
     Sacn,
+    /// A USB interface speaking the Enttec DMX USB Pro protocol (one universe; `target` = its serial port).
+    UsbPro,
 }
 
 impl DmxProtocol {
-    pub const ALL: [DmxProtocol; 2] = [DmxProtocol::ArtNet, DmxProtocol::Sacn];
+    pub const ALL: [DmxProtocol; 3] = [DmxProtocol::ArtNet, DmxProtocol::Sacn, DmxProtocol::UsbPro];
 
     pub fn name(self) -> &'static str {
         match self {
             DmxProtocol::ArtNet => "Art-Net",
             DmxProtocol::Sacn => "sACN (E1.31)",
+            DmxProtocol::UsbPro => "USB (Enttec Pro)",
         }
     }
 }
@@ -498,7 +501,7 @@ fn gamma_table(brightness: f32, gamma: f32) -> [u8; 256] {
 pub struct DmxSettings {
     pub enabled: bool,
     pub protocol: DmxProtocol,
-    /// Where to send: an IP address, or empty = broadcast (Art-Net) / multicast (sACN).
+    /// Where to send: an IP address, or empty = broadcast (Art-Net) / multicast (sACN); for USB, the serial port.
     pub target: String,
     pub fps: f32,
     pub fixtures: Vec<Fixture>,
