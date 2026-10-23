@@ -803,7 +803,9 @@ impl Engine {
                 // Mesh warp or curved edges: one pass drawing the cached, finely subdivided mesh.
                 if s.mesh.is_some() || s.bend.is_some() {
                     let grid = s.mesh.as_ref().map_or([0, 0], |m| [m.cols, m.rows]);
-                    let points = s.mesh.iter().flat_map(|m| m.points.iter()).chain(s.corners.iter()).chain(s.bend.iter().flat_map(|b| b.handles.iter().flatten()));
+                    // Everything the triangles depend on: the points, the input mesh, the handles, the corners, the bends.
+                    let mesh = s.mesh.iter().flat_map(|m| m.points.iter().chain(m.input.iter()).chain(m.handles.iter().flatten()));
+                    let points = mesh.chain(s.corners.iter()).chain(s.bend.iter().flat_map(|b| b.handles.iter().flatten()));
                     let hash = hash_points(points, &[grid[0], grid[1], s.bend.is_some() as u32]);
                     let Some(draw) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id), hash, || s.warp_triangles().unwrap_or_default()) else { continue };
                     let mut u = Uniforms::with_params(&[]);

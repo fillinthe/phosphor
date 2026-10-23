@@ -564,6 +564,10 @@ pub struct Mesh {
     /// Empty = the regular grid (the picture spread evenly).
     #[serde(default)]
     pub input: Vec<[f32; 2]>,
+    /// Handles: for each point, how much its curve's direction across (along the row) and down (along the
+    /// column) is bent from the automatic smooth one, in output units per cell. Empty = all automatic.
+    #[serde(default)]
+    pub handles: Vec<[[f32; 2]; 2]>,
 }
 
 impl Mesh {
@@ -579,7 +583,7 @@ impl Mesh {
                 points.push([(h[0] * s + h[1] * t + h[2]) / w, (h[3] * s + h[4] * t + h[5]) / w]);
             }
         }
-        Self { cols, rows, points, input: Vec::new() }
+        Self { cols, rows, points, input: Vec::new(), handles: Vec::new() }
     }
 
     pub fn point(&self, i: u32, j: u32) -> [f32; 2] {
@@ -595,12 +599,55 @@ impl Mesh {
 
     /// Where surface coordinate (s, t) in 0..1 lands, on a smooth curve through the points.
     pub fn eval(&self, s: f32, t: f32) -> [f32; 2] {
-        eval_grid(&self.points, self.cols, self.rows, s, t)
+        eval_grid(&self.points, &self.handles, self.cols, self.rows, s, t)
     }
 
     /// Which spot of the input picture (0..1) surface coordinate (s, t) shows: on the input mesh's curve, or (s, t).
     pub fn eval_input(&self, s: f32, t: f32) -> [f32; 2] {
-        if self.has_input() { eval_grid(&self.input, self.cols, self.rows, s, t) } else { [s, t] }
+        if self.has_input() { eval_grid(&self.input, &[], self.cols, self.rows, s, t) } else { [s, t] }
+    }
+
+    /// Point `k`'s curve directions, across (0) and down (1): the automatic smooth ones plus its handle offsets.
+    /// A handle's tip sits a third of the way along (± direction / 3), as with Bezier curves.
+    pub fn direction(&self, k: usize) -> [[f32; 2]; 2] {
+        let auto = self.auto_direction(k);
+        let off = self.handles.get(k).copied().unwrap_or_default();
+        [0, 1].map(|d| [auto[d][0] + off[d][0], auto[d][1] + off[d][1]])
+    }
+
+    /// Point `k`'s automatic directions (half the step from the point before it to the one after it).
+    pub fn auto_direction(&self, k: usize) -> [[f32; 2]; 2] {
+        let (i, j) = self.grid_pos(k);
+        let p = |a: i64, b: i64| self.point(a.clamp(0, self.cols as i64) as u32, b.clamp(0, self.rows as i64) as u32);
+        let half = |x: [f32; 2], y: [f32; 2]| [(x[0] - y[0]) * 0.5, (x[1] - y[1]) * 0.5];
+        let (i, j) = (i as i64, j as i64);
+        [half(p(i + 1, j), p(i - 1, j)), half(p(i, j + 1), p(i, j - 1))]
+    }
+
+    /// Bends point `k`'s curve so its direction `d` (0 across, 1 down) is `m`.
+    pub fn set_direction(&mut self, k: usize, d: usize, m: [f32; 2]) {
+        if k >= self.points.len() || d > 1 {
+            return;
+        }
+        let auto = self.auto_direction(k)[d];
+        self.handles.resize(self.points.len(), [[0.0; 2]; 2]);
+        self.handles[k][d] = [m[0] - auto[0], m[1] - auto[1]];
+        if self.handles.iter().all(|h| *h == [[0.0; 2]; 2]) {
+            self.handles.clear();
+        }
+    }
+
+    /// Point `k`'s handles back to automatic.
+    pub fn reset_handles(&mut self, k: usize) {
+        for d in 0..2 {
+            let auto = self.auto_direction(k)[d];
+            self.set_direction(k, d, auto);
+        }
+    }
+
+    /// Has point `k` been bent by hand?
+    pub fn has_handles(&self, k: usize) -> bool {
+        self.handles.get(k).is_some_and(|h| *h != [[0.0; 2]; 2])
     }
 
     /// The input mesh has been changed from the regular grid.
@@ -642,7 +689,7 @@ impl Mesh {
             }
         }
         let input = self.input_at(cols, rows, |i, j| (i as f32 / cols as f32, j as f32 / rows as f32));
-        Self { cols, rows, points, input }
+        Self { cols, rows, points, input, handles: Vec::new() }
     }
 
     /// (column, row) of point `k`.
@@ -669,7 +716,7 @@ impl Mesh {
         // The new column sits half way through cell `i`, so new column c maps back to old (c, or c - 0.5 past i).
         let old = |c: u32| if c <= i { c as f32 } else if c == i + 1 { i as f32 + 0.5 } else { c as f32 - 1.0 };
         let input = self.input_at(self.cols + 1, self.rows, |c, j| (old(c) / self.cols as f32, j as f32 / self.rows as f32));
-        Some(Self { cols: self.cols + 1, rows: self.rows, points, input })
+        Some(Self { cols: self.cols + 1, rows: self.rows, points, input, handles: Vec::new() })
     }
 
     /// One more row of points, through the middle of the cells below row `j`.
@@ -690,7 +737,7 @@ impl Mesh {
         }
         let old = |r: u32| if r <= j { r as f32 } else if r == j + 1 { j as f32 + 0.5 } else { r as f32 - 1.0 };
         let input = self.input_at(self.cols, self.rows + 1, |c, r| (c as f32 / self.cols as f32, old(r) / self.rows as f32));
-        Some(Self { cols: self.cols, rows: self.rows + 1, points, input })
+        Some(Self { cols: self.cols, rows: self.rows + 1, points, input, handles: Vec::new() })
     }
 
     /// Without column `i` (an inner one: the outer edges stay).
@@ -701,7 +748,8 @@ impl Mesh {
         let keep = |k: &usize| self.grid_pos(*k).0 != i;
         let points = self.points.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
         let input = self.input.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
-        Some(Self { cols: self.cols - 1, rows: self.rows, points, input })
+        let handles = self.handles.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
+        Some(Self { cols: self.cols - 1, rows: self.rows, points, input, handles })
     }
 
     /// Without row `j` (an inner one).
@@ -712,7 +760,8 @@ impl Mesh {
         let keep = |k: &usize| self.grid_pos(*k).1 != j;
         let points = self.points.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
         let input = self.input.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
-        Some(Self { cols: self.cols, rows: self.rows - 1, points, input })
+        let handles = self.handles.iter().enumerate().filter(|(k, _)| keep(k)).map(|(_, p)| *p).collect();
+        Some(Self { cols: self.cols, rows: self.rows - 1, points, input, handles })
     }
 
     /// Triangles for drawing: each vertex is (x, y, s, t). Subdivided finely enough to look smooth.
@@ -740,22 +789,38 @@ impl Mesh {
     }
 }
 
-/// (s, t) in 0..1 on a smooth (Catmull-Rom) surface through a `(cols + 1) × (rows + 1)` grid of points.
-fn eval_grid(pts: &[[f32; 2]], cols: u32, rows: u32, s: f32, t: f32) -> [f32; 2] {
+/// (s, t) in 0..1 on a smooth surface through a `(cols + 1) × (rows + 1)` grid of points: Hermite curves whose
+/// directions at each point are the automatic (Catmull-Rom) ones plus that point's handle offsets. With no handles
+/// it is exactly Catmull-Rom.
+fn eval_grid(pts: &[[f32; 2]], handles: &[[[f32; 2]; 2]], cols: u32, rows: u32, s: f32, t: f32) -> [f32; 2] {
     let fx = s.clamp(0.0, 1.0) * cols as f32;
     let fy = t.clamp(0.0, 1.0) * rows as f32;
     let (i, j) = ((fx.floor() as i32).min(cols as i32 - 1), (fy.floor() as i32).min(rows as i32 - 1));
     let (u, v) = (fx - i as f32, fy - j as f32);
-    let p = |a: i32, b: i32| {
-        let (a, b) = (a.clamp(0, cols as i32) as u32, b.clamp(0, rows as i32) as u32);
-        pts.get((b * (cols + 1) + a) as usize).copied().unwrap_or([0.0, 0.0])
-    };
+    let at = |a: i32, b: i32| (b.clamp(0, rows as i32) as u32 * (cols + 1) + a.clamp(0, cols as i32) as u32) as usize;
+    let p = |a: i32, b: i32| pts.get(at(a, b)).copied().unwrap_or([0.0, 0.0]);
+    let off = |a: i32, b: i32, k: usize| handles.get(at(a, b)).map_or([0.0, 0.0], |h| h[k]);
+    let half = |x: [f32; 2], y: [f32; 2]| [(x[0] - y[0]) * 0.5, (x[1] - y[1]) * 0.5];
+    let add = |x: [f32; 2], y: [f32; 2]| [x[0] + y[0], x[1] + y[1]];
+    // Directions at a point: across (along its row) and down (along its column).
+    let across = |a: i32, b: i32| add(half(p(a + 1, b), p(a - 1, b)), off(a, b, 0));
+    let down = |a: i32, b: i32| add(half(p(a, b + 1), p(a, b - 1)), off(a, b, 1));
+    let hermite2 = |p0: [f32; 2], p1: [f32; 2], m0: [f32; 2], m1: [f32; 2], x: f32| [0, 1].map(|k| hermite(p0[k], p1[k], m0[k], m1[k], x));
+    // Each of the two rows: the position across, and the downward direction there (Catmull-Rom across the row's
+    // points' directions, which is what the plain surface does).
     let row = |b: i32| {
-        let q = [p(i - 1, b), p(i, b), p(i + 1, b), p(i + 2, b)];
-        [catmull(q[0][0], q[1][0], q[2][0], q[3][0], u), catmull(q[0][1], q[1][1], q[2][1], q[3][1], u)]
+        let pos = hermite2(p(i, b), p(i + 1, b), across(i, b), across(i + 1, b), u);
+        let d = [down(i - 1, b), down(i, b), down(i + 1, b), down(i + 2, b)];
+        (pos, [0, 1].map(|k| catmull(d[0][k], d[1][k], d[2][k], d[3][k], u)))
     };
-    let r = [row(j - 1), row(j), row(j + 1), row(j + 2)];
-    [catmull(r[0][0], r[1][0], r[2][0], r[3][0], v), catmull(r[0][1], r[1][1], r[2][1], r[3][1], v)]
+    let ((r0, d0), (r1, d1)) = (row(j), row(j + 1));
+    hermite2(r0, r1, d0, d1, v)
+}
+
+/// The curve from `p0` to `p1` leaving in direction `m0` and arriving in direction `m1`.
+fn hermite(p0: f32, p1: f32, m0: f32, m1: f32, t: f32) -> f32 {
+    let (t2, t3) = (t * t, t * t * t);
+    (2.0 * t3 - 3.0 * t2 + 1.0) * p0 + (t3 - 2.0 * t2 + t) * m0 + (-2.0 * t3 + 3.0 * t2) * p1 + (t3 - t2) * m1
 }
 
 fn catmull(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
@@ -1105,6 +1170,50 @@ pub fn masks_triangles(masks: &[Mask]) -> Vec<[f32; 4]> {
 
 #[cfg(test)]
 mod mask_corner_tests {
+    #[test]
+    fn mesh_handles_bend_between_points() {
+        // A bumpy 3 × 2 mesh.
+        let mut m = Mesh::from_corners(&[[0.1, 0.1], [0.9, 0.15], [0.85, 0.9], [0.12, 0.8]], 3, 2);
+        m.points[5] = [0.42, 0.55];
+        m.points[6] = [0.7, 0.4];
+        // No handles: exactly the old Catmull-Rom surface.
+        let old = |s: f32, t: f32| {
+            let (cols, rows, pts) = (m.cols, m.rows, &m.points);
+            let (fx, fy) = (s * cols as f32, t * rows as f32);
+            let (i, j) = ((fx.floor() as i32).min(cols as i32 - 1), (fy.floor() as i32).min(rows as i32 - 1));
+            let (u, v) = (fx - i as f32, fy - j as f32);
+            let p = |a: i32, b: i32| pts[(b.clamp(0, rows as i32) as u32 * (cols + 1) + a.clamp(0, cols as i32) as u32) as usize];
+            let row = |b: i32| [0, 1].map(|k| catmull(p(i - 1, b)[k], p(i, b)[k], p(i + 1, b)[k], p(i + 2, b)[k], u));
+            let r = [row(j - 1), row(j), row(j + 1), row(j + 2)];
+            [0, 1].map(|k| catmull(r[0][k], r[1][k], r[2][k], r[3][k], v))
+        };
+        for k in 0..=20 {
+            for l in 0..=20 {
+                let (s, t) = (k as f32 / 20.0, l as f32 / 20.0);
+                let (a, b) = (m.eval(s, t), old(s, t));
+                assert!((a[0] - b[0]).abs() < 1e-5 && (a[1] - b[1]).abs() < 1e-5, "{s} {t}: {a:?} {b:?}");
+            }
+        }
+        // A handle on point (1, 1): the surface still passes through every point, but bends near it.
+        let before = m.eval(0.5, 0.5);
+        m.handles = vec![[[0.0; 2]; 2]; m.points.len()];
+        m.handles[5] = [[0.0, 0.3], [0.0, 0.0]];
+        assert_eq!(m.eval(1.0 / 3.0, 0.5), m.points[5], "points stay put");
+        let after = m.eval(0.5, 0.5);
+        assert!(after[1] > before[1] + 0.01, "pulled downward between the points: {before:?} {after:?}");
+        // Setting a direction by its handle, and back to automatic.
+        let auto = m.auto_direction(6);
+        m.set_direction(6, 1, [0.1, 0.2]);
+        assert_eq!(m.direction(6)[1], [0.1, 0.2]);
+        assert_eq!(m.direction(6)[0], auto[0], "the other direction is left alone");
+        m.reset_handles(6);
+        assert!(!m.has_handles(6) && m.has_handles(5));
+        // Removing a column keeps the other points' handles.
+        let fewer = m.without_column(2).unwrap();
+        assert_eq!(fewer.handles.len(), fewer.points.len());
+        assert_eq!(fewer.handles[4], [[0.0, 0.3], [0.0, 0.0]]);
+    }
+
     use super::*;
 
     #[test]
