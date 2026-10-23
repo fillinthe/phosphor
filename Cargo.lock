@@ -3718,6 +3718,7 @@ dependencies = [
  "str0m",
  "ttf-parser",
  "tungstenite",
+ "ureq",
  "velato",
  "wasm-bindgen",
  "wasm-bindgen-futures",

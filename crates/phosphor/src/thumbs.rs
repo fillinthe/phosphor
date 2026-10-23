@@ -1,5 +1,6 @@
 //! Thumbnails for the media bin, built on a background thread (images via `image`, movies via
-//! an FFmpeg frame grab) and uploaded as egui textures on first use.
+//! an FFmpeg frame grab) and uploaded as egui textures on first use. An `https://` address works too (online
+//! libraries): those are fetched on threads of their own so slow sites never hold up the media bin's.
 
 use std::collections::{HashMap, HashSet};
 
@@ -15,6 +16,9 @@ pub struct Thumbs {
     pending: HashSet<String>,
     #[cfg(not(target_arch = "wasm32"))]
     worker: native::Worker,
+    /// Started on the first web picture.
+    #[cfg(not(target_arch = "wasm32"))]
+    web: Option<native::Worker>,
 }
 
 impl Thumbs {
@@ -23,7 +27,9 @@ impl Thumbs {
             cache: HashMap::new(),
             pending: HashSet::new(),
             #[cfg(not(target_arch = "wasm32"))]
-            worker: native::Worker::new(),
+            worker: native::Worker::new(1),
+            #[cfg(not(target_arch = "wasm32"))]
+            web: None,
         }
     }
 
@@ -35,7 +41,11 @@ impl Thumbs {
         }
         if self.pending.insert(path.to_string()) {
             #[cfg(not(target_arch = "wasm32"))]
-            self.worker.request(path.to_string());
+            if path.starts_with("https://") {
+                self.web.get_or_insert_with(|| native::Worker::new(4)).request(path.to_string());
+            } else {
+                self.worker.request(path.to_string());
+            }
         }
         None
     }
@@ -64,7 +74,7 @@ impl Thumbs {
     /// Uploads finished thumbnails; call once per frame.
     pub fn poll(&mut self, ctx: &egui::Context) {
         #[cfg(not(target_arch = "wasm32"))]
-        for (path, image) in self.worker.finished() {
+        for (path, image) in self.worker.finished().into_iter().chain(self.web.as_ref().map(|w| w.finished()).unwrap_or_default()) {
             self.pending.remove(&path);
             let handle = image.map(|img| ctx.load_texture(format!("thumb:{path}"), img, egui::TextureOptions::LINEAR));
             self.cache.insert(path, handle);
@@ -83,6 +93,7 @@ impl Thumbs {
 mod native {
     use std::process::{Command, Stdio};
     use std::sync::mpsc::{Receiver, Sender, channel};
+    use std::sync::{Arc, Mutex};
 
     use eframe::egui;
 
@@ -94,17 +105,23 @@ mod native {
     }
 
     impl Worker {
-        pub fn new() -> Self {
+        /// `threads` share the queue (web pictures: several at once).
+        pub fn new(threads: usize) -> Self {
             let (req, req_rx) = channel::<String>();
             let (done_tx, done) = channel();
-            std::thread::Builder::new()
-                .name("phosphor-thumbs".into())
-                .spawn(move || {
-                    for path in req_rx {
-                        let _ = done_tx.send((path.clone(), build(&path)));
-                    }
-                })
-                .expect("thumbnail thread");
+            let queue = Arc::new(Mutex::new(req_rx));
+            for _ in 0..threads.max(1) {
+                let (queue, done_tx) = (queue.clone(), done_tx.clone());
+                std::thread::Builder::new()
+                    .name("phosphor-thumbs".into())
+                    .spawn(move || {
+                        loop {
+                            let Ok(path) = queue.lock().map_err(|_| ()).and_then(|q| q.recv().map_err(|_| ())) else { return };
+                            let _ = done_tx.send((path.clone(), build(&path)));
+                        }
+                    })
+                    .expect("thumbnail thread");
+            }
             Self { req, done }
         }
 
@@ -123,7 +140,9 @@ mod native {
             None => (key, THUMB_W),
         };
         let name = path.to_ascii_lowercase();
-        let img = if crate::media::is_movie(&name) {
+        let img = if path.starts_with("https://") {
+            image::load_from_memory(&crate::online::get_bytes(path).ok()?).ok()?.thumbnail(size, size)
+        } else if crate::media::is_movie(&name) {
             let ffmpeg = crate::stream::ffmpeg_path()?;
             // An image sequence: where its numbers start and its frame rate, before the input.
             let start = crate::media::sequence::first_number(path).unwrap_or(0).to_string();

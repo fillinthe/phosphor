@@ -29,6 +29,8 @@ mod layers;
 mod link_import;
 mod inputs;
 #[cfg(not(target_arch = "wasm32"))]
+mod online;
+#[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;
 mod modulators;
 mod sequencer;
@@ -77,6 +79,8 @@ pub(crate) use layers::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use link_import::*;
 pub(crate) use inputs::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use online::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use ai_shader::*;
 pub(crate) use leds::*;
@@ -136,10 +140,12 @@ pub enum Tab {
     Notes,
     /// Keyframe timeline: tracks of keys over time.
     Timeline,
+    /// Free videos and pictures from online libraries (Library).
+    Online,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 28] = [
+    pub const ALL: [Tab; 29] = [
         Tab::Preview,
         Tab::Layers,
         Tab::Clips,
@@ -168,6 +174,7 @@ impl Tab {
         Tab::Inputs,
         Tab::Notes,
         Tab::Timeline,
+        Tab::Online,
     ];
 
     pub fn title(self) -> String {
@@ -184,6 +191,7 @@ impl Tab {
             Tab::Library => "Effects",
             Tab::Presets => "Presets",
             Tab::Inputs => "Inputs",
+            Tab::Online => "Online",
             Tab::Audio => "Audio",
             Tab::Modulators => "Modulators",
             Tab::Control => "MIDI / OSC",
@@ -263,6 +271,10 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Library => crate::explorer::explorer(ui, st),
         Tab::Presets => presets(ui, st),
         Tab::Inputs => inputs_panel(ui, st),
+        #[cfg(not(target_arch = "wasm32"))]
+        Tab::Online => online_panel(ui, st),
+        #[cfg(target_arch = "wasm32")]
+        Tab::Online => hint(ui, "Online libraries work in the Mac, Windows and Linux apps."),
         Tab::Notes => notes_panel(ui, st),
         Tab::Timeline => timeline::timeline_panel(ui, st),
         Tab::Audio => audio(ui, st),

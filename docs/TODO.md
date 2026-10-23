@@ -187,12 +187,16 @@ online. One **Online** panel in the Library searches every source at once: thumb
 clip cell or layer. Files download into the project's media folder (so the show works offline and in exports), each
 with its licence and credit saved next to it (a Credits list for the show; "only ones I can use commercially"
 filter). Sources that need an API key: a key field per source (like the AI key), or later through a phosphorfx.com
-proxy (**needs you**: the server). Not started; none of these is downloaded or wired yet.
+proxy (**needs you**: the server).
 
-- [ ] O1. **Stock video and pictures**: Pexels and Pixabay (free API keys; free to use, no credit needed), Coverr,
+**Started 2026-10-23:** the Online panel (Library) searches NASA, Wikimedia Commons, the Internet Archive (Prelinger
+films), Openverse and the Art Institute of Chicago at once (no keys); downloads land in the media bin with their credit,
+and a Credits list copies them all. Files go to Phosphor's downloads folder, not yet into the project's own folder.
+
+- [~] O1. **Stock video and pictures** (NASA, Internet Archive, Wikimedia Commons done; Pexels, Pixabay, Coverr need keys): Pexels and Pixabay (free API keys; free to use, no credit needed), Coverr,
   NASA Image and Video Library (public domain, no key), Internet Archive (public-domain films, no key), Wikimedia
   Commons (CC, no key).
-- [ ] O2. **Art and photos**: Openverse (search across CC collections, no key), Unsplash (key), museum open-access
+- [~] O2. **Art and photos** (Openverse and the Art Institute of Chicago done; Unsplash needs a key; other museums next): Openverse (search across CC collections, no key), Unsplash (key), museum open-access
   collections with APIs and CC0 pictures: the Met, Art Institute of Chicago, Smithsonian, Rijksmuseum, Europeana.
 - [ ] O3. **Shaders**: the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
   effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label

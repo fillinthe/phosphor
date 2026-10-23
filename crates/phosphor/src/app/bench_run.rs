@@ -84,6 +84,12 @@ impl PhosphorApp {
             println!("VCAM connected={} status={:?}", self.state.vcam.connected(), crate::virtual_camera::status());
         }
         #[cfg(not(target_arch = "wasm32"))]
+        if let Some(line) = self.state.online.bench_line() {
+            let credits = self.state.comp.media_bin.iter().filter(|m| m.credit.is_some()).count();
+            let layer = self.state.comp.layers.last().map(|l| l.source.label()).unwrap_or_default();
+            println!("{line} credited_files={credits} top_layer={layer}");
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(s) = self.state.link_import.status() {
             let layer = self.state.comp.layers.last().map(|l| l.source.label()).unwrap_or_default();
             println!("LINK {s:?} layer_source={layer} media_bin={}", self.state.comp.media_bin.len());
@@ -635,6 +641,15 @@ impl PhosphorApp {
                 self.state.timeline_seek(0.0, now);
                 self.state.timeline_toggle(now);
                 println!("QUICK timeline: {} events", self.state.comp.timeline.events.len());
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if name == "online" {
+                // Library › Online: PHOSPHOR_ONLINE_QUERY searched in every library, the first picture downloaded
+                // onto a new layer (PHOSPHOR_ONLINE_PICK=video: an Internet Archive film; an ONLINE line at the end).
+                let q = std::env::var("PHOSPHOR_ONLINE_QUERY").unwrap_or_else(|_| "aurora".into());
+                self.state.online.bench_search(&q);
+                println!("QUICK online: {q}");
                 continue;
             }
             #[cfg(not(target_arch = "wasm32"))]

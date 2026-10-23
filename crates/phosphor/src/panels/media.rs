@@ -502,7 +502,8 @@ pub(crate) fn media_tile(
         1 => "\nUsed by 1 layer or clip".to_string(),
         n => format!("\nUsed by {n} layers and clips"),
     };
-    resp.on_hover_text(format!("{}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
+    let credit = item.credit.as_ref().map_or(String::new(), |c| format!("\nCredit: {}", c.line()));
+    resp.on_hover_text(format!("{}{credit}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
         ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
             for (id, name) in targets.layers {
                 if ui.button(name).clicked() {

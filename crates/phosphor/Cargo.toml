@@ -40,6 +40,8 @@ base64 = "0.22"
 elgato-streamdeck = "0.14"
 # MilkDrop presets (.milk) as layers: a MilkDrop engine on wgpu, rendering on Phosphor's own GPU device.
 lactea = "0.2"
+# Online media libraries (Library > Online): searches and downloads streamed to disk (already used by ehttp).
+ureq = "2"
 ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling", "device"] }
 cpal = "0.18.2"
 rustfft = "6.4.1"

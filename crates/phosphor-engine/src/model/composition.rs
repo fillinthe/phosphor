@@ -25,6 +25,45 @@ pub struct MediaItem {
     /// Last played without sound.
     #[serde(default)]
     pub muted: bool,
+    /// Where it came from and its licence, for files brought in from online libraries (the show's Credits list).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credit: Option<Credit>,
+}
+
+/// Who made a file and how it may be used: shown in the Credits list and copied out for a show's credits.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Credit {
+    pub title: String,
+    /// The maker (empty when the source doesn't say).
+    pub author: String,
+    /// Short licence name ("CC BY 4.0", "Public domain", "CC0").
+    pub licence: String,
+    pub licence_url: String,
+    /// The file's page on the site it came from.
+    pub page: String,
+    /// The library it came from ("NASA", "Openverse"…).
+    pub source: String,
+}
+
+impl Credit {
+    /// The licence allows use in paid work (no "NC" = non-commercial clause).
+    pub fn commercial(&self) -> bool {
+        licence_commercial(&self.licence)
+    }
+
+    /// One line for a credits list: "Title" by Author (Licence), Source: page.
+    pub fn line(&self) -> String {
+        let by = if self.author.is_empty() { String::new() } else { format!(" by {}", self.author) };
+        let page = if self.page.is_empty() { String::new() } else { format!(": {}", self.page) };
+        format!("\"{}\"{by} ({}), {}{page}", self.title, self.licence, self.source)
+    }
+}
+
+/// A licence name allows commercial use: anything without a non-commercial clause.
+pub fn licence_commercial(licence: &str) -> bool {
+    let l = licence.to_ascii_uppercase().replace(['-', '_'], " ");
+    !l.split_whitespace().any(|w| w == "NC" || w.starts_with("NONCOMMERCIAL")) && !l.contains("NON COMMERCIAL")
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
