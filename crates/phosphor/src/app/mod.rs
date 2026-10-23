@@ -56,6 +56,7 @@ pub(crate) mod play;
 mod quick;
 pub(crate) use quick::dice;
 mod recording;
+pub(crate) mod recorders;
 mod computed;
 pub(crate) mod offline;
 mod timeline;
@@ -81,6 +82,7 @@ const KEY_COMPOSITION: &str = "composition";
 const KEY_LAYOUTS: &str = "layouts";
 const KEY_DOCK: &str = "dock";
 const KEY_STREAM: &str = "stream";
+const KEY_RECORDERS: &str = "recorders";
 const KEY_KNOWN_TABS: &str = "known_tabs";
 const KEY_DETACHED: &str = "detached";
 const KEY_FAVORITES: &str = "favorites";
@@ -322,6 +324,8 @@ pub struct State {
     /// (a different value now = moved by hand).
     pub timeline_record: bool,
     pub timeline_set: Vec<(phosphor_engine::ControlTarget, f32)>,
+    /// More file recorders at once, each with its own source (`recorders`).
+    pub recorders: Vec<crate::stream::Streamer>,
     /// Rendering the show to a movie offline (the show's clock steps frame by frame), and its settings.
     pub offline: Option<offline::Offline>,
     pub offline_setup: offline::OfflineSetup,
@@ -935,6 +939,11 @@ impl eframe::App for PhosphorApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn on_exit(&mut self) {
+        // Recordings still going: let FFmpeg finish their files (an unfinished .mp4 doesn't play).
+        #[cfg(not(target_arch = "wasm32"))]
+        for r in std::iter::once(&mut self.state.stream).chain(self.state.recorders.iter_mut()).filter(|r| r.running()) {
+            r.stop_and_wait();
+        }
         if !self.bench_session {
             let snap = self.snapshot();
             self.saver = Default::default();

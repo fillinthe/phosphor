@@ -16,6 +16,8 @@ pub enum Purpose {
     StreamFile,
     /// Where Timeline › Render to a movie writes.
     RenderFile,
+    /// Where extra recorder `i` writes.
+    RecorderFile(usize),
     ExportShow,
     TouchOsc,
     /// A TouchOSC layout to bring in as Control Surface pages.

@@ -17,6 +17,9 @@ impl PhosphorApp {
         if let Ok(json) = serde_json::to_string(&self.state.stream.settings) {
             storage.set_string(KEY_STREAM, json);
         }
+        if let Ok(json) = serde_json::to_string(&self.state.recorder_settings()) {
+            storage.set_string(KEY_RECORDERS, json);
+        }
         if let Ok(json) = serde_json::to_string(&Tab::ALL) {
             storage.set_string(KEY_KNOWN_TABS, json);
         }

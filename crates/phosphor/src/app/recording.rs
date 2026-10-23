@@ -13,9 +13,7 @@ impl State {
         self.stream.stop();
         if self.stream.settings.destination == crate::stream::Destination::File {
             let path = self.stream.settings.recorded_path();
-            let name = std::path::Path::new(&path).file_name().map_or(path.clone(), |n| n.to_string_lossy().to_string());
-            self.comp.add_media(&name, &path);
-            self.notice = Some(format!("Recording saved: {path} (in the media bin)"));
+            self.recording_saved(&path);
         }
     }
 
