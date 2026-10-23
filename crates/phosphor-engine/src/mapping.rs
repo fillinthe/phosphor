@@ -101,6 +101,47 @@ pub struct Model3d {
     pub edge_glow: f32,
     /// Shadows: how dark the parts the model hides from the light go (0 = none).
     pub shadows: f32,
+    /// How the picture wraps the model, then moved (`uv_offset`, picture widths), sized (`uv_scale`, 2 = twice as
+    /// big) and turned (`uv_turn`, turns) on it.
+    pub uv_mode: UvMode,
+    pub uv_offset: [f32; 2],
+    pub uv_scale: f32,
+    pub uv_turn: f32,
+}
+
+/// How the picture wraps a 3D model.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UvMode {
+    /// The model file's own texture coordinates (from the front where it has none).
+    #[default]
+    Model,
+    /// Thrown straight from the front, from above, or from the right side.
+    Front,
+    Top,
+    Side,
+    /// Each face takes the picture from the side it faces most (a box's six sides each get the whole picture).
+    Box,
+}
+
+impl UvMode {
+    pub const ALL: [UvMode; 5] = [UvMode::Model, UvMode::Front, UvMode::Top, UvMode::Side, UvMode::Box];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            UvMode::Model => "The model's own",
+            UvMode::Front => "From the front",
+            UvMode::Top => "From above",
+            UvMode::Side => "From the side",
+            UvMode::Box => "Box (each face)",
+        }
+    }
+}
+
+impl crate::model::Choice for UvMode {
+    const OPTIONS: &'static [Self] = &UvMode::ALL;
+    fn label(self) -> &'static str {
+        self.name()
+    }
 }
 
 /// A point of the model (in the model's unit-cube space) and where it must land on the output (0..1).
@@ -112,7 +153,7 @@ pub struct Pin {
 
 impl Default for Model3d {
     fn default() -> Self {
-        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true, pins: Vec::new(), calibrating: false, shade: 0.0, light: [0.12, 0.15], edges: 0.0, edge_glow: 1.0, shadows: 0.0 }
+        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true, pins: Vec::new(), calibrating: false, shade: 0.0, light: [0.12, 0.15], edges: 0.0, edge_glow: 1.0, shadows: 0.0, uv_mode: UvMode::Model, uv_offset: [0.0, 0.0], uv_scale: 1.0, uv_turn: 0.0 }
     }
 }
 
@@ -360,7 +401,7 @@ impl Model3d {
         // Big triangles are split (in 3D, so the split follows perspective) until each covers a small part of the
         // output: the texture is interpolated flat across a triangle, which bends on large perspective faces.
         let mut work: Vec<[([f32; 3], [f32; 2]); 3]> = Vec::with_capacity(mesh.tris.len());
-        let mut stack: Vec<([([f32; 3], [f32; 2]); 3], u8)> = mesh.tris.iter().map(|t| (*t, 0u8)).collect();
+        let mut stack: Vec<([([f32; 3], [f32; 2]); 3], u8)> = mesh.tris.iter().map(|t| (self.wrap(t), 0u8)).collect();
         while let Some((tri, depth)) = stack.pop() {
             let span = {
                 let pts: Vec<[f32; 2]> = tri.iter().filter_map(|(p, _)| project(*p).map(|(xy, _)| xy)).collect();
@@ -417,7 +458,56 @@ impl Model3d {
 
     /// For the hash that decides when to rebuild the triangles.
     pub fn key(&self) -> Vec<[f32; 2]> {
-        vec![[self.yaw, self.pitch], [self.roll, self.distance], [self.fov, self.scale], self.center, [self.cull as u8 as f32, self.path.len() as f32]]
+        vec![
+            [self.yaw, self.pitch],
+            [self.roll, self.distance],
+            [self.fov, self.scale],
+            self.center,
+            [self.cull as u8 as f32, self.path.len() as f32],
+            [self.uv_mode as u8 as f32, self.uv_scale],
+            self.uv_offset,
+            [self.uv_turn, 0.0],
+        ]
+    }
+
+    /// A model triangle with the picture coordinates `uv_mode` and the offset / size / turn give it (0..1, y up as
+    /// in model files). Planar modes work in the model's unit cube, so they're linear and survive splitting.
+    pub fn wrap(&self, tri: &[([f32; 3], [f32; 2]); 3]) -> [([f32; 3], [f32; 2]); 3] {
+        let axis = match self.uv_mode {
+            UvMode::Model => None,
+            UvMode::Front => Some(2),
+            UvMode::Top => Some(1),
+            UvMode::Side => Some(0),
+            UvMode::Box => {
+                let (a, b, c) = (tri[0].0, tri[1].0, tri[2].0);
+                let (u, v) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+                let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+                let k = (0..3).max_by(|&i, &j| n[i].abs().total_cmp(&n[j].abs())).unwrap_or(2);
+                // Facing back (−x, −y, −z): mirrored so the picture reads the right way round from outside.
+                Some(if n[k] < 0.0 { k + 3 } else { k })
+            }
+        };
+        let plane = |p: [f32; 3]| match axis {
+            Some(2) => [p[0] + 0.5, p[1] + 0.5],
+            Some(5) => [0.5 - p[0], p[1] + 0.5],
+            Some(1) => [p[0] + 0.5, 0.5 - p[2]],
+            Some(4) => [p[0] + 0.5, p[2] + 0.5],
+            Some(0) => [0.5 - p[2], p[1] + 0.5],
+            Some(3) => [p[2] + 0.5, p[1] + 0.5],
+            _ => [p[0] + 0.5, p[1] + 0.5],
+        };
+        let moved = self.uv_offset != [0.0, 0.0] || self.uv_scale != 1.0 || self.uv_turn != 0.0;
+        let (sin, cos) = (self.uv_turn * std::f32::consts::TAU).sin_cos();
+        let scale = self.uv_scale.max(0.01);
+        tri.map(|(p, uv)| {
+            let uv = if axis.is_some() { plane(p) } else { uv };
+            if !moved {
+                return (p, uv);
+            }
+            let (x, y) = (uv[0] - 0.5, uv[1] - 0.5);
+            let (x, y) = ((x * cos + y * sin) / scale, (-x * sin + y * cos) / scale);
+            (p, [x + 0.5 - self.uv_offset[0], y + 0.5 - self.uv_offset[1]])
+        })
     }
 
     /// The model's own faces the projector sees (back faces dropped when culling): projected corners (0..1) and the
@@ -2081,6 +2171,44 @@ f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/
         assert_eq!(edges.len(), 9 * 6);
         assert!(m.edge_triangles(16.0 / 9.0, 0.0, (1920, 1080)).is_empty());
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// Picture wrapping: the default leaves the model's coordinates exactly as they were (old projects look the
+    /// same); Box gives every side of a cube the whole picture; From above spreads the picture over a flat floor;
+    /// size and turn move it about the middle.
+    #[test]
+    fn the_picture_wraps_the_model_as_chosen() {
+        let mesh = parse_obj(CUBE).unwrap();
+        let m = Model3d::default();
+        assert!(mesh.tris.iter().all(|t| m.wrap(t) == *t));
+        let boxed = Model3d { uv_mode: UvMode::Box, ..Default::default() };
+        for t in &mesh.tris {
+            let w = boxed.wrap(t);
+            assert!(w.iter().all(|(_, uv)| uv.iter().all(|v| (-1e-6..=1.0 + 1e-6).contains(v))), "{w:?}");
+        }
+        // Each quad (two triangles) covers the whole picture: its corners reach 0 and 1 both ways.
+        for q in mesh.tris.chunks(2) {
+            let uvs: Vec<[f32; 2]> = q.iter().flat_map(|t| boxed.wrap(t).map(|(_, uv)| uv)).collect();
+            for k in 0..2 {
+                assert!(uvs.iter().any(|u| u[k] < 0.01) && uvs.iter().any(|u| u[k] > 0.99), "{uvs:?}");
+            }
+        }
+        // A flat floor, from above: the picture spreads over it (from the front it would be one row).
+        let floor = parse_obj("v -1 0 -1\nv -1 0 1\nv 1 0 1\nv 1 0 -1\nf 1 2 3 4\n").unwrap();
+        let front: Vec<f32> = floor.tris.iter().flat_map(|t| Model3d::default().wrap(t).map(|(_, uv)| uv[1])).collect();
+        assert!(front.iter().all(|v| (v - front[0]).abs() < 1e-6));
+        let top: Vec<f32> = floor.tris.iter().flat_map(|t| Model3d { uv_mode: UvMode::Top, ..Default::default() }.wrap(t).map(|(_, uv)| uv[1])).collect();
+        assert!(top.iter().any(|v| *v < 0.01) && top.iter().any(|v| *v > 0.99));
+        // Twice the size: the corners sample a quarter in from the edges; a quarter turn swaps the axes; moving
+        // right samples further left.
+        let p = [([0.5, 0.5, 0.5], [1.0, 1.0]), ([0.0; 3], [1.0, 0.5]), ([0.0; 3], [0.5, 0.5])];
+        let big = Model3d { uv_scale: 2.0, ..Default::default() }.wrap(&p);
+        assert_eq!(big[0].1, [0.75, 0.75]);
+        let turned = Model3d { uv_turn: 0.25, ..Default::default() }.wrap(&p);
+        assert!((turned[1].1[0] - 0.5).abs() < 1e-6 && (turned[1].1[1] - 0.0).abs() < 1e-6, "{:?}", turned[1].1);
+        assert_eq!(Model3d { uv_offset: [0.25, 0.0], ..Default::default() }.wrap(&p)[2].1, [0.25, 0.5]);
+        // The look is part of the key that rebuilds the triangles.
+        assert_ne!(Model3d { uv_mode: UvMode::Box, ..Default::default() }.key(), Model3d::default().key());
     }
 
     /// A box floating over a floor, light from above: with Shadows the floor under the box goes dark and the rest of
