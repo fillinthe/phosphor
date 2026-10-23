@@ -570,20 +570,27 @@ impl ControlHub {
                 continue;
             }
             self.sends_sent.insert(key, v);
-            #[cfg(not(target_arch = "wasm32"))]
-            match &s.to {
-                phosphor_engine::SendTo::Osc { address } if !comp.surface.osc_host.trim().is_empty() => {
-                    self.backend.send_osc(&[comp.surface.osc_host.trim().to_string()], comp.surface.osc_port, address, v);
-                }
-                phosphor_engine::SendTo::Osc { .. } => {}
-                phosphor_engine::SendTo::OscTo { host, port, address, min, max } => self.backend.send_osc(std::slice::from_ref(host), *port, address, min + v * (max - min)),
-                phosphor_engine::SendTo::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | (channel & 15), cc & 127, (v.clamp(0.0, 1.0) * 127.0).round() as u8]),
-                phosphor_engine::SendTo::MidiNote { channel, note } => {
-                    let on = v > 0.5;
-                    self.backend.send_midi(&[if on { 0x90 } else { 0x80 } | (channel & 15), note & 127, if on { 127 } else { 0 }]);
-                }
+            self.send_to(comp, &s.to, v);
+        }
+    }
+
+    /// Sends one value (0..1) out: OSC (to the Control Surface's OSC-out host, or another app) or MIDI.
+    pub fn send_to(&mut self, comp: &Composition, to: &phosphor_engine::SendTo, v: f32) {
+        #[cfg(not(target_arch = "wasm32"))]
+        match to {
+            phosphor_engine::SendTo::Osc { address } if !comp.surface.osc_host.trim().is_empty() => {
+                self.backend.send_osc(&[comp.surface.osc_host.trim().to_string()], comp.surface.osc_port, address, v);
+            }
+            phosphor_engine::SendTo::Osc { .. } => {}
+            phosphor_engine::SendTo::OscTo { host, port, address, min, max } => self.backend.send_osc(std::slice::from_ref(host), *port, address, min + v * (max - min)),
+            phosphor_engine::SendTo::MidiCc { channel, cc } => self.backend.send_midi(&[0xB0 | (channel & 15), cc & 127, (v.clamp(0.0, 1.0) * 127.0).round() as u8]),
+            phosphor_engine::SendTo::MidiNote { channel, note } => {
+                let on = v > 0.5;
+                self.backend.send_midi(&[if on { 0x90 } else { 0x80 } | (channel & 15), note & 127, if on { 127 } else { 0 }]);
             }
         }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (comp, to, v);
     }
 
     /// Sends values that changed since the last check back to controllers. Cheap when nothing listens.

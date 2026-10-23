@@ -603,6 +603,13 @@ impl PhosphorApp {
                 println!("QUICK ffgl: {:?}", crate::ffgl::bench_apply(&mut self.state));
                 continue;
             }
+            if name == "timeline" {
+                // Play the project's timeline from the start.
+                self.state.timeline_seek(0.0, now);
+                self.state.timeline_toggle(now);
+                println!("QUICK timeline: {} events", self.state.comp.timeline.events.len());
+                continue;
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if name == "link" {
                 // From a link: PHOSPHOR_LINK_URL downloaded onto the top layer (a LINK line at the end).

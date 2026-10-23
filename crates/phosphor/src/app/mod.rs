@@ -323,6 +323,8 @@ pub struct State {
     /// Recording: moving a track's control while the timeline plays keys it. What each track was last set to
     /// (a different value now = moved by hand).
     pub timeline_record: bool,
+    /// The timeline just started (or jumped) while playing: events right at the playhead fire too.
+    pub timeline_fresh: bool,
     pub timeline_set: Vec<(phosphor_engine::ControlTarget, f32)>,
     /// More file recorders at once, each with its own source (`recorders`).
     pub recorders: Vec<crate::stream::Streamer>,

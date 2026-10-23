@@ -139,31 +139,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
         let id = egui::Id::new(("send_draft", format!("{target:?}")));
         let mut draft: SendTo = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(SendTo::Osc { address: "/phosphor/out".into() });
         ui.horizontal(|ui| {
-            for (name, make) in [("OSC", SendTo::Osc { address: "/phosphor/out".into() }), ("MIDI CC", SendTo::MidiCc { channel: 0, cc: 20 }), ("Note", SendTo::MidiNote { channel: 0, note: 60 })] {
-                if ui.selectable_label(std::mem::discriminant(&draft) == std::mem::discriminant(&make), name).clicked() {
-                    draft = make;
-                }
-            }
-        });
-        ui.horizontal(|ui| {
-            match &mut draft {
-                SendTo::Osc { address } => {
-                    text_field(ui, address, "/address", Some(180.0));
-                }
-                SendTo::MidiCc { channel, cc } => {
-                    let mut ch = *channel + 1;
-                    guarded!(ui, ch, egui::DragValue::new(&mut ch).range(1..=16).prefix("ch "));
-                    *channel = ch - 1;
-                    guarded!(ui, *cc, egui::DragValue::new(cc).range(0..=127).prefix("CC "));
-                }
-                SendTo::MidiNote { channel, note } => {
-                    let mut ch = *channel + 1;
-                    guarded!(ui, ch, egui::DragValue::new(&mut ch).range(1..=16).prefix("ch "));
-                    *channel = ch - 1;
-                    guarded!(ui, *note, egui::DragValue::new(note).range(0..=127).prefix("note "));
-                }
-                SendTo::OscTo { .. } => {}
-            }
+            send_to_editor(ui, &mut draft);
             if ui.button("Add").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), draft.clone(), true)));
                 ui.close();
@@ -173,6 +149,37 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
         #[cfg(not(target_arch = "wasm32"))]
         oscquery_browser(ui, target);
     });
+}
+
+/// Pick where a value goes out: OSC (an address), a MIDI CC or a MIDI note, with its numbers. (Another app's OSC
+/// Query settings are picked from `oscquery_browser`; they show as their label here.)
+pub(crate) fn send_to_editor(ui: &mut egui::Ui, to: &mut phosphor_engine::SendTo) {
+    use phosphor_engine::SendTo;
+    for (name, make) in [("OSC", SendTo::Osc { address: "/phosphor/out".into() }), ("MIDI CC", SendTo::MidiCc { channel: 0, cc: 20 }), ("Note", SendTo::MidiNote { channel: 0, note: 60 })] {
+        if ui.selectable_label(std::mem::discriminant(to) == std::mem::discriminant(&make), name).clicked() && std::mem::discriminant(to) != std::mem::discriminant(&make) {
+            *to = make;
+        }
+    }
+    match to {
+        SendTo::Osc { address } => {
+            text_field(ui, address, "/address", Some(180.0));
+        }
+        SendTo::MidiCc { channel, cc } => {
+            let mut ch = *channel + 1;
+            guarded!(ui, ch, egui::DragValue::new(&mut ch).range(1..=16).prefix("ch "));
+            *channel = ch - 1;
+            guarded!(ui, *cc, egui::DragValue::new(cc).range(0..=127).prefix("CC "));
+        }
+        SendTo::MidiNote { channel, note } => {
+            let mut ch = *channel + 1;
+            guarded!(ui, ch, egui::DragValue::new(&mut ch).range(1..=16).prefix("ch "));
+            *channel = ch - 1;
+            guarded!(ui, *note, egui::DragValue::new(note).range(0..=127).prefix("note "));
+        }
+        SendTo::OscTo { .. } => {
+            ui.label(to.label());
+        }
+    }
 }
 
 /// "Another app": read an app's OSC Query list (host:port of its OSC Query server) and send to one of its settings.

@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::ControlTarget;
+use super::{ControlTarget, SendTo};
 
 /// How the value travels from a key to the next one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,11 +131,31 @@ pub struct Marker {
     pub kind: MarkerKind,
 }
 
+/// Something that happens as the playhead passes a moment: a control set to `value` (play a clip, fire a column, go
+/// to a cue, any setting) and / or `value` sent out (OSC, MIDI).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Event {
+    pub t: f64,
+    pub name: String,
+    pub target: Option<ControlTarget>,
+    pub send: Option<SendTo>,
+    pub value: f32,
+}
+
+impl Default for Event {
+    fn default() -> Self {
+        Self { t: 0.0, name: String::new(), target: None, send: None, value: 1.0 }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Timeline {
     pub tracks: Vec<Track>,
     pub markers: Vec<Marker>,
+    /// Events, in no particular order.
+    pub events: Vec<Event>,
     /// Seconds.
     pub length: f64,
     /// Back to the start at the end.
@@ -144,7 +164,7 @@ pub struct Timeline {
 
 impl Default for Timeline {
     fn default() -> Self {
-        Self { tracks: Vec::new(), markers: Vec::new(), length: 60.0, looping: false }
+        Self { tracks: Vec::new(), markers: Vec::new(), events: Vec::new(), length: 60.0, looping: false }
     }
 }
 
@@ -193,9 +213,62 @@ impl Timeline {
     }
 }
 
+impl Timeline {
+    /// The events the playhead passes going from `from` towards `want` (as `advance` moves it: up to a Pause marker,
+    /// back from a Loop marker, round from the end), in the order it meets them. `from` itself counts only when
+    /// `inclusive` (the moment it starts playing).
+    pub fn passed_events(&self, from: f64, want: f64, inclusive: bool) -> Vec<&Event> {
+        let between = |a: f64, b: f64, with_a: bool| {
+            let mut v: Vec<&Event> = self.events.iter().filter(|e| (e.t > a || (with_a && e.t >= a)) && e.t <= b).collect();
+            v.sort_by(|x, y| x.t.total_cmp(&y.t));
+            v
+        };
+        if want < from {
+            return Vec::new();
+        }
+        let first = self.markers.iter().filter(|m| m.t > from && m.t <= want && m.kind != MarkerKind::Label).min_by(|a, b| a.t.total_cmp(&b.t));
+        let mut out = match first {
+            Some(m) if m.kind == MarkerKind::Pause => between(from, m.t, inclusive),
+            Some(m) => {
+                let back = self.markers.iter().filter(|o| o.t < m.t).map(|o| o.t).fold(0.0, f64::max);
+                let mut v = between(from, m.t, inclusive);
+                v.extend(between(back, back + (want - m.t), true));
+                v
+            }
+            None if want >= self.length => {
+                let mut v = between(from, self.length, inclusive);
+                if self.looping {
+                    v.extend(between(0.0, (want - self.length).rem_euclid(self.length.max(0.01)), true));
+                }
+                v
+            }
+            None => between(from, want, inclusive),
+        };
+        out.dedup_by(|a, b| std::ptr::eq(*a, *b));
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn events_fire_as_the_playhead_passes() {
+        let ev = |t: f64, name: &str| Event { t, name: name.into(), ..Default::default() };
+        let mut tl = Timeline { length: 10.0, events: vec![ev(5.0, "b"), ev(0.0, "start"), ev(2.0, "a"), ev(9.5, "end")], ..Default::default() };
+        let names = |v: Vec<&Event>| v.iter().map(|e| e.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names(tl.passed_events(0.0, 2.0, true)), ["start", "a"], "from the start: its own moment too");
+        assert_eq!(names(tl.passed_events(2.0, 2.5, false)), Vec::<String>::new(), "each fires once");
+        assert_eq!(names(tl.passed_events(1.0, 6.0, false)), ["a", "b"], "in order");
+        tl.looping = true;
+        assert_eq!(names(tl.passed_events(9.0, 10.2, false)), ["end", "start"], "round the loop");
+        tl.markers.push(Marker { t: 6.0, name: "Pause".into(), kind: MarkerKind::Pause });
+        assert_eq!(names(tl.passed_events(4.0, 9.8, false)), ["b"], "not past a pause");
+        tl.markers[0].kind = MarkerKind::LoopBack;
+        tl.markers.push(Marker { t: 1.0, name: "Back here".into(), kind: MarkerKind::Label });
+        assert_eq!(names(tl.passed_events(4.0, 7.5, false)), ["b", "a"], "back to the marker before, and on");
+    }
 
     #[test]
     fn keys_ease_and_markers_steer() {

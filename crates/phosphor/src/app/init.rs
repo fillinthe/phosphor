@@ -190,6 +190,7 @@ impl PhosphorApp {
                 timeline_pos: 0.0,
                 timeline_play: None,
                 timeline_record: false,
+                timeline_fresh: false,
                 timeline_set: Vec::new(),
                 offline: None,
                 recorders: recorder_settings.into_iter().take(recorders::MAX).map(Streamer::new).collect(),
