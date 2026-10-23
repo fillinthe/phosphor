@@ -405,6 +405,13 @@ impl PhosphorApp {
                         st.offline_setup.path = p.to_string_lossy().to_string();
                     }
                 }
+                Purpose::TimelineSound => {
+                    if let Some(p) = paths.first() {
+                        let path = p.to_string_lossy().to_string();
+                        let sound = st.comp.timeline.sound.get_or_insert_with(Default::default);
+                        sound.path = path;
+                    }
+                }
                 Purpose::RecorderFile(i) => {
                     if let (Some(p), Some(r)) = (paths.first(), st.recorders.get_mut(i)) {
                         r.settings.file_path = p.to_string_lossy().to_string();

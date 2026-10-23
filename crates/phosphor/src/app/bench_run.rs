@@ -214,6 +214,11 @@ impl PhosphorApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         println!("ISF {} loaded, {} skipped, reloaded {:?}", self.state.isf.loaded, self.state.isf.skipped, self.state.isf.reloaded);
+        #[cfg(not(target_arch = "wasm32"))]
+        if !self.state.comp.timeline.tracks.is_empty() || !self.state.comp.timeline.events.is_empty() || self.state.comp.timeline.sound.is_some() {
+            let sound = self.state.timeline_sound.as_ref().and_then(|s| s.position());
+            println!("TIMELINE pos={:.2} playing={} sound_at={:?}", self.state.timeline_pos, self.state.timeline_play.is_some(), sound.map(|p| (p * 100.0).round() / 100.0));
+        }
         println!("MEDIA {} files in bin, {} thumbnails pending", self.state.comp.media_bin.len(), self.state.comp.media_bin.iter().filter(|m| self.state.thumbs.is_pending(&m.path)).count());
         if self.state.stream.running() {
             let h = self.state.stream.history();

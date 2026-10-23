@@ -106,6 +106,8 @@ impl PhosphorApp {
         }
         self.state.run_multi_edit();
         self.state.run_timeline(now);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.state.run_timeline_sound(now);
         self.state.run_computed(now);
         // Layer names for settings that pick a layer (mask layers), rebuilt only when they change.
         let id = egui::Id::new(crate::ui::LAYER_NAMES);

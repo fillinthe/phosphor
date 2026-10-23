@@ -191,6 +191,8 @@ impl PhosphorApp {
                 timeline_play: None,
                 timeline_record: false,
                 timeline_fresh: false,
+                #[cfg(not(target_arch = "wasm32"))]
+                timeline_sound: None,
                 timeline_set: Vec::new(),
                 offline: None,
                 recorders: recorder_settings.into_iter().take(recorders::MAX).map(Streamer::new).collect(),

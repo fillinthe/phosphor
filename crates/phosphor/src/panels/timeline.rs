@@ -35,6 +35,10 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
             let n = tl.markers.len() + 1;
             tl.markers.push(Marker { t: st.timeline_pos, name: format!("M{n}"), kind: MarkerKind::Label });
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(label(icon::MUSIC_NOTES, "Sound…")).on_hover_text("A sound that plays along with the timeline (music, a voice-over), with its waveform").clicked() {
+            st.dialogs.pick_file(crate::dialogs::Purpose::TimelineSound, Some(("Sound", &["wav", "aif", "aiff", "mp3", "m4a", "aac", "flac", "ogg", "mov", "mp4"])));
+        }
         if ui.button(label(icon::LIGHTNING, "Event")).on_hover_text("An event at the playhead: plays a clip, fires a column or cue, sets anything, or sends OSC / MIDI as the playhead passes (right-click it)").clicked() {
             let n = tl.events.len() + 1;
             tl.events.push(Event { t: st.timeline_pos, name: format!("E{n}"), ..Default::default() });
@@ -109,6 +113,10 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         st.comp.timeline.markers.remove(k);
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    if st.comp.timeline.sound.is_some() {
+        sound_lane(ui, st, lane_x, lane_w, full);
+    }
     if !st.comp.timeline.events.is_empty() {
         events_lane(ui, st, &names, lane_x, lane_w, full);
     }
@@ -289,5 +297,65 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
     }
     if let Some(k) = remove {
         st.comp.timeline.events.remove(k);
+    }
+}
+
+/// The sound track: its waveform from where it starts (drag to move it), right-click for its volume, another file
+/// or Remove.
+#[cfg(not(target_arch = "wasm32"))]
+fn sound_lane(ui: &mut egui::Ui, st: &mut State, lane_x: f32, lane_w: f32, full: f32) {
+    let length = st.comp.timeline.length.max(0.1);
+    let (row, resp) = ui.allocate_exact_size(egui::vec2(full, 40.0), Sense::click_and_drag());
+    let p = ui.painter_at(row);
+    let lane = egui::Rect::from_min_max(egui::pos2(lane_x, row.top() + 2.0), egui::pos2(row.right(), row.bottom() - 2.0));
+    p.rect_filled(lane, 2.0, ui.visuals().faint_bg_color);
+    let Some(sound) = st.comp.timeline.sound.as_mut() else { return };
+    let name = std::path::Path::new(&sound.path).file_name().map_or("Sound".into(), |n| n.to_string_lossy().to_string());
+    p.text(egui::pos2(row.left() + 4.0, row.center().y), egui::Align2::LEFT_CENTER, &name, egui::FontId::proportional(11.0), ui.visuals().text_color());
+    // The waveform: the loudest moment under each column of pixels.
+    let peaks = st.timeline_sound.as_ref().and_then(|s| s.peaks.lock().ok().and_then(|p| p.clone()));
+    let per_sec = crate::media::video::sound::PEAKS_PER_SEC;
+    let x_of = |t: f64| lane_x + (t / length) as f32 * lane_w;
+    match &peaks {
+        Some(peaks) if !peaks.is_empty() => {
+            let secs_per_px = length / lane_w as f64;
+            let first = x_of(sound.start).max(lane.left()).floor() as i32;
+            let last = x_of(sound.start + peaks.len() as f64 / per_sec).min(lane.right()) as i32;
+            for x in first..last {
+                let t = (x as f64 - lane_x as f64) * secs_per_px - sound.start;
+                let (a, b) = (((t * per_sec) as usize).min(peaks.len() - 1), (((t + secs_per_px) * per_sec) as usize).min(peaks.len()));
+                let v = peaks[a..b.max(a + 1)].iter().copied().fold(0.0, f32::max) * sound.volume.min(1.0);
+                let h = (v * lane.height() * 0.5).max(0.5);
+                p.line_segment([egui::pos2(x as f32, lane.center().y - h), egui::pos2(x as f32, lane.center().y + h)], Stroke::new(1.0, accent().gamma_multiply(0.8)));
+            }
+        }
+        Some(_) => {
+            p.text(lane.center(), egui::Align2::CENTER_CENTER, "no sound in this file", egui::FontId::proportional(10.0), Color32::GRAY);
+        }
+        None => {
+            p.text(lane.center(), egui::Align2::CENTER_CENTER, "reading the sound…", egui::FontId::proportional(10.0), Color32::GRAY);
+        }
+    }
+    if resp.dragged() {
+        sound.start = (sound.start + (resp.drag_delta().x / lane_w) as f64 * length).clamp(0.0, length);
+    }
+    let mut remove = false;
+    let mut choose = false;
+    resp.on_hover_text(format!("{name} · starts at {} · drag to move it", clock(sound.start))).context_menu(|ui| {
+        Level::range(&mut sound.volume, 0.0, 2.0, "Volume").default(1.0).width(200.0).show(ui);
+        if ui.button("Another sound…").clicked() {
+            choose = true;
+            ui.close();
+        }
+        if danger_button(ui, label(icon::TRASH, "Remove the sound")).clicked() {
+            remove = true;
+            ui.close();
+        }
+    });
+    if remove {
+        st.comp.timeline.sound = None;
+    }
+    if choose {
+        st.dialogs.pick_file(crate::dialogs::Purpose::TimelineSound, Some(("Sound", &["wav", "aif", "aiff", "mp3", "m4a", "aac", "flac", "ogg", "mov", "mp4"])));
     }
 }

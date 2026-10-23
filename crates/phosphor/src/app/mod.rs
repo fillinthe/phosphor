@@ -58,6 +58,8 @@ pub(crate) use quick::dice;
 mod recording;
 pub(crate) mod recorders;
 mod computed;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod timeline_sound;
 pub(crate) mod offline;
 mod timeline;
 #[cfg(not(target_arch = "wasm32"))]
@@ -323,6 +325,9 @@ pub struct State {
     /// Recording: moving a track's control while the timeline plays keys it. What each track was last set to
     /// (a different value now = moved by hand).
     pub timeline_record: bool,
+    /// The timeline's sound track playing (and its waveform).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) timeline_sound: Option<timeline_sound::TimelineSound>,
     /// The timeline just started (or jumped) while playing: events right at the playhead fire too.
     pub timeline_fresh: bool,
     pub timeline_set: Vec<(phosphor_engine::ControlTarget, f32)>,

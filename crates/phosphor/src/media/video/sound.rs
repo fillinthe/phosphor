@@ -349,6 +349,40 @@ struct Track {
     frame: ff::frame::Audio,
 }
 
+/// How many loudness peaks a second `peaks` gives.
+pub const PEAKS_PER_SEC: f64 = 50.0;
+
+/// The loudness outline of a sound (or a movie's sound) for drawing a waveform: the peak (0..1) of every
+/// 1 / `PEAKS_PER_SEC` second, from the start. Reads the whole file: call it off the UI thread.
+pub fn peaks(path: &str) -> Option<Vec<f32>> {
+    let mut t = Track::open(path)?;
+    let (mut out, mut peak, mut n) = (Vec::new(), 0f32, 0usize);
+    let mut take = |frame: &ff::frame::Audio, out: &mut Vec<f32>| {
+        let per = (frame.rate() as f64 / PEAKS_PER_SEC).max(1.0) as usize;
+        for f in to_stereo(frame).unwrap_or_default().chunks_exact(2) {
+            peak = peak.max(f[0].abs().max(f[1].abs()));
+            n += 1;
+            if n >= per {
+                out.push(peak.min(1.0));
+                (peak, n) = (0.0, 0);
+            }
+        }
+    };
+    for (st, packet) in t.input.packets() {
+        if st.index() != t.stream || t.dec.send_packet(&packet).is_err() {
+            continue;
+        }
+        while t.dec.receive_frame(&mut t.frame).is_ok() {
+            take(&t.frame, &mut out);
+        }
+    }
+    let _ = t.dec.send_eof();
+    while t.dec.receive_frame(&mut t.frame).is_ok() {
+        take(&t.frame, &mut out);
+    }
+    Some(out)
+}
+
 impl Track {
     fn open(path: &str) -> Option<Self> {
         let input = super::open_input(path).ok()?;
@@ -796,6 +830,36 @@ fn mix_clips(out: &mut [f32], pairs: usize) {
 
 #[cfg(test)]
 mod level_tests {
+    /// A waveform: a second of silence then a second of full-scale sound reads as 50 quiet peaks then 50 loud ones.
+    #[test]
+    fn peaks_outline_a_sound() {
+        let rate = 8000u32;
+        let mut pcm: Vec<u8> = Vec::new();
+        for i in 0..rate * 2 {
+            let v: i16 = if i < rate { 0 } else if i % 2 == 0 { i16::MAX } else { -i16::MAX };
+            pcm.extend(v.to_le_bytes());
+        }
+        let mut wav = b"RIFF".to_vec();
+        wav.extend((36 + pcm.len() as u32).to_le_bytes());
+        wav.extend(b"WAVEfmt ");
+        wav.extend(16u32.to_le_bytes());
+        wav.extend(1u16.to_le_bytes()); // PCM
+        wav.extend(1u16.to_le_bytes()); // mono
+        wav.extend(rate.to_le_bytes());
+        wav.extend((rate * 2).to_le_bytes());
+        wav.extend(2u16.to_le_bytes());
+        wav.extend(16u16.to_le_bytes());
+        wav.extend(b"data");
+        wav.extend((pcm.len() as u32).to_le_bytes());
+        wav.extend(pcm);
+        let path = std::env::temp_dir().join(format!("phosphor-peaks-{}.wav", std::process::id()));
+        std::fs::write(&path, wav).unwrap();
+        let p = super::peaks(path.to_str().unwrap()).expect("reads");
+        let _ = std::fs::remove_file(&path);
+        assert!((99..=101).contains(&p.len()), "{} peaks", p.len());
+        assert!(p[..49].iter().all(|v| *v < 0.01) && p[51..99].iter().all(|v| *v > 0.95), "{p:?}");
+    }
+
     use super::*;
 
     #[test]
