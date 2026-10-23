@@ -1020,7 +1020,7 @@ pub(crate) fn svg_menu(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     ui.menu_button(label(icon::FILE_SVG, "SVG"), |ui| {
         let oid = st.mapping_output;
-        if ui.button("Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (SVG for the venue, a cutter or another app; PNG for a picture)").clicked() {
+        if ui.button("Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (SVG for the venue, a cutter or another app; PDF to print; PNG for a picture). Pick the kind by the file name's ending.").clicked() {
             st.dialogs.save_file(crate::dialogs::Purpose::ExportMappingSvg(oid), ("Drawing", &["svg", "png", "pdf"]), "Mapping.svg");
             ui.close();
         }
