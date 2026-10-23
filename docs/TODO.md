@@ -206,7 +206,7 @@ and a Credits list copies them all. Files go to Phosphor's downloads folder, not
   OpenMoji / Twemoji (emoji as SVG): as SVG clips or text-layer symbols.
 - [~] O6. **3D models, textures, HDRIs** (Poly Haven textures done; models and HDRIs next): Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
   models, Smithsonian 3D: for 3D-model slices and textures.
-- [ ] O7. **Music and sound**: Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
+- [~] O7. **Music and sound** (Online › Music: Internet Archive netlabel releases, Creative Commons; Freesound / Jamendo need keys): Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
   audio, Pixabay music: clip sound, timeline sound tracks, and something for the beat detection to follow.
 - [x] O8. **Fonts** (Online › Fonts: Google Fonts families, regular + bold into Phosphor's fonts folder): Google Fonts (open licences; the GitHub repo or the API) for text layers.
 - [x] O9. **DMX fixture definitions** (LED / DMX › A real light…: any Open Fixture Library light and mode): Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving

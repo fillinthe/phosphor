@@ -27,6 +27,8 @@ pub enum Kind {
     Visualizer,
     /// Font families for text layers.
     Font,
+    /// Songs (clips with sound and no picture: the visuals can follow them).
+    Music,
 }
 
 /// One search result.
@@ -265,6 +267,7 @@ pub fn file_name(item: &Item, url: &str) -> String {
             Kind::Icon => "svg",
             Kind::Visualizer => "milk",
             Kind::Font => "ttf",
+            Kind::Music => "mp3",
             Kind::Picture | Kind::Texture => "jpg",
         }
         .into()
@@ -500,6 +503,18 @@ mod tests {
         let body = get_bytes(milk.file.as_deref().unwrap()).expect("preset");
         println!("ONLINE milkdrop {} presets, first {} ({} bytes)", s.items.len(), milk.title, body.len());
         assert!(String::from_utf8_lossy(&body).contains("per_frame") || String::from_utf8_lossy(&body).contains("[preset"), "a preset file");
+        // Music: a netlabel release's first track, a playable sound file.
+        let mut s = Search::start("ambient", &[Source::Archive], &[Kind::Music], true, None);
+        while s.busy() {
+            std::thread::sleep(Duration::from_millis(100));
+            s.poll();
+        }
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        assert!(s.items.iter().all(|i| i.credit.commercial()), "paid work OK: no NC");
+        let song = s.items.first().expect("a release").clone();
+        let (url, size) = sources::pick_file(&song, &get_bytes(&song.list).expect("files")).expect("a track");
+        println!("ONLINE music {} ({}) {url} {size:?}", song.title, song.credit.licence);
+        assert!(url.ends_with(".mp3"));
         // A font family: its files are found and one draws text.
         let mut s = Search::start("bebas", &[Source::GoogleFonts], &[Kind::Font], false, None);
         while s.busy() {

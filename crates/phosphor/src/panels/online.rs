@@ -19,6 +19,7 @@ enum Want {
     Textures,
     Visualizers,
     Fonts,
+    Music,
 }
 
 impl Want {
@@ -31,6 +32,7 @@ impl Want {
             Want::Textures => &[Kind::Texture],
             Want::Visualizers => &[Kind::Visualizer],
             Want::Fonts => &[Kind::Font],
+            Want::Music => &[Kind::Music],
         }
     }
 }
@@ -79,7 +81,7 @@ impl Online {
     /// Bench `--quick online` (PHOSPHOR_ONLINE_QUERY): searches like the panel does.
     pub fn bench_search(&mut self, query: &str) {
         self.query = query.to_string();
-        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font];
+        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font, Kind::Music];
         self.search = Some(Search::start(query, &Source::ALL, &kinds, false, None));
         self.bench = true;
     }
@@ -103,11 +105,12 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
         // PHOSPHOR_ONLINE_PICK=video (an Internet Archive film: small files), icon or texture instead of a picture.
         let pick = std::env::var("PHOSPHOR_ONLINE_PICK").unwrap_or_default();
         let wanted = |i: &&Item| match pick.as_str() {
-            "video" => i.source == Source::Archive,
+            "video" => i.source == Source::Archive && i.kind == Kind::Video,
             "icon" => i.kind == Kind::Icon,
             "texture" => i.kind == Kind::Texture,
             "visualizer" => i.kind == Kind::Visualizer,
             "font" => i.kind == Kind::Font,
+            "music" => i.kind == Kind::Music,
             _ => i.kind == Kind::Picture,
         };
         if let Some(item) = s.items.iter().find(wanted).cloned() {
@@ -282,6 +285,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::Textures, "Textures".to_string()),
             (Want::Visualizers, "Visualizers".to_string()),
             (Want::Fonts, "Fonts".to_string()),
+            (Want::Music, "Music".to_string()),
         ];
         let before = o.want;
         ComboBox::from_id_salt("online_want").selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
@@ -489,6 +493,7 @@ fn kind_icon(kind: Kind) -> &'static str {
         Kind::Texture => icon::CHECKERBOARD,
         Kind::Visualizer => icon::WAVEFORM,
         Kind::Font => icon::TEXT_AA,
+        Kind::Music => icon::MUSIC_NOTES,
     }
 }
 

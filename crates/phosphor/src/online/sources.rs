@@ -51,7 +51,7 @@ impl Source {
             Source::Nasa => "NASA's pictures and videos of space, rockets and Earth. Public domain.",
             Source::Openverse => "Millions of Creative Commons photos from Flickr, museums and more. Some licences need a credit or forbid paid use.",
             Source::Commons => "Wikipedia's media library: photos and videos under open licences.",
-            Source::Archive => "Old films from the Prelinger Archives (ads, educational and industrial films). Public domain.",
+            Source::Archive => "Old public-domain films from the Prelinger Archives, and Creative Commons music from netlabels.",
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
             Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
@@ -64,7 +64,7 @@ impl Source {
     pub fn kinds(self) -> &'static [Kind] {
         match self {
             Source::Nasa | Source::Commons => &[Kind::Video, Kind::Picture],
-            Source::Archive => &[Kind::Video],
+            Source::Archive => &[Kind::Video, Kind::Music],
             Source::Openverse | Source::Artic => &[Kind::Picture],
             Source::Iconify => &[Kind::Icon],
             Source::PolyHaven => &[Kind::Texture],
@@ -96,8 +96,16 @@ impl Source {
                 )
             }
             Source::Archive => {
-                let search = url_encode(&format!("({}) AND mediatype:movies AND collection:prelinger", query.trim()));
-                format!("https://archive.org/advancedsearch.php?q={search}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=year&rows={PAGE}&page={page}&output=json")
+                // Films: the Prelinger Archives (public domain); music: netlabel releases (Creative Commons).
+                // (Music: only releases with a Creative Commons licence and MP3s to play.)
+                let only = if kind == Kind::Music {
+                    "mediatype:audio AND collection:netlabels AND licenseurl:*creativecommons* AND format:\"VBR MP3\""
+                } else {
+                    "mediatype:movies AND collection:prelinger"
+                };
+                let licence = if kind == Kind::Music && commercial { " AND NOT licenseurl:*nc*" } else { "" };
+                let search = url_encode(&format!("({}) AND {only}{licence}", query.trim()));
+                format!("https://archive.org/advancedsearch.php?q={search}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=licenseurl&rows={PAGE}&page={page}&output=json")
             }
             // Iconify pages hold at least 32.
             Source::Iconify => format!("https://api.iconify.design/search?query={q}&limit=32&start={}", (page - 1) * 32),
@@ -132,7 +140,7 @@ impl Source {
             Source::Nasa => nasa(&v, kind),
             Source::Openverse => openverse(&v),
             Source::Commons => commons(&v, kind),
-            Source::Archive => archive(&v),
+            Source::Archive => archive(&v, kind),
             Source::Artic => artic(&v),
             Source::Iconify => iconify(&v),
             Source::PolyHaven => poly_haven(&v, "", 1),
@@ -294,7 +302,24 @@ fn scaled(thumb: &str, width: u64) -> Option<String> {
     px.chars().all(|c| c.is_ascii_digit()).then(|| format!("{dir}/{width}px-{name}"))
 }
 
-fn archive(v: &Value) -> Vec<Item> {
+/// A Creative Commons address as a licence name: ".../licenses/by-nc-sa/3.0/" → "CC BY-NC-SA 3.0".
+pub fn cc_name(url: &str) -> String {
+    let parts: Vec<&str> = url.split('/').filter(|p| !p.is_empty()).collect();
+    if let Some(i) = parts.iter().position(|p| *p == "licenses") {
+        let code = parts.get(i + 1).map_or(String::new(), |c| c.to_uppercase());
+        let version = parts.get(i + 2).copied().unwrap_or("");
+        return format!("CC {code} {version}").trim().to_string();
+    }
+    if url.contains("publicdomain/zero") {
+        return "CC0".into();
+    }
+    if url.contains("publicdomain") {
+        return "Public domain".into();
+    }
+    if url.is_empty() { "See its page".into() } else { url.to_string() }
+}
+
+fn archive(v: &Value, kind: Kind) -> Vec<Item> {
     let docs = v["response"]["docs"].as_array().cloned().unwrap_or_default();
     docs.iter()
         .filter_map(|d| {
@@ -305,9 +330,11 @@ fn archive(v: &Value) -> Vec<Item> {
                     Value::Array(a) => a.iter().map(text).collect::<Vec<_>>().join(", "),
                     c => text(c),
                 };
+                let music = kind == Kind::Music;
+                let licence_url = if music { text(&d["licenseurl"]) } else { "https://archive.org/details/prelinger".into() };
                 Item {
                     source: Source::Archive,
-                    kind: Kind::Video,
+                    kind,
                     title: text(&d["title"]),
                     thumb: format!("https://archive.org/services/img/{id}"),
                     file: None,
@@ -316,10 +343,10 @@ fn archive(v: &Value) -> Vec<Item> {
                     credit: phosphor_engine::Credit {
                         title: text(&d["title"]),
                         author,
-                        licence: "Public domain".into(),
-                        licence_url: "https://archive.org/details/prelinger".into(),
+                        licence: if music { cc_name(&licence_url) } else { "Public domain".into() },
+                        licence_url,
                         page: format!("https://archive.org/details/{id}"),
-                        source: "Internet Archive (Prelinger Archives)".into(),
+                        source: if music { "Internet Archive (netlabels)".into() } else { "Internet Archive (Prelinger Archives)".into() },
                     },
                     id,
                 }
@@ -579,6 +606,27 @@ pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), Stri
             };
             order.iter().find_map(|end| urls.iter().find(|u| u.to_ascii_lowercase().ends_with(end))).map(|u| (u.clone(), None)).ok_or_else(|| "NASA has no file to play for this one".into())
         }
+        Source::Archive if item.kind == Kind::Music => {
+            // A release's first track (as MP3, the format every copy has).
+            let id = text(&v["metadata"]["identifier"]);
+            let id = if id.is_empty() { item.id.clone() } else { id };
+            let mut tracks: Vec<(String, Option<u64>)> = v["files"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|f| text(&f["name"]).to_ascii_lowercase().ends_with(".mp3"))
+                .map(|f| (text(&f["name"]), f["size"].as_str().and_then(|s| s.parse().ok())))
+                .collect();
+            tracks.sort();
+            tracks
+                .into_iter()
+                .next()
+                .map(|(name, size)| {
+                    let path: Vec<String> = name.split('/').map(url_encode).collect();
+                    (format!("https://archive.org/download/{}/{}", url_encode(&id), path.join("/")), size)
+                })
+                .ok_or_else(|| "This release has no MP3".into())
+        }
         Source::Archive => {
             let id = text(&v["metadata"]["identifier"]);
             let id = if id.is_empty() { item.id.clone() } else { id };
@@ -653,6 +701,14 @@ mod tests {
         assert_eq!(h[0].file.as_deref(), Some("https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/N.jpg/3840px-N.jpg"), "a screen-sized copy");
         assert_eq!(h[0].size, None);
 
+        let music = br#"{"response":{"docs":[{"identifier":"bump006","title":"getting warmer EP","creator":"tatsu","licenseurl":"http://creativecommons.org/licenses/by-nc-sa/2.5/"}]}}"#;
+        let m = Source::Archive.parse(Kind::Music, music).unwrap();
+        assert_eq!((m[0].kind, m[0].credit.licence.as_str()), (Kind::Music, "CC BY-NC-SA 2.5"));
+        assert!(!m[0].credit.commercial());
+        let tracks = br#"{"metadata":{"identifier":"bump006"},"files":[{"name":"02-b.mp3","size":"1002661"},{"name":"cover.jpg"},{"name":"01-a song.mp3","size":"524911"}]}"#;
+        assert_eq!(pick_file(&m[0], tracks).unwrap(), ("https://archive.org/download/bump006/01-a%20song.mp3".into(), Some(524911)), "the first track");
+        assert_eq!(cc_name("https://creativecommons.org/publicdomain/zero/1.0/"), "CC0");
+        assert!(Source::Archive.search_url("techno", Kind::Music, 1, true).contains("NOT%20licenseurl"), "paid work: no NC music");
         let ar = br#"{"response":{"docs":[{"identifier":"its_no_picnic","title":"It's No Picnic","creator":["A","B"]}]}}"#;
         let a = Source::Archive.parse(Kind::Video, ar).unwrap();
         assert_eq!((a[0].thumb.as_str(), a[0].credit.author.as_str()), ("https://archive.org/services/img/its_no_picnic", "A, B"));
