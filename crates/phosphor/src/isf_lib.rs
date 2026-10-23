@@ -665,3 +665,42 @@ fn an_edited_shader_replaces_the_old_one() {
     let red = load(path, "Reload Test", "reload_test", fs("1.0, 0.0, 0.0")).unwrap().unwrap();
     assert!(red_at_middle(&mut engine, red, true) > 245, "the edited version draws");
 }
+
+/// Shadertoy's iMouse follows the preview's mouse: Mouse X / Y (set like any point) and Mouse down reach the shader.
+#[cfg(all(test, not(windows)))]
+#[test]
+fn shadertoy_mouse_reaches_the_shader() {
+    use phosphor_engine::{shaders, Composition, LayerState, ModInputs, SourceSpec};
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else { return };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default())) else { return };
+    let mut engine = Engine::new(device, queue);
+    let code = "void mainImage(out vec4 o, in vec2 p) {\n    o = vec4(iMouse.xy / iResolution.xy, iMouse.z > 0.0 ? 1.0 : 0.0, 1.0);\n}\n";
+    let isf = phosphor_isf::shadertoy::to_isf(code, "test").unwrap();
+    let loaded = load(std::path::Path::new("Mouse Test.fs"), "Mouse Test", "mouse_test", isf).unwrap().unwrap();
+    let (id, entry) = (loaded.id.clone(), loaded.entry.clone());
+    install(&mut engine, loaded, false);
+    let params = shaders::generator(&id).expect("registered").params;
+    let mut comp = Composition { width: 16, height: 16, ..Default::default() };
+    comp.layers = vec![LayerState { id: 1, source: SourceSpec::Generator(id), ..Default::default() }];
+    let mut middle = |engine: &mut Engine, values: &[f32]| {
+        comp.layers[0].generator_values = values.to_vec();
+        let started = std::time::Instant::now();
+        while engine.shader_pending(&entry) && started.elapsed().as_secs() < 20 {
+            engine.render(&comp, 0.0, &ModInputs::default());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        engine.render(&comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output().expect("output");
+        let i = ((h / 2 * w + w / 2) * 4) as usize;
+        [px[i], px[i + 1], px[i + 2]]
+    };
+    // The mouse a quarter of the way in from the left and the top, button held.
+    let mut v = Vec::new();
+    shaders::set_points(params, &mut v, [0.25, 0.25]);
+    shaders::set_mouse_down(params, &mut v, true);
+    let [r, g, b] = middle(&mut engine, &v);
+    assert!(r.abs_diff(64) < 4 && g.abs_diff(191) < 4 && b > 250, "{r} {g} {b}");
+    shaders::set_mouse_down(params, &mut v, false);
+    assert!(middle(&mut engine, &v)[2] < 5, "let go: z is negative");
+}

@@ -97,8 +97,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 41. **Frame rate per layer / comp**, to save GPU (V).
       Inspector › Frame rate: every frame / 30 / 15 / 10 / 5, the picture held between. Checked: GPU test.
 - [x] 42. **Before / after preview of one effect** in a chain (V).
-- [~] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
-      Preview bar: a mouse button; dragging moves the selected layer's point settings (ISF point2D). No iMouse input yet. Checked: test of the point mapping.
+- [x] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
+      Preview bar: a mouse button; dragging moves the selected layer's point settings (ISF point2D). Shadertoy shaders that read iMouse get a Mouse point and a Mouse down button: dragging in the preview moves it and holds the button. Checked: test of the point mapping; GPU test (the mouse's place and button reach the shader).
 - [x] 44. **Previews**: drag to scrub the movie, frame-rate cap (V).
 - [x] 45. **Eyedropper**: pick a colour from a preview (V).
 - [x] 46. **Endless scratch** control for movies (V).
@@ -111,8 +111,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       OSC words into text layers (`/phosphor/layer/<id>/text`, or any mapped address). Colours from controllers: not done. Checked: test.
 - [x] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
       Right-click any control › Send out: OSC to the Control Surface's OSC-out host, MIDI CC or note. Checked: real UDP test.
-- [~] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, colour wheel, computed values (V).
-      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field (onto a text layer; Mac and phone). A button grid = Choices + "pick a clip by value". Multi-slider (bars with their own targets; draw across them; Mac, phone, TouchOSC export). Computed value: a formula of other controls (a, b, c…, time, beat) that drives its targets. Checked: tests.
+- [x] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, colour wheel, computed values (V).
+      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field (onto a text layer; Mac and phone). A button grid or pop-up menu = Choices (+ "pick a clip by value"); the colour wheel = the Colour widget. Multi-slider (bars with their own targets; draw across them; Mac, phone, TouchOSC export). Computed value: a formula of other controls (a, b, c…, time, beat) that drives its targets. Checked: tests.
 - [x] 52. **Import TouchOSC layouts** (V). Export exists.
       MIDI / OSC panel › Import TouchOSC layout: pages, controls in place, OSC addresses mapped. Checked: round-trip test with the export.
 - [x] 53. **Clip grid lights on Launchpad / APC**: pad colours for empty / loaded / playing / queued (V, M).
