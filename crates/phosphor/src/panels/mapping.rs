@@ -915,6 +915,30 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             });
             crate::ui::toggle(ui, &mut m.cull, "Hide back faces");
         });
+        // Light on the faces and glowing edges (a building's corners and outline drawn in light).
+        ui.horizontal_wrapped(|ui| {
+            ui.horizontal(|ui| {
+                Level::percent(&mut m.shade, "Light").default(0.0).width(150.0).tip("Shades the faces by a light, so the object looks solid (0 = the picture as it is)").show(ui);
+            });
+            if m.shade > 0.0 {
+                ui.horizontal(|ui| {
+                    Level::range(&mut m.light[0], -0.5, 0.5, "Light from side").default(0.12).width(150.0).show(ui);
+                });
+                ui.horizontal(|ui| {
+                    Level::range(&mut m.light[1], -0.25, 0.25, "Light from above").default(0.15).width(150.0).show(ui);
+                });
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.horizontal(|ui| {
+                Level::range(&mut m.edges, 0.0, 20.0, "Edges px").default(0.0).width(150.0).tip("Glowing lines along the model's corners and outline, this many pixels wide (0 = none)").show(ui);
+            });
+            if m.edges > 0.0 {
+                ui.horizontal(|ui| {
+                    Level::percent(&mut m.edge_glow, "Edge glow").default(1.0).width(150.0).show(ui);
+                });
+            }
+        });
         ui.horizontal(|ui| {
             toggle(ui, &mut m.calibrating, label(icon::CROSSHAIR, "Calibrate")).on_hover_text("Pin model points and drag them onto the real object: from 4 pins the projector is solved for you (6+ also solves the lens)");
             if m.calibrating {

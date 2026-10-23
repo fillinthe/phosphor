@@ -90,6 +90,14 @@ pub struct Model3d {
     pub pins: Vec<Pin>,
     /// Calibrate mode is on (the canvas shows the model's points to pin).
     pub calibrating: bool,
+    /// Light: how much a light shades the model's faces (0 = flat, as projected), and where it comes from (turns
+    /// around and up, seen from the projector).
+    pub shade: f32,
+    pub light: [f32; 2],
+    /// Edges: glowing lines along the model's creases and outline, this many output pixels wide (0 = none), and
+    /// how bright.
+    pub edges: f32,
+    pub edge_glow: f32,
 }
 
 /// A point of the model (in the model's unit-cube space) and where it must land on the output (0..1).
@@ -101,7 +109,7 @@ pub struct Pin {
 
 impl Default for Model3d {
     fn default() -> Self {
-        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true, pins: Vec::new(), calibrating: false }
+        Self { path: String::new(), yaw: 0.08, pitch: 0.05, roll: 0.0, distance: 3.0, fov: 30.0, center: [0.5, 0.5], scale: 1.0, cull: true, pins: Vec::new(), calibrating: false, shade: 0.0, light: [0.12, 0.15], edges: 0.0, edge_glow: 1.0 }
     }
 }
 
@@ -211,18 +219,24 @@ impl Model3d {
         self.project(aspect, false)
     }
 
-    /// Where a model point (unit-cube space) lands on the output (0..1), and its depth; None behind the projector.
-    pub fn project_point(&self, p: [f32; 3], aspect: f32) -> Option<([f32; 2], f32)> {
+    /// A model point (unit-cube space) turned and scaled as the projector sees it (+z towards the projector).
+    fn view(&self, p: [f32; 3]) -> [f32; 3] {
         let tau = std::f32::consts::TAU;
         let (sy, cy) = (self.yaw * tau).sin_cos();
         let (sp, cp) = (self.pitch * tau).sin_cos();
         let (sr, cr) = (self.roll * tau).sin_cos();
-        let f = 1.0 / (self.fov.clamp(5.0, 150.0).to_radians() * 0.5).tan();
-        let dist = self.distance.max(0.6);
         let (x, y, z) = (p[0] * self.scale, p[1] * self.scale, p[2] * self.scale);
         let (x, z) = (x * cy + z * sy, -x * sy + z * cy);
         let (y, z) = (y * cp - z * sp, y * sp + z * cp);
         let (x, y) = (x * cr - y * sr, x * sr + y * cr);
+        [x, y, z]
+    }
+
+    /// Where a model point (unit-cube space) lands on the output (0..1), and its depth; None behind the projector.
+    pub fn project_point(&self, p: [f32; 3], aspect: f32) -> Option<([f32; 2], f32)> {
+        let f = 1.0 / (self.fov.clamp(5.0, 150.0).to_radians() * 0.5).tan();
+        let dist = self.distance.max(0.6);
+        let [x, y, z] = self.view(p);
         let depth = dist - z;
         if depth < 0.05 {
             return None;
@@ -401,6 +415,80 @@ impl Model3d {
     /// For the hash that decides when to rebuild the triangles.
     pub fn key(&self) -> Vec<[f32; 2]> {
         vec![[self.yaw, self.pitch], [self.roll, self.distance], [self.fov, self.scale], self.center, [self.cull as u8 as f32, self.path.len() as f32]]
+    }
+
+    /// The model's own faces the projector sees (back faces dropped when culling): projected corners (0..1) and the
+    /// face's outward direction as the projector sees it (unit length).
+    fn seen_faces(&self, aspect: f32) -> Vec<([[f32; 2]; 3], [f32; 3], [[f32; 3]; 3])> {
+        let mesh = obj_mesh(&self.path);
+        let Ok(mesh) = mesh.as_ref() else { return Vec::new() };
+        let mut out = Vec::with_capacity(mesh.tris.len());
+        for tri in &mesh.tris {
+            let pts: Vec<[f32; 2]> = tri.iter().filter_map(|(p, _)| self.project_point(*p, aspect).map(|(xy, _)| xy)).collect();
+            if pts.len() < 3 {
+                continue;
+            }
+            let (a, b, c) = (pts[0], pts[1], pts[2]);
+            if self.cull && (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) > 0.0 {
+                continue;
+            }
+            let [p0, p1, p2] = [self.view(tri[0].0), self.view(tri[1].0), self.view(tri[2].0)];
+            let (u, v) = ([p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]]);
+            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt().max(1e-9);
+            out.push(([a, b, c], n.map(|x| x / len), [tri[0].0, tri[1].0, tri[2].0]));
+        }
+        out
+    }
+
+    /// Light on the faces: (x, y, brightness, 0) for `fs_mesh_shade_mul` (multiplied over the projected picture).
+    /// Brightness = (1 - shade) + shade × how squarely the face meets the light.
+    pub fn shade_triangles(&self, aspect: f32) -> Vec<[f32; 4]> {
+        let tau = std::f32::consts::TAU;
+        let (a, b) = (self.light[0] * tau, self.light[1] * tau);
+        let l = [a.sin() * b.cos(), b.sin(), a.cos() * b.cos()];
+        let shade = self.shade.clamp(0.0, 1.0);
+        let mut out = Vec::new();
+        for (pts, n, _) in self.seen_faces(aspect) {
+            let lit = (n[0] * l[0] + n[1] * l[1] + n[2] * l[2]).max(0.0);
+            let v = 1.0 - shade + shade * lit;
+            out.extend(pts.map(|p| [p[0], p[1], v, 0.5]));
+        }
+        out
+    }
+
+    /// Glowing edges: a strip `px` output pixels wide along every crease (faces meeting at more than about 20°) and
+    /// outline edge, as (x, y, 0.5, across 0..1) for `fs_mesh_glow_add`. `size` = the output in pixels.
+    pub fn edge_triangles(&self, aspect: f32, px: f32, size: (u32, u32)) -> Vec<[f32; 4]> {
+        if px <= 0.0 {
+            return Vec::new();
+        }
+        let key = |p: [f32; 3]| p.map(|v| (v * 10_000.0).round() as i32);
+        // Each edge: its ends on the output and the faces' directions that meet there.
+        let mut edges: std::collections::HashMap<([i32; 3], [i32; 3]), ([f32; 2], [f32; 2], Vec<[f32; 3]>)> = std::collections::HashMap::new();
+        for (pts, n, model) in self.seen_faces(aspect) {
+            for k in 0..3 {
+                let (i, j) = (k, (k + 1) % 3);
+                let (ka, kb) = (key(model[i]), key(model[j]));
+                let (id, ends) = if ka <= kb { ((ka, kb), (pts[i], pts[j])) } else { ((kb, ka), (pts[j], pts[i])) };
+                edges.entry(id).or_insert_with(|| (ends.0, ends.1, Vec::new())).2.push(n);
+            }
+        }
+        let (w, h) = (size.0.max(1) as f32, size.1.max(1) as f32);
+        let mut out = Vec::new();
+        for (a, b, normals) in edges.values() {
+            let crease = normals.len() == 1 || normals.windows(2).any(|p| p[0][0] * p[1][0] + p[0][1] * p[1][1] + p[0][2] * p[1][2] < 0.94);
+            if !crease {
+                continue;
+            }
+            let (dx, dy) = ((b[0] - a[0]) * w, (b[1] - a[1]) * h);
+            let len = dx.hypot(dy).max(1e-6);
+            let (ox, oy) = (-dy / len * px * 0.5 / w, dx / len * px * 0.5 / h);
+            let (a0, a1) = ([a[0] - ox, a[1] - oy, 0.5, 0.0], [a[0] + ox, a[1] + oy, 0.5, 1.0]);
+            let (b0, b1) = ([b[0] - ox, b[1] - oy, 0.5, 0.0], [b[0] + ox, b[1] + oy, 0.5, 1.0]);
+            out.extend([a0, b0, b1, a0, b1, a1]);
+        }
+        out
     }
 }
 
@@ -1933,6 +2021,31 @@ mod model_tests {
     const CUBE: &str = "v -1 -1 1\nv 1 -1 1\nv 1 1 1\nv -1 1 1\nv -1 -1 -1\nv 1 -1 -1\nv 1 1 -1\nv -1 1 -1\n\
 vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n\
 f 1/1 2/2 3/3 4/4\nf 6/1 5/2 8/3 7/4\nf 5/1 1/2 4/3 8/4\nf 2/1 6/2 7/3 3/4\nf 4/1 3/2 7/3 8/4\nf 5/1 6/2 2/3 1/4\n";
+
+    #[test]
+    fn a_lit_cube_shades_its_faces_and_outlines_its_edges() {
+        let path = std::env::temp_dir().join("phosphor-test-lit-cube.obj");
+        std::fs::write(&path, CUBE).unwrap();
+        let p = path.to_string_lossy().to_string();
+        forget_obj(&p);
+        // Turned so three faces show; a light from the projector, slightly to the right.
+        let m = Model3d { path: p.clone(), yaw: 0.08, pitch: 0.06, shade: 1.0, light: [0.05, 0.0], ..Default::default() };
+        let shade = m.shade_triangles(16.0 / 9.0);
+        assert_eq!(shade.len(), 3 * 2 * 3, "three faces, two triangles each");
+        let mut levels: Vec<i32> = shade.iter().map(|v| (v[2] * 100.0).round() as i32).collect();
+        levels.dedup();
+        levels.sort();
+        levels.dedup();
+        assert_eq!(levels.len(), 3, "each face its own brightness: {levels:?}");
+        assert!(shade.iter().all(|v| (0.0..=1.0).contains(&v[2])));
+        // No light: every face as projected.
+        assert!(Model3d { shade: 0.0, ..m.clone() }.shade_triangles(16.0 / 9.0).iter().all(|v| v[2] == 1.0));
+        // Edges: the 9 a three-faced view shows (outline and creases), not the faces' diagonals.
+        let edges = m.edge_triangles(16.0 / 9.0, 3.0, (1920, 1080));
+        assert_eq!(edges.len(), 9 * 6);
+        assert!(m.edge_triangles(16.0 / 9.0, 0.0, (1920, 1080)).is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn a_cube_parses_and_projects_its_front_faces() {

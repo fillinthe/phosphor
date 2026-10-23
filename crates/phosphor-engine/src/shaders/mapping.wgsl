@@ -119,6 +119,20 @@ fn fs_mesh_screen(in: VOut) -> @location(0) vec4f { return surface_color(in.uv);
 @fragment
 fn fs_mesh_mul(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
 
+// 3D model light: the picture already drawn is multiplied by each face's brightness (s).
+@fragment
+fn fs_mesh_shade_mul(in: VOut) -> @location(0) vec4f {
+    let v = clamp(in.uv.x, 0.0, 1.0);
+    return vec4f(v, v, v, 1.0);
+}
+
+// 3D model edges: soft white lines added on top (t runs across the line), as bright as u.opacity.
+@fragment
+fn fs_mesh_glow_add(in: VOut) -> @location(0) vec4f {
+    let a = u.opacity * (1.0 - abs(in.uv.y * 2.0 - 1.0));
+    return vec4f(a, a, a, 0.0);
+}
+
 @fragment
 fn fs_mask(in: VOut) -> @location(0) vec4f {
     // Premultiplied black at the vertex's darkness (1 inside, fading across a feathered edge).
