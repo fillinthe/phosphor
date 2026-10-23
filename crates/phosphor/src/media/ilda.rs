@@ -140,29 +140,10 @@ pub fn draw(points: &[Point], size: u32) -> Vec<u8> {
 /// is unchanged. Call off the UI thread.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn movie_for(path: &str) -> Result<String, String> {
-    use std::hash::{Hash, Hasher};
-    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
-    let meta = std::fs::metadata(path).map_err(|e| format!("{name}: {e}"))?;
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (path, meta.len(), meta.modified().ok()).hash(&mut h);
-    let dir = crate::show::storage_dir().unwrap_or_else(std::env::temp_dir).join("ilda");
-    let movie = dir.join(format!("{:016x}.mov", h.finish()));
-    let movie_path = movie.to_string_lossy().to_string();
-    if movie.exists() {
-        return Ok(movie_path);
-    }
-    let frames = parse(&std::fs::read(path).map_err(|e| format!("{name}: {e}"))?).map_err(|e| format!("{name}: {e}"))?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    // Written under another name and renamed when whole, so a half-made movie is never reused.
-    let part = dir.join(format!("{:016x}.part.mov", h.finish()));
-    let part_path = part.to_string_lossy().to_string();
-    let mut writer = super::video::hap_encode::HapWriter::create(&part_path, SIZE, SIZE, FPS, super::video::hap_encode::HapKind::HapAlpha)?;
-    for f in &frames {
-        writer.write(&draw(f, SIZE))?;
-    }
-    writer.finish()?;
-    std::fs::rename(&part, &movie).map_err(|e| e.to_string())?;
-    Ok(movie_path)
+    super::baked::cached_movie(path, "ilda", |data| {
+        let frames = parse(data)?;
+        Ok(super::baked::Drawing { size: (SIZE, SIZE), fps: FPS, frames: Box::new(frames.into_iter().map(|f| draw(&f, SIZE))) })
+    })
 }
 
 #[cfg(test)]

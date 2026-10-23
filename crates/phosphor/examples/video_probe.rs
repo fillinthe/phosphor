@@ -12,6 +12,16 @@ mod video;
 mod media {
     pub mod sequence;
 
+    /// Lottie files aren't probed here.
+    pub mod lottie {
+        pub fn is_lottie(_: &str) -> bool {
+            false
+        }
+        pub fn movie_for(path: &str) -> Result<String, String> {
+            Ok(path.to_string())
+        }
+    }
+
     /// Laser files aren't probed here.
     pub mod ilda {
         pub fn is_ilda(_: &str) -> bool {

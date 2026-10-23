@@ -31,6 +31,11 @@ libc = "0.2"
 env_logger = "0.11"
 # SVG pictures as layers and clips.
 resvg = "0.45"
+# Lottie (After Effects) animations: velato parses and animates them, drawn here with tiny-skia (no GPU renderer).
+velato = { version = "0.12", default-features = false }
+kurbo = "0.13"
+peniko = "0.6"
+base64 = "0.22"
 ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling", "device"] }
 cpal = "0.18.2"
 rustfft = "6.4.1"

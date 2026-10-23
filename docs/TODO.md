@@ -147,7 +147,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [ ] 78. **Stream Deck** buttons for cues, clips and settings (M).
 - [x] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
 - [x] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG, PNG and PDF export (Save as › .pdf: a vector page the output's size), masks and lines from SVG. Checked: tests; the PDF passes qpdf's check and was looked at.
-- [~] 81. **SVG and Lottie** (After Effects) animations as clips (M). Done: SVG. Left: Lottie.
+- [x] 81. **SVG and Lottie** (After Effects) animations as clips (M). SVG; Lottie .json (not yet .lottie zips).
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
 - [x] 83. **Interface colour themes** (V). Has a brightness slider.
@@ -179,6 +179,41 @@ Quartz Composer / Vuo / TouchDesigner hosting (QC is dead, the others need their
 Wiimote, Leap Motion, Makey Makey, weather data, Canon / Sony DSLR inputs, MiniMad hardware export, licences / demo mode.
 
 Already in Phosphor and not listed: everything else in the two research files at headline level (see `docs/PARITY.md`).
+
+## Online media: start a show with no media of your own (planned 2026-10-23, after the parity list)
+
+Goal: someone with nothing on their computer can open Phosphor and fill a show from free, openly licensed sources
+online. One **Online** panel in the Library searches every source at once: thumbnails, preview on hover, drag onto a
+clip cell or layer. Files download into the project's media folder (so the show works offline and in exports), each
+with its licence and credit saved next to it (a Credits list for the show; "only ones I can use commercially"
+filter). Sources that need an API key: a key field per source (like the AI key), or later through a phosphorfx.com
+proxy (**needs you**: the server). Not started; none of these is downloaded or wired yet.
+
+- [ ] O1. **Stock video and pictures**: Pexels and Pixabay (free API keys; free to use, no credit needed), Coverr,
+  NASA Image and Video Library (public domain, no key), Internet Archive (public-domain films, no key), Wikimedia
+  Commons (CC, no key).
+- [ ] O2. **Art and photos**: Openverse (search across CC collections, no key), Unsplash (key), museum open-access
+  collections with APIs and CC0 pictures: the Met, Art Institute of Chicago, Smithsonian, Rijksmuseum, Europeana.
+- [ ] O3. **Shaders**: the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
+  effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label
+  them). Overlaps #94.
+- [ ] O4. **Lottie animations**: LottieFiles' free animations (once Lottie clips land, #81).
+- [ ] O5. **Icons and vector shapes**: Iconify (200,000+ open-licence SVG icons, one API, no key), Phosphor icons,
+  OpenMoji / Twemoji (emoji as SVG): as SVG clips or text-layer symbols.
+- [ ] O6. **3D models, textures, HDRIs**: Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
+  models, Smithsonian 3D: for 3D-model slices and textures.
+- [ ] O7. **Music and sound**: Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
+  audio, Pixabay music: clip sound, timeline sound tracks, and something for the beat detection to follow.
+- [ ] O8. **Fonts**: Google Fonts (open licences; the GitHub repo or the API) for text layers.
+- [ ] O9. **DMX fixture definitions**: Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving
+  head / LED bar by name instead of typing channels.
+- [ ] O10. **MilkDrop presets**: projectM's preset packs ("cream of the crop") once #93 lands.
+- [ ] O11. **Live data that moves visuals** (as modulators): weather (Open-Meteo, no key), earthquakes (USGS), the ISS
+  position, RSS / news headlines into text layers, a clock in any city.
+- [ ] O12. **Live pictures**: public webcams and space feeds (NASA / ISS live streams) as live layers; GIFs from
+  Giphy / Tenor (keys). The "From a link" yt-dlp route already covers pasted video links.
+- [ ] O13. **Starter shows**: one click makes a ready show from these sources (a few clip banks, effects, a sound
+  track), by mood ("club", "ambient", "corporate").
 
 ## Next round (2026-10-21, "keep going on the large stuff"), quickest first
 

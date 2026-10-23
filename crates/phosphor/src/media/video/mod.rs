@@ -281,6 +281,9 @@ impl VideoPlayer {
         if crate::media::ilda::is_ilda(path) {
             return Self::open(&crate::media::ilda::movie_for(path)?);
         }
+        if crate::media::lottie::is_lottie(path) {
+            return Self::open(&crate::media::lottie::movie_for(path)?);
+        }
         let started = std::time::Instant::now();
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
         let _timing = TimingLog { name: name.clone(), started };
