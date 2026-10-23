@@ -77,6 +77,8 @@ impl PhosphorApp {
             scopes,
             #[cfg(not(target_arch = "wasm32"))]
             scanner,
+            #[cfg(not(target_arch = "wasm32"))]
+            led_scan,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -202,6 +204,23 @@ impl PhosphorApp {
                     engine.read_monitor(mwants.len() - 1, crate::scanner::MONITOR_KEY as u64);
                 }
             }
+            // LED scanner: the lights show its pictures (below, instead of the picture), the camera read once each;
+            // the fixtures it found are placed.
+            led_scan.poll();
+            if let Some(placed) = led_scan.finished.take() {
+                for (id, positions) in placed {
+                    if let Some(f) = comp.dmx.fixtures.iter_mut().find(|f| f.id == id) {
+                        f.shape = phosphor_engine::FixtureShape::Scanned;
+                        f.positions = positions;
+                    }
+                }
+            }
+            if let Some((src, w, h)) = led_scan.picture() {
+                mwants.push((crate::led_scan::MONITOR_KEY, src, w, h));
+                if led_scan.due(now) {
+                    engine.read_monitor(mwants.len() - 1, crate::led_scan::MONITOR_KEY as u64);
+                }
+            }
         }
         // A picture of one layer / group / comp: read through a monitor slot this frame.
         if let Some(id) = snapshot_source.take() {
@@ -236,8 +255,10 @@ impl PhosphorApp {
         // LED / DMX: sample the fixtures' pixels from this frame when the lights want one.
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // Playing a DMX recording: it goes out instead of the picture (nothing to sample).
+            // Playing a DMX recording, or the LED scanner's pictures: they go out instead of the picture (nothing to
+            // sample).
             let playback = dmx_rec.playback(now);
+            let playback = led_scan.universes(&comp.dmx).or(playback);
             let points = if comp.dmx.enabled && playback.is_none() { comp.dmx.sample_points() } else { Vec::new() };
             engine.set_sample_points(&points);
             if dmx.frame_due(now, &comp.dmx) {
@@ -296,6 +317,8 @@ impl PhosphorApp {
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::scanner::MONITOR_KEY => scanner.give(f.rgba, f.width, f.height),
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::led_scan::MONITOR_KEY => led_scan.give(f.rgba, f.width, f.height),
                 _ => {}
             }
         }
