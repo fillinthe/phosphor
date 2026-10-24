@@ -29,7 +29,7 @@ impl PhosphorApp {
                 #[cfg(target_arch = "wasm32")]
                 let show: Option<Composition> = None;
                 // An exported show always starts from its own project (unless recovering from a crash).
-                recovered.or(show).or_else(|| stored(KEY_COMPOSITION).and_then(|json| Composition::from_json(&json).ok())).unwrap_or_else(Composition::starter)
+                recovered.or(show).or_else(|| stored(KEY_COMPOSITION).and_then(|json| Composition::from_json(&json).ok())).unwrap_or_else(Composition::opening)
             }
         };
         let stream_settings = stored(KEY_STREAM).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();

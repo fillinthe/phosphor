@@ -11,7 +11,11 @@ pub struct FontChoice {
     pub id: String,
 }
 
-pub const BUILTIN: [(&str, &str); 2] = [("Phosphor Sans (light)", "builtin:sans"), ("Phosphor Mono", "builtin:mono")];
+pub const BUILTIN: [(&str, &str); 3] = [("Phosphor Sans (light)", "builtin:sans"), ("Phosphor Mono", "builtin:mono"), ("Phosphor Logo", "builtin:logo")];
+
+/// The logo font (the opening screen's PHOSPHOR), shipped inside the app so it looks the same everywhere (SIL Open
+/// Font License: assets/fonts/OFL.txt).
+const LOGO_FONT: &[u8] = include_bytes!("../../../assets/fonts/logo.ttf");
 
 type FontList = std::sync::Arc<Vec<FontChoice>>;
 
@@ -142,6 +146,7 @@ fn face_name(face: &ttf_parser::Face) -> Option<String> {
 fn font_data(id: &str) -> Result<(std::borrow::Cow<'static, [u8]>, u32), String> {
     match id {
         "builtin:mono" => Ok((epaint_default_fonts::HACK_REGULAR.into(), 0)),
+        "builtin:logo" => Ok((LOGO_FONT.into(), 0)),
         "builtin:sans" | "" => Ok((epaint_default_fonts::UBUNTU_LIGHT.into(), 0)),
         _ => {
             #[cfg(not(target_arch = "wasm32"))]

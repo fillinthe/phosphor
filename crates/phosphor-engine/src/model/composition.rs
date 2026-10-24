@@ -193,6 +193,19 @@ impl Composition {
         comp
     }
 
+    /// What someone opening Phosphor for the first time sees: the rainbow plasma with PHOSPHOR on top, in the logo font.
+    pub fn opening() -> Self {
+        let mut comp = Self::default();
+        let base = comp.add_layer();
+        base.set_generator("plasma");
+        base.name = "Rainbow".into();
+        let top = comp.add_layer();
+        top.name = "PHOSPHOR".into();
+        top.source = SourceSpec::Text(TextStyle { text: "PHOSPHOR".into(), font: "builtin:logo".into(), size: 0.22, outline: 0.02, ..Default::default() });
+        top.opacity = 1.0;
+        comp
+    }
+
     pub fn new_id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -669,6 +682,20 @@ impl Composition {
 
 #[cfg(test)]
 mod voice_tests {
+
+    /// A first launch opens on the rainbow plasma with PHOSPHOR on top, in the logo font, and it saves and reopens.
+    #[test]
+    fn the_opening_is_plasma_and_the_logo() {
+        let c = Composition::opening();
+        assert_eq!(c.layers.len(), 2);
+        assert_eq!(c.layers[0].source, SourceSpec::Generator("plasma".into()));
+        match &c.layers[1].source {
+            SourceSpec::Text(t) => assert_eq!((t.text.as_str(), t.font.as_str()), ("PHOSPHOR", "builtin:logo")),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(Composition::from_json(&c.to_json()).unwrap(), c);
+    }
+
     use super::*;
 
     #[test]
