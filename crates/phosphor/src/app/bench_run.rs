@@ -130,7 +130,7 @@ impl PhosphorApp {
                 show,
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
+                web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
                 self.state.media.positions()
             );
         }
@@ -140,7 +140,7 @@ impl PhosphorApp {
                 self.state.net.followers.load(std::sync::atomic::Ordering::Relaxed),
                 self.state.clock.beats(now),
                 self.state.clock.bpm,
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
+                web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()),
                 self.state.media.positions()
             );
         }

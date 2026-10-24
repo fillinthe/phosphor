@@ -55,7 +55,7 @@ pub struct CueRun {
     /// The calendar file's events, which file and when it changed (re-read when it does), and the last local time
     /// checked (local wall-clock seconds).
     #[cfg(not(target_arch = "wasm32"))]
-    calendar: Option<(String, Option<std::time::SystemTime>, Vec<crate::calendar::Event>)>,
+    calendar: Option<(String, Option<web_time::SystemTime>, Vec<crate::calendar::Event>)>,
     calendar_prev: i64,
     calendar_checked: f64,
     pub clock: ShowClock,

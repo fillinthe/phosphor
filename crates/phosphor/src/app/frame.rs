@@ -151,7 +151,7 @@ impl PhosphorApp {
             #[cfg(not(target_arch = "wasm32"))]
             if !control.mtc_out_port.is_empty() || control.ltc_out_pair.is_some() || ltc_out.is_some() {
                 // Time of day to the millisecond (the wall clock plus the local offset from UTC).
-                let utc = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
+                let utc = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
                 let tod = (utc + crate::calendar::local_now().1 as f64).rem_euclid(86_400.0);
                 let (show, running) = (cue_run.clock.time(now), cue_run.clock.running());
                 control.tick_mtc_out(show, running, tod);
