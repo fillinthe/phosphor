@@ -25,6 +25,7 @@ mod widgets;
 
 pub(crate) use binding::*;
 pub(crate) use kit::*;
+pub mod notice;
 pub(crate) use learn::*;
 pub(crate) use level::*;
 pub(crate) use locks::*;

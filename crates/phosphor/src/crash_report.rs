@@ -14,24 +14,34 @@ pub fn endpoint() -> Option<String> {
     std::env::var("PHOSPHOR_CRASH_URL").ok().filter(|u| u.starts_with("http")).or_else(|| (!ENDPOINT.is_empty()).then(|| ENDPOINT.to_string()))
 }
 
-/// The JSON body for one report.
-pub fn body(report: &str) -> String {
+/// The JSON body for one report (`kind`: "crash" sent by itself, "bug" written by someone).
+pub fn body(kind: &str, report: &str) -> String {
     serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
+        "kind": kind,
         "report": report,
     })
     .to_string()
 }
 
-/// Sends `report` in the background; `done` hears whether it arrived.
+/// Sends a crash report in the background; `done` hears whether it arrived.
 pub fn send(report: String, done: impl FnOnce(Result<(), String>) + Send + 'static) {
+    send_kind("crash", report, done)
+}
+
+/// Sends a report someone wrote (Report a problem).
+pub fn send_bug(report: String, done: impl FnOnce(Result<(), String>) + Send + 'static) {
+    send_kind("bug", report, done)
+}
+
+fn send_kind(kind: &str, report: String, done: impl FnOnce(Result<(), String>) + Send + 'static) {
     let Some(url) = endpoint() else {
-        done(Err("no crash server set up".into()));
+        done(Err("no report server set up".into()));
         return;
     };
-    let mut req = ehttp::Request::post(url, body(&report).into_bytes());
+    let mut req = ehttp::Request::post(url, body(kind, &report).into_bytes());
     req.headers = ehttp::Headers::new(&[("content-type", "application/json"), ("user-agent", "Phosphor")]);
     ehttp::fetch(req, move |r| {
         done(match r {
@@ -48,10 +58,10 @@ mod tests {
 
     #[test]
     fn the_body_carries_the_report_and_nothing_else() {
-        let v: serde_json::Value = serde_json::from_str(&body("crash.log (end):\npanicked at x")).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&body("crash", "crash.log (end):\npanicked at x")).unwrap();
         assert_eq!(v["version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(v["report"], "crash.log (end):\npanicked at x");
-        assert_eq!(v.as_object().unwrap().len(), 4);
+        assert_eq!((v["kind"].as_str(), v["report"].as_str()), (Some("crash"), Some("crash.log (end):\npanicked at x")));
+        assert_eq!(v.as_object().unwrap().len(), 5);
     }
 
     /// A report reaches a server: a local one stands in for the crash server.

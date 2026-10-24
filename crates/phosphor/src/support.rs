@@ -31,6 +31,9 @@ pub struct BugReport {
     pub send_crashes: bool,
     /// What happened to the last automatic report, for the banner.
     pub sent: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
+    /// What happened to the report sent from the window (None = none sent / sending).
+    pub bug_sent: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
+    pub sending: bool,
     /// macOS version, read once.
     os: Option<String>,
 }
@@ -139,7 +142,35 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
             });
         }
         ui.add_space(6.0);
+        // What the last send did.
+        if let Some(r) = st.bug.bug_sent.lock().unwrap().take() {
+            st.bug.sending = false;
+            st.notice = Some(match r {
+                Ok(()) => "Thanks: your report reached the Phosphor team".into(),
+                Err(e) => format!("The report wasn't sent ({e}): copy it or file it on GitHub instead"),
+            });
+            if st.notice.as_deref().is_some_and(|n| n.starts_with("Thanks")) {
+                st.bug.text.clear();
+                st.bug.open = false;
+            }
+        }
         crate::ui::toolbar(ui, |ui| {
+            let can_send = crate::crash_report::endpoint().is_some() && !st.bug.sending && !st.bug.text.trim().is_empty();
+            if crate::ui::command_if(ui, can_send, format!("{} Send to the Phosphor team", icon::PAPER_PLANE_TILT))
+                .on_hover_text("Sends this report privately (no account needed). It's the one-click way.")
+                .on_disabled_hover_text(if crate::crash_report::endpoint().is_none() { "Sending isn't set up in this build: copy the report or file it on GitHub" } else { "Write what happened first" })
+                .clicked()
+            {
+                let text = report_text(st);
+                st.bug.sending = true;
+                let out = st.bug.bug_sent.clone();
+                crate::crash_report::send_bug(text, move |r| {
+                    *out.lock().unwrap() = Some(r);
+                });
+            }
+            if st.bug.sending {
+                ui.spinner();
+            }
             if crate::ui::command(ui, format!("{} File it on GitHub", icon::GITHUB_LOGO)).on_hover_text("Opens a prefilled issue on github.com/fillinthe/phosphor (needs a GitHub account; the report is public)").clicked() {
                 let title = st.bug.text.lines().next().unwrap_or("").chars().take(80).collect::<String>();
                 let title = if title.trim().is_empty() { "Bug report".to_string() } else { title };
