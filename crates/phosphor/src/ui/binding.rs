@@ -19,7 +19,7 @@ pub(crate) fn target_picker(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
             .request_focus();
         let q = query.to_lowercase();
         for (t, name) in targets.iter().filter(|(_, n)| q.is_empty() || n.to_lowercase().contains(&q)) {
-            if ui.selectable_label(current == Some(t), name).clicked() {
+            if crate::ui::pick_item(ui, current == Some(t), name).clicked() {
                 picked = Some(t.clone());
             }
         }
@@ -52,7 +52,7 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
     let mut kind = source_kind(source);
     ComboBox::from_id_salt(id).width(82.0).selected_text(SOURCE_KINDS[kind]).show_ui(ui, |ui| {
         for (i, k) in SOURCE_KINDS.iter().enumerate() {
-            ui.selectable_value(&mut kind, i, *k);
+            crate::ui::pick_value(ui, &mut kind, i, *k);
         }
     });
     let (ch, num) = match source {

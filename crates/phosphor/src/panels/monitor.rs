@@ -78,32 +78,32 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
     ui.horizontal(|ui| {
         let current = monitor_source_name(st, n);
         ComboBox::from_id_salt(("monitor_src", n)).width(180.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut cfg.source, MonitorSource::Output, "Output (what the projector sees)");
-            ui.selectable_value(&mut cfg.source, MonitorSource::Mix, "Mix (before mapping)");
+            crate::ui::pick_value(ui, &mut cfg.source, MonitorSource::Output, "Output (what the projector sees)");
+            crate::ui::pick_value(ui, &mut cfg.source, MonitorSource::Mix, "Mix (before mapping)");
             ui.separator();
             crate::ui::layer_items(ui, &st.comp.layers, &mut cfg.source, MonitorSource::Layer);
             if !st.comp.groups.is_empty() {
                 ui.separator();
                 for g in &st.comp.groups {
-                    ui.selectable_value(&mut cfg.source, MonitorSource::Group(g.id), format!("Group: {}", g.name));
+                    crate::ui::pick_value(ui, &mut cfg.source, MonitorSource::Group(g.id), format!("Group: {}", g.name));
                 }
             }
             if st.comp.comps.len() > 1 {
                 ui.separator();
                 for c in &st.comp.comps {
-                    ui.selectable_value(&mut cfg.source, MonitorSource::Group(c.id), format!("Comp: {}", c.name));
+                    crate::ui::pick_value(ui, &mut cfg.source, MonitorSource::Group(c.id), format!("Comp: {}", c.name));
                 }
             }
             ui.separator();
             for o in &st.comp.outputs {
-                ui.selectable_value(&mut cfg.source, MonitorSource::OneOutput(o.id), format!("Output: {} (mapped)", o.name));
+                crate::ui::pick_value(ui, &mut cfg.source, MonitorSource::OneOutput(o.id), format!("Output: {} (mapped)", o.name));
             }
         });
         toggle(ui, &mut cfg.grid, label(icon::GRID_FOUR, "Guides")).on_hover_text("Thirds and centre guides");
         let rate = PREVIEW_RATES.iter().find(|r| r.0 == cfg.fps).map_or("Every frame", |r| r.1);
         ComboBox::from_id_salt(("monitor_fps", n)).width(90.0).selected_text(rate).show_ui(ui, |ui| {
             for (v, name) in PREVIEW_RATES {
-                ui.selectable_value(&mut cfg.fps, v, name);
+                crate::ui::pick_value(ui, &mut cfg.fps, v, name);
             }
         })
         .response

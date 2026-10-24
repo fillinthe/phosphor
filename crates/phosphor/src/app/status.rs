@@ -76,7 +76,7 @@ impl PhosphorApp {
                 let slow = s.fps > 0.0 && s.fps < 50.0;
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let open = super::areas::library_open(&self.dock);
-                    if ui.selectable_label(open, RichText::new(format!("{} Library", icon::BOOKS)).small()).on_hover_text("Media, effects and presets in a column on the left (drag it anywhere once it's open)").clicked() {
+                    if crate::ui::pick_item(ui, open, RichText::new(format!("{} Library", icon::BOOKS)).small()).on_hover_text("Media, effects and presets in a column on the left (drag it anywhere once it's open)").clicked() {
                         self.toggle_library();
                     }
                     ui.separator();

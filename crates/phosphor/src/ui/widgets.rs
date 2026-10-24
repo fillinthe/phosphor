@@ -301,7 +301,7 @@ pub(crate) fn choice_combo<T: phosphor_engine::Choice>(ui: &mut egui::Ui, id: im
         .selected_text(text(value.label()))
         .show_ui(ui, |ui| {
             for &o in T::OPTIONS {
-                ui.selectable_value(value, o, o.label());
+                crate::ui::pick_value(ui, value, o, o.label());
             }
         })
         .response
@@ -321,7 +321,7 @@ pub fn layer_name(layers: &[phosphor_engine::LayerState], id: u64) -> String {
 /// One choice per layer (top of the stack first) inside a combo box or menu; `make` turns a layer id into the value.
 pub fn layer_items<T: PartialEq>(ui: &mut egui::Ui, layers: &[phosphor_engine::LayerState], value: &mut T, make: impl Fn(u64) -> T) {
     for l in layers.iter().rev() {
-        ui.selectable_value(value, make(l.id), format!("Layer: {}", l.name));
+        crate::ui::pick_value(ui, value, make(l.id), format!("Layer: {}", l.name));
     }
 }
 

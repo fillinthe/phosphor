@@ -20,7 +20,7 @@ pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
             let id = egui::Id::new("live_data_place");
             let mut name: String = ui.ctx().data(|t| t.get_temp(id)).unwrap_or_default();
             let r = crate::ui::text_field(ui, &mut name, if d.place.is_empty() { "A town or city" } else { &d.place }, Some(150.0));
-            let go = (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || ui.add_enabled(!name.trim().is_empty() && !st.feeds.finding, egui::Button::new(icon::MAGNIFYING_GLASS)).on_hover_text("Find this place").clicked();
+            let go = (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || crate::ui::command_if(ui, !name.trim().is_empty() && !st.feeds.finding, icon::MAGNIFYING_GLASS).on_hover_text("Find this place").clicked();
             if go && !name.trim().is_empty() {
                 st.feeds.find_place(&name);
                 name.clear();

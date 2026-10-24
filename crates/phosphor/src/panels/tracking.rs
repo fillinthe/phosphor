@@ -18,11 +18,11 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
                 format!("Layer: {}", crate::ui::layer_name(&st.comp.layers, t.source))
             };
             ComboBox::from_id_salt("tracking_src").width(170.0).selected_text(current).show_ui(ui, |ui| {
-                ui.selectable_value(&mut t.source, MASTER_ID, "Mix");
+                crate::ui::pick_value(ui, &mut t.source, MASTER_ID, "Mix");
                 ui.separator();
                 crate::ui::layer_items(ui, &st.comp.layers, &mut t.source, |id| id);
                 for g in &st.comp.groups {
-                    ui.selectable_value(&mut t.source, g.id, format!("Group: {}", g.name));
+                    crate::ui::pick_value(ui, &mut t.source, g.id, format!("Group: {}", g.name));
                 }
             })
             .response
@@ -42,7 +42,7 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
             st.notice = Some("Faces are hidden on MASTER (Hide Face effect; tracking on)".into());
         }
         let sel = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
-        if ui.add_enabled(sel.is_some(), egui::Button::new(label(icon::SMILEY, "Selected layer on the face"))).on_hover_text("The selected layer's position and size follow the face (a mask, a logo, a picture over the face). Its X, Y and Scale show the motion; Stop the motion there to undo.").clicked()
+        if crate::ui::command_if(ui, sel.is_some(), label(icon::SMILEY, "Selected layer on the face")).on_hover_text("The selected layer's position and size follow the face (a mask, a logo, a picture over the face). Its X, Y and Scale show the motion; Stop the motion there to undo.").clicked()
             && let Some(id) = sel
             && st.comp.follow_face(id)
         {

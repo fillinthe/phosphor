@@ -11,7 +11,7 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
         choice_buttons(ui, &mut s.kind, |_, _| {});
         let current = if s.source == MASTER_ID { "Mix".to_string() } else { format!("Layer: {}", crate::ui::layer_name(&st.comp.layers, s.source)) };
         ComboBox::from_id_salt("scopes_src").width(150.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut s.source, MASTER_ID, "Mix");
+            crate::ui::pick_value(ui, &mut s.source, MASTER_ID, "Mix");
             crate::ui::layer_items(ui, &st.comp.layers, &mut s.source, |id| id);
         });
         if ui.button(label(icon::STACK_PLUS, "As a layer")).on_hover_text("A new layer showing this scope (it keeps measuring while the layer is on)").clicked() {

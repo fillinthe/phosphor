@@ -490,7 +490,7 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
                 Level::range(&mut g.gains[k], 0.0, 2.0, *name).default(1.0).show(ui);
             });
         }
-        if ui.add_enabled(!g.is_neutral(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset colour"))).clicked() {
+        if crate::ui::command_if(ui, !g.is_neutral(), label(icon::ARROW_COUNTER_CLOCKWISE, "Reset colour")).clicked() {
             *g = Default::default();
         }
     });

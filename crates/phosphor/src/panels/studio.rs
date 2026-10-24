@@ -133,7 +133,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     ui.add_space(14.0);
                     crate::ui::eye_toggle(ui, &mut m.enabled);
-                    let r = ui.selectable_label(*selected_surface == Some(m.id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR));
+                    let r = crate::ui::pick_item(ui, *selected_surface == Some(m.id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR));
                     if r.clicked() {
                         *selected_surface = Some(m.id);
                     }
@@ -265,7 +265,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             v.extend(s.corners);
             v
         }).collect();
-        if ui.add_enabled(!pts.is_empty(), egui::Button::new(label(icon::MAGNIFYING_GLASS_PLUS, "Zoom to slice"))).on_hover_text("Fill the view with the selected slice(s)").clicked() {
+        if crate::ui::command_if(ui, !pts.is_empty(), label(icon::MAGNIFYING_GLASS_PLUS, "Zoom to slice")).on_hover_text("Fill the view with the selected slice(s)").clicked() {
             let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
             for p in &pts {
                 for k in 0..2 {
@@ -544,7 +544,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
                 ("Remove its row", m.without_row(j)),
             ] {
                 let can = next.is_some();
-                if ui.add_enabled(can, egui::Button::new(text)).on_disabled_hover_text("Not here: the outer edges stay, and a grid has at most 16 cells a side").clicked() {
+                if crate::ui::command_if(ui, can, text).on_disabled_hover_text("Not here: the outer edges stay, and a grid has at most 16 cells a side").clicked() {
                     changed = next;
                     ui.close();
                 }
@@ -558,13 +558,13 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         let flat = s.model.is_none() && s.line.is_none();
         ui.add_enabled_ui(flat, |ui| {
             ui.menu_button(label(icon::GRID_NINE, "Mesh warp"), |ui| {
-                if ui.selectable_label(s.mesh.is_none(), "Off: four corners").clicked() {
+                if crate::ui::pick_item(ui, s.mesh.is_none(), "Off: four corners").clicked() {
                     s.set_mesh(false, 3, 3);
                     ui.close();
                 }
                 for n in [2u32, 3, 4, 6, 8] {
                     let on = s.mesh.as_ref().is_some_and(|m| m.cols == n && m.rows == n);
-                    if ui.selectable_label(on, format!("{n} × {n} grid")).clicked() {
+                    if crate::ui::pick_item(ui, on, format!("{n} × {n} grid")).clicked() {
                         s.set_mesh(true, n, n);
                         ui.close();
                     }
@@ -580,7 +580,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             });
             ui.menu_button(label(icon::SHAPES, "Shape"), |ui| {
                 for shape in SliceShape::ALL {
-                    if ui.selectable_label(s.shape == shape, shape.name()).clicked() {
+                    if crate::ui::pick_item(ui, s.shape == shape, shape.name()).clicked() {
                         s.shape = shape;
                         ui.close();
                     }

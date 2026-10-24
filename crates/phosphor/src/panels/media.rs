@@ -96,9 +96,9 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             ui.set_min_width(200.0);
             ui.label(RichText::new("Sort by").strong());
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut st.media_view.sort, MediaSort::Name, "Name");
-                ui.selectable_value(&mut st.media_view.sort, MediaSort::Newest, "Newest");
-                ui.selectable_value(&mut st.media_view.sort, MediaSort::Type, "Type");
+                crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Name, "Name");
+                crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Newest, "Newest");
+                crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Type, "Type");
             });
             crate::ui::toggle(ui, &mut st.media_view.by_folder, "Group by folder");
             Level::range(&mut st.media_view.tile, 72.0, 240.0, "Tile size").default(128.0).width(180.0).show(ui);
@@ -121,7 +121,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             segmented(ui, &mut view.filter, &filters, |_, _, _| {});
             for c in comp.media_collections.clone() {
                 let n = count(&|m| comp.in_collection(m, &c));
-                let r = ui.selectable_value(&mut view.filter, MediaFilter::Collection(c.clone()), format!("{} {c} {n}", icon::BOOKMARKS_SIMPLE));
+                let r = crate::ui::pick_value(ui, &mut view.filter, MediaFilter::Collection(c.clone()), format!("{} {c} {n}", icon::BOOKMARKS_SIMPLE));
                 r.right_menu(|ui| {
                     if ui.button(label(icon::TRASH, "Delete collection")).on_hover_text("The media stays in the bin").clicked() {
                         acts.push(MediaAct::DeleteCollection(c.clone()));
@@ -185,16 +185,16 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal_wrapped(|ui| {
         if !in_collection {
             let tip = "A new layer with every file shown here (after search, filter and sort) as its clips, the first one playing";
-            if ui.add_enabled(!shown.is_empty(), egui::Button::new(label(icon::SQUARES_FOUR, &format!("Clip layer ({})", shown.len())))).on_hover_text(tip).clicked() {
+            if crate::ui::command_if(ui, !shown.is_empty(), label(icon::SQUARES_FOUR, &format!("Clip layer ({})", shown.len()))).on_hover_text(tip).clicked() {
                 acts.push(MediaAct::ShownToLayer(shown.clone()));
             }
         }
-        if ui.add_enabled(!shown.is_empty(), egui::Button::new(label(icon::DICE_FIVE, "Random"))).on_hover_text("Play one of the files shown here, at random, on the selected layer (click again for another)").clicked() {
+        if crate::ui::command_if(ui, !shown.is_empty(), label(icon::DICE_FIVE, "Random")).on_hover_text("Play one of the files shown here, at random, on the selected layer (click again for another)").clicked() {
             acts.push(MediaAct::RandomOne(shown.clone()));
         }
         if !in_collection {
             let name = if st.media_view.filter == MediaFilter::Favorites { "Favourites" } else { "Shuffle" }.to_string();
-            if ui.add_enabled(shown.len() > 1, egui::Button::new(label(icon::SHUFFLE, "Shuffle layer"))).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
+            if crate::ui::command_if(ui, shown.len() > 1, label(icon::SHUFFLE, "Shuffle layer")).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
                 acts.push(MediaAct::ShuffleLayer(shown.clone(), name));
             }
         }
@@ -250,7 +250,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                     acts.push(MediaAct::RandomOne(items.clone()));
                     ui.close();
                 }
-                if ui.add_enabled(items.len() > 1, egui::Button::new(label(icon::SHUFFLE, "Shuffle on a new layer"))).on_hover_text("A new layer with this folder's files as clips, playing them in random order by itself").clicked() {
+                if crate::ui::command_if(ui, items.len() > 1, label(icon::SHUFFLE, "Shuffle on a new layer")).on_hover_text("A new layer with this folder's files as clips, playing them in random order by itself").clicked() {
                     acts.push(MediaAct::ShuffleLayer(items.clone(), title.clone()));
                     ui.close();
                 }

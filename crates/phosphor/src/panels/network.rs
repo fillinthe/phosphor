@@ -13,7 +13,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             guarded!(ui, net.port, egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
             ComboBox::from_id_salt("net_fps").width(60.0).selected_text(format!("{} fps", net.fps)).show_ui(ui, |ui| {
                 for f in [10, 15, 20, 30] {
-                    ui.selectable_value(&mut net.fps, f, format!("{f} fps"));
+                    crate::ui::pick_value(ui, &mut net.fps, f, format!("{f} fps"));
                 }
             });
         });
@@ -129,9 +129,9 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         let pages = &st.comp.surface.pages;
         let current = play.surface_page.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "All pages".into());
         ComboBox::from_id_salt("play_page").selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut play.surface_page, None, "All pages");
+            crate::ui::pick_value(ui, &mut play.surface_page, None, "All pages");
             for (i, name) in pages.iter().enumerate() {
-                ui.selectable_value(&mut play.surface_page, Some(i), name);
+                crate::ui::pick_value(ui, &mut play.surface_page, Some(i), name);
             }
         });
         ui.label("Title");
@@ -146,9 +146,9 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(format!("Player {}", i + 1));
                 let current = slot.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "usual".into());
                 ComboBox::from_id_salt(("place_page", i)).width(90.0).selected_text(current).show_ui(ui, |ui| {
-                    ui.selectable_value(slot, None, "usual").on_hover_text("The page above, or page by place");
+                    crate::ui::pick_value(ui, slot, None, "usual").on_hover_text("The page above, or page by place");
                     for (p, name) in pages.iter().enumerate() {
-                        ui.selectable_value(slot, Some(p), name);
+                        crate::ui::pick_value(ui, slot, Some(p), name);
                     }
                 });
             }
@@ -251,7 +251,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 let w = (ui.available_width() - 90.0).clamp(100.0, 260.0);
                 crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(w));
-                if ui.add_enabled(!addr.trim().is_empty(), egui::Button::new(label(icon::LINK, "Follow"))).clicked() {
+                if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::LINK, "Follow")).clicked() {
                     st.following = Some(crate::follow::Link::connect(&addr));
                 }
             });

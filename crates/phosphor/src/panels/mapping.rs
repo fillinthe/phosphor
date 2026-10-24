@@ -705,9 +705,9 @@ pub(crate) fn mask_attach_row(ui: &mut egui::Ui, mapping: &mut phosphor_engine::
     ui.horizontal(|ui| {
         ui.label("Attached to");
         egui::ComboBox::from_id_salt(("mask_attach", mask)).selected_text(name(current)).show_ui(ui, |ui| {
-            ui.selectable_value(&mut pick, None, "Nothing (stays put)");
+            crate::ui::pick_value(ui, &mut pick, None, "Nothing (stays put)");
             for s in &mapping.surfaces {
-                ui.selectable_value(&mut pick, Some(s.id), &s.name);
+                crate::ui::pick_value(ui, &mut pick, Some(s.id), &s.name);
             }
         });
     })
@@ -1074,20 +1074,20 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
             None => groups.iter().find(|g| g.id == id).map_or_else(|| crate::ui::layer_name(layers, id), |g| g.name.clone()),
         });
         egui::ComboBox::from_id_salt(("surface_source", s.id)).width(170.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut s.layer, None, "Whole composition");
+            crate::ui::pick_value(ui, &mut s.layer, None, "Whole composition");
             if ui.button(label(icon::FILE_VIDEO, "A file…")).on_hover_text("A picture or movie of its own on this slice (a layer that stays out of the mix)").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(PICK_SLICE_FILE), s.id));
                 ui.close();
             }
             ui.separator();
             for g in groups.iter() {
-                ui.selectable_value(&mut s.layer, Some(g.id), format!("Group: {}", g.name));
+                crate::ui::pick_value(ui, &mut s.layer, Some(g.id), format!("Group: {}", g.name));
             }
             crate::ui::layer_items(ui, layers, &mut s.layer, Some);
             if !outputs.is_empty() {
                 ui.separator();
                 for (id, name) in outputs {
-                    ui.selectable_value(&mut s.layer, Some(*id), name).on_hover_text("A comp's picture, or another output's finished picture (its slices, warps and masks)");
+                    crate::ui::pick_value(ui, &mut s.layer, Some(*id), name).on_hover_text("A comp's picture, or another output's finished picture (its slices, warps and masks)");
                 }
             }
         })

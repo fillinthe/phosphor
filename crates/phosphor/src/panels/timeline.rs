@@ -227,7 +227,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
             ui.label("fps");
             egui::ComboBox::from_id_salt("render_fps").width(60.0).selected_text(o.fps.to_string()).show_ui(ui, |ui| {
                 for f in [24, 25, 30, 50, 60] {
-                    ui.selectable_value(&mut o.fps, f, f.to_string());
+                    crate::ui::pick_value(ui, &mut o.fps, f, f.to_string());
                 }
             });
             ui.label("Length");

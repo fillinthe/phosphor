@@ -216,7 +216,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         st.clip_page = st.clip_page.min(banks - 1);
         if banks <= 8 {
             for i in 0..banks {
-                if ui.selectable_label(st.clip_page == i, bank_name(i)).clicked() {
+                if crate::ui::pick_item(ui, st.clip_page == i, bank_name(i)).clicked() {
                     st.clip_page = i;
                 }
             }
@@ -227,7 +227,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             ComboBox::from_id_salt("clip_bank").width(60.0).selected_text(bank_name(st.clip_page)).height(400.0).show_ui(ui, |ui| {
                 for i in 0..banks {
                     let first = i * CLIP_PAGE_SIZE + 1;
-                    ui.selectable_value(&mut st.clip_page, i, format!("{}  ({first}–{})", bank_name(i), first + CLIP_PAGE_SIZE - 1));
+                    crate::ui::pick_value(ui, &mut st.clip_page, i, format!("{}  ({first}–{})", bank_name(i), first + CLIP_PAGE_SIZE - 1));
                 }
             });
             if ui.small_button(icon::CARET_RIGHT).clicked() {
@@ -284,9 +284,9 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
                     // Triggers are actions: solid buttons (the columns on the number keys in full colour).
                     let head = if keyed {
-                        action_button_sized(ui, Act::Go, format!("{} {}", icon::PLAY, c + 1), egui::vec2(cell.x, 22.0))
+                        action_button_sized(ui, Act::Go, format!("{} {}", icon::PLAY, c + 1), egui::vec2(cell.x, CONTROL_H))
                     } else {
-                        ui.add_sized([cell.x, 22.0], egui::Button::new(format!("{} {}", icon::PLAY, c + 1)))
+                        command_sized(ui, format!("{} {}", icon::PLAY, c + 1), egui::vec2(cell.x, CONTROL_H))
                     }
                     .on_hover_text(tip);
                     if head.clicked() {

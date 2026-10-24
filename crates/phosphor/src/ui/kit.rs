@@ -104,6 +104,58 @@ pub(crate) fn pick_value<'a, V: PartialEq>(ui: &mut egui::Ui, current: &mut V, v
     r
 }
 
+/// A command that can't be used right now (nothing to save, nothing selected): greyed out until it can.
+pub(crate) fn command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+    ui.add_enabled(enabled, egui::Button::new(text))
+}
+
+/// `command_if`, small (tight rows).
+pub(crate) fn small_command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+    ui.add_enabled(enabled, egui::Button::new(text).small())
+}
+
+/// A command at a set size (a column of same-width buttons, a grid cell's header).
+pub(crate) fn command_sized<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>, size: egui::Vec2) -> egui::Response {
+    ui.add_sized(size, egui::Button::new(text))
+}
+
+/// A command at least `width` wide (a list of choices that should line up).
+pub(crate) fn wide_button<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>, width: f32) -> egui::Response {
+    ui.add(egui::Button::new(text).min_size(egui::vec2(width, CONTROL_H)))
+}
+
+/// Something asking for attention (Donate, an update is out, take back control): solid colour, dark bold text.
+pub(crate) fn callout_button(ui: &mut egui::Ui, text: impl Into<String>, fill: Color32) -> egui::Response {
+    ui.add(callout(text, fill))
+}
+
+/// The `callout_button` widget, to place somewhere exact (`ui.put`).
+pub(crate) fn callout(text: impl Into<String>, fill: Color32) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(text.into()).strong().color(Color32::from_gray(16))).fill(fill)
+}
+
+/// A mode that changes what clicks do (MAP): plain when off, filled with the accent while on.
+pub(crate) fn mode_button(ui: &mut egui::Ui, on: bool, text: impl Into<String>) -> egui::Response {
+    let t = RichText::new(text.into()).strong();
+    let t = if on { t.color(Color32::BLACK) } else { t };
+    ui.add(egui::Button::new(t).selected(on).fill(if on { accent() } else { Color32::TRANSPARENT }))
+}
+
+/// A menu entry with its keyboard shortcut on the right (greyed out when it can't be used).
+pub(crate) fn menu_item(ui: &mut egui::Ui, enabled: bool, text: impl Into<String>, shortcut: impl Into<String>) -> egui::Response {
+    ui.add_enabled(enabled, egui::Button::new(text.into()).shortcut_text(shortcut.into()))
+}
+
+/// The one big button of a panel (the cue list's GO): an action button, bigger.
+pub(crate) fn big_action_button(ui: &mut egui::Ui, act: Act, text: impl Into<String>) -> egui::Response {
+    let fill = match act {
+        Act::Go => accent(),
+        Act::Record => Color32::from_rgb(225, 70, 60),
+    };
+    let ink = if act == Act::Go { Color32::from_gray(12) } else { Color32::WHITE };
+    ui.add(egui::Button::new(RichText::new(text.into()).strong().size(16.0).color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(egui::vec2(80.0, 30.0)))
+}
+
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
 pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: Option<f32>) -> egui::Response {
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))

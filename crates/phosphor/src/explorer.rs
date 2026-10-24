@@ -89,26 +89,26 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     ui.horizontal_wrapped(|ui| {
-        ui.selectable_value(&mut st.explorer.sources, false, label(icon::MAGIC_WAND, "Effects"));
-        ui.selectable_value(&mut st.explorer.sources, true, label(icon::SPARKLE, "Sources"));
+        crate::ui::pick_value(ui, &mut st.explorer.sources, false, label(icon::MAGIC_WAND, "Effects"));
+        crate::ui::pick_value(ui, &mut st.explorer.sources, true, label(icon::SPARKLE, "Sources"));
         ui.separator();
         ui.label(RichText::new("Previews").small().color(Color32::GRAY));
-        ui.selectable_value(&mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse; others refresh every 2 s (lightest)");
-        ui.selectable_value(&mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
-        ui.selectable_value(&mut st.explorer.preview_mode, PreviewMode::Off, "Off");
+        crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse; others refresh every 2 s (lightest)");
+        crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
+        crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Off, "Off");
     });
     let list: Vec<&'static shaders::ShaderDesc> = if st.explorer.sources { shaders::all_generators() } else { shaders::all_effects() };
     // Category chips, only for categories that exist in the current list.
     ui.horizontal_wrapped(|ui| {
-        ui.selectable_value(&mut st.explorer.category, String::new(), "All");
-        ui.selectable_value(&mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+        crate::ui::pick_value(ui, &mut st.explorer.category, String::new(), "All");
+        crate::ui::pick_value(ui, &mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
         let hidden = list.iter().filter(|d| st.explorer.hidden.iter().any(|h| h == d.id)).count();
         if hidden > 0 {
-            ui.selectable_value(&mut st.explorer.category, "hidden".to_string(), label(icon::EYE_SLASH, &format!("Hidden ({hidden})")));
+            crate::ui::pick_value(ui, &mut st.explorer.category, "hidden".to_string(), label(icon::EYE_SLASH, &format!("Hidden ({hidden})")));
         }
         for cat in CATEGORY_ORDER {
             if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
-                ui.selectable_value(&mut st.explorer.category, cat.to_string(), *cat);
+                crate::ui::pick_value(ui, &mut st.explorer.category, cat.to_string(), *cat);
             }
         }
     });
@@ -415,7 +415,7 @@ fn shadertoy_window(ctx: &egui::Context, st: &mut State) {
             ui.colored_label(WARN, e);
         }
         let ready = !imp.name.trim().is_empty() && !imp.code.trim().is_empty();
-        if ui.add_enabled(ready, egui::Button::new(label(icon::CHECK, "Import"))).clicked() {
+        if crate::ui::command_if(ui, ready, label(icon::CHECK, "Import")).clicked() {
             let credit = if imp.credit.trim().is_empty() { "Shadertoy".to_string() } else { format!("{} (Shadertoy)", imp.credit.trim()) };
             let result = phosphor_isf::shadertoy::to_isf(&imp.code, &credit).and_then(|isf| {
                 // Check it converts before saving (same converter the library uses).
@@ -646,7 +646,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
                 let dot = if sh.error.is_some() { RichText::new(icon::RECORD).color(WARN) } else { RichText::new(icon::RECORD).color(accent()) };
                 ui.horizontal(|ui| {
                     ui.label(dot.small());
-                    if ui.selectable_label(st.editor.current == Some(i), name).clicked() {
+                    if crate::ui::pick_item(ui, st.editor.current == Some(i), name).clicked() {
                         st.editor.current = Some(i);
                     }
                 });
@@ -984,7 +984,7 @@ pub fn palette(ctx: &egui::Context, st: &mut State) -> Option<Command> {
                 ui.separator();
                 for (i, (_, text, cmd)) in ranked.iter().enumerate() {
                     let sel = i == st.palette.selected;
-                    if ui.selectable_label(sel, text).clicked() {
+                    if crate::ui::pick_item(ui, sel, text).clicked() {
                         chosen = Some(cmd.clone());
                     }
                 }
@@ -1057,14 +1057,14 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
             }
         });
         ui.horizontal_wrapped(|ui| {
-            ui.selectable_value(&mut b.category, String::new(), "All");
+            crate::ui::pick_value(ui, &mut b.category, String::new(), "All");
             if !b.sources {
-                ui.selectable_value(&mut b.category, "recent".to_string(), format!("{} Recent", icon::CLOCK_COUNTER_CLOCKWISE));
+                crate::ui::pick_value(ui, &mut b.category, "recent".to_string(), format!("{} Recent", icon::CLOCK_COUNTER_CLOCKWISE));
             }
-            ui.selectable_value(&mut b.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+            crate::ui::pick_value(ui, &mut b.category, "★".to_string(), format!("{} Favourites", icon::STAR));
             for cat in CATEGORY_ORDER {
                 if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
-                    ui.selectable_value(&mut b.category, cat.to_string(), *cat);
+                    crate::ui::pick_value(ui, &mut b.category, cat.to_string(), *cat);
                 }
             }
         });

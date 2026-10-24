@@ -105,7 +105,7 @@ impl PhosphorApp {
                             ui.colored_label(egui::Color32::from_rgb(255, 196, 70), format!("{missing} file(s) can't be found and will be left out"));
                         }
                         ui.add_space(4.0);
-                        if ui.add_enabled(!st.export.name.trim().is_empty(), egui::Button::new(label_text(icon::PACKAGE, "Choose folder and export…"))).clicked() {
+                        if crate::ui::command_if(ui, !st.export.name.trim().is_empty(), label_text(icon::PACKAGE, "Choose folder and export…")).clicked() {
                             st.dialogs.pick_folder(crate::dialogs::Purpose::ExportShow);
                         }
                     }

@@ -123,7 +123,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         let current = earlier[..i].iter().find(|(id, _)| *id == c.from).map_or("pick one".to_string(), |(_, n)| n.clone());
                         egui::ComboBox::from_id_salt(("chain_from", m.id)).width(100.0).selected_text(current).show_ui(ui, |ui| {
                             for (id, name) in &earlier[..i] {
-                                ui.selectable_value(&mut c.from, *id, name);
+                                crate::ui::pick_value(ui, &mut c.from, *id, name);
                             }
                         });
                         ui.horizontal(|ui| {

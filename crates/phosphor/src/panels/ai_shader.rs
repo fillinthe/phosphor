@@ -126,7 +126,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
                 hint(ui, "Needs your own Anthropic API key (console.anthropic.com › API keys). Each shader costs a few cents on your account. The key stays on this Mac, in the Keychain.");
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut a.new_key).password(true).hint_text("sk-ant-…").desired_width(300.0));
-                    if ui.add_enabled(!a.new_key.trim().is_empty(), egui::Button::new("Save key")).clicked() {
+                    if crate::ui::command_if(ui, !a.new_key.trim().is_empty(), "Save key").clicked() {
                         match crate::ai_shader::store_key(a.new_key.trim()) {
                             Ok(()) => {
                                 a.new_key.clear();

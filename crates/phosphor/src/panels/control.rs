@@ -47,11 +47,11 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         {
             let shown = if control.clock_out_port.is_empty() { "Off".to_string() } else { control.clock_out_port.clone() };
             ComboBox::from_id_salt("clock_out").width(140.0).selected_text(format!("Clock out: {shown}")).show_ui(ui, |ui| {
-                if ui.selectable_label(control.clock_out_port.is_empty(), "Off").clicked() {
+                if crate::ui::pick_item(ui, control.clock_out_port.is_empty(), "Off").clicked() {
                     control.clock_out_port.clear();
                 }
                 for p in crate::control::clock_out::outputs() {
-                    if ui.selectable_label(control.clock_out_port == p, &p).clicked() {
+                    if crate::ui::pick_item(ui, control.clock_out_port == p, &p).clicked() {
                         control.clock_out_port = p;
                         control.clock_out_error = None;
                     }
@@ -64,11 +64,11 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             }
             let shown = if control.mtc_out_port.is_empty() { "Off".to_string() } else { control.mtc_out_port.clone() };
             ComboBox::from_id_salt("mtc_out").width(140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
-                if ui.selectable_label(control.mtc_out_port.is_empty(), "Off").clicked() {
+                if crate::ui::pick_item(ui, control.mtc_out_port.is_empty(), "Off").clicked() {
                     control.mtc_out_port.clear();
                 }
                 for p in crate::control::clock_out::outputs() {
-                    if ui.selectable_label(control.mtc_out_port == p, &p).clicked() {
+                    if crate::ui::pick_item(ui, control.mtc_out_port == p, &p).clicked() {
                         control.mtc_out_port = p;
                         control.mtc_out_error = None;
                     }
@@ -78,12 +78,12 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 ui.separator();
                 ui.label(RichText::new("LTC (timecode as sound)").small());
                 let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
-                if ui.selectable_label(control.ltc_out_pair.is_none(), "LTC off").clicked() {
+                if crate::ui::pick_item(ui, control.ltc_out_pair.is_none(), "LTC off").clicked() {
                     control.ltc_out_pair = None;
                 }
                 for p in 0..pairs.max(control.ltc_out_pair.map_or(0, |p| p + 1)) {
                     let name = format!("LTC on outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
-                    if ui.selectable_label(control.ltc_out_pair == Some(p), name).clicked() {
+                    if crate::ui::pick_item(ui, control.ltc_out_pair == Some(p), name).clicked() {
                         control.ltc_out_pair = Some(p);
                     }
                 }
@@ -98,7 +98,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             ui.set_min_width(260.0);
             hint(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
             for (name, lights) in crate::control::CLIP_LIGHTS {
-                if ui.selectable_label(control.clip_lights == lights, name).clicked() {
+                if crate::ui::pick_item(ui, control.clip_lights == lights, name).clicked() {
                     control.clip_lights = lights;
                 }
             }
@@ -160,9 +160,9 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             let current = control.arduino_port();
             let mut pick = current.clone();
             ComboBox::from_id_salt("arduino_port").width(200.0).selected_text(if current.is_empty() { "(none)".to_string() } else { current.clone() }).show_ui(ui, |ui| {
-                ui.selectable_value(&mut pick, String::new(), "(none)");
+                crate::ui::pick_value(ui, &mut pick, String::new(), "(none)");
                 for p in crate::serial::ports() {
-                    ui.selectable_value(&mut pick, p.clone(), p);
+                    crate::ui::pick_value(ui, &mut pick, p.clone(), p);
                 }
             })
             .response
@@ -313,7 +313,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 if let Some(t) = target_picker(ui, "new_map_target", &targets, target.as_ref(), 220.0) {
                     *target = Some(t);
                 }
-                if ui.add_enabled(target.is_some(), egui::Button::new("Add")).clicked() {
+                if crate::ui::command_if(ui, target.is_some(), "Add").clicked() {
                     finish = Some(true);
                 }
                 if ui.small_button(icon::X).clicked() {
@@ -347,7 +347,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     source_editor(ui, ("map_source", i), &mut m.source);
                     let relisten = *listen_for == Some(ListenFor::Replace(i)) && control.listen_source;
-                    if ui.selectable_label(relisten, icon::EAR).on_hover_text("Listen again for this mapping's input").clicked() {
+                    if crate::ui::pick_item(ui, relisten, icon::EAR).on_hover_text("Listen again for this mapping's input").clicked() {
                         control.listen_source = true;
                         *listen_for = Some(ListenFor::Replace(i));
                     }
@@ -366,7 +366,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                         m.target = t;
                     }
                     let place = places.get(i).copied().flatten();
-                    if ui.add_enabled(place.is_some(), egui::Button::new(icon::CROSSHAIR).small()).on_hover_text("Show this control (selects its layer and opens its panel)").clicked() {
+                    if crate::ui::small_command_if(ui, place.is_some(), icon::CROSSHAIR).on_hover_text("Show this control (selects its layer and opens its panel)").clicked() {
                         show = place;
                     }
                 });
