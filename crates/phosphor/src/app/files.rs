@@ -67,6 +67,17 @@ impl PhosphorApp {
         let name_of = |p: &std::path::Path| p.file_name().map_or_else(|| p.to_string_lossy().to_string(), |n| n.to_string_lossy().to_string());
         // Watched folders first: this has to run every frame (it rescans every 10 s), not only when a dialog closes.
         // A collection's folders are watched too (an opened project may bring new ones).
+        // Following's folder is watched while any account is followed (each account = a subfolder in Media).
+        #[cfg(not(target_arch = "wasm32"))]
+        if !self.state.media_view.following.accounts.is_empty()
+            && let Some(f) = crate::online::following::folder()
+        {
+            let f = f.to_string_lossy().into_owned();
+            if !self.state.folders.folders.contains(&f) {
+                let _ = std::fs::create_dir_all(&f);
+                self.state.folders.add(f);
+            }
+        }
         for f in &self.state.comp.collection_folders {
             if !self.state.folders.folders.contains(&f.folder) {
                 self.state.folders.add(f.folder.clone());
@@ -74,11 +85,18 @@ impl PhosphorApp {
         }
         if let Some(found) = self.state.folders.poll(now) {
             // Files that vanished from a watched folder leave the bin; new ones join it.
-            let folders = self.state.folders.folders.clone();
+            // (A folder that's missing, its drive unplugged or the network down, keeps its files: they come back.)
+            let folders: Vec<String> = self.state.folders.folders.iter().filter(|f| !self.state.folders.missing(f)).cloned().collect();
             let paths: std::collections::HashSet<&str> = found.iter().map(|(_, p, _)| p.as_str()).collect();
             self.state.comp.media_bin.retain(|m| m.folder.is_empty() || !folders.contains(&m.folder) || paths.contains(m.path.as_str()));
             for (name, path, folder) in &found {
-                self.state.comp.add_folder_media(name, path, folder);
+                if self.state.comp.add_folder_media(name, path, folder) {
+                    // Downloaded files (Online, Following) keep who made them.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Some(m) = self.state.comp.media_bin.last_mut() {
+                        m.credit = crate::online::saved_credit(std::path::Path::new(path));
+                    }
+                }
             }
         }
         let dialogs = self.state.dialogs.poll();
@@ -111,12 +129,20 @@ impl PhosphorApp {
                 Purpose::WatchFolder => {
                     // A watched folder is a collection (like a VDMX media bin page): named after the folder, every
                     // clip in it and new ones as they arrive, ready to Play on a layer.
-                    if let Some(p) = paths.first() {
+                    // (The Media panel's sources show it under This Mac instead: no collection.)
+                    if let Some(p) = paths.first()
+                        && !st.media_view.classic
+                    {
+                        let folder = p.to_string_lossy().to_string();
+                        st.folders.add(folder.clone());
+                        st.media_view.show(crate::panels::MediaSource::Folder(folder.clone()), Some(folder));
+                        st.notice = Some(format!("Watching \"{}\": new clips show up on their own", name_of(p)));
+                    } else if let Some(p) = paths.first() {
                         let folder = p.to_string_lossy().to_string();
                         let name = st.comp.create_collection(&name_of(p));
                         st.comp.add_collection_folder(&name, &folder);
                         st.folders.add(folder);
-                        st.media_view.filter = crate::panels::MediaFilter::Collection(name.clone());
+                        st.media_view.show_collection(name.clone());
                         st.notice = Some(format!("\"{name}\": every clip in that folder, and new ones as they arrive (Play on, to put it on a layer)"));
                     }
                 }

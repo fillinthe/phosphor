@@ -113,6 +113,34 @@ pub(crate) fn pick_value<V: PartialEq>(ui: &mut egui::Ui, current: &mut V, value
 }
 
 /// A command (Import…, Rename, Add folder…): a plain button that never wraps its words.
+/// One row of a source list (the Media panel's sidebar): the whole width, a picked or hovered fill, the name on the
+/// left and a count or badge on the right. Never changes size.
+pub(crate) fn list_row(ui: &mut egui::Ui, picked: bool, text: &str, right: &str, badge: bool) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), CONTROL_H), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let v = ui.visuals();
+        let fill = if picked { v.selection.bg_fill } else if resp.hovered() { v.widgets.hovered.weak_bg_fill } else { Color32::TRANSPARENT };
+        ui.painter().rect_filled(rect, 3.0, fill);
+        let color = if picked { v.selection.stroke.color } else { v.text_color() };
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let mut right_w = 0.0;
+        if !right.is_empty() {
+            let g = ui.painter().layout_no_wrap(right.to_string(), egui::FontId::proportional(11.0), if badge { Color32::BLACK } else { v.weak_text_color() });
+            right_w = g.size().x + 10.0;
+            let at = egui::pos2(rect.right() - 6.0 - g.size().x, rect.center().y - g.size().y / 2.0);
+            if badge {
+                ui.painter().rect_filled(egui::Rect::from_min_size(at - egui::vec2(4.0, 1.0), g.size() + egui::vec2(8.0, 2.0)), 7.0, crate::theme::accent());
+            }
+            ui.painter().galley(at, g, Color32::BLACK);
+        }
+        let room = (rect.width() - 14.0 - right_w).max(10.0);
+        let job = egui::text::LayoutJob { wrap: egui::text::TextWrapping::truncate_at_width(room), ..egui::text::LayoutJob::simple_singleline(text.to_string(), font, color) };
+        let g = ui.painter().layout_job(job);
+        ui.painter().galley(egui::pos2(rect.left() + 6.0, rect.center().y - g.size().y / 2.0), g, color);
+    }
+    resp
+}
+
 pub(crate) fn command<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>) -> egui::Response {
     ui.add(egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend))
 }

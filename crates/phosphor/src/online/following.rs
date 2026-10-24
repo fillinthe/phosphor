@@ -30,14 +30,6 @@ impl Site {
             Site::Instagram => "Instagram",
         }
     }
-
-    /// What's brought in from it.
-    pub fn takes(self) -> &'static str {
-        match self {
-            Site::X => "animated GIFs",
-            Site::Instagram => "videos",
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -262,6 +254,9 @@ pub fn refresh(f: &Following, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<P
     let shared = Arc::new(Mutex::new(Progress { running: true, ..Default::default() }));
     let (out, f) = (shared.clone(), f.clone());
     let _ = std::thread::Builder::new().name("following".into()).spawn(move || {
+        // One refresh at a time (following an account while Refresh runs): two would write the same files.
+        static ONE: Mutex<()> = Mutex::new(());
+        let _turn = ONE.lock().unwrap_or_else(|e| e.into_inner());
         let set = |who: String, what: String, new: usize| {
             if let Ok(mut p) = out.lock() {
                 p.lines.retain(|(w, _)| *w != who);

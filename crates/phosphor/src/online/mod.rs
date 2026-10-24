@@ -5,6 +5,7 @@
 
 pub mod sources;
 pub mod starter;
+pub mod following;
 pub mod x;
 
 use std::io::{Read, Write};
@@ -367,6 +368,25 @@ fn fetch(item: &Item, max: u64, progress: impl Fn(u64, Option<u64>)) -> Result<V
         let _ = std::fs::write(sidecar(&path), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
     }
     Ok(vec![path])
+}
+
+/// One item's file saved into `dir` (Following), with its credit beside it. Returns where, and whether it's new
+/// (false: it was already there).
+pub fn save_into(item: &Item, dir: &Path) -> Result<(PathBuf, bool), String> {
+    let url = item.file.clone().ok_or("no file to save")?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("couldn't make {}: {e}", dir.display()))?;
+    sweep_parts(dir);
+    let path = dir.join(file_name(item, &url));
+    if path.exists() {
+        return Ok((path, false));
+    }
+    // The credit first: the folder scan may see the file the moment it's renamed into place, and reads it then.
+    let _ = std::fs::write(sidecar(&path), serde_json::to_vec_pretty(&item.credit).unwrap_or_default());
+    if let Err(e) = download_to(&url, &path, item.size, MAX_FILE, &|_, _| {}) {
+        let _ = std::fs::remove_file(sidecar(&path));
+        return Err(e);
+    }
+    Ok((path, true))
 }
 
 /// An ISF shader from isf.video: checked with Phosphor's converter first (so only ones that work are kept), then
