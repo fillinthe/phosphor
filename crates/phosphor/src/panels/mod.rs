@@ -325,7 +325,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
 /// Notes saved with the project: running order, venue contacts, what each cue is for.
 fn notes_panel(ui: &mut egui::Ui, st: &mut State) {
     hint(ui, "Kept in the project file.");
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         ui.add(egui::TextEdit::multiline(&mut st.comp.notes).hint_text("Running order, venue details, reminders…").desired_width(f32::INFINITY).desired_rows(20));
     });
 }

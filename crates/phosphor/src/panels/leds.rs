@@ -178,7 +178,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
     });
 
     let mut remove = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         for (i, f) in st.comp.dmx.fixtures.iter_mut().enumerate() {
             let is_sel = selected == Some(f.id);
             let r = card_frame(ui, is_sel).show(ui, |ui| {

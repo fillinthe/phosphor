@@ -124,7 +124,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
     // One row per track.
     let mut remove_track = None;
     let mut seek = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         for (ti, tr) in st.comp.timeline.tracks.iter_mut().enumerate() {
             let (row, resp) = ui.allocate_exact_size(egui::vec2(full, ROW_H), Sense::click());
             let p = ui.painter_at(row);

@@ -609,7 +609,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(4.0);
     let mut remove = None;
     let mut duplicate = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 180.0).max(80.0);
         if o.mapping.surfaces.is_empty() {
             hint(ui, "No surfaces yet. Add one, then drag its corners.");

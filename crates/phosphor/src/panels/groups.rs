@@ -184,7 +184,7 @@ pub(crate) fn apply_group_action(st: &mut State, gid: u64, action: GroupAction) 
 pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<egui::TextureId>, aspect: f32, clipboard_len: usize, outs: &[(u64, String, bool)]) -> (Option<FxAction>, Option<(u64, bool)>) {
     let mut fx_action = None;
     let mut send = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w / aspect), g.enabled);

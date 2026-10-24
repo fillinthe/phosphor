@@ -11,7 +11,7 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
     let layer = st.comp.layers.iter().find(|l| l.id == target).cloned();
     let chain = st.comp.effects(target).cloned().unwrap_or_default();
     let (mut look, mut layer_pick, mut chain_pick) = (None, None, None);
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         let State { presets, preset_name, layer_presets, layer_preset_name, chain_presets, chain_preset_name, comp, .. } = &mut *st;
         crate::ui::section(ui, "presets_Looks", "Looks", true, |ui| {
             hint(ui, "The whole project: layers, effects, mapping.");

@@ -38,7 +38,7 @@ fn permissions(ui: &mut egui::Ui) {
 }
 
 pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         #[cfg(target_os = "macos")]
         permissions(ui);
         // Phones, tablets and browsers on the session.
@@ -96,7 +96,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                         st.web_log.clear();
                     }
                 });
-                egui::ScrollArea::vertical().id_salt("web_log").max_height(160.0).stick_to_bottom(true).show(ui, |ui| {
+                crate::ui::column_scroll(ui).id_salt("web_log").max_height(160.0).stick_to_bottom(true).show(ui, |ui| {
                     egui::Grid::new("web_log_grid").num_columns(3).spacing([10.0, 2.0]).show(ui, |ui| {
                         for l in &st.web_log {
                             ui.monospace(RichText::new(&l.wall).small());

@@ -169,7 +169,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         .collect();
 
     let mut action: Option<TileAction> = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if filtered.is_empty() {
             crate::ui::hint(ui, "Nothing matches. Clear the search or pick another category.");
         }
@@ -408,7 +408,7 @@ fn shadertoy_window(ctx: &egui::Context, st: &mut State) {
             ui.label("By");
             ui.add(egui::TextEdit::singleline(&mut imp.credit).hint_text("its author").desired_width(160.0));
         });
-        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+        crate::ui::column_scroll(ui).max_height(360.0).show(ui, |ui| {
             ui.add(egui::TextEdit::multiline(&mut imp.code).code_editor().desired_rows(16).desired_width(f32::INFINITY).hint_text("void mainImage( out vec4 fragColor, in vec2 fragCoord ) { … }"));
         });
         if let Some(e) = &imp.error {
@@ -625,7 +625,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         .response
         .on_hover_text("Starters that each do one thing (colour, warp, pixelate, mirror, mask, glow, rings, clouds), every line explained");
         ui.menu_button(label(icon::COPY, "Copy a built-in…"), |ui| {
-            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+            crate::ui::column_scroll(ui).max_height(360.0).show(ui, |ui| {
                 for d in shaders::EFFECTS.iter().chain(shaders::GENERATORS) {
                     if let Some(src) = custom::builtin_as_custom(d.id)
                         && crate::ui::command(ui, d.name).clicked()
@@ -637,7 +637,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             });
         });
         ui.separator();
-        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
             if st.editor.shaders.is_empty() {
                 crate::ui::hint(ui, "No shaders yet.");
             }
@@ -1087,7 +1087,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
         if ui.input(|i| i.key_pressed(egui::Key::Enter)) && let Some(d) = shown.first() {
             picked = Some((d.id, false));
         }
-        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
             if shown.is_empty() {
                 crate::ui::hint(ui, "Nothing matches.");
             }

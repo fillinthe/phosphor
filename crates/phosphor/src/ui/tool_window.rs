@@ -31,7 +31,7 @@ pub(crate) fn tool_window(ctx: &egui::Context, title: &str, open: &mut bool, det
                 });
                 ui.separator();
                 if let Some(body) = body.take() {
-                    egui::ScrollArea::vertical().show(ui, body);
+                    crate::ui::column_scroll(ui).show(ui, body);
                 }
             });
         });

@@ -77,7 +77,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
         let avail_h = ui.available_height() - 4.0;
         let cell = (canvas_w / cols).min(avail_h / rows.max(4.0)).max(24.0);
         let height = (rows * cell).max(avail_h);
-        egui::ScrollArea::vertical().id_salt("surface_scroll").max_width(canvas_w).auto_shrink([false, false]).show(ui, |ui| {
+        crate::ui::column_scroll(ui).id_salt("surface_scroll").max_width(canvas_w).auto_shrink([false, false]).show(ui, |ui| {
             let (canvas, _) = ui.allocate_exact_size(egui::vec2(canvas_w, height), Sense::hover());
             let painter = ui.painter_at(canvas);
             if edit {

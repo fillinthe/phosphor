@@ -212,7 +212,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     let uses = st.comp.media_uses();
     let targets = MediaTargets { layers: &layers, click: click_target.as_deref(), playing: &playing, uses: &uses };
     let State { comp, thumbs, .. } = st;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
             hint(ui, "Empty. Import files, watch a folder, or drop files onto the window.");
         } else if shown.is_empty() {

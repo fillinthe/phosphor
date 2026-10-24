@@ -215,7 +215,7 @@ fn oscquery_browser(ui: &mut egui::Ui, target: &ControlTarget) {
             let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
             text_field(ui, &mut search, &format!("search {} settings", params.len()), Some(240.0));
             let q = search.to_lowercase();
-            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+            crate::ui::column_scroll(ui).max_height(220.0).show(ui, |ui| {
                 for p in params.iter().filter(|p| q.is_empty() || p.address.to_lowercase().contains(&q) || p.description.to_lowercase().contains(&q)).take(80) {
                     let text = if p.description.is_empty() { p.address.clone() } else { format!("{}  ·  {}", p.address, p.description) };
                     if crate::ui::command(ui, text).on_hover_text(format!("Send to {host}:{port}{} ({} to {})", p.address, p.min, p.max)).clicked() {

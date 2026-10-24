@@ -48,7 +48,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         Vec::new()
     };
     let n = st.comp.modulators.len();
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    crate::ui::column_scroll(ui).show(ui, |ui| {
         for (i, m) in st.comp.modulators.iter_mut().enumerate() {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
             egui::Frame::group(ui.style()).show(ui, |ui| {

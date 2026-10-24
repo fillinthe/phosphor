@@ -160,7 +160,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     // Group names in use, for each cue's Group menu.
     let mut group_names: Vec<String> = st.comp.cues.cues.iter().map(|c| c.group.clone()).filter(|g| !g.is_empty()).collect();
     group_names.dedup();
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         let mut prev_group = String::new();
         for (i, cue) in st.comp.cues.cues.iter_mut().enumerate() {
             let is_current = current == Some(i);
