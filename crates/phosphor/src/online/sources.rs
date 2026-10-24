@@ -22,10 +22,12 @@ pub enum Source {
     MilkDrop,
     GoogleFonts,
     IsfOnline,
+    /// An X account's GIFs (`super::x`, through gallery-dl; the "query" is the account).
+    X,
 }
 
 impl Source {
-    pub const ALL: [Source; 10] = [
+    pub const ALL: [Source; 11] = [
         Source::Nasa,
         Source::Commons,
         Source::Archive,
@@ -36,6 +38,7 @@ impl Source {
         Source::MilkDrop,
         Source::GoogleFonts,
         Source::IsfOnline,
+        Source::X,
     ];
 
     /// The search answer is the library's whole list, the same every time (kept for the session, `super::get_cached`).
@@ -55,6 +58,7 @@ impl Source {
             Source::MilkDrop => "MilkDrop presets",
             Source::GoogleFonts => "Google Fonts",
             Source::IsfOnline => "ISF shaders",
+            Source::X => "X (Twitter)",
         }
     }
 
@@ -67,6 +71,7 @@ impl Source {
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
             Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
+            Source::X => "An X account's animated GIFs (needs gallery-dl and your browser's X sign-in).",
             Source::IsfOnline => "Thousands of effects and generators people shared on isf.video (licences vary: check the credit).",
             Source::GoogleFonts => "About 1,900 open-licence font families for text layers.",
             Source::MilkDrop => "Nearly 10,000 MilkDrop visualisers (projectM's \"Cream of the Crop\" pack, sorted by Isosceles) that move to the music.",
@@ -84,6 +89,7 @@ impl Source {
             Source::MilkDrop => &[Kind::Visualizer],
             Source::GoogleFonts => &[Kind::Font],
             Source::IsfOnline => &[Kind::Shader],
+            Source::X => &[Kind::Gif],
         }
     }
 
@@ -126,6 +132,8 @@ impl Source {
             // Poly Haven has no search: the whole list (filtered here, `poly_haven`).
             Source::PolyHaven => "https://api.polyhaven.com/assets?type=textures".to_string(),
             Source::MilkDrop => format!("https://api.github.com/repos/{MILK_REPO}/git/trees/master?recursive=1"),
+            // Not an address: gallery-dl lists the account (`super::x::list`).
+            Source::X => format!("x:{}", query.trim()),
             // The ISF editor's own search (18 a page).
             Source::IsfOnline => format!("https://editor.isf.video/api/search?q={q}&page={}&from={}", page - 1, (page - 1) * ISF_PAGE),
             // Every family (the list behind fonts.google.com; no key), searched here.
@@ -163,6 +171,7 @@ impl Source {
             Source::MilkDrop => milkdrop(&v, "", 1),
             Source::GoogleFonts => google_fonts(&v, "", 1),
             Source::IsfOnline => isf_online(&v),
+            Source::X => Vec::new(),
         })
     }
 }

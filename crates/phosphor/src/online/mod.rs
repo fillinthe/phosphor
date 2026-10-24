@@ -5,6 +5,7 @@
 
 pub mod sources;
 pub mod starter;
+pub mod x;
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -31,6 +32,8 @@ pub enum Kind {
     Music,
     /// ISF effects and generators (they join the Effects / Sources lists).
     Shader,
+    /// Animated GIFs from X (small looping MP4s).
+    Gif,
 }
 
 /// One search result.
@@ -163,8 +166,16 @@ impl Search {
                 let (tx, ctx, query, page) = (self.tx.clone(), self.ctx.clone(), self.query.clone(), self.page);
                 self.pending += 1;
                 let _ = std::thread::Builder::new().name("online search".into()).spawn(move || {
-                    let body = if source.whole_list() { get_cached(&url) } else { get_bytes(&url) };
-                    let msg = match body.and_then(|b| source.parse_page(kind, &query, page, &b)) {
+                    let found = if source == Source::X {
+                        match x::handle(&query) {
+                            Some(h) => x::list(&h, page).and_then(|b| x::parse(&h, &b)),
+                            None => Err("type an X account, like @giphy".into()),
+                        }
+                    } else {
+                        let body = if source.whole_list() { get_cached(&url) } else { get_bytes(&url) };
+                        body.and_then(|b| source.parse_page(kind, &query, page, &b))
+                    };
+                    let msg = match found {
                         Ok(items) => Msg::Found { kind, items },
                         Err(e) => Msg::Failed(format!("{}: {e}", source.name())),
                     };
@@ -271,6 +282,7 @@ pub fn file_name(item: &Item, url: &str) -> String {
             Kind::Font => "ttf",
             Kind::Music => "mp3",
             Kind::Shader => "fs",
+            Kind::Gif => "mp4",
             Kind::Picture | Kind::Texture => "jpg",
         }
         .into()
