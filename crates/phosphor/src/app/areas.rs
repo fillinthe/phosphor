@@ -75,7 +75,8 @@ mod tests {
 
     #[test]
     fn panels_find_their_area() {
-        assert_eq!(area_of(Tab::Clips), Some(0));
+        assert_eq!(area_of(Tab::Stack), Some(0));
+        assert_eq!(area_of(Tab::Clips), None, "the old Clips panel opens in any area");
         assert_eq!(area_of(Tab::Studio), Some(1));
         assert_eq!(area_of(Tab::Surface), Some(2));
         assert_eq!(area_of(Tab::Media), None, "the Library opens in any area");

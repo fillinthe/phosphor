@@ -45,6 +45,8 @@ pub enum Purpose {
     MergeProject,
     /// Where "Keep in my library" copies downloaded clips.
     LibraryFolder,
+    /// A folder of clips: one layer per subfolder (Stack › + Layer).
+    LayersFromFolder,
     /// A background picture for this output.
     OutputBackground(u64),
     /// A patch list (CSV) of LED fixtures.

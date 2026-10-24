@@ -395,6 +395,13 @@ impl PhosphorApp {
                     }
                 }
                 #[cfg(not(target_arch = "wasm32"))]
+                Purpose::LayersFromFolder => {
+                    if let Some(p) = paths.first() {
+                        let n = crate::panels::layers_from_folder(st, p);
+                        st.notice = Some(if n == 0 { "No clips found in that folder".into() } else { format!("{n} layer(s) from {}", name_of(p)) });
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
                 Purpose::LibraryFolder => {
                     if let Some(p) = paths.first() {
                         st.media_view.following.library = Some(p.to_string_lossy().into_owned());
