@@ -110,7 +110,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
     });
     ui.separator();
     let State { comp, selected_surface, mapping_output, .. } = st;
-    egui::ScrollArea::vertical().id_salt("studio_tree").auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).id_salt("studio_tree").auto_shrink(false).show(ui, |ui| {
         for o in comp.outputs.iter_mut() {
             if *mapping_output != o.id {
                 continue;
@@ -800,7 +800,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
     let canvas = (comp.width, comp.height);
     let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
     let size = o.size(canvas);
-    egui::ScrollArea::vertical().id_salt("studio_props").auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).id_salt("studio_props").auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
         let many = super::mapping_points::selected_slices(ui.ctx(), *selected_surface);
         if many.len() > 1 {

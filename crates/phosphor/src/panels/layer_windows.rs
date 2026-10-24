@@ -73,7 +73,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                             choice_combo(ui, ("lw_fit", id), &mut layer.fit, 74.0, false);
                         });
                         ui.separator();
-                        egui::ScrollArea::vertical().id_salt(("lw_scroll", id)).auto_shrink(false).show(ui, |ui| {
+                        crate::ui::column_scroll(ui).id_salt(("lw_scroll", id)).auto_shrink(false).show(ui, |ui| {
                             ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(70.0);
                             let (info, position, has_sound) = media.get(&id).cloned().unwrap_or((None, None, false));
                             let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, beat: None, bpm, chapters: Vec::new(), reload: Default::default(), text_file: Default::default(), match_beat: Default::default() };

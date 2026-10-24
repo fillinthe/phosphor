@@ -484,7 +484,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
             Status::Available(r) => {
                 ui.colored_label(crate::theme::accent(), format!("Phosphor {} is out.", r.version));
                 if !r.notes.trim().is_empty() {
-                    egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                    crate::ui::column_scroll(ui).max_height(220.0).show(ui, |ui| {
                         ui.add(egui::Label::new(egui::RichText::new(r.notes.trim()).small()).wrap());
                     });
                 }

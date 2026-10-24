@@ -202,7 +202,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
             return;
         }
         let now = std::time::Instant::now();
-        egui::ScrollArea::vertical().id_salt("monitor_list").max_height(180.0).stick_to_bottom(true).show(ui, |ui| {
+        crate::ui::column_scroll(ui).id_salt("monitor_list").max_height(180.0).stick_to_bottom(true).show(ui, |ui| {
             egui::Grid::new("monitor_grid").num_columns(4).spacing([12.0, 2.0]).striped(true).show(ui, |ui| {
                 for (at, source, value) in &control.recent {
                     let ago = now.saturating_duration_since(*at).as_secs_f32();
@@ -331,7 +331,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     let last = control.last.as_ref().map(|m| (m.source.clone(), m.value));
     let q = map_search.to_lowercase();
     let mut remove = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if comp.control_maps.is_empty() && map_draft.is_none() {
             hint(ui, format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
         }

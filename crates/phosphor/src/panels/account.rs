@@ -88,7 +88,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     }
     let mut open = None;
     let mut delete = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         for p in &a.projects {
             let current = cloud_project.as_ref().is_some_and(|(id, _)| *id == p.id);
             crate::ui::toolbar(ui, |ui| {

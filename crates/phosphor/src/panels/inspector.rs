@@ -12,7 +12,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         super::Focus::Widget => {
             if let Some(id) = super::selected_widget(ui.ctx()) {
                 let targets = crate::control::all_targets(&st.comp);
-                egui::ScrollArea::vertical().id_salt("inspector_widget").auto_shrink(false).show(ui, |ui| {
+                crate::ui::column_scroll(ui).id_salt("inspector_widget").auto_shrink(false).show(ui, |ui| {
                     super::widget_editor(ui, st, id, &targets);
                 });
             }
@@ -45,7 +45,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         (fx_action, send) = comp_inspector(ui, c, thumb, master, clipboard_len, &outs);
     } else if sel == MASTER_ID {
         let tex = st.texture;
-        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
             thumbnail(ui, tex, egui::vec2(w, w / aspect), true);
@@ -79,7 +79,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let clip_slot = st.selected_clip.filter(|(l, _)| *l == sel).map(|(_, c)| c);
         let mut clip_act: Option<(usize, super::ClipAct)> = None;
         let layer = st.comp.layer_mut(sel).unwrap();
-        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+        crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
             thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);

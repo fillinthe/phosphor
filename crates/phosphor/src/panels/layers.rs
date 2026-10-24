@@ -51,7 +51,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let mut palette_drop: Option<(u64, crate::explorer::PaletteDrag)> = None;
     let mut source_drop: Option<(u64, SourceDrag)> = None;
     let mut group_action: Option<(u64, GroupAction)> = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass);
         if pick {
             *selected = Some(MASTER_ID);
@@ -459,7 +459,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 if found.is_empty() {
                     hint(ui, "No generator by that name");
                 }
-                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                crate::ui::column_scroll(ui).max_height(320.0).show(ui, |ui| {
                     for g in found {
                         let active = matches!(&layer.source, SourceSpec::Generator(id) if id == g.id);
                         if crate::ui::pick_item(ui, active, g.name).clicked() {
@@ -568,7 +568,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
             // Many windows: their own submenu.
             if kind == crate::media::live::InputKind::Window && mine.len() > 4 {
                 ui.menu_button(label(icon::APP_WINDOW, &format!("A window ({})", mine.len())), |ui| {
-                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                    crate::ui::column_scroll(ui).max_height(360.0).show(ui, |ui| {
                         for i in &mine {
                             if crate::ui::command(ui, short(&i.label)).on_hover_text(&i.label).clicked() {
                                 picked = Some(i.source.clone());

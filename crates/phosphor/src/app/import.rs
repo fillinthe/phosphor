@@ -99,7 +99,7 @@ impl PhosphorApp {
             crate::ui::hint(ui, format!("{} × {} · {} layers{}", imp.file.width, imp.file.height, imp.file.layers.len(), imp.file.bpm.map_or(String::new(), |b| format!(" · {b:.1} BPM"))));
             ui.add_space(4.0);
             ui.label(format!("{} to bring in (they go side by side in the clip columns; each becomes a media collection):", if imp.vdmx { "Pages" } else { "Decks" }));
-            egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+            crate::ui::column_scroll(ui).max_height(260.0).show(ui, |ui| {
                 for (i, d) in imp.file.decks.iter().enumerate() {
                     let text = format!("{} — {} clips with media, {} columns", d.name, d.files(), d.columns);
                     crate::ui::toggle(ui, &mut imp.chosen[i], text);

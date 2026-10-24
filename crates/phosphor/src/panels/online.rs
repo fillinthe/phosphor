@@ -477,7 +477,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (d.item.key(), part)
         })
         .collect();
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         // As many columns of at least 120 points as fit, filling the width.
         let (gap, room) = (6.0, ui.available_width() - 2.0);
         let cols = ((room + gap) / (120.0 + gap)).floor().max(1.0);

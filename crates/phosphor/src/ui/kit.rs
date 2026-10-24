@@ -35,11 +35,11 @@ pub(crate) fn steady_button(ui: &mut egui::Ui, text: impl Into<String>, labels: 
 /// `steady_button`, small (tight rows).
 pub(crate) fn steady_small_button(ui: &mut egui::Ui, text: impl Into<String>, labels: &[&str]) -> egui::Response {
     let w = steady_width(ui, labels, true);
-    ui.scope(|ui| {
-        ui.spacing_mut().button_padding.x = 4.0;
-        ui.add(egui::Button::new(text.into()).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(w, CONTROL_H)))
-    })
-    .inner
+    let old = ui.spacing().button_padding;
+    ui.spacing_mut().button_padding.x = 4.0;
+    let r = ui.add(egui::Button::new(text.into()).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(w, CONTROL_H)));
+    ui.spacing_mut().button_padding = old;
+    r
 }
 
 /// An `action_button` whose label changes (Play / Pause): as wide as the widest of `labels`.
@@ -126,12 +126,13 @@ pub(crate) fn small_command<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a
 
 /// `small_command`, greyed out until it can be used.
 pub(crate) fn small_command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
-    ui.scope(|ui| {
-        ui.spacing_mut().button_padding.x = 4.0;
-        // (Never wraps its words onto a second line: a tight row moves it to the next line instead.)
-        ui.add_enabled(enabled, egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(0.0, CONTROL_H)))
-    })
-    .inner
+    // Tighter padding just for this button (set and put back on the row itself: a nested container would hide the
+    // button's size from a wrapping row, which then couldn't move it to the next line). Never wraps its words.
+    let old = ui.spacing().button_padding;
+    ui.spacing_mut().button_padding.x = 4.0;
+    let r = ui.add_enabled(enabled, egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(0.0, CONTROL_H)));
+    ui.spacing_mut().button_padding = old;
+    r
 }
 
 /// A command at a set size (a column of same-width buttons, a grid cell's header).
@@ -219,6 +220,13 @@ pub(crate) fn field<R>(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egu
         .inner
     })
     .inner
+}
+
+/// A panel's scrolling column: scrolls up and down and is never wider than the panel. (egui's own vertical scroll
+/// area widens itself to fit anything too wide, and stays wide, so one long row made every row under it lay out wider
+/// than the panel and get cut off.)
+pub(crate) fn column_scroll(ui: &egui::Ui) -> egui::ScrollArea {
+    egui::ScrollArea::vertical().max_width(ui.available_width())
 }
 
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
@@ -362,7 +370,9 @@ pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, 
         let pad = ui.spacing().button_padding.x * 2.0 + 2.0;
         let need: f32 = options.iter().map(|(_, t)| ui.painter().layout_no_wrap(t.clone(), font.clone(), Color32::WHITE).size().x + pad).sum::<f32>() + 4.0;
         let row_start = ui.max_rect().left();
-        if need > ui.available_width() && ui.cursor().left() > row_start + 1.0 {
+        // (In a wrapping row `available_width` is the whole row; what's left of this line is up to the cursor.)
+        let room = ui.max_rect().right() - ui.cursor().left();
+        if need > room && ui.cursor().left() > row_start + 1.0 {
             ui.end_row();
         }
     }

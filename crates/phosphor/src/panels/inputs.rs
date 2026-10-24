@@ -28,7 +28,7 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
     let (list, notes) = inputs(&cams);
     let selected = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let mut put: Option<(Option<u64>, String, SourceSpec)> = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         for kind in InputKind::ALL {
             let mine: Vec<_> = list.iter().filter(|i| i.kind == kind).collect();
             let note = notes.iter().find(|(k, _)| *k == kind).map(|(_, n)| n.clone());

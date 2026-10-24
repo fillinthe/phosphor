@@ -43,7 +43,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
                 let found = crate::ofl::search(all, &query);
                 hint(ui, format!("{} of {} lights", found.len(), all.len()));
                 let mut look = None;
-                egui::ScrollArea::vertical().id_salt("light_list").max_height(180.0).auto_shrink([false, true]).show(ui, |ui| {
+                crate::ui::column_scroll(ui).id_salt("light_list").max_height(180.0).auto_shrink([false, true]).show(ui, |ui| {
                     for l in found.iter().take(300) {
                         let on = lib.open.as_ref().is_some_and(|(o, _)| o.key == l.key);
                         if crate::ui::pick_item(ui, on, format!("{} · {}", l.maker, l.name)).clicked() {

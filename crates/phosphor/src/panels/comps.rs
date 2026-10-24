@@ -115,7 +115,7 @@ pub(crate) fn move_to_comp_menu(ui: &mut egui::Ui, others: &[(u64, String)]) -> 
 pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui::TextureId>, master: (u32, u32), clipboard_len: usize, outs: &[(u64, String, bool)]) -> (Option<FxAction>, Option<(u64, bool)>) {
     let mut fx_action = None;
     let mut send = None;
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
         let (cw, ch) = c.size(master);
         let w = ui.available_width().min(360.0);
