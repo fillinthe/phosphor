@@ -411,6 +411,8 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
     let mut open_dir = None;
     let mut more = false;
     let State { comp, thumbs, media_view, .. } = st;
+    #[cfg(target_arch = "wasm32")]
+    let _ = &media_view;
     crate::ui::column_scroll(ui)
         .id_salt("media_grid")
         .auto_shrink(false)
@@ -468,7 +470,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         follow_fetch(st, src::FollowAct::More, &a, ui.ctx());
     }
     #[cfg(target_arch = "wasm32")]
-    let _ = (more, account, media_view);
+    let _ = (more, account);
 }
 
 /// Refresh every account, or Load more of the one in `account_dir` (how many clips it has now: its files here).
