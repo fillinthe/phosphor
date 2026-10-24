@@ -1252,7 +1252,7 @@ mod speed_tests {
         assert!((before - 600.0).abs() < 1e-3, "the first frame is what the shader always drew");
         t += frame;
         let after = shown(t, s.step(t, 2.0));
-        assert!((after - before - 2.0 * frame as f64).abs() < 1e-3, "one frame on at the new speed, not a jump: {before} → {after}");
+        assert!((after - before - 2.0 * frame as f64).abs() < 1e-3, "one frame on at the new speed, not a jump: {before} then {after}");
         // A second later: moved 2 seconds' worth since the change.
         for _ in 0..60 {
             t += frame;
