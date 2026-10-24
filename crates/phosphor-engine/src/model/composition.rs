@@ -201,7 +201,8 @@ impl Composition {
         base.name = "Rainbow".into();
         let top = comp.add_layer();
         top.name = "PHOSPHOR".into();
-        top.source = SourceSpec::Text(TextStyle { text: "PHOSPHOR".into(), font: "builtin:logo".into(), size: 0.22, outline: 0.02, ..Default::default() });
+        // Black letters on the moving colours (the owner's choice), no outline.
+        top.source = SourceSpec::Text(TextStyle { text: "PHOSPHOR".into(), font: "builtin:logo".into(), size: 0.22, color: [0, 0, 0, 255], outline: 0.0, ..Default::default() });
         top.opacity = 1.0;
         comp
     }
