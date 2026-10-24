@@ -50,7 +50,7 @@ pub(crate) fn source_editor(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + s
     let before = source.clone();
     let id = egui::Id::new(("source_editor", id_salt));
     let mut kind = source_kind(source);
-    ComboBox::from_id_salt(id).width(82.0).selected_text(SOURCE_KINDS[kind]).show_ui(ui, |ui| {
+    crate::ui::dropdown(ui, id, 82.0).selected_text(SOURCE_KINDS[kind]).show_ui(ui, |ui| {
         for (i, k) in SOURCE_KINDS.iter().enumerate() {
             crate::ui::pick_value(ui, &mut kind, i, *k);
         }

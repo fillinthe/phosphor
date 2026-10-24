@@ -1073,7 +1073,7 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
             Some((_, name)) => name.clone(),
             None => groups.iter().find(|g| g.id == id).map_or_else(|| crate::ui::layer_name(layers, id), |g| g.name.clone()),
         });
-        egui::ComboBox::from_id_salt(("surface_source", s.id)).width(170.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("surface_source", s.id), 170.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut s.layer, None, "Whole composition");
             if crate::ui::command(ui, label(icon::FILE_VIDEO, "A file…")).on_hover_text("A picture or movie of its own on this slice (a layer that stays out of the mix)").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(PICK_SLICE_FILE), s.id));

@@ -110,7 +110,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     let names: Vec<(u64, String)> = st.comp.cues.cues.iter().map(|c| (c.id, c.name.clone())).collect();
     let cue_pick = |ui: &mut egui::Ui, salt: &str, id: &mut u64| {
         let shown = names.iter().find(|(i, _)| i == id).map_or("none".to_string(), |(_, n)| n.clone());
-        ComboBox::from_id_salt(salt).width(110.0).selected_text(shown).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, salt, 110.0).selected_text(shown).show_ui(ui, |ui| {
             if crate::ui::pick_item(ui, *id == 0, "none").clicked() {
                 *id = 0;
             }

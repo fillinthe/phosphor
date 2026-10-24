@@ -243,7 +243,7 @@ fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
     crate::ui::toolbar(ui, |ui| {
         ui.label("Signed in to X in");
         let current = xs.browser.clone().unwrap_or_else(|| "pick a browser".into());
-        ComboBox::from_id_salt("x_browser").width(110.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "x_browser", 110.0).selected_text(current).show_ui(ui, |ui| {
             for b in crate::web_media::BROWSERS {
                 if crate::ui::pick_item(ui, xs.browser.as_deref() == Some(b), b).clicked() {
                     xs.browser = Some(b.to_string());

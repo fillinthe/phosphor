@@ -38,7 +38,7 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
                     Some(f) => f.name.clone(),
                     None => "Every LED fixture that's on".to_string(),
                 };
-                ComboBox::from_id_salt("led_scan_only").width(260.0).selected_text(name(only)).show_ui(ui, |ui| {
+                crate::ui::dropdown(ui, "led_scan_only", 260.0).selected_text(name(only)).show_ui(ui, |ui| {
                     crate::ui::pick_value(ui, &mut only, None, name(None));
                     for f in st.comp.dmx.fixtures.iter().filter(|f| f.shape != phosphor_engine::FixtureShape::MovingHead) {
                         crate::ui::pick_value(ui, &mut only, Some(f.id), &f.name);

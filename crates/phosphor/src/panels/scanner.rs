@@ -23,7 +23,7 @@ pub(crate) fn camera_combo(ui: &mut egui::Ui, salt: &str, cameras: &[(u64, Strin
     crate::ui::toolbar(ui, |ui| {
         ui.label("Camera");
         let current = cameras.iter().find(|(id, _)| id == camera).map(|(_, n)| n.clone()).unwrap_or_else(|| "(none)".into());
-        ComboBox::from_id_salt(salt).width(260.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, salt, 260.0).selected_text(current).show_ui(ui, |ui| {
             for (id, n) in cameras {
                 crate::ui::pick_value(ui, camera, *id, n);
             }

@@ -76,7 +76,7 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
         crate::ui::text_field(ui, &mut li.url, "https://x.com/…/status/…", None);
         crate::ui::toolbar(ui, |ui| {
             let current = li.browser.map_or("No sign-in".to_string(), |i| format!("Sign-in from {}", BROWSERS[i]));
-            ComboBox::from_id_salt("link_browser").width(170.0).selected_text(current).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "link_browser", 170.0).selected_text(current).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut li.browser, None, "No sign-in");
                 for (i, b) in BROWSERS.iter().enumerate() {
                     crate::ui::pick_value(ui, &mut li.browser, Some(i), format!("Sign-in from {b}"));

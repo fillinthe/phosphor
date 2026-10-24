@@ -148,6 +148,12 @@ fn tone(g: u8) -> Color32 {
 
 pub fn apply(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
+    // The interface font: Orbitron (the logo's family, OFL, assets/fonts), with egui's own fonts behind it for any
+    // character it doesn't have (arrows, accents, symbols), then the icons.
+    fonts.font_data.insert("orbitron".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../../assets/fonts/ui.ttf"))));
+    if let Some(list) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+        list.insert(0, "orbitron".into());
+    }
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     ctx.set_fonts(fonts);
     ctx.all_styles_mut(|s| {
