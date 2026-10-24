@@ -124,7 +124,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     let target = ControlTarget::App(phosphor_engine::AppControl::Crossfader);
     let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
     ui.horizontal(|ui| {
-        ui.label(RichText::new("A").strong());
+        crate::ui::heading(ui, "A");
         // (Double-click centres it: its default.)
         let width = (ui.available_width() - 200.0).clamp(120.0, 520.0);
         let r = Level::percent(&mut comp.crossfader, "Crossfader").default(0.5).target(target.clone()).width(width).show(ui);
@@ -134,7 +134,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
             x if x > 0.99 => "B".to_string(),
             x => format!("A {:.0}% · B {:.0}%", phosphor_engine::CrossGroup::A.gain(x, comp.fader_curve) * 100.0, phosphor_engine::CrossGroup::B.gain(x, comp.fader_curve) * 100.0),
         });
-        ui.label(RichText::new("B").strong());
+        crate::ui::heading(ui, "B");
         let towards = if comp.crossfader < 0.5 { "B" } else { "A" };
         let auto = action_button(ui, Act::Go, label(if gliding { icon::HOURGLASS } else { icon::ARROWS_LEFT_RIGHT }, "Auto"))
             .on_hover_text(format!("Glide to {towards} over the time beside it (press again on the way to turn back)"));

@@ -44,7 +44,7 @@ impl PhosphorApp {
         let mut open = true;
         let mut done_output: Option<String> = None;
         egui::Window::new(format!("{} Convert", icon::FILM_STRIP)).open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
-            ui.label(RichText::new(&c.name).strong());
+            crate::ui::heading(ui, &c.name);
             let probe = match &c.probe {
                 Some(Ok(p)) => p.clone(),
                 Some(Err(e)) => {
@@ -58,7 +58,7 @@ impl PhosphorApp {
             let progress = c.progress.as_ref().map(|p| p.lock().unwrap().clone());
             let busy = progress.as_ref().is_some_and(|p| !p.finished);
             ui.add_enabled_ui(!busy, |ui| {
-                ui.label(RichText::new("Format").strong());
+                crate::ui::heading(ui, "Format");
                 for f in Format::ALL {
                     ui.radio_value(&mut c.format, f, f.name());
                 }

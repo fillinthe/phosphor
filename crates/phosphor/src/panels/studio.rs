@@ -116,7 +116,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                 continue;
             }
             crate::ui::toolbar(ui, |ui| {
-                ui.label(RichText::new(format!("{} {}", icon::PROJECTOR_SCREEN, o.name)).strong());
+                crate::ui::heading(ui, format!("{} {}", icon::PROJECTOR_SCREEN, o.name));
                 toggle(ui, &mut o.mapping.enabled, "MAPPING").on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
             });
             let mut acts = Vec::new();
@@ -510,7 +510,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
     let others: Vec<(u64, String)> = o.mapping.surfaces.iter().filter(|s| Some(s.id) != selected).map(|s| (s.id, s.name.clone())).collect();
     let mut copy_to: Vec<u64> = Vec::new();
     if let Some(s) = selected.and_then(|id| o.mapping.surfaces.iter_mut().find(|s| s.id == id)) {
-        ui.label(RichText::new(&s.name).strong());
+        crate::ui::heading(ui, &s.name);
         if !others.is_empty() {
             ui.menu_button(label(icon::COPY, "Copy its look to"), |ui| {
                 hint(ui, "Opacity, soft edges, colour, blend and shape; not where it sits or what it shows");

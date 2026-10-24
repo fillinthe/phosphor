@@ -134,7 +134,7 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
         }
         if st.bug.include_diagnostics {
             let diag = diagnostics(st);
-            egui::CollapsingHeader::new("What gets included").id_salt("bug_diag").show(ui, |ui| {
+            crate::ui::section(ui, "bug_diag", "What gets included", false, |ui| {
                 ui.add(egui::Label::new(egui::RichText::new(diag).monospace().small()).wrap());
             });
         }

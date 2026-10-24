@@ -94,7 +94,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
         // Sorting, grouping and tile size in one menu, so this row fits any column.
         ui.menu_button(label(icon::SLIDERS_HORIZONTAL, "View"), |ui| {
             ui.set_min_width(200.0);
-            ui.label(RichText::new("Sort by").strong());
+            crate::ui::heading(ui, "Sort by");
             crate::ui::toolbar(ui, |ui| {
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Name, "Name");
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Newest, "Newest");
@@ -241,10 +241,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 let base = std::path::Path::new(&root).parent().map_or(String::new(), |p| p.to_string_lossy().into_owned());
                 group.strip_prefix(&base).unwrap_or(&group).trim_start_matches(['/', '\\']).to_string()
             };
-            let header = egui::CollapsingHeader::new(RichText::new(format!("{} {title}  ({})", if group.is_empty() { icon::FILES } else { icon::FOLDER }, items.len())).strong())
-                .id_salt(("media_group", &group))
-                .default_open(true)
-                .show(ui, |ui| grid(ui));
+            let header = crate::ui::section(ui, ("media_group", &group), format!("{} {title}  ({})", if group.is_empty() { icon::FILES } else { icon::FOLDER }, items.len()), true, |ui| grid(ui));
             header.header_response.right_menu(|ui| {
                 if crate::ui::command(ui, label(icon::DICE_FIVE, "Random")).on_hover_text("Play one of this folder's files, at random, on the selected layer").clicked() {
                     acts.push(MediaAct::RandomOne(items.clone()));

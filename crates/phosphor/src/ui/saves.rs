@@ -45,7 +45,7 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
     });
     let builtins: Vec<_> = store.builtins().collect();
     if !builtins.is_empty() {
-        ui.label(RichText::new("Built in").strong());
+        crate::ui::heading(ui, "Built in");
         for p in builtins {
             ui.horizontal(|ui| {
                 if crate::ui::command(ui, "Load").clicked() {
@@ -55,7 +55,7 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
             });
         }
         ui.add_space(6.0);
-        ui.label(RichText::new("Yours").strong());
+        crate::ui::heading(ui, "Yours");
     }
     if store.user.is_empty() {
         hint(ui, format!("Nothing saved yet. Name the current {what} above and save it."));

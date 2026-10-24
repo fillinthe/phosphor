@@ -11,7 +11,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
     let playing: Vec<String> = st.comp.layers.iter().filter(|l| l.collection.as_deref() == Some(name)).map(|l| l.name.clone()).collect();
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(format!("{} {name}", icon::BOOKMARKS_SIMPLE)).strong());
+            crate::ui::heading(ui, format!("{} {name}", icon::BOOKMARKS_SIMPLE));
             hint(ui, format!("{count} files"));
             ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                 if let Some(new) = rename_menu(ui, ("rename_coll", name), name) {

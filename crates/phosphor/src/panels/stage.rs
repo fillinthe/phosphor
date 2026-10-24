@@ -29,7 +29,7 @@ pub(crate) fn stage(ui: &mut egui::Ui, st: &mut State) {
         let mut child = ui.new_child(UiBuilder::new().max_rect(rect).layout(egui::Layout::top_down(egui::Align::Min)));
         child.horizontal(|ui| {
             ui.label(RichText::new(format!("{}", i + 1)).strong().color(accent()));
-            ui.label(RichText::new(&o.name).strong());
+            crate::ui::heading(ui, &o.name);
             hint(ui, format!("{ow}×{oh}"));
             super::output::grid_toggle(ui, &mut o.grid);
             if o.mapping.active() {

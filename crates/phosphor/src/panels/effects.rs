@@ -18,7 +18,7 @@ pub(crate) struct FxDrag(u64);
 pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_len: usize) -> Option<FxAction> {
     let mut action: Option<FxAction> = None;
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new("Effects").strong());
+        crate::ui::heading(ui, "Effects");
         let add = crate::ui::command(ui, label(icon::PLUS, "Add effect")).on_hover_text("Browse effects with previews");
         if add.clicked() {
             action = Some(FxAction::Browse(Some(add.rect.left_bottom())));

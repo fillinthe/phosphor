@@ -433,7 +433,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let selected = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let o = &mut st.online;
     let Some(search) = o.search.as_mut() else {
-        ui.label(RichText::new(label(icon::SPARKLE, "Start a show")).strong());
+        crate::ui::heading(ui, label(icon::SPARKLE, "Start a show"));
         hint(ui, "One click fills three layers of clips from these libraries for a mood (replaces the layers; outputs and mapping stay).");
         ui.horizontal_wrapped(|ui| {
             for s in &crate::online::starter::STARTERS {
@@ -621,7 +621,7 @@ fn kind_icon(kind: Kind) -> &'static str {
 /// Every credit in the show, to paste into a programme or a video's description.
 fn credits(ui: &mut egui::Ui, comp: &phosphor_engine::Composition) {
     let n = comp.media_bin.iter().filter(|m| m.credit.is_some()).count();
-    egui::CollapsingHeader::new(format!("{} Credits ({n})", icon::IDENTIFICATION_CARD)).id_salt("online_credits").show(ui, |ui| {
+    crate::ui::section(ui, "online_credits", format!("{} Credits ({n})", icon::IDENTIFICATION_CARD), false, |ui| {
         if n == 0 {
             hint(ui, "Files downloaded here keep who made them and their licence. Most need a credit when you show them in public: copy them all from here.");
             return;

@@ -271,7 +271,7 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
         r.on_hover_text(format!("{} · {}", clock(e.t), if what.is_empty() { "does nothing yet (right-click)".to_string() } else { what })).context_menu(|ui| {
             ui.set_min_width(300.0);
             crate::ui::text_field(ui, &mut e.name, "name", Some(140.0));
-            ui.label(RichText::new("Sets").strong());
+            crate::ui::heading(ui, "Sets");
             crate::ui::toolbar(ui, |ui| {
                 if let Some(t) = target_picker(ui, ("event_target", k), &targets, e.target.as_ref(), 200.0) {
                     e.target = Some(t);

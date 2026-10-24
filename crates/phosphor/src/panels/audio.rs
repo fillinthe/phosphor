@@ -3,7 +3,7 @@
 use super::*;
 
 pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
-    ui.label(RichText::new(format!("{} Sound out", icon::SPEAKER_SIMPLE_HIGH)).strong());
+    crate::ui::heading(ui, format!("{} Sound out", icon::SPEAKER_SIMPLE_HIGH));
     sound_out(ui, &mut st.comp);
     ui.separator();
     let State { audio, notice, mod_inputs, clock, .. } = st;
@@ -96,7 +96,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(6.0);
     ui.separator();
     ui.horizontal(|ui| {
-        ui.label(RichText::new(format!("{} Beat detector", icon::HEARTBEAT)).strong());
+        crate::ui::heading(ui, format!("{} Beat detector", icon::HEARTBEAT));
         let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
         let pulse = mod_inputs.audio_beat;
         ui.painter().circle_filled(r.center(), 4.0 + 5.0 * pulse, if pulse > 0.05 { Color32::from_rgb(255, 196, 70) } else { Color32::from_gray(50) });

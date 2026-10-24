@@ -771,7 +771,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
     let mut changed = false;
     let mut to_code = false;
     ui.horizontal(|ui| {
-        ui.label(RichText::new(if patch.generator { "Generator patch" } else { "Effect patch" }).strong());
+        crate::ui::heading(ui, if patch.generator { "Generator patch" } else { "Effect patch" });
         changed |= crate::ui::text_field(ui, &mut patch.name, "Name", Some(160.0)).changed();
         crate::ui::toggle(ui, &mut show_code, label(icon::CODE, "Code")).on_hover_text("The shader these blocks make");
         if crate::ui::command(ui, label(icon::CODE, "Turn into code")).on_hover_text("Keep editing it as code from here on (the blocks are dropped)").clicked() {
@@ -814,7 +814,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
 /// A shader written as code: the text editor with line numbers and its compile state.
 fn code_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>, now: f64, is_generator: bool) {
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new(if is_generator { "Generator" } else { "Effect" }).strong());
+        crate::ui::heading(ui, if is_generator { "Generator" } else { "Effect" });
         ui.monospace(&sh.slug);
         match &sh.error {
             Some(_) => ui.colored_label(WARN, format!("{} error", icon::RECORD)),

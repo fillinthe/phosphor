@@ -824,7 +824,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         });
     });
     if s.line.is_none() && s.model.is_none() {
-        egui::CollapsingHeader::new(RichText::new("Corners, by number").small()).id_salt(("corner_numbers", s.id)).show(ui, |ui| {
+        crate::ui::subsection(ui, ("corner_numbers", s.id), "Corners, by number", false, |ui| {
             hint(ui, "Each corner as a share of the output (0–100%); type or drag for a fine move. On the canvas: arrows nudge the selected slice, Shift = 10 px.");
             for (k, name) in ["Top left", "Top right", "Bottom right", "Bottom left"].iter().enumerate() {
                 crate::ui::toolbar(ui, |ui| {

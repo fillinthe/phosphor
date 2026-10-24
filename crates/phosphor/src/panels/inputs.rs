@@ -33,7 +33,7 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
             let mine: Vec<_> = list.iter().filter(|i| i.kind == kind).collect();
             let note = notes.iter().find(|(k, _)| *k == kind).map(|(_, n)| n.clone());
             let title = format!("{} {} ({})", super::input_icon(kind), kind.title(), mine.len());
-            egui::CollapsingHeader::new(title).id_salt(("inputs", kind as u8)).default_open(kind != InputKind::Window).show(ui, |ui| {
+            crate::ui::section(ui, ("inputs", kind as u8), title, kind != InputKind::Window, |ui| {
                 if let Some(n) = &note {
                     hint(ui, n.as_str());
                 }
@@ -44,7 +44,7 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
         }
-        egui::CollapsingHeader::new(format!("{} Network stream", icon::GLOBE)).id_salt("inputs_stream").default_open(true).show(ui, |ui| {
+        crate::ui::section(ui, "inputs_stream", format!("{} Network stream", icon::GLOBE), true, |ui| {
             let id = egui::Id::new("inputs_stream_url");
             let mut url: String = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_default();
             crate::ui::text_field(ui, &mut url, "rtsp://… srt://… https://….m3u8", None);

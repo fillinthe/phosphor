@@ -176,6 +176,51 @@ pub(crate) fn big_action_button(ui: &mut egui::Ui, act: Act, text: impl Into<Str
     ui.add(egui::Button::new(RichText::new(text.into()).strong().size(16.0).color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(egui::vec2(80.0, 30.0)))
 }
 
+/// Width of the label column in `field` rows (labels line up down a panel).
+pub(crate) const LABEL_W: f32 = 96.0;
+
+/// A group of settings that folds away: a bold title, its contents below. `id` keeps it open or shut on its own.
+pub(crate) fn section<R>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, title: impl Into<String>, open: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> egui::CollapsingResponse<R> {
+    egui::CollapsingHeader::new(RichText::new(title.into()).strong()).id_salt(id).default_open(open).show(ui, add)
+}
+
+/// A smaller fold-away group inside a section (a transition's settings, corners by number).
+pub(crate) fn subsection<R>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, title: impl Into<String>, open: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> egui::CollapsingResponse<R> {
+    egui::CollapsingHeader::new(RichText::new(title.into()).small()).id_salt(id).default_open(open).show(ui, add)
+}
+
+/// The title of a group of controls that doesn't fold (Screens, Outputs, MIDI).
+pub(crate) fn heading(ui: &mut egui::Ui, text: impl ToString) -> egui::Response {
+    ui.label(RichText::new(text.to_string()).strong())
+}
+
+/// A "label: control" row: the label in a column `LABEL_W` wide (cut short if longer, whole on hover), then the
+/// control(s) in the rest of the row, so settings line up down a panel.
+pub(crate) fn field<R>(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.horizontal(|ui| {
+        let (rect, r) = ui.allocate_exact_size(egui::vec2(LABEL_W, CONTROL_H), Sense::hover());
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let mut job = egui::text::LayoutJob::single_section(label.to_string(), egui::TextFormat::simple(font, ui.visuals().text_color()));
+        job.wrap = egui::text::TextWrapping::truncate_at_width(LABEL_W - 6.0);
+        let galley = ui.painter().layout_job(job);
+        let elided = galley.elided;
+        ui.painter().galley(egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0), galley, ui.visuals().text_color());
+        if elided {
+            r.on_hover_text(label);
+        }
+        // The controls wrap beside the label column, never under it (their own column, exactly the width left).
+        ui.vertical(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.set_min_height(CONTROL_H);
+                add(ui)
+            })
+            .inner
+        })
+        .inner
+    })
+    .inner
+}
+
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
 pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: Option<f32>) -> egui::Response {
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
@@ -310,9 +355,21 @@ pub(crate) fn toggle_locked(ui: &mut egui::Ui, on: &mut bool, text: impl Into<St
 pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, options: &[(T, String)], mut each: impl FnMut(&mut egui::Ui, &egui::Response, &T)) -> bool {
     let before = value.clone();
     let v = ui.visuals().clone();
+    // A framed group only knows its size once it's drawn, so a wrapping row can't move it along by itself: measure it
+    // first and start a new line when it won't fit in what's left of this one.
+    if ui.layout().main_wrap {
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let pad = ui.spacing().button_padding.x * 2.0 + 2.0;
+        let need: f32 = options.iter().map(|(_, t)| ui.painter().layout_no_wrap(t.clone(), font.clone(), Color32::WHITE).size().x + pad).sum::<f32>() + 4.0;
+        let row_start = ui.max_rect().left();
+        if need > ui.available_width() && ui.cursor().left() > row_start + 1.0 {
+            ui.end_row();
+        }
+    }
     egui::Frame::new().fill(v.extreme_bg_color).corner_radius(6.0).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
+        // The options wrap onto another line in a narrow panel instead of running off its edge.
+        ui.horizontal_wrapped(|ui| {
             for (opt, text) in options {
                 let picked = *value == *opt;
                 let ink = if picked { v.strong_text_color() } else { v.weak_text_color() };

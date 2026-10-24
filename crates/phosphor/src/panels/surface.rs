@@ -454,7 +454,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     });
     if w.kind == WidgetKind::Text {
         ui.add_space(4.0);
-        ui.label(RichText::new("Writes on").strong());
+        crate::ui::heading(ui, "Writes on");
         let current = w.text_layer.and_then(|t| text_layers.iter().find(|(id, _)| *id == t)).map_or("(pick a text layer)".to_string(), |(_, n)| n.clone());
         ComboBox::from_id_salt(("text_layer", id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
             for (lid, name) in &text_layers {
@@ -473,13 +473,13 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             _ => "Drives",
         };
         if w.kind == WidgetKind::Computed {
-            ui.label(RichText::new("Formula").strong());
+            crate::ui::heading(ui, "Formula");
             crate::ui::text_field(ui, &mut w.formula, "a * b, max(a, b), sin(beat)…", Some(280.0))
                 .on_hover_text("a, b, c… = the controls below (0..1); t = seconds, beat = beats, val = its own value. + - * / %, min, max, clamp, mix, pow, sin, cos (a turn per 1.0), abs, floor, fract. The answer is kept in 0..1.");
             let mut remove = None;
             for (i, t) in w.inputs.iter_mut().enumerate() {
                 crate::ui::toolbar(ui, |ui| {
-                    ui.label(RichText::new(((b'a' + i as u8) as char).to_string()).monospace().strong());
+                    ui.label(RichText::new(((b'a' + i as u8) as char).to_string()).strong().monospace());
                     if let Some(picked) = target_picker(ui, ("computed_in", id, i), targets, Some(t), 220.0) {
                         *t = picked;
                     }
@@ -512,27 +512,27 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             hint(ui, "Each bar drives its own targets. Map a controller to the widget to move every bar at once, or to one bar (Surface › bar N in any target list).");
             for (i, b) in w.bars.iter_mut().enumerate() {
                 let title = format!("Bar {} drives{}", i + 1, if b.bindings.is_empty() { "" } else { " ·" });
-                egui::CollapsingHeader::new(title).id_salt(("bar", id, i)).default_open(i == 0).show(ui, |ui| {
+                crate::ui::section(ui, ("bar", id, i), title, i == 0, |ui| {
                     binding_list(ui, ("bar_bindings", id, i), targets, &mut b.bindings);
                 });
             }
         } else {
-            ui.label(RichText::new(axis).strong());
+            crate::ui::heading(ui, axis);
             hint(ui, "Each target gets this widget's value, rescaled to its from–to range.");
             binding_list(ui, ("bindings", id), targets, &mut w.bindings);
         }
         if w.kind == WidgetKind::Color {
             ui.add_space(4.0);
-            ui.label(RichText::new("Green drives").strong());
+            crate::ui::heading(ui, "Green drives");
             binding_list(ui, ("bindings_y", id), targets, &mut w.bindings_y);
             ui.add_space(4.0);
-            ui.label(RichText::new("Blue drives").strong());
+            crate::ui::heading(ui, "Blue drives");
             binding_list(ui, ("bindings_z", id), targets, &mut w.bindings_z);
             hint(ui, "A controller on this widget moves the hue (its Y mapping: saturation).");
         }
         if w.kind == WidgetKind::XyPad {
             ui.add_space(4.0);
-            ui.label(RichText::new("Vertical (Y) drives").strong());
+            crate::ui::heading(ui, "Vertical (Y) drives");
             binding_list(ui, ("bindings_y", id), targets, &mut w.bindings_y);
         }
         if w.kind == WidgetKind::Choices {

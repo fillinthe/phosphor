@@ -156,7 +156,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
 /// A Hand modulator's data looper: loop length, record (from the next loop start), play / stop, clear, and the take.
 fn looper_row(ui: &mut egui::Ui, l: &mut phosphor_engine::Looper, beats: f32) {
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new(format!("{} Loop", icon::REPEAT)).strong());
+        crate::ui::heading(ui, format!("{} Loop", icon::REPEAT));
         let mut len = l.len();
         let lengths: Vec<(f32, String)> = [1.0f32, 2.0, 4.0, 8.0, 16.0].into_iter().map(|n| (n, format!("{n:.0}"))).collect();
         if segmented(ui, &mut len, &lengths, |_, r, n| {
