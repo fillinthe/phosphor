@@ -211,7 +211,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
     ui.menu_button(label(icon::FILM_STRIP, "Render…"), |ui| {
         let length = st.comp.timeline.length;
         let o = &mut st.offline_setup;
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             crate::ui::text_field(ui, &mut o.path, "…/show.mp4 or .mov (ProRes)", Some(220.0));
             #[cfg(not(target_arch = "wasm32"))]
             if crate::ui::command(ui, "Choose…").clicked() {

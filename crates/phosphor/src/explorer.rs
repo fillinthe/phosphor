@@ -79,7 +79,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         None => "a new layer".into(),
     };
     // Search on its own row (nothing can cover it), then the rest wraps in narrow columns.
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
         let clear = !st.explorer.search.is_empty();
         let w = ui.available_width() - if clear { 28.0 } else { 0.0 };
@@ -402,7 +402,7 @@ fn shadertoy_window(ctx: &egui::Context, st: &mut State) {
     let mut done: Option<String> = None;
     egui::Window::new(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy")).open(&mut open).default_width(560.0).show(ctx, |ui| {
         crate::ui::hint(ui, "Open a shader on shadertoy.com, copy all the code in its Image tab and paste it here. Shaders that read iChannel0 become effects on a layer's picture; the rest are sources. Check its licence before you share a show with it.");
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             ui.label("Name");
             ui.add(egui::TextEdit::singleline(&mut imp.name).hint_text("e.g. Star Nest").desired_width(180.0));
             ui.label("By");
@@ -770,7 +770,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
     let mut show_code: bool = ui.ctx().data(|d| d.get_temp(code_id)).unwrap_or(false);
     let mut changed = false;
     let mut to_code = false;
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label(RichText::new(if patch.generator { "Generator patch" } else { "Effect patch" }).strong());
         changed |= crate::ui::text_field(ui, &mut patch.name, "Name", Some(160.0)).changed();
         crate::ui::toggle(ui, &mut show_code, label(icon::CODE, "Code")).on_hover_text("The shader these blocks make");
@@ -1048,7 +1048,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
         window = window.default_pos(p - egui::vec2(300.0, 0.0)).current_pos(p - egui::vec2(300.0, 0.0));
     }
     window.show(ctx, |ui| {
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
             let edit = ui.add(egui::TextEdit::singleline(&mut b.search).hint_text("Type to search…  Enter adds the first match").desired_width(f32::INFINITY));
             if b.focus {

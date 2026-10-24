@@ -53,14 +53,14 @@ pub(crate) fn scan_window(ctx: &egui::Context, st: &mut State) {
             if cameras.len() == 1 {
                 hint(ui, "Add a layer showing your camera first (Live input), aimed at the stage. It can stay hidden.");
             }
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 let mut ms = (st.scanner.settle * 1000.0) as f32;
                 if Level::range(&mut ms, 100.0, 1500.0, "Wait per picture (ms)").default(400.0).show(ui).changed() {
                     st.scanner.settle = ms as f64 / 1000.0;
                 }
             });
         });
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             if busy {
                 if danger_button(ui, label(icon::STOP, "Stop")).clicked() {
                     st.scanner.cancel();

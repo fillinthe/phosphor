@@ -52,7 +52,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.end_row();
 
         ui.label("Master");
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             Level::percent(&mut st.comp.master_fade, "Fade").default(1.0).show(ui);
         });
         ui.end_row();
@@ -214,7 +214,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         let o = &mut st.comp.outputs[i];
         card_frame(ui, false).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(64.0, 36.0), Sense::hover());
                 ui.painter().rect_filled(r, 3.0, Color32::BLACK);
                 if let Some(t) = tex {
@@ -389,7 +389,7 @@ pub fn spout_row(ui: &mut egui::Ui, st: &mut State) {
 /// Composition → NDI toggle, name, frame rate and status.
 #[cfg(any(target_os = "macos", windows))]
 pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         let Some(lib) = crate::ndi::Ndi::library() else {
             ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
             hint(ui, if cfg!(windows) { "needs NDI Tools or the NDI Runtime (then restart Phosphor)" } else { "needs NDI Tools for Mac (then restart Phosphor, not the Mac)" });
@@ -473,20 +473,20 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
     let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
     egui::CollapsingHeader::new(title).id_salt(("color_grade", id)).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             Level::range(&mut g.brightness, -1.0, 1.0, "Brightness").default(0.0).show(ui);
         });
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             Level::range(&mut g.contrast, 0.0, 3.0, "Contrast").default(1.0).show(ui);
         });
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             Level::range(&mut g.gamma, 0.2, 3.0, "Gamma").default(1.0).log().show(ui);
         });
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             Level::range(&mut g.saturation, 0.0, 2.0, "Saturation").default(1.0).show(ui);
         });
         for (k, name) in ["Red", "Green", "Blue"].iter().enumerate() {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 Level::range(&mut g.gains[k], 0.0, 2.0, *name).default(1.0).show(ui);
             });
         }
@@ -521,7 +521,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
             ui.label("Line");
             guarded!(ui, g.width, egui::DragValue::new(&mut g.width).range(0.5..=12.0).speed(0.1).suffix(" px"));
         });
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             ui.label("Colour");
             for c in [[255u8, 255, 255], [0, 255, 120], [255, 60, 60], [80, 160, 255], [255, 220, 0]] {
                 let (rect, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::click());

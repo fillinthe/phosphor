@@ -95,7 +95,7 @@ impl PhosphorApp {
                         });
                         crate::ui::toggle(ui, &mut st.export.autostart, "Open the outputs full screen when the show starts");
                         crate::ui::toggle(ui, &mut st.export.zip, "Also make a .zip (easier to send)");
-                        crate::ui::toolbar(ui, |ui| {
+                        ui.horizontal(|ui| {
                             crate::ui::toggle(ui, &mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other computer: just the preview, clips, keys, controllers and outputs");
                             ui.add_enabled(st.export.lock, egui::TextEdit::singleline(&mut st.export.lock_password).password(true).hint_text("unlock password (optional)").desired_width(170.0));
                         });

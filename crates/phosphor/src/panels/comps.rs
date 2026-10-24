@@ -120,7 +120,7 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
         let (cw, ch) = c.size(master);
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w * ch as f32 / cw.max(1) as f32), c.enabled);
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             let on = toggle(ui, &mut c.enabled, "ON");
             mapped_badge(ui, &on, &ControlTarget::LayerEnabled(c.id));
             on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(c.id)));
@@ -146,7 +146,7 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
                 choice_buttons(ui, &mut c.fit, |_, _| {});
             });
         }
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             Level::percent(&mut c.opacity, "Opacity").modulation(&mut c.opacity_mod).target(ControlTarget::LayerOpacity(c.id)).show(ui);
         });
         crate::ui::toolbar(ui, |ui| {

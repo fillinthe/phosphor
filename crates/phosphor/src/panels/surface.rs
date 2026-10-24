@@ -25,7 +25,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
     let mut selected: Option<u64> = ui.ctx().data(|d| d.get_temp(sel_id)).flatten();
 
     // Toolbar.
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         toggle(ui, &mut edit, label(icon::PENCIL_SIMPLE, "Edit")).on_hover_text("Edit: add, move (drag), resize (drag the corner) and wire up widgets. Off: play them.");
         if edit {
             ui.menu_button(label(icon::PLUS, "Add"), |ui| {
@@ -432,11 +432,11 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     let mut duplicate = false;
     let text_layers: Vec<(u64, String)> = st.comp.layers.iter().filter(|l| matches!(l.source, phosphor_engine::SourceSpec::Text(_))).map(|l| (l.id, l.name.clone())).collect();
     let Some(w) = st.comp.surface.widget_mut(id) else { return false };
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label(RichText::new(w.kind.name()).strong().color(accent()));
         ui.add(egui::TextEdit::singleline(&mut w.label).desired_width(170.0));
     });
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         choice_combo(ui, ("widget_kind", id), &mut w.kind, 90.0, false);
         if w.kind == WidgetKind::Multi && w.bars.is_empty() {
             w.set_bar_count(phosphor_engine::DEFAULT_BARS);
@@ -549,13 +549,13 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         }
         ui.add_space(4.0);
         hint(ui, format!("OSC in: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             ui.label("Send OSC");
             ui.add(egui::TextEdit::singleline(&mut w.osc_out).hint_text("/address (to the OSC out app)").desired_width(170.0))
                 .on_hover_text("Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.");
         });
         // Audience play: whether guests get it, and how far they can push it.
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             toggle(ui, &mut w.guests, "Guests can use it").on_hover_text("Audience play: off hides it from guests' phones (only you and remotes use it)");
             if w.guests && matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider | WidgetKind::XyPad) {
                 let [mut lo, mut hi] = w.guest_range;

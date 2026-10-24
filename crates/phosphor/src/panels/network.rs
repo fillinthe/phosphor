@@ -58,7 +58,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
         ui.label(RichText::new(format!("{} Phone / tablet remote", icon::DEVICE_MOBILE)).strong());
         hint(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");
             ui.add_enabled(
@@ -124,7 +124,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::toggle(ui, &mut play.surprise, "Surprise button");
     });
     crate::ui::toggle(ui, &mut play.show_names, "Show the players' names on the output").on_hover_text("A \"Now playing: …\" text layer along the bottom; guests type their name on the play page");
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label("Surface page");
         let pages = &st.comp.surface.pages;
         let current = play.surface_page.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "All pages".into());
@@ -248,7 +248,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
         }
         None => {
             let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 let w = (ui.available_width() - 90.0).clamp(100.0, 260.0);
                 crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(w));
                 if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::LINK, "Follow")).clicked() {

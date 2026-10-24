@@ -89,7 +89,7 @@ impl PhosphorApp {
                 }
             } else {
                 ui.label("Locked, Phosphor only plays: the preview, the clip grid, keys and controllers, the outputs. Menus, panels and editing come back when you unlock.");
-                crate::ui::toolbar(ui, |ui| {
+                ui.horizontal(|ui| {
                     ui.label("Password (optional)");
                     ui.add(egui::TextEdit::singleline(&mut self.lock.draft).password(true).desired_width(180.0));
                 });

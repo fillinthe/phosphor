@@ -52,7 +52,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         for (i, m) in st.comp.modulators.iter_mut().enumerate() {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
             egui::Frame::group(ui.style()).show(ui, |ui| {
-                crate::ui::toolbar(ui, |ui| {
+                ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(100.0));
                     ui.add(crate::ui::meter(value).desired_width(70.0).fill(accent().gamma_multiply(0.7)));
                     if i > 0 && crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
@@ -80,7 +80,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 } else if m.signal.source == phosphor_engine::ModSource::Hand {
-                    crate::ui::toolbar(ui, |ui| {
+                    ui.horizontal(|ui| {
                         Level::percent(&mut m.value, "Value").default(0.0).target(phosphor_engine::ControlTarget::Modulator(m.id)).show(ui);
                         hint(ui, "right-click: Learn a MIDI knob");
                     });
@@ -113,7 +113,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     }
                 }
                 // Chain: take from an earlier modulator.
-                crate::ui::toolbar(ui, |ui| {
+                ui.horizontal(|ui| {
                     let mut on = m.chain.is_some();
                     if crate::ui::toggle(ui, &mut on, "Chain:").on_hover_text("Combine with an earlier modulator").changed() {
                         m.chain = on.then(|| ModChain { from: earlier.get(i.saturating_sub(1)).map_or(0, |e| e.0), ..Default::default() });
@@ -126,7 +126,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                                 crate::ui::pick_value(ui, &mut c.from, *id, name);
                             }
                         });
-                        crate::ui::toolbar(ui, |ui| {
+                        ui.horizontal(|ui| {
                             Level::percent(&mut c.amount, "Amount").default(1.0).show(ui);
                         });
                         if i == 0 || c.mode == ChainMode::Multiply && c.from == 0 {
