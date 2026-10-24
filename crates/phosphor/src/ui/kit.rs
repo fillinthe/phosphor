@@ -78,6 +78,32 @@ pub(crate) fn bar_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R
     .inner
 }
 
+/// A row of controls (buttons, toggles, pick-one groups) that wraps onto another line when the panel is narrow,
+/// instead of running off its edge (and making the whole panel wider than the column, which cuts off every row).
+pub(crate) fn toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.horizontal_wrapped(|ui| {
+        ui.set_min_height(CONTROL_H);
+        add(ui)
+    })
+    .inner
+}
+
+/// One entry in a list or a drop-down (a layer, a device, a size): highlighted when it's the one picked. For a few
+/// options side by side use `segmented` / `choice_buttons`.
+pub(crate) fn pick_item<'a>(ui: &mut egui::Ui, picked: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+    ui.add(egui::Button::selectable(picked, text))
+}
+
+/// `pick_item` that sets `current` to `value` when clicked (marks the response changed).
+pub(crate) fn pick_value<'a, V: PartialEq>(ui: &mut egui::Ui, current: &mut V, value: V, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+    let mut r = pick_item(ui, *current == value, text);
+    if r.clicked() && *current != value {
+        *current = value;
+        r.mark_changed();
+    }
+    r
+}
+
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
 pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: Option<f32>) -> egui::Response {
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
@@ -175,7 +201,11 @@ pub(crate) fn toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<String>) 
 pub(crate) fn toggle_locked(ui: &mut egui::Ui, on: &mut bool, text: impl Into<String>, locked: bool) -> egui::Response {
     let text: String = text.into();
     let font = egui::FontId::proportional(12.0);
-    let galley = ui.painter().layout_no_wrap(text, font, Color32::WHITE);
+    // A long label is cut short (whole on hover) rather than making the panel wider than its column.
+    let mut job = egui::text::LayoutJob::single_section(text.clone(), egui::TextFormat::simple(font, Color32::PLACEHOLDER));
+    job.wrap = egui::text::TextWrapping::truncate_at_width((ui.available_width() - 30.0).max(40.0));
+    let galley = ui.painter().layout_job(job);
+    let elided = galley.elided;
     let size = egui::vec2(galley.size().x + 30.0, CONTROL_H);
     let (rect, mut r) = ui.allocate_exact_size(size, Sense::click());
     if r.clicked() && !locked {
@@ -200,7 +230,7 @@ pub(crate) fn toggle_locked(ui: &mut egui::Ui, on: &mut bool, text: impl Into<St
     }
     p.galley(egui::pos2(rect.left() + 21.0, rect.center().y - galley.size().y * 0.5), galley, ink);
     r.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, ""));
-    r
+    if elided { r.on_hover_text(text) } else { r }
 }
 
 /// Pick one of a few: joined segments in one rounded frame, the picked one raised. `each` gets each segment's
