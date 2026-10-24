@@ -183,6 +183,19 @@ impl Tab {
         Tab::Online,
     ];
 
+    /// The kind of panel, shown by its tab's colour (`theme::Hue`); None = the show itself (preview, layers, clips…).
+    pub fn hue(self) -> Option<crate::theme::Hue> {
+        use crate::theme::Hue;
+        Some(match self {
+            Tab::Media | Tab::Online => Hue::Media,
+            Tab::Library | Tab::ShaderEditor => Hue::Effect,
+            Tab::Inputs | Tab::Audio => Hue::Live,
+            Tab::Output | Tab::Mapping | Tab::Studio | Tab::Stage | Tab::Stream | Tab::Network | Tab::Leds | Tab::LayerWindows => Hue::Output,
+            Tab::Control | Tab::Surface | Tab::Modulators | Tab::Devices => Hue::Control,
+            _ => return None,
+        })
+    }
+
     pub fn title(self) -> String {
         match self {
             Tab::Monitor(n) => return format!("Preview {n}"),
@@ -240,7 +253,11 @@ impl egui_dock::TabViewer for Viewer<'_> {
     fn title(&mut self, tab: &mut Tab) -> egui::WidgetText {
         match tab {
             Tab::Monitor(n) => format!("{} {}", icon::MONITOR, monitor_source_name(self.st, *n)).into(),
-            _ => tab.title().into(),
+            // Coloured by what kind of panel it is.
+            _ => match tab.hue() {
+                Some(h) => RichText::new(tab.title()).color(h.color()).into(),
+                None => tab.title().into(),
+            },
         }
     }
 

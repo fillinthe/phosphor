@@ -10,7 +10,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     } else {
         hint(ui, format!("Listening on: {}", control.midi_ports.join(", ")));
     }
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label(RichText::new("OSC").strong());
         guarded!(ui, control.osc_port, egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
         // More ports, typed as a list ("8000, 9001"); applied by Reconnect.
@@ -273,7 +273,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     let listening = control.listen_source;
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label(RichText::new("Mappings").strong());
         hint(ui, format!("{}", comp.control_maps.len()));
         let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Sets of mappings by name, e.g. one per controller (Load replaces this project's mappings; Undo brings them back).", mapping_presets, mapping_preset_name, "mapping set", || if comp.control_maps.is_empty() { String::new() } else { serde_json::to_string(&comp.control_maps).unwrap_or_default() });
@@ -406,7 +406,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
         hint(ui, "The controller's value goes through these, top to bottom, before its range.");
         let mut remove = None;
         for (k, f) in fx.iter_mut().enumerate() {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 ui.label(RichText::new(f.name()).strong());
                 match f {
                     ValueFx::Smooth(s) => {

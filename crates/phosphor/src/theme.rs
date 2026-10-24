@@ -41,6 +41,55 @@ pub fn tint(base: Color32, amount: f32) -> Color32 {
     base.lerp_to_gamma(accent(), amount)
 }
 
+/// What kind of thing something is, shown by one colour everywhere (a panel's tab, a stripe on a clip or layer):
+/// so a glance tells a movie from a generator from a camera, and an output panel from a controller panel. The
+/// accent stays for "on / playing / selected"; gold means mapped, orange a warning, red record / delete.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hue {
+    /// Movies, pictures, the media bin, online media.
+    Media,
+    /// Generators, effects, shaders, visualisers.
+    Effect,
+    /// Cameras, screens, streams, NDI / Syphon in, sound in.
+    Live,
+    /// Text layers.
+    Text,
+    /// Outputs, mapping, screens, LEDs, streaming.
+    Output,
+    /// MIDI, OSC, controllers, modulators, the control surface.
+    Control,
+}
+
+impl Hue {
+    /// Its colour: bright on dark backgrounds, deeper on light ones.
+    pub fn color(self) -> Color32 {
+        let (dark, light): ([u8; 3], [u8; 3]) = match self {
+            Hue::Media => ([105, 150, 255], [40, 80, 190]),
+            Hue::Effect => ([180, 140, 255], [105, 65, 190]),
+            Hue::Live => ([70, 205, 190], [10, 120, 110]),
+            Hue::Text => ([225, 210, 170], [120, 100, 50]),
+            Hue::Output => ([245, 125, 170], [170, 40, 95]),
+            Hue::Control => ([95, 205, 255], [0, 110, 160]),
+        };
+        let [r, g, b] = if LIGHT.load(std::sync::atomic::Ordering::Relaxed) { light } else { dark };
+        Color32::from_rgb(r, g, b)
+    }
+
+    /// The kind of a layer or clip source (None: empty).
+    pub fn of_source(s: &phosphor_engine::SourceSpec) -> Option<Hue> {
+        use phosphor_engine::SourceSpec as S;
+        Some(match s {
+            S::None => return None,
+            S::Image { .. } | S::Movie { .. } => Hue::Media,
+            S::Generator(_) | S::Feed { .. } => Hue::Effect,
+            // MilkDrop presets are drawn, like generators.
+            S::Live { format, .. } if format == "milkdrop" => Hue::Effect,
+            S::Live { .. } => Hue::Live,
+            S::Text(_) => Hue::Text,
+        })
+    }
+}
+
 /// The interface brightness a fresh install starts at (Phosphor's usual near-black).
 pub const DEFAULT_BRIGHTNESS: f32 = 0.35;
 

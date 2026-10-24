@@ -214,7 +214,7 @@ pub(crate) fn master_card(
     let bg = card_background(ui, card_id);
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             if thumbnail(ui, tex, egui::vec2(112.0, 112.0 / aspect), true).clicked() {
                 select = true;
             }
@@ -259,7 +259,7 @@ pub(crate) fn layer_card(
     let bg = card_background(ui, card_id);
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             let r = thumbnail(ui, thumb, egui::vec2(112.0, 112.0 / aspect), layer.enabled && !muted)
                 .on_hover_text("Click to select · double-click to toggle · drag to reorder");
             r.dnd_set_drag_payload(layer.id);
@@ -270,7 +270,7 @@ pub(crate) fn layer_card(
                 layer.enabled = !layer.enabled;
             }
             ui.vertical(|ui| {
-                crate::ui::toolbar(ui, |ui| {
+                ui.horizontal(|ui| {
                     let on = toggle(ui, &mut layer.enabled, "ON").on_hover_text("Layer on/off (Space) · right-click to Learn");
                     mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
@@ -416,6 +416,12 @@ pub(crate) fn layer_card(
     if hovering {
         ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
+    // What the layer plays: a stripe down the card's left edge in that kind's colour (as on its clips).
+    if let Some(h) = crate::theme::Hue::of_source(&layer.source) {
+        let r = frame.response.rect;
+        let stripe = egui::Rect::from_min_max(r.left_top() + egui::vec2(1.0, 8.0), egui::pos2(r.left() + 4.0, r.bottom() - 8.0));
+        ui.painter().rect_filled(stripe, 1.5, h.color());
+    }
     CardOut { select, action, dropped, dropped_media, dropped_palette, dropped_source }
 }
 
@@ -432,7 +438,7 @@ pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, Str
 
 pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String, bool)]) -> Option<LayerAction> {
     let mut action = None;
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         if crate::ui::command(ui, icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
             action = Some(LayerAction::BrowseSources);
         }
@@ -587,7 +593,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
         ui.label(RichText::new("Stream address").small().color(Color32::GRAY));
         let url_id = egui::Id::new(("live_url", layer));
         let mut url: String = ui.ctx().data(|d| d.get_temp(url_id)).unwrap_or_default();
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             ui.add(egui::TextEdit::singleline(&mut url).hint_text("rtsp://… srt://… https://….m3u8").desired_width(190.0));
             if crate::ui::command_if(ui, url.contains("://"), "Play").clicked() {
                 picked = Some(crate::media::live::stream_source(&url));
@@ -651,7 +657,7 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
 
 /// A layer's opacity: slider (mappable, modulation marker), % field and the ~ modulation button.
 pub(crate) fn opacity_row(ui: &mut egui::Ui, layer: &mut LayerState) {
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         show_button(ui, layer);
         Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).show(ui);
     });

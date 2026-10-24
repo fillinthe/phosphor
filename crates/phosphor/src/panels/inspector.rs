@@ -83,7 +83,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
             thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 super::layers::show_button(ui, layer);
                 send = outputs_menu(ui, &outs).or(send);
                 ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
@@ -356,7 +356,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
             if let Some((pos, dur)) = position {
                 // Scratch: drag along the strip to move through the movie (a screen-width drag = 4 seconds), endlessly.
-                crate::ui::toolbar(ui, |ui| {
+                ui.horizontal(|ui| {
                     ui.label("Scratch");
                     let (rect, r) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(260.0), 18.0), Sense::drag());
                     let p = ui.painter();
@@ -380,7 +380,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     r.on_hover_text("Drag to scratch through the movie (wraps round at the ends)");
                 });
             }
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
                     Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
                 });
@@ -529,7 +529,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     let title = if t.is_identity() { label(icon::ARROWS_OUT_CARDINAL, "Transform") } else { label(icon::ARROWS_OUT_CARDINAL, "Transform (moved)") };
     egui::CollapsingHeader::new(title).id_salt(("transform", id)).show(ui, |ui| {
         let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32| {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 let mut level = Level::range(value, *range.start(), *range.end(), text).default(reset).target(target);
                 if log {
                     level = level.log();
@@ -562,7 +562,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         }
         // Crop: one bar per edge.
         for (k, side) in ["Crop left", "Crop right", "Crop top", "Crop bottom"].into_iter().enumerate() {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 Level::percent(&mut t.crop[k], side).max(0.5).default(0.0).show(ui);
             });
         }
@@ -591,7 +591,7 @@ pub(crate) fn mute_button(ui: &mut egui::Ui, muted: &mut bool, what: &str) -> eg
 
 /// Movie sound: volume (mappable) and whether it fades with the layer's opacity.
 fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         mute_button(ui, &mut layer.muted, "this layer");
         let w = ui.available_width();
         volume_bar(ui, layer, w);
@@ -754,7 +754,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     });
     use phosphor_engine::TextAlign;
     ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         let search_id = egui::Id::new(("font_search", id));
         let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
         ComboBox::from_id_salt(("font", id)).width(200.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
@@ -780,13 +780,13 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             });
         });
     });
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         Level::range(&mut style.size, 0.02, 0.8, "Size").default(0.18).tip("Text height, as a share of the picture's height").show(ui);
     });
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         Level::range(&mut style.outline, 0.0, 0.15, "Outline").default(0.0).show(ui);
     });
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         Level::range(&mut style.line_spacing, 0.6, 2.0, "Line spacing").default(1.0).show(ui);
     });
     hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
@@ -812,7 +812,7 @@ fn transition_settings(ui: &mut egui::Ui, layer: &mut LayerState) {
             if Some(i) == progress {
                 continue;
             }
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 Level::range(&mut layer.transition_values[i], p.min, p.max, p.name).default(p.default).show(ui);
             });
         }

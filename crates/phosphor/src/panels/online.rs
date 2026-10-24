@@ -378,7 +378,7 @@ fn font_arrived(st: &mut State, item: &Item, paths: &[String]) {
 pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let o = &mut st.online;
     let mut go = false;
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         let prompt = if o.want == Want::XGifs { "An X account: @giphy, @nasa…" } else { "Search: aurora, city lights, waves, fire…" };
         let r = crate::ui::text_field(ui, &mut o.query, prompt, Some((ui.available_width() - if o.search.is_some() { 64.0 } else { 34.0 }).max(80.0)));
         go |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));

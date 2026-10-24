@@ -488,7 +488,7 @@ fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
             ui.close();
         }
         if !o.stage_photo.is_empty() {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 Level::percent(&mut o.stage_photo_opacity, "Shows").default(0.5).show(ui);
             });
             if danger_button(ui, label(icon::X, "Remove the photo")).clicked() {
@@ -806,7 +806,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
         if many.len() > 1 {
             super::mapping_points::group_settings(ui, &mut o.mapping, &many);
         } else if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::POLYGON).color(accent()));
                 toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                 ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(f32::INFINITY));
@@ -830,7 +830,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
                 fx_action = Some((s.id, a));
             }
         } else if let Some(m) = o.mapping.masks.iter_mut().find(|m| Some(m.id) == *selected_surface) {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                 toggle(ui, &mut m.enabled, "ON");
                 ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(f32::INFINITY));
@@ -840,7 +840,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             let mid = m.id;
             super::mapping::mask_attach_row(ui, &mut o.mapping, mid);
         } else {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
                 ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(f32::INFINITY));
             });

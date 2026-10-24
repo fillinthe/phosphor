@@ -51,7 +51,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     if let Some(p) = audio.problem() {
         ui.colored_label(WARN, p);
     }
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         Level::range(&mut audio.gain, 0.1, 10.0, "Input gain").log().default(1.0).target(ControlTarget::App(phosphor_engine::AppControl::AudioGain)).tip("How much the input is boosted before the visuals hear it").show(ui);
     });
     // Play-through: hear the input on the sound output (off each time Phosphor opens: no surprise feedback).
@@ -62,10 +62,10 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
             audio.set_play_through(on, 1.0);
         }
     }
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         Level::range(&mut audio.envelope.attack, 0.0, 0.5, "Attack (s)").default(0.0).tip("How fast the levels rise: 0 = instantly (punchy), higher = smoother swells").show(ui);
     });
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         Level::range(&mut audio.envelope.release, 0.02, 2.0, "Release (s)").default(0.15).tip("How fast the levels fall after a hit: short = flickery, long = slow fades").show(ui);
     });
     ui.separator();
@@ -95,7 +95,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     }
     ui.add_space(6.0);
     ui.separator();
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label(RichText::new(format!("{} Beat detector", icon::HEARTBEAT)).strong());
         let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
         let pulse = mod_inputs.audio_beat;
@@ -108,7 +108,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, "listening for a beat…");
         }
     });
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         Level::range(&mut audio.beats.sensitivity, 1.1, 3.0, "Kick threshold").default(1.5).target(ControlTarget::App(phosphor_engine::AppControl::KickThreshold)).tip("Lower catches softer kicks; higher ignores everything but strong hits").show(ui);
     });
     crate::ui::toolbar(ui, |ui| {
@@ -156,7 +156,7 @@ fn sound_device(ui: &mut egui::Ui) {
 
 fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     use phosphor_engine::AppControl;
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         let r = super::inspector::mute_button(ui, &mut comp.sound_muted, "all sound");
         map_menu(ui, &r, ControlTarget::App(AppControl::MuteSound));
         Level::percent(&mut comp.volume, "Master volume").max(2.0).target(ControlTarget::App(AppControl::MasterVolume)).tip("Every movie's sound (each layer has its own volume too)").show(ui);
@@ -166,7 +166,7 @@ fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     sound_device(ui);
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         // Three across whatever width the panel has.
         let w = ((ui.available_width() - 2.0 * ui.spacing().item_spacing.x) / 3.0).max(50.0);
         for (k, name) in ["Low", "Mid", "High"].into_iter().enumerate() {

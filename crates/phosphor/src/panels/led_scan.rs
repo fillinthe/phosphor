@@ -45,14 +45,14 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
                     }
                 });
             });
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 let mut ms = (st.led_scan.settle * 1000.0) as f32;
                 if Level::range(&mut ms, 100.0, 1500.0, "Wait per picture (ms)").default(300.0).tip("Longer if lights or the camera are slow to react (wireless controllers, auto-exposure)").show(ui).changed() {
                     st.led_scan.settle = ms as f64 / 1000.0;
                 }
             });
         });
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             if busy {
                 if danger_button(ui, label(icon::STOP, "Stop")).clicked() {
                     st.led_scan.cancel();

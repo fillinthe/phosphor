@@ -63,7 +63,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
             .or_else(|| project_path.as_deref().and_then(|p| std::path::Path::new(p).file_stem()).map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_else(|| "My show".into());
     }
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.add(egui::TextEdit::singleline(&mut f.name).hint_text("Project name").desired_width(180.0));
         let name = f.name.trim().to_string();
         match cloud_project.clone() {

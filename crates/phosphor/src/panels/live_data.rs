@@ -15,7 +15,7 @@ pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
             (d.place, d.latitude, d.longitude, d.weather) = (name, lat, lon, true);
         }
         let d = &mut st.comp.live_data;
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             toggle(ui, &mut d.weather, "Weather").on_hover_text("Temperature, wind, clouds and rain where you pick (Open-Meteo, every 10 minutes)");
             let id = egui::Id::new("live_data_place");
             let mut name: String = ui.ctx().data(|t| t.get_temp(id)).unwrap_or_default();
@@ -52,7 +52,7 @@ pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
             ui.colored_label(WARN, format!("Only {} shared modulators fit: remove some to get every reading.", phosphor_engine::control::MAX_SHARED));
         }
         for name in names {
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 let (value, shown) = st.feeds.reading(name).map_or((0.0, "waiting…".to_string()), |r| (r.value, r.shown.clone()));
                 ui.add(crate::ui::meter(value).desired_width(90.0));
                 ui.label(name);

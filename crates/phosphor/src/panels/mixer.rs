@@ -123,7 +123,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     let comp = &mut st.comp;
     let target = ControlTarget::App(phosphor_engine::AppControl::Crossfader);
     let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
-    crate::ui::toolbar(ui, |ui| {
+    ui.horizontal(|ui| {
         ui.label(RichText::new("A").strong());
         // (Double-click centres it: its default.)
         let width = (ui.available_width() - 200.0).clamp(120.0, 520.0);

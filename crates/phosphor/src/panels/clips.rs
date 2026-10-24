@@ -277,7 +277,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         let thumb_h = (crate::thumbs::THUMB_W as f32 / aspect).max(1.0) as u32;
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Column headers trigger whole columns.
-            crate::ui::toolbar(ui, |ui| {
+            ui.horizontal(|ui| {
                 ui.allocate_exact_size(egui::vec2(ROW_HEADER_W, 22.0), Sense::hover());
                 for c in 0..cols {
                     let keyed = c / CLIP_PAGE_SIZE == bank;
@@ -302,7 +302,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     continue;
                 }
                 let layer = &mut comp.layers[idx];
-                crate::ui::toolbar(ui, |ui| {
+                ui.horizontal(|ui| {
                     let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
                     let (fill, beat_all, midi) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, cell.y));
                     if let Some(m) = midi {
@@ -394,6 +394,11 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                             ui.visuals().widgets.noninteractive.bg_stroke
                         };
                         p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
+                        // What kind of clip it is: a stripe down its left edge in that kind's colour.
+                        if let Some(h) = clip.and_then(|k| crate::theme::Hue::of_source(&k.source)) {
+                            let stripe = egui::Rect::from_min_max(rect.left_top() + egui::vec2(1.0, 4.0), egui::pos2(rect.left() + 4.0, rect.bottom() - 4.0));
+                            p.rect_filled(stripe, 1.5, h.color());
+                        }
                         // A muted clip says so on its cell.
                         if clip.is_some_and(|k| k.muted) {
                             let at = rect.right_top() + egui::vec2(-4.0, 4.0);
@@ -557,7 +562,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             *selected = Some(layer.id);
         }
         // Show/hide + opacity under the picture; mute + volume for layers with sound.
-        crate::ui::toolbar(ui, |ui| {
+        ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             super::layers::show_button(ui, layer);
             Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).width(size.x - 34.0).show(ui);

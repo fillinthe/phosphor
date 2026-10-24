@@ -258,7 +258,13 @@ impl PhosphorApp {
                         other => (icon::LAYOUT, other, ""),
                     };
                     let tip = format!("{tip}. Drag any panel to rearrange this area; it remembers. View > Reset Layout restores it.");
-                    if crate::ui::pick_item(ui, self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {
+                    // Each area in its colour: the show in the accent, outputs and controllers in theirs (their panels' tabs match).
+                    let color = match *name {
+                        "Outputs" => theme::Hue::Output.color(),
+                        "Control" => theme::Hue::Control.color(),
+                        _ => theme::accent(),
+                    };
+                    if crate::ui::pick_item(ui, self.workspace == Some(i), egui::RichText::new(format!("{glyph} {text}")).color(color)).on_hover_text(tip).clicked() {
                         self.switch_workspace(i);
                     }
                 }
@@ -352,7 +358,7 @@ impl PhosphorApp {
                             }
                         });
                         crate::ui::hint(ui, "Darker for dark rooms and shows, lighter for daylight.");
-                        crate::ui::toolbar(ui, |ui| {
+                        ui.horizontal(|ui| {
                             ui.label(egui::RichText::new("Accent").small());
                             for (k, (name, dark, _)) in theme::ACCENTS.iter().enumerate() {
                                 let (r, resp) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::click());
