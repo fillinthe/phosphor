@@ -29,7 +29,7 @@ pub(crate) enum LayerAction {
 pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     comp_tabs(ui, st);
     ui.horizontal(|ui| {
-        if ui.button(label(icon::PLUS, "Add Layer")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
         }
         hint(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
@@ -291,16 +291,16 @@ pub(crate) fn layer_card(
                         select = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(icon::TRASH).on_hover_text("Delete layer").clicked() {
+                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete layer").clicked() {
                             action = Some(LayerAction::Remove);
                         }
-                        if ui.small_button(icon::COPY).on_hover_text("Duplicate layer").clicked() {
+                        if crate::ui::small_command(ui, icon::COPY).on_hover_text("Duplicate layer").clicked() {
                             action = Some(LayerAction::Duplicate);
                         }
-                        if arrows && ui.small_button(icon::ARROW_DOWN).on_hover_text("Move down the stack").clicked() {
+                        if arrows && crate::ui::small_command(ui, icon::ARROW_DOWN).on_hover_text("Move down the stack").clicked() {
                             action = Some(LayerAction::Down);
                         }
-                        if arrows && ui.small_button(icon::ARROW_UP).on_hover_text("Move up the stack").clicked() {
+                        if arrows && crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Move up the stack").clicked() {
                             action = Some(LayerAction::Up);
                         }
                     });
@@ -336,43 +336,43 @@ pub(crate) fn layer_card(
         select = true;
     }
     resp.right_menu(|ui| {
-        if ui.button(label(icon::SPARKLE, "Browse sources…")).clicked() {
+        if crate::ui::command(ui, label(icon::SPARKLE, "Browse sources…")).clicked() {
             action = Some(LayerAction::BrowseSources);
             ui.close();
         }
-        if ui.button(label(icon::MAGIC_WAND, "Add effect…")).clicked() {
+        if crate::ui::command(ui, label(icon::MAGIC_WAND, "Add effect…")).clicked() {
             action = Some(LayerAction::BrowseEffects);
             ui.close();
         }
-        if ui.button(label(icon::MONITOR, "Preview in a window")).clicked() {
+        if crate::ui::command(ui, label(icon::MONITOR, "Preview in a window")).clicked() {
             action = Some(LayerAction::Monitor);
             ui.close();
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::CAMERA, "Save a picture…")).on_hover_text("This layer's picture now, at the canvas size, as a PNG").clicked() {
+        if crate::ui::command(ui, label(icon::CAMERA, "Save a picture…")).on_hover_text("This layer's picture now, at the canvas size, as a PNG").clicked() {
             super::request_snapshot(ui, layer.id);
             ui.close();
         }
         ui.separator();
         learn_items(ui, &ControlTarget::LayerEnabled(layer.id));
-        if ui.button(label(icon::BROADCAST, "Learn opacity")).clicked() {
+        if crate::ui::command(ui, label(icon::BROADCAST, "Learn opacity")).clicked() {
             request(ui, LEARN_REQUEST, ControlTarget::LayerOpacity(layer.id));
             ui.close();
         }
         ui.separator();
-        if ui.button(label(icon::COPY, "Duplicate (⌘D)")).clicked() {
+        if crate::ui::command(ui, label(icon::COPY, "Duplicate (⌘D)")).clicked() {
             action = Some(LayerAction::Duplicate);
             ui.close();
         }
-        if ui.button(label(icon::ARROW_UP, "Move up")).clicked() {
+        if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {
             action = Some(LayerAction::Up);
             ui.close();
         }
-        if ui.button(label(icon::ARROW_DOWN, "Move down")).clicked() {
+        if crate::ui::command(ui, label(icon::ARROW_DOWN, "Move down")).clicked() {
             action = Some(LayerAction::Down);
             ui.close();
         }
-        if ui.button("Clear source").clicked() {
+        if crate::ui::command(ui, "Clear source").clicked() {
             action = Some(LayerAction::ClearSource);
             ui.close();
         }
@@ -381,25 +381,25 @@ pub(crate) fn layer_card(
         }
         ui.separator();
         if layer.parent.is_some() {
-            if ui.button(label(icon::SELECTION_SLASH, "Take out of the group")).clicked() {
+            if crate::ui::command(ui, label(icon::SELECTION_SLASH, "Take out of the group")).clicked() {
                 action = Some(LayerAction::LeaveGroup);
                 ui.close();
             }
-        } else if ui.button(label(icon::STACK, "Group with the layer below (⌘G)")).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
+        } else if crate::ui::command(ui, label(icon::STACK, "Group with the layer below (⌘G)")).on_hover_text("Mix the two together first, then treat them like one layer (opacity, blend, effects)").clicked() {
             action = Some(LayerAction::GroupWithBelow);
             ui.close();
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::PALETTE, "Match colour to a picture…")).on_hover_text("Adds a Colour Match effect so this layer's colours look like a picture you choose (another camera, a grade, a still)").clicked() {
+        if crate::ui::command(ui, label(icon::PALETTE, "Match colour to a picture…")).on_hover_text("Adds a Colour Match effect so this layer's colours look like a picture you choose (another camera, a grade, a still)").clicked() {
             action = Some(LayerAction::MatchColour);
             ui.close();
         }
-        if ui.button(label(icon::SWATCHES, "Palette from this picture")).on_hover_text("Adds a Palette effect: every pixel becomes one of this layer's six main colours (change them in the effect)").clicked() {
+        if crate::ui::command(ui, label(icon::SWATCHES, "Palette from this picture")).on_hover_text("Adds a Palette effect: every pixel becomes one of this layer's six main colours (change them in the effect)").clicked() {
             action = Some(LayerAction::Palette);
             ui.close();
         }
         ui.separator();
-        if ui.button(label(icon::TRASH, "Delete (Backspace)")).clicked() {
+        if crate::ui::command(ui, label(icon::TRASH, "Delete (Backspace)")).clicked() {
             action = Some(LayerAction::Remove);
             ui.close();
         }
@@ -433,7 +433,7 @@ pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, Str
 pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String, bool)]) -> Option<LayerAction> {
     let mut action = None;
     ui.horizontal(|ui| {
-        if ui.button(icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
+        if crate::ui::command(ui, icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
             action = Some(LayerAction::BrowseSources);
         }
         // Leave room for the Open and Live icon buttons so the row never runs off the card.
@@ -506,7 +506,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 }
             }
         });
-        if ui.button(icon::FOLDER_OPEN).on_hover_text("Open an image or movie file (or drag one onto the window)").clicked() {
+        if crate::ui::command(ui, icon::FOLDER_OPEN).on_hover_text("Open an image or movie file (or drag one onto the window)").clicked() {
             action = Some(LayerAction::OpenFile);
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -564,7 +564,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
                 ui.menu_button(label(icon::APP_WINDOW, &format!("A window ({})", mine.len())), |ui| {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                         for i in &mine {
-                            if ui.button(short(&i.label)).on_hover_text(&i.label).clicked() {
+                            if crate::ui::command(ui, short(&i.label)).on_hover_text(&i.label).clicked() {
                                 picked = Some(i.source.clone());
                                 ui.close();
                             }
@@ -574,12 +574,12 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
                 continue;
             }
             for i in mine {
-                if ui.button(label(input_icon(kind), &short(&i.label))).on_hover_text(&i.label).clicked() {
+                if crate::ui::command(ui, label(input_icon(kind), &short(&i.label))).on_hover_text(&i.label).clicked() {
                     picked = Some(i.source.clone());
                     ui.close();
                 }
             }
-            if kind == crate::media::live::InputKind::Camera && ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+            if kind == crate::media::live::InputKind::Camera && crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("live_rescan"), true));
             }
         }

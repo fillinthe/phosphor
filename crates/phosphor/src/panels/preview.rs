@@ -47,7 +47,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             crate::ui::icon_toggle(ui, &mut st.mouse_to_shaders, icon::CURSOR_CLICK).on_hover_text("Mouse into shaders: drag in the preview to move the selected layer's points (ISF point settings: centres, positions)");
             let r = super::inspector::mute_button(ui, &mut st.comp.sound_muted, "all sound");
             map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MuteSound));
-            if ui.button(icon::PLUS).on_hover_text("New preview window: the mix, a layer, a group or one output, as many as you like").clicked() {
+            if crate::ui::command(ui, icon::PLUS).on_hover_text("New preview window: the mix, a layer, a group or one output, as many as you like").clicked() {
                 st.new_monitor = Some(MonitorSource::Mix);
             }
             let (stop, play) = (label(icon::STOP, "Output"), label(icon::PLAY, "Output"));
@@ -93,7 +93,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     corner_pin_handles(ui, st, frame);
     resp.right_menu(|ui| {
         let open = st.output_open();
-        if ui.button(label(if open { icon::STOP } else { icon::PLAY }, if open { "Close output" } else { "Open output" })).clicked() {
+        if crate::ui::command(ui, label(if open { icon::STOP } else { icon::PLAY }, if open { "Close output" } else { "Open output" })).clicked() {
             st.toggle_output();
             ui.close();
         }
@@ -102,23 +102,23 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
                 st.displays = crate::screens::displays();
             }
             for d in st.displays.clone() {
-                if ui.button(d.label()).clicked() {
+                if crate::ui::command(ui, d.label()).clicked() {
                     st.send_output_to(d);
                     ui.close();
                 }
             }
         });
-        if ui.button(label(icon::MONITOR, "New preview window")).clicked() {
+        if crate::ui::command(ui, label(icon::MONITOR, "New preview window")).clicked() {
             st.new_monitor = Some(MonitorSource::Mix);
             ui.close();
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::CAMERA, "Save snapshot…")).clicked() {
+        if crate::ui::command(ui, label(icon::CAMERA, "Save snapshot…")).clicked() {
             st.snapshot_requested = true;
             ui.close();
         }
         ui.separator();
-        if ui.button(label(icon::BROADCAST, "Learn master fade")).clicked() {
+        if crate::ui::command(ui, label(icon::BROADCAST, "Learn master fade")).clicked() {
             request(ui, LEARN_REQUEST, ControlTarget::MasterFade);
             ui.close();
         }

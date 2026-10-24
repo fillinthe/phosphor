@@ -92,7 +92,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                     ui.label("File");
                     ui.add(egui::TextEdit::singleline(&mut s.file_path).hint_text("…/recording.mp4 or .mov (ProRes)").desired_width(260.0));
                     #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button("Choose…").clicked() {
+                    if crate::ui::command(ui, "Choose…").clicked() {
                         choose_file = true;
                     }
                 });
@@ -139,7 +139,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                     crate::ui::pick_value(ui, &mut s.audio_device, *i, name);
                 }
             });
-            if ui.button(icon::ARROWS_CLOCKWISE).on_hover_text("Scan audio devices (mic, interface, BlackHole loopback)").clicked() {
+            if crate::ui::command(ui, icon::ARROWS_CLOCKWISE).on_hover_text("Scan audio devices (mic, interface, BlackHole loopback)").clicked() {
                 *stream_audio_devices = crate::stream::list_audio_devices();
             }
         });
@@ -155,7 +155,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
             }
             ui.colored_label(accent(), format!("{} LIVE {:02}:{:02}", icon::RECORD, (stream.elapsed(now) / 60.0) as u32, stream.elapsed(now) as u32 % 60));
             stream_health(ui, stream);
-        } else if ui.button(label(icon::BROADCAST, if waiting { "Starting on the bar…" } else { "Start" })).on_hover_text(if waiting { "Press again to cancel" } else { "Start now (or on the next bar, if that's on)" }).clicked() {
+        } else if crate::ui::command(ui, label(icon::BROADCAST, if waiting { "Starting on the bar…" } else { "Start" })).on_hover_text(if waiting { "Press again to cancel" } else { "Start now (or on the next bar, if that's on)" }).clicked() {
             toggle_now = true;
         }
         ui.add_enabled_ui(!running, |ui| {
@@ -205,7 +205,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
     use crate::app::recorders::MAX;
     ui.horizontal(|ui| {
         ui.label(RichText::new("More recorders").strong());
-        if st.recorders.len() < MAX && ui.button(label(icon::PLUS, "Recorder")).on_hover_text("Record another picture to its own file at the same time (a layer on its own, a comp, the program)").clicked() {
+        if st.recorders.len() < MAX && crate::ui::command(ui, label(icon::PLUS, "Recorder")).on_hover_text("Record another picture to its own file at the same time (a layer on its own, a comp, the program)").clicked() {
             st.recorder_add();
         }
     });
@@ -225,7 +225,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
                     });
                     crate::ui::text_field(ui, &mut s.file_path, "…/take.mp4 or .mov", Some(180.0));
                     #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button("Choose…").clicked() {
+                    if crate::ui::command(ui, "Choose…").clicked() {
                         choose = Some(i);
                     }
                     choice_combo(ui, ("rec_format", i), &mut s.file_format, 150.0, false);
@@ -244,7 +244,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
                     if action_button(ui, Act::Record, label(icon::RECORD, "Record")).clicked() {
                         toggle = Some(i);
                     }
-                    if ui.small_button(icon::TRASH).on_hover_text("Remove this recorder").clicked() {
+                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove this recorder").clicked() {
                         remove = Some(i);
                     }
                 }

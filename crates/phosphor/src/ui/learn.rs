@@ -58,7 +58,7 @@ pub(crate) const MAPPED: Color32 = Color32::from_rgb(255, 196, 70);
 pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     ui.set_min_width(300.0);
     lock_item(ui, target);
-    if ui.button(label(icon::EAR, "Listen: move a knob, send OSC, or press a key")).clicked() {
+    if crate::ui::command(ui, label(icon::EAR, "Listen: move a knob, send OSC, or press a key")).clicked() {
         request(ui, LEARN_REQUEST, target.clone());
         ui.close();
     }
@@ -69,7 +69,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(ONLY_SHOWN_REQUEST), (target.clone(), want)));
         }
     }
-    if ui.button(label(icon::DIAMOND, "Key on the timeline")).on_hover_text("Keeps this value at the timeline's playhead (a track for it appears in the Timeline panel)").clicked() {
+    if crate::ui::command(ui, label(icon::DIAMOND, "Key on the timeline")).on_hover_text("Keeps this value at the timeline's playhead (a track for it appears in the Timeline panel)").clicked() {
         request(ui, KEY_REQUEST, target.clone());
         ui.close();
     }
@@ -77,7 +77,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     ui.horizontal(|ui| {
         ui.label(RichText::new("OSC").small().color(Color32::GRAY));
         ui.monospace(&address).on_hover_text("Always works, no mapping needed. Send 0–1 (1 = press for buttons and clips). A layer's, group's or slice's name works in place of its number (/phosphor/layer/intro_loop/opacity), and * reaches them all.");
-        if ui.small_button(icon::COPY).on_hover_text("Copy address").clicked() {
+        if crate::ui::small_command(ui, icon::COPY).on_hover_text("Copy address").clicked() {
             ui.ctx().copy_text(address.clone());
         }
     });
@@ -89,7 +89,7 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
         let mut set = false;
         ui.horizontal(|ui| {
             source_editor(ui, ("map_to", format!("{target:?}")), &mut draft);
-            set = ui.button("Map").clicked();
+            set = crate::ui::command(ui, "Map").clicked();
         });
         ui.ctx().data_mut(|d| d.insert_temp(id, draft.clone()));
         if set {
@@ -102,17 +102,17 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
     if !sources.is_empty() {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("Mapped: {}", sources.join(", "))).small().color(MAPPED));
-            if ui.small_button(label(icon::X, "Forget")).clicked() {
+            if crate::ui::small_command(ui, label(icon::X, "Forget")).clicked() {
                 request(ui, UNLEARN_REQUEST, target.clone());
                 ui.close();
             }
-            if ui.small_button(label(icon::COPY, "Copy")).on_hover_text("Copy these mappings (input, range, value effects) to paste onto another control").clicked() {
+            if crate::ui::small_command(ui, label(icon::COPY, "Copy")).on_hover_text("Copy these mappings (input, range, value effects) to paste onto another control").clicked() {
                 request(ui, COPY_MAPS_REQUEST, target.clone());
                 ui.close();
             }
         });
     }
-    if copied > 0 && ui.button(label(icon::CLIPBOARD_TEXT, &format!("Paste mapping{} here", if copied == 1 { "" } else { "s" }))).on_hover_text("The copied inputs drive this control too").clicked() {
+    if copied > 0 && crate::ui::command(ui, label(icon::CLIPBOARD_TEXT, &format!("Paste mapping{} here", if copied == 1 { "" } else { "s" }))).on_hover_text("The copied inputs drive this control too").clicked() {
         request(ui, PASTE_MAPS_REQUEST, target.clone());
         ui.close();
     }
@@ -131,7 +131,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
         for to in &mine {
             ui.horizontal(|ui| {
                 ui.label(to.label());
-                if ui.small_button(icon::X).on_hover_text("Stop sending").clicked() {
+                if crate::ui::small_command(ui, icon::X).on_hover_text("Stop sending").clicked() {
                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), to.clone(), false)));
                 }
             });
@@ -140,7 +140,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
         let mut draft: SendTo = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(SendTo::Osc { address: "/phosphor/out".into() });
         ui.horizontal(|ui| {
             send_to_editor(ui, &mut draft);
-            if ui.button("Add").clicked() {
+            if crate::ui::command(ui, "Add").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), draft.clone(), true)));
                 ui.close();
             }
@@ -197,7 +197,7 @@ fn oscquery_browser(ui: &mut egui::Ui, target: &ControlTarget) {
     let shared: Shared = ui.ctx().data_mut(|d| d.get_temp_mut_or_default::<Shared>(result_id).clone());
     ui.horizontal(|ui| {
         text_field(ui, &mut addr, "host:port", Some(150.0));
-        if ui.button("Read").on_hover_text("Ask the app at this address (its OSC Query port) what it can be sent").clicked() {
+        if crate::ui::command(ui, "Read").on_hover_text("Ask the app at this address (its OSC Query port) what it can be sent").clicked() {
             *shared.lock().unwrap() = None;
             fetch(&addr, shared.clone(), ui.ctx().clone());
         }
@@ -218,7 +218,7 @@ fn oscquery_browser(ui: &mut egui::Ui, target: &ControlTarget) {
             egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                 for p in params.iter().filter(|p| q.is_empty() || p.address.to_lowercase().contains(&q) || p.description.to_lowercase().contains(&q)).take(80) {
                     let text = if p.description.is_empty() { p.address.clone() } else { format!("{}  ·  {}", p.address, p.description) };
-                    if ui.button(text).on_hover_text(format!("Send to {host}:{port}{} ({} to {})", p.address, p.min, p.max)).clicked() {
+                    if crate::ui::command(ui, text).on_hover_text(format!("Send to {host}:{port}{} ({} to {})", p.address, p.min, p.max)).clicked() {
                         let to = phosphor_engine::SendTo::OscTo { host: host.clone(), port, address: p.address.clone(), min: p.min, max: p.max };
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SEND_REQUEST), (target.clone(), to, true)));
                         ui.close();
@@ -316,29 +316,29 @@ pub(crate) fn control_menu_with(resp: &egui::Response, target: Option<&ControlTa
         let moving = m.as_ref().is_some_and(|m| m.is_some());
         if let Some(m) = m {
             ui.menu_button(label(icon::WAVE_SINE, "Modulate…"), |ui| modulation_editor(ui, &mut *m));
-            if moving && ui.button(label(icon::PAUSE, "Stop the motion")).on_hover_text("Keeps the value where it is set, without the modulation").clicked() {
+            if moving && crate::ui::command(ui, label(icon::PAUSE, "Stop the motion")).on_hover_text("Keeps the value where it is set, without the modulation").clicked() {
                 *m = None;
                 ui.close();
             }
             let clip = egui::Id::new(MOTION_CLIPBOARD);
             if let Some(motion) = m.as_ref().filter(|_| moving)
-                && ui.button(label(icon::COPY, "Copy the motion")).on_hover_text("To paste onto another value").clicked()
+                && crate::ui::command(ui, label(icon::COPY, "Copy the motion")).on_hover_text("To paste onto another value").clicked()
             {
                 ui.ctx().data_mut(|d| d.insert_temp(clip, Some(motion.clone())));
                 ui.close();
             }
             if let Some(motion) = ui.ctx().data(|d| d.get_temp::<Option<Modulation>>(clip)).flatten()
-                && ui.button(label(icon::CLIPBOARD_TEXT, "Paste the motion")).on_hover_text("The copied modulation, on this value").clicked()
+                && crate::ui::command(ui, label(icon::CLIPBOARD_TEXT, "Paste the motion")).on_hover_text("The copied modulation, on this value").clicked()
             {
                 *m = Some(motion);
                 ui.close();
             }
-            if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).on_hover_text("The default value, with no modulation").clicked() {
+            if crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).on_hover_text("The default value, with no modulation").clicked() {
                 *m = None;
                 reset = true;
                 ui.close();
             }
-        } else if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).clicked() {
+        } else if crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Reset to default")).clicked() {
             reset = true;
             ui.close();
         }

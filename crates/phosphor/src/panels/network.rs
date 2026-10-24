@@ -18,10 +18,10 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             });
         });
         if net.running() {
-            if ui.button(label(icon::STOP, "Stop session")).clicked() {
+            if crate::ui::command(ui, label(icon::STOP, "Stop session")).clicked() {
                 net.stop();
             }
-        } else if ui.button(label(icon::BROADCAST, "Start session")).clicked() {
+        } else if crate::ui::command(ui, label(icon::BROADCAST, "Start session")).clicked() {
             match net.start() {
                 Ok(()) => *notice = None,
                 Err(e) => *notice = Some(e),
@@ -32,7 +32,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         let url = net.url();
         ui.horizontal(|ui| {
             ui.monospace(&url);
-            if ui.button(icon::COPY).on_hover_text("Copy link").clicked() {
+            if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link").clicked() {
                 ui.ctx().copy_text(url.clone());
             }
         });
@@ -46,7 +46,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 ui.label(format!("{} Secure link", icon::LOCK));
                 ui.monospace(&secure);
-                if ui.button(icon::COPY).on_hover_text("Copy the secure link").clicked() {
+                if crate::ui::command(ui, icon::COPY).on_hover_text("Copy the secure link").clicked() {
                     ui.ctx().copy_text(secure.clone());
                 }
             });
@@ -74,7 +74,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             qr_code(ui, &remote, 150.0);
             ui.vertical(|ui| {
                 ui.monospace(&remote);
-                if ui.button(icon::COPY).on_hover_text("Copy link").clicked() {
+                if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link").clicked() {
                     ui.ctx().copy_text(remote.clone());
                 }
                 ui.monospace(format!("remotes connected: {}", net.remotes.load(std::sync::atomic::Ordering::Relaxed)));
@@ -89,7 +89,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             net.audio_peers.load(std::sync::atomic::Ordering::Relaxed)
         ));
         if !audio.is_network() {
-            if ui.button(label(icon::MICROPHONE, "React to viewers' audio")).clicked() {
+            if crate::ui::command(ui, label(icon::MICROPHONE, "React to viewers' audio")).clicked() {
                 audio.use_network();
             }
         } else {
@@ -175,7 +175,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         ui.vertical(|ui| {
             ui.monospace(&url);
             ui.horizontal(|ui| {
-                if ui.button(icon::COPY).on_hover_text("Copy link").clicked() {
+                if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link").clicked() {
                     ui.ctx().copy_text(url.clone());
                 }
                 #[cfg(not(target_arch = "wasm32"))]
@@ -196,7 +196,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                 let page = p.page.and_then(|i| pages.get(i)).map(|n| format!(" · {n}")).unwrap_or_default();
                 ui.horizontal(|ui| {
                     ui.colored_label(accent(), format!("{} Playing: {}{page}{left}", icon::HAND_WAVING, p.label));
-                    if ui.small_button("Skip").on_hover_text("End this turn now; the next person gets the controls").clicked() {
+                    if crate::ui::small_command(ui, "Skip").on_hover_text("End this turn now; the next person gets the controls").clicked() {
                         skip = Some(p.who.clone());
                     }
                 });
@@ -228,7 +228,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
             let mut stop = false;
             ui.horizontal(|ui| {
                 ui.colored_label(accent(), text);
-                stop = ui.button(label(icon::STOP, "Stop following")).clicked();
+                stop = crate::ui::command(ui, label(icon::STOP, "Stop following")).clicked();
             });
             if stop {
                 st.following = None;

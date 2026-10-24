@@ -74,7 +74,7 @@ impl PhosphorApp {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!("{} Recovered after an unexpected quit", icon::LIFEBUOY)).color(theme::accent()).strong());
                     crate::ui::hint(ui, "project, layout, outputs, session and audio were restored");
-                    if was_streaming && ui.button(format!("{} Resume stream", icon::BROADCAST)).clicked() {
+                    if was_streaming && crate::ui::command(ui, format!("{} Resume stream", icon::BROADCAST)).clicked() {
                         let (w, h) = (self.state.comp.width, self.state.comp.height);
                         let now = ui.ctx().input(|i| i.time);
                         if let Err(e) = self.state.stream.start(w, h, now) {
@@ -92,7 +92,7 @@ impl PhosphorApp {
                         None => {}
                     }
                     // Opt-in crash report: the bug window, filled in, with the end of crash.log in its diagnostics.
-                    if ui.button(format!("{} Report it", icon::BUG)).on_hover_text("Opens Report a Bug with what happened filled in; nothing is sent until you send it").clicked() {
+                    if crate::ui::command(ui, format!("{} Report it", icon::BUG)).on_hover_text("Opens Report a Bug with what happened filled in; nothing is sent until you send it").clicked() {
                         let bug = &mut self.state.bug;
                         bug.open = true;
                         bug.include_diagnostics = true;
@@ -101,7 +101,7 @@ impl PhosphorApp {
                         }
                         self.recovered = None;
                     }
-                    if ui.small_button("OK").clicked() {
+                    if crate::ui::small_command(ui, "OK").clicked() {
                         self.recovered = None;
                     }
                 });

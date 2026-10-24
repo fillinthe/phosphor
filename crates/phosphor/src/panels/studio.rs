@@ -138,7 +138,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                         *selected_surface = Some(m.id);
                     }
                     r.right_menu(|ui| {
-                        if ui.button(label(icon::TRASH, "Delete")).clicked() {
+                        if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
                             action = Some(TreeAction::Delete(o.id, m.id));
                             ui.close();
                         }
@@ -147,12 +147,12 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             }
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
-                if ui.small_button(label(icon::PLUS, "Slice")).clicked() {
+                if crate::ui::small_command(ui, label(icon::PLUS, "Slice")).clicked() {
                     action = Some(TreeAction::AddSlice(o.id));
                 }
                 ui.menu_button(label(icon::PLUS, "Mask"), |ui| {
                     for &shape in <MaskShape as phosphor_engine::Choice>::OPTIONS {
-                        if ui.button(shape.name()).clicked() {
+                        if crate::ui::command(ui, shape.name()).clicked() {
                             action = Some(TreeAction::AddMask(o.id, shape));
                             ui.close();
                         }
@@ -254,7 +254,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal_wrapped(|ui| {
         segmented(ui, &mut vs.view, &[(View::Split, "Output + input".to_string()), (View::Output, "Output".to_string()), (View::Input, "Input".to_string())], |_, _, _| {});
         ui.separator();
-        if ui.button(label(icon::CORNERS_OUT, "Fit")).on_hover_text("Show the whole output").clicked() {
+        if crate::ui::command(ui, label(icon::CORNERS_OUT, "Fit")).on_hover_text("Show the whole output").clicked() {
             vs.zoom = 1.0;
             vs.pan = egui::Vec2::ZERO;
         }
@@ -291,13 +291,13 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             let mut remove = None;
             for (k, (name, ids)) in o.mapping.solo_sets.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    if ui.button(format!("{name} ({})", ids.len())).on_hover_text("Select these slices and show only them").clicked() {
+                    if crate::ui::command(ui, format!("{name} ({})", ids.len())).on_hover_text("Select these slices and show only them").clicked() {
                         let ids: Vec<u64> = ids.iter().copied().filter(|id| o.mapping.surfaces.iter().any(|s| s.id == *id)).collect();
                         o.mapping.solo = ids.clone();
                         super::mapping_points::select_slices(ui.ctx(), selected_surface, ids);
                         ui.close();
                     }
-                    if ui.small_button(icon::TRASH).on_hover_text("Delete this set (the slices stay)").clicked() {
+                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete this set (the slices stay)").clicked() {
                         remove = Some(k);
                     }
                 });
@@ -478,12 +478,12 @@ fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
     ui.menu_button(text, |ui| {
         ui.set_min_width(260.0);
         hint(ui, "A photo of the stage taken from where the projector stands: line the slices up with it. Only shows here, never on the output.");
-        if ui.button(label(icon::FOLDER_OPEN, if o.stage_photo.is_empty() { "Choose a photo…" } else { "Another photo…" })).clicked() {
+        if crate::ui::command(ui, label(icon::FOLDER_OPEN, if o.stage_photo.is_empty() { "Choose a photo…" } else { "Another photo…" })).clicked() {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(super::mapping::PICK_STAGE_PHOTO), o.id));
             ui.close();
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::SCAN, "Scan the stage with a camera…")).on_hover_text("The projector shows patterns, a camera watches: Phosphor makes the photo for you (MadMapper's spatial scanner)").clicked() {
+        if crate::ui::command(ui, label(icon::SCAN, "Scan the stage with a camera…")).on_hover_text("The projector shows patterns, a camera watches: Phosphor makes the photo for you (MadMapper's spatial scanner)").clicked() {
             super::open_scan_window(ui.ctx(), o.id);
             ui.close();
         }
@@ -514,13 +514,13 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         if !others.is_empty() {
             ui.menu_button(label(icon::COPY, "Copy its look to"), |ui| {
                 hint(ui, "Opacity, soft edges, colour, blend and shape; not where it sits or what it shows");
-                if ui.button("Every other slice here").clicked() {
+                if crate::ui::command(ui, "Every other slice here").clicked() {
                     copy_to = others.iter().map(|(id, _)| *id).collect();
                     ui.close();
                 }
                 ui.separator();
                 for (id, name) in &others {
-                    if ui.button(name).clicked() {
+                    if crate::ui::command(ui, name).clicked() {
                         copy_to = vec![*id];
                         ui.close();
                     }
@@ -572,7 +572,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
                 if let Some(m) = &s.mesh {
                     let (c, r) = (m.cols, m.rows);
                     ui.separator();
-                    if ui.button("Flatten: straighten the grid").clicked() {
+                    if crate::ui::command(ui, "Flatten: straighten the grid").clicked() {
                         s.mesh = Some(Mesh::from_corners(&s.corners, c, r));
                         ui.close();
                     }
@@ -586,7 +586,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
                     }
                 }
             });
-            if ui.button(label(icon::CORNERS_OUT, "Fill the output")).on_hover_text("Corners back to the edges of the output").clicked() {
+            if crate::ui::command(ui, label(icon::CORNERS_OUT, "Fill the output")).on_hover_text("Corners back to the edges of the output").clicked() {
                 s.mesh = None;
                 s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
                 ui.close();
@@ -609,11 +609,11 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             if crate::ui::toggle(ui, &mut m.calibrating, "Calibrate (pin points)").on_hover_text("Click model points, drag their pins onto the real object; 4+ pins solve the projector").changed() {
                 ui.close();
             }
-            if !m.pins.is_empty() && ui.button("Clear calibration pins").clicked() {
+            if !m.pins.is_empty() && crate::ui::command(ui, "Clear calibration pins").clicked() {
                 m.pins.clear();
                 ui.close();
             }
-            if ui.button("Choose another model…").clicked() {
+            if crate::ui::command(ui, "Choose another model…").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(crate::panels::PICK_MODEL), s.id));
                 ui.close();
             }
@@ -633,27 +633,27 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         let id = s.id;
         ui.separator();
         let picked = super::mapping_points::selected_slices(ui.ctx(), selected);
-        if picked.len() > 1 && ui.button(label(icon::FOLDER_PLUS, &format!("Group the {} selected slices", picked.len()))).clicked() {
+        if picked.len() > 1 && crate::ui::command(ui, label(icon::FOLDER_PLUS, &format!("Group the {} selected slices", picked.len()))).clicked() {
             *action = Some(TreeAction::Group(oid, picked));
             ui.close();
         }
-        if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+        if crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
             *action = Some(TreeAction::Duplicate(id));
             ui.close();
         }
-        if ui.button(label(icon::TRASH, "Delete")).clicked() {
+        if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
             *action = Some(TreeAction::Delete(oid, id));
             ui.close();
         }
         ui.separator();
     }
-    if ui.button(label(icon::PLUS, "Add a slice here")).clicked() {
+    if crate::ui::command(ui, label(icon::PLUS, "Add a slice here")).clicked() {
         *action = Some(TreeAction::AddSliceAt(oid, at));
         ui.close();
     }
     ui.menu_button(label(icon::PLUS, "Add a mask"), |ui| {
         for &shape in <MaskShape as phosphor_engine::Choice>::OPTIONS {
-            if ui.button(shape.name()).clicked() {
+            if crate::ui::command(ui, shape.name()).clicked() {
                 *action = Some(TreeAction::AddMask(oid, shape));
                 ui.close();
             }
@@ -664,7 +664,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
     crate::ui::toggle(ui, &mut o.grid.on, "Alignment grid").on_hover_text("Over the whole output: cells, crosshair, circle, border (settings: right-click GRID in the strip)");
     crate::ui::toggle(ui, &mut o.mapping.test_pattern, "Slice test pattern");
     crate::ui::toggle(ui, &mut vs.snap, "Snap to grid");
-    if ui.button(label(icon::CORNERS_OUT, "Fit the view")).clicked() {
+    if crate::ui::command(ui, label(icon::CORNERS_OUT, "Fit the view")).clicked() {
         vs.zoom = 1.0;
         vs.pan = egui::Vec2::ZERO;
         ui.close();
@@ -811,14 +811,14 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
                 toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                 ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(f32::INFINITY));
             });
-            if ui.small_button(label(icon::CORNERS_OUT, "Corners to the full output")).clicked() {
+            if crate::ui::small_command(ui, label(icon::CORNERS_OUT, "Corners to the full output")).clicked() {
                 s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
                 if s.mesh.is_some() {
                     let (c, r) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));
                     s.mesh = Some(phosphor_engine::mapping::Mesh::from_corners(&s.corners, c, r));
                 }
             }
-            if s.line.is_none() && s.model.is_none() && ui.small_button(label(icon::FRAME_CORNERS, "Match the picture's shape")).on_hover_text("A straight rectangle with the picture's own proportions (no stretching), as tall as the slice is now").clicked() {
+            if s.line.is_none() && s.model.is_none() && crate::ui::small_command(ui, label(icon::FRAME_CORNERS, "Match the picture's shape")).on_hover_text("A straight rectangle with the picture's own proportions (no stretching), as tall as the slice is now").clicked() {
                 s.match_picture_shape(canvas, size);
             }
             super::mapping_points::point_fields(ui, s, size);

@@ -116,7 +116,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
             Some(_) => {
                 ui.horizontal(|ui| {
                     hint(ui, if std::env::var_os("ANTHROPIC_API_KEY").is_some() { "Using the key in ANTHROPIC_API_KEY." } else { "Your Anthropic API key is saved (Keychain)." });
-                    if std::env::var_os("ANTHROPIC_API_KEY").is_none() && ui.small_button("Forget it").clicked() {
+                    if std::env::var_os("ANTHROPIC_API_KEY").is_none() && crate::ui::small_command(ui, "Forget it").clicked() {
                         a.key_error = crate::ai_shader::store_key("").err();
                         a.key = None;
                     }

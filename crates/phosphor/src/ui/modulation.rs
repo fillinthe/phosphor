@@ -145,7 +145,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     if linked == 0 {
         chips(ui, "AUDIO", |s| s.is_audio());
         chips(ui, "TIME & TEMPO", |s| !s.is_audio());
-    } else if ui.small_button("Use its own signal instead").clicked()
+    } else if crate::ui::small_command(ui, "Use its own signal instead").clicked()
         && let Some(mm) = m.as_mut()
     {
         mm.link = 0;

@@ -59,15 +59,15 @@ impl PhosphorApp {
                 ui.label("Output › send to your projector, drag the corners in Mapping. The Session panel's QR code makes a phone the remote, and a second one lets the crowd play.");
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    if ui.button("Open the Session panel").clicked() {
+                    if crate::ui::command(ui, "Open the Session panel").clicked() {
                         action = Some(super::Tab::Network);
                         close = true;
                     }
-                    if ui.button("Show the Mapping panel").clicked() {
+                    if crate::ui::command(ui, "Show the Mapping panel").clicked() {
                         action = Some(super::Tab::Mapping);
                         close = true;
                     }
-                    if ui.button("Start").clicked() {
+                    if crate::ui::command(ui, "Start").clicked() {
                         close = true;
                     }
                 });

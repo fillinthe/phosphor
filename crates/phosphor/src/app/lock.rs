@@ -84,7 +84,7 @@ impl PhosphorApp {
                         ui.colored_label(crate::theme::WARN, "That's not it.");
                     }
                 }
-                if ui.button(format!("{} Unlock", icon::LOCK_OPEN)).clicked() {
+                if crate::ui::command(ui, format!("{} Unlock", icon::LOCK_OPEN)).clicked() {
                     action = Some(false);
                 }
             } else {
@@ -94,7 +94,7 @@ impl PhosphorApp {
                     ui.add(egui::TextEdit::singleline(&mut self.lock.draft).password(true).desired_width(180.0));
                 });
                 crate::ui::hint(ui, "Leave it empty if anyone may unlock. Export Show can open the show locked too.");
-                if ui.button(format!("{} Lock now", icon::LOCK)).clicked() {
+                if crate::ui::command(ui, format!("{} Lock now", icon::LOCK)).clicked() {
                     action = Some(true);
                 }
             }
@@ -134,7 +134,7 @@ impl PhosphorApp {
                 }
                 ui.label(format!("{} {}", icon::LIGHTNING, super::menus::launch_summary(&self.state.comp)));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(format!("{} Unlock", icon::LOCK_OPEN)).clicked() {
+                    if crate::ui::command(ui, format!("{} Unlock", icon::LOCK_OPEN)).clicked() {
                         self.lock.window = true;
                     }
                     let s = self.state.stats.latest;

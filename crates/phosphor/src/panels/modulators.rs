@@ -9,18 +9,18 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let beats = st.mod_inputs.beats;
     let inputs = st.mod_inputs;
     ui.horizontal(|ui| {
-        if ui.button(label(icon::PLUS, "Modulator")).on_hover_text("A shared signal: pick it in any control's Modulate menu").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
+        if crate::ui::command(ui, label(icon::PLUS, "Modulator")).on_hover_text("A shared signal: pick it in any control's Modulate menu").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
             let id = st.comp.new_id();
             let n = st.comp.modulators.len() + 1;
             st.comp.modulators.push(Modulator { id, name: format!("Mod {n}"), ..Default::default() });
         }
-        if ui.button(label(icon::SQUARES_FOUR, "Step track")).on_hover_text("A step sequencer track on the beat (levels or on/off gates) that any control can follow").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
+        if crate::ui::command(ui, label(icon::SQUARES_FOUR, "Step track")).on_hover_text("A step sequencer track on the beat (levels or on/off gates) that any control can follow").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
             let id = st.comp.new_id();
             let n = st.comp.modulators.iter().filter(|m| m.sequence.is_some()).count() + 1;
             let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Steps, ..Default::default() };
             st.comp.modulators.push(Modulator { id, name: format!("Track {n}"), signal, sequence: Some(super::sequencer::new_track()), ..Default::default() });
         }
-        if ui.button(label(icon::WAVEFORM, "Sound band")).on_hover_text("How loud the sound is between two frequencies (a kick, a snare, a voice): any control can follow it").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
+        if crate::ui::command(ui, label(icon::WAVEFORM, "Sound band")).on_hover_text("How loud the sound is between two frequencies (a kick, a snare, a voice): any control can follow it").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
             let id = st.comp.new_id();
             let n = st.comp.modulators.iter().filter(|m| m.band.is_some()).count() + 1;
             let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() };
@@ -55,13 +55,13 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(100.0));
                     ui.add(crate::ui::meter(value).desired_width(70.0).fill(accent().gamma_multiply(0.7)));
-                    if i > 0 && ui.small_button(icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
+                    if i > 0 && crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
                         moves = Some((i, i - 1));
                     }
-                    if i + 1 < n && ui.small_button(icon::ARROW_DOWN).on_hover_text("Later in the chain").clicked() {
+                    if i + 1 < n && crate::ui::small_command(ui, icon::ARROW_DOWN).on_hover_text("Later in the chain").clicked() {
                         moves = Some((i, i + 1));
                     }
-                    if ui.small_button(icon::TRASH).on_hover_text("Delete (controls following it stop moving)").clicked() {
+                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete (controls following it stop moving)").clicked() {
                         remove = Some(i);
                     }
                 });
@@ -74,7 +74,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         ui.label("to");
                         guarded!(ui, band[1], egui::DragValue::new(&mut band[1]).range(20.0..=16_000.0).speed(2.0).suffix(" Hz"));
                         for (name, lo, hi) in [("Kick", 40.0, 120.0), ("Snare", 150.0, 400.0), ("Voice", 300.0, 3000.0), ("Hats", 6000.0, 14000.0)] {
-                            if ui.small_button(name).clicked() {
+                            if crate::ui::small_command(ui, name).clicked() {
                                 *band = [lo, hi];
                             }
                         }
@@ -106,7 +106,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     if let Some(s) = sig {
                         m.signal = s;
                     }
-                    if m.signal.source == phosphor_engine::ModSource::Steps && ui.small_button(label(icon::SQUARES_FOUR, "More steps…")).on_hover_text("Turn it into a step sequencer track (4 to 64 steps on the beat grid, gates)").clicked() {
+                    if m.signal.source == phosphor_engine::ModSource::Steps && crate::ui::small_command(ui, label(icon::SQUARES_FOUR, "More steps…")).on_hover_text("Turn it into a step sequencer track (4 to 64 steps on the beat grid, gates)").clicked() {
                         let s = &m.signal;
                         let per_beat = if s.sync { 8.0 / s.rate.max(0.25) } else { 2.0 };
                         m.sequence = Some(phosphor_engine::StepTrack { steps: s.steps.to_vec(), per_beat, ..Default::default() });
@@ -182,7 +182,7 @@ fn looper_row(ui: &mut egui::Ui, l: &mut phosphor_engine::Looper, beats: f32) {
                     if steady_action_button(ui, Act::Go, play, &[&stop, &start]).on_hover_text("Play the take back, looped with the beat (stopped: the knob drives it again)").clicked() {
                         l.playing = !l.playing;
                     }
-                    if ui.small_button(icon::TRASH).on_hover_text("Forget the take").clicked() {
+                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Forget the take").clicked() {
                         l.samples.clear();
                         l.playing = false;
                     }

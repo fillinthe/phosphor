@@ -123,7 +123,7 @@ impl PhosphorApp {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new(format!("{} MAP MODE", icon::PLUG)).strong().color(theme::accent()));
                         ui.label("Click any highlighted control, then move a knob, send OSC, or press a key.");
-                        if ui.small_button("Done (Esc)").clicked() {
+                        if crate::ui::small_command(ui, "Done (Esc)").clicked() {
                             self.state.map_mode = false;
                         }
                     });
@@ -138,7 +138,7 @@ impl PhosphorApp {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!("{} Learning: {name}", icon::BROADCAST)).color(egui::Color32::from_rgb(255, 205, 90)));
                     crate::ui::hint(ui, "move a knob, send OSC, or press a key");
-                    if ui.small_button("Cancel (Esc)").clicked() {
+                    if crate::ui::small_command(ui, "Cancel (Esc)").clicked() {
                         self.state.control.learning = None;
                     }
                 });

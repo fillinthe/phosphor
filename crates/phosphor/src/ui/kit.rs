@@ -23,7 +23,7 @@ pub(crate) fn steady_width(ui: &egui::Ui, labels: &[&str], small: bool) -> f32 {
     let font = egui::TextStyle::Button.resolve(ui.style());
     let widest = labels.iter().map(|l| ui.painter().layout_no_wrap(l.to_string(), font.clone(), Color32::WHITE).size().x).fold(0.0, f32::max);
     // (+4: bold text in action buttons is a little wider.)
-    widest + if small { 4.0 } else { ui.spacing().button_padding.x * 2.0 } + 4.0
+    widest + if small { 8.0 } else { ui.spacing().button_padding.x * 2.0 } + 4.0
 }
 
 /// A command button whose label changes: as wide as the widest of `labels` (`text` is one of them).
@@ -35,7 +35,11 @@ pub(crate) fn steady_button(ui: &mut egui::Ui, text: impl Into<String>, labels: 
 /// `steady_button`, small (tight rows).
 pub(crate) fn steady_small_button(ui: &mut egui::Ui, text: impl Into<String>, labels: &[&str]) -> egui::Response {
     let w = steady_width(ui, labels, true);
-    ui.add(egui::Button::new(text.into()).small().min_size(egui::vec2(w, 0.0)))
+    ui.scope(|ui| {
+        ui.spacing_mut().button_padding.x = 4.0;
+        ui.add(egui::Button::new(text.into()).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(w, CONTROL_H)))
+    })
+    .inner
 }
 
 /// An `action_button` whose label changes (Play / Pause): as wide as the widest of `labels`.
@@ -104,14 +108,30 @@ pub(crate) fn pick_value<'a, V: PartialEq>(ui: &mut egui::Ui, current: &mut V, v
     r
 }
 
-/// A command that can't be used right now (nothing to save, nothing selected): greyed out until it can.
-pub(crate) fn command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
-    ui.add_enabled(enabled, egui::Button::new(text))
+/// A command (Import…, Rename, Add folder…): a plain button that never wraps its words.
+pub(crate) fn command<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+    ui.add(egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend))
 }
 
-/// `command_if`, small (tight rows).
+/// A command that can't be used right now (nothing to save, nothing selected): greyed out until it can.
+pub(crate) fn command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+    ui.add_enabled(enabled, egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend))
+}
+
+/// A command for a tight row (an icon, a short word): narrower than `ui.button` but the same height, so it lines up
+/// with everything beside it.
+pub(crate) fn small_command<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+    small_command_if(ui, true, text)
+}
+
+/// `small_command`, greyed out until it can be used.
 pub(crate) fn small_command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
-    ui.add_enabled(enabled, egui::Button::new(text).small())
+    ui.scope(|ui| {
+        ui.spacing_mut().button_padding.x = 4.0;
+        // (Never wraps its words onto a second line: a tight row moves it to the next line instead.)
+        ui.add_enabled(enabled, egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(0.0, CONTROL_H)))
+    })
+    .inner
 }
 
 /// A command at a set size (a column of same-width buttons, a grid cell's header).
@@ -311,5 +331,5 @@ pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, 
 
 /// A destructive command (Delete, Remove…): red text.
 pub(crate) fn danger_button(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
-    ui.button(RichText::new(text.into()).color(crate::theme::WARN))
+    command(ui, RichText::new(text.into()).color(crate::theme::WARN))
 }

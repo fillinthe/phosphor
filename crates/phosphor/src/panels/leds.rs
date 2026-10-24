@@ -136,7 +136,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
     }
 
     ui.horizontal_wrapped(|ui| {
-        if ui.button(label(icon::PLUS, "LED strip")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "LED strip")).clicked() {
             let id = st.comp.new_id();
             let n = st.comp.dmx.fixtures.len();
             let next = next_free(&st.comp.dmx.fixtures);
@@ -145,10 +145,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             selected = Some(id);
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::TABLE, "Import CSV…")).on_hover_text("Fixtures from a patch list: name, shape, pixels, universe, channel, x1, y1, x2, y2 (0–1 of the picture)").clicked() {
+        if crate::ui::command(ui, label(icon::TABLE, "Import CSV…")).on_hover_text("Fixtures from a patch list: name, shape, pixels, universe, channel, x1, y1, x2, y2 (0–1 of the picture)").clicked() {
             st.dialogs.pick_file(crate::dialogs::Purpose::ImportFixtures, Some(("Patch list", &["csv", "txt", "tsv"])));
         }
-        if ui.button(label(icon::GRID_FOUR, "LED matrix")).clicked() {
+        if crate::ui::command(ui, label(icon::GRID_FOUR, "LED matrix")).clicked() {
             let id = st.comp.new_id();
             let n = st.comp.dmx.fixtures.len();
             let next = next_free(&st.comp.dmx.fixtures);
@@ -167,11 +167,11 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         }
         video_wall_menu(ui, st);
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::LIGHTBULB, "A real light…")).on_hover_text("Pick your light by name from the Open Fixture Library (moving heads, pars, bars…): its channels are set up for you").clicked() {
+        if crate::ui::command(ui, label(icon::LIGHTBULB, "A real light…")).on_hover_text("Pick your light by name from the Open Fixture Library (moving heads, pars, bars…): its channels are set up for you").clicked() {
             open_light_window(ui.ctx());
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::SCAN, "Find with a camera…")).on_hover_text("The lights blink codes while a camera watches; each light is placed where the camera sees it").clicked() {
+        if crate::ui::command(ui, label(icon::SCAN, "Find with a camera…")).on_hover_text("The lights blink codes while a camera watches; each light is placed where the camera sees it").clicked() {
             open_led_scan_window(ui.ctx());
         }
         hint(ui, "Drag the dots on the picture to place lights; the square moves the whole fixture.");
@@ -188,7 +188,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     ui.add(egui::TextEdit::singleline(&mut f.name).desired_width(120.0));
                     hint(ui, f.span());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(icon::TRASH).on_hover_text("Delete").clicked() {
+                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete").clicked() {
                             remove = Some(i);
                         }
                     });
@@ -260,7 +260,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                             crate::ui::text_field(ui, &mut e.name, &format!("channel {}", f.head.channels() + i + 1), Some(80.0));
                             let name = if e.name.is_empty() { format!("Ch {}", f.head.channels() + i + 1) } else { e.name.clone() };
                             Level::percent(&mut e.value, &name).default(0.0).width(160.0).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
-                            if ui.small_button(icon::TRASH).on_hover_text("Remove this channel (the ones after it move up one)").clicked() {
+                            if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove this channel (the ones after it move up one)").clicked() {
                                 gone = Some(i);
                             }
                         });
@@ -268,7 +268,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     if let Some(i) = gone {
                         f.extra.remove(i);
                     }
-                    if !custom && f.extra.len() < 32 && ui.small_button(label(icon::PLUS, "Channel")).on_hover_text("A channel after the layout's: gobo, prism, zoom, strobe… (in the order your light's manual lists them)").clicked() {
+                    if !custom && f.extra.len() < 32 && crate::ui::small_command(ui, label(icon::PLUS, "Channel")).on_hover_text("A channel after the layout's: gobo, prism, zoom, strobe… (in the order your light's manual lists them)").clicked() {
                         f.extra.push(phosphor_engine::ExtraChannel::default());
                     }
                 }
@@ -318,7 +318,7 @@ fn video_wall_menu(ui: &mut egui::Ui, st: &mut State) {
         });
         let start = next_free(&st.comp.dmx.fixtures);
         hint(ui, format!("{} tiles of {} pixels, from universe {} (each tile starts a fresh universe). Set the wiring (zig-zag, order) on each after.", v[0] * v[1], v[2] * v[3], start.0));
-        if ui.button(label(icon::PLUS, "Add the wall")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Add the wall")).clicked() {
             let comp = &mut st.comp;
             let mut ids = Vec::new();
             for _ in 0..v[0] * v[1] {
@@ -394,12 +394,12 @@ fn dmx_recorder(ui: &mut egui::Ui, st: &mut State) {
             if action_button(ui, Act::Record, label(icon::STOP, &format!("Stop ({:.0} s)", r.elapsed(now)))).clicked() {
                 r.stop();
             }
-        } else if ui.button(label(icon::RECORD, "Record DMX")).on_hover_text("Keep everything the lights are sent from now on (Stop ends the take)").clicked() {
+        } else if crate::ui::command(ui, label(icon::RECORD, "Record DMX")).on_hover_text("Keep everything the lights are sent from now on (Stop ends the take)").clicked() {
             r.start_recording(now);
         }
         let has_take = r.take.as_ref().is_some_and(|t| !t.frames.is_empty());
         if r.is_playing() {
-            if ui.button(label(icon::STOP, &format!("Stop playback ({:.0} s)", r.elapsed(now)))).clicked() {
+            if crate::ui::command(ui, label(icon::STOP, &format!("Stop playback ({:.0} s)", r.elapsed(now)))).clicked() {
                 r.stop();
             }
         } else if crate::ui::command_if(ui, has_take && !r.is_recording(), label(icon::PLAY, "Play")).on_hover_text("Send the take to the lights instead of the picture").clicked() {
@@ -412,7 +412,7 @@ fn dmx_recorder(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command_if(ui, has_take, label(icon::FLOPPY_DISK, "Save…")).clicked() {
             st.dialogs.save_file(crate::dialogs::Purpose::SaveDmxTake, ("DMX take", &["phdmx"]), "Lights.phdmx");
         }
-        if ui.button(label(icon::FOLDER_OPEN, "Open…")).on_hover_text("A saved take (.phdmx)").clicked() {
+        if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Open…")).on_hover_text("A saved take (.phdmx)").clicked() {
             st.dialogs.pick_file(crate::dialogs::Purpose::OpenDmxTake, Some(("DMX take", &["phdmx"])));
         }
     });

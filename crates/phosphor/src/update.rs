@@ -465,7 +465,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
         crate::ui::toggle(ui, &mut up.auto, "Install updates by themselves").on_hover_text("Phosphor checks when it opens and every hour; a new version downloads and installs in the background, and opens when you relaunch");
         match up.status.clone() {
             Status::Idle => {
-                if ui.button("Check now").clicked() {
+                if crate::ui::command(ui, "Check now").clicked() {
                     up.check(ctx);
                 }
             }
@@ -477,7 +477,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
             }
             Status::UpToDate => {
                 ui.colored_label(crate::theme::accent(), "You're up to date.");
-                if ui.button("Check again").clicked() {
+                if crate::ui::command(ui, "Check again").clicked() {
                     up.check(ctx);
                 }
             }
@@ -490,13 +490,13 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 }
                 ui.horizontal(|ui| {
                     #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button(format!("{} Download and install", icon::DOWNLOAD_SIMPLE)).clicked() {
+                    if crate::ui::command(ui, format!("{} Download and install", icon::DOWNLOAD_SIMPLE)).clicked() {
                         up.install();
                     }
-                    if ui.button("Release page").clicked() {
+                    if crate::ui::command(ui, "Release page").clicked() {
                         ctx.open_url(egui::OpenUrl::new_tab(r.page.clone()));
                     }
-                    if ui.button("Skip this version").clicked() {
+                    if crate::ui::command(ui, "Skip this version").clicked() {
                         up.skipped = r.version.clone();
                         up.window = false;
                     }
@@ -512,7 +512,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
             Status::Ready(path) => {
                 ui.colored_label(crate::theme::accent(), "The new Phosphor is installed. Relaunch to start using it.");
                 #[cfg(not(target_arch = "wasm32"))]
-                if ui.button(format!("{} Relaunch now", icon::ARROW_CLOCKWISE)).clicked() {
+                if crate::ui::command(ui, format!("{} Relaunch now", icon::ARROW_CLOCKWISE)).clicked() {
                     relaunch(ctx, &path);
                 }
                 #[cfg(target_arch = "wasm32")]
@@ -522,7 +522,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
             Status::Downloaded(path) => {
                 ui.label("Downloaded. Phosphor isn't running from an app bundle, so drag the new app to Applications yourself.");
                 #[cfg(not(target_arch = "wasm32"))]
-                if ui.button("Show in Finder").clicked() {
+                if crate::ui::command(ui, "Show in Finder").clicked() {
                     crate::os::reveal(&path);
                 }
                 #[cfg(target_arch = "wasm32")]
@@ -538,14 +538,14 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 ui.label("3. Open it. If macOS warns, go to System Settings > Privacy & Security and click Open Anyway.");
                 ui.horizontal(|ui| {
                     let url = r.zip.clone().unwrap_or_else(|| r.page.clone());
-                    if ui.button(egui::RichText::new(format!("{} Download Phosphor {}", icon::DOWNLOAD_SIMPLE, r.version)).color(crate::theme::accent())).clicked() {
+                    if crate::ui::command(ui, egui::RichText::new(format!("{} Download Phosphor {}", icon::DOWNLOAD_SIMPLE, r.version)).color(crate::theme::accent())).clicked() {
                         ctx.open_url(egui::OpenUrl::new_tab(url));
                     }
-                    if ui.button("Release page").clicked() {
+                    if crate::ui::command(ui, "Release page").clicked() {
                         ctx.open_url(egui::OpenUrl::new_tab(r.page.clone()));
                     }
                     #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button("Try again").clicked() {
+                    if crate::ui::command(ui, "Try again").clicked() {
                         up.status = Status::Available(r.clone());
                         up.install();
                     }
@@ -555,10 +555,10 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
             Status::Failed(e) => {
                 ui.colored_label(crate::theme::WARN, e);
                 ui.horizontal(|ui| {
-                    if ui.button("Try again").clicked() {
+                    if crate::ui::command(ui, "Try again").clicked() {
                         up.check(ctx);
                     }
-                    if ui.button("Release page").clicked() {
+                    if crate::ui::command(ui, "Release page").clicked() {
                         ctx.open_url(egui::OpenUrl::new_tab(RELEASES_PAGE));
                     }
                 });

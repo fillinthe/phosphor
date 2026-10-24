@@ -140,14 +140,14 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
         }
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button(format!("{} File it on GitHub", icon::GITHUB_LOGO)).on_hover_text("Opens a prefilled issue on github.com/fillinthe/phosphor (needs a GitHub account; the report is public)").clicked() {
+            if crate::ui::command(ui, format!("{} File it on GitHub", icon::GITHUB_LOGO)).on_hover_text("Opens a prefilled issue on github.com/fillinthe/phosphor (needs a GitHub account; the report is public)").clicked() {
                 let title = st.bug.text.lines().next().unwrap_or("").chars().take(80).collect::<String>();
                 let title = if title.trim().is_empty() { "Bug report".to_string() } else { title };
                 let body = report_text(st);
                 let url = format!("{ISSUES_URL}?title={}&body={}", url_encode(&title), url_encode(&body));
                 ctx.open_url(egui::OpenUrl::new_tab(url));
             }
-            if ui.button(format!("{} Copy report", icon::COPY)).on_hover_text("Copies the report to paste into an email or message").clicked() {
+            if crate::ui::command(ui, format!("{} Copy report", icon::COPY)).on_hover_text("Copies the report to paste into an email or message").clicked() {
                 let text = report_text(st);
                 ctx.copy_text(text);
                 st.notice = Some("Report copied. Paste it wherever you like.".into());
@@ -155,7 +155,7 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(p) = crate::recovery::crash_log_path()
                 && p.exists()
-                && ui.button(format!("{} crash.log", icon::FILE_TEXT)).on_hover_text("Show the log file in the Finder").clicked()
+                && crate::ui::command(ui, format!("{} crash.log", icon::FILE_TEXT)).on_hover_text("Show the log file in the Finder").clicked()
             {
                 crate::os::reveal(&p);
             }

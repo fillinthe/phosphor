@@ -217,7 +217,7 @@ fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
     ui.horizontal_wrapped(|ui| {
         let mut gone = None;
         for acc in &xs.accounts {
-            let r = ui.button(format!("@{acc}")).on_hover_text("Browse this account's GIFs · right-click: remove");
+            let r = crate::ui::command(ui, format!("@{acc}")).on_hover_text("Browse this account's GIFs · right-click: remove");
             if r.clicked() {
                 o.query = format!("@{acc}");
                 browse = true;
@@ -234,7 +234,7 @@ fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
             changed = true;
         }
         if let Some(h) = x::handle(&o.query).filter(|h| !xs.accounts.contains(h))
-            && ui.button(label(icon::PLUS, &format!("Save @{h}"))).on_hover_text("Keep this account here to browse with one click").clicked()
+            && crate::ui::command(ui, label(icon::PLUS, &format!("Save @{h}"))).on_hover_text("Keep this account here to browse with one click").clicked()
         {
             xs.accounts.push(h);
             changed = true;
@@ -383,7 +383,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         let r = crate::ui::text_field(ui, &mut o.query, prompt, Some((ui.available_width() - if o.search.is_some() { 64.0 } else { 34.0 }).max(80.0)));
         go |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         go |= crate::ui::command_if(ui, !o.query.trim().is_empty(), icon::MAGNIFYING_GLASS).on_hover_text("Search every library that's on").clicked();
-        if o.search.is_some() && ui.button(icon::X).on_hover_text("Clear the results (back to Start a show)").clicked() {
+        if o.search.is_some() && crate::ui::command(ui, icon::X).on_hover_text("Clear the results (back to Start a show)").clicked() {
             o.search = None;
             o.query.clear();
         }
@@ -493,7 +493,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
         });
-        if search.has_more() && ui.button(label(icon::ARROW_DOWN, "More")).clicked() {
+        if search.has_more() && crate::ui::command(ui, label(icon::ARROW_DOWN, "More")).clicked() {
             search.more();
         }
         ui.add_space(8.0);
@@ -579,7 +579,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
         });
     }
     resp.on_hover_text(format!("{}{by}\n{} · {}{size}\n{doing}", item.title, c.licence, c.source)).right_menu(|ui| {
-        if local.is_none() && ui.button(label(icon::DOWNLOAD_SIMPLE, "Download into the media bin")).clicked() {
+        if local.is_none() && crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Download into the media bin")).clicked() {
             out = Some(Then::Bin);
             ui.close();
         }
@@ -587,16 +587,16 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
             out = selected.map(Then::Layer);
             ui.close();
         }
-        if ui.button(label(icon::PLUS, "On a new layer")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "On a new layer")).clicked() {
             out = Some(Then::NewLayer);
             ui.close();
         }
         ui.separator();
-        if !c.page.is_empty() && ui.button(label(icon::GLOBE, &format!("Open its page ({})", c.source))).clicked() {
+        if !c.page.is_empty() && crate::ui::command(ui, label(icon::GLOBE, &format!("Open its page ({})", c.source))).clicked() {
             ui.ctx().open_url(egui::OpenUrl::new_tab(&c.page));
             ui.close();
         }
-        if ui.button(label(icon::COPY, "Copy the credit")).clicked() {
+        if crate::ui::command(ui, label(icon::COPY, "Copy the credit")).clicked() {
             ui.ctx().copy_text(c.line());
             ui.close();
         }
@@ -626,7 +626,7 @@ fn credits(ui: &mut egui::Ui, comp: &phosphor_engine::Composition) {
             hint(ui, "Files downloaded here keep who made them and their licence. Most need a credit when you show them in public: copy them all from here.");
             return;
         }
-        if ui.button(label(icon::COPY, "Copy all credits")).clicked() {
+        if crate::ui::command(ui, label(icon::COPY, "Copy all credits")).clicked() {
             ui.ctx().copy_text(crate::online::credits_text(comp));
         }
         for m in comp.media_bin.iter().filter(|m| m.credit.is_some()) {

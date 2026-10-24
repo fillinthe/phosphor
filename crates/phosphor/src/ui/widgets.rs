@@ -174,12 +174,12 @@ pub(crate) fn screen_menu(ui: &mut egui::Ui, st: &mut State) {
         st.displays = crate::screens::displays();
     }
     for d in st.displays.clone() {
-        if ui.button(d.label()).clicked() {
+        if crate::ui::command(ui, d.label()).clicked() {
             st.send_output_to(d);
             ui.close();
         }
     }
-    if ui.button("Rescan displays").clicked() {
+    if crate::ui::command(ui, "Rescan displays").clicked() {
         st.displays = crate::screens::displays();
     }
 }
@@ -450,7 +450,7 @@ pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
                     ui.close();
                 }
                 r.context_menu(|ui| {
-                    if ui.button(label(icon::TRASH, "Remove swatch")).clicked() {
+                    if crate::ui::command(ui, label(icon::TRASH, "Remove swatch")).clicked() {
                         remove = Some(k);
                         ui.close();
                     }
@@ -461,11 +461,11 @@ pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
             saved.remove(k);
             ui.ctx().data_mut(|d| d.insert_persisted(swatches_id(), saved.clone()));
         }
-        if ui.button(label(icon::EYEDROPPER, "Pick from the preview")).on_hover_text("Then click the picture in the Preview (Esc stops)").clicked() {
+        if crate::ui::command(ui, label(icon::EYEDROPPER, "Pick from the preview")).on_hover_text("Then click the picture in the Preview (Esc stops)").clicked() {
             super::eyedropper::arm(ui.ctx(), Some(button.id));
             ui.close();
         }
-        if ui.button(label(icon::PLUS, "Save this colour")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Save this colour")).clicked() {
             save = true;
             ui.close();
         }

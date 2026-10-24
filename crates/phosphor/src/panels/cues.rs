@@ -43,17 +43,17 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
         if go.clicked() {
             st.cue_next(now);
         }
-        let back = ui.button(label(icon::SKIP_BACK, "Back")).on_hover_text("Previous cue");
+        let back = crate::ui::command(ui, label(icon::SKIP_BACK, "Back")).on_hover_text("Previous cue");
         map_menu(ui, &back, ControlTarget::App(AppControl::CueBack));
         if back.clicked() {
             st.cue_back(now);
         }
-        let random = ui.button(label(icon::SHUFFLE, "Random")).on_hover_text("A random cue (not the one on now)");
+        let random = crate::ui::command(ui, label(icon::SHUFFLE, "Random")).on_hover_text("A random cue (not the one on now)");
         map_menu(ui, &random, ControlTarget::App(AppControl::CueRandom));
         if random.clicked() {
             st.cue_random(now);
         }
-        if ui.button(label(icon::RECORD, "Record cue")).on_hover_text("Save how every layer looks now (sources, on/off, opacity, blend, values, effects) as the next cue").clicked() {
+        if crate::ui::command(ui, label(icon::RECORD, "Record cue")).on_hover_text("Save how every layer looks now (sources, on/off, opacity, blend, values, effects) as the next cue").clicked() {
             let n = st.comp.cues.cues.len() + 1;
             let cue = st.comp.record_cue(format!("Cue {n}"));
             let at = st.cue_run.current.map_or(st.comp.cues.cues.len(), |c| c + 1);
@@ -71,7 +71,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                 if steady_button(ui, text, &[&pause, &start]).clicked() {
                     clock.toggle(now);
                 }
-                if ui.button(icon::ARROW_COUNTER_CLOCKWISE).on_hover_text("Back to 00:00:00").clicked() {
+                if crate::ui::command(ui, icon::ARROW_COUNTER_CLOCKWISE).on_hover_text("Back to 00:00:00").clicked() {
                     clock.reset(now);
                 }
             }
@@ -98,10 +98,10 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
         }
         #[cfg(not(target_arch = "wasm32"))]
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.small_button(label(icon::UPLOAD_SIMPLE, "Save CSV")).on_hover_text("Save the cue names and timings as a table (spreadsheet)").clicked() {
+            if crate::ui::small_command(ui, label(icon::UPLOAD_SIMPLE, "Save CSV")).on_hover_text("Save the cue names and timings as a table (spreadsheet)").clicked() {
                 st.dialogs.save_file(crate::dialogs::Purpose::ExportCues, ("CSV", &["csv"]), "Cues.csv");
             }
-            if ui.small_button(label(icon::DOWNLOAD_SIMPLE, "Read CSV")).on_hover_text("Read names and timings from a table into the cues, in order (the looks stay as recorded)").clicked() {
+            if crate::ui::small_command(ui, label(icon::DOWNLOAD_SIMPLE, "Read CSV")).on_hover_text("Read names and timings from a table into the cues, in order (the looks stay as recorded)").clicked() {
                 st.dialogs.pick_file(crate::dialogs::Purpose::ImportCues, Some(("CSV", &["csv", "txt"])));
             }
         });
@@ -138,13 +138,13 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("Calendar").small());
         if st.comp.cues.calendar.is_empty() {
-            if ui.small_button(label(icon::CALENDAR, "Choose a calendar (.ics)…")).on_hover_text("Events in a calendar (exported from Calendar, Google, Outlook) start the cue with the same name, on time; repeating events too").clicked() {
+            if crate::ui::small_command(ui, label(icon::CALENDAR, "Choose a calendar (.ics)…")).on_hover_text("Events in a calendar (exported from Calendar, Google, Outlook) start the cue with the same name, on time; repeating events too").clicked() {
                 st.dialogs.pick_file(crate::dialogs::Purpose::CueCalendar, Some(("Calendar", &["ics"])));
             }
         } else {
             let name = std::path::Path::new(&st.comp.cues.calendar).file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned());
             hint(ui, format!("{} (events start the cues named like them)", name));
-            if ui.small_button(icon::X).on_hover_text("No calendar").clicked() {
+            if crate::ui::small_command(ui, icon::X).on_hover_text("No calendar").clicked() {
                 st.comp.cues.calendar.clear();
             }
         }
@@ -170,7 +170,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             if !cue.group.is_empty() && cue.group != prev_group {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(format!("{} {}", icon::FOLDER_OPEN, cue.group)).strong());
-                    if ui.small_button(label(icon::PLAY, "Go")).on_hover_text("Start this group (its first cue)").clicked() {
+                    if crate::ui::small_command(ui, label(icon::PLAY, "Go")).on_hover_text("Start this group (its first cue)").clicked() {
                         fire = Some(i);
                     }
                 });
@@ -180,7 +180,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                 ui.set_width(ui.available_width());
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new(format!("{}", i + 1)).monospace().strong().color(if is_current { accent() } else { Color32::GRAY }));
-                    if ui.small_button(icon::PLAY).on_hover_text("Go to this cue").clicked() {
+                    if crate::ui::small_command(ui, icon::PLAY).on_hover_text("Go to this cue").clicked() {
                         fire = Some(i);
                     }
                     ui.add(egui::TextEdit::singleline(&mut cue.name).desired_width(140.0));
@@ -234,10 +234,10 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(icon::TRASH).on_hover_text("Delete cue").clicked() {
+                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete cue").clicked() {
                             remove = Some(i);
                         }
-                        if ui.small_button(icon::ARROWS_CLOCKWISE).on_hover_text("Re-record: save how everything looks now into this cue").clicked() {
+                        if crate::ui::small_command(ui, icon::ARROWS_CLOCKWISE).on_hover_text("Re-record: save how everything looks now into this cue").clicked() {
                             update = Some(i);
                         }
                         hint(ui, if cue.slices.is_empty() { format!("{} layers", cue.layers.len()) } else { format!("{} layers · {} slices", cue.layers.len(), cue.slices.len()) });

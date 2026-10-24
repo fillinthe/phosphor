@@ -35,7 +35,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
             }
             Some(Err(e)) => {
                 ui.colored_label(WARN, e.as_str());
-                if ui.button("Try again").clicked() {
+                if crate::ui::command(ui, "Try again").clicked() {
                     lib.retry();
                 }
             }
@@ -75,7 +75,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
                     }
                     for (i, (name, _)) in d.modes.iter().enumerate() {
                         ui.horizontal(|ui| {
-                            if ui.button(label(icon::PLUS, &format!("Add · {name}"))).on_hover_text(d.mode_summary(i)).clicked() {
+                            if crate::ui::command(ui, label(icon::PLUS, &format!("Add · {name}"))).on_hover_text(d.mode_summary(i)).clicked() {
                                 add = Some(d.fixture(&light.maker, i));
                             }
                             ui.add(egui::Label::new(RichText::new(d.mode_summary(i)).weak()).truncate());

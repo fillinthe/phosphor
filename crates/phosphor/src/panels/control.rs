@@ -20,7 +20,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             control.osc_extra_ports = text.split([',', ' ']).filter_map(|p| p.trim().parse::<u16>().ok()).filter(|p| *p >= 1024).collect();
         }
         ui.data_mut(|d| d.insert_temp(id, text));
-        if ui.button(label(icon::ARROWS_CLOCKWISE, "Reconnect")).clicked() {
+        if crate::ui::command(ui, label(icon::ARROWS_CLOCKWISE, "Reconnect")).clicked() {
             control.reconnect();
         }
     });
@@ -35,7 +35,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         {
             st.dialogs.save_file(crate::dialogs::Purpose::TouchOsc, ("TouchOSC layout", &["tosc"]), "Phosphor.tosc");
         }
-        if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import TouchOSC layout…")).on_hover_text("Bring a TouchOSC layout in as Control Surface pages: same controls in the same places, each control's OSC address already mapped").clicked() {
+        if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Import TouchOSC layout…")).on_hover_text("Bring a TouchOSC layout in as Control Surface pages: same controls in the same places, each control's OSC address already mapped").clicked() {
             st.dialogs.pick_file(crate::dialogs::Purpose::ImportTouchOsc, Some(("TouchOSC layout", &["tosc", "xml"])));
         }
     });
@@ -193,7 +193,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
             if steady_small_button(ui, pause, &[&resume, &hold]).clicked() {
                 control.monitor_paused = !control.monitor_paused;
             }
-            if ui.small_button(label(icon::TRASH, "Clear")).clicked() {
+            if crate::ui::small_command(ui, label(icon::TRASH, "Clear")).clicked() {
                 control.recent.clear();
             }
             hint(ui, format!("{} messages", control.recent.len()));
@@ -288,15 +288,15 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         if listening {
             ui.label(RichText::new(format!("{} Listening… touch a knob, pad or key, or send OSC", icon::EAR)).color(Color32::from_rgb(255, 205, 90)));
             ui.ctx().request_repaint();
-            if ui.button("Cancel").clicked() {
+            if crate::ui::command(ui, "Cancel").clicked() {
                 control.listen_source = false;
                 *listen_for = None;
             }
-        } else if ui.button(label(icon::EAR, "Listen")).on_hover_text("Waits for the next input (MIDI knob/pad, OSC message or key), then lets you pick what it controls").clicked() {
+        } else if crate::ui::command(ui, label(icon::EAR, "Listen")).on_hover_text("Waits for the next input (MIDI knob/pad, OSC message or key), then lets you pick what it controls").clicked() {
             control.listen_source = true;
             *listen_for = Some(ListenFor::NewMapping);
         }
-        if ui.button(label(icon::PLUS, "Add by hand")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Add by hand")).clicked() {
             *map_draft = Some((phosphor_engine::ControlSource::MidiCc { channel: 0, cc: 1 }, None));
         }
         ui.add(egui::TextEdit::singleline(map_search).hint_text("Search mappings").desired_width(140.0));
@@ -316,7 +316,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 if crate::ui::command_if(ui, target.is_some(), "Add").clicked() {
                     finish = Some(true);
                 }
-                if ui.small_button(icon::X).clicked() {
+                if crate::ui::small_command(ui, icon::X).clicked() {
                     finish = Some(false);
                 }
             });
@@ -374,7 +374,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                     range_editor(ui, &mut m.range);
                     value_fx_menu(ui, ("map_fx", i), &mut m.fx);
                 });
-                if ui.small_button(icon::TRASH).on_hover_text("Delete").clicked() {
+                if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete").clicked() {
                     remove = Some(i);
                 }
                 ui.end_row();
@@ -451,7 +451,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
                         crate::ui::step_bars(ui, points, None, false, 40.0);
                     }
                 }
-                if ui.small_button(icon::X).clicked() {
+                if crate::ui::small_command(ui, icon::X).clicked() {
                     remove = Some(k);
                 }
             });
@@ -478,7 +478,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
             ];
             for f in fresh {
                 let name = f.name();
-                if ui.small_button(label(icon::PLUS, name)).clicked() {
+                if crate::ui::small_command(ui, label(icon::PLUS, name)).clicked() {
                     fx.push(f);
                 }
             }

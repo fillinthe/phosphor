@@ -77,14 +77,14 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal_wrapped(|ui| {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if ui.button(label(icon::FOLDER_OPEN, "Import…")).on_hover_text("Add files").clicked() {
+            if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Import…")).on_hover_text("Add files").clicked() {
                 let exts = crate::media::dialog_extensions();
                 st.dialogs.pick_files(crate::dialogs::Purpose::ImportFiles, Some(("Media", &exts)));
             }
-            if ui.button(label(icon::LINK, "From a link…")).on_hover_text("The video or GIF in a post on X, Instagram, TikTok, YouTube…").clicked() {
+            if crate::ui::command(ui, label(icon::LINK, "From a link…")).on_hover_text("The video or GIF in a post on X, Instagram, TikTok, YouTube…").clicked() {
                 st.link_import.open = true;
             }
-            if ui.button(label(icon::EYE, "Watch folder…")).on_hover_text("A collection of every clip in a folder (and its subfolders); new files join as they arrive").clicked() {
+            if crate::ui::command(ui, label(icon::EYE, "Watch folder…")).on_hover_text("A collection of every clip in a folder (and its subfolders); new files join as they arrive").clicked() {
                 st.dialogs.pick_folder(crate::dialogs::Purpose::WatchFolder);
             }
             if st.folders.scanning() {
@@ -123,13 +123,13 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 let n = count(&|m| comp.in_collection(m, &c));
                 let r = crate::ui::pick_value(ui, &mut view.filter, MediaFilter::Collection(c.clone()), format!("{} {c} {n}", icon::BOOKMARKS_SIMPLE));
                 r.right_menu(|ui| {
-                    if ui.button(label(icon::TRASH, "Delete collection")).on_hover_text("The media stays in the bin").clicked() {
+                    if crate::ui::command(ui, label(icon::TRASH, "Delete collection")).on_hover_text("The media stays in the bin").clicked() {
                         acts.push(MediaAct::DeleteCollection(c.clone()));
                         ui.close();
                     }
                 });
             }
-            if ui.button(label(icon::PLUS, "New collection")).on_hover_text("A set of files for a show: add files or whole folders, then play it on a layer").clicked() {
+            if crate::ui::command(ui, label(icon::PLUS, "New collection")).on_hover_text("A set of files for a show: add files or whole folders, then play it on a layer").clicked() {
                 acts.push(MediaAct::NewCollection(String::new(), None));
             }
         });
@@ -246,7 +246,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 .default_open(true)
                 .show(ui, |ui| grid(ui));
             header.header_response.right_menu(|ui| {
-                if ui.button(label(icon::DICE_FIVE, "Random")).on_hover_text("Play one of this folder's files, at random, on the selected layer").clicked() {
+                if crate::ui::command(ui, label(icon::DICE_FIVE, "Random")).on_hover_text("Play one of this folder's files, at random, on the selected layer").clicked() {
                     acts.push(MediaAct::RandomOne(items.clone()));
                     ui.close();
                 }
@@ -254,16 +254,16 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                     acts.push(MediaAct::ShuffleLayer(items.clone(), title.clone()));
                     ui.close();
                 }
-                if ui.button(label(icon::SQUARES_FOUR, "Fill clips of the selected layer")).on_hover_text("Puts this folder's media into the selected layer's clip slots, in order").clicked() {
+                if crate::ui::command(ui, label(icon::SQUARES_FOUR, "Fill clips of the selected layer")).on_hover_text("Puts this folder's media into the selected layer's clip slots, in order").clicked() {
                     acts.push(MediaAct::FillFolder(items.clone()));
                     ui.close();
                 }
                 if !group.is_empty() {
-                    if root == group && ui.button(label(icon::EYE_SLASH, "Stop watching")).clicked() {
+                    if root == group && crate::ui::command(ui, label(icon::EYE_SLASH, "Stop watching")).clicked() {
                         acts.push(MediaAct::Unwatch(root.clone()));
                         ui.close();
                     }
-                    if ui.button(label(icon::FOLDER_OPEN, "Show the folder")).clicked() {
+                    if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Show the folder")).clicked() {
                         crate::os::open(&group);
                         ui.close();
                     }
@@ -506,19 +506,19 @@ pub(crate) fn media_tile(
     resp.on_hover_text(format!("{}{credit}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
         ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
             for (id, name) in targets.layers {
-                if ui.button(name).clicked() {
+                if crate::ui::command(ui, name).clicked() {
                     acts.push(MediaAct::PlayOn(i, *id));
                     ui.close();
                 }
             }
-            if ui.button(label(icon::PLUS, "A new layer")).clicked() {
+            if crate::ui::command(ui, label(icon::PLUS, "A new layer")).clicked() {
                 acts.push(MediaAct::NewLayer(i));
                 ui.close();
             }
         });
         ui.separator();
         let fav = if item.favorite { "Remove from favourites" } else { "Add to favourites" };
-        if ui.button(label(icon::STAR, fav)).clicked() {
+        if crate::ui::command(ui, label(icon::STAR, fav)).clicked() {
             acts.push(MediaAct::Favorite(i));
             ui.close();
         }
@@ -540,25 +540,25 @@ pub(crate) fn media_tile(
             }
         });
         #[cfg(not(target_arch = "wasm32"))]
-        if crate::media::is_movie(&item.name) && ui.button(label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show (Hap, ProRes, or H.264 with every frame a keyframe); see the size first").clicked() {
+        if crate::media::is_movie(&item.name) && crate::ui::command(ui, label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show (Hap, ProRes, or H.264 with every frame a keyframe); see the size first").clicked() {
             acts.push(MediaAct::Convert(i));
             ui.close();
         }
-        if ui.button(label(icon::ARROW_CLOCKWISE, "Reload")).on_hover_text("Open the file again from disk (after you've changed it in another app)").clicked() {
+        if crate::ui::command(ui, label(icon::ARROW_CLOCKWISE, "Reload")).on_hover_text("Open the file again from disk (after you've changed it in another app)").clicked() {
             acts.push(MediaAct::Reload(i));
             ui.close();
         }
         ui.separator();
-        if ui.button(label(icon::PLUS, "Put on a new layer")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Put on a new layer")).clicked() {
             acts.push(MediaAct::NewLayer(i));
             ui.close();
         }
         #[cfg(target_os = "macos")]
-        if ui.button(label(icon::FOLDER_OPEN, "Reveal in Finder")).clicked() {
+        if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Reveal in Finder")).clicked() {
             crate::os::reveal(&item.path);
             ui.close();
         }
-        if ui.button(label(icon::TRASH, "Remove from bin")).clicked() {
+        if crate::ui::command(ui, label(icon::TRASH, "Remove from bin")).clicked() {
             acts.push(MediaAct::Remove(i));
             ui.close();
         }

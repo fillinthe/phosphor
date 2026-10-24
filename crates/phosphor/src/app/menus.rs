@@ -302,7 +302,7 @@ impl PhosphorApp {
                             surprise = picks.clone();
                             ui.close();
                         }
-                        if ui.button("All layers").clicked() {
+                        if crate::ui::command(ui, "All layers").clicked() {
                             surprise = self.state.comp.layers.iter().map(|l| l.id).collect();
                             ui.close();
                         }
@@ -325,7 +325,7 @@ impl PhosphorApp {
                     self.state.toggle_output();
                 }
                 ui.separator();
-                if ui.button(named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
+                if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
                 }
                 if crate::ui::mode_button(ui, self.state.map_mode, format!("{} MAP", icon::PLUG))
@@ -372,7 +372,7 @@ impl PhosphorApp {
                     if self.ui_brightness != before {
                         theme::set_brightness(ui.ctx(), self.ui_brightness);
                     }
-                    if ui.button(icon::BUG).on_hover_text("Report a bug").clicked() {
+                    if crate::ui::command(ui, icon::BUG).on_hover_text("Report a bug").clicked() {
                         self.state.bug.open = true;
                     }
                     // Frame rate and CPU live in the status line (bottom right), where there's room.
@@ -421,13 +421,13 @@ impl PhosphorApp {
                                 ui.menu_button("Open Recent", |ui| {
                                     for p in self.state.recent.clone() {
                                         let name = std::path::Path::new(&p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
-                                        if ui.button(name).on_hover_text(&p).clicked() {
+                                        if crate::ui::command(ui, name).on_hover_text(&p).clicked() {
                                             self.state.open_project_file(&p);
                                             ui.close();
                                         }
                                     }
                                     ui.separator();
-                                    if ui.button("Clear Menu").clicked() {
+                                    if crate::ui::command(ui, "Clear Menu").clicked() {
                                         self.state.recent.clear();
                                         ui.close();
                                     }
@@ -454,13 +454,13 @@ impl PhosphorApp {
                                         ui.separator();
                                     }
                                     let text = if startup.as_deref() == Some(name.as_str()) { format!("{name}  (startup)") } else { name.clone() };
-                                    if ui.button(text).clicked() {
+                                    if crate::ui::command(ui, text).clicked() {
                                         clicked.push(Action::Layout(i));
                                         ui.close();
                                     }
                                 }
                                 ui.separator();
-                                if ui.button(format!("{} Save Current Layout…", icon::FLOPPY_DISK)).clicked() {
+                                if crate::ui::command(ui, format!("{} Save Current Layout…", icon::FLOPPY_DISK)).clicked() {
                                     clicked.push(Action::SaveLayout);
                                     ui.close();
                                 }
@@ -479,7 +479,7 @@ impl PhosphorApp {
                                 if !self.layouts.saved.is_empty() {
                                     ui.menu_button("Delete", |ui| {
                                         for name in self.layouts.saved.iter().map(|l| l.name.clone()).collect::<Vec<_>>() {
-                                            if ui.button(&name).clicked() {
+                                            if crate::ui::command(ui, &name).clicked() {
                                                 self.layouts.remove(&name);
                                                 self.install_native_menu();
                                                 ui.close();
@@ -561,11 +561,11 @@ impl PhosphorApp {
                 ui.set_max_width(320.0);
                 ui.label("Phosphor is free. A free phosphorfx.com account keeps your projects and layouts on every computer you use. It's optional.");
                 ui.horizontal(|ui| {
-                    if ui.button(format!("{} Sign in or create one", icon::USER_CIRCLE)).clicked() {
+                    if crate::ui::command(ui, format!("{} Sign in or create one", icon::USER_CIRCLE)).clicked() {
                         st.account_window = true;
                         close = true;
                     }
-                    if ui.button("Not now").clicked() {
+                    if crate::ui::command(ui, "Not now").clicked() {
                         close = true;
                     }
                 });

@@ -21,7 +21,7 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
     let mut rescan = false;
     let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        rescan = ui.small_button(icon::ARROWS_CLOCKWISE).on_hover_text("Look for cameras and capture cards again").clicked();
+        rescan = crate::ui::small_command(ui, icon::ARROWS_CLOCKWISE).on_hover_text("Look for cameras and capture cards again").clicked();
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| hint(ui, "Drag onto a layer or a clip cell, or use the buttons."));
     });
     let cams = crate::media::live::cameras_cached(ui.ctx(), rescan);
@@ -79,7 +79,7 @@ fn input_row(ui: &mut egui::Ui, name: &str, source: &SourceSpec, glyph: &str, se
     // Buttons on the right first, then the name fills what's left (cut short, full name on hover).
     let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if ui.small_button(icon::PLUS).on_hover_text("On a new layer").clicked() {
+        if crate::ui::small_command(ui, icon::PLUS).on_hover_text("On a new layer").clicked() {
             out = Some(None);
         }
         if crate::ui::small_command_if(ui, selected.is_some(), icon::ARROW_RIGHT).on_hover_text("On the selected layer").on_disabled_hover_text("Select a layer first").clicked() {

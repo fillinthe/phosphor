@@ -59,7 +59,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
         ui.horizontal(|ui| {
             ui.add_space(indent);
             let caret = if g.collapsed { icon::CARET_RIGHT } else { icon::CARET_DOWN };
-            if ui.small_button(caret).on_hover_text(if g.collapsed { "Open the group" } else { "Fold the group" }).clicked() {
+            if crate::ui::small_command(ui, caret).on_hover_text(if g.collapsed { "Open the group" } else { "Fold the group" }).clicked() {
                 edits.push(Edit::Fold(g.id));
             }
             let mut on = members.iter().any(|id| mapping.surfaces.iter().any(|s| s.id == *id && s.enabled));
@@ -82,7 +82,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
                     }
                 });
                 move_menu(ui, mapping, Some(g.id), g.parent, &mut |to| edits.push(Edit::GroupTo(g.id, to)));
-                if ui.button(label(icon::SELECTION_SLASH, "Ungroup")).on_hover_text("Its slices stay, one level up").clicked() {
+                if crate::ui::command(ui, label(icon::SELECTION_SLASH, "Ungroup")).on_hover_text("Its slices stay, one level up").clicked() {
                     edits.push(Edit::Ungroup(g.id));
                     ui.close();
                 }
@@ -117,17 +117,17 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             r.right_menu(|ui| {
                 let n = these.len();
                 let text = if n > 1 { format!("Group these {n} slices") } else { "Put in a new group".into() };
-                if ui.button(label(icon::FOLDER_PLUS, &text)).clicked() {
+                if crate::ui::command(ui, label(icon::FOLDER_PLUS, &text)).clicked() {
                     acts.push(SliceAct::Group(these.clone()));
                     ui.close();
                 }
                 move_menu(ui, mapping, None, group, &mut |to| edits.push(Edit::SlicesTo(these.clone(), to)));
                 ui.separator();
-                if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+                if crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
                     acts.push(SliceAct::Duplicate(id));
                     ui.close();
                 }
-                if ui.button(label(icon::TRASH, "Delete")).clicked() {
+                if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
                     acts.push(SliceAct::Delete(vec![id]));
                     ui.close();
                 }
@@ -148,12 +148,12 @@ fn move_menu(ui: &mut egui::Ui, mapping: &Mapping, moving: Option<u64>, now: Opt
         return;
     }
     ui.menu_button(label(icon::ARROW_SQUARE_IN, "Move to group"), |ui| {
-        if now.is_some() && ui.button("Out of every group").clicked() {
+        if now.is_some() && crate::ui::command(ui, "Out of every group").clicked() {
             pick(None);
             ui.close();
         }
         for (id, name, depth) in targets {
-            if ui.button(format!("{}{} {name}", "   ".repeat(depth), icon::FOLDER)).clicked() {
+            if crate::ui::command(ui, format!("{}{} {name}", "   ".repeat(depth), icon::FOLDER)).clicked() {
                 pick(Some(id));
                 ui.close();
             }
