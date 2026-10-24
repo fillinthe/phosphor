@@ -401,7 +401,10 @@ impl PhosphorApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(dir) = app.bench.as_ref().and_then(|b| b.cfg.watch.clone()) {
-            app.state.folders.add(dir);
+            app.state.folders.add(dir.clone());
+            // (PHOSPHOR_MEDIA_DIR = a folder inside it to open in Media, for pictures of the panel.)
+            let at = std::env::var("PHOSPHOR_MEDIA_DIR").ok().filter(|d| !d.is_empty()).unwrap_or_else(|| dir.clone());
+            app.state.media_view.show(crate::panels::MediaSource::Folder(dir), Some(at));
         }
         if let Some(pw) = app.bench.as_ref().and_then(|b| b.cfg.remote_password.clone()) {
             app.state.remote_password = pw;

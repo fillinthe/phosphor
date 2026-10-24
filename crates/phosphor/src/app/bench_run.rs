@@ -754,7 +754,7 @@ impl PhosphorApp {
                 let c = self.state.comp.create_collection("Show A");
                 self.state.comp.add_collection_folder(&c, folder);
                 self.state.folders.add(folder.to_string());
-                self.state.media_view.filter = crate::panels::MediaFilter::Collection(c.clone());
+                self.state.media_view.show_collection(c.clone());
                 let id = self.state.add_layer();
                 if let Some(l) = self.state.comp.layer_mut(id) {
                     l.collection = Some(c.clone());

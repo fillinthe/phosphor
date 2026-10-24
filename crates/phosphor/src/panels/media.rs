@@ -23,15 +23,73 @@ pub enum MediaSort {
 /// How the Media panel is filtered and laid out (per session).
 pub struct MediaView {
     pub search: String,
+    /// Favourites / a collection (the classic view's filter; kept in step with `source`), or Videos / Pictures.
     pub filter: MediaFilter,
     pub sort: MediaSort,
     pub by_folder: bool,
     pub tile: f32,
+    /// What the grid shows (`media_sources`).
+    pub source: super::media_sources::MediaSource,
+    /// The folder open in a watched folder (`MediaSource::Folder`).
+    pub dir: Option<String>,
+    /// The old one-list view with folder groups (View menu).
+    pub classic: bool,
+    /// Videos / pictures only (`All`, `Videos`, `Images`).
+    pub only: MediaFilter,
+    pub follow_open: bool,
+    pub follow_text: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub follow_site: crate::online::following::Site,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub following: crate::online::following::Following,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub refresh: Option<std::sync::Arc<std::sync::Mutex<crate::online::following::Progress>>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub has_gallery_dl: Option<bool>,
 }
 
 impl Default for MediaView {
     fn default() -> Self {
-        Self { search: String::new(), filter: MediaFilter::All, sort: MediaSort::Name, by_folder: true, tile: 128.0 }
+        Self {
+            search: String::new(),
+            filter: MediaFilter::All,
+            sort: MediaSort::Name,
+            by_folder: true,
+            tile: 128.0,
+            source: Default::default(),
+            dir: None,
+            classic: false,
+            only: MediaFilter::All,
+            follow_open: false,
+            follow_text: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            follow_site: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            following: crate::online::following::Following::load(),
+            #[cfg(not(target_arch = "wasm32"))]
+            refresh: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            has_gallery_dl: None,
+        }
+    }
+}
+
+impl MediaView {
+    /// Shows a source (and the folder open in it); the classic view's filter follows.
+    pub fn show(&mut self, source: super::media_sources::MediaSource, dir: Option<String>) {
+        use super::media_sources::MediaSource as S;
+        self.filter = match &source {
+            S::Favorites => MediaFilter::Favorites,
+            S::Collection(c) => MediaFilter::Collection(c.clone()),
+            _ => MediaFilter::All,
+        };
+        self.dir = dir;
+        self.source = source;
+        self.follow_open = false;
+    }
+
+    pub fn show_collection(&mut self, name: String) {
+        self.show(super::media_sources::MediaSource::Collection(name), None);
     }
 }
 
@@ -68,6 +126,14 @@ pub(crate) enum MediaAct {
 }
 
 pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
+    if st.media_view.classic {
+        return media_classic(ui, st);
+    }
+    super::media_browser::media_browser(ui, st);
+}
+
+/// The Media panel before sources (View › Classic view): one list, folders as groups.
+fn media_classic(ui: &mut egui::Ui, st: &mut State) {
     // Row 1: search, the full width (it never shares a row, so nothing can cover it).
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
@@ -102,6 +168,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             });
             crate::ui::toggle(ui, &mut st.media_view.by_folder, "Group by folder");
             Level::range(&mut st.media_view.tile, 72.0, 240.0, "Tile size").default(128.0).width(180.0).show(ui);
+            crate::ui::toggle(ui, &mut st.media_view.classic, "Classic view").on_hover_text("One list with folders as groups (off: sources down the left)");
         })
         .response
         .on_hover_text("Sort, group by folder, tile size");
@@ -270,6 +337,11 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     });
 
     let now = ui.ctx().input(|i| i.time);
+    apply_acts(st, acts, now);
+}
+
+/// Does what the Media panel's tiles and buttons asked.
+pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
     for act in acts {
         match act {
             MediaAct::Assign(i) => {
@@ -377,11 +449,11 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
                 if let Some(i) = item {
                     st.comp.add_to_collection(i, &name);
                 }
-                st.media_view.filter = MediaFilter::Collection(name);
+                st.media_view.show_collection(name);
             }
             MediaAct::RenameCollection(from, to) => {
                 if st.comp.rename_collection(&from, &to) {
-                    st.media_view.filter = MediaFilter::Collection(to);
+                    st.media_view.show_collection(to);
                 } else {
                     st.notice = Some(format!("There's already a collection called \"{to}\""));
                 }
@@ -410,7 +482,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
             MediaAct::DeleteCollection(name) => {
                 st.comp.delete_collection(&name);
                 if st.media_view.filter == MediaFilter::Collection(name) {
-                    st.media_view.filter = MediaFilter::All;
+                    st.media_view.show(Default::default(), None);
                 }
             }
         }
@@ -563,7 +635,7 @@ pub(crate) fn media_tile(
 }
 
 /// Media bin items as clips (name without extension, source by file type).
-fn clip_items<'a>(items: impl Iterator<Item = &'a phosphor_engine::MediaItem>) -> Vec<(String, SourceSpec)> {
+pub(crate) fn clip_items<'a>(items: impl Iterator<Item = &'a phosphor_engine::MediaItem>) -> Vec<(String, SourceSpec)> {
     items
         .map(|m| (crate::media::clip_name(&m.name), crate::media::spec_for_path(&m.path)))
         .collect()
