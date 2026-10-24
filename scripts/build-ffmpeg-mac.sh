@@ -8,8 +8,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
-# The oldest macOS Phosphor runs on, for every bundled binary (one value: scripts/min-macos).
-MIN_MACOS=$(cat scripts/min-macos)
+# The oldest macOS Phosphor runs on, for every bundled binary (one value: scripts/min-macos; MIN_MACOS overrides it,
+# e.g. the build for older Intel Macs). Built for this Mac's processor (arm64, or x86_64 on an Intel Mac).
+MIN_MACOS=${MIN_MACOS:-$(cat scripts/min-macos)}
+ARCH=$(uname -m)
+if [[ $ARCH == x86_64 ]]; then VPX_TARGET=x86_64-darwin19-gcc; SSL_TARGET=darwin64-x86_64-cc; else VPX_TARGET=arm64-darwin23-gcc; SSL_TARGET=darwin64-arm64-cc; fi
 FFMPEG_VER=9.0.2
 DAV1D_VER=1.5.1
 VPX_VER=1.15.2
@@ -44,7 +47,7 @@ install_name_tool -id "@rpath/libdav1d.7.dylib" "$PREFIX/lib/libdav1d.7.dylib"
 rm -rf libvpx-$VPX_VER && tar xf libvpx-$VPX_VER.tar.gz
 (
   cd libvpx-$VPX_VER
-  ./configure --prefix="$PREFIX" --target=arm64-darwin23-gcc --enable-shared --disable-static --disable-examples --disable-tools \
+  ./configure --prefix="$PREFIX" --target=$VPX_TARGET $([[ $ARCH == x86_64 ]] && echo --as=nasm) --enable-shared --disable-static --disable-examples --disable-tools \
     --disable-docs --disable-unit-tests --disable-vp8-encoder --disable-vp9-encoder --enable-vp9-highbitdepth \
     --extra-cflags="-mmacosx-version-min=$MIN_MACOS" >/dev/null
   make -j"$JOBS" >/dev/null
@@ -61,7 +64,7 @@ if [[ ! -f "$SSL/lib/libssl.a" ]]; then
   rm -rf openssl-$OPENSSL_VER && tar xf openssl-$OPENSSL_VER.tar.gz
   (
     cd openssl-$OPENSSL_VER
-    ./Configure darwin64-arm64-cc no-shared no-tests no-docs no-apps --prefix="$SSL" --libdir=lib -mmacosx-version-min=$MIN_MACOS >/dev/null
+    ./Configure $SSL_TARGET no-shared no-tests no-docs no-apps --prefix="$SSL" --libdir=lib -mmacosx-version-min=$MIN_MACOS >/dev/null
     make -j"$JOBS" >/dev/null
     make install_sw >/dev/null
   )

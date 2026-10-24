@@ -14,10 +14,18 @@ pub const RELEASES_API: &str = "https://api.github.com/repos/fillinthe/phosphor/
 pub const RELEASES_PAGE: &str = "https://github.com/fillinthe/phosphor/releases";
 /// Redirects to the newest release's page; no API rate limit (the fallback check reads the tag from where it lands).
 pub const LATEST_PAGE: &str = "https://github.com/fillinthe/phosphor/releases/latest";
-/// The Mac download of a given version (the name `scripts/release-github.sh` uploads).
+/// This build's download name (what `scripts/release-github.sh` uploads): Intel Macs have their own build.
+pub const ZIP_NAME: &str = if cfg!(windows) {
+    "Phosphor-windows.zip"
+} else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+    "Phosphor-mac-intel.zip"
+} else {
+    "Phosphor-mac.zip"
+};
+
+/// This build's download of a given version.
 pub fn zip_url(version: &str) -> String {
-    let file = if cfg!(windows) { "Phosphor-windows.zip" } else { "Phosphor-mac.zip" };
-    format!("https://github.com/fillinthe/phosphor/releases/download/v{version}/{file}")
+    format!("https://github.com/fillinthe/phosphor/releases/download/v{version}/{ZIP_NAME}")
 }
 
 /// "…/releases/tag/v0.2.42" → "0.2.42".
@@ -111,10 +119,8 @@ fn parse_release(text: &str) -> Result<Option<Release>, String> {
         .get("assets")
         .and_then(|a| a.as_array())
         .and_then(|a| {
-            let zips: Vec<&serde_json::Value> = a.iter().filter(|x| x.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.ends_with(".zip"))).collect();
-            // This platform's download: "…-mac.zip" on the Mac, "…-windows.zip" on Windows.
-            let want = if cfg!(windows) { "windows" } else { "mac" };
-            zips.iter().find(|x| x.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.to_lowercase().contains(want))).or(zips.first()).copied()
+            // Exactly this build's download (an Intel Mac never gets the Apple Silicon zip, or the other way round).
+            a.iter().find(|x| x.get("name").and_then(|n| n.as_str()) == Some(ZIP_NAME))
         })
         .and_then(|x| x.get("browser_download_url").and_then(|u| u.as_str()).map(str::to_string));
     Ok(Some(Release {
@@ -604,15 +610,24 @@ mod tests {
     fn version_from_the_latest_redirect() {
         assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases/tag/v0.2.42").as_deref(), Some("0.2.42"));
         assert_eq!(version_from_url("https://github.com/fillinthe/phosphor/releases"), None);
-        let file = if cfg!(windows) { "Phosphor-windows.zip" } else { "Phosphor-mac.zip" };
-        assert_eq!(zip_url("0.2.42"), format!("https://github.com/fillinthe/phosphor/releases/download/v0.2.42/{file}"));
+        assert_eq!(zip_url("0.2.42"), format!("https://github.com/fillinthe/phosphor/releases/download/v0.2.42/{ZIP_NAME}"));
     }
 
     #[test]
     fn release_json() {
-        let r = parse_release(r#"{"tag_name":"v0.3.0","body":"notes","html_url":"https://x/y","assets":[{"name":"Phosphor-mac.zip","browser_download_url":"https://x/z.zip"}]}"#).unwrap().unwrap();
+        let json = format!(
+            r#"{{"tag_name":"v0.3.0","body":"notes","html_url":"https://x/y","assets":[{{"name":"Phosphor-mac-intel.zip","browser_download_url":"https://x/intel.zip"}},{{"name":"Phosphor-mac.zip","browser_download_url":"https://x/arm.zip"}},{{"name":"Phosphor-windows.zip","browser_download_url":"https://x/win.zip"}}]}}"#
+        );
+        let r = parse_release(&json).unwrap().unwrap();
         assert_eq!(r.version, "0.3.0");
-        assert_eq!(r.zip.as_deref(), Some("https://x/z.zip"));
+        let want = match ZIP_NAME {
+            "Phosphor-mac-intel.zip" => "https://x/intel.zip",
+            "Phosphor-mac.zip" => "https://x/arm.zip",
+            _ => "https://x/win.zip",
+        };
+        assert_eq!(r.zip.as_deref(), Some(want), "this build's own download");
+        let only_arm = r#"{"tag_name":"v0.3.1","assets":[{"name":"Phosphor-mac.zip","browser_download_url":"https://x/arm.zip"}]}"#;
+        assert_eq!(parse_release(only_arm).unwrap().unwrap().zip.is_some(), ZIP_NAME == "Phosphor-mac.zip", "never another build's zip");
         assert!(parse_release(r#"{"message":"Not Found"}"#).unwrap().is_none());
     }
 }

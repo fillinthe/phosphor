@@ -1,0 +1,91 @@
+# Mac build for Intel Macs, macOS 10.15 Catalina and later (older Macs that can't run the main build, which is Apple
+# Silicon on macOS 13+). Same app without screen / window capture and system sound (ScreenCaptureKit needs macOS
+# 12.3); tracking hands, bodies and Remove Background switch off on macOS too old for them. Built on GitHub's Intel
+# Mac runner (free for this public repository). scripts/release-github.sh attaches this run's zip to a release when
+# it built the same commit.
+name: Mac Intel build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "ROADMAP.md"
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    env:
+      CARGO_TERM_COLOR: never
+      MIN_MACOS: "10.15"
+      CARGO_FEATURES: "--no-default-features"
+      SKIP_PANEL_CHECK: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Build tools
+        run: brew install nasm ninja pkg-config || true
+
+      # FFmpeg (and dav1d, libvpx, OpenSSL) for macOS 10.15 on Intel: built once, kept until the script changes.
+      - uses: actions/cache@v4
+        with:
+          path: vendor/ffmpeg
+          key: mac-intel-ffmpeg-${{ hashFiles('scripts/build-ffmpeg-mac.sh') }}-10.15
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/bundle
+          key: mac-intel-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: FFmpeg
+        run: "[[ -x vendor/ffmpeg/bin/ffmpeg ]] || scripts/build-ffmpeg-mac.sh"
+
+      - name: Engine tests
+        run: cargo test -p phosphor-engine --release
+
+      - name: App bundle
+        run: scripts/bundle-mac.sh --no-install
+
+      - name: What it needs
+        run: |
+          file dist/Phosphor.app/Contents/MacOS/Phosphor
+          otool -l dist/Phosphor.app/Contents/MacOS/Phosphor | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX/{b=1} b && /minos|version/{print; exit}'
+          otool -L dist/Phosphor.app/Contents/MacOS/Phosphor | grep -v "@rpath\|/usr/lib\|/System/Library" && exit 1 || true
+
+      - name: Zip
+        run: (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac-intel.zip) && ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phosphor-mac-intel
+          path: dist/Phosphor-mac-intel.zip
+
+      # Smoke test: open the app for a few seconds with the test project. The runner may have no usable GPU, so this
+      # is reported, not required.
+      - name: Launch test
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          dist/Phosphor.app/Contents/MacOS/Phosphor --bench 4 --project scripts/ci/smoke.phosphor --snapshot "$PWD/dist/intel-snapshot.png" > dist/launch.txt 2>&1 &
+          pid=$!
+          for i in $(seq 1 120); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+          kill $pid 2>/dev/null || true
+          grep -E "SUMMARY|LAYERS|LAYER_ERROR|panicked|GPU" dist/launch.txt | head -20
+          test -f dist/intel-snapshot.png
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-intel-launch-test
+          path: |
+            dist/launch.txt
+            dist/intel-snapshot.png
+          if-no-files-found: ignore
