@@ -58,7 +58,8 @@ jobs:
         run: |
           file dist/Phosphor.app/Contents/MacOS/Phosphor
           otool -l dist/Phosphor.app/Contents/MacOS/Phosphor | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX/{b=1} b && /minos|version/{print; exit}'
-          otool -L dist/Phosphor.app/Contents/MacOS/Phosphor | grep -v "@rpath\|/usr/lib\|/System/Library" && exit 1 || true
+          # Every library it links must be inside the app or part of macOS (the first line is the file's own name).
+          if otool -L dist/Phosphor.app/Contents/MacOS/Phosphor | tail -n +2 | grep -v "@rpath\|/usr/lib\|/System/Library"; then exit 1; fi
 
       - name: Zip
         run: (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac-intel.zip) && ls -la dist
