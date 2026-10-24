@@ -151,30 +151,6 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
         Pick::Source(MediaSource::All, None),
     );
     let following = following_root();
-    let (mut local, mut network): (Vec<&String>, Vec<&String>) = (Vec::new(), Vec::new());
-    for f in &st.folders.folders {
-        if Some(f) == following.as_ref() {
-            continue;
-        }
-        if st.folders.state.get(f).is_some_and(|s| s.network) {
-            network.push(f)
-        } else {
-            local.push(f)
-        }
-    }
-    let folder_row = |f: &String, glyph: &str| {
-        let (right, badge) = if st.folders.missing(f) {
-            ("missing".to_string(), true)
-        } else {
-            (count(&|m| m.folder == *f).to_string(), false)
-        };
-        (
-            format!("{glyph} {}", folder_name(f)),
-            right,
-            badge,
-            Pick::Source(MediaSource::Folder(f.clone()), Some(f.clone())),
-        )
-    };
     add(
         Some("THIS MAC"),
         format!("{} Added files", icon::FILES),
@@ -182,32 +158,60 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
         false,
         Pick::Source(MediaSource::Added, None),
     );
-    for f in local {
-        let (l, r, b, p) = folder_row(f, icon::FOLDER);
-        add(None, l, r, b, p);
-    }
-    add(
-        None,
-        format!("{} Watch a folder…", icon::EYE),
-        String::new(),
-        false,
-        Pick::WatchFolder,
-    );
-    if !network.is_empty() {
-        let mut first = true;
-        for f in network {
-            let (l, r, b, p) = folder_row(f, icon::HARD_DRIVES);
-            add(
-                if std::mem::take(&mut first) {
-                    Some("NETWORK")
-                } else {
-                    None
-                },
-                l,
-                r,
-                b,
-                p,
-            );
+    // Watched folders: the desktop app only (the browser has no folders to watch).
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (mut local, mut network): (Vec<&String>, Vec<&String>) = (Vec::new(), Vec::new());
+        for f in &st.folders.folders {
+            if Some(f) == following.as_ref() {
+                continue;
+            }
+            if st.folders.state.get(f).is_some_and(|s| s.network) {
+                network.push(f)
+            } else {
+                local.push(f)
+            }
+        }
+        let folder_row = |f: &String, glyph: &str| {
+            let (right, badge) = if st.folders.missing(f) {
+                ("missing".to_string(), true)
+            } else {
+                (count(&|m| m.folder == *f).to_string(), false)
+            };
+            (
+                format!("{glyph} {}", folder_name(f)),
+                right,
+                badge,
+                Pick::Source(MediaSource::Folder(f.clone()), Some(f.clone())),
+            )
+        };
+        for f in local {
+            let (l, r, b, p) = folder_row(f, icon::FOLDER);
+            add(None, l, r, b, p);
+        }
+        add(
+            None,
+            format!("{} Watch a folder…", icon::EYE),
+            String::new(),
+            false,
+            Pick::WatchFolder,
+        );
+        if !network.is_empty() {
+            let mut first = true;
+            for f in network {
+                let (l, r, b, p) = folder_row(f, icon::HARD_DRIVES);
+                add(
+                    if std::mem::take(&mut first) {
+                        Some("NETWORK")
+                    } else {
+                        None
+                    },
+                    l,
+                    r,
+                    b,
+                    p,
+                );
+            }
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -397,6 +401,7 @@ fn entry_menu(r: &egui::Response, e: &Entry, st: &State) -> Option<SourceAct> {
             let account = Some(root) == following.as_ref();
             r.right_menu(|ui| {
                 if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Show the folder")).clicked() {
+                    #[cfg(not(target_arch = "wasm32"))]
                     crate::os::open(dir);
                     ui.close();
                 }

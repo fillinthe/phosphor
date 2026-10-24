@@ -402,6 +402,7 @@ impl NetSession {
     }
 
     pub fn stop(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(d) = self.mdns.take() {
             let _ = d.shutdown();
         }

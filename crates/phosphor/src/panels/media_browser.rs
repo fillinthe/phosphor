@@ -47,7 +47,10 @@ pub(crate) fn media_browser(ui: &mut egui::Ui, st: &mut State) {
 /// A source whose folder stopped being watched, or whose collection was deleted, goes back to All media.
 fn forget_gone_sources(st: &mut State) {
     let gone = match &st.media_view.source {
+        #[cfg(not(target_arch = "wasm32"))]
         MediaSource::Folder(root) => !st.folders.folders.contains(root),
+        #[cfg(target_arch = "wasm32")]
+        MediaSource::Folder(_) => true,
         MediaSource::Collection(c) => !st.comp.media_collections.contains(c),
         _ => false,
     };
@@ -252,6 +255,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         if let Some(p) = go {
             st.media_view.dir = Some(p);
         }
+        #[cfg(not(target_arch = "wasm32"))]
         if st.folders.missing(root) {
             ui.colored_label(WARN, "This folder isn't there now (drive unplugged or network down): its files come back when it is.");
         }

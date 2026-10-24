@@ -630,6 +630,10 @@ mod stub {
             Err("Audio input in the browser is coming with network sessions".into())
         }
         pub fn close(&mut self) {}
+        pub fn is_open_or_clips(&self) -> bool {
+            false
+        }
+
         pub fn is_clips(&self) -> bool {
             false
         }

@@ -89,7 +89,6 @@ mod pjlink;
 mod scopes;
 #[cfg(not(target_arch = "wasm32"))]
 mod web_media;
-#[cfg(not(target_arch = "wasm32"))]
 mod crash_report;
 #[cfg(not(target_arch = "wasm32"))]
 mod ai_shader;

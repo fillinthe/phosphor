@@ -213,6 +213,7 @@ impl PhosphorApp {
         let an = self.state.audio.analysis();
         println!("BEAT bpm {:.1} confidence {:.2} clock {:.1} follow {} downbeat shifts {}", an.bpm, an.confidence, self.state.clock.bpm, self.state.clock.follow_audio, self.state.clock.downbeat.shifts);
         // Bar phase check for a clip cut at a known tempo (PHOSPHOR_BENCH_BPM): the clip's own bar phase vs the clock's.
+        #[cfg(not(target_arch = "wasm32"))]
         if let Ok(bpm) = std::env::var("PHOSPHOR_BENCH_BPM").map(|v| v.parse::<f64>().unwrap_or(0.0))
             && bpm > 0.0
             && let Some(l) = self.state.comp.layers.iter().find(|l| crate::app::beat_match::movie_path(&l.source).is_some())
@@ -292,6 +293,7 @@ impl PhosphorApp {
                 self.state.updater.check(ctx);
                 continue;
             }
+            #[cfg(not(target_arch = "wasm32"))]
             if name == "beat" {
                 // Visual beat of the first movie layer, scanned right here (prints RHYTHM …).
                 let path = self.state.comp.layers.iter().find_map(|l| crate::app::beat_match::movie_path(&l.source));
@@ -302,6 +304,7 @@ impl PhosphorApp {
                 }
                 continue;
             }
+            #[cfg(not(target_arch = "wasm32"))]
             if name == "beatmatch" {
                 if let Some(id) = self.state.comp.layers.iter().find(|l| crate::app::beat_match::movie_path(&l.source).is_some()).map(|l| l.id) {
                     self.state.match_beat(crate::media::rhythm::MatchTarget::Layer(id));
@@ -753,6 +756,7 @@ impl PhosphorApp {
                 // A collection watching `folder`, shown in the Media panel, playing on a new layer (in order).
                 let c = self.state.comp.create_collection("Show A");
                 self.state.comp.add_collection_folder(&c, folder);
+                #[cfg(not(target_arch = "wasm32"))]
                 self.state.folders.add(folder.to_string());
                 self.state.media_view.show_collection(c.clone());
                 let id = self.state.add_layer();

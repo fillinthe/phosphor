@@ -266,7 +266,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
         st.dialogs.save_file(crate::dialogs::Purpose::RecorderFile(i), ("Video", &["mp4", "mov"]), "Phosphor take.mp4");
     }
     #[cfg(target_arch = "wasm32")]
-    let _ = choose;
+    let _: Option<usize> = choose;
 }
 
 /// Beside LIVE: the last two minutes (bitrate line, red where frames were dropped) and a short verdict.

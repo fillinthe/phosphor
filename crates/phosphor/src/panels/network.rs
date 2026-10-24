@@ -178,7 +178,6 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                 if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link").clicked() {
                     ui.ctx().copy_text(url.clone());
                 }
-                #[cfg(not(target_arch = "wasm32"))]
                 let (off, on) = (label(icon::QR_CODE, "Take the code off the output"), label(icon::QR_CODE, "Show the code on the output"));
                 if steady_button(ui, if on_output { off.clone() } else { on.clone() }, &[&off, &on]).clicked() {
                     toggle = true;

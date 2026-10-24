@@ -566,6 +566,7 @@ impl MediaManager {
             if let SourceSpec::Image { path: Some(p), .. } | SourceSpec::Movie { path: Some(p), .. } = &l.source
                 && p == path
             {
+                #[cfg(not(target_arch = "wasm32"))]
                 if let Some((pos, _)) = self.position(l.id) {
                     self.pending_seek.insert(l.id, pos);
                 }

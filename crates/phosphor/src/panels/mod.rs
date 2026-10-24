@@ -300,7 +300,9 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         #[cfg(not(target_arch = "wasm32"))]
         Tab::Online => online_panel(ui, st),
         #[cfg(target_arch = "wasm32")]
-        Tab::Online => hint(ui, "Online libraries work in the Mac, Windows and Linux apps."),
+        Tab::Online => {
+            hint(ui, "Online libraries work in the Mac, Windows and Linux apps.");
+        }
         Tab::Notes => notes_panel(ui, st),
         Tab::Timeline => timeline::timeline_panel(ui, st),
         // (Panels with no scrolling of their own scroll here, so nothing is hidden when they're short.)
