@@ -12,11 +12,14 @@ pub struct Clock {
     last_beat: i64,
     /// Which beat of the bar carries the accent (audio follow).
     pub downbeat: Downbeat,
+    /// Beat one was set by hand (Resync): following audio keeps the tempo and the grid on the kicks, but no longer
+    /// moves the bar to the loudest beat.
+    pub bar_by_hand: bool,
 }
 
 impl Clock {
     pub fn new(bpm: f32) -> Self {
-        Self { bpm, follow_audio: true, follow_midi: true, anchor: 0.0, taps: Vec::new(), last_beat: 0, downbeat: Downbeat::default() }
+        Self { bpm, follow_audio: true, follow_midi: true, anchor: 0.0, taps: Vec::new(), last_beat: 0, downbeat: Downbeat::default(), bar_by_hand: false }
     }
 
     pub fn beats(&self, now: f64) -> f64 {
@@ -74,7 +77,7 @@ impl Clock {
     /// the accent and, once it's clear, moves the bar so that beat is beat one (whole beats only, so the
     /// beat grid itself doesn't move). Quantised launches and Auto show then land on real downbeats.
     pub fn on_audio_downbeat(&mut self, now: f64, bass: f32) {
-        if !self.follow_audio {
+        if !self.follow_audio || self.bar_by_hand {
             return;
         }
         // Only kicks that sit on a beat count; syncopated hits between beats say nothing about the bar.
@@ -107,9 +110,12 @@ impl Clock {
         self.anchor = now - beats * 60.0 / self.bpm.max(1.0) as f64;
     }
 
-    /// Realigns beat zero to now without changing the tempo.
+    /// Realigns beat zero to now without changing the tempo. You've said where beat one is, so following audio stops
+    /// moving the bar (it used to move it back to the loudest beat a few bars later, undoing Resync).
     pub fn resync(&mut self, now: f64) {
         self.anchor = now;
+        self.downbeat = Downbeat::default();
+        self.bar_by_hand = true;
         self.last_beat = 0;
     }
 }
@@ -323,6 +329,29 @@ impl Downbeat {
 #[cfg(test)]
 mod downbeat_tests {
     use super::Downbeat;
+
+    /// Following audio with the accent learned on beat 3: Resync makes now beat one, and the learner doesn't put the
+    /// bar back where it was on the next kicks.
+    #[test]
+    fn resync_sticks_while_following_audio() {
+        let mut c = super::Clock::new(120.0);
+        c.follow_audio = true;
+        // 32 beats (0.5 s each) with the strong kick on beat 3 of each bar: the bar moves so that beat is beat one.
+        for i in 0..32 {
+            let t = i as f64 * 0.5;
+            c.on_audio_downbeat(t, if i % 4 == 2 { 1.0 } else { 0.2 });
+        }
+        // Resync on a beat that's a weak one in that pattern.
+        let now = 32.0 * 0.5 + 0.5;
+        c.resync(now);
+        assert_eq!(c.beat_in_bar(now + 0.01), 0);
+        // 16 bars more of the same music (the learner would have moved the bar back within a few): still where you put it.
+        for i in 1..=64 {
+            let t = now + i as f64 * 0.5;
+            c.on_audio_downbeat(t, if (i + 33) % 4 == 2 { 1.0 } else { 0.2 });
+        }
+        assert_eq!(c.beat_in_bar(now + 32.0 + 0.01), 0, "the bar stayed where Resync put it");
+    }
 
     #[test]
     fn accent_on_beat_three_moves_the_bar() {

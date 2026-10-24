@@ -619,7 +619,13 @@ impl State {
                     l.resync();
                 }
             }
-            A::FollowAudio => self.clock.follow_audio = if v == FLIP { !self.clock.follow_audio } else { press },
+            A::FollowAudio => {
+                self.clock.follow_audio = if v == FLIP { !self.clock.follow_audio } else { press };
+                // AUTO on again: the music decides where beat one is again.
+                if self.clock.follow_audio {
+                    self.clock.bar_by_hand = false;
+                }
+            }
             A::AudioGain => self.audio.gain = unit_to(v, 0.1, 10.0, true),
             A::KickThreshold => self.audio.beats.sensitivity = unit_to(v, 1.1, 3.0, false),
             A::CueGo if press => self.cue_next(now),
