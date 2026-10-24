@@ -24,7 +24,7 @@ pub(crate) fn tool_window(ctx: &egui::Context, title: &str, open: &mut bool, det
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(title).strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(format!("{} Dock back", icon::ARROW_SQUARE_IN)).clicked() {
+                        if crate::ui::small_command(ui, format!("{} Dock back", icon::ARROW_SQUARE_IN)).clicked() {
                             dock_back = true;
                         }
                     });
@@ -47,7 +47,7 @@ pub(crate) fn tool_window(ctx: &egui::Context, title: &str, open: &mut bool, det
     let mut still_open = true;
     egui::Window::new(title).open(&mut still_open).collapsible(false).resizable(true).default_width(width).show(ctx, |ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-            if ui.small_button(icon::ARROW_SQUARE_OUT).on_hover_text("Open in its own window (drag it to another screen)").clicked() {
+            if crate::ui::small_command(ui, icon::ARROW_SQUARE_OUT).on_hover_text("Open in its own window (drag it to another screen)").clicked() {
                 *detached = true;
             }
         });

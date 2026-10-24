@@ -32,7 +32,7 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
     let mut action = None;
     ui.horizontal(|ui| {
         ui.add(egui::TextEdit::singleline(name).hint_text(format!("Name this {what}")).desired_width(180.0));
-        if ui.button(label(icon::FLOPPY_DISK, &format!("Save {what}"))).clicked() {
+        if crate::ui::command(ui, label(icon::FLOPPY_DISK, &format!("Save {what}"))).clicked() {
             let json = current();
             if json.is_empty() {
                 action = Some(SaveAction::Error(format!("Nothing to save: select a {what} first")));
@@ -48,7 +48,7 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
         ui.label(RichText::new("Built in").strong());
         for p in builtins {
             ui.horizontal(|ui| {
-                if ui.button("Load").clicked() {
+                if crate::ui::command(ui, "Load").clicked() {
                     action = Some(SaveAction::Load(p.json.clone()));
                 }
                 ui.label(&p.name);
@@ -63,12 +63,12 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
     let mut delete = None;
     for p in &store.user {
         ui.horizontal(|ui| {
-            if ui.button("Load").clicked() {
+            if crate::ui::command(ui, "Load").clicked() {
                 action = Some(SaveAction::Load(p.json.clone()));
             }
             ui.label(&p.name);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button(icon::TRASH).on_hover_text(format!("Delete this {what}")).clicked() {
+                if crate::ui::small_command(ui, icon::TRASH).on_hover_text(format!("Delete this {what}")).clicked() {
                     delete = Some(p.name.clone());
                 }
             });

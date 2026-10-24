@@ -96,7 +96,7 @@ impl PhosphorApp {
             ui.add_space(6.0);
             match progress {
                 None => {
-                    if ui.button(RichText::new(format!("{} Convert", icon::FILM_STRIP)).strong()).clicked() {
+                    if crate::ui::command(ui, RichText::new(format!("{} Convert", icon::FILM_STRIP)).strong()).clicked() {
                         c.progress = Some(crate::convert::start(crate::convert::Job { src: c.src.clone(), format: c.format, quality: c.quality, size: c.size, probe: probe.clone() }));
                         c.swapped = false;
                     }
@@ -109,7 +109,7 @@ impl PhosphorApp {
                 Some(p) => match &p.error {
                     Some(e) => {
                         ui.colored_label(theme::WARN, e);
-                        if ui.button("Try again").clicked() {
+                        if crate::ui::command(ui, "Try again").clicked() {
                             c.progress = None;
                         }
                     }
@@ -122,10 +122,10 @@ impl PhosphorApp {
                             done_output = Some(p.output.clone());
                         }
                         ui.horizontal(|ui| {
-                            if ui.button(crate::ui::label(icon::FOLDER_OPEN, "Show the file")).clicked() {
+                            if crate::ui::command(ui, crate::ui::label(icon::FOLDER_OPEN, "Show the file")).clicked() {
                                 crate::os::reveal(&p.output);
                             }
-                            if ui.button("Convert another way").clicked() {
+                            if crate::ui::command(ui, "Convert another way").clicked() {
                                 c.progress = None;
                             }
                         });

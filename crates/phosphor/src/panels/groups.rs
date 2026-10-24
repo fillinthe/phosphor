@@ -30,7 +30,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             let caret = if g.collapsed { icon::CARET_RIGHT } else { icon::CARET_DOWN };
-            if ui.small_button(caret).on_hover_text(if g.collapsed { "Show the group's layers" } else { "Fold the group's layers away" }).clicked() {
+            if crate::ui::small_command(ui, caret).on_hover_text(if g.collapsed { "Show the group's layers" } else { "Fold the group's layers away" }).clicked() {
                 g.collapsed = !g.collapsed;
             }
             let r = thumbnail(ui, thumb, egui::vec2(80.0, 80.0 / aspect), g.enabled).on_hover_text("Click to select · double-click to toggle");
@@ -55,10 +55,10 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
                         select = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(icon::ARROW_DOWN).on_hover_text("Move the group down").clicked() {
+                        if crate::ui::small_command(ui, icon::ARROW_DOWN).on_hover_text("Move the group down").clicked() {
                             action = Some(GroupAction::Down);
                         }
-                        if ui.small_button(icon::ARROW_UP).on_hover_text("Move the group up").clicked() {
+                        if crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Move the group up").clicked() {
                             action = Some(GroupAction::Up);
                         }
                     });
@@ -84,34 +84,34 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
         select = true;
     }
     resp.right_menu(|ui| {
-        if ui.button(label(icon::MAGIC_WAND, "Add effect to the group…")).clicked() {
+        if crate::ui::command(ui, label(icon::MAGIC_WAND, "Add effect to the group…")).clicked() {
             action = Some(GroupAction::BrowseEffects);
             ui.close();
         }
-        if ui.button(label(icon::MONITOR, "Preview in a window")).clicked() {
+        if crate::ui::command(ui, label(icon::MONITOR, "Preview in a window")).clicked() {
             request_preview(ui, MonitorSource::Group(g.id));
             ui.close();
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::CAMERA, "Save a picture…")).on_hover_text("This group's picture now, at the canvas size, as a PNG").clicked() {
+        if crate::ui::command(ui, label(icon::CAMERA, "Save a picture…")).on_hover_text("This group's picture now, at the canvas size, as a PNG").clicked() {
             super::request_snapshot(ui, g.id);
             ui.close();
         }
         ui.separator();
-        if ui.button(label(icon::ARROW_UP, "Move up")).clicked() {
+        if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {
             action = Some(GroupAction::Up);
             ui.close();
         }
-        if ui.button(label(icon::ARROW_DOWN, "Move down")).clicked() {
+        if crate::ui::command(ui, label(icon::ARROW_DOWN, "Move down")).clicked() {
             action = Some(GroupAction::Down);
             ui.close();
         }
         ui.separator();
-        if ui.button(label(icon::SELECTION_SLASH, "Ungroup (keep the layers)")).clicked() {
+        if crate::ui::command(ui, label(icon::SELECTION_SLASH, "Ungroup (keep the layers)")).clicked() {
             action = Some(GroupAction::Ungroup);
             ui.close();
         }
-        if ui.button(label(icon::TRASH, "Delete group and its layers")).clicked() {
+        if crate::ui::command(ui, label(icon::TRASH, "Delete group and its layers")).clicked() {
             action = Some(GroupAction::Delete);
             ui.close();
         }

@@ -30,7 +30,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
         if edit {
             ui.menu_button(label(icon::PLUS, "Add"), |ui| {
                 for &kind in <WidgetKind as phosphor_engine::Choice>::OPTIONS {
-                    if ui.button(phosphor_engine::Choice::label(kind)).clicked() {
+                    if crate::ui::command(ui, phosphor_engine::Choice::label(kind)).clicked() {
                         selected = Some(st.comp.surface.add(kind));
                         ui.close();
                     }
@@ -216,7 +216,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
                         learn_items(ui, &ControlTarget::SurfaceY(wid));
                     }
                     ui.separator();
-                    if ui.button(label(icon::PENCIL_SIMPLE, "Edit widget…")).clicked() {
+                    if crate::ui::command(ui, label(icon::PENCIL_SIMPLE, "Edit widget…")).clicked() {
                         open_editor = Some(wid);
                         ui.close();
                     }
@@ -483,7 +483,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                     if let Some(picked) = target_picker(ui, ("computed_in", id, i), targets, Some(t), 220.0) {
                         *t = picked;
                     }
-                    if ui.small_button(icon::X).on_hover_text("Remove").clicked() {
+                    if crate::ui::small_command(ui, icon::X).on_hover_text("Remove").clicked() {
                         remove = Some(i);
                     }
                 });
@@ -567,8 +567,8 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     }
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        duplicate = ui.button(label(icon::COPY, "Duplicate")).clicked();
-        delete = ui.button(label(icon::TRASH, "Delete")).clicked();
+        duplicate = crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked();
+        delete = crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked();
     });
     if duplicate {
         st.comp.surface.duplicate(id);
@@ -603,14 +603,14 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
                 r.right_menu(|ui| {
                     ui.label(RichText::new("Page name").small());
                     ui.text_edit_singleline(&mut sf.pages[i]);
-                    if sf.pages.len() > 1 && ui.button(label(icon::TRASH, "Delete page and its widgets")).clicked() {
+                    if sf.pages.len() > 1 && crate::ui::command(ui, label(icon::TRASH, "Delete page and its widgets")).clicked() {
                         remove = Some(i);
                         ui.close();
                     }
                 });
             }
         }
-        if edit && ui.small_button(label(icon::PLUS, "Page")).on_hover_text("Add a page (right-click a page to rename or delete it)").clicked() {
+        if edit && crate::ui::small_command(ui, label(icon::PLUS, "Page")).on_hover_text("Add a page (right-click a page to rename or delete it)").clicked() {
             sf.add_page();
         }
     });

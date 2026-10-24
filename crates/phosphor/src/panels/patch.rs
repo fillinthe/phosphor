@@ -122,7 +122,7 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
         // Saved (and recompiled) once, when the block is let go.
         changed |= t.drag_stopped();
         t.context_menu(|ui| {
-            if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+            if crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
                 duplicate = Some(n.id);
                 ui.close();
             }
@@ -212,7 +212,7 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
         for g in Group::ALL.into_iter().filter(|g| *g != Group::Output) {
             ui.menu_button(g.name(), |ui| {
                 for b in BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator)) {
-                    if ui.button(b.name).on_hover_text(b.about).clicked() {
+                    if crate::ui::command(ui, b.name).on_hover_text(b.about).clicked() {
                         let at: [f32; 2] = ui.ctx().data(|d| d.get_temp(id.with("add_at"))).unwrap_or([40.0, 40.0]);
                         patch.add(b.id, at);
                         changed = true;
@@ -221,7 +221,7 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
                 }
             });
         }
-        if !patch.nodes.iter().any(|n| n.block == "output") && ui.button("Output").clicked() {
+        if !patch.nodes.iter().any(|n| n.block == "output") && crate::ui::command(ui, "Output").clicked() {
             patch.add("output", [400.0, 40.0]);
             changed = true;
             ui.close();

@@ -66,10 +66,10 @@ impl PhosphorApp {
                                 crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
                             }
                             ui.horizontal(|ui| {
-                                if ui.button(label_text(icon::FOLDER_OPEN, if cfg!(windows) { "Show in Explorer" } else { "Show in Finder" })).clicked() {
+                                if crate::ui::command(ui, label_text(icon::FOLDER_OPEN, if cfg!(windows) { "Show in Explorer" } else { "Show in Finder" })).clicked() {
                                     crate::os::reveal(app);
                                 }
-                                if ui.button("Export again").clicked() {
+                                if crate::ui::command(ui, "Export again").clicked() {
                                     st.export.progress = None;
                                     st.export.summary = None;
                                 }
@@ -77,7 +77,7 @@ impl PhosphorApp {
                         }
                         if let Some(e) = &p.error {
                             ui.colored_label(egui::Color32::from_rgb(255, 120, 90), e);
-                            if p.output.is_none() && ui.button("Try again").clicked() {
+                            if p.output.is_none() && crate::ui::command(ui, "Try again").clicked() {
                                 st.export.progress = None;
                             }
                         }

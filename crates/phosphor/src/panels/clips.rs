@@ -71,18 +71,18 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
     if filled {
         crate::ui::text_field(ui, &mut layer.clip_slot_mut(c).name, "clip name", None);
         ui.horizontal_wrapped(|ui| {
-            if ui.button(label(icon::PLAY, "Trigger")).clicked() {
+            if crate::ui::command(ui, label(icon::PLAY, "Trigger")).clicked() {
                 act = Some(ClipAct::Trigger);
             }
             let target = ControlTarget::TriggerClip { layer: layer.id, slot: c };
             ui.menu_button(label(icon::PLUG, "Map…"), |ui| learn_items(ui, &target)).response.on_hover_text("Trigger it from a MIDI pad, a key or OSC");
             if is_movie
-                && ui.button(label(icon::MAGIC_WAND, "Match the beat")).on_hover_text("Scan this movie's motion for its rhythm; the clip then starts on its first hit and is stretched so every hit lands on a beat").clicked()
+                && crate::ui::command(ui, label(icon::MAGIC_WAND, "Match the beat")).on_hover_text("Scan this movie's motion for its rhythm; the clip then starts on its first hit and is stretched so every hit lands on a beat").clicked()
             {
                 act = Some(ClipAct::MatchBeat);
             }
             #[cfg(not(target_arch = "wasm32"))]
-            if ui.button(label(icon::IMAGE, "Use this picture")).on_hover_text("The layer's picture right now becomes this clip's picture in the grid (right-click again for a new one)").clicked() {
+            if crate::ui::command(ui, label(icon::IMAGE, "Use this picture")).on_hover_text("The layer's picture right now becomes this clip's picture in the grid (right-click again for a new one)").clicked() {
                 act = Some(ClipAct::Thumbnail);
             }
         });
@@ -106,7 +106,7 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
         ui.separator();
     }
     ui.horizontal_wrapped(|ui| {
-        if ui.button("Store the layer's current source here").clicked() {
+        if crate::ui::command(ui, "Store the layer's current source here").clicked() {
             act = Some(ClipAct::StoreCurrent);
         }
         if filled && crate::ui::danger_button(ui, "Clear slot").clicked() {
@@ -156,14 +156,14 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let aspect = st.aspect();
     ui.horizontal_wrapped(|ui| {
-        let tap = ui.button(label(icon::METRONOME, "Tap")).on_hover_text("Tap 3+ times to set the tempo");
+        let tap = crate::ui::command(ui, label(icon::METRONOME, "Tap")).on_hover_text("Tap 3+ times to set the tempo");
         map_menu(ui, &tap, ControlTarget::App(phosphor_engine::AppControl::TapTempo));
         if tap.clicked() {
             st.clock.tap(now);
         }
         let bpm = guarded!(ui, st.clock.bpm, egui::DragValue::new(&mut st.clock.bpm).range(40.0..=300.0).speed(0.5).suffix(" bpm"));
         map_menu(ui, &bpm, ControlTarget::App(phosphor_engine::AppControl::Tempo));
-        let resync = ui.button("Resync").on_hover_text("Beat 1 = now");
+        let resync = crate::ui::command(ui, "Resync").on_hover_text("Beat 1 = now");
         map_menu(ui, &resync, ControlTarget::App(phosphor_engine::AppControl::Resync));
         if resync.clicked() {
             st.clock.resync(now);
@@ -221,7 +221,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
         } else {
-            if ui.small_button(icon::CARET_LEFT).clicked() {
+            if crate::ui::small_command(ui, icon::CARET_LEFT).clicked() {
                 st.clip_page = st.clip_page.saturating_sub(1);
             }
             ComboBox::from_id_salt("clip_bank").width(60.0).selected_text(bank_name(st.clip_page)).height(400.0).show_ui(ui, |ui| {
@@ -230,13 +230,13 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     crate::ui::pick_value(ui, &mut st.clip_page, i, format!("{}  ({first}–{})", bank_name(i), first + CLIP_PAGE_SIZE - 1));
                 }
             });
-            if ui.small_button(icon::CARET_RIGHT).clicked() {
+            if crate::ui::small_command(ui, icon::CARET_RIGHT).clicked() {
                 st.clip_page = (st.clip_page + 1).min(banks - 1);
             }
             hint(ui, format!("of {banks}"));
         }
         ui.separator();
-        if ui.button(label(icon::PLUS, "Column")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Column")).clicked() {
             st.comp.clip_columns += 1;
         }
         hint(ui, "Keys 1–9 trigger the lit bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
@@ -573,12 +573,12 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         ui.menu_button(RichText::new(name).color(ui.visuals().text_color()), |ui| {
             ui.set_min_width(220.0);
             let q = crate::app::Quick::Fill;
-            if ui.button(format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
+            if crate::ui::command(ui, format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
                 fill = true;
                 ui.close();
             }
             if layer.clips.iter().any(|c| matches!(c.source, SourceSpec::Movie { path: Some(_), .. }))
-                && ui.button(label(icon::MAGIC_WAND, "Match the beat of every movie here")).on_hover_text("Scans each movie clip in this row for its rhythm and locks it to the tempo").clicked()
+                && crate::ui::command(ui, label(icon::MAGIC_WAND, "Match the beat of every movie here")).on_hover_text("Scans each movie clip in this row for its rhythm and locks it to the tempo").clicked()
             {
                 beat_all = true;
                 ui.close();
@@ -593,7 +593,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
                 guarded!(ui, c1, egui::DragValue::new(&mut c1).range(1..=16).prefix("ch "));
                 ch = c1 - 1;
                 guarded!(ui, note, egui::DragValue::new(&mut note).range(0..=127).prefix("from note "));
-                if ui.button("Map the row").clicked() {
+                if crate::ui::command(ui, "Map the row").clicked() {
                     row_midi = Some(RowAct::Map(ch, note));
                     ui.close();
                 }
@@ -602,23 +602,23 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             ui.horizontal(|ui| {
                 ui.label("Shift its notes");
                 for by in [-8, -1, 1, 8] {
-                    if ui.small_button(format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
+                    if crate::ui::small_command(ui, format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
                         row_midi = Some(RowAct::Shift(by));
                     }
                 }
             });
             #[cfg(not(target_arch = "wasm32"))]
             ui.horizontal(|ui| {
-                if ui.button(label(icon::EXPORT, "Export clips…")).on_hover_text("Save this row's clips and their settings as a bank file").clicked() {
+                if crate::ui::command(ui, label(icon::EXPORT, "Export clips…")).on_hover_text("Save this row's clips and their settings as a bank file").clicked() {
                     row_midi = Some(RowAct::ExportBank);
                     ui.close();
                 }
-                if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import…")).on_hover_text("Replace this row's clips with a saved bank").clicked() {
+                if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Import…")).on_hover_text("Replace this row's clips with a saved bank").clicked() {
                     row_midi = Some(RowAct::ImportBank);
                     ui.close();
                 }
             });
-            let pick = ui.button(label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
+            let pick = crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
             map_menu(ui, &pick, ControlTarget::LayerClipPick(layer.id));
             ui.separator();
             ui.label(RichText::new(format!("{} Plays on", icon::STACK)).strong());
@@ -658,7 +658,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             // Playing a collection: say which, and a one-click stop right here.
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                let r = ui.small_button(RichText::new(icon::STOP).color(accent())).on_hover_text("Stop stepping through the collection (what's showing stays)");
+                let r = crate::ui::small_command(ui, RichText::new(icon::STOP).color(accent())).on_hover_text("Stop stepping through the collection (what's showing stays)");
                 if r.clicked() {
                     layer.collection = None;
                 }

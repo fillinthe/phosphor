@@ -19,7 +19,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
     let mut action: Option<FxAction> = None;
     ui.horizontal(|ui| {
         ui.label(RichText::new("Effects").strong());
-        let add = ui.button(label(icon::PLUS, "Add effect")).on_hover_text("Browse effects with previews");
+        let add = crate::ui::command(ui, label(icon::PLUS, "Add effect")).on_hover_text("Browse effects with previews");
         if add.clicked() {
             action = Some(FxAction::Browse(Some(add.rect.left_bottom())));
         }
@@ -58,25 +58,25 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                 on.right_menu(|ui| {
                     learn_items(ui, &ControlTarget::EffectEnabled(fx.id));
                     ui.separator();
-                    if ui.button(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset all controls")).clicked() {
+                    if crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Reset all controls")).clicked() {
                         fx.values = desc.defaults();
                         fx.mods.clear();
                         fx.mix = 1.0;
                         ui.close();
                     }
-                    if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+                    if crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
                         duplicate = Some(i);
                         ui.close();
                     }
-                    if ui.button(label(icon::ARROW_UP, "Earlier in the chain")).clicked() && i > 0 {
+                    if crate::ui::command(ui, label(icon::ARROW_UP, "Earlier in the chain")).clicked() && i > 0 {
                         swap = Some((i, i - 1));
                         ui.close();
                     }
-                    if ui.button(label(icon::ARROW_DOWN, "Later in the chain")).clicked() && i + 1 < count {
+                    if crate::ui::command(ui, label(icon::ARROW_DOWN, "Later in the chain")).clicked() && i + 1 < count {
                         swap = Some((i, i + 1));
                         ui.close();
                     }
-                    if ui.button(label(icon::TRASH, "Remove")).clicked() {
+                    if crate::ui::command(ui, label(icon::TRASH, "Remove")).clicked() {
                         remove = Some(i);
                         ui.close();
                     }
@@ -85,20 +85,20 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                     hint(ui, format!("{:.0}%", fx.mix * 100.0));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button(icon::TRASH).on_hover_text("Remove effect").clicked() {
+                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove effect").clicked() {
                         remove = Some(i);
                     }
-                    if ui.small_button(icon::ARROW_DOWN).on_hover_text("Later in the chain").clicked() && i + 1 < count {
+                    if crate::ui::small_command(ui, icon::ARROW_DOWN).on_hover_text("Later in the chain").clicked() && i + 1 < count {
                         swap = Some((i, i + 1));
                     }
-                    if ui.small_button(icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() && i > 0 {
+                    if crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() && i > 0 {
                         swap = Some((i, i - 1));
                     }
                     // Before / after: the picture without this one effect while the button is held.
                     let key = egui::Id::new(("fx_compare", fx.id));
                     let was: Option<bool> = ui.ctx().data(|d| d.get_temp(key));
                     if fx.enabled || was.is_some() {
-                        let held = ui.small_button(icon::EYE_SLASH).on_hover_text("Hold to see the picture without this effect").is_pointer_button_down_on();
+                        let held = crate::ui::small_command(ui, icon::EYE_SLASH).on_hover_text("Hold to see the picture without this effect").is_pointer_button_down_on();
                         match (held, was) {
                             (true, None) => {
                                 ui.ctx().data_mut(|d| d.insert_temp(key, fx.enabled));

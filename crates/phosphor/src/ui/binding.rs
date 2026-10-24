@@ -133,7 +133,7 @@ pub(crate) fn binding_list(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + st
                 b.target = t;
             }
             range_editor(ui, &mut b.range);
-            if ui.small_button(icon::TRASH).on_hover_text("Remove").clicked() {
+            if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove").clicked() {
                 remove = Some(i);
             }
         });

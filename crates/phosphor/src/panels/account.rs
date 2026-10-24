@@ -38,10 +38,10 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
         ui.label(&user.email);
         let plan = if a.pro() { RichText::new("Pro").color(accent()).strong() } else { RichText::new("Free").color(Color32::GRAY) };
         ui.label(plan);
-        if ui.small_button("Account page").clicked() {
+        if crate::ui::small_command(ui, "Account page").clicked() {
             a.open_web(&ctx, "/account/");
         }
-        if !Account::web() && ui.small_button("Sign out").clicked() {
+        if !Account::web() && crate::ui::small_command(ui, "Sign out").clicked() {
             a.sign_out(&ctx);
         }
     });
@@ -51,7 +51,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
         ui.add(crate::ui::meter(frac).desired_height(6.0).fill(accent().gamma_multiply(0.6)));
         ui.horizontal(|ui| {
             hint(ui, format!("{:.1} MB of {} MB used · your layouts are kept here too", used as f64 / 1_048_576.0, max >> 20));
-            if !a.pro() && ui.small_button(label(icon::STAR, "More space")).on_hover_text("Phosphor Pro: 1 GB").clicked() {
+            if !a.pro() && crate::ui::small_command(ui, label(icon::STAR, "More space")).on_hover_text("Phosphor Pro: 1 GB").clicked() {
                 a.open_web(&ctx, "/#pricing");
             }
         });
@@ -68,15 +68,15 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
         let name = f.name.trim().to_string();
         match cloud_project.clone() {
             Some((id, _)) => {
-                if ui.button(label(icon::CLOUD_ARROW_UP, "Save")).on_hover_text("Replace the copy in your account").clicked() && !name.is_empty() {
+                if crate::ui::command(ui, label(icon::CLOUD_ARROW_UP, "Save")).on_hover_text("Replace the copy in your account").clicked() && !name.is_empty() {
                     a.save(&ctx, &id, &name, &comp.to_json());
                 }
-                if ui.button("Save as new").clicked() && !name.is_empty() {
+                if crate::ui::command(ui, "Save as new").clicked() && !name.is_empty() {
                     a.save(&ctx, "", &name, &comp.to_json());
                 }
             }
             None => {
-                if ui.button(label(icon::CLOUD_ARROW_UP, "Save to account")).clicked() && !name.is_empty() {
+                if crate::ui::command(ui, label(icon::CLOUD_ARROW_UP, "Save to account")).clicked() && !name.is_empty() {
                     a.save(&ctx, "", &name, &comp.to_json());
                 }
             }
@@ -92,7 +92,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
         for p in &a.projects {
             let current = cloud_project.as_ref().is_some_and(|(id, _)| *id == p.id);
             ui.horizontal(|ui| {
-                if ui.button(label(icon::FOLDER_OPEN, "Open")).clicked() {
+                if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Open")).clicked() {
                     open = Some(p.id.clone());
                 }
                 let name = if current { RichText::new(&p.name).color(accent()) } else { RichText::new(&p.name) };
@@ -101,7 +101,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let armed = f.confirm_delete.as_deref() == Some(p.id.as_str());
                     let text = if armed { RichText::new("Delete for good?").color(WARN) } else { RichText::new(icon::TRASH) };
-                    if ui.small_button(text).on_hover_text("Delete from your account (click twice)").clicked() {
+                    if crate::ui::small_command(ui, text).on_hover_text("Delete from your account (click twice)").clicked() {
                         if armed {
                             delete = Some(p.id.clone());
                         } else {
@@ -127,7 +127,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
 fn sign_in_form(ui: &mut egui::Ui, ctx: &egui::Context, a: &mut Account, f: &mut AccountUi) {
     if Account::web() {
         ui.label("Sign in on phosphorfx.com to use your account.");
-        if ui.button("Sign in").clicked() {
+        if crate::ui::command(ui, "Sign in").clicked() {
             a.open_web(ctx, "/signin/?next=/app/");
         }
         return;
@@ -147,7 +147,7 @@ fn sign_in_form(ui: &mut egui::Ui, ctx: &egui::Context, a: &mut Account, f: &mut
         }
         let enter = pw.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         ui.label("");
-        if (ui.button("Sign in").clicked() || enter) && !f.email.trim().is_empty() && !f.password.is_empty() {
+        if (crate::ui::command(ui, "Sign in").clicked() || enter) && !f.email.trim().is_empty() && !f.password.is_empty() {
             a.sign_in(ctx, &f.email, &f.password, &f.code);
             f.password.clear();
         }

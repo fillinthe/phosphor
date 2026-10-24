@@ -29,26 +29,26 @@ pub(crate) fn comp_tabs(ui: &mut egui::Ui, st: &mut State) {
                             ui.close();
                         }
                     });
-                    if ui.button(label(icon::SLIDERS_HORIZONTAL, "Settings (size, opacity, effects)")).clicked() {
+                    if crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Settings (size, opacity, effects)")).clicked() {
                         act = Some(CompAct::Select(*id));
                         ui.close();
                     }
-                    if ui.button(label(icon::MONITOR, "Preview in a window")).clicked() {
+                    if crate::ui::command(ui, label(icon::MONITOR, "Preview in a window")).clicked() {
                         request_preview(ui, MonitorSource::Group(*id));
                         ui.close();
                     }
                     #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button(label(icon::CAMERA, "Save a picture…")).on_hover_text("This comp's picture now, as a PNG").clicked() {
+                    if crate::ui::command(ui, label(icon::CAMERA, "Save a picture…")).on_hover_text("This comp's picture now, as a PNG").clicked() {
                         super::request_snapshot(ui, *id);
                         ui.close();
                     }
                     if many {
                         ui.separator();
-                        if ui.button(label(icon::ARROW_LEFT, "Earlier (further down in the master)")).clicked() {
+                        if crate::ui::command(ui, label(icon::ARROW_LEFT, "Earlier (further down in the master)")).clicked() {
                             act = Some(CompAct::Move(*id, false));
                             ui.close();
                         }
-                        if ui.button(label(icon::ARROW_RIGHT, "Later (on top in the master)")).clicked() {
+                        if crate::ui::command(ui, label(icon::ARROW_RIGHT, "Later (on top in the master)")).clicked() {
                             act = Some(CompAct::Move(*id, true));
                             ui.close();
                         }
@@ -63,7 +63,7 @@ pub(crate) fn comp_tabs(ui: &mut egui::Ui, st: &mut State) {
             });
             st.comp.open_comp = Some(open);
         }
-        if ui.small_button(label(icon::PLUS, "Comp")).on_hover_text(add_tip).clicked() {
+        if crate::ui::small_command(ui, label(icon::PLUS, "Comp")).on_hover_text(add_tip).clicked() {
             let n = st.comp.comps.len().max(1) + 1;
             let id = st.comp.add_comp(&format!("Comp {n}"));
             st.selected = Some(id);
@@ -101,7 +101,7 @@ pub(crate) fn move_to_comp_menu(ui: &mut egui::Ui, others: &[(u64, String)]) -> 
     let mut picked = None;
     ui.menu_button(label(icon::FRAME_CORNERS, "Move to comp"), |ui| {
         for (id, name) in others {
-            if ui.button(name).clicked() {
+            if crate::ui::command(ui, name).clicked() {
                 picked = Some(*id);
                 ui.close();
             }

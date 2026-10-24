@@ -113,7 +113,7 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
             ui.colored_label(WARN, "Needs yt-dlp (free): in Terminal, brew install yt-dlp, or get it from github.com/yt-dlp/yt-dlp (put it in Phosphor's bin folder).");
         }
         if let Some(d) = crate::web_media::downloads_dir()
-            && ui.small_button(label(icon::FOLDER_OPEN, "Downloads folder")).clicked()
+            && crate::ui::small_command(ui, label(icon::FOLDER_OPEN, "Downloads folder")).clicked()
         {
             let _ = std::fs::create_dir_all(&d);
             crate::os::open(&d);

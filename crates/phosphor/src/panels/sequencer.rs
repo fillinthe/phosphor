@@ -49,19 +49,19 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
                 toggle(ui, &mut track.glide, "Glide").on_hover_text("Slide from one step to the next");
             }
         }
-        if ui.small_button(icon::ARROW_LEFT).on_hover_text("Shift the pattern one step earlier").clicked() {
+        if crate::ui::small_command(ui, icon::ARROW_LEFT).on_hover_text("Shift the pattern one step earlier").clicked() {
             track.shift(-1);
         }
-        if ui.small_button(icon::ARROW_RIGHT).on_hover_text("Shift the pattern one step later").clicked() {
+        if crate::ui::small_command(ui, icon::ARROW_RIGHT).on_hover_text("Shift the pattern one step later").clicked() {
             track.shift(1);
         }
-        if ui.button(label(icon::DICE_FIVE, "Random")).clicked() {
+        if crate::ui::command(ui, label(icon::DICE_FIVE, "Random")).clicked() {
             track.randomize(seed);
         }
-        if ui.button("Clear").clicked() {
+        if crate::ui::command(ui, "Clear").clicked() {
             track.steps.iter_mut().for_each(|s| *s = 0.0);
         }
-        if ui.small_button("Plain signal").on_hover_text("Back to an ordinary signal (LFO, audio…)").clicked() {
+        if crate::ui::small_command(ui, "Plain signal").on_hover_text("Back to an ordinary signal (LFO, audio…)").clicked() {
             back_to_signal = true;
         }
     });
@@ -103,7 +103,7 @@ pub(crate) fn colour_targets(ui: &mut egui::Ui, id: impl std::hash::Hash + std::
     for (i, t) in paint.iter().enumerate() {
         ui.horizontal(|ui| {
             ui.label(reds.iter().find(|(r, _)| r == t).map_or("(removed)", |(_, n)| n.as_str()));
-            if ui.small_button(icon::X).on_hover_text("Stop painting this one").clicked() {
+            if crate::ui::small_command(ui, icon::X).on_hover_text("Stop painting this one").clicked() {
                 remove = Some(i);
             }
         });

@@ -28,7 +28,7 @@ fn permissions(ui: &mut egui::Ui) {
                 Status::Denied | Status::Restricted => (icon::WARNING, Color32::from_rgb(230, 160, 60)),
             };
             ui.label(RichText::new(format!("{glyph} {}", status.label())).color(color));
-            if *status != Status::Allowed && ui.small_button("System Settings…").on_hover_text("Open the page where you can allow it").clicked() {
+            if *status != Status::Allowed && crate::ui::small_command(ui, "System Settings…").on_hover_text("Open the page where you can allow it").clicked() {
                 crate::os::open(settings.as_str());
             }
             ui.end_row();
@@ -78,10 +78,10 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                     }
                     hint(ui, ago(p.since));
                     ui.horizontal(|ui| {
-                        if ui.small_button("Disconnect").on_hover_text("Drops it now; it can reconnect").clicked() {
+                        if crate::ui::small_command(ui, "Disconnect").on_hover_text("Drops it now; it can reconnect").clicked() {
                             st.net.disconnect(p.id);
                         }
-                        if ui.small_button(label(icon::PROHIBIT, "Block")).on_hover_text("Drops everything from this address and refuses it until unblocked").clicked() {
+                        if crate::ui::small_command(ui, label(icon::PROHIBIT, "Block")).on_hover_text("Drops everything from this address and refuses it until unblocked").clicked() {
                             st.net.block(&p.ip);
                         }
                     });
@@ -92,7 +92,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Changes from the web").small().strong());
-                    if ui.small_button("Clear").clicked() {
+                    if crate::ui::small_command(ui, "Clear").clicked() {
                         st.web_log.clear();
                     }
                 });
@@ -114,7 +114,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                 for ip in blocked {
                     ui.horizontal(|ui| {
                         ui.monospace(&ip);
-                        if ui.small_button("Unblock").clicked() {
+                        if crate::ui::small_command(ui, "Unblock").clicked() {
                             st.net.unblock(&ip);
                         }
                     });
@@ -126,7 +126,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         // MIDI inputs.
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("{} MIDI inputs", icon::PIANO_KEYS)).strong());
-            if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+            if crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
                 st.control.reconnect();
             }
         });
@@ -203,7 +203,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| {
                     ui.label(&p.name);
                     hint(ui, format!("OSC {}:{}{}", p.address, p.port, if p.version.is_empty() { String::new() } else { format!(" · {}", p.version) }));
-                    if ui.small_button(icon::COPY).on_hover_text("Copy its OSC address (to send it cues or values)").clicked() {
+                    if crate::ui::small_command(ui, icon::COPY).on_hover_text("Copy its OSC address (to send it cues or values)").clicked() {
                         ui.ctx().copy_text(format!("{}:{}", p.address, p.port));
                     }
                 });

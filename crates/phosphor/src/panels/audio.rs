@@ -31,7 +31,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
         });
-        if ui.button(icon::ARROWS_CLOCKWISE).on_hover_text("Rescan audio devices").clicked() {
+        if crate::ui::command(ui, icon::ARROWS_CLOCKWISE).on_hover_text("Rescan audio devices").clicked() {
             audio.refresh_devices();
         }
         let mut on = audio.is_open();

@@ -230,7 +230,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         if let Some(name) = layer.collection.clone() {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new(format!("{} Playing collection · {name}", icon::BOOKMARKS_SIMPLE)).strong());
-                if ui.small_button(label(icon::STOP, "Stop")).on_hover_text("Keep what's showing; stop stepping through the collection").clicked() {
+                if crate::ui::small_command(ui, label(icon::STOP, "Stop")).on_hover_text("Keep what's showing; stop stepping through the collection").clicked() {
                     layer.collection = None;
                 }
             });
@@ -282,12 +282,12 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 let at = (pos / dur.max(1e-6)) as f32;
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Section").small().color(Color32::GRAY));
-                    let r = ui.button("In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
+                    let r = crate::ui::command(ui, "In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
                     map_menu(ui, &r, ControlTarget::LayerLoopIn(layer.id));
                     if r.clicked() {
                         layer.loop_in = at.min(layer.loop_out - 0.01).max(0.0);
                     }
-                    let r = ui.button("Out").on_hover_text("Loop ends here");
+                    let r = crate::ui::command(ui, "Out").on_hover_text("Loop ends here");
                     map_menu(ui, &r, ControlTarget::LayerLoopOut(layer.id));
                     if r.clicked() {
                         layer.loop_out = at.max(layer.loop_in + 0.01).min(1.0);
@@ -300,7 +300,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                             crate::ui::pick_value(ui, &mut layer.loop_beats, b, format!("{b} beats"));
                         }
                     }).response.on_hover_text("Loop a number of beats from In, at the current tempo");
-                    if (layer.loop_in, layer.loop_out, layer.loop_beats) != (0.0, 1.0, 0.0) && ui.small_button("Clear").on_hover_text("Play the whole clip").clicked() {
+                    if (layer.loop_in, layer.loop_out, layer.loop_beats) != (0.0, 1.0, 0.0) && crate::ui::small_command(ui, "Clear").on_hover_text("Play the whole clip").clicked() {
                         (layer.loop_in, layer.loop_out, layer.loop_beats) = (0.0, 1.0, 0.0);
                     }
                 });
@@ -312,10 +312,10 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 if steady_action_button(ui, Act::Go, text, &[&pause, &play]).clicked() {
                     layer.playing = !layer.playing;
                 }
-                if ui.button(icon::ARROW_CLOCKWISE).on_hover_text("Reload: open the file again from disk (after you've changed it in another app)").clicked() {
+                if crate::ui::command(ui, icon::ARROW_CLOCKWISE).on_hover_text("Reload: open the file again from disk (after you've changed it in another app)").clicked() {
                     media.reload.set(true);
                 }
-                if ui.button(icon::SKIP_BACK).on_hover_text("Back to the start").clicked() {
+                if crate::ui::command(ui, icon::SKIP_BACK).on_hover_text("Back to the start").clicked() {
                     seek_to = Some(0.0);
                 }
                 toggle(ui, &mut layer.looping, "Loop");
@@ -331,7 +331,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     ui.label("Jump");
                     let step = layer.jump_secs(Some(dur), media.bpm);
                     for (forward, glyph, tip) in [(false, icon::REWIND, "Jump back one step"), (true, icon::FAST_FORWARD, "Jump forward one step")] {
-                        let r = ui.button(glyph).on_hover_text(tip);
+                        let r = crate::ui::command(ui, glyph).on_hover_text(tip);
                         if r.clicked() {
                             seek_to = Some(if forward { pos + step } else { pos - step }.clamp(0.0, dur));
                         }
@@ -340,7 +340,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     if !media.chapters.is_empty() {
                         ui.menu_button(label(icon::BOOKMARKS_SIMPLE, "Chapters"), |ui| {
                             for (at, title) in &media.chapters {
-                                if ui.button(format!("{}  {title}", crate::app::format_tc(*at))).clicked() {
+                                if crate::ui::command(ui, format!("{}  {title}", crate::app::format_tc(*at))).clicked() {
                                     seek_to = Some(*at);
                                     ui.close();
                                 }
@@ -349,7 +349,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     }
                     guarded!(ui, layer.jump, egui::DragValue::new(&mut layer.jump).range(0.05..=64.0).speed(0.05).max_decimals(2)).on_hover_text("How far each jump goes");
                     let unit = if layer.jump_in_seconds { "seconds" } else if layer.jump == 1.0 { "beat" } else { "beats" };
-                    if ui.small_button(unit).on_hover_text("Click: step in seconds or in beats").clicked() {
+                    if crate::ui::small_command(ui, unit).on_hover_text("Click: step in seconds or in beats").clicked() {
                         layer.jump_in_seconds = !layer.jump_in_seconds;
                     }
                 });
@@ -405,10 +405,10 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                             hint(ui, format!("no steady visual beat ({:.0}%): not locked", steady * 100.0));
                         }
                         if sync {
-                            if ui.small_button("÷2").on_hover_text("Hits every second beat (half as many beats)").clicked() {
+                            if crate::ui::small_command(ui, "÷2").on_hover_text("Hits every second beat (half as many beats)").clicked() {
                                 layer.sync_beats = (layer.sync_beats / 2.0).round().max(1.0);
                             }
-                            if ui.small_button("×2").on_hover_text("Two hits per beat (twice the beats)").clicked() {
+                            if crate::ui::small_command(ui, "×2").on_hover_text("Two hits per beat (twice the beats)").clicked() {
                                 layer.sync_beats = (layer.sync_beats * 2.0).round().min(256.0);
                             }
                         }
@@ -473,7 +473,7 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
                 if !std::path::Path::new(&d).exists() && !crate::media::sequence::exists(&d) {
                     ui.colored_label(WARN, format!("{} missing", icon::WARNING)).on_hover_text("The file isn't at this path any more: File › Find Missing Media");
                 }
-                if ui.small_button(icon::FOLDER_OPEN).on_hover_text("Show in Finder").clicked() {
+                if crate::ui::small_command(ui, icon::FOLDER_OPEN).on_hover_text("Show in Finder").clicked() {
                     crate::os::reveal(std::path::Path::new(&d));
                 }
             }
@@ -582,7 +582,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
 /// Speaker toggle: sound on / off for a layer or a clip (keeps the volume). Shared by the Inspector and clip rows.
 pub(crate) fn mute_button(ui: &mut egui::Ui, muted: &mut bool, what: &str) -> egui::Response {
     let (glyph, color) = if *muted { (icon::SPEAKER_SIMPLE_X, crate::theme::WARN) } else { (icon::SPEAKER_SIMPLE_HIGH, ui.visuals().text_color()) };
-    let r = ui.small_button(RichText::new(glyph).color(color)).on_hover_text(if *muted { format!("Sound off for {what}: click to turn it on") } else { format!("Mute {what}") });
+    let r = crate::ui::small_command(ui, RichText::new(glyph).color(color)).on_hover_text(if *muted { format!("Sound off for {what}: click to turn it on") } else { format!("Mute {what}") });
     if r.clicked() {
         *muted = !*muted;
     }
@@ -689,7 +689,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
                 }
             }
             LiveText::Stopwatch => {
-                if ui.small_button(label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
+                if crate::ui::small_command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
                     style.live_start = ui.input(|i| i.time);
                 }
             }
@@ -700,7 +700,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
                 let mut name: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
                 let shown = if style.live_source.is_empty() { "A town or city".to_string() } else { style.live_source.clone() };
                 let r = crate::ui::text_field(ui, &mut name, &shown, Some(140.0));
-                if ((r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || ui.small_button(icon::MAGNIFYING_GLASS).on_hover_text("Find this place and its time").clicked()) && !name.trim().is_empty() {
+                if ((r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || crate::ui::small_command(ui, icon::MAGNIFYING_GLASS).on_hover_text("Find this place and its time").clicked()) && !name.trim().is_empty() {
                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(ZONE_REQUEST), (id, name.trim().to_string())));
                     name.clear();
                 }
@@ -729,25 +729,25 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("Parts").small());
         choice_combo(ui, ("chunk_by", id), &mut style.chunk_by, 100.0, true);
-        if ui.small_button(label(icon::FILE_TEXT, "From a file…")).on_hover_text("Lyrics, a script, a list: shown a part at a time").clicked() {
+        if crate::ui::small_command(ui, label(icon::FILE_TEXT, "From a file…")).on_hover_text("Lyrics, a script, a list: shown a part at a time").clicked() {
             from_file = true;
         }
         if style.parts.is_empty() {
-            if ui.small_button("Split what's typed").on_hover_text("Cut the text below into parts to show one at a time").clicked() {
+            if crate::ui::small_command(ui, "Split what's typed").on_hover_text("Cut the text below into parts to show one at a time").clicked() {
                 let text = style.text.clone();
                 let by = style.chunk_by;
                 style.set_parts(&text, by);
             }
         } else {
             for (forward, glyph) in [(false, icon::CARET_LEFT), (true, icon::CARET_RIGHT)] {
-                let r = ui.small_button(glyph).on_hover_text(if forward { "Next part" } else { "Previous part" });
+                let r = crate::ui::small_command(ui, glyph).on_hover_text(if forward { "Next part" } else { "Previous part" });
                 if r.clicked() {
                     style.step_part(forward);
                 }
                 map_menu(ui, &r, ControlTarget::LayerTextStep { layer: id, forward });
             }
             hint(ui, format!("{} / {}", style.part + 1, style.parts.len()));
-            if ui.small_button(icon::X).on_hover_text("Back to plain text (keeps the part showing)").clicked() {
+            if crate::ui::small_command(ui, icon::X).on_hover_text("Back to plain text (keeps the part showing)").clicked() {
                 style.parts.clear();
             }
         }

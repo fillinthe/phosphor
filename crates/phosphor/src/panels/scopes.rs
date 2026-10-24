@@ -14,7 +14,7 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
             crate::ui::pick_value(ui, &mut s.source, MASTER_ID, "Mix");
             crate::ui::layer_items(ui, &st.comp.layers, &mut s.source, |id| id);
         });
-        if ui.button(label(icon::STACK_PLUS, "As a layer")).on_hover_text("A new layer showing this scope (it keeps measuring while the layer is on)").clicked() {
+        if crate::ui::command(ui, label(icon::STACK_PLUS, "As a layer")).on_hover_text("A new layer showing this scope (it keeps measuring while the layer is on)").clicked() {
             let kind = s.kind;
             let l = st.comp.add_layer();
             l.source = kind.layer_source();

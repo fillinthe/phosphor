@@ -84,7 +84,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         let clear = !st.explorer.search.is_empty();
         let w = ui.available_width() - if clear { 28.0 } else { 0.0 };
         ui.add(egui::TextEdit::singleline(&mut st.explorer.search).hint_text("Search effects, looks, categories…").desired_width(w));
-        if clear && ui.small_button(icon::X).clicked() {
+        if clear && crate::ui::small_command(ui, icon::X).clicked() {
             st.explorer.search.clear();
         }
     });
@@ -120,18 +120,18 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             Some(d) => {
                 ui.label(RichText::new(d.name).strong().color(accent()));
                 if st.explorer.sources {
-                    if ui.button(label(icon::SPARKLE, &format!("Use on {target_name}"))).clicked() {
+                    if crate::ui::command(ui, label(icon::SPARKLE, &format!("Use on {target_name}"))).clicked() {
                         add_to = Some(None);
                     }
                 } else {
-                    if ui.button(label(icon::PLUS, &format!("Add to {target_name}"))).clicked() {
+                    if crate::ui::command(ui, label(icon::PLUS, &format!("Add to {target_name}"))).clicked() {
                         add_to = Some(None);
                     }
-                    if st.selected != Some(MASTER_ID) && ui.button(label(icon::PLUS, "Add to MASTER")).clicked() {
+                    if st.selected != Some(MASTER_ID) && crate::ui::command(ui, label(icon::PLUS, "Add to MASTER")).clicked() {
                         add_to = Some(Some(MASTER_ID));
                     }
                 }
-                if ui.small_button(icon::X).on_hover_text("Unselect").clicked() {
+                if crate::ui::small_command(ui, icon::X).on_hover_text("Unselect").clicked() {
                     st.explorer.picked = None;
                 }
             }
@@ -231,23 +231,23 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 let resp = resp.on_hover_text(format!("{about}\n\nControls: {}", if params.is_empty() { "none".into() } else { params.join(", ") }));
                 resp.right_menu(|ui| {
                     let text = if fav { label(icon::STAR, "Remove from favourites") } else { label(icon::STAR, "Add to favourites") };
-                    if ui.button(text).clicked() {
+                    if crate::ui::command(ui, text).clicked() {
                         action = Some(TileAction::Favorite(desc.id.to_string()));
                         ui.close();
                     }
                     let is_hidden = st.explorer.hidden.iter().any(|h| h == desc.id);
                     let text = if is_hidden { label(icon::EYE, "Show in the lists again") } else { label(icon::EYE_SLASH, "Hide from the lists") };
-                    if ui.button(text).on_hover_text("Hidden ones only show under \"Hidden\" (and still work wherever they're used)").clicked() {
+                    if crate::ui::command(ui, text).on_hover_text("Hidden ones only show under \"Hidden\" (and still work wherever they're used)").clicked() {
                         action = Some(TileAction::Hide(desc.id.to_string()));
                         ui.close();
                     }
                     if desc.id.starts_with(shaders::CUSTOM_EFFECT) || desc.id.starts_with(shaders::CUSTOM_GENERATOR) || desc.id.starts_with(shaders::CUSTOM_BLEND) {
-                        if ui.button(label(icon::CODE, "Edit in Shader Editor")).clicked() {
+                        if crate::ui::command(ui, label(icon::CODE, "Edit in Shader Editor")).clicked() {
                             action = Some(TileAction::EditCustom(desc.id.to_string()));
                             ui.close();
                         }
                     } else if custom::builtin_as_custom(desc.id).is_some() {
-                        if ui.button(label(icon::CODE, "Edit a copy in Shader Editor")).clicked() {
+                        if crate::ui::command(ui, label(icon::CODE, "Edit a copy in Shader Editor")).clicked() {
                             action = Some(TileAction::EditCopy(desc.id));
                             ui.close();
                         }
@@ -315,7 +315,7 @@ fn ffgl_status(ui: &mut egui::Ui, ffgl: &crate::ffgl::Ffgl) {
         }
     });
     r.context_menu(|ui| {
-        if ui.button(label(icon::FOLDER_OPEN, "Open the FFGL folder")).clicked()
+        if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Open the FFGL folder")).clicked()
             && let Some(d) = crate::show::storage_dir().map(|d| d.join("ffgl"))
         {
             let _ = std::fs::create_dir_all(&d);
@@ -583,21 +583,21 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
     let mut create: Option<String> = None;
     egui::Panel::left("shader_list").resizable(true).default_size(190.0).show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
-            if ui.button(label(icon::PLUS, "Effect")).on_hover_text("New effect (processes a layer)").clicked() {
+            if crate::ui::command(ui, label(icon::PLUS, "Effect")).on_hover_text("New effect (processes a layer)").clicked() {
                 create = Some(custom::template(false));
             }
-            if ui.button(label(icon::PLUS, "Generator")).on_hover_text("New generator (makes its own picture)").clicked() {
+            if crate::ui::command(ui, label(icon::PLUS, "Generator")).on_hover_text("New generator (makes its own picture)").clicked() {
                 create = Some(custom::template(true));
             }
             ui.menu_button(label(icon::GRAPH, "Patch"), |ui| {
                 for (text, generator) in [("Effect patch", false), ("Generator patch", true)] {
-                    if ui.button(text).clicked() {
+                    if crate::ui::command(ui, text).clicked() {
                         create = Patch::new(if generator { "My Patch Generator" } else { "My Patch" }, generator).compile().ok();
                         ui.close();
                     }
                 }
                 ui.separator();
-                if ui.button("Example: kaleidoscope glow with trails").on_hover_text("The picture through a kaleidoscope and a glow, mixed with its own last frame (trails): open it and change any block").clicked() {
+                if crate::ui::command(ui, "Example: kaleidoscope glow with trails").on_hover_text("The picture through a kaleidoscope and a glow, mixed with its own last frame (trails): open it and change any block").clicked() {
                     create = Patch::kaleido_glow_trails().compile().ok();
                     ui.close();
                 }
@@ -606,17 +606,17 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             .on_hover_text("Build an effect from blocks wired together (blur, warp, colour, mix, trails): no code");
         });
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::MAGIC_WAND, "Describe it…")).on_hover_text("Say what it should look like and the AI writes the shader (your own Anthropic API key)").clicked() {
+        if crate::ui::command(ui, label(icon::MAGIC_WAND, "Describe it…")).on_hover_text("Say what it should look like and the AI writes the shader (your own Anthropic API key)").clicked() {
             st.ai_shader.open = true;
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy…")).on_hover_text("Paste a shader from shadertoy.com").clicked() {
+        if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy…")).on_hover_text("Paste a shader from shadertoy.com").clicked() {
             st.editor.shadertoy.get_or_insert_with(Default::default);
         }
         ui.menu_button(label(icon::SPARKLE, "New from template…"), |ui| {
             ui.set_min_width(260.0);
             for t in custom::TEMPLATES {
-                if ui.button(t.name).on_hover_text(t.about).clicked() {
+                if crate::ui::command(ui, t.name).on_hover_text(t.about).clicked() {
                     create = Some(t.source.to_string());
                     ui.close();
                 }
@@ -628,7 +628,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                 for d in shaders::EFFECTS.iter().chain(shaders::GENERATORS) {
                     if let Some(src) = custom::builtin_as_custom(d.id)
-                        && ui.button(d.name).clicked()
+                        && crate::ui::command(ui, d.name).clicked()
                     {
                         create = Some(src);
                         ui.close();
@@ -655,7 +655,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(dir) = effects_dir() {
             ui.separator();
-            if ui.small_button(label(icon::FOLDER_OPEN, "Show folder")).clicked() {
+            if crate::ui::small_command(ui, label(icon::FOLDER_OPEN, "Show folder")).clicked() {
                 let _ = std::fs::create_dir_all(&dir);
                 crate::os::open(&dir);
             }
@@ -707,16 +707,16 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         let ok = compiled && st.editor.shaders[idx].error.is_none();
         ui.add_enabled_ui(ok, |ui| {
             if is_generator {
-                if ui.button(label(icon::SPARKLE, "Use as source of selected layer")).clicked() {
+                if crate::ui::command(ui, label(icon::SPARKLE, "Use as source of selected layer")).clicked() {
                     let g: &'static str = shaders::generator(&id).map_or("", |d| d.id);
                     apply_palette(st, PaletteDrag { effect: None, generator: Some(g) }, None);
                 }
             } else {
-                if ui.button(label(icon::PLUS, "Add to selected layer")).clicked() {
+                if crate::ui::command(ui, label(icon::PLUS, "Add to selected layer")).clicked() {
                     let e: &'static str = shaders::effect(&id).map_or("", |d| d.id);
                     apply_palette(st, PaletteDrag { effect: Some(e), generator: None }, None);
                 }
-                if ui.button(label(icon::PLUS, "Add to MASTER")).clicked() {
+                if crate::ui::command(ui, label(icon::PLUS, "Add to MASTER")).clicked() {
                     let e: &'static str = shaders::effect(&id).map_or("", |d| d.id);
                     apply_palette(st, PaletteDrag { effect: Some(e), generator: None }, Some(MASTER_ID));
                 }
@@ -733,7 +733,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             ui.monospace("aspect()  TAU");
         });
         ui.add_space(8.0);
-        if ui.button(label(icon::TRASH, "Delete shader")).clicked() {
+        if crate::ui::command(ui, label(icon::TRASH, "Delete shader")).clicked() {
             delete = Some(idx);
         }
     });
@@ -774,7 +774,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
         ui.label(RichText::new(if patch.generator { "Generator patch" } else { "Effect patch" }).strong());
         changed |= crate::ui::text_field(ui, &mut patch.name, "Name", Some(160.0)).changed();
         crate::ui::toggle(ui, &mut show_code, label(icon::CODE, "Code")).on_hover_text("The shader these blocks make");
-        if ui.button(label(icon::CODE, "Turn into code")).on_hover_text("Keep editing it as code from here on (the blocks are dropped)").clicked() {
+        if crate::ui::command(ui, label(icon::CODE, "Turn into code")).on_hover_text("Keep editing it as code from here on (the blocks are dropped)").clicked() {
             to_code = true;
         }
         match (&sh.patch_error, &sh.error) {

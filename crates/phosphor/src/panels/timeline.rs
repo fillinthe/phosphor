@@ -23,7 +23,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         if action_button(ui, Act::Go, label(icon_, text)).clicked() {
             st.timeline_toggle(now);
         }
-        if ui.button(label(icon::SKIP_BACK, "To the start")).clicked() {
+        if crate::ui::command(ui, label(icon::SKIP_BACK, "To the start")).clicked() {
             st.timeline_seek(0.0, now);
         }
         crate::ui::toggle(ui, &mut st.timeline_record, label(icon::RECORD, "Record")).on_hover_text("While it plays, moving a control that has a track keys it as you go (key a control once from its menu to give it a track)");
@@ -31,15 +31,15 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         let tl = &mut st.comp.timeline;
         crate::ui::toggle(ui, &mut tl.looping, "Loop");
         guarded!(ui, tl.length, egui::DragValue::new(&mut tl.length).range(1.0..=36_000.0).speed(0.5).prefix("length ").suffix(" s").max_decimals(1));
-        if ui.button(label(icon::FLAG, "Marker")).on_hover_text("A marker at the playhead (right-click it: pause or loop there)").clicked() {
+        if crate::ui::command(ui, label(icon::FLAG, "Marker")).on_hover_text("A marker at the playhead (right-click it: pause or loop there)").clicked() {
             let n = tl.markers.len() + 1;
             tl.markers.push(Marker { t: st.timeline_pos, name: format!("M{n}"), kind: MarkerKind::Label });
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if ui.button(label(icon::MUSIC_NOTES, "Sound…")).on_hover_text("A sound that plays along with the timeline (music, a voice-over), with its waveform").clicked() {
+        if crate::ui::command(ui, label(icon::MUSIC_NOTES, "Sound…")).on_hover_text("A sound that plays along with the timeline (music, a voice-over), with its waveform").clicked() {
             st.dialogs.pick_file(crate::dialogs::Purpose::TimelineSound, Some(("Sound", &["wav", "aif", "aiff", "mp3", "m4a", "aac", "flac", "ogg", "mov", "mp4"])));
         }
-        if ui.button(label(icon::LIGHTNING, "Event")).on_hover_text("An event at the playhead: plays a clip, fires a column or cue, sets anything, or sends OSC / MIDI as the playhead passes (right-click it)").clicked() {
+        if crate::ui::command(ui, label(icon::LIGHTNING, "Event")).on_hover_text("An event at the playhead: plays a clip, fires a column or cue, sets anything, or sends OSC / MIDI as the playhead passes (right-click it)").clicked() {
             let n = tl.events.len() + 1;
             tl.events.push(Event { t: st.timeline_pos, name: format!("E{n}"), ..Default::default() });
         }
@@ -49,7 +49,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         let stop = ui.horizontal(|ui| {
             ui.add(meter(p).desired_width(200.0));
             ui.label(format!("Rendering {done} / {frames} frames"));
-            ui.button("Stop").clicked()
+            crate::ui::command(ui, "Stop").clicked()
         });
         if stop.inner {
             st.offline_stop();
@@ -214,7 +214,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
         ui.horizontal(|ui| {
             crate::ui::text_field(ui, &mut o.path, "…/show.mp4 or .mov (ProRes)", Some(220.0));
             #[cfg(not(target_arch = "wasm32"))]
-            if ui.button("Choose…").clicked() {
+            if crate::ui::command(ui, "Choose…").clicked() {
                 st.dialogs.save_file(crate::dialogs::Purpose::RenderFile, ("Video", &["mp4", "mov"]), "Phosphor render.mp4");
             }
         });
@@ -276,7 +276,7 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
                 if let Some(t) = target_picker(ui, ("event_target", k), &targets, e.target.as_ref(), 200.0) {
                     e.target = Some(t);
                 }
-                if e.target.is_some() && ui.small_button(icon::X).on_hover_text("Set nothing").clicked() {
+                if e.target.is_some() && crate::ui::small_command(ui, icon::X).on_hover_text("Set nothing").clicked() {
                     e.target = None;
                 }
             });
@@ -343,7 +343,7 @@ fn sound_lane(ui: &mut egui::Ui, st: &mut State, lane_x: f32, lane_w: f32, full:
     let mut choose = false;
     resp.on_hover_text(format!("{name} · starts at {} · drag to move it", clock(sound.start))).context_menu(|ui| {
         Level::range(&mut sound.volume, 0.0, 2.0, "Volume").default(1.0).width(200.0).show(ui);
-        if ui.button("Another sound…").clicked() {
+        if crate::ui::command(ui, "Another sound…").clicked() {
             choose = true;
             ui.close();
         }

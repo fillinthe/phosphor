@@ -36,7 +36,7 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
             toggle(ui, &mut t.read_text, "Text").on_hover_text("Read the words in the picture: a text layer shows them (Live › Text seen)");
         });
         ui.horizontal(|ui| Level::percent(&mut t.smoothing, "Smoothing").default(0.5).show(ui)).inner.on_hover_text("Higher = less jitter, a little more lag");
-        if ui.button(label(icon::EYE_SLASH, "Hide faces")).on_hover_text("Adds a Hide Face effect to MASTER that follows the face it finds (pixelate, blur or black: change it in the effect)").clicked()
+        if crate::ui::command(ui, label(icon::EYE_SLASH, "Hide faces")).on_hover_text("Adds a Hide Face effect to MASTER that follows the face it finds (pixelate, blur or black: change it in the effect)").clicked()
             && st.comp.add_face_hider(MASTER_ID).is_some()
         {
             st.notice = Some("Faces are hidden on MASTER (Hide Face effect; tracking on)".into());

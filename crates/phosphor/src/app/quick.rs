@@ -152,7 +152,7 @@ pub fn quick_menu(ui: &mut egui::Ui) -> Option<Quick> {
         if q == Quick::Fill {
             ui.separator();
         }
-        if ui.button(format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
+        if crate::ui::command(ui, format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
             out = Some(q);
             ui.close();
         }
@@ -165,7 +165,7 @@ pub fn quick_row(ui: &mut egui::Ui) -> Option<Quick> {
     let mut out = None;
     ui.horizontal_wrapped(|ui| {
         for (q, text) in [(Quick::SurpriseLayer, "Surprise"), (Quick::Shuffle, "Shuffle"), (Quick::React, "React"), (Quick::Fill, "Fill clips")] {
-            if ui.small_button(format!("{} {text}", q.icon())).on_hover_text(q.about()).clicked() {
+            if crate::ui::small_command(ui, format!("{} {text}", q.icon())).on_hover_text(q.about()).clicked() {
                 out = Some(q);
             }
         }

@@ -21,12 +21,12 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
                 hint(ui, "The layer plays this collection by itself: next / previous / random (Inspector)");
                 for (id, lname) in &layers {
-                    if ui.button(lname).clicked() {
+                    if crate::ui::command(ui, lname).clicked() {
                         acts.push(MediaAct::PlayCollection(name.to_string(), Some(*id)));
                         ui.close();
                     }
                 }
-                if ui.button(label(icon::PLUS, "A new layer")).clicked() {
+                if crate::ui::command(ui, label(icon::PLUS, "A new layer")).clicked() {
                     acts.push(MediaAct::PlayCollection(name.to_string(), None));
                     ui.close();
                 }
@@ -34,7 +34,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             .response
             .on_hover_text("Put this collection on a layer: it steps through the files on its own");
             #[cfg(not(target_arch = "wasm32"))]
-            if ui.button(label(icon::FOLDER_PLUS, "Add folder…")).on_hover_text("Every clip in that folder (and its subfolders) joins this collection, and new files as they arrive").clicked() {
+            if crate::ui::command(ui, label(icon::FOLDER_PLUS, "Add folder…")).on_hover_text("Every clip in that folder (and its subfolders) joins this collection, and new files as they arrive").clicked() {
                 st.dialogs.pick_folder(crate::dialogs::Purpose::CollectionFolder(name.to_string()));
             }
             if danger_button(ui, label(icon::TRASH, "Delete")).on_hover_text("The files stay in the media bin").clicked() {
@@ -44,7 +44,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
         if !playing.is_empty() {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new(format!("{} Playing on: {}", icon::PLAY, playing.join(", "))).small().color(accent()));
-                if ui.small_button(label(icon::STOP, "Stop")).on_hover_text("Those layers stop stepping through this collection (what's showing stays)").clicked() {
+                if crate::ui::small_command(ui, label(icon::STOP, "Stop")).on_hover_text("Those layers stop stepping through this collection (what's showing stays)").clicked() {
                     acts.push(MediaAct::StopCollection(name.to_string()));
                 }
             });
@@ -53,7 +53,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             ui.horizontal(|ui| {
                 let short = std::path::Path::new(&f).file_name().map_or(f.clone(), |n| n.to_string_lossy().into_owned());
                 ui.label(RichText::new(format!("{} {short}", icon::FOLDER)).small()).on_hover_text(&f);
-                if ui.small_button(icon::X).on_hover_text("Stop including this folder").clicked() {
+                if crate::ui::small_command(ui, icon::X).on_hover_text("Stop including this folder").clicked() {
                     acts.push(MediaAct::RemoveCollectionFolder(name.to_string(), f.clone()));
                 }
             });

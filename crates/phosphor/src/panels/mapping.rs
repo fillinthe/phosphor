@@ -124,7 +124,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             let r = point_handle(ui, id.with(i), to_screen(*p), frame, base, false, &mut d);
             if bent.get(i).copied().unwrap_or(false) {
                 r.clone().right_menu(|ui| {
-                    if ui.button("Straighten").on_hover_text("This point's handles back to the automatic smooth curve").clicked() {
+                    if crate::ui::command(ui, "Straighten").on_hover_text("This point's handles back to the automatic smooth curve").clicked() {
                         straighten = Some(i);
                         ui.close();
                     }
@@ -331,7 +331,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
                 if !smooth {
                     hint(ui, "Turn on Smooth to curve the whole outline; points can then be sharp corners.");
                 }
-                if count > 3 && ui.button(label(icon::TRASH, "Delete point")).clicked() {
+                if count > 3 && crate::ui::command(ui, label(icon::TRASH, "Delete point")).clicked() {
                     delete = Some(i);
                     ui.close();
                 }
@@ -377,11 +377,11 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
 /// Actions for all outputs at once: Identify, and All to their screens (when outputs remember screens).
 pub(crate) fn outputs_actions(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
-    if ui.button(label(icon::HASH, "Identify")).on_hover_text("Each output shows its number").clicked() {
+    if crate::ui::command(ui, label(icon::HASH, "Identify")).on_hover_text("Each output shows its number").clicked() {
         st.identify_outputs(now);
     }
     if st.comp.outputs.iter().any(|o| o.enabled && !o.screen.is_empty())
-        && ui.button(label(icon::PROJECTOR_SCREEN, "All to their screens")).on_hover_text("Open every output fullscreen on the screen it was last sent to").clicked()
+        && crate::ui::command(ui, label(icon::PROJECTOR_SCREEN, "All to their screens")).on_hover_text("Open every output fullscreen on the screen it was last sent to").clicked()
     {
         let missing = st.send_outputs_to_screens();
         st.notice = (!missing.is_empty()).then(|| format!("Not connected right now: {}", missing.join(", ")));
@@ -461,13 +461,13 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                 }
                 r.on_hover_text(format!("{} · {ow}×{oh}\nClick to edit its mapping · double-click to open / close its window · right-click for more", o.name)).right_menu(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(160.0));
-                    if ui.button(label(if open { icon::STOP } else { icon::PLAY }, if open { "Close window" } else { "Open window" })).clicked() {
+                    if crate::ui::command(ui, label(if open { icon::STOP } else { icon::PLAY }, if open { "Close window" } else { "Open window" })).clicked() {
                         todo.push(Do::Window(id));
                         ui.close();
                     }
                     ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send to screen"), |ui| {
                         for d in &displays {
-                            if ui.button(d.label()).clicked() {
+                            if crate::ui::command(ui, d.label()).clicked() {
                                 todo.push(Do::Send(id, d.clone()));
                                 ui.close();
                             }
@@ -476,13 +476,13 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                             hint(ui, "No displays found");
                         }
                     });
-                    if ui.button(label(icon::HASH, "Identify all")).on_hover_text("Each output shows its number").clicked() {
+                    if crate::ui::command(ui, label(icon::HASH, "Identify all")).on_hover_text("Each output shows its number").clicked() {
                         todo.push(Do::Identify);
                         ui.close();
                     }
                     crate::ui::toggle(ui, &mut o.enabled, "Output on");
                     crate::ui::toggle(ui, &mut o.mapping.enabled, "Mapping on");
-                    if count > 1 && ui.button(label(icon::TRASH, "Remove output")).clicked() {
+                    if count > 1 && crate::ui::command(ui, label(icon::TRASH, "Remove output")).clicked() {
                         todo.push(Do::Remove(id));
                         ui.close();
                     }
@@ -552,12 +552,12 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 .on_hover_text("When on, this output shows only its surfaces");
             super::output::grid_toggle(ui, &mut o.grid);
             toggle(ui, &mut o.mapping.test_pattern, label(icon::CHECKERBOARD, "Slice test pattern"));
-            if ui.button(label(icon::PLUS, "Surface")).clicked() {
+            if crate::ui::command(ui, label(icon::PLUS, "Surface")).clicked() {
                 add_surface = true;
             }
             ui.menu_button(label(icon::PLUS, "Mask"), |ui| {
                 for &shape in <phosphor_engine::mapping::MaskShape as phosphor_engine::Choice>::OPTIONS {
-                    if ui.button(shape.name()).clicked() {
+                    if crate::ui::command(ui, shape.name()).clicked() {
                         add_mask = Some(shape);
                         ui.close();
                     }
@@ -624,10 +624,10 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                     ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(140.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(icon::TRASH).on_hover_text("Delete surface").clicked() {
+                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete surface").clicked() {
                             remove = Some(i);
                         }
-                        if ui.small_button(icon::CORNERS_OUT).on_hover_text("Reset corners to the full output").clicked() {
+                        if crate::ui::small_command(ui, icon::CORNERS_OUT).on_hover_text("Reset corners to the full output").clicked() {
                             s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
                         }
                     });
@@ -640,15 +640,15 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                 *selected_surface = Some(s.id);
             }
             resp.right_menu(|ui| {
-                if ui.button(label(icon::CORNERS_OUT, "Reset corners")).clicked() {
+                if crate::ui::command(ui, label(icon::CORNERS_OUT, "Reset corners")).clicked() {
                     s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
                     ui.close();
                 }
-                if ui.button(label(icon::COPY, "Duplicate")).clicked() {
+                if crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
                     duplicate = Some(i);
                     ui.close();
                 }
-                if ui.button(label(icon::TRASH, "Delete")).clicked() {
+                if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
                     remove = Some(i);
                     ui.close();
                 }
@@ -666,7 +666,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
                     hint(ui, format!("{} points", m.points.len()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button(icon::TRASH).on_hover_text("Delete mask").clicked() {
+                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete mask").clicked() {
                             remove_mask = Some(i);
                         }
                     });
@@ -884,7 +884,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         if let Some(m) = &mut s.model {
             let name = std::path::Path::new(&m.path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "no model yet".into());
             ui.label(egui::RichText::new(name).small());
-            if ui.small_button("Choose…").clicked() {
+            if crate::ui::small_command(ui, "Choose…").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(PICK_MODEL), s.id));
             }
         }
@@ -965,7 +965,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             if m.calibrating {
                 let n = m.pins.len();
                 hint(ui, if n < 4 { format!("{n} pinned, {} more to solve", 4 - n) } else if n < 6 { format!("{n} pinned: solving position (6 also solve the lens)") } else { format!("{n} pinned: solving position and lens") });
-                if n > 0 && ui.small_button("Clear pins").clicked() {
+                if n > 0 && crate::ui::small_command(ui, "Clear pins").clicked() {
                     m.pins.clear();
                 }
             }
@@ -981,13 +981,13 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             ui.horizontal(|ui| {
                 Level::range(&mut l.width, 0.005, 0.5, "Width").default(0.06).log().show(ui);
             });
-            if ui.small_button(label(icon::PLUS, "point")).on_hover_text("Adds a point after the last one").clicked() {
+            if crate::ui::small_command(ui, label(icon::PLUS, "point")).on_hover_text("Adds a point after the last one").clicked() {
                 let n = l.points.len();
                 let last = l.points[n - 1];
                 let prev = l.points[n.saturating_sub(2)];
                 l.points.push([(last[0] * 2.0 - prev[0]).clamp(0.0, 1.0), (last[1] * 2.0 - prev[1]).clamp(0.0, 1.0)]);
             }
-            if l.points.len() > 2 && ui.small_button(label(icon::MINUS, "point")).clicked() {
+            if l.points.len() > 2 && crate::ui::small_command(ui, label(icon::MINUS, "point")).clicked() {
                 l.points.pop();
             }
         }
@@ -999,7 +999,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         if on {
             changed |= guarded!(ui, cols, egui::DragValue::new(&mut cols).range(1..=8).prefix("cols ")).changed();
             changed |= guarded!(ui, rows, egui::DragValue::new(&mut rows).range(1..=8).prefix("rows ")).changed();
-            if ui.small_button("Flatten").on_hover_text("Straighten the grid between the four corners").clicked() {
+            if crate::ui::small_command(ui, "Flatten").on_hover_text("Straighten the grid between the four corners").clicked() {
                 s.mesh = Some(phosphor_engine::mapping::Mesh::from_corners(&s.corners, cols, rows));
             }
         }
@@ -1012,7 +1012,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         if toggle(ui, &mut on, label(icon::BEZIER_CURVE, "Curved edges")).on_hover_text("Two handles on each edge bend it (round tables, arches, curved screens); the picture follows").changed() {
             s.set_bend(on);
         }
-        if s.bend.is_some_and(|b| !b.is_straight()) && ui.small_button("Straighten").on_hover_text("Edges back to straight lines").clicked() {
+        if s.bend.is_some_and(|b| !b.is_straight()) && crate::ui::small_command(ui, "Straighten").on_hover_text("Edges back to straight lines").clicked() {
             s.set_bend(false);
             s.set_bend(true);
         }
@@ -1075,7 +1075,7 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
         });
         egui::ComboBox::from_id_salt(("surface_source", s.id)).width(170.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut s.layer, None, "Whole composition");
-            if ui.button(label(icon::FILE_VIDEO, "A file…")).on_hover_text("A picture or movie of its own on this slice (a layer that stays out of the mix)").clicked() {
+            if crate::ui::command(ui, label(icon::FILE_VIDEO, "A file…")).on_hover_text("A picture or movie of its own on this slice (a layer that stays out of the mix)").clicked() {
                 ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(PICK_SLICE_FILE), s.id));
                 ui.close();
             }
@@ -1107,11 +1107,11 @@ pub(crate) fn svg_menu(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     ui.menu_button(label(icon::FILE_SVG, "SVG"), |ui| {
         let oid = st.mapping_output;
-        if ui.button("Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (SVG for the venue, a cutter or another app; PDF to print; PNG for a picture). Pick the kind by the file name's ending.").clicked() {
+        if crate::ui::command(ui, "Export the mapping…").on_hover_text("Every slice and mask of this output as a drawing (SVG for the venue, a cutter or another app; PDF to print; PNG for a picture). Pick the kind by the file name's ending.").clicked() {
             st.dialogs.save_file(crate::dialogs::Purpose::ExportMappingSvg(oid), ("Drawing", &["svg", "png", "pdf"]), "Mapping.svg");
             ui.close();
         }
-        if ui.button("Masks and lines from a drawing…").on_hover_text("Each closed shape in an SVG becomes a mask on this output, each open line a line slice").clicked() {
+        if crate::ui::command(ui, "Masks and lines from a drawing…").on_hover_text("Each closed shape in an SVG becomes a mask on this output, each open line a line slice").clicked() {
             st.dialogs.pick_file(crate::dialogs::Purpose::ImportMasksSvg(oid), Some(("SVG", &["svg"])));
             ui.close();
         }

@@ -10,7 +10,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     let width_id = egui::Id::new("layer_windows_width");
     let mut col_w: f32 = ui.ctx().data(|d| d.get_temp(width_id)).unwrap_or(300.0);
     ui.horizontal(|ui| {
-        if ui.button(label(icon::PLUS, "Add Layer")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
         }
         Level::range(&mut col_w, 220.0, 520.0, "Width").default(300.0).width(180.0).show(ui);

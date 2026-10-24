@@ -106,10 +106,10 @@ impl PhosphorApp {
                 }
             });
             ui.horizontal(|ui| {
-                if ui.small_button("All").clicked() {
+                if crate::ui::small_command(ui, "All").clicked() {
                     imp.chosen.iter_mut().for_each(|c| *c = true);
                 }
-                if ui.small_button("None").clicked() {
+                if crate::ui::small_command(ui, "None").clicked() {
                     imp.chosen.iter_mut().for_each(|c| *c = false);
                 }
             });

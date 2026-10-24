@@ -55,15 +55,15 @@ pub(crate) fn limit_items(ui: &mut egui::Ui, target: &ControlTarget, unit: f32, 
         if let Some((lo, hi)) = now {
             ui.label(format!("Now: {} to {}", show(lo), show(hi)));
         }
-        if ui.button(format!("Lowest = here ({})", show(unit))).clicked() {
+        if crate::ui::command(ui, format!("Lowest = here ({})", show(unit))).clicked() {
             ask(ui, PrefChange::Limit(target.clone(), true, Some(unit)));
             ui.close();
         }
-        if ui.button(format!("Highest = here ({})", show(unit))).clicked() {
+        if crate::ui::command(ui, format!("Highest = here ({})", show(unit))).clicked() {
             ask(ui, PrefChange::Limit(target.clone(), false, Some(unit)));
             ui.close();
         }
-        if now.is_some() && ui.button(label(icon::X, "No limits")).clicked() {
+        if now.is_some() && crate::ui::command(ui, label(icon::X, "No limits")).clicked() {
             ask(ui, PrefChange::Limit(target.clone(), true, None));
             ui.close();
         }
@@ -87,7 +87,7 @@ pub(crate) fn lock_item(ui: &mut egui::Ui, target: &ControlTarget) {
     } else {
         (icon::LOCK, "Lock", "Nothing moves it: not the mouse, a controller, OSC or a phone")
     };
-    if ui.button(label(glyph, text)).on_hover_text(tip).clicked() {
+    if crate::ui::command(ui, label(glyph, text)).on_hover_text(tip).clicked() {
         ask(ui, PrefChange::Lock(target.clone(), !locked));
         ui.close();
     }
@@ -109,13 +109,13 @@ pub(crate) fn snap_items(ui: &mut egui::Ui, target: &ControlTarget, unit: f32, s
     ui.menu_button(label(icon::MAGNET, "Snap points…"), |ui| {
         ui.set_min_width(220.0);
         hint(ui, "Hold Shift while dragging to land on a snap point (the ends, the default and 100% always count)");
-        if ui.button(label(icon::PLUS, &format!("Add one here ({})", show(unit)))).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, &format!("Add one here ({})", show(unit)))).clicked() {
             ask(ui, PrefChange::AddSnap(target.clone(), unit));
         }
         if !points.is_empty() {
             ui.separator();
             for &u in &points {
-                if ui.button(label(icon::X, &show(u))).on_hover_text("Remove this snap point").clicked() {
+                if crate::ui::command(ui, label(icon::X, &show(u))).on_hover_text("Remove this snap point").clicked() {
                     ask(ui, PrefChange::RemoveSnap(target.clone(), u));
                 }
             }

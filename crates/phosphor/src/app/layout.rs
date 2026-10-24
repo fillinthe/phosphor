@@ -165,7 +165,7 @@ impl PhosphorApp {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new(tab.title()).strong());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("Dock back").clicked() {
+                            if crate::ui::small_command(ui, "Dock back").clicked() {
                                 redock.push(tab);
                             }
                         });

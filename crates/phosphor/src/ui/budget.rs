@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod tests {
     fn raw_count(text: &str) -> usize {
-        ["selectable_label(", "selectable_value(", "egui::Button::new(", "ui.checkbox(", "ui.toggle_value("].iter().map(|p| text.matches(p).count()).sum()
+        ["selectable_label(", "selectable_value(", "egui::Button::new(", "ui.checkbox(", "ui.toggle_value(", "ui.small_button(", "ui.button("].iter().map(|p| text.matches(p).count()).sum()
     }
 
     #[test]

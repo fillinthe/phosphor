@@ -12,7 +12,7 @@ pub(crate) const RESOLUTIONS: &[(u32, u32, &str)] = &[
 pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Screens").strong());
-        if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
+        if crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
             st.displays = crate::screens::displays();
         }
     });
@@ -27,7 +27,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, "(this screen)");
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Send Output 1 here").on_hover_text("Opens the first output fullscreen on this display, no menu bar").clicked() {
+                if crate::ui::command(ui, "Send Output 1 here").on_hover_text("Opens the first output fullscreen on this display, no menu bar").clicked() {
                     st.send_output_to(d.clone());
                 }
             });
@@ -152,21 +152,21 @@ fn gpu_row(ui: &mut egui::Ui, st: &mut State) {
 pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Outputs").strong());
-        if ui.small_button(label(icon::PLUS, "Add output")).clicked() {
+        if crate::ui::small_command(ui, label(icon::PLUS, "Add output")).clicked() {
             st.mapping_output = st.comp.add_output();
         }
         super::mapping::outputs_actions(ui, st);
         ui.menu_button(label(icon::GRID_FOUR, "Split across"), |ui| {
             hint(ui, "New outputs that each show one part of the picture (a wall of screens or projectors side by side)");
             for (c, r) in [(2, 1), (3, 1), (4, 1), (2, 2), (3, 3)] {
-                if ui.button(format!("{c} × {r}")).clicked() {
+                if crate::ui::command(ui, format!("{c} × {r}")).clicked() {
                     let n = st.comp.split_across(c, r).len();
                     st.notice = Some(format!("{n} new outputs, one tile each: send each to its screen"));
                     ui.close();
                 }
             }
         });
-        if ui.small_button(label(icon::GRADIENT, "Soft edges")).on_hover_text("Work out the soft-edge blends from where the slices' parts of the picture overlap (projectors side by side or stacked); replaces the edges set by hand").clicked() {
+        if crate::ui::small_command(ui, label(icon::GRADIENT, "Soft edges")).on_hover_text("Work out the soft-edge blends from where the slices' parts of the picture overlap (projectors side by side or stacked); replaces the edges set by hand").clicked() {
             let n = st.comp.auto_soft_edges();
             st.notice = Some(if n == 0 { "No overlaps found: give neighbouring slices overlapping parts of the picture (Input) first".into() } else { format!("Soft edges set on {n} slices from their overlaps") });
         }
@@ -228,13 +228,13 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         crate::ui::toggle(ui, &mut o.enabled, "ON").on_hover_text("Render this output");
                         grid_toggle(ui, &mut o.grid);
                         program_picker(ui, o, &comps);
-                        if ui.small_button(icon::MONITOR).on_hover_text("Preview this output (after mapping) in a window").clicked() {
+                        if crate::ui::small_command(ui, icon::MONITOR).on_hover_text("Preview this output (after mapping) in a window").clicked() {
                             request_preview(ui, MonitorSource::OneOutput(id));
                         }
-                        if ui.small_button(icon::CAMERA).on_hover_text("Save a picture of this output as it is now (after mapping)").clicked() {
+                        if crate::ui::small_command(ui, icon::CAMERA).on_hover_text("Save a picture of this output as it is now (after mapping)").clicked() {
                             snapshot = Some(id);
                         }
-                        if ui.small_button(icon::COPY).on_hover_text("Another output showing exactly this one (the same picture on one more screen)").clicked() {
+                        if crate::ui::small_command(ui, icon::COPY).on_hover_text("Another output showing exactly this one (the same picture on one more screen)").clicked() {
                             mirror = Some(id);
                         }
                         crate::ui::toggle(ui, &mut o.frozen, "FREEZE").on_hover_text("Hold this output's picture while you change things behind it (not saved: a show opens live)");
@@ -261,7 +261,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         }
                         ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send to"), |ui| {
                             for d in &displays {
-                                if ui.button(d.label()).clicked() {
+                                if crate::ui::command(ui, d.label()).clicked() {
                                     send = Some(d.clone());
                                     ui.close();
                                 }
@@ -270,7 +270,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                                 hint(ui, "No displays found");
                             }
                         });
-                        if count > 1 && ui.small_button(icon::TRASH).on_hover_text("Remove output").clicked() {
+                        if count > 1 && crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove output").clicked() {
                             remove = Some(i);
                         }
                     });
@@ -282,12 +282,12 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                             .on_hover_text("Show this output a few frames late, to line it up with a slower projector or LED processor");
                         #[cfg(not(target_arch = "wasm32"))]
                         if o.background.is_empty() {
-                            if ui.small_button(label(icon::IMAGE, "Background…")).on_hover_text("A picture behind this output's slices (a backdrop; only with mapping)").clicked() {
+                            if crate::ui::small_command(ui, label(icon::IMAGE, "Background…")).on_hover_text("A picture behind this output's slices (a backdrop; only with mapping)").clicked() {
                                 background = Some(id);
                             }
                         } else {
                             Level::percent(&mut o.background_opacity, "Background").default(1.0).width(110.0).show(ui);
-                            if ui.small_button(icon::X).on_hover_text("No background picture").clicked() {
+                            if crate::ui::small_command(ui, icon::X).on_hover_text("No background picture").clicked() {
                                 o.background.clear();
                             }
                         }
@@ -300,7 +300,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     let (glyph, color) = if connected { (icon::CHECK_CIRCLE, accent()) } else { (icon::WARNING, Color32::from_rgb(230, 160, 60)) };
                     ui.label(RichText::new(format!("{glyph} Screen: {}", o.screen)).small().color(color))
                         .on_hover_text(if connected { "Saved with the project; \"All to their screens\" sends it here" } else { "That screen isn't connected right now" });
-                    if ui.small_button(icon::X).on_hover_text("Forget this screen").clicked() {
+                    if crate::ui::small_command(ui, icon::X).on_hover_text("Forget this screen").clicked() {
                         o.screen.clear();
                     }
                 });
@@ -393,7 +393,7 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
         let Some(lib) = crate::ndi::Ndi::library() else {
             ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
             hint(ui, if cfg!(windows) { "needs NDI Tools or the NDI Runtime (then restart Phosphor)" } else { "needs NDI Tools for Mac (then restart Phosphor, not the Mac)" });
-            if ui.small_button("Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
+            if crate::ui::small_command(ui, "Get NDI Tools…").on_hover_text("ndi.video/tools — installs the NDI runtime; then restart Phosphor").clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab("https://ndi.video/tools/"));
             }
             return;
