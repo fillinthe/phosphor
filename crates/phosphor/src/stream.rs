@@ -61,6 +61,7 @@ impl FileFormat {
     pub const ALL: [FileFormat; 7] = [FileFormat::Auto, FileFormat::Hap, FileFormat::HapAlpha, FileFormat::HapQ, FileFormat::HapQAlpha, FileFormat::HapR, FileFormat::Hevc];
 
     /// The Hap flavour this records, if it's one.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn hap(self) -> Option<crate::media::video::hap_encode::HapKind> {
         use crate::media::video::hap_encode::HapKind;
         match self {

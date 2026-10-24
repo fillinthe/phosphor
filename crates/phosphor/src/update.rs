@@ -306,7 +306,6 @@ impl Updater {
 }
 
 /// The current app bundle, when running from one (…/Phosphor.app/Contents/MacOS/phosphor).
-#[cfg(not(target_arch = "wasm32"))]
 fn current_bundle() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let bundle = exe.parent()?.parent()?.parent()?;
@@ -412,7 +411,6 @@ fn install_folder(unpacked: &std::path::Path, exe: &std::path::Path) -> Result<(
     Ok((exe, true))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn find_file(dir: &std::path::Path, name: &str) -> Option<PathBuf> {
     for entry in std::fs::read_dir(dir).ok()?.flatten() {
         let p = entry.path();
@@ -428,7 +426,6 @@ fn find_file(dir: &std::path::Path, name: &str) -> Option<PathBuf> {
     None
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn find_app(dir: &std::path::Path) -> Option<PathBuf> {
     for entry in std::fs::read_dir(dir).ok()?.flatten() {
         let p = entry.path();

@@ -33,9 +33,11 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             .on_hover_text("A ready-made TouchOSC layout from your Control Surface (or master, layers and columns if you haven't built one), already sending Phosphor's addresses")
             .clicked()
         {
+            #[cfg(not(target_arch = "wasm32"))]
             st.dialogs.save_file(crate::dialogs::Purpose::TouchOsc, ("TouchOSC layout", &["tosc"]), "Phosphor.tosc");
         }
         if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Import TouchOSC layout…")).on_hover_text("Bring a TouchOSC layout in as Control Surface pages: same controls in the same places, each control's OSC address already mapped").clicked() {
+            #[cfg(not(target_arch = "wasm32"))]
             st.dialogs.pick_file(crate::dialogs::Purpose::ImportTouchOsc, Some(("TouchOSC layout", &["tosc", "xml"])));
         }
     });

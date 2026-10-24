@@ -158,10 +158,13 @@ impl PhosphorApp {
                 st.set_web_control(on);
             }
             // What changed in each version (the release notes come from CHANGELOG.md).
-            A::Notes => crate::os::open("https://github.com/fillinthe/phosphor/releases".to_string()),
+            A::Notes => ctx.open_url(egui::OpenUrl::new_tab("https://github.com/fillinthe/phosphor/releases")),
             A::Roadmap => open_doc("../ROADMAP.md"),
             A::Website => ctx.open_url(egui::OpenUrl::new_tab("https://phosphorfx.com")),
             A::Donate => ctx.open_url(egui::OpenUrl::new_tab(crate::support::DONATE_URL)),
+            #[cfg(target_arch = "wasm32")]
+            A::ShaderFolder | A::LutFolder => {}
+            #[cfg(not(target_arch = "wasm32"))]
             A::ShaderFolder => {
                 // ~/Library/Application Support/Phosphor/isf: scanned at startup like VDMX's ISF folders.
                 if let Some(dir) = crate::show::storage_dir().map(|d| d.join("isf")) {
@@ -187,6 +190,7 @@ impl PhosphorApp {
                     None => st.notice = Some("Save the project first: backups go in a folder next to it".into()),
                 }
             }
+            #[cfg(not(target_arch = "wasm32"))]
             A::LutFolder => {
                 // ~/Library/Application Support/Phosphor/luts: each .cube becomes an effect (category LUT).
                 if let Some(dir) = crate::show::storage_dir().map(|d| d.join("luts")) {

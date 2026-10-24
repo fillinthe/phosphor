@@ -141,7 +141,10 @@ impl PhosphorApp {
         self.remote_sync(now);
         self.sync_mapping_from_output();
         {
+            #[cfg(not(target_arch = "wasm32"))]
             let State { control, comp, clock, cue_run, ltc_out, .. } = &mut self.state;
+            #[cfg(target_arch = "wasm32")]
+            let State { control, comp, clock, cue_run, .. } = &mut self.state;
             let heard = control.poll(comp);
             control.poll_clock(now);
             control.tick_clock_out(clock.beats(now), clock.bpm);

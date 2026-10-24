@@ -101,6 +101,7 @@ impl PhosphorApp {
         } else if let Ok(name) = std::env::var("PHOSPHOR_SOUND_OUT") {
             crate::media::video::sound::set_output_device(Some(name));
         }
+        #[cfg(not(target_arch = "wasm32"))]
         if bench.as_ref().is_some_and(|b| b.movie_sound && !b.sound) {
             crate::media::video::sound::set_local(false);
         }

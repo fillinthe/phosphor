@@ -335,6 +335,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
                         ui.close();
                     }
                     if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Show the folder")).clicked() {
+                        #[cfg(not(target_arch = "wasm32"))]
                         crate::os::open(&group);
                         ui.close();
                     }
