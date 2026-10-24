@@ -1,13 +1,11 @@
-//! Crash reports sent by themselves (opt-in): after Phosphor reopens from a crash, and only when "Send crash reports"
-//! is on, the same diagnostics the Report a Bug window shows (version, system, the project's shape as counts, the end
-//! of crash.log; no project content, no file names) go to the crash server as JSON, once per crash.
-//!
-//! The server isn't set up yet: `ENDPOINT` is empty until it is, and `PHOSPHOR_CRASH_URL` points it anywhere (tests).
-//! What the server needs: accept `POST <endpoint>` with `Content-Type: application/json` and the body
-//! `{"version", "os", "arch", "report"}` (strings), answer 2xx, keep it privately.
+//! Reports to the Phosphor team: bug reports someone sends from Report a Bug (one click), and crash reports sent by
+//! themselves (opt-in: after Phosphor reopens from a crash, when "Send crash reports" is on). A report is the words
+//! plus the diagnostics the window shows (version, system, the project's shape as counts, the end of crash.log; no
+//! project content, no file names), as JSON `{"version", "os", "arch", "kind", "report"}` to `ENDPOINT`, which keeps it
+//! privately (nothing public). `PHOSPHOR_CRASH_URL` points it anywhere (tests).
 
-/// The crash server (empty: not set up yet, nothing is sent).
-const ENDPOINT: &str = "";
+/// Where reports go (the phosphorfx.com report receiver). Empty = sending off.
+const ENDPOINT: &str = "https://phosphorfx.com/api/report";
 
 /// Where reports go, if anywhere.
 pub fn endpoint() -> Option<String> {
