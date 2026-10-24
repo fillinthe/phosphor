@@ -6,7 +6,7 @@ use phosphor_engine::MASTER_ID;
 use super::*;
 
 pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
-    egui::CollapsingHeader::new(RichText::new(label(icon::SCAN, "Video tracking")).strong()).id_salt("tracking").default_open(st.comp.tracking.enabled).show(ui, |ui| {
+    crate::ui::section(ui, "tracking", label(icon::SCAN, "Video tracking"), st.comp.tracking.enabled, |ui| {
         let t = &mut st.comp.tracking;
         crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut t.enabled, "TRACKING").on_hover_text("Look for faces, hands and a body in the picture (Apple Vision, on this Mac)");

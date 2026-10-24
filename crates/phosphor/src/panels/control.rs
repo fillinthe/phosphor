@@ -4,14 +4,14 @@ use super::*;
 
 pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     let control = &mut st.control;
-    ui.label(RichText::new("MIDI").strong());
+    crate::ui::heading(ui, "MIDI");
     if control.midi_ports.is_empty() {
         hint(ui, "No MIDI inputs found. Plug in a controller and press Reconnect.");
     } else {
         hint(ui, format!("Listening on: {}", control.midi_ports.join(", ")));
     }
     ui.horizontal(|ui| {
-        ui.label(RichText::new("OSC").strong());
+        crate::ui::heading(ui, "OSC");
         guarded!(ui, control.osc_port, egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
         // More ports, typed as a list ("8000, 9001"); applied by Reconnect.
         let id = ui.id().with("osc_extra");
@@ -183,8 +183,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
 
 /// The MIDI / OSC monitor: every message as it comes in (newest at the bottom), what it's mapped to, pause / clear.
 fn monitor(ui: &mut egui::Ui, st: &mut State) {
-    let header = egui::CollapsingHeader::new(RichText::new(format!("{} Monitor: what your controllers send", icon::PULSE)).strong()).id_salt("control_monitor").default_open(true);
-    header.show(ui, |ui| {
+    crate::ui::section(ui, "control_monitor", format!("{} Monitor: what your controllers send", icon::PULSE), true, |ui| {
         let comp = &st.comp;
         let control = &mut st.control;
         crate::ui::toolbar(ui, |ui| {
@@ -274,7 +273,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     }
     let listening = control.listen_source;
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Mappings").strong());
+        crate::ui::heading(ui, "Mappings");
         hint(ui, format!("{}", comp.control_maps.len()));
         let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Sets of mappings by name, e.g. one per controller (Load replaces this project's mappings; Undo brings them back).", mapping_presets, mapping_preset_name, "mapping set", || if comp.control_maps.is_empty() { String::new() } else { serde_json::to_string(&comp.control_maps).unwrap_or_default() });
         match picked {
@@ -402,12 +401,12 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
     let text = if fx.is_empty() { RichText::new(icon::WAVE_SINE) } else { RichText::new(format!("{} {}", icon::WAVE_SINE, fx.len())).color(accent()) };
     ui.menu_button(text, |ui| {
         ui.set_min_width(260.0);
-        ui.label(RichText::new("On the way in").strong());
+        crate::ui::heading(ui, "On the way in");
         hint(ui, "The controller's value goes through these, top to bottom, before its range.");
         let mut remove = None;
         for (k, f) in fx.iter_mut().enumerate() {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(f.name()).strong());
+                crate::ui::heading(ui, f.name());
                 match f {
                     ValueFx::Smooth(s) => {
                         guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=10.0).speed(0.01).suffix(" s")).on_hover_text("Glide to each new value over this long");

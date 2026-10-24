@@ -144,7 +144,7 @@ pub(crate) fn point_fields(ui: &mut egui::Ui, s: &mut Surface, size: (u32, u32))
     let locked = s.locked;
     let Some(p) = points_mut(s).into_iter().nth(i) else { return };
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new(format!("Point {}", i + 1)).strong());
+        crate::ui::heading(ui, format!("Point {}", i + 1));
         for (axis, (name, len)) in [("X", size.0), ("Y", size.1)].into_iter().enumerate() {
             let mut v = p[axis] * len as f32;
             let r = ui.add_enabled(!locked, egui::DragValue::new(&mut v).speed(0.25).fixed_decimals(1).prefix(format!("{name} ")).suffix(" px"));
@@ -221,7 +221,7 @@ mod tests {
 /// one's values are shown).
 pub(crate) fn group_settings(ui: &mut egui::Ui, mapping: &mut Mapping, ids: &[u64]) {
     let Some(first) = mapping.surfaces.iter().find(|s| ids.contains(&s.id)).cloned() else { return };
-    ui.label(RichText::new(format!("{} {} slices selected", icon::SELECTION_ALL, ids.len())).strong());
+    crate::ui::heading(ui, format!("{} {} slices selected", icon::SELECTION_ALL, ids.len()));
     hint(ui, "Changes here apply to all of them · drag one to move them all · arrows nudge them · Shift-click to add or remove one");
     let all = |mapping: &mut Mapping, f: &dyn Fn(&mut Surface)| mapping.surfaces.iter_mut().filter(|s| ids.contains(&s.id)).for_each(f);
     let mut on = first.enabled;

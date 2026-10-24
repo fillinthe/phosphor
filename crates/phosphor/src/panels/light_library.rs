@@ -69,7 +69,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
                     ui.colored_label(WARN, e.as_str());
                 }
                 Some(Ok(d)) => {
-                    ui.label(RichText::new(format!("{} {}", light.maker, d.name)).strong());
+                    crate::ui::heading(ui, format!("{} {}", light.maker, d.name));
                     if !d.categories.is_empty() {
                         hint(ui, d.categories.join(", "));
                     }

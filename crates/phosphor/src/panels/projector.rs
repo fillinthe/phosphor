@@ -9,7 +9,7 @@ use super::*;
 
 /// The Projector section of an output's properties.
 pub(crate) fn projector_settings(ui: &mut egui::Ui, o: &mut OutputConfig, projectors: &mut Projectors) {
-    egui::CollapsingHeader::new(label(icon::PROJECTOR_SCREEN_CHART, "Projector (PJLink)")).id_salt(("pjlink", o.id)).default_open(o.projector.is_some()).show(ui, |ui| {
+    crate::ui::section(ui, ("pjlink", o.id), label(icon::PROJECTOR_SCREEN_CHART, "Projector (PJLink)"), o.projector.is_some(), |ui| {
         let Some(p) = &mut o.projector else {
             hint(ui, "Switch this output's projector on and off, and close its shutter, over the network (most Epson, Panasonic, NEC, Sony, Optoma, Christie and Barco projectors).");
             if crate::ui::command(ui, label(icon::PLUS, "Add its projector")).clicked() {

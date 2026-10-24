@@ -348,7 +348,7 @@ pub(crate) fn next_free(fixtures: &[Fixture]) -> (u16, u16) {
 /// this is open.
 #[cfg(not(target_arch = "wasm32"))]
 fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
-    egui::CollapsingHeader::new(label(icon::MONITOR, "Monitor (what's being sent)")).id_salt("dmx_monitor").show(ui, |ui| {
+    crate::ui::section(ui, "dmx_monitor", label(icon::MONITOR, "Monitor (what's being sent)"), false, |ui| {
         st.dmx.watching = true;
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         let unis: Vec<u16> = st.dmx.sent.keys().copied().collect();

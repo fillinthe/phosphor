@@ -121,8 +121,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     };
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("When the project opens").small());
+    crate::ui::field(ui, "When the project opens", |ui| {
         cue_pick(ui, "open_cue", &mut st.comp.cues.open_cue);
         ui.separator();
         let mut idle = st.comp.cues.idle_minutes > 0.0;
@@ -135,8 +134,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     #[cfg(not(target_arch = "wasm32"))]
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Calendar").small());
+    crate::ui::field(ui, "Calendar", |ui| {
         if st.comp.cues.calendar.is_empty() {
             if crate::ui::small_command(ui, label(icon::CALENDAR, "Choose a calendar (.ics)…")).on_hover_text("Events in a calendar (exported from Calendar, Google, Outlook) start the cue with the same name, on time; repeating events too").clicked() {
                 st.dialogs.pick_file(crate::dialogs::Purpose::CueCalendar, Some(("Calendar", &["ics"])));
@@ -169,7 +167,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             // A group starts here: its name, and Go (its first cue).
             if !cue.group.is_empty() && cue.group != prev_group {
                 crate::ui::toolbar(ui, |ui| {
-                    ui.label(RichText::new(format!("{} {}", icon::FOLDER_OPEN, cue.group)).strong());
+                    crate::ui::heading(ui, format!("{} {}", icon::FOLDER_OPEN, cue.group));
                     if crate::ui::small_command(ui, label(icon::PLAY, "Go")).on_hover_text("Start this group (its first cue)").clicked() {
                         fire = Some(i);
                     }

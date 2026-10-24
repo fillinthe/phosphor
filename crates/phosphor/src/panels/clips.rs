@@ -589,7 +589,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
                 ui.close();
             }
             ui.separator();
-            ui.label(RichText::new(format!("{} MIDI notes", icon::PIANO_KEYS)).strong());
+            crate::ui::heading(ui, format!("{} MIDI notes", icon::PIANO_KEYS));
             hint(ui, "The whole row on a run of notes (a pad grid's row): clip 1 = the first note, clip 2 = the next…");
             let key = ui.id().with(("row_midi", layer.id));
             let (mut ch, mut note): (u8, u8) = ui.data(|d| d.get_temp(key)).unwrap_or((0, 36));
@@ -626,11 +626,11 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             let pick = crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
             map_menu(ui, &pick, ControlTarget::LayerClipPick(layer.id));
             ui.separator();
-            ui.label(RichText::new(format!("{} Plays on", icon::STACK)).strong());
+            crate::ui::heading(ui, format!("{} Plays on", icon::STACK));
             hint(ui, "Share this row's clips over the layers beside it (same group): each clip on the next layer, or on one with nothing playing.");
             choice_buttons(ui, &mut layer.voices, |_, _| {});
             ui.separator();
-            ui.label(RichText::new(format!("{} Autopilot", icon::AIRPLANE_TILT)).strong());
+            crate::ui::heading(ui, format!("{} Autopilot", icon::AIRPLANE_TILT));
             hint(ui, "When this clip is done: play another one by itself, or clear the layer.");
             for a in Autopilot::ALL {
                 ui.radio_value(&mut layer.autopilot, a, a.name());

@@ -17,7 +17,7 @@ fn permissions(ui: &mut egui::Ui) {
             list
         }
     };
-    ui.label(RichText::new(format!("{} Permissions", icon::SHIELD_CHECK)).strong());
+    crate::ui::heading(ui, format!("{} Permissions", icon::SHIELD_CHECK));
     egui::Grid::new("permissions").num_columns(3).spacing([10.0, 4.0]).show(ui, |ui| {
         use crate::permissions::Status;
         for (name, why, status, settings) in list.iter() {
@@ -43,7 +43,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         permissions(ui);
         // Phones, tablets and browsers on the session.
         crate::ui::toolbar(ui, |ui| {
-            ui.label(RichText::new(format!("{} Phones & browsers", icon::DEVICE_MOBILE)).strong());
+            crate::ui::heading(ui, format!("{} Phones & browsers", icon::DEVICE_MOBILE));
             if st.net.running() {
                 hint(ui, st.net.url());
             } else {
@@ -91,7 +91,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             if !st.web_log.is_empty() {
                 ui.add_space(4.0);
                 crate::ui::toolbar(ui, |ui| {
-                    ui.label(RichText::new("Changes from the web").small().strong());
+                    ui.label(RichText::new("Changes from the web").strong().small());
                     if crate::ui::small_command(ui, "Clear").clicked() {
                         st.web_log.clear();
                     }
@@ -100,7 +100,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                     egui::Grid::new("web_log_grid").num_columns(3).spacing([10.0, 2.0]).show(ui, |ui| {
                         for l in &st.web_log {
                             ui.monospace(RichText::new(&l.wall).small());
-                            ui.label(RichText::new(&l.who).small().strong());
+                            ui.label(RichText::new(&l.who).strong().small());
                             ui.label(RichText::new(&l.what).small());
                             ui.end_row();
                         }
@@ -125,7 +125,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
 
         // MIDI inputs.
         crate::ui::toolbar(ui, |ui| {
-            ui.label(RichText::new(format!("{} MIDI inputs", icon::PIANO_KEYS)).strong());
+            crate::ui::heading(ui, format!("{} MIDI inputs", icon::PIANO_KEYS));
             if crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
                 st.control.reconnect();
             }
@@ -159,7 +159,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
 
         // OSC senders.
         crate::ui::toolbar(ui, |ui| {
-            ui.label(RichText::new(format!("{} OSC senders", icon::BROADCAST)).strong());
+            crate::ui::heading(ui, format!("{} OSC senders", icon::BROADCAST));
             hint(ui, &st.control.osc_status);
         });
         let (senders, blocked) = {
@@ -192,7 +192,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             crate::ui::toolbar(ui, |ui| {
-                ui.label(RichText::new(format!("{} Other Phosphors", icon::DESKTOP_TOWER)).strong());
+                crate::ui::heading(ui, format!("{} Other Phosphors", icon::DESKTOP_TOWER));
                 hint(ui, format!("this one is \"{}\"", crate::control::discovery::identity().0));
             });
             let players = crate::control::discovery::players();
@@ -212,14 +212,14 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         }
 
         // Audio input and outputs, for the full picture.
-        ui.label(RichText::new(format!("{} Audio in", icon::MICROPHONE)).strong());
+        crate::ui::heading(ui, format!("{} Audio in", icon::MICROPHONE));
         if st.audio.is_open() {
             ui.label(st.audio.current().unwrap_or("Default input"));
         } else {
             hint(ui, "off (Audio panel)");
         }
         ui.separator();
-        ui.label(RichText::new(format!("{} Outputs", icon::PROJECTOR_SCREEN)).strong());
+        crate::ui::heading(ui, format!("{} Outputs", icon::PROJECTOR_SCREEN));
         #[cfg(target_os = "macos")]
         syphon_row(ui, st);
         #[cfg(windows)]

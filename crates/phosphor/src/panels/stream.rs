@@ -204,7 +204,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
 fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], now: f64) {
     use crate::app::recorders::MAX;
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new("More recorders").strong());
+        crate::ui::heading(ui, "More recorders");
         if st.recorders.len() < MAX && crate::ui::command(ui, label(icon::PLUS, "Recorder")).on_hover_text("Record another picture to its own file at the same time (a layer on its own, a comp, the program)").clicked() {
             st.recorder_add();
         }

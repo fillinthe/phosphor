@@ -111,7 +111,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     let inputs = mod_inputs(ui);
     let current = m.map(|m| m.source);
     ui.horizontal(|ui| {
-        ui.label(RichText::new(if signal_only { "Its signal" } else { "Drive this control with" }).strong());
+        crate::ui::heading(ui, if signal_only { "Its signal" } else { "Drive this control with" });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if crate::ui::pick_item(ui, current.is_none(), "Off").clicked() {
                 *m = None;

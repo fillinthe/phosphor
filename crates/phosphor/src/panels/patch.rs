@@ -208,7 +208,7 @@ pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> b
     }
     let generator = patch.generator;
     bg.context_menu(|ui| {
-        ui.label(RichText::new("Add a block").strong());
+        crate::ui::heading(ui, "Add a block");
         for g in Group::ALL.into_iter().filter(|g| *g != Group::Output) {
             ui.menu_button(g.name(), |ui| {
                 for b in BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator)) {

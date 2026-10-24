@@ -11,7 +11,7 @@ pub(crate) const RESOLUTIONS: &[(u32, u32, &str)] = &[
 
 pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new("Screens").strong());
+        crate::ui::heading(ui, "Screens");
         if crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
             st.displays = crate::screens::displays();
         }
@@ -151,7 +151,7 @@ fn gpu_row(ui: &mut egui::Ui, st: &mut State) {
 /// Every output with its size, screen, window and Identify controls.
 pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new("Outputs").strong());
+        crate::ui::heading(ui, "Outputs");
         if crate::ui::small_command(ui, label(icon::PLUS, "Add output")).clicked() {
             st.mapping_output = st.comp.add_output();
         }
@@ -307,7 +307,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
             }
             if !o.mapping.surfaces.is_empty() {
                 let title = format!("{} surfaces{}", o.mapping.surfaces.len(), if o.mapping.enabled { "" } else { " (mapping off)" });
-                egui::CollapsingHeader::new(title).id_salt(("out_surfaces", id)).show(ui, |ui| {
+                crate::ui::section(ui, ("out_surfaces", id), title, false, |ui| {
                     for s in o.mapping.surfaces.iter_mut() {
                         crate::ui::toolbar(ui, |ui| {
                             crate::ui::toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
@@ -471,7 +471,7 @@ pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputC
 
 pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_engine::ColorGrade) {
     let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
-    egui::CollapsingHeader::new(title).id_salt(("color_grade", id)).show(ui, |ui| {
+    crate::ui::section(ui, ("color_grade", id), title, false, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
         ui.horizontal(|ui| {
             Level::range(&mut g.brightness, -1.0, 1.0, "Brightness").default(0.0).show(ui);
@@ -503,7 +503,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
     let name = if g.pattern == phosphor_engine::TestPattern::Grid { "GRID".to_string() } else { g.pattern.label().to_uppercase() };
     let r = toggle(ui, &mut g.on, label(icon::GRID_FOUR, &name)).on_hover_text("Alignment grid or test pattern on this output to line up the projector · right-click to pick the pattern and its settings · off for the show");
     r.right_menu(|ui| {
-        ui.label(RichText::new("Test pattern").strong());
+        crate::ui::heading(ui, "Test pattern");
         for &p in phosphor_engine::TestPattern::ALL.iter() {
             if ui.radio_value(&mut g.pattern, p, p.label()).clicked() {
                 g.on = true;
@@ -511,7 +511,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
         }
         hint(ui, "Grid shows over the show; the others cover it. Test card: red top left, green top right, blue bottom right, yellow bottom left.");
         ui.separator();
-        ui.label(RichText::new("Grid").strong());
+        crate::ui::heading(ui, "Grid");
         crate::ui::toolbar(ui, |ui| {
             ui.label("Cells across");
             guarded!(ui, g.cells, egui::DragValue::new(&mut g.cells).range(2..=64));

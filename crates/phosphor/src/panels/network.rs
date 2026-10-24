@@ -6,7 +6,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     follow_section(ui, st);
     let State { net, notice, .. } = &mut *st;
-    ui.label(RichText::new("Session").strong());
+    crate::ui::heading(ui, "Session");
     hint(ui, "Anyone on your network opens the link and sees the output live; they can send their music back.");
     crate::ui::toolbar(ui, |ui| {
         ui.add_enabled_ui(!net.running(), |ui| {
@@ -56,7 +56,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         audience_play(ui, st);
         let State { net, remote_password, require_password, .. } = &mut *st;
         ui.separator();
-        ui.label(RichText::new(format!("{} Phone / tablet remote", icon::DEVICE_MOBILE)).strong());
+        crate::ui::heading(ui, format!("{} Phone / tablet remote", icon::DEVICE_MOBILE));
         hint(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
         ui.horizontal(|ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
@@ -106,7 +106,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
 /// Audience play: a QR code for the room; people scan it and take turns at the chosen controls.
 fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.input(|i| i.time);
-    ui.label(RichText::new(format!("{} Audience play", icon::GAME_CONTROLLER)).strong());
+    crate::ui::heading(ui, format!("{} Audience play", icon::GAME_CONTROLLER));
     hint(ui, "People scan the code, line up, and each gets the controls for a while: your Control Surface, clip columns, Surprise.");
     let play = &mut st.comp.play;
     crate::ui::toggle(ui, &mut play.enabled, "Let the audience play");
@@ -219,7 +219,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
 /// Follow another Phosphor: play its show (project, beat, clips) on this machine's own outputs (`crate::follow`).
 #[cfg(not(target_arch = "wasm32"))]
 fn follow_section(ui: &mut egui::Ui, st: &mut State) {
-    ui.label(RichText::new("Follow another Phosphor").strong());
+    crate::ui::heading(ui, "Follow another Phosphor");
     let key = egui::Id::new("phosphor_follow_address");
     match &st.following {
         Some(l) => {

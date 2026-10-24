@@ -18,7 +18,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     let ctx = ui.ctx().clone();
     let State { account: a, account_ui: f, comp, cloud_project, project_path, .. } = st;
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new("Your account").strong());
+        crate::ui::heading(ui, "Your account");
         if a.busy > 0 {
             ui.spinner();
         }

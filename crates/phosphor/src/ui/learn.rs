@@ -192,7 +192,7 @@ fn oscquery_browser(ui: &mut egui::Ui, target: &ControlTarget) {
     type Shared = std::sync::Arc<std::sync::Mutex<Option<Fetched>>>;
     let (addr_id, result_id, search_id) = (egui::Id::new("oscq_addr"), egui::Id::new("oscq_result"), egui::Id::new("oscq_search"));
     ui.separator();
-    ui.label(RichText::new("Another app (OSC Query)").strong());
+    crate::ui::heading(ui, "Another app (OSC Query)");
     let mut addr: String = ui.ctx().data_mut(|d| d.get_persisted(addr_id)).unwrap_or_else(|| "127.0.0.1:".into());
     let shared: Shared = ui.ctx().data_mut(|d| d.get_temp_mut_or_default::<Shared>(result_id).clone());
     ui.horizontal(|ui| {

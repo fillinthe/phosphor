@@ -93,7 +93,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 let k = &layer.clips[c];
                 let is_movie = matches!(k.source, SourceSpec::Movie { path: Some(_), .. });
                 let title = format!("{} Clip {} · column {}", icon::SQUARES_FOUR, k.name, c + 1);
-                egui::CollapsingHeader::new(title).id_salt("inspector_clip").default_open(true).show(ui, |ui| {
+                crate::ui::section(ui, "inspector_clip", title, true, |ui| {
                     if also_clips > 0 {
                         hint(ui, &format!("Editing {} clips: how a press plays, sound and own settings go to all of them. Click a clip without Shift / Cmd to edit just one.", also_clips + 1));
                     }
@@ -194,12 +194,11 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         if let SourceSpec::Generator(id) = &layer.source
             && let Some(desc) = shaders::generator(id)
         {
-            ui.label(RichText::new(format!("Generator · {}", desc.name)).strong());
+            crate::ui::heading(ui, format!("Generator · {}", desc.name));
             for (i, p) in desc.params.iter().enumerate() {
                 param_slider(ui, &mut layer.generator_values, &mut layer.generator_mods, i, p, Some(ControlTarget::GeneratorParam { layer: layer.id, index: i }));
             }
-            crate::ui::toolbar(ui, |ui| {
-                ui.label(RichText::new("Render size").small());
+            crate::ui::field(ui, "Render size", |ui| {
                 let sizes: Vec<(f32, String)> = [1.0, 0.75, 0.5, 0.25].iter().map(|s| (*s, format!("{:.0}%", s * 100.0))).collect();
                 let mut scale = sizes.iter().map(|(s, _)| *s).min_by(|a, b| (a - layer.render_scale).abs().total_cmp(&(b - layer.render_scale).abs())).unwrap_or(1.0);
                 if segmented(ui, &mut scale, &sizes, |_, r, _| {
@@ -211,14 +210,13 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             ui.separator();
         }
         if let SourceSpec::Text(style) = &mut layer.source {
-            ui.label(RichText::new("Text").strong());
+            crate::ui::heading(ui, "Text");
             if text_editor(ui, style, layer.id) {
                 media.text_file.set(true);
             }
             // Ready-made movement (it sets the layer's move / size / opacity motion, on the tempo).
             let mut motion = layer.text_motion();
-            ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Moves").small());
+            crate::ui::field(ui, "Moves", |ui| {
                 let was = motion;
                 choice_buttons(ui, &mut motion, |_, _| {});
                 if motion != was {
@@ -229,7 +227,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         }
         if let Some(name) = layer.collection.clone() {
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new(format!("{} Playing collection · {name}", icon::BOOKMARKS_SIMPLE)).strong());
+                crate::ui::heading(ui, format!("{} Playing collection · {name}", icon::BOOKMARKS_SIMPLE));
                 if crate::ui::small_command(ui, label(icon::STOP, "Stop")).on_hover_text("Keep what's showing; stop stepping through the collection").clicked() {
                     layer.collection = None;
                 }
@@ -251,7 +249,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             ui.separator();
         }
         crate::ui::toolbar(ui, |ui| {
-            ui.label(RichText::new("Fade style").strong());
+            crate::ui::heading(ui, "Fade style");
             choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
             if transition_effect_combo(ui, ("trans_fx", layer.id), layer.transition_kind, &mut layer.transition_effect) {
                 layer.transition_values.clear();
@@ -259,8 +257,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
         });
         transition_settings(ui, layer);
-        crate::ui::toolbar(ui, |ui| {
-            ui.label(RichText::new("Frame rate").small());
+        crate::ui::field(ui, "Frame rate", |ui| {
             let rates: Vec<(f32, String)> = [(0.0, "every frame".to_string()), (30.0, "30".into()), (15.0, "15".into()), (10.0, "10".into()), (5.0, "5".into())].into_iter().collect();
             segmented(ui, &mut layer.render_fps, &rates, |_, r, _| {
                 r.clone().on_hover_text("Draw this layer (its source and effects) only this often and hold the picture between: saves the GPU, or a choppy look on purpose");
@@ -268,7 +265,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         });
         ui.separator();
         if matches!(layer.source, SourceSpec::Movie { .. }) {
-            ui.label(RichText::new("Playback").strong());
+            crate::ui::heading(ui, "Playback");
             if let Some(info) = &info {
                 hint(ui, *info);
             }
@@ -460,7 +457,7 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
     // Triggered from the clip grid: which slot.
     let clip = layer.active_clip.and_then(|id| layer.clips.iter().position(|c| c.id == id));
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new(format!("{glyph} {kind}")).strong());
+        crate::ui::heading(ui, format!("{glyph} {kind}"));
         if let Some(i) = clip {
             hint(ui, format!("· clip {} (column {})", layer.clips[i].name.trim().is_empty().then(|| (i + 1).to_string()).unwrap_or_else(|| layer.clips[i].name.clone()), i + 1));
         }
@@ -497,7 +494,7 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         Some(d) => label(icon::INTERSECT, &format!("Blend shader: {}", d.name)),
         None => label(icon::INTERSECT, "Blend shader"),
     };
-    egui::CollapsingHeader::new(title).id_salt(("mixer", layer.id)).show(ui, |ui| {
+    crate::ui::section(ui, ("mixer", layer.id), title, false, |ui| {
         hint(ui, "Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies.");
         let mut pick = layer.mixer.clone();
         ComboBox::from_id_salt(("mixer_pick", layer.id)).width(200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
@@ -527,7 +524,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     let id = layer.id;
     let t = &mut layer.transform;
     let title = if t.is_identity() { label(icon::ARROWS_OUT_CARDINAL, "Transform") } else { label(icon::ARROWS_OUT_CARDINAL, "Transform (moved)") };
-    egui::CollapsingHeader::new(title).id_salt(("transform", id)).show(ui, |ui| {
+    crate::ui::section(ui, ("transform", id), title, false, |ui| {
         let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32| {
             ui.horizontal(|ui| {
                 let mut level = Level::range(value, *range.start(), *range.end(), text).default(reset).target(target);
@@ -656,9 +653,8 @@ pub(crate) fn zone_requests(ctx: &egui::Context, st: &mut State) {
 pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
     let mut from_file = false;
     // Live: the words follow the clock.
-    ui.horizontal_wrapped(|ui| {
+    crate::ui::field(ui, "Live", |ui| {
         use phosphor_engine::LiveText;
-        ui.label(RichText::new("Live").small());
         let kinds = [
             (LiveText::Off, "Off"),
             (LiveText::Clock, "Clock"),
@@ -726,8 +722,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
         }
     });
     // In parts: one line / sentence / word at a time, stepped by the buttons (or a controller).
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Parts").small());
+    crate::ui::field(ui, "Parts", |ui| {
         choice_combo(ui, ("chunk_by", id), &mut style.chunk_by, 100.0, true);
         if crate::ui::small_command(ui, label(icon::FILE_TEXT, "From a file…")).on_hover_text("Lyrics, a script, a list: shown a part at a time").clicked() {
             from_file = true;
@@ -754,10 +749,11 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     });
     use phosphor_engine::TextAlign;
     ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
-    ui.horizontal(|ui| {
+    // (Font, colour and alignment wrap in a narrow Inspector.)
+    crate::ui::toolbar(ui, |ui| {
         let search_id = egui::Id::new(("font_search", id));
         let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
-        ComboBox::from_id_salt(("font", id)).width(200.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
+        ComboBox::from_id_salt(("font", id)).width(170.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search fonts").desired_width(180.0)).request_focus();
             let q = search.to_lowercase();
             for f in crate::text::fonts().iter().filter(|f| q.is_empty() || f.name.to_lowercase().contains(&q)).take(400) {
@@ -807,7 +803,7 @@ fn transition_settings(ui: &mut egui::Ui, layer: &mut LayerState) {
     if layer.transition_values.len() != desc.params.len() {
         layer.transition_values = desc.defaults();
     }
-    egui::CollapsingHeader::new(RichText::new(format!("{} settings", desc.name)).small()).id_salt(("trans_settings", layer.id)).show(ui, |ui| {
+    crate::ui::subsection(ui, ("trans_settings", layer.id), format!("{} settings", desc.name), false, |ui| {
         for (i, p) in desc.params.iter().enumerate() {
             if Some(i) == progress {
                 continue;

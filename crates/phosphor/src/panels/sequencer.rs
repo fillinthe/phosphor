@@ -8,8 +8,7 @@ use super::*;
 /// One track's settings and steps. `beats` = the clock now (for the playing step), `seed` for Random.
 pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32, seed: u64) -> bool {
     let mut back_to_signal = false;
-    crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new("Steps").small());
+    crate::ui::field(ui, "Steps", |ui| {
         let mut len = track.len();
         let counts: Vec<(usize, String)> = STEP_COUNTS.iter().map(|&n| (n, n.to_string())).collect();
         if segmented(ui, &mut len, &counts, |_, r, n| {
@@ -18,8 +17,7 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
             track.resize(len);
         }
     });
-    crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new("Each").small());
+    crate::ui::field(ui, "Each", |ui| {
         let mut rate = track.rate();
         let rates: Vec<(f32, String)> = STEP_RATES.iter().map(|&(v, n)| (v, n.to_string())).collect();
         if segmented(ui, &mut rate, &rates, |_, r, _| {
