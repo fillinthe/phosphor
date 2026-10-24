@@ -37,15 +37,25 @@ impl Engine {
                 let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
                 Target::ensure(slot, device, "generator", w, h);
                 let target = slot.as_ref().unwrap();
+                // Built-in generators' Speed: smooth when changed (`SpeedPhase`).
+                let mut params = resolve_params(desc, values, value_mods, mods);
+                if !desc.id.contains(':') {
+                    for (i, p) in desc.params.iter().enumerate() {
+                        if p.name == "Speed"
+                            && let Some(v) = params.get_mut(i)
+                        {
+                            *v = res.speeds.entry((outgoing, i)).or_default().step(time, *v);
+                        }
+                    }
+                }
                 if let Some(plan) = shaders::pass_plan(desc.entry) {
                     let out = target.view.clone();
-                    let params = resolve_params(desc, values, value_mods, mods);
                     let key = if outgoing { GENERATOR_OUT_KEY } else { GENERATOR_KEY };
                     let blank = tex0.unwrap_or_else(|| self.gpu.blank.clone());
                     let view = self.run_plan(layer_id, key, desc.entry, &plan, &params, blank, out, (w, h), time, &[], passes);
                     return Some(Frame::Rgb { view, w, h });
                 }
-                let mut u = Uniforms::with_params(&resolve_params(desc, values, value_mods, mods));
+                let mut u = Uniforms::with_params(&params);
                 u.resolution = [w as f32, h as f32];
                 u.time = time;
                 passes.push(Pass {

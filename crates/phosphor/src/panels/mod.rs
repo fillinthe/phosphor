@@ -300,13 +300,14 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Online => hint(ui, "Online libraries work in the Mac, Windows and Linux apps."),
         Tab::Notes => notes_panel(ui, st),
         Tab::Timeline => timeline::timeline_panel(ui, st),
-        Tab::Audio => audio(ui, st),
+        // (Panels with no scrolling of their own scroll here, so nothing is hidden when they're short.)
+        Tab::Audio => scrolled(ui, "audio_scroll", |ui| audio(ui, st)),
         Tab::Modulators => modulators::modulators(ui, st),
         Tab::Control => control(ui, st),
         Tab::Mapping => mapping(ui, st),
-        Tab::Stream => stream(ui, st),
-        Tab::Network => network(ui, st),
-        Tab::Output => output(ui, st),
+        Tab::Stream => scrolled(ui, "stream_scroll", |ui| stream(ui, st)),
+        Tab::Network => scrolled(ui, "network_scroll", |ui| network(ui, st)),
+        Tab::Output => scrolled(ui, "output_scroll", |ui| output(ui, st)),
         Tab::ShaderEditor => crate::explorer::shader_editor(ui, st),
         Tab::Monitor(n) => monitor(ui, st, n),
         Tab::Mixer => mixer(ui, st),
@@ -320,6 +321,11 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Studio => studio(ui, st),
         Tab::Stage => stage(ui, st),
     }
+}
+
+/// A panel's whole contents in a scrolling column (for panels that don't scroll by themselves).
+fn scrolled(ui: &mut egui::Ui, id: &str, add: impl FnOnce(&mut egui::Ui)) {
+    crate::ui::column_scroll(ui).id_salt(id).auto_shrink(false).show(ui, add);
 }
 
 /// Notes saved with the project: running order, venue contacts, what each cue is for.
