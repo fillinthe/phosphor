@@ -1,0 +1,48 @@
+# Browser build of Phosphor (phosphorfx.com/app): the same app compiled to WebAssembly with trunk. Built on GitHub,
+# kept as the `phosphor-web` artifact; publishing it is a separate step outside this repository.
+name: Web build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "ROADMAP.md"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain (wasm target)
+        run: rustup toolchain install stable --profile minimal && rustup default stable && rustup target add wasm32-unknown-unknown
+
+      - name: trunk
+        run: |
+          curl -sL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar xz -C /usr/local/bin
+          trunk --version
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: web-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build
+        working-directory: crates/phosphor
+        run: trunk build --release --public-url /app/ --dist "$GITHUB_WORKSPACE/web-dist"
+
+      - name: What came out
+        run: ls -la web-dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phosphor-web
+          path: web-dist
