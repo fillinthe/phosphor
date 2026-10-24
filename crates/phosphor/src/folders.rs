@@ -106,7 +106,8 @@ fn walk(dir: &Path, depth: u32, budget: &mut usize, root: &str, out: &mut Found)
             if depth > 0 {
                 walk(&p, depth - 1, budget, root, out);
             }
-        } else if crate::media::is_supported(&name) {
+        // (The whole path: a .json is only media if it's a Lottie animation, which needs the file to look inside.)
+        } else if crate::media::is_supported(&p.to_string_lossy()) {
             *budget -= 1;
             out.push((name, p.to_string_lossy().to_string(), root.to_string()));
         }
@@ -141,6 +142,22 @@ pub fn on_network(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// A downloaded clip's credit (.credit.json) and other .json files beside clips aren't media.
+    #[test]
+    fn only_media_files_join_the_bin() {
+        let dir = std::env::temp_dir().join(format!("phosphor-walk-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        for f in ["a.mp4", "a.mp4.credit.json", "notes.json", "._b.mov"] {
+            std::fs::write(dir.join(f), b"{}").unwrap();
+        }
+        let mut out = Vec::new();
+        let mut budget = 100;
+        super::walk(&dir, 2, &mut budget, "root", &mut out);
+        let names: Vec<&str> = out.iter().map(|(n, _, _)| n.as_str()).collect();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(names, ["a.mp4"]);
+    }
+
     #[test]
     fn this_macs_own_folders_are_not_network() {
         assert!(!super::on_network(&std::env::temp_dir()));
