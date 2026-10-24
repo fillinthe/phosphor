@@ -29,8 +29,8 @@ pub(crate) fn media_browser(ui: &mut egui::Ui, st: &mut State) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     if st.media_view.follow_open {
-        if let Some((site, name)) = src::follow_box(ui, &mut st.media_view) {
-            follow(st, site, &name, ui.ctx());
+        if let Some(account) = src::follow_box(ui, &mut st.media_view) {
+            follow(st, account, ui.ctx());
         }
         ui.add_space(4.0);
     }
@@ -83,38 +83,35 @@ fn source_act(st: &mut State, act: SourceAct, acts: &mut Vec<MediaAct>, ctx: &eg
     }
 }
 
-/// Follows an account, opens it and brings in its newest clips.
+/// Follows an account (or one of your lists), opens it and brings in its newest clips.
 #[cfg(not(target_arch = "wasm32"))]
-fn follow(st: &mut State, site: crate::online::following::Site, name: &str, ctx: &egui::Context) {
-    use crate::online::following::{self as fl, Account, Following};
+fn follow(st: &mut State, account: crate::online::following::Account, ctx: &egui::Context) {
+    use crate::online::following::{self as fl, Following};
     let view = &mut st.media_view;
-    if !view.following.follow(site, name) {
-        st.notice = Some(format!("Already following @{name} on {}", site.name()));
+    if !view.following.add(account.clone()) {
+        st.notice = Some(format!("Already following {}", account.label()));
     }
     view.following.save();
     view.follow_text.clear();
     view.follow_open = false;
-    let account = Account {
-        site,
-        name: name.to_string(),
-    };
     if let (Some(root), Some(dir)) = (fl::folder(), account.dir()) {
         let _ = std::fs::create_dir_all(&dir);
-        view.show(
-            MediaSource::Folder(root.to_string_lossy().into_owned()),
-            Some(dir.to_string_lossy().into_owned()),
-        );
+        view.show(MediaSource::Folder(root.to_string_lossy().into_owned()), Some(dir.to_string_lossy().into_owned()));
     }
-    let one = Following {
-        accounts: vec![account],
-        ..view.following.clone()
-    };
+    let one = Following { accounts: vec![account], ..view.following.clone() };
     view.refresh = Some(fl::refresh(&one, Some(ctx.clone())));
 }
 
 /// When a refresh brought files in: rescan the Following folder now (not in 10 s).
 #[cfg(not(target_arch = "wasm32"))]
 fn following_poll(st: &mut State) {
+    // Keep in my library finished: say so, and show the copies now.
+    if let Some(msg) = st.media_view.kept.lock().ok().and_then(|mut k| k.take()) {
+        st.notice = Some(msg);
+        if let Some(lib) = st.media_view.following.library_dir() {
+            st.folders.add(lib.to_string_lossy().into_owned());
+        }
+    }
     let Some(p) = &st.media_view.refresh else {
         return;
     };
@@ -261,8 +258,14 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         #[cfg(not(target_arch = "wasm32"))]
         if following {
             account = Some(base.clone());
-            if let Some(act) = src::account_header(ui, &mut st.media_view, &base) {
-                follow_fetch(st, act, &base, ui.ctx());
+            match src::account_header(ui, &mut st.media_view, &base) {
+                Some(src::FollowAct::KeepAll) => {
+                    let all = (0..st.comp.media_bin.len()).filter(|i| src::inside(&st.comp.media_bin[*i].path, &base)).collect();
+                    acts.push(MediaAct::Keep(all));
+                }
+                Some(src::FollowAct::PickLibrary) => st.dialogs.pick_folder(crate::dialogs::Purpose::LibraryFolder),
+                Some(act) => follow_fetch(st, act, &base, ui.ctx()),
+                None => {}
             }
         }
         dir = Some(
@@ -471,6 +474,7 @@ fn follow_fetch(st: &mut State, act: src::FollowAct, account_dir: &str, ctx: &eg
     let view = &mut st.media_view;
     view.refresh = Some(match act {
         src::FollowAct::Refresh => fl::refresh(&view.following, Some(ctx.clone())),
+        src::FollowAct::KeepAll | src::FollowAct::PickLibrary => return,
         src::FollowAct::More => {
             let Some(a) = view.following.accounts.iter().find(|a| a.dir().is_some_and(|d| d.to_string_lossy() == account_dir)).cloned() else { return };
             let have = st.comp.media_bin.iter().filter(|m| src::inside(&m.path, account_dir)).count();

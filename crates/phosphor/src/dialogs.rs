@@ -43,6 +43,8 @@ pub enum Purpose {
     CueCalendar,
     /// A project to merge into this one.
     MergeProject,
+    /// Where "Keep in my library" copies downloaded clips.
+    LibraryFolder,
     /// A background picture for this output.
     OutputBackground(u64),
     /// A patch list (CSV) of LED fixtures.

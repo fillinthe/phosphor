@@ -246,7 +246,7 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
                 };
                 add(
                     None,
-                    format!("{logo} {}", a.name),
+                    format!("{logo} {}", a.short()),
                     right,
                     badge,
                     Pick::Source(MediaSource::Folder(root.clone()), Some(dir)),
@@ -487,11 +487,8 @@ pub(crate) fn folder_tile(
 
 /// The "Follow an account" box: the account (name or link), its site, Follow.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn follow_box(
-    ui: &mut egui::Ui,
-    view: &mut MediaView,
-) -> Option<(crate::online::following::Site, String)> {
-    use crate::online::following::{Site, handle};
+pub(crate) fn follow_box(ui: &mut egui::Ui, view: &mut MediaView) -> Option<crate::online::following::Account> {
+    use crate::online::following::{Account, Feed, Site, handle};
     let mut out = None;
     egui::Frame::group(ui.style()).show(ui, |ui| {
         crate::ui::heading(ui, label(icon::PLUS, "Follow an account"));
@@ -508,7 +505,7 @@ pub(crate) fn follow_box(
             if (crate::ui::action_button(ui, crate::ui::Act::Go, "Follow").clicked() || enter)
                 && let Some((_, name)) = &typed
             {
-                out = Some((view.follow_site, name.clone()));
+                out = Some(Account::new(view.follow_site, name));
             }
             if crate::ui::command(ui, "Cancel").clicked() {
                 view.follow_open = false;
@@ -517,6 +514,22 @@ pub(crate) fn follow_box(
         if !view.follow_text.trim().is_empty() && typed.is_none() {
             ui.colored_label(WARN, "That isn't an account name");
         }
+        ui.add_space(4.0);
+        crate::ui::heading(ui, "Or what you've liked and saved");
+        crate::ui::toolbar(ui, |ui| {
+            if crate::ui::command(ui, label(icon::X_LOGO, "My likes")).on_hover_text("The GIFs in posts you liked on X (X shows likes only to you: uses your sign-in)").clicked() {
+                out = Some(Account::mine(Site::X, Feed::Likes, ""));
+            }
+            if crate::ui::command(ui, label(icon::X_LOGO, "My bookmarks")).on_hover_text("The GIFs in posts you bookmarked on X").clicked() {
+                out = Some(Account::mine(Site::X, Feed::Bookmarks, ""));
+            }
+            let me = typed.as_ref().map(|(_, n)| n.clone());
+            if crate::ui::command_if(ui, me.is_some(), label(icon::INSTAGRAM_LOGO, "My saved")).on_hover_text("The videos you saved on Instagram: type your own @name above first").clicked()
+                && let Some(me) = me
+            {
+                out = Some(Account::mine(Site::Instagram, Feed::Saved, &me));
+            }
+        });
         browser_pick(ui, view);
     });
     out
@@ -564,6 +577,10 @@ pub(crate) enum FollowAct {
     Refresh,
     /// The next older clips of this account.
     More,
+    /// Copy all its clips into the library folder.
+    KeepAll,
+    /// Pick the library folder.
+    PickLibrary,
 }
 
 /// "Load more" (the next older clips): under a followed account's tiles. Greyed out while a fetch runs.
@@ -614,6 +631,21 @@ pub(crate) fn account_header(ui: &mut egui::Ui, view: &mut MediaView, account_di
         });
         if let Some(l) = line {
             hint(ui, l);
+        }
+    });
+    crate::ui::toolbar(ui, |ui| {
+        if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Keep all"))
+            .on_hover_text("Copy this account's clips (with their credits) into your library folder, to hold onto them")
+            .clicked()
+        {
+            refresh = Some(FollowAct::KeepAll);
+        }
+        let lib = view.following.library_dir().map_or_else(|| "?".into(), |p| p.file_name().map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned()));
+        if crate::ui::small_command(ui, format!("in {lib}"))
+            .on_hover_text(format!("Kept clips go to {} (click to pick another folder)", view.following.library_dir().map_or_else(String::new, |p| p.display().to_string())))
+            .clicked()
+        {
+            refresh = Some(FollowAct::PickLibrary);
         }
     });
     browser_pick(ui, view);
