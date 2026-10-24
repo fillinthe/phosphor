@@ -31,7 +31,7 @@ pub struct Peer {
     pub kind: PeerKind,
     pub ip: String,
     pub device: String,
-    pub since: std::time::Instant,
+    pub since: web_time::Instant,
     /// Remote unlocked (or no password set).
     pub controlling: bool,
     /// Guests: the id their browser remembers, so a reconnect is the same person.
@@ -74,7 +74,7 @@ impl Seat {
         let mut r = reg.lock().unwrap();
         r.next += 1;
         let id = r.next;
-        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: std::time::Instant::now(), controlling: false, token: String::new(), name: String::new(), level: 0.0 });
+        r.peers.push(Peer { id, kind, ip: ip.to_string(), device: device.to_string(), since: web_time::Instant::now(), controlling: false, token: String::new(), name: String::new(), level: 0.0 });
         Self { reg: reg.clone(), id }
     }
 

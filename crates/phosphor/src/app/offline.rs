@@ -35,8 +35,8 @@ pub(crate) struct Offline {
     /// The recording settings it borrowed, put back afterwards.
     saved: (StreamSettings, bool),
     /// When this frame started waiting for its movies (real time), and when the last frame was taken.
-    waiting: Option<std::time::Instant>,
-    finished: Option<std::time::Instant>,
+    waiting: Option<web_time::Instant>,
+    finished: Option<web_time::Instant>,
 }
 
 /// How long one frame waits for a movie before going out anyway.
@@ -62,7 +62,7 @@ impl Offline {
             self.waiting = None;
             return true;
         }
-        if self.waiting.get_or_insert_with(std::time::Instant::now).elapsed() > PATIENCE {
+        if self.waiting.get_or_insert_with(web_time::Instant::now).elapsed() > PATIENCE {
             self.waiting = None;
             self.late += 1;
             return true;
@@ -123,7 +123,7 @@ impl State {
             return;
         }
         // Frames still being read back from the GPU arrive a few frames later.
-        let at = *o.finished.get_or_insert_with(std::time::Instant::now);
+        let at = *o.finished.get_or_insert_with(web_time::Instant::now);
         if self.stream.running() && self.stream.sent() < o.frames && at.elapsed().as_secs_f32() < 2.0 {
             return;
         }
