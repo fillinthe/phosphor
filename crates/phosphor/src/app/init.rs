@@ -144,6 +144,7 @@ impl PhosphorApp {
                 venue_name: String::new(),
                 preset_name: String::new(),
                 notice: None,
+                notice_since: 0.0,
                 audio_declined: false,
                 clip_cells: Vec::new(),
                 audio: AudioInput::new(),
@@ -405,6 +406,10 @@ impl PhosphorApp {
             // (PHOSPHOR_MEDIA_DIR = a folder inside it to open in Media, for pictures of the panel.)
             let at = std::env::var("PHOSPHOR_MEDIA_DIR").ok().filter(|d| !d.is_empty()).unwrap_or_else(|| dir.clone());
             app.state.media_view.show(crate::panels::MediaSource::Folder(dir), Some(at));
+        }
+        // (PHOSPHOR_NOTICE = a message to show in the bar, for pictures of it.)
+        if app.bench.is_some() && let Ok(n) = std::env::var("PHOSPHOR_NOTICE") {
+            app.state.notice = Some(n);
         }
         if let Some(pw) = app.bench.as_ref().and_then(|b| b.cfg.remote_password.clone()) {
             app.state.remote_password = pw;

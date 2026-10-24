@@ -268,6 +268,8 @@ pub struct State {
     pub preset_name: String,
     /// A message worth showing the user (save failed, bad preset, …).
     pub notice: Option<String>,
+    /// When the notice last changed (the message bar lets news go after a while).
+    pub notice_since: f64,
     /// Next time movies' settings are saved into the media bin (`Composition::remember_media_settings`).
     pub media_memory_at: f64,
     /// The Convert window (right-click a media file > Convert…).

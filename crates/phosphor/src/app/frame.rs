@@ -247,6 +247,7 @@ impl PhosphorApp {
                 log::info!("notice: {n}");
             }
             self.logged_notice = self.state.notice.clone();
+            self.state.notice_since = now;
         }
         if self.lock.active {
             self.locked_top_bar(ui);
@@ -322,6 +323,7 @@ impl PhosphorApp {
             self.state.poll_relink();
         }
         self.recovered_banner(&ctx);
+        crate::ui::notice::notice_bar(&ctx, &mut self.state, now);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let rect = ctx.content_rect();
