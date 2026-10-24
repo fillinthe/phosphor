@@ -139,7 +139,7 @@ pub(crate) fn qr_code(ui: &mut egui::Ui, text: &str, size: f32) {
 
 // Devices: everything connected to this Mac, with disconnect / block / disable.
 
-pub(crate) fn ago(t: std::time::Instant) -> String {
+pub(crate) fn ago(t: web_time::Instant) -> String {
     short_duration(t.elapsed().as_secs())
 }
 
@@ -161,7 +161,7 @@ pub(crate) fn short_duration(s: u64) -> String {
     }
 }
 
-pub(crate) fn activity_dot(ui: &mut egui::Ui, last: Option<std::time::Instant>) {
+pub(crate) fn activity_dot(ui: &mut egui::Ui, last: Option<web_time::Instant>) {
     let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), Sense::hover());
     let lit = last.map_or(0.0, |t| (1.0 - t.elapsed().as_secs_f32() / 1.5).clamp(0.0, 1.0));
     let c = if lit > 0.0 { accent().gamma_multiply(0.3 + 0.7 * lit) } else { Color32::from_gray(50) };

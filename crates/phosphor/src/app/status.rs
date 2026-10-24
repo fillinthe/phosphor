@@ -62,7 +62,7 @@ impl PhosphorApp {
                     ui.label(small(format!("{} NDI · {} watching", icon::BROADCAST, st.ndi.connections()), Color32::GRAY));
                 }
                 // Controllers: lit while something arrived in the last second and a half.
-                let fresh = |t: std::time::Instant| t.elapsed().as_secs_f32() < 1.5;
+                let fresh = |t: web_time::Instant| t.elapsed().as_secs_f32() < 1.5;
                 let (midi, osc) = {
                     let a = st.control.activity.lock().unwrap();
                     (a.midi_seen.values().any(|t| fresh(*t)), a.osc.values().any(|s| fresh(s.last_seen)))
