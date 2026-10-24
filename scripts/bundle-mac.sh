@@ -11,13 +11,15 @@ VERSION=$(grep -m1 '^version' crates/phosphor/Cargo.toml | cut -d'"' -f2)
 # Oldest macOS the app runs on. Everything bundled must be built for it (checked at the end).
 # The oldest macOS Phosphor runs on (one value for FFmpeg, Syphon and the app: scripts/min-macos). 13 is the floor:
 # the ScreenCaptureKit bridge uses macOS 13 calls.
-MIN_MACOS=$(cat scripts/min-macos)
+# MIN_MACOS overrides it: the build for older Intel Macs (CI, .github/workflows/mac-intel.yml) uses 10.15 with
+# CARGO_FEATURES=--no-default-features (no screen capture, which needs macOS 12.3).
+export MIN_MACOS=${MIN_MACOS:-$(cat scripts/min-macos)}
 # FFmpeg built for MIN_MACOS (scripts/build-ffmpeg-mac.sh); Homebrew's only runs on the macOS it was built on.
 # The bundle build gets its own target folder so day-to-day builds keep using Homebrew's FFmpeg.
 VENDOR_FFMPEG=$PWD/vendor/ffmpeg
 [[ -x "$VENDOR_FFMPEG/bin/ffmpeg" ]] || scripts/build-ffmpeg-mac.sh
 export FFMPEG_DIR=$VENDOR_FFMPEG PKG_CONFIG_PATH=$VENDOR_FFMPEG/lib/pkgconfig MACOSX_DEPLOYMENT_TARGET=$MIN_MACOS
-CARGO_TARGET_DIR=target/bundle cargo build --release -p phosphor
+CARGO_TARGET_DIR=target/bundle cargo build --release -p phosphor ${CARGO_FEATURES:-}
 
 APP=dist/Phosphor.app
 rm -rf "$APP"
@@ -29,7 +31,7 @@ cp target/bundle/release/phosphor "$APP/Contents/MacOS/Phosphor"
 mkdir -p "$APP/Contents/Frameworks"
 cp -R vendor/Syphon.framework "$APP/Contents/Frameworks/"
 # The virtual camera (scripts/build-camera-extension.sh), when it's been built. Inert until signed (see that script).
-if [[ -d vendor/PhosphorCamera.systemextension ]]; then
+if [[ -d vendor/PhosphorCamera.systemextension && -z "${CARGO_FEATURES:-}" ]]; then
   mkdir -p "$APP/Contents/Library/SystemExtensions"
   cp -R vendor/PhosphorCamera.systemextension "$APP/Contents/Library/SystemExtensions/"
 fi
@@ -117,7 +119,8 @@ codesign --verify --deep --strict "$APP"
 echo "built $APP ($(du -sh "$APP" | cut -f1))"
 
 # Every panel must draw without panicking before this build goes anywhere.
-scripts/panel-check.sh "$APP/Contents/MacOS/Phosphor"
+# (SKIP_PANEL_CHECK=1: a build machine with no screen to draw on.)
+[[ -n "${SKIP_PANEL_CHECK:-}" ]] || scripts/panel-check.sh "$APP/Contents/MacOS/Phosphor"
 
 if [[ "${1:-}" != "--no-install" ]]; then
   rm -rf /Applications/Phosphor.app

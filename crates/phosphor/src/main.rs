@@ -74,6 +74,7 @@ mod menu;
 #[cfg(target_os = "macos")]
 mod syphon;
 #[cfg(target_os = "macos")]
+#[cfg_attr(not(feature = "screencapture"), path = "screen_capture_off.rs")]
 mod screen_capture;
 #[cfg(target_os = "macos")]
 mod ffgl;

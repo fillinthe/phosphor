@@ -32,12 +32,14 @@ pub fn look(rgba: &[u8], width: u32, height: u32, cfg: &phosphor_engine::Trackin
         let pixels = pixel_buffer(rgba, width, height).ok_or("Tracking: no picture buffer")?;
         let handler = VNImageRequestHandler::initWithCVPixelBuffer_options(VNImageRequestHandler::alloc(), &pixels, &NSDictionary::new());
         let faces = cfg.faces.then(|| VNDetectFaceRectanglesRequest::new());
-        let hands = cfg.hands.then(|| {
+        // Hands and bodies need macOS 11 (older Macs track faces only).
+        let pose = crate::os::macos_at_least(11, 0);
+        let hands = (cfg.hands && pose).then(|| {
             let r = VNDetectHumanHandPoseRequest::new();
             r.setMaximumHandCount(2);
             r
         });
-        let body = cfg.body.then(|| VNDetectHumanBodyPoseRequest::new());
+        let body = (cfg.body && pose).then(|| VNDetectHumanBodyPoseRequest::new());
         let mut requests: Vec<&VNRequest> = Vec::new();
         if let Some(r) = &faces {
             requests.push(r);
@@ -148,6 +150,9 @@ pub fn read(rgba: &[u8], width: u32, height: u32, codes: bool, text: bool) -> Re
 pub fn person_matte(rgba: &[u8], width: u32, height: u32) -> Result<Matte, String> {
     if rgba.len() < (width * height * 4) as usize {
         return Err("Remove background: picture too small".into());
+    }
+    if !crate::os::macos_at_least(12, 0) {
+        return Err("Remove background needs macOS 12 or later".into());
     }
     autoreleasepool(|_| unsafe {
         let pixels = pixel_buffer(rgba, width, height).ok_or("Remove background: no picture buffer")?;

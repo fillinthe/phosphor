@@ -63,5 +63,12 @@ if [ -n "$LINUX_RUN" ] && gh run download "$LINUX_RUN" -R fillinthe/phosphor -n 
   ASSETS="$ASSETS dist/linux/Phosphor-linux-arm64.tar.gz"
   echo "Adding the Linux ARM build from run $LINUX_RUN"
 fi
+# The build for older Intel Macs (macOS 10.15+), when its build of this code succeeded (optional, like Linux).
+INTEL_RUN=$(bash scripts/ci-run.sh mac-intel.yml --success || true)
+rm -rf dist/intel
+if [ -n "$INTEL_RUN" ] && gh run download "$INTEL_RUN" -R fillinthe/phosphor -n Phosphor-mac-intel -D dist/intel 2>/dev/null; then
+  ASSETS="$ASSETS dist/intel/Phosphor-mac-intel.zip"
+  echo "Adding the Intel Mac build from run $INTEL_RUN"
+fi
 gh release create "$TAG" $ASSETS -R fillinthe/phosphor --title "Phosphor $VER" --notes-file "$NOTES"
 echo "Published $TAG. Running apps install it within the hour, and when they next open."

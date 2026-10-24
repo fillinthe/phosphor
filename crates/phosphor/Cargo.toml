@@ -4,6 +4,12 @@ version = "0.3.1"
 license = "GPL-3.0-or-later"
 edition = "2024"
 
+[features]
+# Screen and window capture and system sound (ScreenCaptureKit: macOS 12.3 and later). The build for older Intel Macs
+# leaves it out (--no-default-features); Phosphor then says screen capture needs a newer macOS.
+default = ["screencapture"]
+screencapture = ["dep:screencapturekit"]
+
 [dependencies]
 phosphor-engine = { path = "../phosphor-engine" }
 eframe = { version = "0.36.2", default-features = false, features = ["wgpu", "default_fonts", "persistence"] }
@@ -61,7 +67,8 @@ snap = "1"
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
 objc2 = "0.6"
 muda = { version = "0.21", default-features = false }
-screencapturekit = "11"
+# Display / window capture and system sound (macOS 12.3+); off in the build for older Intel Macs.
+screencapturekit = { version = "11", optional = true }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSGeometry", "NSArray", "NSEnumerator"] }
 objc2-metal = { version = "0.3", default-features = false, features = ["std", "MTLDevice", "MTLTexture", "MTLResource", "MTLCommandQueue", "MTLCommandBuffer", "MTLAllocation"] }
 objc2-vision = { version = "0.3", default-features = false, features = ["std", "VNRequest", "VNRequestHandler", "VNObservation", "VNDetectFaceRectanglesRequest", "VNDetectHumanHandPoseRequest", "VNDetectHumanBodyPoseRequest", "VNDetectedPoint", "VNGeometry", "VNTypes", "VNGeneratePersonSegmentationRequest", "VNStatefulRequest", "VNDetectBarcodesRequest", "VNRecognizeTextRequest", "objc2-core-video", "objc2-core-foundation"] }
