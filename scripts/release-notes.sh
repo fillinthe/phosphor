@@ -21,5 +21,10 @@ case "$VER" in
   *) echo
      echo "**Windows 10/11 (preview):** download Phosphor-windows.zip, unzip anywhere, run Phosphor.exe. Windows warns once because the app isn't signed: **More info**, **Run anyway**." ;;
 esac
+case "$VER" in
+  0.[0-2].*|0.3.[01]) ;;
+  *) echo
+     echo "**Older Intel Macs (macOS 10.15 Catalina to 12):** download Phosphor-mac-intel.zip, unzip, drag Phosphor to Applications. The first time, right-click Phosphor › **Open** › Open (it isn't notarized yet). Same app without screen / window capture and hearing the Mac's sound." ;;
+esac
 echo
 echo "After that, Phosphor updates itself (Help › Check for Updates…)."
