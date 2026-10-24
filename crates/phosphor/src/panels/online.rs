@@ -245,7 +245,7 @@ fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
         let current = xs.browser.clone().unwrap_or_else(|| "pick a browser".into());
         ComboBox::from_id_salt("x_browser").width(110.0).selected_text(current).show_ui(ui, |ui| {
             for b in crate::web_media::BROWSERS {
-                if ui.selectable_label(xs.browser.as_deref() == Some(b), b).clicked() {
+                if crate::ui::pick_item(ui, xs.browser.as_deref() == Some(b), b).clicked() {
                     xs.browser = Some(b.to_string());
                     changed = true;
                 }
@@ -382,7 +382,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         let prompt = if o.want == Want::XGifs { "An X account: @giphy, @nasa…" } else { "Search: aurora, city lights, waves, fire…" };
         let r = crate::ui::text_field(ui, &mut o.query, prompt, Some((ui.available_width() - if o.search.is_some() { 64.0 } else { 34.0 }).max(80.0)));
         go |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        go |= ui.add_enabled(!o.query.trim().is_empty(), egui::Button::new(icon::MAGNIFYING_GLASS)).on_hover_text("Search every library that's on").clicked();
+        go |= crate::ui::command_if(ui, !o.query.trim().is_empty(), icon::MAGNIFYING_GLASS).on_hover_text("Search every library that's on").clicked();
         if o.search.is_some() && ui.button(icon::X).on_hover_text("Clear the results (back to Start a show)").clicked() {
             o.search = None;
             o.query.clear();
@@ -404,7 +404,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         let before = o.want;
         ComboBox::from_id_salt("online_want").selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
             for (w, text) in &opts {
-                ui.selectable_value(&mut o.want, *w, text);
+                crate::ui::pick_value(ui, &mut o.want, *w, text);
             }
         });
         go |= o.want != before && o.search.is_some();
@@ -437,7 +437,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         hint(ui, "One click fills three layers of clips from these libraries for a mood (replaces the layers; outputs and mapping stay).");
         ui.horizontal_wrapped(|ui| {
             for s in &crate::online::starter::STARTERS {
-                if ui.add_enabled(st.online.starter.is_none(), egui::Button::new(s.name)).on_hover_text(s.about).clicked() {
+                if crate::ui::command_if(ui, st.online.starter.is_none(), s.name).on_hover_text(s.about).clicked() {
                     start_show(st, s, ui.ctx());
                 }
             }
@@ -583,7 +583,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
             out = Some(Then::Bin);
             ui.close();
         }
-        if ui.add_enabled(selected.is_some(), egui::Button::new(label(icon::ARROW_RIGHT, "On the selected layer"))).on_disabled_hover_text("Select a layer first").clicked() {
+        if crate::ui::command_if(ui, selected.is_some(), label(icon::ARROW_RIGHT, "On the selected layer")).on_disabled_hover_text("Select a layer first").clicked() {
             out = selected.map(Then::Layer);
             ui.close();
         }

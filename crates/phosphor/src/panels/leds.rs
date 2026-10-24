@@ -29,7 +29,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     ui.label("No USB interface found: plug it in (FTDI driver on older Macs)");
                 }
                 for p in ports {
-                    ui.selectable_value(&mut d.target, p.clone(), p);
+                    crate::ui::pick_value(ui, &mut d.target, p.clone(), p);
                 }
             })
             .response
@@ -361,7 +361,7 @@ fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
         ui.horizontal_wrapped(|ui| {
             ui.label("Universe");
             for u in &unis {
-                if ui.selectable_label(*u == uni, u.to_string()).clicked() {
+                if crate::ui::pick_item(ui, *u == uni, u.to_string()).clicked() {
                     uni = *u;
                 }
             }
@@ -402,14 +402,14 @@ fn dmx_recorder(ui: &mut egui::Ui, st: &mut State) {
             if ui.button(label(icon::STOP, &format!("Stop playback ({:.0} s)", r.elapsed(now)))).clicked() {
                 r.stop();
             }
-        } else if ui.add_enabled(has_take && !r.is_recording(), egui::Button::new(label(icon::PLAY, "Play"))).on_hover_text("Send the take to the lights instead of the picture").clicked() {
+        } else if crate::ui::command_if(ui, has_take && !r.is_recording(), label(icon::PLAY, "Play")).on_hover_text("Send the take to the lights instead of the picture").clicked() {
             r.play(now);
         }
         crate::ui::toggle(ui, &mut r.looping, "Loop");
         if let Some(t) = &r.take {
             hint(ui, &format!("take: {:.1} s, {} frames", t.length(), t.frames.len()));
         }
-        if ui.add_enabled(has_take, egui::Button::new(label(icon::FLOPPY_DISK, "Save…"))).clicked() {
+        if crate::ui::command_if(ui, has_take, label(icon::FLOPPY_DISK, "Save…")).clicked() {
             st.dialogs.save_file(crate::dialogs::Purpose::SaveDmxTake, ("DMX take", &["phdmx"]), "Lights.phdmx");
         }
         if ui.button(label(icon::FOLDER_OPEN, "Open…")).on_hover_text("A saved take (.phdmx)").clicked() {

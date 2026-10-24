@@ -82,7 +82,7 @@ fn input_row(ui: &mut egui::Ui, name: &str, source: &SourceSpec, glyph: &str, se
         if ui.small_button(icon::PLUS).on_hover_text("On a new layer").clicked() {
             out = Some(None);
         }
-        if ui.add_enabled(selected.is_some(), egui::Button::new(icon::ARROW_RIGHT).small()).on_hover_text("On the selected layer").on_disabled_hover_text("Select a layer first").clicked() {
+        if crate::ui::small_command_if(ui, selected.is_some(), icon::ARROW_RIGHT).on_hover_text("On the selected layer").on_disabled_hover_text("Select a layer first").clicked() {
             out = Some(selected);
         }
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {

@@ -258,7 +258,7 @@ impl PhosphorApp {
                         other => (icon::LAYOUT, other, ""),
                     };
                     let tip = format!("{tip}. Drag any panel to rearrange this area; it remembers. View > Reset Layout restores it.");
-                    if ui.selectable_label(self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {
+                    if crate::ui::pick_item(ui, self.workspace == Some(i), format!("{glyph} {text}")).on_hover_text(tip).clicked() {
                         self.switch_workspace(i);
                     }
                 }
@@ -298,7 +298,7 @@ impl PhosphorApp {
                     }
                     picks.retain(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
                     ui.horizontal(|ui| {
-                        if ui.add_enabled(!picks.is_empty(), egui::Button::new(format!("{} Surprise these", icon::DICE_FIVE))).clicked() {
+                        if crate::ui::command_if(ui, !picks.is_empty(), format!("{} Surprise these", icon::DICE_FIVE)).clicked() {
                             surprise = picks.clone();
                             ui.close();
                         }
@@ -328,10 +328,7 @@ impl PhosphorApp {
                 if ui.button(named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
                 }
-                let map_text = egui::RichText::new(format!("{} MAP", icon::PLUG)).strong();
-                let map_text = if self.state.map_mode { map_text.color(egui::Color32::BLACK) } else { map_text };
-                if ui
-                    .add(egui::Button::new(map_text).selected(self.state.map_mode).fill(if self.state.map_mode { theme::accent() } else { egui::Color32::TRANSPARENT }))
+                if crate::ui::mode_button(ui, self.state.map_mode, format!("{} MAP", icon::PLUG))
                     .on_hover_text("Map mode (Shift ⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")
                     .clicked()
                 {
@@ -349,7 +346,7 @@ impl PhosphorApp {
                         crate::ui::Level::percent(&mut self.ui_brightness, "Brightness").default(theme::DEFAULT_BRIGHTNESS).width(220.0).show(ui);
                         ui.horizontal(|ui| {
                             for (name, b) in theme::BRIGHTNESS_PRESETS {
-                                if ui.selectable_label((self.ui_brightness - b).abs() < 0.01, *name).clicked() {
+                                if crate::ui::pick_item(ui, (self.ui_brightness - b).abs() < 0.01, *name).clicked() {
                                     self.ui_brightness = *b;
                                 }
                             }
@@ -414,7 +411,7 @@ impl PhosphorApp {
                                 Action::Ndi => format!("{label}  ({})", if self.state.comp.ndi.enabled { "on" } else { "off" }),
                                 _ => label.to_string(),
                             };
-                            if ui.add_enabled(enabled, egui::Button::new(text).shortcut_text(shortcut_text(*sc))).clicked() {
+                            if crate::ui::menu_item(ui, enabled, text, shortcut_text(*sc)).clicked() {
                                 clicked.push(*a);
                                 ui.close();
                             }
@@ -442,7 +439,7 @@ impl PhosphorApp {
                                 crate::ui::hint(ui, "Drag any tab to move it; drag it outside to float it.");
                                 for (i, tab) in Tab::ALL.iter().enumerate() {
                                     let open = self.detached.contains(tab) || self.dock.find_tab(tab).is_some();
-                                    if ui.selectable_label(open, tab.title()).clicked() {
+                                    if crate::ui::pick_item(ui, open, tab.title()).clicked() {
                                         clicked.push(Action::Panel(i));
                                     }
                                 }
@@ -468,12 +465,12 @@ impl PhosphorApp {
                                     ui.close();
                                 }
                                 ui.menu_button("Open at Startup", |ui| {
-                                    if ui.selectable_label(startup.is_none(), "However I left it").clicked() {
+                                    if crate::ui::pick_item(ui, startup.is_none(), "However I left it").clicked() {
                                         self.layouts.startup = None;
                                         ui.close();
                                     }
                                     for name in &names {
-                                        if ui.selectable_label(startup.as_deref() == Some(name.as_str()), name).clicked() {
+                                        if crate::ui::pick_item(ui, startup.as_deref() == Some(name.as_str()), name).clicked() {
                                             self.layouts.startup = Some(name.clone());
                                             ui.close();
                                         }
@@ -541,7 +538,7 @@ fn account_button(ui: &mut egui::Ui, st: &mut State) {
         None => format!("{} Sign in", icon::USER_CIRCLE),
     };
     let hover = if st.account.user.is_some() { "Your phosphorfx.com account: projects and layouts" } else { "Optional: a free phosphorfx.com account keeps your projects and layouts on every computer" };
-    if ui.selectable_label(st.account_window, text).on_hover_text(hover).clicked() {
+    if crate::ui::pick_item(ui, st.account_window, text).on_hover_text(hover).clicked() {
         st.account_window = !st.account_window;
     }
 }

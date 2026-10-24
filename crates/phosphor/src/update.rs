@@ -296,7 +296,7 @@ impl Updater {
         };
         if let Some(text) = text
             && ui
-                .add(egui::Button::new(egui::RichText::new(text).strong().color(egui::Color32::BLACK)).fill(crate::theme::accent()))
+                .add(crate::ui::callout(text, crate::theme::accent()))
                 .on_hover_text("A new Phosphor is out: click to see what's new and install it")
                 .clicked()
         {

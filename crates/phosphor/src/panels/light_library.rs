@@ -46,7 +46,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
                 egui::ScrollArea::vertical().id_salt("light_list").max_height(180.0).auto_shrink([false, true]).show(ui, |ui| {
                     for l in found.iter().take(300) {
                         let on = lib.open.as_ref().is_some_and(|(o, _)| o.key == l.key);
-                        if ui.selectable_label(on, format!("{} · {}", l.maker, l.name)).clicked() {
+                        if crate::ui::pick_item(ui, on, format!("{} · {}", l.maker, l.name)).clicked() {
                             look = Some((*l).clone());
                         }
                     }

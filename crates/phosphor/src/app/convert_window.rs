@@ -66,13 +66,13 @@ impl PhosphorApp {
                 if c.format.has_quality() {
                     ui.horizontal(|ui| {
                         for q in Quality::ALL {
-                            ui.selectable_value(&mut c.quality, q, q.name());
+                            crate::ui::pick_value(ui, &mut c.quality, q, q.name());
                         }
                     });
                 }
                 ui.horizontal(|ui| {
                     for s in Size::ALL {
-                        ui.selectable_value(&mut c.size, s, s.name());
+                        crate::ui::pick_value(ui, &mut c.size, s, s.name());
                     }
                 });
             });

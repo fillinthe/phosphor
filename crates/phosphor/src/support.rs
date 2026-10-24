@@ -14,8 +14,7 @@ pub const DONATE_ORANGE: egui::Color32 = egui::Color32::from_rgb(0xff, 0x9a, 0x2
 
 /// Heart button that opens the donation page (top bar, menus): filled orange with dark text, like GCarve's.
 pub fn donate_button(ui: &mut egui::Ui) {
-    let text = egui::RichText::new(format!("{} Donate", icon::HEART)).color(egui::Color32::from_rgb(0x1a, 0x1a, 0x1a)).strong();
-    if ui.add(egui::Button::new(text).fill(DONATE_ORANGE)).on_hover_text("Phosphor is free and open source. A donation keeps it going.").clicked() {
+    if crate::ui::callout_button(ui, format!("{} Donate", icon::HEART), DONATE_ORANGE).on_hover_text("Phosphor is free and open source. A donation keeps it going.").clicked() {
         ui.ctx().open_url(egui::OpenUrl::new_tab(DONATE_URL));
     }
 }

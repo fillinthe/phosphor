@@ -156,7 +156,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
 pub(crate) fn send_to_editor(ui: &mut egui::Ui, to: &mut phosphor_engine::SendTo) {
     use phosphor_engine::SendTo;
     for (name, make) in [("OSC", SendTo::Osc { address: "/phosphor/out".into() }), ("MIDI CC", SendTo::MidiCc { channel: 0, cc: 20 }), ("Note", SendTo::MidiNote { channel: 0, note: 60 }), ("Arduino", SendTo::Arduino { pin: 9 })] {
-        if ui.selectable_label(std::mem::discriminant(to) == std::mem::discriminant(&make), name).clicked() && std::mem::discriminant(to) != std::mem::discriminant(&make) {
+        if crate::ui::pick_item(ui, std::mem::discriminant(to) == std::mem::discriminant(&make), name).clicked() && std::mem::discriminant(to) != std::mem::discriminant(&make) {
             *to = make;
         }
     }

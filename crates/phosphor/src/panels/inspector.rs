@@ -295,9 +295,9 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     }
                     let beats = if layer.loop_beats > 0.0 { format!("{} beats", layer.loop_beats) } else { "Beats: off".into() };
                     ComboBox::from_id_salt(("loop_beats", layer.id)).width(84.0).selected_text(beats).show_ui(ui, |ui| {
-                        ui.selectable_value(&mut layer.loop_beats, 0.0, "Off (use Out)");
+                        crate::ui::pick_value(ui, &mut layer.loop_beats, 0.0, "Off (use Out)");
                         for b in [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0] {
-                            ui.selectable_value(&mut layer.loop_beats, b, format!("{b} beats"));
+                            crate::ui::pick_value(ui, &mut layer.loop_beats, b, format!("{b} beats"));
                         }
                     }).response.on_hover_text("Loop a number of beats from In, at the current tempo");
                     if (layer.loop_in, layer.loop_out, layer.loop_beats) != (0.0, 1.0, 0.0) && ui.small_button("Clear").on_hover_text("Play the whole clip").clicked() {
@@ -395,7 +395,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     let _ = path;
                     let pending = media.beat_pending;
                     let text = if pending { format!("{} Listening to the picture…", icon::HOURGLASS) } else { format!("{} Match the beat", icon::MAGIC_WAND) };
-                    if ui.add_enabled(!pending, egui::Button::new(text)).on_hover_text("Scans the movie's motion for its own rhythm, then starts the loop on its first hit and stretches it so every hit lands on a beat").clicked() {
+                    if crate::ui::command_if(ui, !pending, text).on_hover_text("Scans the movie's motion for its own rhythm, then starts the loop on its first hit and stretches it so every hit lands on a beat").clicked() {
                         media.match_beat.set(true);
                     }
                     if let Some((bpm, steady)) = media.beat {
@@ -501,9 +501,9 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         hint(ui, "Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies.");
         let mut pick = layer.mixer.clone();
         ComboBox::from_id_salt(("mixer_pick", layer.id)).width(200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
-            ui.selectable_value(&mut pick, None, "None (blend mode)");
+            crate::ui::pick_value(ui, &mut pick, None, "None (blend mode)");
             for d in &mixers {
-                ui.selectable_value(&mut pick, Some(d.id.to_string()), d.name);
+                crate::ui::pick_value(ui, &mut pick, Some(d.id.to_string()), d.name);
             }
         });
         if pick != layer.mixer {
@@ -571,7 +571,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
             guarded!(ui, t.stretch_y, egui::DragValue::new(&mut t.stretch_y).range(0.05..=8.0).speed(0.01).prefix("height ×"));
             toggle(ui, &mut t.flip_x, format!("Flip {}", icon::ARROWS_LEFT_RIGHT));
             toggle(ui, &mut t.flip_y, format!("Flip {}", icon::ARROWS_DOWN_UP));
-            if ui.add_enabled(!t.is_identity(), egui::Button::new(label(icon::ARROW_COUNTER_CLOCKWISE, "Reset"))).clicked() {
+            if crate::ui::command_if(ui, !t.is_identity(), label(icon::ARROW_COUNTER_CLOCKWISE, "Reset")).clicked() {
                 *t = Default::default();
             }
         });
@@ -604,9 +604,9 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
         ui.label("Sound device");
         let current = layer.sound_device.clone().unwrap_or_else(|| "Main output".into());
         ComboBox::from_id_salt(("sound_device", layer.id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut layer.sound_device, None, "Main output");
+            crate::ui::pick_value(ui, &mut layer.sound_device, None, "Main output");
             for d in crate::media::video::sound::output_devices() {
-                ui.selectable_value(&mut layer.sound_device, Some(d.clone()), d);
+                crate::ui::pick_value(ui, &mut layer.sound_device, Some(d.clone()), d);
             }
         })
         .response
@@ -622,7 +622,7 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
                 ui.label("Plays on");
                 ComboBox::from_id_salt(("sound_pair", layer.id)).width(120.0).selected_text(name(layer.sound_pair)).show_ui(ui, |ui| {
                     for p in 0..pairs.max(layer.sound_pair + 1) {
-                        ui.selectable_value(&mut layer.sound_pair, p, name(p));
+                        crate::ui::pick_value(ui, &mut layer.sound_pair, p, name(p));
                     }
                 });
             });
@@ -670,7 +670,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             (LiveText::Read, "Text seen"),
         ];
         for (k, name) in kinds {
-            if ui.selectable_label(std::mem::discriminant(&style.live) == std::mem::discriminant(&k), name).clicked() {
+            if crate::ui::pick_item(ui, std::mem::discriminant(&style.live) == std::mem::discriminant(&k), name).clicked() {
                 style.live = k;
                 style.live_start = ui.input(|i| i.time);
             }
@@ -714,7 +714,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
                 let current = crate::live_data::NEWS.iter().find(|(_, u)| *u == style.live_source).map_or_else(|| if style.live_source.is_empty() { "Pick a news feed".to_string() } else { "Your feed".to_string() }, |(n, _)| n.to_string());
                 ComboBox::from_id_salt(("news_feed", id)).width(150.0).selected_text(current).show_ui(ui, |ui| {
                     for (name, url) in crate::live_data::NEWS {
-                        if ui.selectable_label(style.live_source == url, name).clicked() {
+                        if crate::ui::pick_item(ui, style.live_source == url, name).clicked() {
                             style.live_source = url.to_string();
                         }
                     }
@@ -761,7 +761,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search fonts").desired_width(180.0)).request_focus();
             let q = search.to_lowercase();
             for f in crate::text::fonts().iter().filter(|f| q.is_empty() || f.name.to_lowercase().contains(&q)).take(400) {
-                ui.selectable_value(&mut style.font, f.id.clone(), &f.name);
+                crate::ui::pick_value(ui, &mut style.font, f.id.clone(), &f.name);
             }
         });
         ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
@@ -834,7 +834,7 @@ pub(crate) fn transition_effect_combo(ui: &mut egui::Ui, id: impl std::hash::Has
             hint(ui, "No shader transitions found (they come with the ISF collection).");
         }
         for d in list {
-            if ui.selectable_label(d.id == effect.as_str(), d.name).clicked() {
+            if crate::ui::pick_item(ui, d.id == effect.as_str(), d.name).clicked() {
                 *effect = d.id.to_string();
                 changed = true;
             }

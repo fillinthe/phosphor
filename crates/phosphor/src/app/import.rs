@@ -122,7 +122,7 @@ impl PhosphorApp {
                 },
             );
             ui.add_space(6.0);
-            go = ui.add_enabled(imp.chosen.iter().any(|c| *c), egui::Button::new(crate::ui::label(icon::CHECK, "Open as a new project"))).clicked();
+            go = crate::ui::command_if(ui, imp.chosen.iter().any(|c| *c), crate::ui::label(icon::CHECK, "Open as a new project")).clicked();
         });
         if go {
             let imp = self.state.avc_import.take().unwrap();

@@ -68,7 +68,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             }
             let all_picked = !members.is_empty() && members.iter().all(|m| picked.contains(m));
             let text = RichText::new(format!("{} {}  ({})", icon::FOLDER, g.name, members.len())).strong();
-            let r = ui.selectable_label(all_picked, text).on_hover_text("Click to select all its slices");
+            let r = crate::ui::pick_item(ui, all_picked, text).on_hover_text("Click to select all its slices");
             let target = ControlTarget::SliceEnabled(g.id);
             crate::ui::mapped_badge(ui, &r, &target);
             if r.clicked() {
@@ -106,7 +106,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             ui.add_space(indent);
             let s = &mut mapping.surfaces[i];
             crate::ui::eye_toggle(ui, &mut s.enabled);
-            let r = ui.selectable_label(picked.contains(&s.id), format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several");
+            let r = crate::ui::pick_item(ui, picked.contains(&s.id), format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several");
             if r.clicked() {
                 let shift = ui.input(|i| i.modifiers.shift);
                 super::mapping_points::click_slice(ui.ctx(), selected, id, shift);

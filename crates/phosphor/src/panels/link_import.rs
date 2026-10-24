@@ -77,9 +77,9 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
         ui.horizontal(|ui| {
             let current = li.browser.map_or("No sign-in".to_string(), |i| format!("Sign-in from {}", BROWSERS[i]));
             ComboBox::from_id_salt("link_browser").width(170.0).selected_text(current).show_ui(ui, |ui| {
-                ui.selectable_value(&mut li.browser, None, "No sign-in");
+                crate::ui::pick_value(ui, &mut li.browser, None, "No sign-in");
                 for (i, b) in BROWSERS.iter().enumerate() {
-                    ui.selectable_value(&mut li.browser, Some(i), format!("Sign-in from {b}"));
+                    crate::ui::pick_value(ui, &mut li.browser, Some(i), format!("Sign-in from {b}"));
                 }
             })
             .response
@@ -90,11 +90,11 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
         let ready = have_tool && !busy && li.url.trim().starts_with("http");
         ui.horizontal(|ui| {
             let browser = li.browser.map(|i| BROWSERS[i]);
-            if ui.add_enabled(ready, egui::Button::new(label(icon::DOWNLOAD_SIMPLE, "Download"))).on_hover_text("Into Phosphor's downloads folder and the media bin: a clip that loops and works offline").clicked() {
+            if crate::ui::command_if(ui, ready, label(icon::DOWNLOAD_SIMPLE, "Download")).on_hover_text("Into Phosphor's downloads folder and the media bin: a clip that loops and works offline").clicked() {
                 li.job = Some(Job::download(&li.url, browser));
                 li.live = false;
             }
-            if ui.add_enabled(ready, egui::Button::new(label(icon::BROADCAST, "Play from the link"))).on_hover_text("Plays it live on the selected layer without saving it (the site's link stops working after a while)").clicked() {
+            if crate::ui::command_if(ui, ready, label(icon::BROADCAST, "Play from the link")).on_hover_text("Plays it live on the selected layer without saving it (the site's link stops working after a while)").clicked() {
                 li.job = Some(Job::stream(&li.url, browser));
                 li.live = true;
             }

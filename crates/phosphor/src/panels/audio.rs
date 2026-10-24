@@ -12,19 +12,19 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         let current = audio.current().unwrap_or("Default input").to_string();
         ComboBox::from_id_salt("audio_device").width(220.0).selected_text(current).show_ui(ui, |ui| {
             let devices: Vec<String> = audio.devices().to_vec();
-            if ui.selectable_label(audio.current().is_none(), "Default input").clicked()
+            if crate::ui::pick_item(ui, audio.current().is_none(), "Default input").clicked()
                 && let Err(e) = audio.open(None)
             {
                 *notice = Some(e);
             }
-            if ui.selectable_label(audio.is_network(), "Session viewers (network)").on_hover_text("Audio sent back by people watching your session link").clicked() {
+            if crate::ui::pick_item(ui, audio.is_network(), "Session viewers (network)").on_hover_text("Audio sent back by people watching your session link").clicked() {
                 audio.use_network();
             }
-            if ui.selectable_label(audio.is_clips(), "Clip sound (what Phosphor plays)").on_hover_text("The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic").clicked() {
+            if crate::ui::pick_item(ui, audio.is_clips(), "Clip sound (what Phosphor plays)").on_hover_text("The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic").clicked() {
                 audio.use_clips();
             }
             for d in devices {
-                if ui.selectable_label(audio.current() == Some(d.as_str()), &d).clicked()
+                if crate::ui::pick_item(ui, audio.current() == Some(d.as_str()), &d).clicked()
                     && let Err(e) = audio.open(Some(&d))
                 {
                     *notice = Some(e);
@@ -136,11 +136,11 @@ fn sound_device(ui: &mut egui::Ui) {
                 ui.ctx().data_mut(|d| d.insert_temp(key, list.clone()));
                 list
             });
-            if ui.selectable_label(current.is_none(), "The Mac's default output").clicked() {
+            if crate::ui::pick_item(ui, current.is_none(), "The Mac's default output").clicked() {
                 sound::set_output_device(None);
             }
             for name in devices {
-                if ui.selectable_label(current.as_deref() == Some(name.as_str()), &name).clicked() {
+                if crate::ui::pick_item(ui, current.as_deref() == Some(name.as_str()), &name).clicked() {
                     sound::set_output_device(Some(name));
                 }
             }

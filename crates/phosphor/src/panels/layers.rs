@@ -219,7 +219,7 @@ pub(crate) fn master_card(
                 select = true;
             }
             ui.vertical(|ui| {
-                if ui.selectable_label(is_selected, RichText::new("MASTER").strong().size(12.5).color(accent())).clicked() {
+                if crate::ui::pick_item(ui, is_selected, RichText::new("MASTER").strong().size(12.5).color(accent())).clicked() {
                     select = true;
                 }
                 hint(ui, "Effects here run over all layers");
@@ -456,24 +456,24 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
                     for g in found {
                         let active = matches!(&layer.source, SourceSpec::Generator(id) if id == g.id);
-                        if ui.selectable_label(active, g.name).clicked() {
+                        if crate::ui::pick_item(ui, active, g.name).clicked() {
                             layer.set_generator(g.id);
                         }
                     }
                 });
                 return;
             }
-            if ui.selectable_label(layer.source == SourceSpec::None, "No source").clicked() {
+            if crate::ui::pick_item(ui, layer.source == SourceSpec::None, "No source").clicked() {
                 layer.source = SourceSpec::None;
             }
-            if ui.selectable_label(matches!(layer.source, SourceSpec::Text(_)), label(icon::TEXT_T, "Text")).on_hover_text("Words on the layer: type them in the Inspector").clicked() && !matches!(layer.source, SourceSpec::Text(_)) {
+            if crate::ui::pick_item(ui, matches!(layer.source, SourceSpec::Text(_)), label(icon::TEXT_T, "Text")).on_hover_text("Words on the layer: type them in the Inspector").clicked() && !matches!(layer.source, SourceSpec::Text(_)) {
                 layer.source = SourceSpec::Text(crate::text::default_style());
             }
             ui.menu_button(label(icon::ARROW_BEND_DOWN_RIGHT, "From another layer"), |ui| {
                 hint(ui, "Use another layer's finished picture (with its effects), or the program for video feedback.");
                 for (id, name, _) in feeds.iter().filter(|(id, ..)| *id != layer.id) {
                     let active = matches!(&layer.source, SourceSpec::Feed { id: cur, before_fx: false, .. } if cur == id);
-                    if ui.selectable_label(active, name).clicked() {
+                    if crate::ui::pick_item(ui, active, name).clicked() {
                         layer.source = SourceSpec::Feed { id: *id, name: name.clone(), before_fx: false };
                         ui.close();
                     }
@@ -485,7 +485,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                     hint(ui, "Before its effects:");
                     for (id, name, _) in plain {
                         let active = matches!(&layer.source, SourceSpec::Feed { id: cur, before_fx: true, .. } if cur == id);
-                        if ui.selectable_label(active, format!("{name} (before effects)")).clicked() {
+                        if crate::ui::pick_item(ui, active, format!("{name} (before effects)")).clicked() {
                             layer.source = SourceSpec::Feed { id: *id, name: format!("{name} (before effects)"), before_fx: true };
                             ui.close();
                         }
@@ -493,7 +493,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 }
                 // A layer feeding on itself = trails / feedback of its own previous frame.
                 let me = matches!(&layer.source, SourceSpec::Feed { id, .. } if *id == layer.id);
-                if ui.selectable_label(me, "Itself (previous frame)").clicked() {
+                if crate::ui::pick_item(ui, me, "Itself (previous frame)").clicked() {
                     layer.source = SourceSpec::Feed { id: layer.id, name: "itself".into(), before_fx: false };
                     ui.close();
                 }
@@ -501,7 +501,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
             ui.separator();
             for g in shaders::GENERATORS {
                 let active = matches!(&layer.source, SourceSpec::Generator(id) if id == g.id);
-                if ui.selectable_label(active, g.name).clicked() {
+                if crate::ui::pick_item(ui, active, g.name).clicked() {
                     layer.set_generator(g.id);
                 }
             }
@@ -589,7 +589,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
         let mut url: String = ui.ctx().data(|d| d.get_temp(url_id)).unwrap_or_default();
         ui.horizontal(|ui| {
             ui.add(egui::TextEdit::singleline(&mut url).hint_text("rtsp://… srt://… https://….m3u8").desired_width(190.0));
-            if ui.add_enabled(url.contains("://"), egui::Button::new("Play")).clicked() {
+            if crate::ui::command_if(ui, url.contains("://"), "Play").clicked() {
                 picked = Some(crate::media::live::stream_source(&url));
                 ui.close();
             }

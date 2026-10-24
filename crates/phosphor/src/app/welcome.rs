@@ -14,7 +14,7 @@ impl PhosphorApp {
             ui.set_width(420.0);
             for (k, (name, about, _)) in phosphor_engine::TEMPLATES.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    if ui.add(egui::Button::new(*name).min_size(egui::vec2(130.0, 0.0))).clicked() {
+                    if crate::ui::wide_button(ui, *name, 130.0).clicked() {
                         pick = Some(k);
                     }
                     crate::ui::hint(ui, *about);

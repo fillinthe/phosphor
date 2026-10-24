@@ -57,7 +57,7 @@ impl PhosphorApp {
             if self.layouts.saved.iter().any(|l| l.name == draft.0.trim()) {
                 crate::ui::hint(ui, "Replaces the saved layout with this name.");
             }
-            save |= ui.add_enabled(!draft.0.trim().is_empty(), egui::Button::new("Save")).clicked();
+            save |= crate::ui::command_if(ui, !draft.0.trim().is_empty(), "Save").clicked();
         });
         if save && let Some((name, startup)) = self.layout_draft.take() {
             let name = name.trim().to_string();

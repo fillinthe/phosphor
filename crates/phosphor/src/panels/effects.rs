@@ -25,10 +25,10 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Icons only: the row has to fit narrow columns (names on hover).
-            if ui.add_enabled(clipboard_len > 0, egui::Button::new(icon::CLIPBOARD_TEXT)).on_hover_text("Paste: append the copied chain").clicked() {
+            if crate::ui::command_if(ui, clipboard_len > 0, icon::CLIPBOARD_TEXT).on_hover_text("Paste: append the copied chain").clicked() {
                 action = Some(FxAction::PasteChain);
             }
-            if ui.add_enabled(!effects.is_empty(), egui::Button::new(icon::COPY)).on_hover_text("Copy this whole chain").clicked() {
+            if crate::ui::command_if(ui, !effects.is_empty(), icon::COPY).on_hover_text("Copy this whole chain").clicked() {
                 action = Some(FxAction::CopyChain);
             }
         });

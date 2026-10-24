@@ -65,7 +65,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                     ui.horizontal(|ui| {
                         for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
                             let on = layer.group == g;
-                            if ui.selectable_label(on, RichText::new(g.name()).small().strong()).on_hover_text("Crossfader side (click again for none)").clicked() {
+                            if crate::ui::pick_item(ui, on, RichText::new(g.name()).small().strong()).on_hover_text("Crossfader side (click again for none)").clicked() {
                                 layer.group = if on { phosphor_engine::CrossGroup::None } else { g };
                             }
                         }

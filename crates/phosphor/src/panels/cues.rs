@@ -37,7 +37,7 @@ fn daily_editor(ui: &mut egui::Ui, cue: &mut phosphor_engine::Cue) {
 pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     ui.horizontal_wrapped(|ui| {
-        let go = ui.add(egui::Button::new(RichText::new(format!("{} GO", icon::PLAY)).strong().size(16.0)).min_size(egui::vec2(80.0, 30.0)).fill(accent().gamma_multiply(0.35)))
+        let go = big_action_button(ui, Act::Go, format!("{} GO", icon::PLAY))
             .on_hover_text("Next cue · right-click to map a pad, key or OSC");
         map_menu(ui, &go, ControlTarget::App(AppControl::CueGo));
         if go.clicked() {
@@ -111,11 +111,11 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     let cue_pick = |ui: &mut egui::Ui, salt: &str, id: &mut u64| {
         let shown = names.iter().find(|(i, _)| i == id).map_or("none".to_string(), |(_, n)| n.clone());
         ComboBox::from_id_salt(salt).width(110.0).selected_text(shown).show_ui(ui, |ui| {
-            if ui.selectable_label(*id == 0, "none").clicked() {
+            if crate::ui::pick_item(ui, *id == 0, "none").clicked() {
                 *id = 0;
             }
             for (cid, n) in &names {
-                if ui.selectable_label(id == cid, n).clicked() {
+                if crate::ui::pick_item(ui, id == cid, n).clicked() {
                     *id = *cid;
                 }
             }
@@ -208,7 +208,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         hint(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
                         crate::ui::text_field(ui, &mut cue.group, "group name (empty = none)", Some(180.0));
                         for g in &group_names {
-                            if ui.selectable_label(cue.group == *g, g).clicked() {
+                            if crate::ui::pick_item(ui, cue.group == *g, g).clicked() {
                                 cue.group.clone_from(g);
                                 ui.close();
                             }

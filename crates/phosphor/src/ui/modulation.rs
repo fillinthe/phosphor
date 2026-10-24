@@ -18,7 +18,7 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
             ui.label(p.name.trim_end_matches(" #"));
             let r = egui::ComboBox::from_id_salt(("param_layer", p.name, i)).selected_text(name_of(n)).show_ui(ui, |ui| {
                 for k in 0..=names.len().min(p.max as usize) {
-                    if ui.selectable_label(n == k, name_of(k)).clicked() {
+                    if crate::ui::pick_item(ui, n == k, name_of(k)).clicked() {
                         values[i] = k as f32;
                     }
                 }
@@ -37,7 +37,7 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
             let r = egui::ComboBox::from_id_salt(("param_menu", p.name, i)).selected_text(current).show_ui(ui, |ui| {
                 for (k, name) in p.labels.iter().enumerate() {
                     let v = p.min + k as f32;
-                    if ui.selectable_label((values[i] - v).abs() < 0.5, *name).clicked() {
+                    if crate::ui::pick_item(ui, (values[i] - v).abs() < 0.5, *name).clicked() {
                         values[i] = v;
                     }
                 }
@@ -113,7 +113,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
     ui.horizontal(|ui| {
         ui.label(RichText::new(if signal_only { "Its signal" } else { "Drive this control with" }).strong());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.selectable_label(current.is_none(), "Off").clicked() {
+            if crate::ui::pick_item(ui, current.is_none(), "Off").clicked() {
                 *m = None;
             }
         });
@@ -125,7 +125,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         ui.label(RichText::new("SHARED MODULATORS").small().color(Color32::GRAY));
         ui.horizontal_wrapped(|ui| {
             for (id, name) in &shared {
-                if ui.selectable_label(linked == *id, format!("{} {name}", icon::LINK)).on_hover_text("Follow this modulator (set it up in the Modulators panel)").clicked() {
+                if crate::ui::pick_item(ui, linked == *id, format!("{} {name}", icon::LINK)).on_hover_text("Follow this modulator (set it up in the Modulators panel)").clicked() {
                     *m = Some(Modulation { link: *id, ..m.unwrap_or_default() });
                 }
             }
@@ -136,7 +136,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
         ui.horizontal_wrapped(|ui| {
             // "Hand / MIDI knob" only makes sense on a shared modulator (its value is the knob).
             for src in ModSource::ALL.into_iter().filter(|s| filter(*s) && (signal_only || *s != ModSource::Hand)) {
-                if ui.selectable_label(current == Some(src), src.name()).clicked() {
+                if crate::ui::pick_item(ui, current == Some(src), src.name()).clicked() {
                     *m = Some(Modulation { source: src, ..m.unwrap_or_default() });
                 }
             }
@@ -159,7 +159,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
                 let current = SYNC_CHOICES.iter().find(|(v, _)| (*v - mm.rate).abs() < 1e-3).map_or("custom", |(_, n)| *n);
                 ComboBox::from_id_salt("sync_rate").width(100.0).selected_text(format!("every {current}")).show_ui(ui, |ui| {
                     for (v, name) in SYNC_CHOICES {
-                        ui.selectable_value(&mut mm.rate, *v, *name);
+                        crate::ui::pick_value(ui, &mut mm.rate, *v, *name);
                     }
                 });
             } else {
