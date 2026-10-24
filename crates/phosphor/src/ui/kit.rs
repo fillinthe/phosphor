@@ -12,9 +12,41 @@
 
 use super::*;
 
+/// The one height of a control in a row (buttons, toggles, pick-one groups, fields, sliders: `theme` sets egui's
+/// `interact_size.y` to it). Everything in a row being this tall means a row never grows part-way through, so nothing
+/// sits high or jumps. Taller things (the big GO) get a row of their own.
+pub(crate) const CONTROL_H: f32 = 22.0;
+
+/// How wide a button must be to fit the widest of `labels` (its padding included), so a button whose label changes
+/// (Play / Pause, Open / Close) keeps one width and nothing beside it moves.
+pub(crate) fn steady_width(ui: &egui::Ui, labels: &[&str], small: bool) -> f32 {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let widest = labels.iter().map(|l| ui.painter().layout_no_wrap(l.to_string(), font.clone(), Color32::WHITE).size().x).fold(0.0, f32::max);
+    // (+4: bold text in action buttons is a little wider.)
+    widest + if small { 4.0 } else { ui.spacing().button_padding.x * 2.0 } + 4.0
+}
+
+/// A command button whose label changes: as wide as the widest of `labels` (`text` is one of them).
+pub(crate) fn steady_button(ui: &mut egui::Ui, text: impl Into<String>, labels: &[&str]) -> egui::Response {
+    let w = steady_width(ui, labels, false);
+    ui.add(egui::Button::new(text.into()).min_size(egui::vec2(w, CONTROL_H)))
+}
+
+/// `steady_button`, small (tight rows).
+pub(crate) fn steady_small_button(ui: &mut egui::Ui, text: impl Into<String>, labels: &[&str]) -> egui::Response {
+    let w = steady_width(ui, labels, true);
+    ui.add(egui::Button::new(text.into()).small().min_size(egui::vec2(w, 0.0)))
+}
+
+/// An `action_button` whose label changes (Play / Pause): as wide as the widest of `labels`.
+pub(crate) fn steady_action_button(ui: &mut egui::Ui, act: Act, text: impl Into<String>, labels: &[&str]) -> egui::Response {
+    let w = steady_width(ui, labels, false);
+    action_button_sized(ui, act, text, egui::vec2(w, CONTROL_H))
+}
+
 /// A compact on/off button for tight rows (an icon or a letter): filled when on. Marks the response changed.
 pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui::WidgetText>) -> egui::Response {
-    let mut r = ui.add(egui::Button::new(text).selected(*on).min_size(egui::vec2(20.0, 18.0)));
+    let mut r = ui.add(egui::Button::new(text).selected(*on).min_size(egui::vec2(20.0, CONTROL_H)));
     if r.clicked() {
         *on = !*on;
         r.mark_changed();
@@ -25,7 +57,7 @@ pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui
 /// Show / hide: an eye, crossed out in orange when hidden. Marks the response changed.
 pub(crate) fn eye_toggle(ui: &mut egui::Ui, shown: &mut bool) -> egui::Response {
     let (glyph, color, tip) = if *shown { (icon::EYE, ui.visuals().text_color(), "Showing: click to hide") } else { (icon::EYE_SLASH, crate::theme::WARN, "Hidden: click to show") };
-    let mut r = ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false).min_size(egui::vec2(22.0, 18.0))).on_hover_text(tip);
+    let mut r = ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false).min_size(egui::vec2(22.0, CONTROL_H))).on_hover_text(tip);
     if r.clicked() {
         *shown = !*shown;
         r.mark_changed();
@@ -37,8 +69,8 @@ pub(crate) fn eye_toggle(ui: &mut egui::Ui, shown: &mut bool) -> egui::Response 
 /// same line. (`ui.horizontal` starts one button high and grows when a taller one comes, leaving the earlier items
 /// high.)
 pub(crate) fn bar_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    // The action buttons' height plus a little air above and below.
-    const HEIGHT: f32 = 26.0;
+    // A control's height plus a little air above and below.
+    const HEIGHT: f32 = CONTROL_H + 4.0;
     ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), HEIGHT), egui::Layout::left_to_right(egui::Align::Center), |ui| {
         ui.set_min_height(HEIGHT);
         add(ui)
@@ -116,7 +148,7 @@ pub(crate) enum Act {
 
 /// A button that makes something happen now: solid, bold. (Commands that open or edit things stay plain buttons.)
 pub(crate) fn action_button(ui: &mut egui::Ui, act: Act, text: impl Into<String>) -> egui::Response {
-    action_button_sized(ui, act, text, egui::vec2(0.0, 22.0))
+    action_button_sized(ui, act, text, egui::vec2(0.0, CONTROL_H))
 }
 
 /// `action_button` at a set size (clip column triggers).
@@ -144,7 +176,7 @@ pub(crate) fn toggle_locked(ui: &mut egui::Ui, on: &mut bool, text: impl Into<St
     let text: String = text.into();
     let font = egui::FontId::proportional(12.0);
     let galley = ui.painter().layout_no_wrap(text, font, Color32::WHITE);
-    let size = egui::vec2(galley.size().x + 30.0, 22.0);
+    let size = egui::vec2(galley.size().x + 30.0, CONTROL_H);
     let (rect, mut r) = ui.allocate_exact_size(size, Sense::click());
     if r.clicked() && !locked {
         *on = !*on;
@@ -183,7 +215,7 @@ pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, 
                 let picked = *value == *opt;
                 let ink = if picked { v.strong_text_color() } else { v.weak_text_color() };
                 let fill = if picked { v.widgets.active.weak_bg_fill } else { Color32::TRANSPARENT };
-                let b = egui::Button::new(RichText::new(text).color(ink)).fill(fill).stroke(if picked { Stroke::new(1.0, v.widgets.hovered.bg_stroke.color) } else { Stroke::NONE }).corner_radius(4.0).min_size(egui::vec2(0.0, 18.0));
+                let b = egui::Button::new(RichText::new(text).color(ink)).fill(fill).stroke(if picked { Stroke::new(1.0, v.widgets.hovered.bg_stroke.color) } else { Stroke::NONE }).corner_radius(4.0).min_size(egui::vec2(0.0, CONTROL_H - 4.0));
                 let r = ui.add(b);
                 if r.clicked() {
                     *value = opt.clone();

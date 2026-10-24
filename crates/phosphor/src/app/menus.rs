@@ -270,7 +270,10 @@ impl PhosphorApp {
                 // The dice says where it will land: the selected layer, else every layer.
                 let target = self.state.selected.filter(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
                 let where_ = target.map_or("all layers".to_string(), |id| crate::ui::layer_name(&self.state.comp.layers, id));
-                let dice = crate::ui::action_button(ui, crate::ui::Act::Go, named(icon::DICE_FIVE, &format!("Surprise · {where_}"))).on_hover_text(format!(
+                // One width whatever's selected (a long layer name is cut short; the whole name is in the tooltip).
+                let short: String = if where_.chars().count() > 10 { format!("{}…", where_.chars().take(9).collect::<String>()) } else { where_.clone() };
+                let (text, widest) = (named(icon::DICE_FIVE, &format!("Surprise · {short}")), named(icon::DICE_FIVE, "Surprise · all layers"));
+                let dice = crate::ui::steady_action_button(ui, crate::ui::Act::Go, text.clone(), &[&text, &widest]).on_hover_text(format!(
                     "{} (⌘R: all layers). Click: a new look on {where_}. The arrow: pick several layers. Right-click to map a pad or key.",
                     super::Quick::Surprise.about()
                 ));
@@ -316,8 +319,9 @@ impl PhosphorApp {
                 if let Some(q) = picked {
                     self.state.quick(q, now);
                 }
-                let output_label = named(if self.state.output_open() { icon::STOP } else { icon::PLAY }, "Output");
-                if ui.button(output_label).on_hover_text("Output windows on / off. F = fullscreen, Esc = exit").clicked() {
+                let (stop, play) = (named(icon::STOP, "Output"), named(icon::PLAY, "Output"));
+                let output_label = if self.state.output_open() { stop.clone() } else { play.clone() };
+                if crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output windows on / off. F = fullscreen, Esc = exit").clicked() {
                     self.state.toggle_output();
                 }
                 ui.separator();

@@ -50,8 +50,9 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             if ui.button(icon::PLUS).on_hover_text("New preview window: the mix, a layer, a group or one output, as many as you like").clicked() {
                 st.new_monitor = Some(MonitorSource::Mix);
             }
-            let text = if st.output_open() { label(icon::STOP, "Output") } else { label(icon::PLAY, "Output") };
-            if ui.button(text).on_hover_text("Open the output window (F = fullscreen, E = edit mapping)").clicked() {
+            let (stop, play) = (label(icon::STOP, "Output"), label(icon::PLAY, "Output"));
+            let text = if st.output_open() { stop.clone() } else { play.clone() };
+            if steady_button(ui, text, &[&stop, &play]).on_hover_text("Open the output window (F = fullscreen, E = edit mapping)").clicked() {
                 st.toggle_output();
             }
         });

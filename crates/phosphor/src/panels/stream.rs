@@ -149,7 +149,8 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         if running {
-            if ui.button(label(icon::STOP, if waiting { "Stopping on the bar…" } else { "Stop" })).clicked() {
+            let (later, stop_now) = (label(icon::STOP, "Stopping on the bar…"), label(icon::STOP, "Stop"));
+            if steady_button(ui, if waiting { later.clone() } else { stop_now.clone() }, &[&later, &stop_now]).clicked() {
                 toggle_now = true;
             }
             ui.colored_label(accent(), format!("{} LIVE {:02}:{:02}", icon::RECORD, (stream.elapsed(now) / 60.0) as u32, stream.elapsed(now) as u32 % 60));

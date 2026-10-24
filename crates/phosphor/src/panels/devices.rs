@@ -140,8 +140,8 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 activity_dot(ui, seen.get(&name).copied());
                 let mut on = !st.control.midi_disabled.contains(&name);
-                let text = if on { "ON" } else { "OFF" };
-                if toggle(ui, &mut on, text).changed() {
+                // (The light shows on / off: one word keeps it one width.)
+                if toggle(ui, &mut on, "On").changed() {
                     if on {
                         st.control.midi_disabled.remove(&name);
                     } else {
@@ -176,7 +176,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, format!("{} msgs · {}", s.count, s.last_address));
                 let is_blocked = blocked.contains(&s.ip);
                 let text = if is_blocked { "Unblock" } else { "Block" };
-                if ui.small_button(text).clicked() {
+                if steady_small_button(ui, text, &["Unblock", "Block"]).clicked() {
                     let mut a = st.control.activity.lock().unwrap();
                     if is_blocked {
                         a.osc_blocked.remove(&s.ip);

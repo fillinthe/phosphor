@@ -177,8 +177,9 @@ fn looper_row(ui: &mut egui::Ui, l: &mut phosphor_engine::Looper, beats: f32) {
                     l.arm(beats);
                 }
                 if !l.samples.is_empty() {
-                    let play = if l.playing { label(icon::STOP, "Stop") } else { label(icon::PLAY, "Play") };
-                    if action_button(ui, Act::Go, play).on_hover_text("Play the take back, looped with the beat (stopped: the knob drives it again)").clicked() {
+                    let (stop, start) = (label(icon::STOP, "Stop"), label(icon::PLAY, "Play"));
+                    let play = if l.playing { stop.clone() } else { start.clone() };
+                    if steady_action_button(ui, Act::Go, play, &[&stop, &start]).on_hover_text("Play the take back, looped with the beat (stopped: the knob drives it again)").clicked() {
                         l.playing = !l.playing;
                     }
                     if ui.small_button(icon::TRASH).on_hover_text("Forget the take").clicked() {
