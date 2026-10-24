@@ -21,6 +21,7 @@ enum Want {
     Fonts,
     Music,
     Shaders,
+    XGifs,
 }
 
 impl Want {
@@ -35,6 +36,7 @@ impl Want {
             Want::Fonts => &[Kind::Font],
             Want::Music => &[Kind::Music],
             Want::Shaders => &[Kind::Shader],
+            Want::XGifs => &[Kind::Gif],
         }
     }
 }
@@ -76,6 +78,10 @@ pub struct Online {
     bench: bool,
     /// A shader just downloaded, to put on a layer once it's loaded: (slug, layer, give up at).
     apply: Option<(String, Option<u64>, f64)>,
+    /// GIFs from X: saved accounts and the browser to sign in with (read when first shown), and whether gallery-dl
+    /// is installed (looked for once).
+    x: Option<crate::online::x::XSettings>,
+    has_gallery_dl: Option<bool>,
     /// A starter show being built.
     filling: Vec<Filling>,
     starter: Option<&'static str>,
@@ -85,6 +91,7 @@ impl Online {
     /// Bench `--quick online` (PHOSPHOR_ONLINE_QUERY): searches like the panel does.
     pub fn bench_search(&mut self, query: &str) {
         self.query = query.to_string();
+        // (Not X: it needs your sign-in.)
         let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font, Kind::Music, Kind::Shader];
         self.search = Some(Search::start(query, &Source::ALL, &kinds, false, None));
         self.bench = true;
@@ -198,6 +205,62 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             st.launch_source(layer, crate::media::spec_for_path(&path), Vec::new(), name, now);
         }
     }
+}
+
+/// GIFs from X: saved accounts (click one to browse it), save the one typed, and the browser whose X sign-in is used.
+/// Returns true when an account was clicked (browse it now).
+fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
+    use crate::online::x;
+    let mut browse = false;
+    let mut changed = false;
+    let xs = o.x.get_or_insert_with(x::XSettings::load);
+    ui.horizontal_wrapped(|ui| {
+        let mut gone = None;
+        for acc in &xs.accounts {
+            let r = ui.button(format!("@{acc}")).on_hover_text("Browse this account's GIFs · right-click: remove");
+            if r.clicked() {
+                o.query = format!("@{acc}");
+                browse = true;
+            }
+            r.right_menu(|ui| {
+                if danger_button(ui, label(icon::TRASH, "Remove")).clicked() {
+                    gone = Some(acc.clone());
+                    ui.close();
+                }
+            });
+        }
+        if let Some(acc) = gone {
+            xs.accounts.retain(|a| *a != acc);
+            changed = true;
+        }
+        if let Some(h) = x::handle(&o.query).filter(|h| !xs.accounts.contains(h))
+            && ui.button(label(icon::PLUS, &format!("Save @{h}"))).on_hover_text("Keep this account here to browse with one click").clicked()
+        {
+            xs.accounts.push(h);
+            changed = true;
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label("Signed in to X in");
+        let current = xs.browser.clone().unwrap_or_else(|| "pick a browser".into());
+        ComboBox::from_id_salt("x_browser").width(110.0).selected_text(current).show_ui(ui, |ui| {
+            for b in crate::web_media::BROWSERS {
+                if ui.selectable_label(xs.browser.as_deref() == Some(b), b).clicked() {
+                    xs.browser = Some(b.to_string());
+                    changed = true;
+                }
+            }
+        })
+        .response
+        .on_hover_text("X only shows an account's posts to people signed in: gallery-dl uses that browser's X sign-in (only to list the posts)");
+    });
+    if !*o.has_gallery_dl.get_or_insert_with(|| crate::web_media::find_gallery_dl().is_some()) {
+        ui.colored_label(WARN, x::NO_TOOL);
+    }
+    if changed {
+        xs.save();
+    }
+    browse
 }
 
 /// Builds a starter show: replaces the layers with the starter's three (outputs, mapping and controls stay) and
@@ -316,7 +379,8 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let o = &mut st.online;
     let mut go = false;
     ui.horizontal(|ui| {
-        let r = crate::ui::text_field(ui, &mut o.query, "Search: aurora, city lights, waves, fire…", Some((ui.available_width() - if o.search.is_some() { 64.0 } else { 34.0 }).max(80.0)));
+        let prompt = if o.want == Want::XGifs { "An X account: @giphy, @nasa…" } else { "Search: aurora, city lights, waves, fire…" };
+        let r = crate::ui::text_field(ui, &mut o.query, prompt, Some((ui.available_width() - if o.search.is_some() { 64.0 } else { 34.0 }).max(80.0)));
         go |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         go |= ui.add_enabled(!o.query.trim().is_empty(), egui::Button::new(icon::MAGNIFYING_GLASS)).on_hover_text("Search every library that's on").clicked();
         if o.search.is_some() && ui.button(icon::X).on_hover_text("Clear the results (back to Start a show)").clicked() {
@@ -335,6 +399,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::Fonts, "Fonts".to_string()),
             (Want::Music, "Music".to_string()),
             (Want::Shaders, "Shaders (ISF)".to_string()),
+            (Want::XGifs, "GIFs from X".to_string()),
         ];
         let before = o.want;
         ComboBox::from_id_salt("online_want").selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
@@ -356,9 +421,14 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     });
+    if o.want == Want::XGifs {
+        go |= x_accounts(ui, o);
+    }
     if go && !o.query.trim().is_empty() {
         let sources: Vec<Source> = Source::ALL.into_iter().filter(|s| !o.off.contains(s)).collect();
-        o.search = Some(Search::start(&o.query, &sources, o.want.kinds(), o.commercial, Some(ui.ctx().clone())));
+        // (X posts have no licence to filter by.)
+        let commercial = o.commercial && o.want != Want::XGifs;
+        o.search = Some(Search::start(&o.query, &sources, o.want.kinds(), commercial, Some(ui.ctx().clone())));
     }
     let selected = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let o = &mut st.online;
@@ -544,6 +614,7 @@ fn kind_icon(kind: Kind) -> &'static str {
         Kind::Font => icon::TEXT_AA,
         Kind::Music => icon::MUSIC_NOTES,
         Kind::Shader => icon::SPARKLE,
+        Kind::Gif => icon::GIF,
     }
 }
 
