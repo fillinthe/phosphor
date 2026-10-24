@@ -163,7 +163,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         }
         let bpm = guarded!(ui, st.clock.bpm, egui::DragValue::new(&mut st.clock.bpm).range(40.0..=300.0).speed(0.5).suffix(" bpm"));
         map_menu(ui, &bpm, ControlTarget::App(phosphor_engine::AppControl::Tempo));
-        let resync = crate::ui::command(ui, "Resync").on_hover_text("Beat 1 = now");
+        let resync = crate::ui::command(ui, "Resync").on_hover_text("Beat 1 = now, and it stays there (AUTO keeps the tempo; turn AUTO off and on to let the music move beat 1 again)");
         map_menu(ui, &resync, ControlTarget::App(phosphor_engine::AppControl::Resync));
         if resync.clicked() {
             st.clock.resync(now);
@@ -200,6 +200,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             }
         }
         let auto = toggle(ui, &mut st.clock.follow_audio, "AUTO").on_hover_text("Follow the audio beat detector (tempo and beat)");
+        if auto.changed() && st.clock.follow_audio {
+            // AUTO on again: the music decides where beat one is again (after a Resync).
+            st.clock.bar_by_hand = false;
+        }
         map_menu(ui, &auto, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
         if st.mod_inputs.audio_beat > 0.05 {
             ui.painter().circle_filled(auto.rect.right_top() + egui::vec2(-2.0, 2.0), 2.0 + 3.0 * st.mod_inputs.audio_beat, Color32::from_rgb(255, 196, 70));
