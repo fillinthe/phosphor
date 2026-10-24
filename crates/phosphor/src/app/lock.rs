@@ -124,7 +124,7 @@ impl PhosphorApp {
     pub(crate) fn locked_top_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("top_bar").show(ui, |ui| {
             crate::ui::bar_row(ui, |ui| {
-                ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(crate::theme::accent()));
+                ui.label(crate::theme::logo(13.5));
                 ui.label(egui::RichText::new(format!("{} Locked", icon::LOCK)).color(crate::theme::accent()));
                 ui.separator();
                 let (stop, play) = (format!("{} Output", icon::STOP), format!("{} Output", icon::PLAY));
