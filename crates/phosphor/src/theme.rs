@@ -146,14 +146,18 @@ fn tone(g: u8) -> Color32 {
     Color32::from_rgb(g.saturating_sub(3), g.saturating_sub(1), g)
 }
 
+const LOGO_FAMILY: &str = "phosphor-logo";
+
+/// The PHOSPHOR wordmark at `size`, in the logo's font and the accent colour (top bar, locked top bar).
+pub fn logo(size: f32) -> egui::RichText {
+    egui::RichText::new("PHOSPHOR").font(egui::FontId::new(size, egui::FontFamily::Name(LOGO_FAMILY.into()))).color(accent())
+}
+
 pub fn apply(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    // The interface font: Orbitron (the logo's family, OFL, assets/fonts), with egui's own fonts behind it for any
-    // character it doesn't have (arrows, accents, symbols), then the icons.
-    fonts.font_data.insert("orbitron".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../../assets/fonts/ui.ttf"))));
-    if let Some(list) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
-        list.insert(0, "orbitron".into());
-    }
+    // The logo's font (Orbitron Bold, OFL, assets/fonts): only for the PHOSPHOR wordmark (`logo`).
+    fonts.font_data.insert(LOGO_FAMILY.into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../../assets/fonts/logo.ttf"))));
+    fonts.families.insert(egui::FontFamily::Name(LOGO_FAMILY.into()), vec![LOGO_FAMILY.into()]);
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     ctx.set_fonts(fonts);
     ctx.all_styles_mut(|s| {

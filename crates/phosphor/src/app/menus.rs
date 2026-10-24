@@ -232,7 +232,7 @@ impl PhosphorApp {
     pub(crate) fn top_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("top_bar").show(ui, |ui| {
             crate::ui::bar_row(ui, |ui| {
-                ui.label(egui::RichText::new("PHOSPHOR").strong().size(13.5).color(theme::accent()));
+                ui.label(theme::logo(13.5));
                 let now = ui.ctx().input(|i| i.time);
                 // On the Mac the menus live in the macOS menu bar; the in-window copy is for the browser build.
                 #[cfg(target_os = "macos")]
