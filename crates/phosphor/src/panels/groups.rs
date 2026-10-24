@@ -28,7 +28,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
     let bg = card_background(ui, card_id);
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let caret = if g.collapsed { icon::CARET_RIGHT } else { icon::CARET_DOWN };
             if crate::ui::small_command(ui, caret).on_hover_text(if g.collapsed { "Show the group's layers" } else { "Fold the group's layers away" }).clicked() {
                 g.collapsed = !g.collapsed;
@@ -41,7 +41,7 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
                 g.enabled = !g.enabled;
             }
             ui.vertical(|ui| {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     let on = toggle(ui, &mut g.enabled, "ON").on_hover_text("Group on/off · right-click to Learn");
                     mapped_badge(ui, &on, &ControlTarget::LayerEnabled(g.id));
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(g.id)));
@@ -63,10 +63,10 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
                         }
                     });
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     Level::percent(&mut g.opacity, "Group opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     choice_combo(ui, ("group_blend", g.id), &mut g.blend, 104.0, false);
                     if let Some(r) = fx_badge(ui, &g.effects, &mut g.fx_bypass) {
                         map_menu(ui, &r, ControlTarget::LayerFxBypass(g.id));
@@ -188,17 +188,17 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
         ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w / aspect), g.enabled);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut g.enabled, "ON");
             ui.label(icon::STACK);
             send = outputs_menu(ui, outs).or(send);
             ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(f32::INFINITY));
         });
         hint(ui, "A group: its layers mix together first; its opacity, blend and effects then apply to that mix. The screen button sends it to outputs of its own.");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::percent(&mut g.opacity, "Opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Blend");
             choice_combo(ui, ("group_blend_insp", g.id), &mut g.blend, 120.0, false);
         });

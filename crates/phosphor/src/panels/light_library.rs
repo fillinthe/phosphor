@@ -28,7 +28,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
         let lib = &mut st.ofl;
         match &lib.lights {
             None => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.spinner();
                     hint(ui, "Getting the list of lights…");
                 });
@@ -60,7 +60,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
             ui.separator();
             match def {
                 None => {
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         ui.spinner();
                         hint(ui, format!("Getting {}…", light.name));
                     });
@@ -74,7 +74,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
                         hint(ui, d.categories.join(", "));
                     }
                     for (i, (name, _)) in d.modes.iter().enumerate() {
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             if crate::ui::command(ui, label(icon::PLUS, &format!("Add · {name}"))).on_hover_text(d.mode_summary(i)).clicked() {
                                 add = Some(d.fixture(&light.maker, i));
                             }

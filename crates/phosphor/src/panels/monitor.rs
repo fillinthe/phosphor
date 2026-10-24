@@ -75,7 +75,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
         }),
         _ => st.aspect(),
     };
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let current = monitor_source_name(st, n);
         ComboBox::from_id_salt(("monitor_src", n)).width(180.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut cfg.source, MonitorSource::Output, "Output (what the projector sees)");

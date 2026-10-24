@@ -28,7 +28,7 @@ pub(crate) enum LayerAction {
 
 pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     comp_tabs(ui, st);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if crate::ui::command(ui, label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
         }
@@ -214,7 +214,7 @@ pub(crate) fn master_card(
     let bg = card_background(ui, card_id);
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             if thumbnail(ui, tex, egui::vec2(112.0, 112.0 / aspect), true).clicked() {
                 select = true;
             }
@@ -259,7 +259,7 @@ pub(crate) fn layer_card(
     let bg = card_background(ui, card_id);
     let frame = card_frame(ui, is_selected).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let r = thumbnail(ui, thumb, egui::vec2(112.0, 112.0 / aspect), layer.enabled && !muted)
                 .on_hover_text("Click to select · double-click to toggle · drag to reorder");
             r.dnd_set_drag_payload(layer.id);
@@ -270,7 +270,7 @@ pub(crate) fn layer_card(
                 layer.enabled = !layer.enabled;
             }
             ui.vertical(|ui| {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     let on = toggle(ui, &mut layer.enabled, "ON").on_hover_text("Layer on/off (Space) · right-click to Learn");
                     mapped_badge(ui, &on, &ControlTarget::LayerEnabled(layer.id));
                     on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(layer.id)));
@@ -309,7 +309,7 @@ pub(crate) fn layer_card(
                     action = Some(a);
                 }
                 opacity_row(ui, layer);
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     // A mixer plugin blends it instead of its blend mode (Inspector › Mixer plugin).
                     match layer.mixer.as_deref().and_then(shaders::mixer) {
                         Some(d) => {
@@ -432,7 +432,7 @@ pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, Str
 
 pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String, bool)]) -> Option<LayerAction> {
     let mut action = None;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if crate::ui::command(ui, icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
             action = Some(LayerAction::BrowseSources);
         }
@@ -587,7 +587,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
         ui.label(RichText::new("Stream address").small().color(Color32::GRAY));
         let url_id = egui::Id::new(("live_url", layer));
         let mut url: String = ui.ctx().data(|d| d.get_temp(url_id)).unwrap_or_default();
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut url).hint_text("rtsp://… srt://… https://….m3u8").desired_width(190.0));
             if crate::ui::command_if(ui, url.contains("://"), "Play").clicked() {
                 picked = Some(crate::media::live::stream_source(&url));
@@ -651,7 +651,7 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
 
 /// A layer's opacity: slider (mappable, modulation marker), % field and the ~ modulation button.
 pub(crate) fn opacity_row(ui: &mut egui::Ui, layer: &mut LayerState) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         show_button(ui, layer);
         Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).show(ui);
     });

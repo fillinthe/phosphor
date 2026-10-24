@@ -85,7 +85,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
         };
         ui.add(egui::TextEdit::multiline(&mut a.description).hint_text(example).desired_rows(3).desired_width(f32::INFINITY));
         let busy = a.job.as_ref().is_some_and(|j| matches!(j.status, Status::Working(_)));
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let ready = key.is_some() && !busy && !a.description.trim().is_empty();
             if ui.add_enabled_ui(ready, |ui| action_button(ui, Act::Go, format!("{} Write it", icon::MAGIC_WAND))).inner.clicked()
                 && let Some(k) = key.clone()
@@ -114,7 +114,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
         ui.separator();
         match &key {
             Some(_) => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     hint(ui, if std::env::var_os("ANTHROPIC_API_KEY").is_some() { "Using the key in ANTHROPIC_API_KEY." } else { "Your Anthropic API key is saved (Keychain)." });
                     if std::env::var_os("ANTHROPIC_API_KEY").is_none() && crate::ui::small_command(ui, "Forget it").clicked() {
                         a.key_error = crate::ai_shader::store_key("").err();
@@ -124,7 +124,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
             }
             None => {
                 hint(ui, "Needs your own Anthropic API key (console.anthropic.com › API keys). Each shader costs a few cents on your account. The key stays on this Mac, in the Keychain.");
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.add(egui::TextEdit::singleline(&mut a.new_key).password(true).hint_text("sk-ant-…").desired_width(300.0));
                     if crate::ui::command_if(ui, !a.new_key.trim().is_empty(), "Save key").clicked() {
                         match crate::ai_shader::store_key(a.new_key.trim()) {

@@ -32,7 +32,7 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
             } else {
                 camera_combo(ui, "led_scan_camera", &cameras, &mut camera);
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label("Lights");
                 let name = |id: Option<u64>| match id.and_then(|id| st.comp.dmx.fixtures.iter().find(|f| f.id == id)) {
                     Some(f) => f.name.clone(),
@@ -45,14 +45,14 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
                     }
                 });
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let mut ms = (st.led_scan.settle * 1000.0) as f32;
                 if Level::range(&mut ms, 100.0, 1500.0, "Wait per picture (ms)").default(300.0).tip("Longer if lights or the camera are slow to react (wireless controllers, auto-exposure)").show(ui).changed() {
                     st.led_scan.settle = ms as f64 / 1000.0;
                 }
             });
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             if busy {
                 if danger_button(ui, label(icon::STOP, "Stop")).clicked() {
                     st.led_scan.cancel();

@@ -58,11 +58,11 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 let lit = layer.enabled && !muted;
                 if strip(ui, layer.id, *selected == Some(layer.id), tex(layer.id), aspect, lit, name, |ui| {
                     fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         super::layers::show_button(ui, layer);
                         toggle(ui, &mut layer.solo, "S");
                     });
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
                             let on = layer.group == g;
                             if crate::ui::pick_item(ui, on, RichText::new(g.name()).small().strong()).on_hover_text("Crossfader side (click again for none)").clicked() {
@@ -123,7 +123,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     let comp = &mut st.comp;
     let target = ControlTarget::App(phosphor_engine::AppControl::Crossfader);
     let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("A").strong());
         // (Double-click centres it: its default.)
         let width = (ui.available_width() - 200.0).clamp(120.0, 520.0);

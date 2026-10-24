@@ -9,7 +9,7 @@ use super::*;
 pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     let width_id = egui::Id::new("layer_windows_width");
     let mut col_w: f32 = ui.ctx().data(|d| d.get_temp(width_id)).unwrap_or(300.0);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if crate::ui::command(ui, label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
         }
@@ -45,7 +45,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                     card_frame(ui, is_sel).show(ui, |ui| {
                         ui.set_width(col_w - 14.0);
                         ui.set_min_height(height - 24.0);
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             super::layers::show_button(ui, layer);
                             super::layers::solo_button(ui, &mut layer.solo);
                             ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
@@ -68,7 +68,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                         if let Some(q) = crate::app::quick_row(ui) {
                             quick.push((id, q));
                         }
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             choice_combo(ui, ("lw_blend", id), &mut layer.blend, 120.0, false);
                             choice_combo(ui, ("lw_fit", id), &mut layer.fit, 74.0, false);
                         });

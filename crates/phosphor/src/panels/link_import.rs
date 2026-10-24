@@ -74,7 +74,7 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
     egui::Window::new(label(icon::LINK, "From a link")).open(&mut open).default_width(460.0).show(ctx, |ui| {
         hint(ui, "Paste the link to a post on X, Instagram, TikTok, YouTube, Vimeo… Its video or GIF comes into Phosphor. Only use clips you have the right to show.");
         crate::ui::text_field(ui, &mut li.url, "https://x.com/…/status/…", None);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let current = li.browser.map_or("No sign-in".to_string(), |i| format!("Sign-in from {}", BROWSERS[i]));
             ComboBox::from_id_salt("link_browser").width(170.0).selected_text(current).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut li.browser, None, "No sign-in");
@@ -88,7 +88,7 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
         });
         let busy = li.job.as_ref().is_some_and(|j| matches!(j.status, Status::Working(_)));
         let ready = have_tool && !busy && li.url.trim().starts_with("http");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let browser = li.browser.map(|i| BROWSERS[i]);
             if crate::ui::command_if(ui, ready, label(icon::DOWNLOAD_SIMPLE, "Download")).on_hover_text("Into Phosphor's downloads folder and the media bin: a clip that loops and works offline").clicked() {
                 li.job = Some(Job::download(&li.url, browser));

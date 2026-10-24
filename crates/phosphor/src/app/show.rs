@@ -47,7 +47,7 @@ impl PhosphorApp {
                 let progress = st.export.progress.as_ref().map(|p| p.lock().unwrap().clone());
                 match progress {
                     Some(p) if !p.done => {
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             ui.spinner();
                             ui.label(&p.step);
                         });
@@ -65,7 +65,7 @@ impl PhosphorApp {
                             } else {
                                 crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
                             }
-                            ui.horizontal(|ui| {
+                            crate::ui::toolbar(ui, |ui| {
                                 if crate::ui::command(ui, label_text(icon::FOLDER_OPEN, if cfg!(windows) { "Show in Explorer" } else { "Show in Finder" })).clicked() {
                                     crate::os::reveal(app);
                                 }
@@ -89,13 +89,13 @@ impl PhosphorApp {
                             "Packs this project, every media file, the shaders it uses, and all MIDI/OSC/key mappings and outputs into one app that runs on another Mac: no Phosphor install needed."
                         });
                         ui.add_space(4.0);
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             ui.label("Show name");
                             ui.text_edit_singleline(&mut st.export.name);
                         });
                         crate::ui::toggle(ui, &mut st.export.autostart, "Open the outputs full screen when the show starts");
                         crate::ui::toggle(ui, &mut st.export.zip, "Also make a .zip (easier to send)");
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             crate::ui::toggle(ui, &mut st.export.lock, "Open locked (play only)").on_hover_text("No menus or editing on the other computer: just the preview, clips, keys, controllers and outputs");
                             ui.add_enabled(st.export.lock, egui::TextEdit::singleline(&mut st.export.lock_password).password(true).hint_text("unlock password (optional)").desired_width(170.0));
                         });

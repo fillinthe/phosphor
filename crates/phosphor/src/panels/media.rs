@@ -69,7 +69,7 @@ pub(crate) enum MediaAct {
 
 pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     // Row 1: search, the full width (it never shares a row, so nothing can cover it).
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
         ui.add(egui::TextEdit::singleline(&mut st.media_view.search).hint_text("Search media").desired_width(ui.available_width()));
     });
@@ -95,7 +95,7 @@ pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
         ui.menu_button(label(icon::SLIDERS_HORIZONTAL, "View"), |ui| {
             ui.set_min_width(200.0);
             ui.label(RichText::new("Sort by").strong());
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Name, "Name");
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Newest, "Newest");
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Type, "Type");

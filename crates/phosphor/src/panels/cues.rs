@@ -90,7 +90,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             None => {}
         }
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if let Some((next, secs)) = st.next_cue_in(now) {
             let name = st.comp.cues.cues.get(next).map_or(String::new(), |c| c.name.clone());
             ui.label(RichText::new(format!("{} next: {} \"{name}\" in {}", icon::HOURGLASS, next + 1, format_tc(secs))).color(accent()));
@@ -168,7 +168,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             let is_current = current == Some(i);
             // A group starts here: its name, and Go (its first cue).
             if !cue.group.is_empty() && cue.group != prev_group {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new(format!("{} {}", icon::FOLDER_OPEN, cue.group)).strong());
                     if crate::ui::small_command(ui, label(icon::PLAY, "Go")).on_hover_text("Start this group (its first cue)").clicked() {
                         fire = Some(i);

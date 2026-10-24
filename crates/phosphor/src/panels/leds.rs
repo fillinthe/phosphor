@@ -183,7 +183,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             let is_sel = selected == Some(f.id);
             let r = card_frame(ui, is_sel).show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     toggle(ui, &mut f.enabled, "ON");
                     ui.add(egui::TextEdit::singleline(&mut f.name).desired_width(120.0));
                     hint(ui, f.span());
@@ -224,13 +224,13 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                 if f.shape == FixtureShape::MovingHead {
                     // One row each: a level fills its row.
                     ui.vertical(|ui| {
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             Level::percent(&mut f.pan, "Pan").default(0.5).target(ControlTarget::Fixture { fixture: f.id, param: 0 }).show(ui);
                         });
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             Level::percent(&mut f.tilt, "Tilt").default(0.5).target(ControlTarget::Fixture { fixture: f.id, param: 1 }).show(ui);
                         });
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             Level::percent(&mut f.dimmer, "Dimmer").default(1.0).target(ControlTarget::Fixture { fixture: f.id, param: 2 }).show(ui);
                         });
                     });
@@ -238,7 +238,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                         choice_buttons(ui, &mut f.motion, |_, _| {});
                         if f.motion != phosphor_engine::HeadMotion::Still {
                             ui.spacing_mut().slider_width = 80.0;
-                            ui.horizontal(|ui| {
+                            crate::ui::toolbar(ui, |ui| {
                                 Level::percent(&mut f.motion_size, "Size").default(0.2).width(140.0).target(ControlTarget::Fixture { fixture: f.id, param: 3 }).show(ui);
                             });
                             guarded!(ui, f.motion_beats, egui::DragValue::new(&mut f.motion_beats).range(0.25..=64.0).speed(0.25).suffix(" beats"));
@@ -251,12 +251,12 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     for (i, e) in f.extra.iter_mut().enumerate() {
                         if custom {
                             // A library light's own settings: named by the library, in its channel order.
-                            ui.horizontal(|ui| {
+                            crate::ui::toolbar(ui, |ui| {
                                 Level::percent(&mut e.value, &e.name).width(240.0).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
                             });
                             continue;
                         }
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             crate::ui::text_field(ui, &mut e.name, &format!("channel {}", f.head.channels() + i + 1), Some(80.0));
                             let name = if e.name.is_empty() { format!("Ch {}", f.head.channels() + i + 1) } else { e.name.clone() };
                             Level::percent(&mut e.value, &name).default(0.0).width(160.0).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
@@ -276,10 +276,10 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     guarded!(ui, f.universe, egui::DragValue::new(&mut f.universe).range(0..=32767).prefix("universe "));
                     guarded!(ui, f.channel, egui::DragValue::new(&mut f.channel).range(1..=512).prefix("channel "));
                     ui.spacing_mut().slider_width = 90.0;
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         Level::percent(&mut f.brightness, "Bright").default(1.0).width(140.0).target(ControlTarget::Fixture { fixture: f.id, param: 4 }).show(ui);
                     });
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         Level::range(&mut f.gamma, 1.0, 3.0, "Gamma").default(2.2).width(140.0).tip("2.2 makes fades look even on most LEDs").show(ui);
                     });
                 });
@@ -306,12 +306,12 @@ fn video_wall_menu(ui: &mut egui::Ui, st: &mut State) {
     let key = ui.id().with("video_wall");
     let mut v: [u32; 4] = ui.data_mut(|d| d.get_temp(key)).unwrap_or([4, 3, 32, 32]);
     ui.menu_button(label(icon::SQUARES_FOUR, "Video wall…"), |ui| {
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Tiles");
             guarded!(ui, v[0], egui::DragValue::new(&mut v[0]).range(1..=32).suffix(" across"));
             guarded!(ui, v[1], egui::DragValue::new(&mut v[1]).range(1..=32).suffix(" down"));
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Each tile");
             guarded!(ui, v[2], egui::DragValue::new(&mut v[2]).range(1..=512).suffix(" px wide"));
             guarded!(ui, v[3], egui::DragValue::new(&mut v[3]).range(1..=512).suffix(" px high"));

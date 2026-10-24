@@ -15,7 +15,7 @@ pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
             (d.place, d.latitude, d.longitude, d.weather) = (name, lat, lon, true);
         }
         let d = &mut st.comp.live_data;
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut d.weather, "Weather").on_hover_text("Temperature, wind, clouds and rain where you pick (Open-Meteo, every 10 minutes)");
             let id = egui::Id::new("live_data_place");
             let mut name: String = ui.ctx().data(|t| t.get_temp(id)).unwrap_or_default();
@@ -38,7 +38,7 @@ pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
         } else if d.weather {
             hint(ui, "Type a place and press Enter.");
         }
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut d.iss, "Space station").on_hover_text("Where the International Space Station is over the Earth (every 5 seconds; it goes round in 90 minutes)");
             toggle(ui, &mut d.quakes, "Earthquakes").on_hover_text("The newest earthquake's size and how many there were in the last hour, worldwide (USGS, every minute)");
         });
@@ -52,7 +52,7 @@ pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
             ui.colored_label(WARN, format!("Only {} shared modulators fit: remove some to get every reading.", phosphor_engine::control::MAX_SHARED));
         }
         for name in names {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let (value, shown) = st.feeds.reading(name).map_or((0.0, "waiting…".to_string()), |r| (r.value, r.shown.clone()));
                 ui.add(crate::ui::meter(value).desired_width(90.0));
                 ui.label(name);

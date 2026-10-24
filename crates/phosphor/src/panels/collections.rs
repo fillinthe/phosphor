@@ -50,7 +50,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             });
         }
         for f in folders {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let short = std::path::Path::new(&f).file_name().map_or(f.clone(), |n| n.to_string_lossy().into_owned());
                 ui.label(RichText::new(format!("{} {short}", icon::FOLDER)).small()).on_hover_text(&f);
                 if crate::ui::small_command(ui, icon::X).on_hover_text("Stop including this folder").clicked() {

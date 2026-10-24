@@ -64,13 +64,13 @@ impl PhosphorApp {
                 }
                 crate::ui::hint(ui, c.format.about());
                 if c.format.has_quality() {
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         for q in Quality::ALL {
                             crate::ui::pick_value(ui, &mut c.quality, q, q.name());
                         }
                     });
                 }
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     for s in Size::ALL {
                         crate::ui::pick_value(ui, &mut c.size, s, s.name());
                     }
@@ -121,7 +121,7 @@ impl PhosphorApp {
                             c.swapped = true;
                             done_output = Some(p.output.clone());
                         }
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             if crate::ui::command(ui, crate::ui::label(icon::FOLDER_OPEN, "Show the file")).clicked() {
                                 crate::os::reveal(&p.output);
                             }

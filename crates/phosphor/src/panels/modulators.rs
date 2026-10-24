@@ -8,7 +8,7 @@ use super::*;
 pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let beats = st.mod_inputs.beats;
     let inputs = st.mod_inputs;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if crate::ui::command(ui, label(icon::PLUS, "Modulator")).on_hover_text("A shared signal: pick it in any control's Modulate menu").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
             let id = st.comp.new_id();
             let n = st.comp.modulators.len() + 1;
@@ -52,7 +52,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         for (i, m) in st.comp.modulators.iter_mut().enumerate() {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
             egui::Frame::group(ui.style()).show(ui, |ui| {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(100.0));
                     ui.add(crate::ui::meter(value).desired_width(70.0).fill(accent().gamma_multiply(0.7)));
                     if i > 0 && crate::ui::small_command(ui, icon::ARROW_UP).on_hover_text("Earlier in the chain").clicked() {
@@ -68,7 +68,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                 // Hand / MIDI knob: a fader that any knob, OSC message or the remote can move (right-click it: Learn).
                 if let Some(band) = &mut m.band {
                     // A sound band: its value follows the sound (the audio input or the clips' sound).
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         ui.label("Sound from");
                         guarded!(ui, band[0], egui::DragValue::new(&mut band[0]).range(20.0..=16_000.0).speed(2.0).suffix(" Hz"));
                         ui.label("to");
@@ -80,7 +80,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                 } else if m.signal.source == phosphor_engine::ModSource::Hand {
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         Level::percent(&mut m.value, "Value").default(0.0).target(phosphor_engine::ControlTarget::Modulator(m.id)).show(ui);
                         hint(ui, "right-click: Learn a MIDI knob");
                     });
@@ -113,7 +113,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                     }
                 }
                 // Chain: take from an earlier modulator.
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     let mut on = m.chain.is_some();
                     if crate::ui::toggle(ui, &mut on, "Chain:").on_hover_text("Combine with an earlier modulator").changed() {
                         m.chain = on.then(|| ModChain { from: earlier.get(i.saturating_sub(1)).map_or(0, |e| e.0), ..Default::default() });
@@ -126,7 +126,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                                 crate::ui::pick_value(ui, &mut c.from, *id, name);
                             }
                         });
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             Level::percent(&mut c.amount, "Amount").default(1.0).show(ui);
                         });
                         if i == 0 || c.mode == ChainMode::Multiply && c.from == 0 {

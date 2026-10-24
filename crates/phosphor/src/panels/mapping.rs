@@ -533,7 +533,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     }
     // Every output, live; the selected one is edited below.
     output_strip(ui, st, 54.0);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         venue_menu(ui, st);
         svg_menu(ui, st);
         outputs_actions(ui, st);
@@ -547,7 +547,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     {
         let State { comp, output, .. } = st;
         let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
                 .on_hover_text("When on, this output shows only its surfaces");
             super::output::grid_toggle(ui, &mut o.grid);
@@ -620,7 +620,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
             let bg = card_background(ui, card_id);
             let frame = card_frame(ui, is_selected).show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                     ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(140.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -660,7 +660,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         for (i, m) in o.mapping.masks.iter_mut().enumerate() {
             card_frame(ui, *selected_surface == Some(m.id)).show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                     toggle(ui, &mut m.enabled, "ON");
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
@@ -813,11 +813,11 @@ fn slice_drop(ui: &mut egui::Ui, frame: egui::Rect, mapping: &Mapping) {
 
 pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], others: &[(u64, String)]) {
     surface_source(ui, s, layers, groups, others);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Shape");
         choice_buttons(ui, &mut s.shape, |_, _| {});
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Blend");
         choice_buttons(ui, &mut s.blend, |_, r| {
             r.clone().on_hover_text("How this slice lands on the slices under it (Add: overlaps get brighter)");
@@ -827,7 +827,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         egui::CollapsingHeader::new(RichText::new("Corners, by number").small()).id_salt(("corner_numbers", s.id)).show(ui, |ui| {
             hint(ui, "Each corner as a share of the output (0–100%); type or drag for a fine move. On the canvas: arrows nudge the selected slice, Shift = 10 px.");
             for (k, name) in ["Top left", "Top right", "Bottom right", "Bottom left"].iter().enumerate() {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new(*name).small());
                     for axis in 0..2 {
                         let mut v = s.corners[k][axis] * 100.0;
@@ -840,15 +840,15 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             }
         });
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         Level::percent(&mut s.opacity, "Opacity").default(1.0).target(ControlTarget::SliceOpacity(s.id)).show(ui);
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if s.edges.is_none() {
             Level::range(&mut s.feather, 0.0, 0.5, "Soft edge").default(0.0).show(ui);
         }
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let mut per_side = s.edges.is_some();
         if crate::ui::toggle(ui, &mut per_side, "Soft edge per side").on_hover_text("A different soft edge on each side: e.g. only the side that overlaps the next projector").changed() {
             s.edges = per_side.then_some([s.feather; 4]);
@@ -858,18 +858,18 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     });
     if let Some(e) = s.edges.as_mut() {
         for (k, side) in ["Left", "Right", "Top", "Bottom"].iter().enumerate() {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut e[k], 0.0, 0.5, *side).default(0.0).show(ui);
             });
         }
     }
     if s.feather > 0.0 {
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut s.blend_gamma, 0.5, 4.0, "Blend curve").default(1.0).tip("Shape of the soft edge. Where two projectors overlap, about 2.2 usually removes the bright band.").show(ui);
         });
     }
     color_grade_editor(ui, s.id, &mut s.color);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let mut on3d = s.model.is_some();
         if toggle(ui, &mut on3d, label(icon::CUBE, "3D model")).on_hover_text("Map onto a real object from its 3D model (OBJ with UVs): line the virtual camera up with the projector").changed() {
             if on3d {
@@ -892,25 +892,25 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     if let Some(m) = &mut s.model {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().slider_width = 110.0;
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.yaw, -0.5, 0.5, "Turn").default(0.08).width(150.0).show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.pitch, -0.25, 0.25, "Tilt").default(0.05).width(150.0).show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.roll, -0.25, 0.25, "Roll").default(0.0).width(150.0).show(ui);
             });
         });
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().slider_width = 110.0;
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.distance, 0.8, 12.0, "Distance").default(3.0).log().width(150.0).show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.fov, 10.0, 90.0, "Lens °").default(30.0).width(150.0).tip("The projector's vertical throw angle; a long-throw lens is narrow").show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.scale, 0.1, 4.0, "Size").default(1.0).log().width(150.0).show(ui);
             });
             crate::ui::toggle(ui, &mut m.cull, "Hide back faces");
@@ -920,47 +920,47 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             ui.label("Picture");
             choice_combo(ui, ("model_uv", s.id), &mut m.uv_mode, 130.0, false)
                 .on_hover_text("How the picture wraps the model: the model's own texture coordinates, thrown from one side, or Box (each face from the side it faces)");
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.uv_offset[0], -1.0, 1.0, "Move across").default(0.0).width(150.0).show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.uv_offset[1], -1.0, 1.0, "Move up").default(0.0).width(150.0).show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.uv_scale, 0.1, 10.0, "Picture size").default(1.0).log().width(150.0).show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.uv_turn, -0.5, 0.5, "Picture turn").default(0.0).width(150.0).show(ui);
             });
         });
         // Light on the faces and glowing edges (a building's corners and outline drawn in light).
         ui.horizontal_wrapped(|ui| {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::percent(&mut m.shade, "Light").default(0.0).width(150.0).tip("Shades the faces by a light, so the object looks solid (0 = the picture as it is)").show(ui);
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::percent(&mut m.shadows, "Shadows").default(0.0).width(150.0).tip("Darkens the parts of the model its other parts hide from the light (0 = none)").show(ui);
             });
             if m.shade > 0.0 || m.shadows > 0.0 {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     Level::range(&mut m.light[0], -0.5, 0.5, "Light from side").default(0.12).width(150.0).show(ui);
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     Level::range(&mut m.light[1], -0.25, 0.25, "Light from above").default(0.15).width(150.0).show(ui);
                 });
             }
         });
         ui.horizontal_wrapped(|ui| {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut m.edges, 0.0, 20.0, "Edges px").default(0.0).width(150.0).tip("Glowing lines along the model's corners and outline, this many pixels wide (0 = none)").show(ui);
             });
             if m.edges > 0.0 {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     Level::percent(&mut m.edge_glow, "Edge glow").default(1.0).width(150.0).show(ui);
                 });
             }
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut m.calibrating, label(icon::CROSSHAIR, "Calibrate")).on_hover_text("Pin model points and drag them onto the real object: from 4 pins the projector is solved for you (6+ also solves the lens)");
             if m.calibrating {
                 let n = m.pins.len();
@@ -972,13 +972,13 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         });
         hint(ui, "Drag the dot on the canvas to move it, or Calibrate: click points on the model (blue), drag their pins (orange) to the real corners. The picture follows the model's UVs.");
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let mut on = s.line.is_some();
         if toggle(ui, &mut on, label(icon::LINE_SEGMENTS, "Line")).on_hover_text("The picture runs along a line with a width: outlines, edges, strips. Drag its points on the canvas").changed() {
             s.set_line(on);
         }
         if let Some(l) = &mut s.line {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut l.width, 0.005, 0.5, "Width").default(0.06).log().show(ui);
             });
             if crate::ui::small_command(ui, label(icon::PLUS, "point")).on_hover_text("Adds a point after the last one").clicked() {
@@ -992,7 +992,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             }
         }
     });
-    ui.add_enabled_ui(s.line.is_none(), |ui| ui.horizontal(|ui| {
+    ui.add_enabled_ui(s.line.is_none(), |ui| crate::ui::toolbar(ui, |ui| {
         let mut on = s.mesh.is_some();
         let (mut cols, mut rows) = s.mesh.as_ref().map_or((3, 3), |m| (m.cols, m.rows));
         let mut changed = toggle(ui, &mut on, label(icon::GRID_NINE, "Mesh warp")).on_hover_text("Bend the surface onto curved or uneven objects with a grid of points").changed();
@@ -1007,7 +1007,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             s.set_mesh(on, cols, rows);
         }
     }));
-    ui.add_enabled_ui(s.line.is_none() && s.model.is_none(), |ui| ui.horizontal(|ui| {
+    ui.add_enabled_ui(s.line.is_none() && s.model.is_none(), |ui| crate::ui::toolbar(ui, |ui| {
         let mut on = s.bend.is_some();
         if toggle(ui, &mut on, label(icon::BEZIER_CURVE, "Curved edges")).on_hover_text("Two handles on each edge bend it (round tables, arches, curved screens); the picture follows").changed() {
             s.set_bend(on);
@@ -1018,19 +1018,19 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         }
     }));
     ui.collapsing("Input region (part of the picture shown)", |ui| {
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut s.input[0], 0.0, 1.0, "X").default(0.0).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut s.input[1], 0.0, 1.0, "Y").default(0.0).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut s.input[2], 0.05, 1.0, "Width").default(1.0).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut s.input[3], 0.05, 1.0, "Height").default(1.0).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut s.flip[0], label(icon::ARROWS_LEFT_RIGHT, "Flip")).on_hover_text("Mirror the picture left to right (rear projection)");
             toggle(ui, &mut s.flip[1], label(icon::ARROWS_DOWN_UP, "Flip")).on_hover_text("Turn the picture upside down (both flips = a ceiling-hung projector)");
         });
@@ -1039,11 +1039,11 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
 
 /// A mask's settings: invert, smooth curve, soft edge.
 pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping::Mask) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         toggle(ui, &mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
         toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point for a sharp corner or bezier handles)");
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         Level::range(&mut m.feather, 0.0, 0.2, "Soft edge").default(0.0).tip("Fade the mask's edge (0 = hard)").show(ui);
     });
     if m.feather > 0.0 {
@@ -1067,7 +1067,7 @@ pub(crate) fn picture_sources(comp: &phosphor_engine::Composition, except_output
 }
 
 pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], outputs: &[(u64, String)]) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Shows");
         let current = s.layer.map_or("Whole composition".into(), |id| match outputs.iter().find(|(o, _)| *o == id) {
             Some((_, name)) => name.clone(),

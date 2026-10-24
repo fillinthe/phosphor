@@ -143,7 +143,7 @@ pub(crate) fn point_fields(ui: &mut egui::Ui, s: &mut Surface, size: (u32, u32))
     };
     let locked = s.locked;
     let Some(p) = points_mut(s).into_iter().nth(i) else { return };
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new(format!("Point {}", i + 1)).strong());
         for (axis, (name, len)) in [("X", size.0), ("Y", size.1)].into_iter().enumerate() {
             let mut v = p[axis] * len as f32;
@@ -237,7 +237,7 @@ pub(crate) fn group_settings(ui: &mut egui::Ui, mapping: &mut Mapping, ids: &[u6
         all(mapping, &|s| s.opacity = opacity);
     }
     let mut blend = first.blend;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Blend");
         choice_buttons(ui, &mut blend, |_, _| {});
     });

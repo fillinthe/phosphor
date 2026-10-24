@@ -20,7 +20,7 @@ pub(crate) fn camera_layers(st: &State) -> Vec<(u64, String)> {
 
 /// "Camera [list]": pick one of `cameras` (id, name).
 pub(crate) fn camera_combo(ui: &mut egui::Ui, salt: &str, cameras: &[(u64, String)], camera: &mut u64) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Camera");
         let current = cameras.iter().find(|(id, _)| id == camera).map(|(_, n)| n.clone()).unwrap_or_else(|| "(none)".into());
         ComboBox::from_id_salt(salt).width(260.0).selected_text(current).show_ui(ui, |ui| {
@@ -53,14 +53,14 @@ pub(crate) fn scan_window(ctx: &egui::Context, st: &mut State) {
             if cameras.len() == 1 {
                 hint(ui, "Add a layer showing your camera first (Live input), aimed at the stage. It can stay hidden.");
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let mut ms = (st.scanner.settle * 1000.0) as f32;
                 if Level::range(&mut ms, 100.0, 1500.0, "Wait per picture (ms)").default(400.0).show(ui).changed() {
                     st.scanner.settle = ms as f64 / 1000.0;
                 }
             });
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             if busy {
                 if danger_button(ui, label(icon::STOP, "Stop")).clicked() {
                     st.scanner.cancel();

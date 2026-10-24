@@ -40,7 +40,7 @@ fn corner_pin_handles(ui: &mut egui::Ui, st: &mut State, frame: egui::Rect) {
 
 pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     egui::Panel::bottom("preview_bar").show_separator_line(false).show(ui, |ui| {
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label(RichText::new("MASTER").small().strong());
             let w = (ui.available_width() - 140.0).max(80.0);
             Level::percent(&mut st.comp.master_fade, "Fade").modulation(&mut st.comp.master_fade_mod).target(ControlTarget::MasterFade).width(w - 26.0).tip("Master fade: everything that goes out").show(ui);

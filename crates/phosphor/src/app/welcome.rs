@@ -13,7 +13,7 @@ impl PhosphorApp {
         egui::Window::new("New from a template").collapsible(false).resizable(false).open(&mut open).anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0]).show(ctx, |ui| {
             ui.set_width(420.0);
             for (k, (name, about, _)) in phosphor_engine::TEMPLATES.iter().enumerate() {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if crate::ui::wide_button(ui, *name, 130.0).clicked() {
                         pick = Some(k);
                     }
@@ -58,7 +58,7 @@ impl PhosphorApp {
                 ui.label(egui::RichText::new("3. Map it, and hand out the controls").strong());
                 ui.label("Output › send to your projector, drag the corners in Mapping. The Session panel's QR code makes a phone the remote, and a second one lets the crowd play.");
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if crate::ui::command(ui, "Open the Session panel").clicked() {
                         action = Some(super::Tab::Network);
                         close = true;

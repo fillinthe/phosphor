@@ -8,7 +8,7 @@ use super::*;
 pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
     egui::CollapsingHeader::new(RichText::new(label(icon::SCAN, "Video tracking")).strong()).id_salt("tracking").default_open(st.comp.tracking.enabled).show(ui, |ui| {
         let t = &mut st.comp.tracking;
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut t.enabled, "TRACKING").on_hover_text("Look for faces, hands and a body in the picture (Apple Vision, on this Mac)");
             let current = if t.source == MASTER_ID {
                 "Mix".to_string()
@@ -28,7 +28,7 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
             .response
             .on_hover_text("What to watch: usually a camera layer");
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut t.faces, "Faces").on_hover_text("The biggest face: Track Face X / Y / Size / Found");
             toggle(ui, &mut t.hands, "Hands").on_hover_text("The index fingertip: Track Hand X / Y, Track Pinch (thumb to index), Found");
             toggle(ui, &mut t.body, "Body").on_hover_text("The hips: Track Body X / Y, both wrists' height, Found");

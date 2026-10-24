@@ -15,7 +15,7 @@ enum CompAct {
 /// The comp tabs: click one to show its layers here; right-click for its settings; + Comp makes another canvas.
 pub(crate) fn comp_tabs(ui: &mut egui::Ui, st: &mut State) {
     let add_tip = "Another canvas with its own layers, size and effects, mixed into the master (or sent to outputs of its own)";
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let mut act = None;
         if let Some(mut open) = st.comp.open_comp() {
             let options: Vec<(u64, String)> = st.comp.comps.iter().map(|c| (c.id, format!("{} {}", icon::FRAME_CORNERS, c.name))).collect();
@@ -120,7 +120,7 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
         let (cw, ch) = c.size(master);
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w * ch as f32 / cw.max(1) as f32), c.enabled);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let on = toggle(ui, &mut c.enabled, "ON");
             mapped_badge(ui, &on, &ControlTarget::LayerEnabled(c.id));
             on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(c.id)));
@@ -129,7 +129,7 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
             ui.add(egui::TextEdit::singleline(&mut c.name).desired_width(f32::INFINITY));
         });
         hint(ui, "A comp is a canvas of its own: its layers mix at its size, then its effects run, then it mixes into the master like a layer. The screen button sends it to outputs of its own.");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let mut same = c.width == 0;
             if toggle(ui, &mut same, "Master size").on_hover_text(format!("{}×{}", master.0, master.1)).changed() {
                 (c.width, c.height) = if same { (0, 0) } else { master };
@@ -141,15 +141,15 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
             }
         });
         if c.width != 0 {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label("In the master");
                 choice_buttons(ui, &mut c.fit, |_, _| {});
             });
         }
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::percent(&mut c.opacity, "Opacity").modulation(&mut c.opacity_mod).target(ControlTarget::LayerOpacity(c.id)).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Blend");
             choice_combo(ui, ("comp_blend", c.id), &mut c.blend, 120.0, false);
             if let Some(r) = fx_badge(ui, &c.effects, &mut c.fx_bypass) {

@@ -105,7 +105,7 @@ impl PhosphorApp {
                     crate::ui::toggle(ui, &mut imp.chosen[i], text);
                 }
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 if crate::ui::small_command(ui, "All").clicked() {
                     imp.chosen.iter_mut().for_each(|c| *c = true);
                 }

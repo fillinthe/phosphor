@@ -211,7 +211,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
     ui.menu_button(label(icon::FILM_STRIP, "Render…"), |ui| {
         let length = st.comp.timeline.length;
         let o = &mut st.offline_setup;
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             crate::ui::text_field(ui, &mut o.path, "…/show.mp4 or .mov (ProRes)", Some(220.0));
             #[cfg(not(target_arch = "wasm32"))]
             if crate::ui::command(ui, "Choose…").clicked() {
@@ -219,11 +219,11 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
             }
         });
         let o = &mut st.offline_setup;
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Format");
             choice_combo(ui, "render_format", &mut o.format, 200.0, false);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("fps");
             egui::ComboBox::from_id_salt("render_fps").width(60.0).selected_text(o.fps.to_string()).show_ui(ui, |ui| {
                 for f in [24, 25, 30, 50, 60] {
@@ -272,7 +272,7 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
             ui.set_min_width(300.0);
             crate::ui::text_field(ui, &mut e.name, "name", Some(140.0));
             ui.label(RichText::new("Sets").strong());
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 if let Some(t) = target_picker(ui, ("event_target", k), &targets, e.target.as_ref(), 200.0) {
                     e.target = Some(t);
                 }

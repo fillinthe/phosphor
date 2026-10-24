@@ -89,7 +89,7 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
         let current = layer.clip_settings();
         let lid = layer.id;
         let k = layer.clip_slot_mut(c);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("When pressed");
             choice_combo(ui, ("clip_trigger", lid, c), &mut k.trigger, 150.0, false);
         });
@@ -277,7 +277,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         let thumb_h = (crate::thumbs::THUMB_W as f32 / aspect).max(1.0) as u32;
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Column headers trigger whole columns.
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.allocate_exact_size(egui::vec2(ROW_HEADER_W, 22.0), Sense::hover());
                 for c in 0..cols {
                     let keyed = c / CLIP_PAGE_SIZE == bank;
@@ -302,7 +302,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     continue;
                 }
                 let layer = &mut comp.layers[idx];
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
                     let (fill, beat_all, midi) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, cell.y));
                     if let Some(m) = midi {
@@ -557,13 +557,13 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             *selected = Some(layer.id);
         }
         // Show/hide + opacity under the picture; mute + volume for layers with sound.
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             super::layers::show_button(ui, layer);
             Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).width(size.x - 34.0).show(ui);
         });
         if has_sound {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 super::inspector::mute_button(ui, &mut layer.muted, "this layer");
                 super::inspector::volume_bar(ui, layer, size.x - 34.0);
@@ -588,7 +588,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             hint(ui, "The whole row on a run of notes (a pad grid's row): clip 1 = the first note, clip 2 = the next…");
             let key = ui.id().with(("row_midi", layer.id));
             let (mut ch, mut note): (u8, u8) = ui.data(|d| d.get_temp(key)).unwrap_or((0, 36));
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let mut c1 = ch + 1;
                 guarded!(ui, c1, egui::DragValue::new(&mut c1).range(1..=16).prefix("ch "));
                 ch = c1 - 1;
@@ -599,7 +599,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
                 }
             });
             ui.data_mut(|d| d.insert_temp(key, (ch, note)));
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label("Shift its notes");
                 for by in [-8, -1, 1, 8] {
                     if crate::ui::small_command(ui, format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
@@ -608,7 +608,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
                 }
             });
             #[cfg(not(target_arch = "wasm32"))]
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 if crate::ui::command(ui, label(icon::EXPORT, "Export clips…")).on_hover_text("Save this row's clips and their settings as a bank file").clicked() {
                     row_midi = Some(RowAct::ExportBank);
                     ui.close();
@@ -633,12 +633,12 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             if layer.autopilot != Autopilot::Off {
                 ui.separator();
                 let mut at_end = layer.autopilot_beats <= 0.0;
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if ui.radio_value(&mut at_end, true, "When the clip ends").changed() {
                         layer.autopilot_beats = 0.0;
                     }
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if ui.radio_value(&mut at_end, false, "After").changed() {
                         layer.autopilot_beats = 16.0;
                     }
@@ -656,7 +656,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         let when = if layer.autopilot_beats > 0.0 { format!("{:.0} beats", layer.autopilot_beats) } else { "at end".into() };
         if let Some(c) = layer.collection.clone() {
             // Playing a collection: say which, and a one-click stop right here.
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let r = crate::ui::small_command(ui, RichText::new(icon::STOP).color(accent())).on_hover_text("Stop stepping through the collection (what's showing stays)");
                 if r.clicked() {
