@@ -23,7 +23,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         if usb {
             // The interface's USB serial port (the list is read when the menu opens).
             #[cfg(not(target_arch = "wasm32"))]
-            ComboBox::from_id_salt("dmx_usb_port").width(180.0).selected_text(if d.target.is_empty() { "(choose the port)".to_string() } else { d.target.clone() }).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "dmx_usb_port", 180.0).selected_text(if d.target.is_empty() { "(choose the port)".to_string() } else { d.target.clone() }).show_ui(ui, |ui| {
                 let ports = crate::usb_dmx::ports();
                 if ports.is_empty() {
                     ui.label("No USB interface found: plug it in (FTDI driver on older Macs)");

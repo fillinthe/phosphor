@@ -10,7 +10,7 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
         let s = &mut st.scopes;
         choice_buttons(ui, &mut s.kind, |_, _| {});
         let current = if s.source == MASTER_ID { "Mix".to_string() } else { format!("Layer: {}", crate::ui::layer_name(&st.comp.layers, s.source)) };
-        ComboBox::from_id_salt("scopes_src").width(150.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "scopes_src", 150.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut s.source, MASTER_ID, "Mix");
             crate::ui::layer_items(ui, &st.comp.layers, &mut s.source, |id| id);
         });

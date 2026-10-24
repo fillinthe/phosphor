@@ -11,7 +11,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
         ui.add_enabled_ui(!net.running(), |ui| {
             guarded!(ui, net.port, egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
-            ComboBox::from_id_salt("net_fps").width(60.0).selected_text(format!("{} fps", net.fps)).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "net_fps", 60.0).selected_text(format!("{} fps", net.fps)).show_ui(ui, |ui| {
                 for f in [10, 15, 20, 30] {
                     crate::ui::pick_value(ui, &mut net.fps, f, format!("{f} fps"));
                 }
@@ -145,7 +145,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
             for (i, slot) in play.place_pages.iter_mut().enumerate() {
                 ui.label(format!("Player {}", i + 1));
                 let current = slot.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "usual".into());
-                ComboBox::from_id_salt(("place_page", i)).width(90.0).selected_text(current).show_ui(ui, |ui| {
+                crate::ui::dropdown(ui, ("place_page", i), 90.0).selected_text(current).show_ui(ui, |ui| {
                     crate::ui::pick_value(ui, slot, None, "usual").on_hover_text("The page above, or page by place");
                     for (p, name) in pages.iter().enumerate() {
                         crate::ui::pick_value(ui, slot, Some(p), name);

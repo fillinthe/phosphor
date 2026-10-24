@@ -224,7 +224,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             if crate::ui::small_command(ui, icon::CARET_LEFT).clicked() {
                 st.clip_page = st.clip_page.saturating_sub(1);
             }
-            ComboBox::from_id_salt("clip_bank").width(60.0).selected_text(bank_name(st.clip_page)).height(400.0).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "clip_bank", 60.0).selected_text(bank_name(st.clip_page)).height(400.0).show_ui(ui, |ui| {
                 for i in 0..banks {
                     let first = i * CLIP_PAGE_SIZE + 1;
                     crate::ui::pick_value(ui, &mut st.clip_page, i, format!("{}  ({first}–{})", bank_name(i), first + CLIP_PAGE_SIZE - 1));

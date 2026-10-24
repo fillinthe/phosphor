@@ -10,7 +10,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     } else {
         hint(ui, format!("Listening on: {}", control.midi_ports.join(", ")));
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         crate::ui::heading(ui, "OSC");
         guarded!(ui, control.osc_port, egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
         // More ports, typed as a list ("8000, 9001"); applied by Reconnect.
@@ -46,7 +46,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let shown = if control.clock_out_port.is_empty() { "Off".to_string() } else { control.clock_out_port.clone() };
-            ComboBox::from_id_salt("clock_out").width(140.0).selected_text(format!("Clock out: {shown}")).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "clock_out", 140.0).selected_text(format!("Clock out: {shown}")).show_ui(ui, |ui| {
                 if crate::ui::pick_item(ui, control.clock_out_port.is_empty(), "Off").clicked() {
                     control.clock_out_port.clear();
                 }
@@ -63,7 +63,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(Color32::from_rgb(230, 160, 60)));
             }
             let shown = if control.mtc_out_port.is_empty() { "Off".to_string() } else { control.mtc_out_port.clone() };
-            ComboBox::from_id_salt("mtc_out").width(140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "mtc_out", 140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
                 if crate::ui::pick_item(ui, control.mtc_out_port.is_empty(), "Off").clicked() {
                     control.mtc_out_port.clear();
                 }
@@ -159,7 +159,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             ui.label("Arduino");
             let current = control.arduino_port();
             let mut pick = current.clone();
-            ComboBox::from_id_salt("arduino_port").width(200.0).selected_text(if current.is_empty() { "(none)".to_string() } else { current.clone() }).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "arduino_port", 200.0).selected_text(if current.is_empty() { "(none)".to_string() } else { current.clone() }).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut pick, String::new(), "(none)");
                 for p in crate::serial::ports() {
                     crate::ui::pick_value(ui, &mut pick, p.clone(), p);

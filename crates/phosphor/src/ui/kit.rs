@@ -229,6 +229,26 @@ pub(crate) fn column_scroll(ui: &egui::Ui) -> egui::ScrollArea {
     egui::ScrollArea::vertical().max_width(ui.available_width())
 }
 
+/// In a wrapping row, starts a new line when what comes next (`need` wide) won't fit in what's left of this one.
+/// Containers (pick-one groups, drop-downs) only know their size once drawn, so a wrapping row can't move them along
+/// by itself. Does nothing in other rows, or at the start of a line.
+pub(crate) fn make_room(ui: &mut egui::Ui, need: f32) {
+    if !ui.layout().main_wrap {
+        return;
+    }
+    // (In a wrapping row `available_width` is the whole row; what's left of this line is up to the cursor.)
+    let room = ui.max_rect().right() - ui.cursor().left();
+    if need > room && ui.cursor().left() > ui.max_rect().left() + 1.0 {
+        ui.end_row();
+    }
+}
+
+/// A drop-down `width` wide (plus its arrow) that moves to the next line of a wrapping row when it won't fit.
+pub(crate) fn dropdown(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, width: f32) -> egui::ComboBox {
+    make_room(ui, width + ui.spacing().icon_width + ui.spacing().button_padding.x * 2.0);
+    egui::ComboBox::from_id_salt(id).width(width)
+}
+
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.
 pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width: Option<f32>) -> egui::Response {
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
@@ -369,12 +389,7 @@ pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, 
         let font = egui::TextStyle::Button.resolve(ui.style());
         let pad = ui.spacing().button_padding.x * 2.0 + 2.0;
         let need: f32 = options.iter().map(|(_, t)| ui.painter().layout_no_wrap(t.clone(), font.clone(), Color32::WHITE).size().x + pad).sum::<f32>() + 4.0;
-        let row_start = ui.max_rect().left();
-        // (In a wrapping row `available_width` is the whole row; what's left of this line is up to the cursor.)
-        let room = ui.max_rect().right() - ui.cursor().left();
-        if need > room && ui.cursor().left() > row_start + 1.0 {
-            ui.end_row();
-        }
+        make_room(ui, need);
     }
     egui::Frame::new().fill(v.extreme_bg_color).corner_radius(6.0).inner_margin(egui::Margin::same(2)).show(ui, |ui| {
         ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);

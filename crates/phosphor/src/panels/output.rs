@@ -128,7 +128,7 @@ fn gpu_row(ui: &mut egui::Ui, st: &mut State) {
         ui.label("Graphics card");
         let shown = wanted.clone().unwrap_or_else(|| "Automatic".into());
         let mut pick: Option<Option<String>> = None;
-        ComboBox::from_id_salt("gpu_pick").width(220.0).selected_text(&shown).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "gpu_pick", 220.0).selected_text(&shown).show_ui(ui, |ui| {
             if crate::ui::pick_item(ui, wanted.is_none(), "Automatic").clicked() {
                 pick = Some(None);
             }
@@ -247,7 +247,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                     });
                     ui.horizontal_wrapped(|ui| {
                         let current = OUTPUT_SIZES.iter().find(|(w, h, _)| *w == o.width && *h == o.height).map_or(format!("{}×{}", o.width, o.height), |(_, _, n)| n.to_string());
-                        ComboBox::from_id_salt(("out_size", id)).width(130.0).selected_text(current).show_ui(ui, |ui| {
+                        crate::ui::dropdown(ui, ("out_size", id), 130.0).selected_text(current).show_ui(ui, |ui| {
                             for (w, h, name) in OUTPUT_SIZES {
                                 if crate::ui::pick_item(ui, o.width == *w && o.height == *h, *name).clicked() {
                                     o.width = *w;
@@ -401,7 +401,7 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
         let hover = format!("Send the composition over the network as NDI (MadMapper, Resolume, OBS, vMix, other computers)\nNDI library: {}", lib.display());
         output_toggle(ui, &mut st.comp.ndi.enabled, icon::BROADCAST, "NDI", &hover, phosphor_engine::AppControl::Ndi);
         ui.add(egui::TextEdit::singleline(&mut st.comp.ndi.name).desired_width(90.0)).on_hover_text("Name receivers see");
-        ComboBox::from_id_salt("ndi_fps").width(60.0).selected_text(format!("{} fps", st.comp.ndi.fps)).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "ndi_fps", 60.0).selected_text(format!("{} fps", st.comp.ndi.fps)).show_ui(ui, |ui| {
             for f in [25, 30, 50, 60] {
                 crate::ui::pick_value(ui, &mut st.comp.ndi.fps, f, format!("{f} fps"));
             }
@@ -455,7 +455,7 @@ pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputC
     crate::ui::toolbar(ui, |ui| {
         ui.label("Shows");
         let current = o.program.and_then(|id| comps.iter().find(|(c, _, _)| *c == id)).map_or("Main mix".to_string(), |(_, n, _)| format!("Comp: {n}"));
-        ComboBox::from_id_salt(("output_program", o.id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("output_program", o.id), 180.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut o.program, None, "Main mix");
             for (id, name, _) in comps {
                 crate::ui::pick_value(ui, &mut o.program, Some(*id), format!("Comp: {name}"));

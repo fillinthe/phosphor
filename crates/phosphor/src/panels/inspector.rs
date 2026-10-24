@@ -291,7 +291,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                         layer.loop_beats = 0.0;
                     }
                     let beats = if layer.loop_beats > 0.0 { format!("{} beats", layer.loop_beats) } else { "Beats: off".into() };
-                    ComboBox::from_id_salt(("loop_beats", layer.id)).width(84.0).selected_text(beats).show_ui(ui, |ui| {
+                    crate::ui::dropdown(ui, ("loop_beats", layer.id), 84.0).selected_text(beats).show_ui(ui, |ui| {
                         crate::ui::pick_value(ui, &mut layer.loop_beats, 0.0, "Off (use Out)");
                         for b in [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0] {
                             crate::ui::pick_value(ui, &mut layer.loop_beats, b, format!("{b} beats"));
@@ -497,7 +497,7 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     crate::ui::section(ui, ("mixer", layer.id), title, false, |ui| {
         hint(ui, "Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies.");
         let mut pick = layer.mixer.clone();
-        ComboBox::from_id_salt(("mixer_pick", layer.id)).width(200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("mixer_pick", layer.id), 200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut pick, None, "None (blend mode)");
             for d in &mixers {
                 crate::ui::pick_value(ui, &mut pick, Some(d.id.to_string()), d.name);
@@ -600,7 +600,7 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
     crate::ui::toolbar(ui, |ui| {
         ui.label("Sound device");
         let current = layer.sound_device.clone().unwrap_or_else(|| "Main output".into());
-        ComboBox::from_id_salt(("sound_device", layer.id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("sound_device", layer.id), 180.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut layer.sound_device, None, "Main output");
             for d in crate::media::video::sound::output_devices() {
                 crate::ui::pick_value(ui, &mut layer.sound_device, Some(d.clone()), d);
@@ -617,7 +617,7 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
             let name = |p: u8| format!("Outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
             crate::ui::toolbar(ui, |ui| {
                 ui.label("Plays on");
-                ComboBox::from_id_salt(("sound_pair", layer.id)).width(120.0).selected_text(name(layer.sound_pair)).show_ui(ui, |ui| {
+                crate::ui::dropdown(ui, ("sound_pair", layer.id), 120.0).selected_text(name(layer.sound_pair)).show_ui(ui, |ui| {
                     for p in 0..pairs.max(layer.sound_pair + 1) {
                         crate::ui::pick_value(ui, &mut layer.sound_pair, p, name(p));
                     }
@@ -708,7 +708,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             #[cfg(not(target_arch = "wasm32"))]
             LiveText::Headlines(secs) => {
                 let current = crate::live_data::NEWS.iter().find(|(_, u)| *u == style.live_source).map_or_else(|| if style.live_source.is_empty() { "Pick a news feed".to_string() } else { "Your feed".to_string() }, |(n, _)| n.to_string());
-                ComboBox::from_id_salt(("news_feed", id)).width(150.0).selected_text(current).show_ui(ui, |ui| {
+                crate::ui::dropdown(ui, ("news_feed", id), 150.0).selected_text(current).show_ui(ui, |ui| {
                     for (name, url) in crate::live_data::NEWS {
                         if crate::ui::pick_item(ui, style.live_source == url, name).clicked() {
                             style.live_source = url.to_string();
@@ -753,7 +753,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     crate::ui::toolbar(ui, |ui| {
         let search_id = egui::Id::new(("font_search", id));
         let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
-        ComboBox::from_id_salt(("font", id)).width(170.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("font", id), 170.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search fonts").desired_width(180.0)).request_focus();
             let q = search.to_lowercase();
             for f in crate::text::fonts().iter().filter(|f| q.is_empty() || f.name.to_lowercase().contains(&q)).take(400) {

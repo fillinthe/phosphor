@@ -456,7 +456,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         ui.add_space(4.0);
         crate::ui::heading(ui, "Writes on");
         let current = w.text_layer.and_then(|t| text_layers.iter().find(|(id, _)| *id == t)).map_or("(pick a text layer)".to_string(), |(_, n)| n.clone());
-        ComboBox::from_id_salt(("text_layer", id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("text_layer", id), 180.0).selected_text(current).show_ui(ui, |ui| {
             for (lid, name) in &text_layers {
                 crate::ui::pick_value(ui, &mut w.text_layer, Some(*lid), name);
             }

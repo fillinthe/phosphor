@@ -24,7 +24,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         let s = &mut stream.settings;
         crate::ui::toolbar(ui, |ui| {
             ui.label("Destination");
-            ComboBox::from_id_salt("stream_dest").width(160.0).selected_text(s.destination.name()).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "stream_dest", 160.0).selected_text(s.destination.name()).show_ui(ui, |ui| {
                 for d in Destination::ALL {
                     crate::ui::pick_value(ui, &mut s.destination, d, d.name());
                 }
@@ -34,7 +34,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
             ui.horizontal(|ui| {
                 crate::ui::toggle(ui, &mut s.second_enabled, "Also send to").on_hover_text("A second live destination from the same encode (YouTube + Twitch at once)");
                 if s.second_enabled {
-                    ComboBox::from_id_salt("stream_second").width(130.0).selected_text(s.second_destination.name()).show_ui(ui, |ui| {
+                    crate::ui::dropdown(ui, "stream_second", 130.0).selected_text(s.second_destination.name()).show_ui(ui, |ui| {
                         for d in [Destination::YouTube, Destination::Twitch, Destination::CustomRtmp] {
                             crate::ui::pick_value(ui, &mut s.second_destination, d, d.name());
                         }
@@ -115,7 +115,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
             ui.label("fps");
-            ComboBox::from_id_salt("stream_fps").width(60.0).selected_text(s.fps.to_string()).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "stream_fps", 60.0).selected_text(s.fps.to_string()).show_ui(ui, |ui| {
                 for f in [24, 25, 30, 50, 60] {
                     crate::ui::pick_value(ui, &mut s.fps, f, f.to_string());
                 }
@@ -133,7 +133,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
             } else {
                 stream_audio_devices.iter().find(|(i, _)| *i == s.audio_device).map(|(_, n)| n.clone()).unwrap_or_else(|| format!("Device {}", s.audio_device))
             };
-            ComboBox::from_id_salt("stream_audio").width(220.0).selected_text(current).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "stream_audio", 220.0).selected_text(current).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut s.audio_device, -1, "None");
                 for (i, name) in stream_audio_devices.iter() {
                     crate::ui::pick_value(ui, &mut s.audio_device, *i, name);
@@ -162,7 +162,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
             crate::ui::toggle(ui, &mut stream.settings.on_bar, "On the bar").on_hover_text("Start and stop on the next bar of the clock (4 beats)");
             let s = &mut stream.settings;
             let current = if s.source == 0 { "Program".to_string() } else { sources.iter().find(|(id, _)| *id == s.source).map_or("(gone)".into(), |x| x.1.clone()) };
-            ComboBox::from_id_salt("stream_source").width(150.0).selected_text(current).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "stream_source", 150.0).selected_text(current).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut s.source, 0, "Program (what the output shows)");
                 for (id, name) in &sources {
                     crate::ui::pick_value(ui, &mut s.source, *id, name);
@@ -217,7 +217,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
                 let s = &mut r.settings;
                 ui.add_enabled_ui(!running, |ui| {
                     let current = if s.source == 0 { "Program".to_string() } else { sources.iter().find(|(id, _)| *id == s.source).map_or("(gone)".into(), |x| x.1.clone()) };
-                    ComboBox::from_id_salt(("rec_source", i)).width(130.0).selected_text(current).show_ui(ui, |ui| {
+                    crate::ui::dropdown(ui, ("rec_source", i), 130.0).selected_text(current).show_ui(ui, |ui| {
                         crate::ui::pick_value(ui, &mut s.source, 0, "Program (the mix)");
                         for (id, name) in sources {
                             crate::ui::pick_value(ui, &mut s.source, *id, name);
@@ -229,7 +229,7 @@ fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], 
                         choose = Some(i);
                     }
                     choice_combo(ui, ("rec_format", i), &mut s.file_format, 150.0, false);
-                    ComboBox::from_id_salt(("rec_fps", i)).width(50.0).selected_text(format!("{} fps", s.fps)).show_ui(ui, |ui| {
+                    crate::ui::dropdown(ui, ("rec_fps", i), 50.0).selected_text(format!("{} fps", s.fps)).show_ui(ui, |ui| {
                         for f in [24, 25, 30, 50, 60] {
                             crate::ui::pick_value(ui, &mut s.fps, f, f.to_string());
                         }

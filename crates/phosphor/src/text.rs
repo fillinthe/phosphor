@@ -74,12 +74,9 @@ pub fn add_font_file(path: &std::path::Path) -> Vec<String> {
     names
 }
 
-/// A new text layer's look: a bold installed font when there is one (titles read better bold).
+/// A new text layer's look: Phosphor's own font (Orbitron Bold, the logo's), the same on every computer.
 pub fn default_style() -> TextStyle {
-    let bold = ["Avenir Next Bold", "Helvetica Neue Bold", "Arial Bold", "Futura Bold"];
-    let all = fonts();
-    let font = bold.iter().find_map(|want| all.iter().find(|f| f.name == *want)).map_or_else(|| "builtin:sans".to_string(), |f| f.id.clone());
-    TextStyle { font, outline: 0.03, ..Default::default() }
+    TextStyle { font: "builtin:logo".into(), outline: 0.03, ..Default::default() }
 }
 
 /// The shown name of a `TextStyle::font` value.

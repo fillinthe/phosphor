@@ -10,7 +10,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     let follow_audio = &mut clock.follow_audio;
     crate::ui::toolbar(ui, |ui| {
         let current = audio.current().unwrap_or("Default input").to_string();
-        ComboBox::from_id_salt("audio_device").width(220.0).selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "audio_device", 220.0).selected_text(current).show_ui(ui, |ui| {
             let devices: Vec<String> = audio.devices().to_vec();
             if crate::ui::pick_item(ui, audio.current().is_none(), "Default input").clicked()
                 && let Err(e) = audio.open(None)
@@ -130,7 +130,7 @@ fn sound_device(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label("Plays on");
         let current = sound::output_device();
-        let r = ComboBox::from_id_salt("sound_out_device").width(220.0).selected_text(current.clone().unwrap_or_else(|| "The Mac's default output".into())).show_ui(ui, |ui| {
+        let r = crate::ui::dropdown(ui, "sound_out_device", 220.0).selected_text(current.clone().unwrap_or_else(|| "The Mac's default output".into())).show_ui(ui, |ui| {
             let devices: Vec<String> = ui.ctx().data_mut(|d| d.get_temp(key)).unwrap_or_else(|| {
                 let list = sound::output_devices();
                 ui.ctx().data_mut(|d| d.insert_temp(key, list.clone()));

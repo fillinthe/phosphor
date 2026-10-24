@@ -17,7 +17,7 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
             } else {
                 format!("Layer: {}", crate::ui::layer_name(&st.comp.layers, t.source))
             };
-            ComboBox::from_id_salt("tracking_src").width(170.0).selected_text(current).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "tracking_src", 170.0).selected_text(current).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut t.source, MASTER_ID, "Mix");
                 ui.separator();
                 crate::ui::layer_items(ui, &st.comp.layers, &mut t.source, |id| id);

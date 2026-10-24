@@ -157,7 +157,7 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
             crate::ui::toggle(ui, &mut mm.sync, "Sync to tempo");
             if mm.sync {
                 let current = SYNC_CHOICES.iter().find(|(v, _)| (*v - mm.rate).abs() < 1e-3).map_or("custom", |(_, n)| *n);
-                ComboBox::from_id_salt("sync_rate").width(100.0).selected_text(format!("every {current}")).show_ui(ui, |ui| {
+                crate::ui::dropdown(ui, "sync_rate", 100.0).selected_text(format!("every {current}")).show_ui(ui, |ui| {
                     for (v, name) in SYNC_CHOICES {
                         crate::ui::pick_value(ui, &mut mm.rate, *v, *name);
                     }
