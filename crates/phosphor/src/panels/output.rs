@@ -10,7 +10,7 @@ pub(crate) const RESOLUTIONS: &[(u32, u32, &str)] = &[
 ];
 
 pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Screens").strong());
         if ui.small_button(label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
             st.displays = crate::screens::displays();
@@ -20,7 +20,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         hint(ui, "No displays found.");
     }
     for d in st.displays.clone() {
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let icon_name = if d.main { icon::LAPTOP } else { icon::PROJECTOR_SCREEN };
             ui.label(format!("{icon_name} {}", d.label()));
             if d.main {
@@ -43,7 +43,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         let current = format!("{}×{}", st.comp.width, st.comp.height);
         ComboBox::from_id_salt("resolution").selected_text(current).show_ui(ui, |ui| {
             for (w, h, label) in RESOLUTIONS {
-                if ui.selectable_label(st.comp.width == *w && st.comp.height == *h, *label).clicked() {
+                if crate::ui::pick_item(ui, st.comp.width == *w && st.comp.height == *h, *label).clicked() {
                     st.comp.width = *w;
                     st.comp.height = *h;
                 }
@@ -58,14 +58,14 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.end_row();
 
         ui.label("Render at");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             crate::ui::choice_combo(ui, "render_rate", &mut st.render_rate, 110.0, false);
             crate::ui::hint(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
         });
         ui.end_row();
 
         ui.label("Colour depth");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             if st.comp.deep_color && !phosphor_engine::deep_colour() {
                 crate::ui::hint(ui, "This graphics card can't: mixing stays 8-bit.");
             }
@@ -124,16 +124,16 @@ fn gpu_row(ui: &mut egui::Ui, st: &mut State) {
     if names.len() < 2 && wanted.is_none() {
         return;
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Graphics card");
         let shown = wanted.clone().unwrap_or_else(|| "Automatic".into());
         let mut pick: Option<Option<String>> = None;
         ComboBox::from_id_salt("gpu_pick").width(220.0).selected_text(&shown).show_ui(ui, |ui| {
-            if ui.selectable_label(wanted.is_none(), "Automatic").clicked() {
+            if crate::ui::pick_item(ui, wanted.is_none(), "Automatic").clicked() {
                 pick = Some(None);
             }
             for n in &names {
-                if ui.selectable_label(wanted.as_deref() == Some(n.as_str()), n).clicked() {
+                if crate::ui::pick_item(ui, wanted.as_deref() == Some(n.as_str()), n).clicked() {
                     pick = Some(Some(n.clone()));
                 }
             }
@@ -150,7 +150,7 @@ fn gpu_row(ui: &mut egui::Ui, st: &mut State) {
 
 /// Every output with its size, screen, window and Identify controls.
 pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Outputs").strong());
         if ui.small_button(label(icon::PLUS, "Add output")).clicked() {
             st.mapping_output = st.comp.add_output();
@@ -249,7 +249,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                         let current = OUTPUT_SIZES.iter().find(|(w, h, _)| *w == o.width && *h == o.height).map_or(format!("{}×{}", o.width, o.height), |(_, _, n)| n.to_string());
                         ComboBox::from_id_salt(("out_size", id)).width(130.0).selected_text(current).show_ui(ui, |ui| {
                             for (w, h, name) in OUTPUT_SIZES {
-                                if ui.selectable_label(o.width == *w && o.height == *h, *name).clicked() {
+                                if crate::ui::pick_item(ui, o.width == *w && o.height == *h, *name).clicked() {
                                     o.width = *w;
                                     o.height = *h;
                                 }
@@ -295,7 +295,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                 });
             });
             if !o.screen.is_empty() {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     let connected = crate::screens::find_screen(&displays, &o.screen).is_some();
                     let (glyph, color) = if connected { (icon::CHECK_CIRCLE, accent()) } else { (icon::WARNING, Color32::from_rgb(230, 160, 60)) };
                     ui.label(RichText::new(format!("{glyph} Screen: {}", o.screen)).small().color(color))
@@ -309,7 +309,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                 let title = format!("{} surfaces{}", o.mapping.surfaces.len(), if o.mapping.enabled { "" } else { " (mapping off)" });
                 egui::CollapsingHeader::new(title).id_salt(("out_surfaces", id)).show(ui, |ui| {
                     for s in o.mapping.surfaces.iter_mut() {
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             crate::ui::toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                             ui.label(&s.name);
                         });
@@ -349,7 +349,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
 /// Composition → Syphon toggle with status.
 #[cfg(target_os = "macos")]
 pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if !st.syphon.available {
             hint(ui, "Syphon unavailable (framework missing)");
             return;
@@ -369,7 +369,7 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
 /// Composition → Spout toggle with status (Windows; the same setting as Syphon on the Mac).
 #[cfg(windows)]
 pub fn spout_row(ui: &mut egui::Ui, st: &mut State) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let hover = "Publish the composition as the Spout sender \"Phosphor\": pick it in Resolume, TouchDesigner, OBS (Spout2 plugin), MadMapper…";
         if output_toggle(ui, &mut st.comp.spout, icon::SHARE_NETWORK, "Spout", hover, phosphor_engine::AppControl::Syphon).changed() {
             st.spout.clear_error();
@@ -389,7 +389,7 @@ pub fn spout_row(ui: &mut egui::Ui, st: &mut State) {
 /// Composition → NDI toggle, name, frame rate and status.
 #[cfg(any(target_os = "macos", windows))]
 pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let Some(lib) = crate::ndi::Ndi::library() else {
             ui.label(RichText::new(format!("{} NDI", icon::BROADCAST)).color(Color32::GRAY));
             hint(ui, if cfg!(windows) { "needs NDI Tools or the NDI Runtime (then restart Phosphor)" } else { "needs NDI Tools for Mac (then restart Phosphor, not the Mac)" });
@@ -403,7 +403,7 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
         ui.add(egui::TextEdit::singleline(&mut st.comp.ndi.name).desired_width(90.0)).on_hover_text("Name receivers see");
         ComboBox::from_id_salt("ndi_fps").width(60.0).selected_text(format!("{} fps", st.comp.ndi.fps)).show_ui(ui, |ui| {
             for f in [25, 30, 50, 60] {
-                ui.selectable_value(&mut st.comp.ndi.fps, f, format!("{f} fps"));
+                crate::ui::pick_value(ui, &mut st.comp.ndi.fps, f, format!("{f} fps"));
             }
         });
         crate::ui::toggle(ui, &mut st.comp.ndi.sound, "Sound").on_hover_text("The movies' sound goes out with the picture");
@@ -420,7 +420,7 @@ pub fn ndi_row(ui: &mut egui::Ui, st: &mut State) {
 /// Phosphor as a camera ("Phosphor") in Zoom, OBS, Teams…: on/off and what macOS said about installing it.
 #[cfg(target_os = "macos")]
 pub fn vcam_row(ui: &mut egui::Ui, st: &mut State) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let was = st.vcam.on;
         crate::ui::toggle(ui, &mut st.vcam.on, label(icon::WEBCAM, "Virtual camera"))
             .on_hover_text("The composition as a camera called \"Phosphor\" in video calls, OBS and other apps (1920×1080, 30 fps)");
@@ -452,13 +452,13 @@ pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputC
     if comps.len() < 2 {
         return;
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Shows");
         let current = o.program.and_then(|id| comps.iter().find(|(c, _, _)| *c == id)).map_or("Main mix".to_string(), |(_, n, _)| format!("Comp: {n}"));
         ComboBox::from_id_salt(("output_program", o.id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut o.program, None, "Main mix");
+            crate::ui::pick_value(ui, &mut o.program, None, "Main mix");
             for (id, name, _) in comps {
-                ui.selectable_value(&mut o.program, Some(*id), format!("Comp: {name}"));
+                crate::ui::pick_value(ui, &mut o.program, Some(*id), format!("Comp: {name}"));
             }
         })
         .response
@@ -512,16 +512,16 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
         hint(ui, "Grid shows over the show; the others cover it. Test card: red top left, green top right, blue bottom right, yellow bottom left.");
         ui.separator();
         ui.label(RichText::new("Grid").strong());
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Cells across");
             guarded!(ui, g.cells, egui::DragValue::new(&mut g.cells).range(2..=64));
         });
         crate::ui::toggle(ui, &mut g.crosshair, "Crosshair, circle and diagonals");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Line");
             guarded!(ui, g.width, egui::DragValue::new(&mut g.width).range(0.5..=12.0).speed(0.1).suffix(" px"));
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Colour");
             for c in [[255u8, 255, 255], [0, 255, 120], [255, 60, 60], [80, 160, 255], [255, 220, 0]] {
                 let (rect, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::click());
