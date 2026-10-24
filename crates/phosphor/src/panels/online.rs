@@ -240,7 +240,7 @@ fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
             changed = true;
         }
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Signed in to X in");
         let current = xs.browser.clone().unwrap_or_else(|| "pick a browser".into());
         ComboBox::from_id_salt("x_browser").width(110.0).selected_text(current).show_ui(ui, |ui| {
@@ -378,7 +378,7 @@ fn font_arrived(st: &mut State, item: &Item, paths: &[String]) {
 pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let o = &mut st.online;
     let mut go = false;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let prompt = if o.want == Want::XGifs { "An X account: @giphy, @nasa…" } else { "Search: aurora, city lights, waves, fire…" };
         let r = crate::ui::text_field(ui, &mut o.query, prompt, Some((ui.available_width() - if o.search.is_some() { 64.0 } else { 34.0 }).max(80.0)));
         go |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
@@ -444,7 +444,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         });
         if let Some(name) = st.online.starter {
             let coming = st.online.downloads.iter().filter(|(_, t)| matches!(t, Then::Cell(..))).count();
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.spinner();
                 hint(ui, format!("Building {name}: {coming} clips downloading"));
             });
@@ -455,7 +455,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         return;
     };
     search.poll();
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if search.busy() {
             ui.spinner();
         }

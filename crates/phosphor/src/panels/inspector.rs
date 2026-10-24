@@ -83,7 +83,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
             thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 super::layers::show_button(ui, layer);
                 send = outputs_menu(ui, &outs).or(send);
                 ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
@@ -198,7 +198,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             for (i, p) in desc.params.iter().enumerate() {
                 param_slider(ui, &mut layer.generator_values, &mut layer.generator_mods, i, p, Some(ControlTarget::GeneratorParam { layer: layer.id, index: i }));
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new("Render size").small());
                 let sizes: Vec<(f32, String)> = [1.0, 0.75, 0.5, 0.25].iter().map(|s| (*s, format!("{:.0}%", s * 100.0))).collect();
                 let mut scale = sizes.iter().map(|(s, _)| *s).min_by(|a, b| (a - layer.render_scale).abs().total_cmp(&(b - layer.render_scale).abs())).unwrap_or(1.0);
@@ -250,7 +250,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             hint(ui, "New files in the collection's folders join as they arrive. Put any clip or file on this layer yourself and it stops following the collection.");
             ui.separator();
         }
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label(RichText::new("Fade style").strong());
             choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
             if transition_effect_combo(ui, ("trans_fx", layer.id), layer.transition_kind, &mut layer.transition_effect) {
@@ -259,7 +259,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
         });
         transition_settings(ui, layer);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label(RichText::new("Frame rate").small());
             let rates: Vec<(f32, String)> = [(0.0, "every frame".to_string()), (30.0, "30".into()), (15.0, "15".into()), (10.0, "10".into()), (5.0, "5".into())].into_iter().collect();
             segmented(ui, &mut layer.render_fps, &rates, |_, r, _| {
@@ -280,7 +280,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     layer.loop_out = hi.max(lo + 0.01).min(1.0);
                 }
                 let at = (pos / dur.max(1e-6)) as f32;
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new("Section").small().color(Color32::GRAY));
                     let r = crate::ui::command(ui, "In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
                     map_menu(ui, &r, ControlTarget::LayerLoopIn(layer.id));
@@ -305,7 +305,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     }
                 });
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 // Play / pause makes something happen: an action button (not a toggle pill).
                 let (pause, play) = (label(icon::PAUSE, "Pause"), label(icon::PLAY, "Play"));
                 let text = if layer.playing { pause.clone() } else { play.clone() };
@@ -327,7 +327,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 choice_mapped(ui, &mut layer.direction, ControlTarget::LayerDirection(layer.id));
             });
             if let Some((pos, dur)) = position {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("Jump");
                     let step = layer.jump_secs(Some(dur), media.bpm);
                     for (forward, glyph, tip) in [(false, icon::REWIND, "Jump back one step"), (true, icon::FAST_FORWARD, "Jump forward one step")] {
@@ -356,7 +356,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
             if let Some((pos, dur)) = position {
                 // Scratch: drag along the strip to move through the movie (a screen-width drag = 4 seconds), endlessly.
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("Scratch");
                     let (rect, r) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(260.0), 18.0), Sense::drag());
                     let p = ui.painter();
@@ -380,12 +380,12 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     r.on_hover_text("Drag to scratch through the movie (wraps round at the ends)");
                 });
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
                     Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
                 });
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let mut sync = layer.sync_beats > 0.0;
                 if toggle(ui, &mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
                     layer.sync_beats = if sync { 16.0 } else { 0.0 };
@@ -467,7 +467,7 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
     });
     if let Some(d) = detail {
         let is_file = matches!(&layer.source, SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } if !p.starts_with("http"));
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             #[cfg(not(target_arch = "wasm32"))]
             if is_file {
                 if !std::path::Path::new(&d).exists() && !crate::media::sequence::exists(&d) {
@@ -529,7 +529,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     let title = if t.is_identity() { label(icon::ARROWS_OUT_CARDINAL, "Transform") } else { label(icon::ARROWS_OUT_CARDINAL, "Transform (moved)") };
     egui::CollapsingHeader::new(title).id_salt(("transform", id)).show(ui, |ui| {
         let row = |ui: &mut egui::Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>, text: &str, target: ControlTarget, m: Option<&mut Option<Modulation>>, log: bool, reset: f32| {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let mut level = Level::range(value, *range.start(), *range.end(), text).default(reset).target(target);
                 if log {
                     level = level.log();
@@ -551,7 +551,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         }
         if let Some(c) = &mut t.corners {
             for (k, name) in ["Top left", "Top right", "Bottom right", "Bottom left"].into_iter().enumerate() {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new(name).small());
                     for axis in 0..2 {
                         let r = guarded!(ui, c[k][axis], egui::DragValue::new(&mut c[k][axis]).speed(0.002).range(-1.0..=2.0).fixed_decimals(3).prefix(if axis == 0 { "x " } else { "y " }));
@@ -562,11 +562,11 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         }
         // Crop: one bar per edge.
         for (k, side) in ["Crop left", "Crop right", "Crop top", "Crop bottom"].into_iter().enumerate() {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::percent(&mut t.crop[k], side).max(0.5).default(0.0).show(ui);
             });
         }
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             guarded!(ui, t.stretch_x, egui::DragValue::new(&mut t.stretch_x).range(0.05..=8.0).speed(0.01).prefix("width ×"));
             guarded!(ui, t.stretch_y, egui::DragValue::new(&mut t.stretch_y).range(0.05..=8.0).speed(0.01).prefix("height ×"));
             toggle(ui, &mut t.flip_x, format!("Flip {}", icon::ARROWS_LEFT_RIGHT));
@@ -591,7 +591,7 @@ pub(crate) fn mute_button(ui: &mut egui::Ui, muted: &mut bool, what: &str) -> eg
 
 /// Movie sound: volume (mappable) and whether it fades with the layer's opacity.
 fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         mute_button(ui, &mut layer.muted, "this layer");
         let w = ui.available_width();
         volume_bar(ui, layer, w);
@@ -600,7 +600,7 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
     // Another sound device (headphones for cueing, a second interface…): the device list is asked for only when the
     // menu opens.
     #[cfg(not(target_arch = "wasm32"))]
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Sound device");
         let current = layer.sound_device.clone().unwrap_or_else(|| "Main output".into());
         ComboBox::from_id_salt(("sound_device", layer.id)).width(180.0).selected_text(current).show_ui(ui, |ui| {
@@ -618,7 +618,7 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
         let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
         if pairs > 1 || layer.sound_pair > 0 {
             let name = |p: u8| format!("Outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label("Plays on");
                 ComboBox::from_id_salt(("sound_pair", layer.id)).width(120.0).selected_text(name(layer.sound_pair)).show_ui(ui, |ui| {
                     for p in 0..pairs.max(layer.sound_pair + 1) {
@@ -754,7 +754,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     });
     use phosphor_engine::TextAlign;
     ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         let search_id = egui::Id::new(("font_search", id));
         let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
         ComboBox::from_id_salt(("font", id)).width(200.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
@@ -780,13 +780,13 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             });
         });
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         Level::range(&mut style.size, 0.02, 0.8, "Size").default(0.18).tip("Text height, as a share of the picture's height").show(ui);
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         Level::range(&mut style.outline, 0.0, 0.15, "Outline").default(0.0).show(ui);
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         Level::range(&mut style.line_spacing, 0.6, 2.0, "Line spacing").default(1.0).show(ui);
     });
     hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
@@ -812,7 +812,7 @@ fn transition_settings(ui: &mut egui::Ui, layer: &mut LayerState) {
             if Some(i) == progress {
                 continue;
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut layer.transition_values[i], p.min, p.max, p.name).default(p.default).show(ui);
             });
         }

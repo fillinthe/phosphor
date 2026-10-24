@@ -139,7 +139,7 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
             });
         }
         ui.add_space(6.0);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             if crate::ui::command(ui, format!("{} File it on GitHub", icon::GITHUB_LOGO)).on_hover_text("Opens a prefilled issue on github.com/fillinthe/phosphor (needs a GitHub account; the report is public)").clicked() {
                 let title = st.bug.text.lines().next().unwrap_or("").chars().take(80).collect::<String>();
                 let title = if title.trim().is_empty() { "Bug report".to_string() } else { title };

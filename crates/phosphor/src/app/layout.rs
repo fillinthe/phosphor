@@ -47,7 +47,7 @@ impl PhosphorApp {
         let mut save = false;
         egui::Window::new(format!("{} Save Layout", icon::LAYOUT)).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
             ui.label("Saves where every panel is, including floating windows.");
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label("Name");
                 let r = ui.text_edit_singleline(&mut draft.0);
                 r.request_focus();
@@ -162,7 +162,7 @@ impl PhosphorApp {
                     redock.push(tab);
                 }
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         ui.label(egui::RichText::new(tab.title()).strong());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if crate::ui::small_command(ui, "Dock back").clicked() {

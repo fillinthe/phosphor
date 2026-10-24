@@ -22,7 +22,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     let running = stream.running();
     ui.add_enabled_ui(!running, |ui| {
         let s = &mut stream.settings;
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Destination");
             ComboBox::from_id_salt("stream_dest").width(160.0).selected_text(s.destination.name()).show_ui(ui, |ui| {
                 for d in Destination::ALL {
@@ -31,7 +31,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
             });
         });
         if !matches!(s.destination, Destination::File | Destination::Whip) {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 crate::ui::toggle(ui, &mut s.second_enabled, "Also send to").on_hover_text("A second live destination from the same encode (YouTube + Twitch at once)");
                 if s.second_enabled {
                     ComboBox::from_id_salt("stream_second").width(130.0).selected_text(s.second_destination.name()).show_ui(ui, |ui| {
@@ -45,7 +45,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                     ui.add(egui::TextEdit::singleline(&mut s.second_key).password(true).hint_text("stream key").desired_width(160.0));
                 }
             });
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 crate::ui::toggle(ui, &mut s.copy_enabled, "Also record a copy").on_hover_text("An H.264 .mp4 of the stream, written while it goes out");
                 if s.copy_enabled {
                     ui.add(egui::TextEdit::singleline(&mut s.copy_path).hint_text("…/stream-copy.mp4").desired_width(240.0));
@@ -54,41 +54,41 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         }
         match s.destination {
             Destination::YouTube | Destination::Twitch => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("Stream key");
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
                     crate::ui::toggle(ui, &mut s.secure, "Secure (RTMPS)").on_hover_text("Encrypted ingest (rtmps://, port 443): what YouTube and Twitch recommend; turn off only if a network blocks it");
                 });
             }
             Destination::CustomRtmp => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("RTMP URL");
                     ui.add(egui::TextEdit::singleline(&mut s.rtmp_url).desired_width(260.0));
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("Stream key");
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
                 });
             }
             Destination::Srt => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("SRT URL");
                     ui.add(egui::TextEdit::singleline(&mut s.srt_url).desired_width(300.0));
                 });
             }
             Destination::Whip => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("WHIP URL");
                     ui.add(egui::TextEdit::singleline(&mut s.whip_url).hint_text("https://…/whip").desired_width(300.0));
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("Token");
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).hint_text("bearer token, if the service gives one").desired_width(260.0));
                 });
                 hint(ui, "WebRTC: under a second of delay. H.264 Baseline video, Opus audio. Goes out on its own (no second destination or copy).");
             }
             Destination::File => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("File");
                     ui.add(egui::TextEdit::singleline(&mut s.file_path).hint_text("…/recording.mp4 or .mov (ProRes)").desired_width(260.0));
                     #[cfg(not(target_arch = "wasm32"))]
@@ -96,7 +96,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                         choose_file = true;
                     }
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label("Format");
                     choice_combo(ui, "record_format", &mut s.file_format, 200.0, false);
                     if s.file_format != crate::stream::FileFormat::Auto {
@@ -105,7 +105,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
         }
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Size");
             let current = if s.height == 0 { format!("Canvas ({cw}×{ch})") } else { format!("{}p", s.height) };
             ComboBox::from_id_salt("stream_size").selected_text(current).show_ui(ui, |ui| {
@@ -126,7 +126,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
             s.kbps = kbps.round() as u32;
         }
         #[cfg(not(target_arch = "wasm32"))]
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Audio");
             let current = if s.audio_device < 0 {
                 "None".to_string()
@@ -147,7 +147,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         toggle(ui, &mut s.program_sound, label(icon::FILM_STRIP, "Movie sound")).on_hover_text("Phosphor's own sound (the movies playing) in the stream or recording, mixed with the audio device above when one is chosen");
     });
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if running {
             let (later, stop_now) = (label(icon::STOP, "Stopping on the bar…"), label(icon::STOP, "Stop"));
             if steady_button(ui, if waiting { later.clone() } else { stop_now.clone() }, &[&later, &stop_now]).clicked() {
@@ -203,7 +203,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
 /// More recorders: each records its own source (the program, a layer, group or comp) to its own file, all at once.
 fn more_recorders(ui: &mut egui::Ui, st: &mut State, sources: &[(u64, String)], now: f64) {
     use crate::app::recorders::MAX;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("More recorders").strong());
         if st.recorders.len() < MAX && crate::ui::command(ui, label(icon::PLUS, "Recorder")).on_hover_text("Record another picture to its own file at the same time (a layer on its own, a comp, the program)").clicked() {
             st.recorder_add();

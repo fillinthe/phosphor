@@ -17,7 +17,7 @@ pub struct AccountUi {
 pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     let ctx = ui.ctx().clone();
     let State { account: a, account_ui: f, comp, cloud_project, project_path, .. } = st;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Your account").strong());
         if a.busy > 0 {
             ui.spinner();
@@ -34,7 +34,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
         sign_in_form(ui, &ctx, a, f);
         return;
     };
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(&user.email);
         let plan = if a.pro() { RichText::new("Pro").color(accent()).strong() } else { RichText::new("Free").color(Color32::GRAY) };
         ui.label(plan);
@@ -49,7 +49,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     if let Some((used, max)) = a.storage {
         let frac = if max > 0 { used as f32 / max as f32 } else { 0.0 };
         ui.add(crate::ui::meter(frac).desired_height(6.0).fill(accent().gamma_multiply(0.6)));
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             hint(ui, format!("{:.1} MB of {} MB used · your layouts are kept here too", used as f64 / 1_048_576.0, max >> 20));
             if !a.pro() && crate::ui::small_command(ui, label(icon::STAR, "More space")).on_hover_text("Phosphor Pro: 1 GB").clicked() {
                 a.open_web(&ctx, "/#pricing");
@@ -63,7 +63,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
             .or_else(|| project_path.as_deref().and_then(|p| std::path::Path::new(p).file_stem()).map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_else(|| "My show".into());
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.add(egui::TextEdit::singleline(&mut f.name).hint_text("Project name").desired_width(180.0));
         let name = f.name.trim().to_string();
         match cloud_project.clone() {
@@ -91,7 +91,7 @@ pub(crate) fn account(ui: &mut egui::Ui, st: &mut State) {
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         for p in &a.projects {
             let current = cloud_project.as_ref().is_some_and(|(id, _)| *id == p.id);
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Open")).clicked() {
                     open = Some(p.id.clone());
                 }
@@ -153,7 +153,7 @@ fn sign_in_form(ui: &mut egui::Ui, ctx: &egui::Context, a: &mut Account, f: &mut
         }
         ui.end_row();
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         if ui.link("Create a free account").clicked() {
             a.open_web(ctx, "/signin/?signup");
         }

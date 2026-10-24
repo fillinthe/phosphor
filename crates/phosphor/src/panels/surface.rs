@@ -25,7 +25,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
     let mut selected: Option<u64> = ui.ctx().data(|d| d.get_temp(sel_id)).flatten();
 
     // Toolbar.
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         toggle(ui, &mut edit, label(icon::PENCIL_SIMPLE, "Edit")).on_hover_text("Edit: add, move (drag), resize (drag the corner) and wire up widgets. Off: play them.");
         if edit {
             ui.menu_button(label(icon::PLUS, "Add"), |ui| {
@@ -432,11 +432,11 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     let mut duplicate = false;
     let text_layers: Vec<(u64, String)> = st.comp.layers.iter().filter(|l| matches!(l.source, phosphor_engine::SourceSpec::Text(_))).map(|l| (l.id, l.name.clone())).collect();
     let Some(w) = st.comp.surface.widget_mut(id) else { return false };
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new(w.kind.name()).strong().color(accent()));
         ui.add(egui::TextEdit::singleline(&mut w.label).desired_width(170.0));
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         choice_combo(ui, ("widget_kind", id), &mut w.kind, 90.0, false);
         if w.kind == WidgetKind::Multi && w.bars.is_empty() {
             w.set_bar_count(phosphor_engine::DEFAULT_BARS);
@@ -478,7 +478,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                 .on_hover_text("a, b, c… = the controls below (0..1); t = seconds, beat = beats, val = its own value. + - * / %, min, max, clamp, mix, pow, sin, cos (a turn per 1.0), abs, floor, fract. The answer is kept in 0..1.");
             let mut remove = None;
             for (i, t) in w.inputs.iter_mut().enumerate() {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new(((b'a' + i as u8) as char).to_string()).monospace().strong());
                     if let Some(picked) = target_picker(ui, ("computed_in", id, i), targets, Some(t), 220.0) {
                         *t = picked;
@@ -492,7 +492,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                 w.inputs.remove(i);
             }
             if w.inputs.len() < 8 {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new(((b'a' + w.inputs.len() as u8) as char).to_string()).monospace().color(Color32::GRAY));
                     if let Some(picked) = target_picker(ui, ("computed_new", id), targets, None, 220.0) {
                         w.inputs.push(picked);
@@ -502,7 +502,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             ui.add_space(4.0);
         }
         if w.kind == WidgetKind::Multi {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label("Bars");
                 let mut n = w.bars.len();
                 if guarded!(ui, n, egui::DragValue::new(&mut n).range(1..=64)).changed() {
@@ -549,13 +549,13 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         }
         ui.add_space(4.0);
         hint(ui, format!("OSC in: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Send OSC");
             ui.add(egui::TextEdit::singleline(&mut w.osc_out).hint_text("/address (to the OSC out app)").desired_width(170.0))
                 .on_hover_text("Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.");
         });
         // Audience play: whether guests get it, and how far they can push it.
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut w.guests, "Guests can use it").on_hover_text("Audience play: off hides it from guests' phones (only you and remotes use it)");
             if w.guests && matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider | WidgetKind::XyPad) {
                 let [mut lo, mut hi] = w.guest_range;
@@ -566,7 +566,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         });
     }
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         duplicate = crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked();
         delete = crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked();
     });

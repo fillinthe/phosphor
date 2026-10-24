@@ -8,7 +8,7 @@ use super::*;
 /// One track's settings and steps. `beats` = the clock now (for the playing step), `seed` for Random.
 pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32, seed: u64) -> bool {
     let mut back_to_signal = false;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Steps").small());
         let mut len = track.len();
         let counts: Vec<(usize, String)> = STEP_COUNTS.iter().map(|&n| (n, n.to_string())).collect();
@@ -18,7 +18,7 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
             track.resize(len);
         }
     });
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Each").small());
         let mut rate = track.rate();
         let rates: Vec<(f32, String)> = STEP_RATES.iter().map(|&(v, n)| (v, n.to_string())).collect();
@@ -101,7 +101,7 @@ pub(crate) fn new_track() -> StepTrack {
 pub(crate) fn colour_targets(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug + Copy, reds: &[(ControlTarget, String)], paint: &mut Vec<ControlTarget>) {
     let mut remove = None;
     for (i, t) in paint.iter().enumerate() {
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label(reds.iter().find(|(r, _)| r == t).map_or("(removed)", |(_, n)| n.as_str()));
             if crate::ui::small_command(ui, icon::X).on_hover_text("Stop painting this one").clicked() {
                 remove = Some(i);

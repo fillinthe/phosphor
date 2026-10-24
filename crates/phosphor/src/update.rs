@@ -470,7 +470,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 }
             }
             Status::Checking => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.spinner();
                     ui.label("Checking…");
                 });
@@ -488,7 +488,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                         ui.add(egui::Label::new(egui::RichText::new(r.notes.trim()).small()).wrap());
                     });
                 }
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     #[cfg(not(target_arch = "wasm32"))]
                     if crate::ui::command(ui, format!("{} Download and install", icon::DOWNLOAD_SIMPLE)).clicked() {
                         up.install();
@@ -504,7 +504,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 crate::ui::hint(ui, "Your projects, layouts and settings stay as they are.");
             }
             Status::Downloading(r) => {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.spinner();
                     ui.label(format!("{} Phosphor {}", up.progress(), r.version));
                 });
@@ -536,7 +536,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                 ui.label("1. Download Phosphor (button below) and open the zip in Downloads.");
                 ui.label("2. Quit this Phosphor, drag the new Phosphor into Applications and choose Replace.");
                 ui.label("3. Open it. If macOS warns, go to System Settings > Privacy & Security and click Open Anyway.");
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     let url = r.zip.clone().unwrap_or_else(|| r.page.clone());
                     if crate::ui::command(ui, egui::RichText::new(format!("{} Download Phosphor {}", icon::DOWNLOAD_SIMPLE, r.version)).color(crate::theme::accent())).clicked() {
                         ctx.open_url(egui::OpenUrl::new_tab(url));
@@ -554,7 +554,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
             }
             Status::Failed(e) => {
                 ui.colored_label(crate::theme::WARN, e);
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if crate::ui::command(ui, "Try again").clicked() {
                         up.check(ctx);
                     }

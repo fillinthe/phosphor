@@ -52,7 +52,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.end_row();
 
         ui.label("Master");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::percent(&mut st.comp.master_fade, "Fade").default(1.0).show(ui);
         });
         ui.end_row();
@@ -214,7 +214,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         let o = &mut st.comp.outputs[i];
         card_frame(ui, false).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(64.0, 36.0), Sense::hover());
                 ui.painter().rect_filled(r, 3.0, Color32::BLACK);
                 if let Some(t) = tex {
@@ -473,20 +473,20 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
     let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
     egui::CollapsingHeader::new(title).id_salt(("color_grade", id)).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut g.brightness, -1.0, 1.0, "Brightness").default(0.0).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut g.contrast, 0.0, 3.0, "Contrast").default(1.0).show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut g.gamma, 0.2, 3.0, "Gamma").default(1.0).log().show(ui);
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             Level::range(&mut g.saturation, 0.0, 2.0, "Saturation").default(1.0).show(ui);
         });
         for (k, name) in ["Red", "Green", "Blue"].iter().enumerate() {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut g.gains[k], 0.0, 2.0, *name).default(1.0).show(ui);
             });
         }

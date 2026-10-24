@@ -297,7 +297,7 @@ impl PhosphorApp {
                         }
                     }
                     picks.retain(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         if crate::ui::command_if(ui, !picks.is_empty(), format!("{} Surprise these", icon::DICE_FIVE)).clicked() {
                             surprise = picks.clone();
                             ui.close();
@@ -344,7 +344,7 @@ impl PhosphorApp {
                     ui.menu_button(icon::SUN, |ui| {
                         ui.label(egui::RichText::new("Interface brightness").strong());
                         crate::ui::Level::percent(&mut self.ui_brightness, "Brightness").default(theme::DEFAULT_BRIGHTNESS).width(220.0).show(ui);
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             for (name, b) in theme::BRIGHTNESS_PRESETS {
                                 if crate::ui::pick_item(ui, (self.ui_brightness - b).abs() < 0.01, *name).clicked() {
                                     self.ui_brightness = *b;
@@ -352,7 +352,7 @@ impl PhosphorApp {
                             }
                         });
                         crate::ui::hint(ui, "Darker for dark rooms and shows, lighter for daylight.");
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             ui.label(egui::RichText::new("Accent").small());
                             for (k, (name, dark, _)) in theme::ACCENTS.iter().enumerate() {
                                 let (r, resp) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::click());
@@ -560,7 +560,7 @@ impl PhosphorApp {
             egui::Window::new("Welcome to Phosphor").collapsible(false).resizable(false).anchor(egui::Align2::RIGHT_TOP, [-12.0, 44.0]).show(ctx, |ui| {
                 ui.set_max_width(320.0);
                 ui.label("Phosphor is free. A free phosphorfx.com account keeps your projects and layouts on every computer you use. It's optional.");
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if crate::ui::command(ui, format!("{} Sign in or create one", icon::USER_CIRCLE)).clicked() {
                         st.account_window = true;
                         close = true;

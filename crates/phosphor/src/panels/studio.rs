@@ -115,7 +115,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             if *mapping_output != o.id {
                 continue;
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new(format!("{} {}", icon::PROJECTOR_SCREEN, o.name)).strong());
                 toggle(ui, &mut o.mapping.enabled, "MAPPING").on_hover_text("Mapping on for this output (off = the whole picture, unmapped)");
             });
@@ -130,7 +130,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             for m in &mut o.mapping.masks {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.add_space(14.0);
                     crate::ui::eye_toggle(ui, &mut m.enabled);
                     let r = crate::ui::pick_item(ui, *selected_surface == Some(m.id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR));
@@ -145,7 +145,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                     });
                 });
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.add_space(14.0);
                 if crate::ui::small_command(ui, label(icon::PLUS, "Slice")).clicked() {
                     action = Some(TreeAction::AddSlice(o.id));
@@ -290,7 +290,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             }
             let mut remove = None;
             for (k, (name, ids)) in o.mapping.solo_sets.iter().enumerate() {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if crate::ui::command(ui, format!("{name} ({})", ids.len())).on_hover_text("Select these slices and show only them").clicked() {
                         let ids: Vec<u64> = ids.iter().copied().filter(|id| o.mapping.surfaces.iter().any(|s| s.id == *id)).collect();
                         o.mapping.solo = ids.clone();
@@ -488,7 +488,7 @@ fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
             ui.close();
         }
         if !o.stage_photo.is_empty() {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 Level::percent(&mut o.stage_photo_opacity, "Shows").default(0.5).show(ui);
             });
             if danger_button(ui, label(icon::X, "Remove the photo")).clicked() {
@@ -532,7 +532,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         if let (Some(k), Some(m)) = (point, s.mesh.clone()) {
             let (i, j) = m.grid_pos(k);
             let mut changed = None;
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new(format!("Point {} (column {}, row {})", k + 1, i + 1, j + 1)).small());
             });
             let col_right = if i < m.cols { i } else { i.saturating_sub(1) };
@@ -806,7 +806,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
         if many.len() > 1 {
             super::mapping_points::group_settings(ui, &mut o.mapping, &many);
         } else if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| Some(s.id) == *selected_surface) {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new(icon::POLYGON).color(accent()));
                 toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                 ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(f32::INFINITY));
@@ -830,7 +830,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
                 fx_action = Some((s.id, a));
             }
         } else if let Some(m) = o.mapping.masks.iter_mut().find(|m| Some(m.id) == *selected_surface) {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
                 toggle(ui, &mut m.enabled, "ON");
                 ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(f32::INFINITY));
@@ -840,13 +840,13 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             let mid = m.id;
             super::mapping::mask_attach_row(ui, &mut o.mapping, mid);
         } else {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new(icon::PROJECTOR_SCREEN).color(accent()));
                 ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(f32::INFINITY));
             });
             toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
             super::program_picker(ui, o, &comps);
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label("Size");
                 guarded!(ui, o.width, egui::DragValue::new(&mut o.width).range(0..=8192).suffix(" w"));
                 guarded!(ui, o.height, egui::DragValue::new(&mut o.height).range(0..=8192).suffix(" h"));

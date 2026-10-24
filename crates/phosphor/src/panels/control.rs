@@ -10,7 +10,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     } else {
         hint(ui, format!("Listening on: {}", control.midi_ports.join(", ")));
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("OSC").strong());
         guarded!(ui, control.osc_port, egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
         // More ports, typed as a list ("8000, 9001"); applied by Reconnect.
@@ -40,7 +40,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     let control = &mut st.control;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         crate::ui::toggle(ui, &mut control.soft_takeover, "Soft takeover")
             .on_hover_text("A fader or knob only takes over once it reaches the value on screen (moves it past it), so the picture never jumps when the hardware was left somewhere else");
         #[cfg(not(target_arch = "wasm32"))]
@@ -102,7 +102,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                     control.clip_lights = lights;
                 }
             }
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 for (k, what) in ["empty", "loaded", "playing"].iter().enumerate() {
                     guarded!(ui, control.clip_lights[k], egui::DragValue::new(&mut control.clip_lights[k]).range(0..=127).prefix(format!("{what} ")));
                 }
@@ -129,7 +129,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let control = &mut st.control;
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let mut on = control.dmx_in();
             if crate::ui::toggle(ui, &mut on, "DMX in")
                 .on_hover_text("A lighting desk drives Phosphor: listen for Art-Net and sACN, then map any channel like a MIDI fader (right-click a control › Learn, move the desk's fader)")
@@ -142,7 +142,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             }
         });
         // Elgato Stream Deck: keys and dials map like MIDI pads and knobs; mapped keys show their control's name.
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let mut on = control.stream_deck_on();
             if crate::ui::toggle(ui, &mut on, "Stream Deck")
                 .on_hover_text("Use an Elgato Stream Deck: right-click any control › Learn, press a key (or turn a Stream Deck + dial). Each mapped key shows the control's name, lit while it's on. Quit Elgato's own Stream Deck app first.")
@@ -155,7 +155,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             }
         });
         // An Arduino board (StandardFirmata): its pins map like MIDI; PWM pins can be sent to (Send out).
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Arduino");
             let current = control.arduino_port();
             let mut pick = current.clone();
@@ -187,7 +187,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
     header.show(ui, |ui| {
         let comp = &st.comp;
         let control = &mut st.control;
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             let (resume, hold) = (label(icon::PLAY, "Resume"), label(icon::PAUSE, "Pause"));
             let pause = if control.monitor_paused { resume.clone() } else { hold.clone() };
             if steady_small_button(ui, pause, &[&resume, &hold]).clicked() {
@@ -273,7 +273,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     let listening = control.listen_source;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Mappings").strong());
         hint(ui, format!("{}", comp.control_maps.len()));
         let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Sets of mappings by name, e.g. one per controller (Load replaces this project's mappings; Undo brings them back).", mapping_presets, mapping_preset_name, "mapping set", || if comp.control_maps.is_empty() { String::new() } else { serde_json::to_string(&comp.control_maps).unwrap_or_default() });
@@ -306,7 +306,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     let mut finish: Option<bool> = None;
     if let Some((src, target)) = map_draft.as_mut() {
         card_frame(ui, true).show(ui, |ui| {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new("New").strong().color(accent()));
                 source_editor(ui, "new_map_source", src);
                 ui.label(icon::ARROW_RIGHT);
@@ -344,7 +344,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                     continue;
                 }
                 crate::ui::toggle(ui, &mut m.enabled, "").on_hover_text("On / off");
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     source_editor(ui, ("map_source", i), &mut m.source);
                     let relisten = *listen_for == Some(ListenFor::Replace(i)) && control.listen_source;
                     if crate::ui::pick_item(ui, relisten, icon::EAR).on_hover_text("Listen again for this mapping's input").clicked() {
@@ -361,7 +361,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                     fill.set_width(r.width() * v.clamp(0.0, 1.0));
                     ui.painter().rect_filled(fill, 2.0, accent());
                 }
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     if let Some(t) = target_picker(ui, ("map_target", i), &targets, Some(&m.target), 220.0) {
                         m.target = t;
                     }
@@ -370,7 +370,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                         show = place;
                     }
                 });
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     range_editor(ui, &mut m.range);
                     value_fx_menu(ui, ("map_fx", i), &mut m.fx);
                 });
@@ -406,7 +406,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
         hint(ui, "The controller's value goes through these, top to bottom, before its range.");
         let mut remove = None;
         for (k, f) in fx.iter_mut().enumerate() {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new(f.name()).strong());
                 match f {
                     ValueFx::Smooth(s) => {

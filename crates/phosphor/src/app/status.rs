@@ -17,7 +17,7 @@ impl PhosphorApp {
         let mut unmute = false;
         let mut web_toggle = false;
         egui::Panel::bottom("status_line").show(ui, |ui| {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
                 let st = &self.state;
                 let small = |t: String, c: Color32| RichText::new(t).small().color(c);

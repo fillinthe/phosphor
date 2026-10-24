@@ -17,7 +17,7 @@ pub(crate) struct FxDrag(u64);
 /// An effect chain editor: collapsible cards, drag to reorder, copy/paste whole chains.
 pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_len: usize) -> Option<FxAction> {
     let mut action: Option<FxAction> = None;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("Effects").strong());
         let add = crate::ui::command(ui, label(icon::PLUS, "Add effect")).on_hover_text("Browse effects with previews");
         if add.clicked() {
@@ -117,7 +117,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
                 for (pi, p) in desc.params.iter().enumerate() {
                     param_slider(ui, &mut fx.values, &mut fx.mods, pi, p, Some(ControlTarget::EffectParam { effect: fx.id, index: pi }));
                 }
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     Level::percent(&mut fx.mix, "Mix").target(ControlTarget::EffectMix(fx.id)).width((ui.available_width() - 110.0).max(80.0)).tip("How much of this effect: 0% = bypassed").show(ui);
                     choice_combo(ui, ("fx_blend", fx.id), &mut fx.blend, 96.0, true).on_hover_text("How the effect's result lands on the picture it was given (Normal = a plain mix)");
                     // The masks are for layers (they cut what's below), not effects.

@@ -56,7 +56,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
     for g in groups {
         let members = mapping.group_members(g.id);
         let picked = super::mapping_points::selected_slices(ui.ctx(), *selected);
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.add_space(indent);
             let caret = if g.collapsed { icon::CARET_RIGHT } else { icon::CARET_DOWN };
             if crate::ui::small_command(ui, caret).on_hover_text(if g.collapsed { "Open the group" } else { "Fold the group" }).clicked() {
@@ -102,7 +102,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
     let ids: Vec<u64> = mapping.surfaces.iter().filter(|s| s.group == parent).map(|s| s.id).collect();
     for id in ids {
         let Some(i) = mapping.surfaces.iter().position(|s| s.id == id) else { continue };
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.add_space(indent);
             let s = &mut mapping.surfaces[i];
             crate::ui::eye_toggle(ui, &mut s.enabled);

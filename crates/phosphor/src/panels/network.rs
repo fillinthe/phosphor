@@ -8,7 +8,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     let State { net, notice, .. } = &mut *st;
     ui.label(RichText::new("Session").strong());
     hint(ui, "Anyone on your network opens the link and sees the output live; they can send their music back.");
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.add_enabled_ui(!net.running(), |ui| {
             guarded!(ui, net.port, egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
             ComboBox::from_id_salt("net_fps").width(60.0).selected_text(format!("{} fps", net.fps)).show_ui(ui, |ui| {
@@ -30,20 +30,20 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     });
     if net.running() {
         let url = net.url();
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.monospace(&url);
             if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link").clicked() {
                 ui.ctx().copy_text(url.clone());
             }
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Easy to type");
             ui.monospace(net.local_url());
             hint(ui, "Bonjour name: works on iPhones, iPads, Macs and most Android phones on the same Wi-Fi");
         });
         if net.https {
             let secure = net.https_url();
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(format!("{} Secure link", icon::LOCK));
                 ui.monospace(&secure);
                 if crate::ui::command(ui, icon::COPY).on_hover_text("Copy the secure link").clicked() {
@@ -58,7 +58,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
         ui.label(RichText::new(format!("{} Phone / tablet remote", icon::DEVICE_MOBILE)).strong());
         hint(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");
             ui.add_enabled(
@@ -70,7 +70,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             ui.colored_label(WARN, "Type a password, or anyone can control.");
         }
         let remote = net.remote_url();
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             qr_code(ui, &remote, 150.0);
             ui.vertical(|ui| {
                 ui.monospace(&remote);
@@ -113,7 +113,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     if !play.enabled {
         return;
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Each turn");
         guarded!(ui, play.turn_secs, egui::DragValue::new(&mut play.turn_secs).range(10..=900).suffix(" s"));
         ui.label("Rest after");
@@ -124,7 +124,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::toggle(ui, &mut play.surprise, "Surprise button");
     });
     crate::ui::toggle(ui, &mut play.show_names, "Show the players' names on the output").on_hover_text("A \"Now playing: …\" text layer along the bottom; guests type their name on the play page");
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label("Surface page");
         let pages = &st.comp.surface.pages;
         let current = play.surface_page.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "All pages".into());
@@ -170,11 +170,11 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     let url = st.net.play_url();
     let on_output = st.comp.layers.iter().any(|l| l.name == crate::app::play::QR_LAYER);
     let mut toggle = false;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         qr_code(ui, &url, 150.0);
         ui.vertical(|ui| {
             ui.monospace(&url);
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link").clicked() {
                     ui.ctx().copy_text(url.clone());
                 }
@@ -194,7 +194,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
             for p in &players {
                 let left = p.left.map(|s| format!(" · {}:{:02} left", s as u32 / 60, s as u32 % 60)).unwrap_or_default();
                 let page = p.page.and_then(|i| pages.get(i)).map(|n| format!(" · {n}")).unwrap_or_default();
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.colored_label(accent(), format!("{} Playing: {}{page}{left}", icon::HAND_WAVING, p.label));
                     if crate::ui::small_command(ui, "Skip").on_hover_text("End this turn now; the next person gets the controls").clicked() {
                         skip = Some(p.who.clone());
@@ -226,7 +226,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
             let rtt = l.rtt().map(|r| format!(" · {:.0} ms away", r * 1000.0)).unwrap_or_default();
             let text = format!("{} {}: {}{rtt}", icon::LINK, l.address, l.status);
             let mut stop = false;
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.colored_label(accent(), text);
                 stop = crate::ui::command(ui, label(icon::STOP, "Stop following")).clicked();
             });
@@ -248,7 +248,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
         }
         None => {
             let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 let w = (ui.available_width() - 90.0).clamp(100.0, 260.0);
                 crate::ui::text_field(ui, &mut addr, "leader's address (from its Session link)", Some(w));
                 if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::LINK, "Follow")).clicked() {

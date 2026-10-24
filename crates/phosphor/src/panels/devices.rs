@@ -42,7 +42,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(target_os = "macos")]
         permissions(ui);
         // Phones, tablets and browsers on the session.
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label(RichText::new(format!("{} Phones & browsers", icon::DEVICE_MOBILE)).strong());
             if st.net.running() {
                 hint(ui, st.net.url());
@@ -69,7 +69,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                     ui.label(format!("{glyph} {}", p.device));
                     ui.monospace(&p.ip);
                     if p.kind == crate::net::PeerKind::Audio {
-                        ui.horizontal(|ui| {
+                        crate::ui::toolbar(ui, |ui| {
                             ui.label(RichText::new(what).small());
                             ui.add(crate::ui::meter(p.level).desired_width(60.0).desired_height(8.0)).on_hover_text("Level of the audio this phone is sending");
                         });
@@ -77,7 +77,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                         ui.label(RichText::new(what).small());
                     }
                     hint(ui, ago(p.since));
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         if crate::ui::small_command(ui, "Disconnect").on_hover_text("Drops it now; it can reconnect").clicked() {
                             st.net.disconnect(p.id);
                         }
@@ -90,7 +90,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             });
             if !st.web_log.is_empty() {
                 ui.add_space(4.0);
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new("Changes from the web").small().strong());
                     if crate::ui::small_command(ui, "Clear").clicked() {
                         st.web_log.clear();
@@ -112,7 +112,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                 ui.add_space(4.0);
                 ui.label(RichText::new("Blocked addresses").small().color(Color32::GRAY));
                 for ip in blocked {
-                    ui.horizontal(|ui| {
+                    crate::ui::toolbar(ui, |ui| {
                         ui.monospace(&ip);
                         if crate::ui::small_command(ui, "Unblock").clicked() {
                             st.net.unblock(&ip);
@@ -124,7 +124,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
 
         // MIDI inputs.
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label(RichText::new(format!("{} MIDI inputs", icon::PIANO_KEYS)).strong());
             if crate::ui::small_command(ui, label(icon::ARROWS_CLOCKWISE, "Rescan")).clicked() {
                 st.control.reconnect();
@@ -137,7 +137,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         let seen = st.control.activity.lock().unwrap().midi_seen.clone();
         let mut changed = false;
         for name in all {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 activity_dot(ui, seen.get(&name).copied());
                 let mut on = !st.control.midi_disabled.contains(&name);
                 // (The light shows on / off: one word keeps it one width.)
@@ -158,7 +158,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
 
         // OSC senders.
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label(RichText::new(format!("{} OSC senders", icon::BROADCAST)).strong());
             hint(ui, &st.control.osc_status);
         });
@@ -170,7 +170,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, "No OSC received yet.");
         }
         for s in senders {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 activity_dot(ui, Some(s.last_seen));
                 ui.monospace(&s.ip);
                 hint(ui, format!("{} msgs · {}", s.count, s.last_address));
@@ -191,7 +191,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         // Other Phosphors on the network (Bonjour), e.g. the computers of a multi-room show.
         #[cfg(not(target_arch = "wasm32"))]
         {
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(RichText::new(format!("{} Other Phosphors", icon::DESKTOP_TOWER)).strong());
                 hint(ui, format!("this one is \"{}\"", crate::control::discovery::identity().0));
             });
@@ -200,7 +200,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, "None heard on this network.");
             }
             for p in &players {
-                ui.horizontal(|ui| {
+                crate::ui::toolbar(ui, |ui| {
                     ui.label(&p.name);
                     hint(ui, format!("OSC {}:{}{}", p.address, p.port, if p.version.is_empty() { String::new() } else { format!(" · {}", p.version) }));
                     if crate::ui::small_command(ui, icon::COPY).on_hover_text("Copy its OSC address (to send it cues or values)").clicked() {
@@ -229,7 +229,7 @@ pub(crate) fn devices(ui: &mut egui::Ui, st: &mut State) {
         let windows: Vec<(u64, bool)> = st.output.lock().unwrap().iter().map(|(id, o)| (*id, o.open)).collect();
         for o in &st.comp.outputs {
             let open = windows.iter().any(|(id, on)| *id == o.id && *on);
-            ui.horizontal(|ui| {
+            crate::ui::toolbar(ui, |ui| {
                 ui.label(&o.name);
                 hint(ui, if open { "window open" } else { "closed" });
             });

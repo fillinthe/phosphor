@@ -17,11 +17,11 @@ pub(crate) fn projector_settings(ui: &mut egui::Ui, o: &mut OutputConfig, projec
             }
             return;
         };
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Address");
             text_field(ui, &mut p.host, "192.168.1.50", Some(150.0)).on_hover_text("The projector's IP address or name (PJLink port 4352; add :port for another)");
         });
-        ui.horizontal(|ui| {
+        crate::ui::toolbar(ui, |ui| {
             ui.label("Password");
             ui.add(egui::TextEdit::singleline(&mut p.password).password(true).hint_text("none").desired_width(150.0)).on_hover_text("The projector's PJLink password, if it has one (set in its network menu)");
         });
@@ -57,7 +57,7 @@ pub(crate) fn all_projectors_row(ui: &mut egui::Ui, outputs: &[OutputConfig], pr
     if !outputs.iter().any(|o| o.projector.as_ref().is_some_and(|p| !p.host.trim().is_empty())) {
         return;
     }
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         ui.label(label(icon::PROJECTOR_SCREEN_CHART, "Projectors"));
         let on = crate::ui::command(ui, "All on");
         if on.clicked() {
