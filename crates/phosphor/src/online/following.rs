@@ -251,6 +251,20 @@ pub struct Progress {
 
 /// Refreshes every followed account on a thread: lists its newest clips and saves the ones not here yet.
 pub fn refresh(f: &Following, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
+    let wants = f.accounts.iter().map(|a| (a.clone(), f.per_account)).collect();
+    fetch_accounts(f, wants, ctx)
+}
+
+/// Load more: the next `per_account` older clips of one account (it has `have`).
+pub fn more(f: &Following, account: &Account, have: usize, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
+    fetch_accounts(f, vec![(account.clone(), have + f.per_account)], ctx)
+}
+
+/// Most of an account's posts' media looked through at once (Load more goes this far back).
+const MAX_LOOK: usize = 900;
+
+/// For each account, makes sure its newest `want` clips are here (on a thread, one fetch at a time).
+fn fetch_accounts(f: &Following, wants: Vec<(Account, usize)>, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
     let shared = Arc::new(Mutex::new(Progress { running: true, ..Default::default() }));
     let (out, f) = (shared.clone(), f.clone());
     let _ = std::thread::Builder::new().name("following".into()).spawn(move || {
@@ -274,11 +288,12 @@ pub fn refresh(f: &Following, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<P
             }
             return;
         };
-        for a in &f.accounts {
+        for (a, want) in &wants {
             set(a.label(), "looking…".into(), 0);
             // Posts carry several media, and not all are clips: look a little further than needed.
-            let found = gallery_list(&a.profile(), 1, f.per_account * 3, &browser).and_then(|b| parse(a, &b));
-            match found.and_then(|items| save_newest(a, &items, f.per_account)) {
+            let found = gallery_list(&a.profile(), 1, (want * 3).min(MAX_LOOK), &browser).and_then(|b| parse(a, &b));
+            match found.and_then(|items| save_newest(a, &items, *want)) {
+                Ok((0, kept)) if kept < *want => set(a.label(), format!("that's all ({kept})"), 0),
                 Ok((new, kept)) => set(a.label(), if new == 0 { format!("up to date ({kept})") } else { format!("{new} new") }, new),
                 Err(e) => set(a.label(), e, 0),
             }

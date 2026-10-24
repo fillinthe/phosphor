@@ -218,6 +218,8 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
     let source = st.media_view.source.clone();
     // A folder: where in it, and the path back out.
     let mut dir: Option<String> = None;
+    // A followed account's folder (Load more under its tiles).
+    let mut account: Option<String> = None;
     if let MediaSource::Folder(root) = &source {
         let at = st
             .media_view
@@ -257,12 +259,11 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
             ui.colored_label(WARN, "This folder isn't there now (drive unplugged or network down): its files come back when it is.");
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if following && src::account_header(ui, &mut st.media_view, &base) {
-            let ctx = ui.ctx().clone();
-            st.media_view.refresh = Some(crate::online::following::refresh(
-                &st.media_view.following,
-                Some(ctx),
-            ));
+        if following {
+            account = Some(base.clone());
+            if let Some(act) = src::account_header(ui, &mut st.media_view, &base) {
+                follow_fetch(st, act, &base, ui.ctx());
+            }
         }
         dir = Some(
             st.media_view
@@ -401,7 +402,8 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
     };
     let collections = st.comp.media_collections.clone();
     let mut open_dir = None;
-    let State { comp, thumbs, .. } = st;
+    let mut more = false;
+    let State { comp, thumbs, media_view, .. } = st;
     crate::ui::column_scroll(ui)
         .id_salt("media_grid")
         .auto_shrink(false)
@@ -445,10 +447,36 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
                     );
                 }
             });
+        #[cfg(not(target_arch = "wasm32"))]
+        if account.is_some() && !searching {
+            ui.add_space(6.0);
+            more = src::load_more(ui, media_view);
+        }
         });
     if let Some(d) = open_dir {
         st.media_view.dir = Some(d);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if more && let Some(a) = account {
+        follow_fetch(st, src::FollowAct::More, &a, ui.ctx());
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = (more, account, media_view);
+}
+
+/// Refresh every account, or Load more of the one in `account_dir` (how many clips it has now: its files here).
+#[cfg(not(target_arch = "wasm32"))]
+fn follow_fetch(st: &mut State, act: src::FollowAct, account_dir: &str, ctx: &egui::Context) {
+    use crate::online::following as fl;
+    let view = &mut st.media_view;
+    view.refresh = Some(match act {
+        src::FollowAct::Refresh => fl::refresh(&view.following, Some(ctx.clone())),
+        src::FollowAct::More => {
+            let Some(a) = view.following.accounts.iter().find(|a| a.dir().is_some_and(|d| d.to_string_lossy() == account_dir)).cloned() else { return };
+            let have = st.comp.media_bin.iter().filter(|m| src::inside(&m.path, account_dir)).count();
+            fl::more(&view.following, &a, have, Some(ctx.clone()))
+        }
+    });
 }
 
 fn empty_text(source: &MediaSource, bin_empty: bool, searching: bool) -> &'static str {

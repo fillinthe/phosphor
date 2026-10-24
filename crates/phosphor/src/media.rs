@@ -124,7 +124,8 @@ pub fn decode_still(path: &str) -> Result<image::DynamicImage, String> {
 pub fn is_supported(name: &str) -> bool {
     // "._clip.mov": the metadata macOS writes next to every file on drives formatted for Windows, not a movie.
     let file = name.rsplit(['/', '\\']).next().unwrap_or(name);
-    if file.starts_with("._") {
+    // (".credit.json": who made a downloaded file, saved beside it.)
+    if file.starts_with("._") || file.ends_with(".credit.json") {
         return false;
     }
     let ext = extension(name);
