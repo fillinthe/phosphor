@@ -452,8 +452,8 @@ mod tests {
 
     fn pump(a: &mut Account, ctx: &egui::Context, until: impl Fn(&Account) -> bool) -> Vec<Event> {
         let mut events = Vec::new();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while std::time::Instant::now() < deadline {
+        let deadline = web_time::Instant::now() + std::time::Duration::from_secs(10);
+        while web_time::Instant::now() < deadline {
             events.extend(a.poll(ctx));
             if a.busy == 0 && until(a) {
                 break;

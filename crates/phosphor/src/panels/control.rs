@@ -203,7 +203,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, "Nothing yet: move a knob, press a pad, or send OSC to this Mac.");
             return;
         }
-        let now = std::time::Instant::now();
+        let now = web_time::Instant::now();
         crate::ui::column_scroll(ui).id_salt("monitor_list").max_height(180.0).stick_to_bottom(true).show(ui, |ui| {
             egui::Grid::new("monitor_grid").num_columns(4).spacing([12.0, 2.0]).striped(true).show(ui, |ui| {
                 for (at, source, value) in &control.recent {

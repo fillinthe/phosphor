@@ -179,7 +179,7 @@ fn main() -> eframe::Result {
         if let Some(path) = recovery::crash_log_path() {
             use std::io::Write;
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
-                let when = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                let when = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
                 let _ = writeln!(f, "[{when}] {info}");
             }
         }

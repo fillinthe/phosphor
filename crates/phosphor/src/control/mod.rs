@@ -91,7 +91,7 @@ pub struct OscSender {
     pub ip: String,
     pub count: u64,
     pub last_address: String,
-    pub last_seen: std::time::Instant,
+    pub last_seen: web_time::Instant,
     /// Has used a built-in /phosphor/… address (its layout follows Phosphor's own addresses).
     pub uses_builtin: bool,
 }
@@ -101,7 +101,7 @@ pub struct OscSender {
 pub struct Activity {
     pub osc: std::collections::BTreeMap<String, OscSender>,
     pub osc_blocked: std::collections::BTreeSet<String>,
-    pub midi_seen: std::collections::HashMap<String, std::time::Instant>,
+    pub midi_seen: std::collections::HashMap<String, web_time::Instant>,
 }
 
 /// MIDI clock and transport messages.
@@ -118,8 +118,8 @@ pub enum ClockEvent {
 pub struct ControlHub {
     rx: mpsc::Receiver<Incoming>,
     tx: mpsc::Sender<Incoming>,
-    clock_rx: mpsc::Receiver<(ClockEvent, std::time::Instant)>,
-    clock_tx: mpsc::Sender<(ClockEvent, std::time::Instant)>,
+    clock_rx: mpsc::Receiver<(ClockEvent, web_time::Instant)>,
+    clock_tx: mpsc::Sender<(ClockEvent, web_time::Instant)>,
     /// OSC messages that carry text: (address, the words), for text layers.
     text_rx: mpsc::Receiver<(String, String)>,
     text_tx: mpsc::Sender<(String, String)>,
@@ -177,7 +177,7 @@ pub struct ControlHub {
     /// LTC (timecode as audio) out on this pair of the sound output's channels (None = off); same time as MTC out.
     pub ltc_out_pair: Option<u8>,
     /// The last messages that came in, newest last (the MIDI / OSC monitor): when, from what, value.
-    pub recent: std::collections::VecDeque<(std::time::Instant, ControlSource, f32)>,
+    pub recent: std::collections::VecDeque<(web_time::Instant, ControlSource, f32)>,
     /// The monitor is paused (messages still work; the list stops moving).
     pub monitor_paused: bool,
     pickups: HashMap<String, Pickup>,
@@ -516,7 +516,7 @@ impl ControlHub {
 
     /// Feeds clock messages into `midi_clock`, timed in app seconds (`now`) from when they arrived.
     pub fn poll_clock(&mut self, now: f64) {
-        let instant_now = std::time::Instant::now();
+        let instant_now = web_time::Instant::now();
         while let Ok((e, at)) = self.clock_rx.try_recv() {
             let t = now - instant_now.saturating_duration_since(at).as_secs_f64();
             match e {
@@ -554,7 +554,7 @@ impl ControlHub {
             }
         }
         if !self.monitor_paused {
-            self.recent.push_back((std::time::Instant::now(), msg.source.clone(), msg.value));
+            self.recent.push_back((web_time::Instant::now(), msg.source.clone(), msg.value));
             while self.recent.len() > MONITOR_LEN {
                 self.recent.pop_front();
             }
