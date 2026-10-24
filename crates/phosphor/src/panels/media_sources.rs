@@ -672,14 +672,9 @@ mod tests {
         ];
         let (subs, files) = folder_view(paths.iter().copied().enumerate(), "/show");
         assert_eq!(files, vec![0], "only the file right in the folder");
-        assert_eq!(
-            subs,
-            vec![
-                ("/show/Drops".to_string(), 1, 3),
-                ("/show/Intro".to_string(), 2, 1)
-            ],
-            "subfolders by name, counted at any depth"
-        );
+        // (Joined the platform's way: Windows puts a backslash before the subfolder.)
+        let sub = |n: &str| std::path::Path::new("/show").join(n).to_string_lossy().into_owned();
+        assert_eq!(subs, vec![(sub("Drops"), 1, 3), (sub("Intro"), 2, 1)], "subfolders by name, counted at any depth");
         let (subs, files) = folder_view(paths.iter().copied().enumerate(), "/show/Intro");
         assert!(subs.is_empty());
         assert_eq!(files, vec![1, 2]);
@@ -690,7 +685,7 @@ mod tests {
         let c = crumbs("/Users/me/Show Loops", "/Users/me/Show Loops/Intro/Slow");
         let names: Vec<&str> = c.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, ["Show Loops", "Intro", "Slow"]);
-        assert_eq!(c[1].1, "/Users/me/Show Loops/Intro");
+        assert_eq!(c[1].1, std::path::Path::new("/Users/me/Show Loops").join("Intro").to_string_lossy());
         assert_eq!(crumbs("/a", "/a").len(), 1);
         assert!(inside("/a/b/c.mov", "/a/b") && !inside("/a/bc.mov", "/a/b"));
     }
