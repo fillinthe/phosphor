@@ -32,11 +32,13 @@ pub struct Comp {
     pub fx_bypass: bool,
     /// Mixed into the master. Off = only outputs, slices and Feed sources that pick it show it.
     pub in_mix: bool,
+    /// Its layers folded away in the Stack panel.
+    pub collapsed: bool,
 }
 
 impl Default for Comp {
     fn default() -> Self {
-        Self { id: 0, name: "Comp".into(), width: 0, height: 0, enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, fit: FitMode::Fit, effects: Vec::new(), fx_bypass: false, in_mix: true }
+        Self { id: 0, name: "Comp".into(), width: 0, height: 0, enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, fit: FitMode::Fit, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false }
     }
 }
 

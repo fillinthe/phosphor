@@ -200,6 +200,91 @@ const ROW_HEADER_W: f32 = 176.0;
 /// (menu: autopilot, fill, match the beat), ON and opacity. Returns (fill the row, match every clip's beat).
 /// A row's MIDI notes, asked for in its menu: map the row from a note (channel, first note), or shift it.
 
+/// A clip row's menu: fill with variations, match the beat, MIDI notes for the row, export / import the bank,
+/// pick a clip by value, "plays on" and autopilot. Shared by the Clips panel's row header and the Stack's strips.
+pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, fill: &mut bool, beat_all: &mut bool, row_midi: &mut Option<RowAct>) {
+    use phosphor_engine::Autopilot;
+    ui.set_min_width(220.0);
+        let q = crate::app::Quick::Fill;
+        if crate::ui::command(ui, format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
+            *fill = true;
+            ui.close();
+        }
+        if layer.clips.iter().any(|c| matches!(c.source, SourceSpec::Movie { path: Some(_), .. }))
+            && crate::ui::command(ui, label(icon::MAGIC_WAND, "Match the beat of every movie here")).on_hover_text("Scans each movie clip in this row for its rhythm and locks it to the tempo").clicked()
+        {
+            *beat_all = true;
+            ui.close();
+        }
+        ui.separator();
+        crate::ui::heading(ui, format!("{} MIDI notes", icon::PIANO_KEYS));
+        hint(ui, "The whole row on a run of notes (a pad grid's row): clip 1 = the first note, clip 2 = the next…");
+        let key = ui.id().with(("row_midi", layer.id));
+        let (mut ch, mut note): (u8, u8) = ui.data(|d| d.get_temp(key)).unwrap_or((0, 36));
+        crate::ui::toolbar(ui, |ui| {
+            let mut c1 = ch + 1;
+            guarded!(ui, c1, egui::DragValue::new(&mut c1).range(1..=16).prefix("ch "));
+            ch = c1 - 1;
+            guarded!(ui, note, egui::DragValue::new(&mut note).range(0..=127).prefix("from note "));
+            if crate::ui::command(ui, "Map the row").clicked() {
+                *row_midi = Some(RowAct::Map(ch, note));
+                ui.close();
+            }
+        });
+        ui.data_mut(|d| d.insert_temp(key, (ch, note)));
+        crate::ui::toolbar(ui, |ui| {
+            ui.label("Shift its notes");
+            for by in [-8, -1, 1, 8] {
+                if crate::ui::small_command(ui, format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
+                    *row_midi = Some(RowAct::Shift(by));
+                }
+            }
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::ui::toolbar(ui, |ui| {
+            if crate::ui::command(ui, label(icon::EXPORT, "Export clips…")).on_hover_text("Save this row's clips and their settings as a bank file").clicked() {
+                *row_midi = Some(RowAct::ExportBank);
+                ui.close();
+            }
+            if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Import…")).on_hover_text("Replace this row's clips with a saved bank").clicked() {
+                *row_midi = Some(RowAct::ImportBank);
+                ui.close();
+            }
+        });
+        let pick = crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
+        map_menu(ui, &pick, ControlTarget::LayerClipPick(layer.id));
+        ui.separator();
+        crate::ui::heading(ui, format!("{} Plays on", icon::STACK));
+        hint(ui, "Share this row's clips over the layers beside it (same group): each clip on the next layer, or on one with nothing playing.");
+        choice_buttons(ui, &mut layer.voices, |_, _| {});
+        ui.separator();
+        crate::ui::heading(ui, format!("{} Autopilot", icon::AIRPLANE_TILT));
+        hint(ui, "When this clip is done: play another one by itself, or clear the layer.");
+        for a in Autopilot::ALL {
+            ui.radio_value(&mut layer.autopilot, a, a.name());
+        }
+        if layer.autopilot != Autopilot::Off {
+            ui.separator();
+            let mut at_end = layer.autopilot_beats <= 0.0;
+            crate::ui::toolbar(ui, |ui| {
+                if ui.radio_value(&mut at_end, true, "When the clip ends").changed() {
+                    layer.autopilot_beats = 0.0;
+                }
+            });
+            crate::ui::toolbar(ui, |ui| {
+                if ui.radio_value(&mut at_end, false, "After").changed() {
+                    layer.autopilot_beats = 16.0;
+                }
+                if !at_end {
+                    guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));
+                }
+            });
+            if at_end {
+                hint(ui, "Stills, generators and live inputs have no end: they move on after 16 beats.");
+            }
+        }
+}
+
 fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool, Option<RowAct>) {
     use phosphor_engine::Autopilot;
     let mut row_midi = None;
@@ -238,85 +323,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         }
         let name: String = layer.name.chars().take(20).collect();
         ui.menu_button(RichText::new(name).color(ui.visuals().text_color()), |ui| {
-            ui.set_min_width(220.0);
-            let q = crate::app::Quick::Fill;
-            if crate::ui::command(ui, format!("{} {}", q.icon(), q.label())).on_hover_text(q.about()).clicked() {
-                fill = true;
-                ui.close();
-            }
-            if layer.clips.iter().any(|c| matches!(c.source, SourceSpec::Movie { path: Some(_), .. }))
-                && crate::ui::command(ui, label(icon::MAGIC_WAND, "Match the beat of every movie here")).on_hover_text("Scans each movie clip in this row for its rhythm and locks it to the tempo").clicked()
-            {
-                beat_all = true;
-                ui.close();
-            }
-            ui.separator();
-            crate::ui::heading(ui, format!("{} MIDI notes", icon::PIANO_KEYS));
-            hint(ui, "The whole row on a run of notes (a pad grid's row): clip 1 = the first note, clip 2 = the next…");
-            let key = ui.id().with(("row_midi", layer.id));
-            let (mut ch, mut note): (u8, u8) = ui.data(|d| d.get_temp(key)).unwrap_or((0, 36));
-            crate::ui::toolbar(ui, |ui| {
-                let mut c1 = ch + 1;
-                guarded!(ui, c1, egui::DragValue::new(&mut c1).range(1..=16).prefix("ch "));
-                ch = c1 - 1;
-                guarded!(ui, note, egui::DragValue::new(&mut note).range(0..=127).prefix("from note "));
-                if crate::ui::command(ui, "Map the row").clicked() {
-                    row_midi = Some(RowAct::Map(ch, note));
-                    ui.close();
-                }
-            });
-            ui.data_mut(|d| d.insert_temp(key, (ch, note)));
-            crate::ui::toolbar(ui, |ui| {
-                ui.label("Shift its notes");
-                for by in [-8, -1, 1, 8] {
-                    if crate::ui::small_command(ui, format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
-                        row_midi = Some(RowAct::Shift(by));
-                    }
-                }
-            });
-            #[cfg(not(target_arch = "wasm32"))]
-            crate::ui::toolbar(ui, |ui| {
-                if crate::ui::command(ui, label(icon::EXPORT, "Export clips…")).on_hover_text("Save this row's clips and their settings as a bank file").clicked() {
-                    row_midi = Some(RowAct::ExportBank);
-                    ui.close();
-                }
-                if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Import…")).on_hover_text("Replace this row's clips with a saved bank").clicked() {
-                    row_midi = Some(RowAct::ImportBank);
-                    ui.close();
-                }
-            });
-            let pick = crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
-            map_menu(ui, &pick, ControlTarget::LayerClipPick(layer.id));
-            ui.separator();
-            crate::ui::heading(ui, format!("{} Plays on", icon::STACK));
-            hint(ui, "Share this row's clips over the layers beside it (same group): each clip on the next layer, or on one with nothing playing.");
-            choice_buttons(ui, &mut layer.voices, |_, _| {});
-            ui.separator();
-            crate::ui::heading(ui, format!("{} Autopilot", icon::AIRPLANE_TILT));
-            hint(ui, "When this clip is done: play another one by itself, or clear the layer.");
-            for a in Autopilot::ALL {
-                ui.radio_value(&mut layer.autopilot, a, a.name());
-            }
-            if layer.autopilot != Autopilot::Off {
-                ui.separator();
-                let mut at_end = layer.autopilot_beats <= 0.0;
-                crate::ui::toolbar(ui, |ui| {
-                    if ui.radio_value(&mut at_end, true, "When the clip ends").changed() {
-                        layer.autopilot_beats = 0.0;
-                    }
-                });
-                crate::ui::toolbar(ui, |ui| {
-                    if ui.radio_value(&mut at_end, false, "After").changed() {
-                        layer.autopilot_beats = 16.0;
-                    }
-                    if !at_end {
-                        guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));
-                    }
-                });
-                if at_end {
-                    hint(ui, "Stills, generators and live inputs have no end: they move on after 16 beats.");
-                }
-            }
+            row_menu(ui, layer, &mut fill, &mut beat_all, &mut row_midi);
         })
         .response
         .on_hover_text("Click for autopilot and fill with variations");

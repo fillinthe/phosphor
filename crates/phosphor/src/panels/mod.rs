@@ -18,6 +18,7 @@ mod account;
 mod audio;
 mod clips;
 mod clip_grid;
+mod stack;
 mod control;
 mod cues;
 mod devices;
@@ -50,6 +51,8 @@ mod media;
 mod media_browser;
 mod media_sources;
 pub(crate) use media_sources::MediaSource;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use stack::layers_from_folder;
 mod mixer;
 mod monitor;
 mod network;
@@ -152,11 +155,14 @@ pub enum Tab {
     Timeline,
     /// Free videos and pictures from online libraries (Library).
     Online,
+    /// Every layer with its controls and its clips side by side; groups and comps as bands (replaces Clips + Layers).
+    Stack,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 29] = [
+    pub const ALL: [Tab; 30] = [
         Tab::Preview,
+        Tab::Stack,
         Tab::Layers,
         Tab::Clips,
         Tab::Inspector,
@@ -209,6 +215,7 @@ impl Tab {
             Tab::Preview => "Preview",
             Tab::Layers => "Layers",
             Tab::Clips => "Clips",
+            Tab::Stack => "Stack",
             Tab::Inspector => "Inspector",
             Tab::Media => "Media",
             Tab::Library => "Effects",
@@ -293,6 +300,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Preview => preview(ui, st),
         Tab::Layers => layers(ui, st),
         Tab::Clips => clips(ui, st),
+        Tab::Stack => stack::stack(ui, st),
         Tab::Inspector => inspector(ui, st),
         Tab::Media => media(ui, st),
         Tab::Library => crate::explorer::explorer(ui, st),
