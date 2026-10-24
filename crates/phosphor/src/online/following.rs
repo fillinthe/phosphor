@@ -32,22 +32,66 @@ impl Site {
     }
 }
 
+/// Which of an account's lists is followed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Feed {
+    /// Its own posts.
+    #[default]
+    Posts,
+    /// Posts you liked (X: only yours, through your sign-in).
+    Likes,
+    /// Your X bookmarks.
+    Bookmarks,
+    /// Your Instagram saved posts.
+    Saved,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Account {
     pub site: Site,
+    /// The account (for your likes / bookmarks on X: unused; for your Instagram saved posts: your name).
     pub name: String,
+    pub feed: Feed,
 }
 
 impl Account {
+    pub fn new(site: Site, name: &str) -> Account {
+        Account { site, name: name.to_string(), feed: Feed::Posts }
+    }
+
+    /// One of your own lists: X likes / bookmarks, Instagram saved (needs your name).
+    pub fn mine(site: Site, feed: Feed, name: &str) -> Account {
+        Account { site, name: name.to_string(), feed }
+    }
+
+    /// Its folder's name and how it's listed: "@name (X)", "My likes (X)", "My saved (Instagram)".
     pub fn label(&self) -> String {
-        format!("@{} ({})", self.name, self.site.name())
+        match self.feed {
+            Feed::Posts => format!("@{} ({})", self.name, self.site.name()),
+            Feed::Likes => format!("My likes ({})", self.site.name()),
+            Feed::Bookmarks => format!("My bookmarks ({})", self.site.name()),
+            Feed::Saved => format!("My saved ({})", self.site.name()),
+        }
+    }
+
+    /// The sidebar's words (after the site's logo).
+    pub fn short(&self) -> String {
+        match self.feed {
+            Feed::Posts => self.name.clone(),
+            Feed::Likes => "My likes".into(),
+            Feed::Bookmarks => "My bookmarks".into(),
+            Feed::Saved => "My saved".into(),
+        }
     }
 
     fn profile(&self) -> String {
-        match self.site {
-            Site::X => format!("https://x.com/{}/media", self.name),
-            Site::Instagram => format!("https://www.instagram.com/{}/", self.name),
+        match (self.site, self.feed) {
+            (Site::X, Feed::Likes) => "https://x.com/i/history/likes".into(),
+            (Site::X, Feed::Bookmarks) => "https://x.com/i/bookmarks".into(),
+            (Site::X, _) => format!("https://x.com/{}/media", self.name),
+            (Site::Instagram, Feed::Saved) => format!("https://www.instagram.com/{}/saved/", self.name),
+            (Site::Instagram, _) => format!("https://www.instagram.com/{}/", self.name),
         }
     }
 
@@ -66,12 +110,61 @@ pub struct Following {
     /// One of `web_media::BROWSERS`.
     pub browser: Option<String>,
     pub per_account: usize,
+    /// Where "Keep in my library" copies clips to hold onto them (None = Movies/Phosphor Library).
+    pub library: Option<String>,
 }
 
 impl Default for Following {
     fn default() -> Self {
-        Following { accounts: Vec::new(), browser: None, per_account: 12 }
+        Following { accounts: Vec::new(), browser: None, per_account: 12, library: None }
     }
+}
+
+/// Movies/Phosphor Library: where kept clips go unless you pick another folder.
+pub fn default_library() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Movies").join("Phosphor Library"))
+}
+
+impl Following {
+    pub fn library_dir(&self) -> Option<PathBuf> {
+        self.library.as_ref().map(PathBuf::from).or_else(default_library)
+    }
+}
+
+/// Copies downloaded files (and their credits) into `library/<their folder's name>/`, so they're yours to keep
+/// whatever happens to the downloads. Returns how many were copied (already there: skipped). Runs on a thread.
+pub fn keep(files: Vec<PathBuf>, library: PathBuf, ctx: Option<eframe::egui::Context>, done: Arc<Mutex<Option<String>>>) {
+    let _ = std::thread::Builder::new().name("keep".into()).spawn(move || {
+        let mut copied = 0;
+        let mut problem = None;
+        for f in &files {
+            let group = f.parent().and_then(|p| p.file_name()).map_or_else(|| "Kept".into(), |n| n.to_string_lossy().into_owned());
+            let dir = library.join(group);
+            let Some(name) = f.file_name() else { continue };
+            let to = dir.join(name);
+            if to.exists() {
+                continue;
+            }
+            let r = std::fs::create_dir_all(&dir).and_then(|_| std::fs::copy(f, &to));
+            match r {
+                Ok(_) => {
+                    copied += 1;
+                    let mut credit = f.as_os_str().to_owned();
+                    credit.push(".credit.json");
+                    let mut credit_to = to.as_os_str().to_owned();
+                    credit_to.push(".credit.json");
+                    let _ = std::fs::copy(PathBuf::from(credit), PathBuf::from(credit_to));
+                }
+                Err(e) => problem = Some(format!("Couldn't keep {}: {e}", f.display())),
+            }
+        }
+        if let Ok(mut d) = done.lock() {
+            *d = Some(problem.unwrap_or_else(|| format!("Kept {copied} in {} (it's under This Mac in Media)", library.display())));
+        }
+        if let Some(c) = ctx {
+            c.request_repaint();
+        }
+    });
 }
 
 /// The folder every followed account's clips go in (watched by the media bin).
@@ -97,7 +190,7 @@ impl Following {
             return f;
         }
         let old: OldXSettings = crate::show::storage_dir().and_then(|d| std::fs::read(d.join("x_accounts.json")).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        Following { accounts: old.accounts.into_iter().map(|name| Account { site: Site::X, name }).collect(), browser: old.browser, ..Default::default() }
+        Following { accounts: old.accounts.into_iter().map(|name| Account::new(Site::X, &name)).collect(), browser: old.browser, ..Default::default() }
     }
 
     pub fn save(&self) {
@@ -110,8 +203,13 @@ impl Following {
     }
 
     /// Follows an account (no duplicates). Returns false if it's already followed.
+    #[cfg(test)]
     pub fn follow(&mut self, site: Site, name: &str) -> bool {
-        let a = Account { site, name: name.to_string() };
+        self.add(Account::new(site, name))
+    }
+
+    /// Adds an account or list (no duplicates). Returns false if it's already here.
+    pub fn add(&mut self, a: Account) -> bool {
         if self.accounts.contains(&a) {
             return false;
         }
@@ -198,11 +296,13 @@ pub fn parse(account: &Account, body: &[u8]) -> Result<Vec<Item>, String> {
         if !url.starts_with("https://") {
             continue;
         }
+        // Who posted it (likes and saved posts are other people's).
+        let author = info["author"]["name"].as_str().or(info["owner"]["username"].as_str()).or(info["username"].as_str()).unwrap_or(&account.name).to_string();
         let text = |k: &str| info[k].as_str().map(str::to_string).or_else(|| info[k].as_u64().map(|n| n.to_string())).unwrap_or_default();
         let (wanted, post, page, words) = match account.site {
             Site::X => {
                 let post = text("tweet_id");
-                (info["type"].as_str() == Some("animated_gif"), post.clone(), format!("https://x.com/{}/status/{post}", account.name), text("content"))
+                (info["type"].as_str() == Some("animated_gif"), post.clone(), format!("https://x.com/{}/status/{post}", author), text("content"))
             }
             Site::Instagram => {
                 let code = text("post_shortcode");
@@ -216,7 +316,7 @@ pub fn parse(account: &Account, body: &[u8]) -> Result<Vec<Item>, String> {
         }
         let num = info["num"].as_u64().unwrap_or(1);
         let words: String = words.split_whitespace().filter(|w| !w.starts_with("https://")).collect::<Vec<_>>().join(" ");
-        let title = if words.is_empty() { format!("{} from @{}", if account.site == Site::X { "GIF" } else { "Video" }, account.name) } else { words.chars().take(60).collect() };
+        let title = if words.is_empty() { format!("{} from @{author}", if account.site == Site::X { "GIF" } else { "Video" }) } else { words.chars().take(60).collect() };
         out.push(Item {
             source: Source::X,
             kind: Kind::Gif,
@@ -229,7 +329,7 @@ pub fn parse(account: &Account, body: &[u8]) -> Result<Vec<Item>, String> {
             size: None,
             credit: phosphor_engine::Credit {
                 title,
-                author: format!("@{}", account.name),
+                author: format!("@{author}"),
                 licence: format!("Unknown (posted on {site}: ask before showing it in public)"),
                 licence_url: String::new(),
                 page,
@@ -334,13 +434,13 @@ mod tests {
 
     #[test]
     fn x_gifs_and_instagram_videos_come_back() {
-        let x = Account { site: Site::X, name: "giphy".into() };
+        let x = Account::new(Site::X, "giphy");
         let listing = br#"[[3, "https://video.twimg.com/tweet_video/AbC.mp4", {"tweet_id": 5, "num": 1, "type": "animated_gif", "content": "dance loop https://t.co/x"}],
             [3, "https://pbs.twimg.com/media/P.jpg?name=orig", {"tweet_id": 6, "type": "photo"}]]"#;
         let g = parse(&x, listing).unwrap();
         assert_eq!(g.len(), 1);
         assert_eq!((g[0].title.as_str(), g[0].credit.page.as_str()), ("dance loop", "https://x.com/giphy/status/5"));
-        let ig = Account { site: Site::Instagram, name: "artist".into() };
+        let ig = Account::new(Site::Instagram, "artist");
         let listing = br#"[[3, "https://scontent.cdninstagram.com/v.mp4?sig=1", {"post_shortcode": "Cx1", "num": 1, "extension": "mp4", "description": "new loop"}],
             [3, "https://scontent.cdninstagram.com/p.jpg?sig=2", {"post_shortcode": "Cx2", "extension": "jpg"}]]"#;
         let v = parse(&ig, listing).unwrap();
@@ -360,5 +460,42 @@ mod tests {
         assert_eq!(f.accounts[1].label(), "@nasa (Instagram)");
         let back: Following = serde_json::from_str(&serde_json::to_string(&f).unwrap()).unwrap();
         assert_eq!(back, f);
+    }
+
+    #[test]
+    fn likes_and_saved_lists_have_their_own_folder_and_address() {
+        let likes = Account::mine(Site::X, Feed::Likes, "");
+        assert_eq!((likes.label().as_str(), likes.profile().as_str()), ("My likes (X)", "https://x.com/i/history/likes"));
+        let saved = Account::mine(Site::Instagram, Feed::Saved, "me");
+        assert_eq!(saved.profile(), "https://www.instagram.com/me/saved/");
+        // A liked post is someone else's: its credit says who.
+        let listing = br#"[[3, "https://video.twimg.com/tweet_video/Q.mp4", {"tweet_id": 9, "type": "animated_gif", "content": "loop", "author": {"name": "artist"}}]]"#;
+        let g = parse(&likes, listing).unwrap();
+        assert_eq!((g[0].credit.author.as_str(), g[0].credit.page.as_str()), ("@artist", "https://x.com/artist/status/9"));
+        // Old saved lists (no feed) still read: they're an account's posts.
+        let old: Account = serde_json::from_str(r#"{"site":"X","name":"nasa"}"#).unwrap();
+        assert_eq!(old, Account::new(Site::X, "nasa"));
+    }
+
+    #[test]
+    fn keeping_copies_clips_and_credits_once() {
+        let base = std::env::temp_dir().join(format!("phosphor-keep-{}", std::process::id()));
+        let src = base.join("@a (X)");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("c.mp4"), b"movie").unwrap();
+        std::fs::write(src.join("c.mp4.credit.json"), b"{}").unwrap();
+        let lib = base.join("lib");
+        for _ in 0..2 {
+            let done = Arc::new(Mutex::new(None));
+            keep(vec![src.join("c.mp4")], lib.clone(), None, done.clone());
+            let t = Instant::now();
+            while done.lock().unwrap().is_none() && t.elapsed() < Duration::from_secs(5) {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(done.lock().unwrap().as_deref().is_some_and(|m| m.starts_with("Kept")));
+        }
+        assert_eq!(std::fs::read(lib.join("@a (X)/c.mp4")).unwrap(), b"movie");
+        assert!(lib.join("@a (X)/c.mp4.credit.json").exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

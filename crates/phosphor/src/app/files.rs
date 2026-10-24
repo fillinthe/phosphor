@@ -394,6 +394,14 @@ impl PhosphorApp {
                         });
                     }
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                Purpose::LibraryFolder => {
+                    if let Some(p) = paths.first() {
+                        st.media_view.following.library = Some(p.to_string_lossy().into_owned());
+                        st.media_view.following.save();
+                        st.notice = Some(format!("Kept clips go to {}", p.display()));
+                    }
+                }
                 Purpose::ImportCues => {
                     if let Some(p) = paths.first() {
                         let read = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| st.comp.cues.apply_csv(&t));

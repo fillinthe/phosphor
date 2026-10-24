@@ -46,6 +46,9 @@ pub struct MediaView {
     pub refresh: Option<std::sync::Arc<std::sync::Mutex<crate::online::following::Progress>>>,
     #[cfg(not(target_arch = "wasm32"))]
     pub has_gallery_dl: Option<bool>,
+    /// What the last "Keep in my library" did (set by its thread).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub kept: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl Default for MediaView {
@@ -70,6 +73,8 @@ impl Default for MediaView {
             refresh: None,
             #[cfg(not(target_arch = "wasm32"))]
             has_gallery_dl: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            kept: Default::default(),
         }
     }
 }
@@ -123,6 +128,8 @@ pub(crate) enum MediaAct {
     /// Every layer playing this collection stops following it.
     StopCollection(String),
     DeleteCollection(String),
+    /// Copy these downloaded files into the library folder (to hold onto them).
+    Keep(Vec<usize>),
 }
 
 pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
@@ -479,6 +486,18 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                     l.collection = None;
                 }
             }
+            MediaAct::Keep(items) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(lib) = st.media_view.following.library_dir() {
+                    let files = items.iter().filter_map(|i| st.comp.media_bin.get(*i)).map(|m| std::path::PathBuf::from(&m.path)).collect();
+                    // Watched, so kept clips show under This Mac.
+                    let _ = std::fs::create_dir_all(&lib);
+                    st.folders.add(lib.to_string_lossy().into_owned());
+                    crate::online::following::keep(files, lib, None, st.media_view.kept.clone());
+                }
+                #[cfg(target_arch = "wasm32")]
+                let _ = items;
+            }
             MediaAct::DeleteCollection(name) => {
                 st.comp.delete_collection(&name);
                 if st.media_view.filter == MediaFilter::Collection(name) {
@@ -611,6 +630,13 @@ pub(crate) fn media_tile(
         #[cfg(not(target_arch = "wasm32"))]
         if crate::media::is_movie(&item.name) && crate::ui::command(ui, label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show (Hap, ProRes, or H.264 with every frame a keyframe); see the size first").clicked() {
             acts.push(MediaAct::Convert(i));
+            ui.close();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if crate::web_media::downloads_dir().is_some_and(|d| std::path::Path::new(&item.path).starts_with(d))
+            && crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Keep in my library")).on_hover_text("Copy it (with its credit) into your library folder, to hold onto it").clicked()
+        {
+            acts.push(MediaAct::Keep(vec![i]));
             ui.close();
         }
         if crate::ui::command(ui, label(icon::ARROW_CLOCKWISE, "Reload")).on_hover_text("Open the file again from disk (after you've changed it in another app)").clicked() {
