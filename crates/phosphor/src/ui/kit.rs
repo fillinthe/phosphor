@@ -94,12 +94,16 @@ pub(crate) fn toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R
 
 /// One entry in a list or a drop-down (a layer, a device, a size): highlighted when it's the one picked. For a few
 /// options side by side use `segmented` / `choice_buttons`.
-pub(crate) fn pick_item<'a>(ui: &mut egui::Ui, picked: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
-    ui.add(egui::Button::selectable(picked, text))
+pub(crate) fn pick_item(ui: &mut egui::Ui, picked: bool, text: impl Into<egui::WidgetText>) -> egui::Response {
+    // egui frames an entry only while it's hovered or picked, which made it 2 points wider then (and moved what's
+    // next to it): it's always as wide as when framed.
+    let text: egui::WidgetText = text.into();
+    let w = text.clone().into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Button).size().x;
+    ui.add(egui::Button::selectable(picked, text).min_size(egui::vec2(w + ui.spacing().button_padding.x * 2.0 + 2.0, 0.0)))
 }
 
 /// `pick_item` that sets `current` to `value` when clicked (marks the response changed).
-pub(crate) fn pick_value<'a, V: PartialEq>(ui: &mut egui::Ui, current: &mut V, value: V, text: impl egui::IntoAtoms<'a>) -> egui::Response {
+pub(crate) fn pick_value<V: PartialEq>(ui: &mut egui::Ui, current: &mut V, value: V, text: impl Into<egui::WidgetText>) -> egui::Response {
     let mut r = pick_item(ui, *current == value, text);
     if r.clicked() && *current != value {
         *current = value;
@@ -414,4 +418,111 @@ pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, 
 /// A destructive command (Delete, Remove…): red text.
 pub(crate) fn danger_button(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
     command(ui, RichText::new(text.into()).color(crate::theme::WARN))
+}
+
+#[cfg(test)]
+mod steady_tests {
+    use eframe::egui;
+
+    /// Draws a row like the Clips toolbar's Launch controls with the mouse at `pointer`; returns where each piece
+    /// starts and the row's end.
+    fn layout_with_pointer(ctx: &egui::Context, pointer: egui::Pos2) -> Vec<f32> {
+        layout(ctx, pointer, true)
+    }
+
+    fn layout(ctx: &egui::Context, pointer: egui::Pos2, fade_on: bool) -> Vec<f32> {
+        let mut input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 200.0))), ..Default::default() };
+        input.events.push(egui::Event::PointerMoved(pointer));
+        let mut xs = Vec::new();
+        let mut out = ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                super::toolbar(ui, |ui| {
+                    xs.push(ui.cursor().left());
+                    ui.label("Launch");
+                    xs.push(ui.cursor().left());
+                    let mut fade = fade_on;
+                    super::segmented(ui, &mut fade, &[(false, "Cut".to_string()), (true, "Fade".to_string())], |_, _, _| {});
+                    xs.push(ui.cursor().left());
+                    let mut secs = 0.5f32;
+                    ui.add(egui::DragValue::new(&mut secs).fixed_decimals(2).suffix(" s"));
+                    xs.push(ui.cursor().left());
+                    let mut on = true;
+                    super::toggle(ui, &mut on, "AUTO");
+                    xs.push(ui.cursor().left());
+                    super::command(ui, "Resync");
+                    xs.push(ui.cursor().left());
+                });
+            });
+        });
+        out.textures_delta.clear();
+        xs
+    }
+
+    /// Moving the mouse over the buttons never moves anything in the row (the owner saw Cut / Fade shift).
+    #[test]
+    fn hovering_moves_nothing() {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx);
+        let away = layout_with_pointer(&ctx, egui::pos2(850.0, 190.0));
+        let away = layout_with_pointer(&ctx, egui::pos2(850.0, 190.0)).into_iter().zip(away).map(|(a, _)| a).collect::<Vec<_>>();
+        for x in (0..500).step_by(4) {
+            for frame in 0..2 {
+                let at = layout_with_pointer(&ctx, egui::pos2(x as f32, 18.0));
+                assert_eq!(at, away, "with the mouse at x={x} (frame {frame}) the row moved");
+            }
+        }
+        // Picking the other option (Cut instead of Fade) doesn't move the row either.
+        let _ = layout(&ctx, egui::pos2(850.0, 190.0), false);
+        assert_eq!(layout(&ctx, egui::pos2(850.0, 190.0), false), away, "picking Cut moved the row");
+    }
+
+    /// Every other kind of control: hovering any of them moves nothing.
+    #[test]
+    fn hovering_any_control_moves_nothing() {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx);
+        let draw = |ctx: &egui::Context, pointer: egui::Pos2| {
+            let mut input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 200.0))), ..Default::default() };
+            input.events.push(egui::Event::PointerMoved(pointer));
+            let mut xs = Vec::new();
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    super::toolbar(ui, |ui| {
+                        super::pick_item(ui, false, "List entry");
+                        xs.push(ui.cursor().left());
+                        super::pick_item(ui, true, "Picked entry");
+                        xs.push(ui.cursor().left());
+                        super::small_command(ui, "Small");
+                        xs.push(ui.cursor().left());
+                        super::command_if(ui, true, "Command");
+                        xs.push(ui.cursor().left());
+                        super::steady_button(ui, "Play", &["Play", "Pause"]);
+                        xs.push(ui.cursor().left());
+                        super::action_button(ui, super::Act::Go, "Go");
+                        xs.push(ui.cursor().left());
+                        let mut v = 1usize;
+                        super::dropdown(ui, "dd", 90.0).selected_text("Crossfade").show_ui(ui, |ui| {
+                            super::pick_value(ui, &mut v, 1, "Crossfade");
+                        });
+                        xs.push(ui.cursor().left());
+                        let mut on = false;
+                        super::toggle(ui, &mut on, "Toggle");
+                        xs.push(ui.cursor().left());
+                        let mut b = false;
+                        super::icon_toggle(ui, &mut b, "S");
+                        xs.push(ui.cursor().left());
+                    });
+                });
+            });
+            out.textures_delta.clear();
+            xs
+        };
+        let _ = draw(&ctx, egui::pos2(1390.0, 190.0));
+        let away = draw(&ctx, egui::pos2(1390.0, 190.0));
+        for x in (0..1000).step_by(3) {
+            for _ in 0..2 {
+                assert_eq!(draw(&ctx, egui::pos2(x as f32, 18.0)), away, "with the mouse at x={x} the row moved");
+            }
+        }
+    }
 }

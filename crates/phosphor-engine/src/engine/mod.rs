@@ -52,6 +52,31 @@ impl CompressedFormat {
     }
 }
 
+/// Turning a Speed setting moves the picture on from where it is. Built-in generators draw `time * speed`, so a new
+/// speed used to rescale all the time since the start (ten minutes in, a small nudge jumped minutes ahead or back).
+/// This keeps how far the speed has carried the picture (`phase`, added up frame by frame) and hands the shader the
+/// speed that gives exactly that at this time: `time * step(..) == phase`.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SpeedPhase {
+    phase: f64,
+    last: f32,
+    started: bool,
+}
+
+impl SpeedPhase {
+    pub(crate) fn step(&mut self, time: f32, speed: f32) -> f32 {
+        // First frame, or the clock went back (a new show, a render from the start): as the shader would have it.
+        if !self.started || time < self.last {
+            self.phase = time as f64 * speed as f64;
+        } else {
+            self.phase += (time - self.last) as f64 * speed as f64;
+        }
+        self.started = true;
+        self.last = time;
+        if time.abs() > 1e-3 { (self.phase / time as f64) as f32 } else { speed }
+    }
+}
+
 #[derive(Default)]
 struct LayerResources {
     generator: Option<Target>,
@@ -75,6 +100,8 @@ struct LayerResources {
     blend: [Option<Target>; 2],
     /// Its picture before its effects, while another layer shows that (`SourceSpec::Feed { before_fx }`).
     feed_pre: Option<Target>,
+    /// Built-in generators' Speed settings, smoothed (`SpeedPhase`): (outgoing side, setting index).
+    speeds: HashMap<(bool, usize), SpeedPhase>,
     /// A layer with its own frame rate: its last finished picture, and when it was drawn.
     held: Option<Target>,
     held_at: f32,
@@ -1206,5 +1233,34 @@ impl Engine {
         if g.enabled && g.in_mix && opacity > 0.001 {
             self.push_blend(frame, FitMode::Stretch, opacity, g.blend, None, 0, current, ctx.canvas, ctx.time, passes);
         }
+    }
+}
+
+#[cfg(test)]
+mod speed_tests {
+    use super::SpeedPhase;
+
+    /// Ten minutes in, doubling the speed moves the picture on from where it is (no jump of ten minutes' motion), and
+    /// it then runs at the new speed.
+    #[test]
+    fn a_new_speed_carries_on_from_where_the_picture_is() {
+        let mut s = SpeedPhase::default();
+        let frame = 1.0 / 60.0;
+        let mut t = 600.0f32;
+        let shown = |t: f32, eff: f32| t as f64 * eff as f64;
+        let before = shown(t, s.step(t, 1.0));
+        assert!((before - 600.0).abs() < 1e-3, "the first frame is what the shader always drew");
+        t += frame;
+        let after = shown(t, s.step(t, 2.0));
+        assert!((after - before - 2.0 * frame as f64).abs() < 1e-3, "one frame on at the new speed, not a jump: {before} → {after}");
+        // A second later: moved 2 seconds' worth since the change.
+        for _ in 0..60 {
+            t += frame;
+            s.step(t, 2.0);
+        }
+        let later = shown(t, s.step(t, 2.0));
+        assert!((later - after - 2.0).abs() < 0.01, "{later}");
+        // The clock going back (a new show) starts over.
+        assert_eq!(s.step(1.0, 3.0), 3.0);
     }
 }

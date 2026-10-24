@@ -223,6 +223,12 @@ pub fn set_brightness(ctx: &egui::Context, b: f32) {
         // Nothing grows when hovered or pressed (egui's default is a pixel each side): buttons stay put; hover and
         // press show in their colour and outline.
         w.expansion = 0.0;
+        // Every state has the same outline width (a resting button's is just invisible): egui sizes a button by its
+        // outline, so a 0-wide resting outline and a 1-wide hovered one made every button 2 points smaller on hover
+        // and moved its row.
+        if w.bg_stroke.width < 1.0 {
+            w.bg_stroke = Stroke::new(1.0, Color32::TRANSPARENT);
+        }
     }
     let theme = if light { egui::Theme::Light } else { egui::Theme::Dark };
     ctx.set_visuals_of(theme, v);
