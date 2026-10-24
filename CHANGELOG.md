@@ -4,6 +4,62 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.3.2 (2026-10-23)
+
+A big one: the rest of the VDMX and MadMapper list, free media from the internet, and a build for older Intel Macs.
+
+**Start with no media of your own** (Library › Online)
+- **Search free libraries** for videos, pictures, icons, textures, fonts, music, MilkDrop visualisers and ISF shaders:
+  NASA, Wikimedia Commons, the Internet Archive, Openverse, the Art Institute of Chicago, Iconify, Poly Haven, Google
+  Fonts, netlabel music and isf.video. Click to bring one in; "Paid work OK" hides non-commercial licences.
+- **Credits** stay with each file in the project; copy them all from the Credits list.
+- **Start a show:** one click builds three layers of clips for a mood (Space, Nature, Retro, Club, Gallery).
+- **Live data:** weather anywhere, the space station and earthquakes as modulators; news headlines and a clock in any
+  city on text layers.
+- **Real lights by name** (LED / DMX › A real light…): pick your light and its DMX mode from the Open Fixture Library.
+
+**New kinds of media**
+- MilkDrop presets (.milk) as layers that move to the music; Lottie animations; laser shows (ILDA .ild); SVG drawings.
+- Stream Deck keys and dials as controllers, showing what each key does.
+- USB DMX (Enttec Pro and Open DMX cables) and Arduino boards (Firmata) as inputs and outputs.
+
+**Shows and timing**
+- **Timeline** with keys for any control, markers, events, a sound track and Record; render a show to a movie
+  offline, frame by frame.
+- Cues: choose what a cue changes, groups, schedules (on open, when idle, from a calendar).
+- MIDI clock, MIDI timecode and LTC out.
+
+**Mapping and outputs**
+- Soft edges worked out from overlapping slices, split one picture across several screens, mirror outputs, a
+  background picture behind slices, smooth edges.
+- Mesh warp handles, input mesh, slices from dropped files and drawn lines, mapping export as SVG, PNG and PDF.
+- 3D model slices: light, edges, shadows and picture wrapping.
+- LED scanner: blink the lights while a camera watches and each light is placed where it was seen. Ring and curve
+  fixtures, a video wall template, patch lists from CSV, record and play back DMX.
+
+**Sound**
+- Hear this Mac's sound (all apps) without a loopback driver; play-through; EQ on movie sound; each layer on its own
+  output channels or sound device; NDI sends sound too; sound band modulators (kick, snare, voice).
+
+**Looks and effects**
+- Your own blend modes; blend mode per effect; Hide Face, Blur Background, Colour Match and Palette effects; the
+  Particles generator; deep colour (16 bits a channel); hold the eye button to compare without an effect.
+- Text layers in parts (lyrics, scripts), with ready-made movement, live clock / countdown / stopwatch.
+
+**Control**
+- Control Surface: Choices, Text field, Multi-slider and Computed value widgets; import TouchOSC layouts.
+- Clip pad lights for Launchpad and APC mini; mappings that work only while their control is on screen; OSC Query
+  client; send any control's value out over OSC or MIDI.
+
+**Everyday**
+- File › Merge Project and New from Template; edit several layers or clips at once; Lock Panels; interface accent
+  colour; eyedropper; save a picture of any layer.
+- The top bar's buttons sit in the middle of the bar; thumbnails keep their shape.
+
+**Older Macs:** a separate download, **Phosphor-mac-intel.zip**, for Intel Macs on macOS 10.15 Catalina or later.
+It's the same app without screen and window capture or hearing the Mac's sound (they need newer macOS); hand and
+body tracking need macOS 11 and Remove Background macOS 12. The main download stays Apple Silicon, macOS 13+.
+
 ## 0.3.1 (2026-10-22)
 
 More from the VDMX and MadMapper list.

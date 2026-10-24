@@ -39,6 +39,25 @@ fn write_this_versions_project() {
     for (_, _, make) in TEMPLATES {
         comp.merge(make());
     }
+    // Settings newer than the templates use, so they're checked too: a credited file, live data, a light with its own
+    // channels, a news-headlines text layer.
+    comp.add_media("aurora.jpg", "/media/aurora.jpg");
+    if let Some(m) = comp.media_bin.last_mut() {
+        m.credit = Some(phosphor_engine::Credit { title: "Aurora".into(), author: "NASA".into(), licence: "Public domain".into(), source: "NASA".into(), ..Default::default() });
+    }
+    comp.live_data = phosphor_engine::LiveData { weather: true, place: "Reykjavik".into(), latitude: 64.1, longitude: -21.9, iss: true, quakes: false };
+    let id = comp.new_id();
+    comp.dmx.fixtures.push(phosphor_engine::Fixture {
+        id,
+        name: "Library spot".into(),
+        shape: phosphor_engine::FixtureShape::MovingHead,
+        head: phosphor_engine::HeadLayout::Custom,
+        roles: vec![phosphor_engine::Role::Pan, phosphor_engine::Role::Dimmer, phosphor_engine::Role::Extra(0)],
+        extra: vec![phosphor_engine::ExtraChannel { name: "Gobo".into(), value: 0.0 }],
+        ..Default::default()
+    });
+    let style = phosphor_engine::TextStyle { live: phosphor_engine::LiveText::Headlines(8), live_source: "https://feeds.bbci.co.uk/news/world/rss.xml".into(), ..Default::default() };
+    comp.add_layer().source = phosphor_engine::SourceSpec::Text(style);
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/old_projects");
     let name = format!("{name}.phosphor");
     std::fs::write(dir.join(name), comp.to_json()).expect("written");
