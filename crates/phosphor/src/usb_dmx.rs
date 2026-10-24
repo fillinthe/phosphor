@@ -181,7 +181,8 @@ mod tests {
     }
 
     /// Open DMX: the worker keeps repeating the last frame (lights black out without a steady signal), and a new
-    /// frame replaces it.
+    /// frame replaces it. (Mac only, like Open DMX itself.)
+    #[cfg(target_os = "macos")]
     #[test]
     fn open_dmx_repeats_the_last_frame() {
         let path = std::env::temp_dir().join(format!("phosphor-open-dmx-{}", std::process::id()));
