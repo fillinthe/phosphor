@@ -9,8 +9,14 @@ use super::layers::LayerAction;
 use super::*;
 use phosphor_engine::{Comp, Composition, LayerGroup};
 
-/// The layer strip before each clip row.
+/// The layer strip before each clip row: a share of the panel, within these.
 pub(crate) const STRIP_W: f32 = 470.0;
+const STRIP_MIN_W: f32 = 380.0;
+
+/// The strip width for this panel width (narrow panels keep room for clip cells).
+fn strip_width(panel_w: f32) -> f32 {
+    (panel_w * 0.42).clamp(STRIP_MIN_W, STRIP_W)
+}
 
 /// What the strips and bands asked for this frame (applied after the borrows end).
 #[derive(Default)]
@@ -42,6 +48,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
     ui.add_space(2.0);
     let (grid, mut out) = Grid::new(ui, st);
     let aspect = grid.aspect;
+    let strip_w = strip_width(ui.available_width());
     let feeds = super::layers::feed_choices(&st.comp);
     let others = other_comps(&st.comp);
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
@@ -53,7 +60,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
         let mut cx = CellCtx { thumbs, clip_cells, preview_wants, preview_keys, preview_textures, also_clips, ctx };
         let sel_is_layer = selected.is_some_and(|s| comp.layers.iter().any(|l| l.id == s));
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-            column_headers(ui, &grid, STRIP_W, &mut out);
+            column_headers(ui, &grid, strip_w, &mut out);
             // Comps are bands, the later (on top in the master) first. No comps, or one plain one: just the layers.
             let comp_ids: Vec<Option<u64>> = if comp.comps.is_empty() { vec![None] } else { comp.comps.iter().rev().map(|c| Some(c.id)).collect() };
             let many = comp.comps.len() > 1;
@@ -118,7 +125,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                     let dimmed = any_solo && !layer.solo;
                     let indent = 10.0 * (band.is_some() as u8 + parent.is_some() as u8) as f32;
                     ui.horizontal(|ui| {
-                        let strip = Strip { thumb, aspect, is_selected, dimmed, err: err.as_deref(), feeds: &feeds, others: &others, indent, size: egui::vec2(STRIP_W, grid.cell.y) };
+                        let strip = Strip { thumb, aspect, is_selected, dimmed, err: err.as_deref(), feeds: &feeds, others: &others, indent, size: egui::vec2(strip_w, grid.cell.y) };
                         let o = layer_strip(ui, layer, &strip, &mut out);
                         if o.select {
                             if adding && sel_is_layer && *selected != Some(layer.id) {
@@ -336,10 +343,19 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
                         if let Some(m) = row_midi {
                             out.row_midi = Some((layer.id, m));
                         }
+                        // The source, at the row's end (the strip never grows past its width: the cells stay under
+                        // their column headers).
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.set_max_width(ui.available_width());
+                            if let Some(a) = super::layers::source_picker(ui, layer, s.feeds) {
+                                o.action = Some(a);
+                            }
+                        });
                     });
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
-                        let w = (ui.available_width() - 2.0 * 62.0 - 46.0).max(60.0);
+                        // Opacity takes what the blend menu and the fx badge leave.
+                        let w = (ui.available_width() - 62.0 - 44.0 - 12.0).max(60.0);
                         Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).width(w).show(ui);
                         match layer.mixer.as_deref().and_then(shaders::mixer) {
                             Some(d) => {
@@ -348,9 +364,6 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
                             None => {
                                 choice_combo(ui, ("stack_blend", layer.id), &mut layer.blend, 62.0, true);
                             }
-                        }
-                        if let Some(a) = super::layers::source_picker(ui, layer, s.feeds) {
-                            o.action = Some(a);
                         }
                         if let Some(r) = super::groups::fx_badge(ui, &layer.effects, &mut layer.fx_bypass) {
                             map_menu(ui, &r, ControlTarget::LayerFxBypass(layer.id));
@@ -683,6 +696,16 @@ fn apply_stack_acts(st: &mut State, acts: StackActs, now: f64) {
 
 /// Layers from a folder of clips: one per subfolder (its clips in the row, in name order), and one for the files at
 /// the top level. Returns how many layers were made.
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_strip_shares_a_narrow_panel_with_the_cells() {
+        assert_eq!(super::strip_width(2000.0), super::STRIP_W);
+        assert_eq!(super::strip_width(700.0), super::STRIP_MIN_W);
+        assert!((super::strip_width(1000.0) - 420.0).abs() < 0.01);
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn layers_from_folder(st: &mut State, dir: &std::path::Path) -> usize {
     let mut made = 0;
