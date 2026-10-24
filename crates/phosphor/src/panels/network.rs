@@ -179,7 +179,8 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
                     ui.ctx().copy_text(url.clone());
                 }
                 #[cfg(not(target_arch = "wasm32"))]
-                if ui.button(label(icon::QR_CODE, if on_output { "Take the code off the output" } else { "Show the code on the output" })).clicked() {
+                let (off, on) = (label(icon::QR_CODE, "Take the code off the output"), label(icon::QR_CODE, "Show the code on the output"));
+                if steady_button(ui, if on_output { off.clone() } else { on.clone() }, &[&off, &on]).clicked() {
                     toggle = true;
                 }
             });

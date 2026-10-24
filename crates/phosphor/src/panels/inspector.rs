@@ -307,8 +307,9 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
             ui.horizontal(|ui| {
                 // Play / pause makes something happen: an action button (not a toggle pill).
-                let text = if layer.playing { label(icon::PAUSE, "Pause") } else { label(icon::PLAY, "Play") };
-                if action_button(ui, Act::Go, text).clicked() {
+                let (pause, play) = (label(icon::PAUSE, "Pause"), label(icon::PLAY, "Play"));
+                let text = if layer.playing { pause.clone() } else { play.clone() };
+                if steady_action_button(ui, Act::Go, text, &[&pause, &play]).clicked() {
                     layer.playing = !layer.playing;
                 }
                 if ui.button(icon::ARROW_CLOCKWISE).on_hover_text("Reload: open the file again from disk (after you've changed it in another app)").clicked() {

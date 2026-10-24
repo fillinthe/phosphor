@@ -853,8 +853,8 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         if crate::ui::toggle(ui, &mut per_side, "Soft edge per side").on_hover_text("A different soft edge on each side: e.g. only the side that overlaps the next projector").changed() {
             s.edges = per_side.then_some([s.feather; 4]);
         }
-        let text = if s.locked { label(icon::LOCK, "Locked") } else { label(icon::LOCK_OPEN, "Lock") };
-        toggle(ui, &mut s.locked, text).on_hover_text("Locked: its points can't be dragged or nudged");
+        // (The light shows locked / not: one label keeps the row still.)
+        toggle(ui, &mut s.locked, label(icon::LOCK, "Lock")).on_hover_text("Locked: its points can't be dragged or nudged");
     });
     if let Some(e) = s.edges.as_mut() {
         for (k, side) in ["Left", "Right", "Top", "Bottom"].iter().enumerate() {

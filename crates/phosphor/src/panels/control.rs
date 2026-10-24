@@ -188,8 +188,9 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
         let comp = &st.comp;
         let control = &mut st.control;
         ui.horizontal(|ui| {
-            let pause = if control.monitor_paused { label(icon::PLAY, "Resume") } else { label(icon::PAUSE, "Pause") };
-            if ui.small_button(pause).clicked() {
+            let (resume, hold) = (label(icon::PLAY, "Resume"), label(icon::PAUSE, "Pause"));
+            let pause = if control.monitor_paused { resume.clone() } else { hold.clone() };
+            if steady_small_button(ui, pause, &[&resume, &hold]).clicked() {
                 control.monitor_paused = !control.monitor_paused;
             }
             if ui.small_button(label(icon::TRASH, "Clear")).clicked() {

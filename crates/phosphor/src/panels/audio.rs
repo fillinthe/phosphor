@@ -35,8 +35,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
             audio.refresh_devices();
         }
         let mut on = audio.is_open();
-        let text = if on { label(icon::MICROPHONE, "Listening") } else { label(icon::MICROPHONE, "Off") };
-        if toggle(ui, &mut on, text).clicked() {
+        if toggle(ui, &mut on, label(icon::MICROPHONE, "Listen")).clicked() {
             if on {
                 if let Err(e) = audio.open(audio.current().map(str::to_string).as_deref()) {
                     *notice = Some(e);

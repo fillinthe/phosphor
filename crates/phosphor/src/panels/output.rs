@@ -75,7 +75,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
 
         ui.label("All output windows");
         let text = if st.output_open() { "Close" } else { "Open" };
-        if ui.button(text).clicked() {
+        if steady_button(ui, text, &["Close", "Open"]).clicked() {
             st.toggle_output();
         }
         ui.end_row();
@@ -255,8 +255,8 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
                                 }
                             }
                         });
-                        let text = if open { label(icon::STOP, "Window") } else { label(icon::PLAY, "Window") };
-                        if ui.button(text).clicked() {
+                        let (stop, play) = (label(icon::STOP, "Window"), label(icon::PLAY, "Window"));
+                        if steady_button(ui, if open { stop.clone() } else { play.clone() }, &[&stop, &play]).clicked() {
                             toggle = true;
                         }
                         ui.menu_button(label(icon::PROJECTOR_SCREEN, "Send to"), |ui| {

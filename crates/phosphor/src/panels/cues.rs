@@ -66,8 +66,9 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             TimecodeSource::Off => {}
             TimecodeSource::ShowClock => {
                 let clock = &mut st.cue_run.clock;
-                let text = if clock.running() { label(icon::PAUSE, "Pause") } else { label(icon::PLAY, "Start") };
-                if ui.button(text).clicked() {
+                let (pause, start) = (label(icon::PAUSE, "Pause"), label(icon::PLAY, "Start"));
+                let text = if clock.running() { pause.clone() } else { start.clone() };
+                if steady_button(ui, text, &[&pause, &start]).clicked() {
                     clock.toggle(now);
                 }
                 if ui.button(icon::ARROW_COUNTER_CLOCKWISE).on_hover_text("Back to 00:00:00").clicked() {

@@ -116,7 +116,8 @@ pub fn apply(ctx: &egui::Context) {
         s.spacing.button_padding = egui::vec2(7.0, 3.0);
         s.spacing.slider_width = 150.0;
         s.spacing.slider_rail_height = 10.0;
-        s.spacing.interact_size.y = 19.0;
+        // One control height for every row (`ui::CONTROL_H`).
+        s.spacing.interact_size.y = crate::ui::CONTROL_H;
         s.spacing.menu_margin = egui::Margin::same(6);
     });
     set_brightness(ctx, DEFAULT_BRIGHTNESS);
@@ -160,6 +161,9 @@ pub fn set_brightness(ctx: &egui::Context, b: f32) {
         &mut v.widgets.open,
     ] {
         w.corner_radius = CornerRadius::same(5);
+        // Nothing grows when hovered or pressed (egui's default is a pixel each side): buttons stay put; hover and
+        // press show in their colour and outline.
+        w.expansion = 0.0;
     }
     let theme = if light { egui::Theme::Light } else { egui::Theme::Dark };
     ctx.set_visuals_of(theme, v);

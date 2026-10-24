@@ -229,8 +229,7 @@ pub(crate) fn group_settings(ui: &mut egui::Ui, mapping: &mut Mapping, ids: &[u6
         all(mapping, &|s| s.enabled = on);
     }
     let mut locked = first.locked;
-    let text = if locked { label(icon::LOCK, "Locked") } else { label(icon::LOCK_OPEN, "Lock") };
-    if toggle(ui, &mut locked, text).changed() {
+    if toggle(ui, &mut locked, label(icon::LOCK, "Lock")).changed() {
         all(mapping, &|s| s.locked = locked);
     }
     let mut opacity = first.opacity;
