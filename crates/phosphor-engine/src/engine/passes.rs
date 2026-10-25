@@ -418,6 +418,14 @@ impl Engine {
                     let mut tex1 = None;
                     let mut tex2 = None;
                     let mut next_idx: Option<usize> = None;
+                    // Rutt-Etra draws a vertex per line end: a budget keeps four layers of it from freezing the show.
+                    if entry == "fs_rutt" {
+                        let (rows, cols) = rutt_grid(u.p[0][0], u.p[0][1], u.p[2][2] as u32);
+                        (u.p[0][0], u.p[0][1]) = (rows, cols);
+                    } else if entry == "fs_rutt_points" {
+                        let (rows, cols) = rutt_grid(u.p[0][0], u.p[0][1], 3);
+                        (u.p[0][0], u.p[0][1]) = (rows, cols);
+                    }
                     let target = if entry == "fs_rutt" || entry == "fs_rutt_points" {
                         let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
                         let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
@@ -482,5 +490,44 @@ impl Engine {
             }
         }
         Frame::Rgb { view: input, w, h }
+    }
+}
+
+/// The most vertices one Rutt-Etra pass may draw (the default 120 x 240 lines is about 57,000; the sliders' top
+/// ends in mesh modes were over a million, and a few of those on different layers froze the frame).
+pub(crate) const RUTT_VERTEX_BUDGET: u32 = 400_000;
+
+/// Scanlines and points per line, scaled down together (the picture keeps its shape) when the vertices they ask
+/// for in this draw mode (0 lines, 1 mesh, 2 triangles, 3 vertices only) are over the budget.
+pub(crate) fn rutt_grid(rows: f32, cols: f32, mode: u32) -> (f32, f32) {
+    let (r, c) = (rows.max(2.0), cols.max(2.0));
+    let (ru, cu) = (r as u32, c as u32);
+    let horizontal = if mode == 3 { 0 } else { ru * (cu - 1) };
+    let vertical = if mode >= 1 { cu * (ru - 1) } else { 0 };
+    let diagonal = if mode == 2 { (ru - 1) * (cu - 1) } else { 0 };
+    let verts = ((horizontal + vertical + diagonal) * 2).max(ru * cu);
+    if verts <= RUTT_VERTEX_BUDGET {
+        return (r, c);
+    }
+    let k = (RUTT_VERTEX_BUDGET as f32 / verts as f32).sqrt();
+    ((r * k).floor().max(2.0), (c * k).floor().max(2.0))
+}
+
+#[cfg(test)]
+mod rutt_tests {
+    use super::*;
+
+    #[test]
+    fn rutt_etra_stays_inside_its_vertex_budget() {
+        // The defaults are untouched.
+        assert_eq!(rutt_grid(120.0, 240.0, 0), (120.0, 240.0));
+        // The sliders' top ends, in the heaviest mode, are brought down together.
+        let (r, c) = rutt_grid(400.0, 512.0, 2);
+        let (ru, cu) = (r as u32, c as u32);
+        let verts = (ru * (cu - 1) + cu * (ru - 1) + (ru - 1) * (cu - 1)) * 2;
+        assert!(verts <= RUTT_VERTEX_BUDGET, "{verts} vertices");
+        assert!((c / r - 512.0 / 400.0).abs() < 0.1, "the shape stays: {r} x {c}");
+        // Never below two of each.
+        assert_eq!(rutt_grid(2.0, 2.0, 2), (2.0, 2.0));
     }
 }
