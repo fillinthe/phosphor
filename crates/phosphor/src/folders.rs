@@ -26,12 +26,18 @@ pub struct FolderWatcher {
     rx: Receiver<Scan>,
     scanning: bool,
     last_scan: f64,
+    /// What each folder held at the last scan, with its modification time (`walk`).
+    dirs: DirCache,
 }
+
+/// Per folder: when it last changed, the media files right in it (name, path) and its subfolders. A folder whose
+/// time hasn't moved is not listed again: a rescan of an external drive is one look per folder, not per file.
+type DirCache = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<PathBuf, (std::time::SystemTime, Vec<(String, String)>, Vec<PathBuf>)>>>;
 
 impl FolderWatcher {
     pub fn new(folders: Vec<String>) -> Self {
         let (tx, rx) = channel();
-        Self { folders, state: Default::default(), tx, rx, scanning: false, last_scan: f64::NEG_INFINITY }
+        Self { folders, state: Default::default(), tx, rx, scanning: false, last_scan: f64::NEG_INFINITY, dirs: Default::default() }
     }
 
     pub fn add(&mut self, folder: String) {
@@ -68,6 +74,7 @@ impl FolderWatcher {
             self.last_scan = now;
             let folders = self.folders.clone();
             let tx = self.tx.clone();
+            let dirs = self.dirs.clone();
             std::thread::Builder::new()
                 .name("phosphor-folders".into())
                 .spawn(move || {
@@ -77,7 +84,7 @@ impl FolderWatcher {
                         let mut budget = 3000;
                         let state = FolderState { network: on_network(Path::new(f)), missing: !Path::new(f).is_dir() };
                         states.push((f.clone(), state));
-                        walk(Path::new(f), 4, &mut budget, f, &mut out);
+                        walk(Path::new(f), 4, &mut budget, f, &mut out, &dirs);
                     }
                     let _ = tx.send((out, states));
                 })
@@ -87,31 +94,66 @@ impl FolderWatcher {
     }
 }
 
-fn walk(dir: &Path, depth: u32, budget: &mut usize, root: &str, out: &mut Found) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
-    let mut entries: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
-    entries.sort();
-    for (name, path) in crate::media::sequence::take_sequences(dir, &mut entries) {
-        out.push((name, path, root.to_string()));
-    }
-    for p in entries {
+fn walk(dir: &Path, depth: u32, budget: &mut usize, root: &str, out: &mut Found, dirs: &DirCache) {
+    let Ok(modified) = std::fs::metadata(dir).and_then(|m| m.modified()) else { return };
+    let known = dirs.lock().ok().and_then(|d| d.get(dir).filter(|(t, _, _)| *t == modified).map(|(_, f, s)| (f.clone(), s.clone())));
+    let (files, subs) = match known {
+        Some(listing) => listing,
+        None => {
+            let listing = list_dir(dir);
+            if let Ok(mut d) = dirs.lock() {
+                d.insert(dir.to_path_buf(), (modified, listing.0.clone(), listing.1.clone()));
+            }
+            listing
+        }
+    };
+    for (name, path) in files {
         if *budget == 0 {
             return;
         }
-        let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        *budget -= 1;
+        out.push((name, path, root.to_string()));
+    }
+    if depth > 0 {
+        for sub in subs {
+            walk(&sub, depth - 1, budget, root, out, dirs);
+        }
+    }
+}
+
+/// One folder's media files (name, path; numbered pictures as one sequence) and subfolders. The kind of each entry
+/// comes with the listing (no extra look at each file).
+fn list_dir(dir: &Path) -> (Vec<(String, String)>, Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return (Vec::new(), Vec::new()) };
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut subs: Vec<PathBuf> = Vec::new();
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') {
             continue;
         }
-        if p.is_dir() {
-            if depth > 0 {
-                walk(&p, depth - 1, budget, root, out);
-            }
-        // (The whole path: a .json is only media if it's a Lottie animation, which needs the file to look inside.)
-        } else if crate::media::is_supported(&p.to_string_lossy()) {
-            *budget -= 1;
-            out.push((name, p.to_string_lossy().to_string(), root.to_string()));
+        // (A link is followed to see what it points at.)
+        let kind = e.file_type().ok().filter(|t| !t.is_symlink()).or_else(|| std::fs::metadata(e.path()).ok().map(|m| m.file_type()));
+        match kind {
+            Some(t) if t.is_dir() => subs.push(e.path()),
+            Some(t) if t.is_file() => files.push(e.path()),
+            _ => {}
         }
     }
+    files.sort();
+    subs.sort();
+    let names: Vec<String> = files.iter().filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).collect();
+    let sequences = crate::media::sequence::find(&names, crate::media::is_picture);
+    let members: std::collections::HashSet<&str> = sequences.iter().flat_map(|(_, m)| m.iter().map(String::as_str)).collect();
+    let mut out: Vec<(String, String)> = sequences.iter().map(|(pattern, _)| (pattern.clone(), dir.join(pattern).to_string_lossy().into_owned())).collect();
+    for p in &files {
+        let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        // (The whole path: a .json is only media if it's a Lottie animation, which needs the file to look inside.)
+        if !members.contains(name.as_str()) && crate::media::is_supported(&p.to_string_lossy()) {
+            out.push((name, p.to_string_lossy().into_owned()));
+        }
+    }
+    (out, subs)
 }
 
 /// A folder on a network drive (the drive isn't on this Mac). Runs on the scan thread: asking can wait on the network.
@@ -152,7 +194,7 @@ mod tests {
         }
         let mut out = Vec::new();
         let mut budget = 100;
-        super::walk(&dir, 2, &mut budget, "root", &mut out);
+        super::walk(&dir, 2, &mut budget, "root", &mut out, &Default::default());
         let names: Vec<&str> = out.iter().map(|(n, _, _)| n.as_str()).collect();
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(names, ["a.mp4"]);
@@ -161,5 +203,35 @@ mod tests {
     #[test]
     fn this_macs_own_folders_are_not_network() {
         assert!(!super::on_network(&std::env::temp_dir()));
+    }
+
+    /// A rescan uses what it knew of a folder that hasn't changed, and still finds a file added since.
+    #[test]
+    fn unchanged_folders_are_not_listed_again() {
+        let dir = std::env::temp_dir().join(format!("phosphor-rescan-{}", std::process::id()));
+        let sub = dir.join("Intro");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(dir.join("a.mp4"), b"x").unwrap();
+        std::fs::write(sub.join("b.mov"), b"x").unwrap();
+        let cache: super::DirCache = Default::default();
+        let scan = |cache: &super::DirCache| {
+            let mut out = Vec::new();
+            let mut budget = 100;
+            super::walk(&dir, 3, &mut budget, "root", &mut out, cache);
+            let mut names: Vec<String> = out.into_iter().map(|(n, _, _)| n).collect();
+            names.sort();
+            names
+        };
+        assert_eq!(scan(&cache), ["a.mp4", "b.mov"]);
+        assert_eq!(cache.lock().unwrap().len(), 2, "both folders remembered");
+        // Unchanged: the remembered listing is used (a stale entry proves it: it comes back as remembered).
+        let t = cache.lock().unwrap().get(&dir).unwrap().0;
+        cache.lock().unwrap().insert(dir.clone(), (t, vec![("remembered.mp4".into(), "x".into())], vec![sub.clone()]));
+        assert_eq!(scan(&cache), ["b.mov", "remembered.mp4"]);
+        // A file added: the folder's time moves on, so it's listed again.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(dir.join("c.mp4"), b"x").unwrap();
+        assert_eq!(scan(&cache), ["a.mp4", "b.mov", "c.mp4"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
