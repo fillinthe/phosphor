@@ -155,7 +155,6 @@ pub(crate) fn apply_clip_act(st: &mut State, layer: u64, c: usize, act: ClipAct,
 pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     transport_bar(ui, st);
-    comp_tabs(ui, st);
     ui.add_space(4.0);
     let (grid, mut out) = Grid::new(ui, st);
     {
@@ -165,8 +164,20 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             column_headers(ui, &grid, ROW_HEADER_W, &mut out);
             let n = comp.layers.len();
+            // Every comp's rows, under its name (as in Layers), the later comp first; folded comps hide theirs.
+            let comp_ids: Vec<Option<u64>> = if comp.comps.is_empty() { vec![None] } else { comp.comps.iter().rev().map(|c| Some(c.id)).collect() };
+            let many = comp.comps.len() > 1;
+            for cid in comp_ids {
+            if let Some(c) = cid.and_then(|id| comp.comp(id)).filter(|c| many || !c.is_plain()) {
+                let caret = if c.collapsed { icon::CARET_RIGHT } else { icon::CARET_DOWN };
+                ui.label(RichText::new(format!("{caret} {} {}", icon::FRAME_CORNERS, c.name)).strong().color(crate::theme::Hue::Output.color()))
+                    .on_hover_text("A comp (fold it, rename it and its settings: the Layers panel)");
+                if c.collapsed {
+                    continue;
+                }
+            }
             for idx in (0..n).rev() {
-                if !comp.in_open_comp(&comp.layers[idx]) {
+                if comp.comp_of(&comp.layers[idx]) != cid {
                     continue;
                 }
                 let layer = &mut comp.layers[idx];
@@ -184,6 +195,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                     }
                     super::clip_grid::clip_cells(ui, &grid, &mut cx, layer, idx, &mut out);
                 });
+            }
             }
             if n == 0 {
                 hint(ui, "Add layers first; each layer gets a row of clip slots.");

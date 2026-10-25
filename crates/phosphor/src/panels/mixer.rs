@@ -42,15 +42,15 @@ fn on_toggle(ui: &mut egui::Ui, enabled: &mut bool, target: ControlTarget) {
 }
 
 pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
-    comp_tabs(ui, st);
+    // Every layer has its strip (comps have theirs before MASTER), as in Layers and Clips: no comp tabs.
     let aspect = st.aspect();
     let height = (ui.available_height() - 210.0).clamp(80.0, 600.0);
     crossfader(ui, st);
     let State { comp, selected, layer_textures, texture, .. } = st;
-    let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo && comp.in_open_comp(l));
+    let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
     let tex = |id: u64| layer_textures.get(&id).map(|(t, _)| *t);
     // The open comp's layers (and, with several comps, a strip per comp before MASTER).
-    let shown: Vec<bool> = comp.layers.iter().map(|l| comp.in_open_comp(l)).collect();
+    let shown: Vec<bool> = vec![true; comp.layers.len()];
     let phosphor_engine::Composition { layers, groups, comps, master_fade, master_fade_mod, master_effects, master_fx_bypass, .. } = comp;
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
