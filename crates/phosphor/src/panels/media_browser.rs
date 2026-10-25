@@ -483,8 +483,7 @@ fn follow_fetch(st: &mut State, act: src::FollowAct, account_dir: &str, ctx: &eg
         src::FollowAct::KeepAll | src::FollowAct::PickLibrary => return,
         src::FollowAct::More => {
             let Some(a) = view.following.accounts.iter().find(|a| a.dir().is_some_and(|d| d.to_string_lossy() == account_dir)).cloned() else { return };
-            let have = st.comp.media_bin.iter().filter(|m| src::inside(&m.path, account_dir)).count();
-            fl::more(&view.following, &a, have, Some(ctx.clone()))
+            fl::more(&view.following, &a, Some(ctx.clone()))
         }
     });
 }
