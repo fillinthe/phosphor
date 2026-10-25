@@ -310,6 +310,16 @@ pub(crate) fn outputs_menu(ui: &mut egui::Ui, outs: &[(u64, String, bool)]) -> O
     out
 }
 
+/// A menu button whose menu has a text field in it: egui closes a menu on ANY click inside it, which closed the
+/// pop-up the moment the field was clicked. This one stays open until you click outside it or the field confirms
+/// (`rename_menu` / `new_name_menu` close it). Use it for every menu button that holds a field.
+pub(crate) fn field_menu<'a, R>(ui: &mut egui::Ui, atoms: impl egui::IntoAtoms<'a>, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> egui::InnerResponse<Option<R>> {
+    use egui::containers::menu::{MenuButton, MenuConfig, SubMenuButton, is_in_menu};
+    let config = MenuConfig::new().close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+    let (response, inner) = if is_in_menu(ui) { SubMenuButton::new(atoms).config(config).ui(ui, add_contents) } else { MenuButton::new(atoms).config(config).ui(ui, add_contents) };
+    egui::InnerResponse::new(inner.map(|i| i.inner), response)
+}
+
 /// The body of a "Rename" menu: a field with the current name, OK (or Enter). Returns the new name when confirmed
 /// (trimmed, never empty). `id` keeps what's typed while the menu is open.
 pub(crate) fn rename_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str) -> Option<String> {
@@ -552,5 +562,64 @@ mod steady_tests {
                 assert_eq!(draw(&ctx, egui::pos2(x as f32, 18.0)), away, "with the mouse at x={x} the row moved");
             }
         }
+    }
+
+    /// Clicking the text field inside a Rename menu keeps the menu open (egui closes a menu on any click inside it,
+    /// which closed collection renames the moment the field was clicked); clicking outside closes it.
+    #[test]
+    fn a_menu_with_a_field_stays_open_when_the_field_is_clicked() {
+        use std::cell::Cell;
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx);
+        let open = Cell::new(false);
+        let field_at = Cell::new(egui::Pos2::ZERO);
+        let button_at = Cell::new(egui::Pos2::ZERO);
+        let mut time = 0.0;
+        let mut frame = |events: Vec<egui::Event>, pointer: egui::Pos2| {
+            time += 0.05;
+            let mut input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0))), time: Some(time), ..Default::default() };
+            input.events.push(egui::Event::PointerMoved(pointer));
+            input.events.extend(events);
+            open.set(false);
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    let r = super::field_menu(ui, "Rename", |ui| {
+                        open.set(true);
+                        let mut text = String::from("Show A");
+                        let f = super::text_field(ui, &mut text, "name", Some(120.0));
+                        field_at.set(f.rect.center());
+                    });
+                    button_at.set(r.response.rect.center());
+                });
+            });
+            out.textures_delta.clear();
+        };
+        let click = |pos: egui::Pos2| {
+            let b = egui::PointerButton::Primary;
+            vec![
+                egui::Event::PointerButton { pos, button: b, pressed: true, modifiers: Default::default() },
+                egui::Event::PointerButton { pos, button: b, pressed: false, modifiers: Default::default() },
+            ]
+        };
+        frame(vec![], egui::pos2(500.0, 300.0));
+        frame(vec![], egui::pos2(500.0, 300.0));
+        let at = button_at.get();
+        frame(click(at), at);
+        for _ in 0..3 {
+            frame(vec![], at);
+        }
+        assert!(open.get(), "the menu opens when its button is clicked");
+        let f = field_at.get();
+        frame(click(f), f);
+        for _ in 0..3 {
+            frame(vec![], f);
+        }
+        assert!(open.get(), "and stays open when its text field is clicked");
+        let away = egui::pos2(550.0, 380.0);
+        frame(click(away), away);
+        for _ in 0..3 {
+            frame(vec![], away);
+        }
+        assert!(!open.get(), "and closes when the click is outside it");
     }
 }

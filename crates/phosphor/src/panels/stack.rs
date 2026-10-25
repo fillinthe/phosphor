@@ -397,7 +397,7 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
 /// The rest of a layer's menu (after the row items): sources, effects, duplicate, move, group, delete.
 fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)], o: &mut StripOut) {
     let mut picked: Option<LayerAction> = None;
-    ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+    crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
         if let Some(n) = rename_menu(ui, ("stack_rename", layer.id), &layer.name) {
             layer.name = n;
             ui.close();
@@ -506,7 +506,7 @@ fn group_band(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<egui::Texture
             hint(ui, "surfaces only");
         }
         ui.menu_button(icon::DOTS_THREE, |ui| {
-            ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+            crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                 if let Some(n) = rename_menu(ui, ("stack_group_rename", g.id), &g.name) {
                     g.name = n;
                     ui.close();
@@ -588,7 +588,7 @@ fn comp_band(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui::TextureId>, as
         let size = if c.width == 0 { "master size".to_string() } else { format!("{}×{}", c.width, c.height) };
         hint(ui, if c.in_mix { size } else { format!("{size} · outputs only") });
         ui.menu_button(icon::DOTS_THREE, |ui| {
-            ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+            crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                 if let Some(n) = rename_menu(ui, ("stack_comp_rename", c.id), &c.name) {
                     action = Some(CompBandAct::Rename(n));
                     ui.close();

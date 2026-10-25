@@ -611,7 +611,7 @@ pub(crate) fn media_tile(
             acts.push(MediaAct::Favorite(i));
             ui.close();
         }
-        ui.menu_button(label(icon::BOOKMARKS_SIMPLE, "Collections"), |ui| {
+        crate::ui::field_menu(ui, label(icon::BOOKMARKS_SIMPLE, "Collections"), |ui| {
             for c in collections {
                 let mut on = item.collections.contains(c);
                 if crate::ui::toggle(ui, &mut on, c).clicked() {
@@ -623,7 +623,7 @@ pub(crate) fn media_tile(
                 acts.push(MediaAct::NewCollection(name, Some(i)));
             }
         });
-        ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+        crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
             if let Some(name) = rename_menu(ui, ("rename", &item.path), &item.name) {
                 acts.push(MediaAct::Rename(i, name));
             }

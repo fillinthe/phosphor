@@ -13,7 +13,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
         ui.horizontal_wrapped(|ui| {
             crate::ui::heading(ui, format!("{} {name}", icon::BOOKMARKS_SIMPLE));
             hint(ui, format!("{count} files"));
-            ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+            crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                 if let Some(new) = rename_menu(ui, ("rename_coll", name), name) {
                     acts.push(MediaAct::RenameCollection(name.to_string(), new));
                 }
