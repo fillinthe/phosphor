@@ -473,7 +473,7 @@ mod steady_tests {
         input.events.push(egui::Event::PointerMoved(pointer));
         let mut xs = Vec::new();
         let mut out = ctx.run_ui(input, |ui| {
-            egui::CentralPanel::default().show_inside(ui, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 super::toolbar(ui, |ui| {
                     xs.push(ui.cursor().left());
                     ui.label("Launch");
@@ -524,7 +524,7 @@ mod steady_tests {
             input.events.push(egui::Event::PointerMoved(pointer));
             let mut xs = Vec::new();
             let mut out = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
                     super::toolbar(ui, |ui| {
                         super::pick_item(ui, false, "List entry");
                         xs.push(ui.cursor().left());
@@ -582,7 +582,7 @@ mod steady_tests {
             input.events.extend(events);
             open.set(false);
             let mut out = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
                     let r = super::field_menu(ui, "Rename", |ui| {
                         open.set(true);
                         let mut text = String::from("Show A");

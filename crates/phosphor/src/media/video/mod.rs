@@ -245,6 +245,8 @@ impl Shared {
 /// frame number and frame rate (FFmpeg alone only looks for frames 0–4). Every file open goes through here.
 pub fn open_input(path: &str) -> Result<ff::format::context::Input, ff::Error> {
     if !crate::media::sequence::is_sequence(path) {
+        // A clip from another drive: this Mac's copy when there is one (and a copy asked for when there isn't).
+        let path = crate::media::clip_cache::resolve(path);
         let mut input = ff::format::input(&path)?;
         mark_hap_r(&mut input);
         return Ok(input);
