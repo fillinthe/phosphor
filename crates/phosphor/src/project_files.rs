@@ -169,10 +169,8 @@ mod tests {
 
 /// Where a project's picture is kept (a small picture of its output, saved with it): the settings folder's cache.
 pub fn picture_path(project: &str) -> Option<PathBuf> {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    project.hash(&mut h);
-    Some(crate::show::storage_dir()?.join("cache").join("project pictures").join(format!("{:016x}.png", h.finish())))
+    let h = phosphor_engine::stable_hash(&[project.as_bytes()]);
+    Some(crate::show::storage_dir()?.join("cache").join("project pictures").join(format!("{h:016x}.png")))
 }
 
 /// Saves a project's picture from the output's pixels (RGBA), made small, on a thread of its own.

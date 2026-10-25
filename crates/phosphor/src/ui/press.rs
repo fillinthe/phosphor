@@ -4,7 +4,6 @@
 //! clicked the next time it's drawn (so it works while the button is on screen).
 
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 
 use eframe::egui;
 use phosphor_engine::ControlTarget;
@@ -39,9 +38,8 @@ pub(crate) fn press(ctx: &egui::Context, key: u64, now: f64) {
 
 /// The stable key of the `n`th button labelled `label` in `panel`.
 pub(crate) fn key_of(panel: &str, label: &str, n: u32) -> u64 {
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (panel, label, n).hash(&mut h);
-    h.finish()
+    // (Saved in projects: a hash that never changes.)
+    phosphor_engine::stable_hash(&[panel.as_bytes(), label.as_bytes(), &n.to_le_bytes()])
 }
 
 /// What people see for it in mapping lists: "Clips › Random clip" ("#2" for the second one).

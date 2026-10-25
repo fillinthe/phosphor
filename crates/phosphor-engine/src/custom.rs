@@ -55,6 +55,21 @@ fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
+/// A hash that never changes between runs or Rust versions (FNV-1a, 64-bit), for anything saved: mapping keys in
+/// projects, cache file names. `parts` are kept apart (a separator byte between them). Never `DefaultHasher` for those.
+pub fn stable_hash(parts: &[&[u8]]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for (k, part) in parts.iter().enumerate() {
+        if k > 0 {
+            h = (h ^ 0xff).wrapping_mul(0x0100_0000_01b3);
+        }
+        for b in *part {
+            h = (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    h
+}
+
 /// File/shader name → id-safe slug ("My Shader.fs" stem → "my_shader"). Used for ISF imports,
 /// Shader Editor files and show exports, so the same file always gets the same id.
 pub fn slug(name: &str) -> String {
@@ -613,3 +628,14 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod stable_hash_tests {
+    /// Fixed values: if these change, saved button mappings and caches would be lost.
+    #[test]
+    fn the_hash_never_changes() {
+        assert_eq!(super::stable_hash(&[b""]), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(super::stable_hash(&[b"a"]), 0xaf63_dc4c_8601_ec8c);
+        assert_ne!(super::stable_hash(&[b"ab", b"c"]), super::stable_hash(&[b"a", b"bc"]));
+    }
+}

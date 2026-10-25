@@ -205,14 +205,12 @@ mod native {
     /// Where a file's thumbnail at `size` is kept: Phosphor's cache folder, named by a hash of the path, the file's
     /// length and modification time (an edited file gets a new one). None when the file can't be looked at.
     pub(super) fn cache_file(path: &str, size: u32) -> Option<std::path::PathBuf> {
-        use std::hash::{Hash, Hasher};
         // (A sequence pattern isn't a file: its first frame stands in.)
         let probe = if crate::media::sequence::is_sequence(path) { crate::media::sequence::members(path).into_iter().next().map(|p| p.to_string_lossy().into_owned())? } else { path.to_string() };
         let meta = std::fs::metadata(&probe).ok()?;
         let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        (path, meta.len(), modified, size).hash(&mut h);
-        Some(crate::show::storage_dir()?.join("cache").join("thumbs").join(format!("{:016x}.png", h.finish())))
+        let h = phosphor_engine::stable_hash(&[path.as_bytes(), &meta.len().to_le_bytes(), &modified.to_le_bytes(), &size.to_le_bytes()]);
+        Some(crate::show::storage_dir()?.join("cache").join("thumbs").join(format!("{h:016x}.png")))
     }
 }
 

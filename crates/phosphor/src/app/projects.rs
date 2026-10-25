@@ -390,11 +390,9 @@ impl State {
     /// A small picture of the output, kept for the Projects window's card (on a save you asked for: not autosave).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn save_project_picture(&mut self) {
-        let (Some(project), Some(engine)) = (self.project_path.clone(), self.engine.as_ref()) else { return };
-        if let Some((w, h, px)) = engine.read_output() {
-            crate::project_files::save_picture(&project, w, h, px);
-            self.projects.pictures_checked = false;
-        }
+        // Read back over the next frames without waiting (`render`), saved small on a thread of its own.
+        self.project_picture = self.project_path.clone();
+        self.projects.pictures_checked = false;
     }
 }
 

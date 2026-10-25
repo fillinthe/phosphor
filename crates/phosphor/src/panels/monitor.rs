@@ -28,6 +28,8 @@ pub(crate) fn request_snapshot(ui: &egui::Ui, id: u64) {
 
 /// The monitor key a layer / group / comp snapshot is read through.
 pub const SNAPSHOT_KEY: u8 = 254;
+/// The Projects window's picture of a project, read back (small, without waiting) after a Save.
+pub const PROJECT_PICTURE_KEY: u8 = 248;
 
 /// Opens a new preview window showing `source` (from any panel; the app opens it after this frame).
 pub(crate) fn request_preview(ui: &egui::Ui, source: MonitorSource) {

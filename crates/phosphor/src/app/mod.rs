@@ -391,6 +391,8 @@ pub struct State {
     /// A layer / group / comp to save a picture of (read back next frame), and the picture once it's here.
     pub snapshot_source: Option<u64>,
     pub snapshot_ready: Option<(u32, u32, Vec<u8>)>,
+    /// A project just saved whose picture (of the mix) is being read back for the Projects window.
+    pub(crate) project_picture: Option<String>,
     #[cfg(not(target_arch = "wasm32"))]
     pub isf: crate::isf_lib::IsfLibrary,
     /// Effect chain copied with the Copy button, for pasting onto another layer or MASTER.
@@ -546,6 +548,8 @@ impl State {
     }
 
     pub fn load_composition(&mut self, comp: Composition) {
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::media::cuts::project_changed();
         // The timeline starts over, stopped, and changes nothing until it plays.
         (self.timeline_pos, self.timeline_play, self.timeline_applied) = (0.0, None, Some(0.0));
         self.selected = comp.layers.last().map(|l| l.id);

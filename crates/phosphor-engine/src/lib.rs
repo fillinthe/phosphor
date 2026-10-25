@@ -16,7 +16,7 @@ pub mod shaders;
 
 pub use capture::CapturedFrame;
 pub use control::ModInputs;
-pub use custom::CompileError;
+pub use custom::{CompileError, stable_hash};
 pub use engine::{CompressedFormat, Engine, ExternalJob, FrameInfo, MASTER_ID, PREVIEW_WIDTH, PreviewItem, PreviewRefresh, THUMBNAIL_WIDTH};
 pub use gpu::{FORMAT, Target};
 pub use mapping::{Mapping, Surface};

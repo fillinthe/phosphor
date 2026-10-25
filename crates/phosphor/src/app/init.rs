@@ -238,6 +238,7 @@ impl PhosphorApp {
                 snapshot_requested: false,
                 snapshot_source: None,
                 snapshot_ready: None,
+                project_picture: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 isf: crate::isf_lib::IsfLibrary::scan(),
                 fx_clipboard: Vec::new(),
@@ -365,7 +366,8 @@ impl PhosphorApp {
         // A fresh install (nothing saved yet): say hello once.
         app.welcome_open = fresh_install;
         // The Projects window at start (not on the very first launch, in tests or in an exported show).
-        app.state.projects.open = app.state.projects.at_start && !fresh_install && app.bench.is_none() && !cfg!(target_arch = "wasm32") && {
+        // (Not over a show just brought back after a crash, either.)
+        app.state.projects.open = app.state.projects.at_start && !fresh_install && app.recovered.is_none() && app.bench.is_none() && !cfg!(target_arch = "wasm32") && {
             #[cfg(not(target_arch = "wasm32"))]
             let show = crate::show::bundled().is_some();
             #[cfg(target_arch = "wasm32")]

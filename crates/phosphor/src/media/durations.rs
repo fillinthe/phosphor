@@ -8,6 +8,8 @@ pub struct Durations {
     tx: Sender<String>,
     rx: Receiver<(String, f32)>,
     asked: HashSet<String>,
+    /// Asked for and not back yet.
+    pub outstanding: usize,
 }
 
 impl Default for Durations {
@@ -26,21 +28,23 @@ impl Default for Durations {
                 }
             }
         });
-        Durations { tx, rx, asked: HashSet::new() }
+        Durations { tx, rx, asked: HashSet::new(), outstanding: 0 }
     }
 }
 
 impl Durations {
     /// Asks for a file's length (once).
     pub fn want(&mut self, path: &str) {
-        if self.asked.insert(path.to_string()) {
-            let _ = self.tx.send(path.to_string());
+        if self.asked.insert(path.to_string()) && self.tx.send(path.to_string()).is_ok() {
+            self.outstanding += 1;
         }
     }
 
     /// Lengths that came in: (path, seconds; 0 for pictures and unreadable files).
     pub fn take(&mut self) -> Vec<(String, f32)> {
-        self.rx.try_iter().collect()
+        let got: Vec<(String, f32)> = self.rx.try_iter().collect();
+        self.outstanding = self.outstanding.saturating_sub(got.len());
+        got
     }
 }
 

@@ -12,7 +12,7 @@ impl PhosphorApp {
         self.recovered = Some(streaming);
         // Opted in: the crash report goes by itself (once: this runs once per crash).
         if st.bug.send_crashes {
-            let report = crate::support::diagnostics(st);
+            let report = crate::support::crash_diagnostics(st);
             let sent = st.bug.sent.clone();
             crate::crash_report::send(report, move |r| {
                 *sent.lock().unwrap() = Some(r);

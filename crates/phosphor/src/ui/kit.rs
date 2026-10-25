@@ -49,7 +49,8 @@ pub(crate) fn steady_small_button(ui: &mut egui::Ui, text: impl Into<String>, la
 /// An `action_button` whose label changes (Play / Pause): as wide as the widest of `labels`.
 pub(crate) fn steady_action_button(ui: &mut egui::Ui, act: Act, text: impl Into<String>, labels: &[&str]) -> egui::Response {
     let w = steady_width(ui, labels, false);
-    action_button_sized(ui, act, text, egui::vec2(w, CONTROL_H))
+    // (Mapped by its first label, so a pad keeps working whichever label it shows.)
+    action_button_named(ui, act, text, egui::vec2(w, CONTROL_H), labels.first().copied())
 }
 
 /// A compact on/off button for tight rows (an icon or a letter): filled when on. Marks the response changed.
@@ -397,6 +398,11 @@ pub(crate) fn action_button(ui: &mut egui::Ui, act: Act, text: impl Into<String>
 
 /// `action_button` at a set size (clip column triggers).
 pub(crate) fn action_button_sized(ui: &mut egui::Ui, act: Act, text: impl Into<String>, size: egui::Vec2) -> egui::Response {
+    action_button_named(ui, act, text, size, None)
+}
+
+/// `action_button_sized`, mapped under `name` (a label that changes) instead of its text.
+fn action_button_named(ui: &mut egui::Ui, act: Act, text: impl Into<String>, size: egui::Vec2, name: Option<&str>) -> egui::Response {
     let fill = match act {
         Act::Go => accent(),
         Act::Record => Color32::from_rgb(225, 70, 60),
@@ -405,7 +411,7 @@ pub(crate) fn action_button_sized(ui: &mut egui::Ui, act: Act, text: impl Into<S
     let text: String = text.into();
     let b = egui::Button::new(RichText::new(&text).strong().color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(size);
     let mut r = if size.x > 0.0 { ui.add_sized(size, b) } else { ui.add(b) };
-    crate::ui::press::mappable(ui, &mut r, &text);
+    crate::ui::press::mappable(ui, &mut r, name.unwrap_or(&text));
     if r.hovered() {
         ui.painter().rect_stroke(r.rect, 6.0, Stroke::new(1.5, Color32::WHITE.gamma_multiply(0.7)), StrokeKind::Inside);
     }
