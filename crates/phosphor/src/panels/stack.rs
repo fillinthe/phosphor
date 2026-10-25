@@ -395,8 +395,14 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
 }
 
 /// The rest of a layer's menu (after the row items): sources, effects, duplicate, move, group, delete.
-fn layer_menu(ui: &mut egui::Ui, layer: &LayerState, others: &[(u64, String)], o: &mut StripOut) {
+fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)], o: &mut StripOut) {
     let mut picked: Option<LayerAction> = None;
+    ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+        if let Some(n) = rename_menu(ui, ("stack_rename", layer.id), &layer.name) {
+            layer.name = n;
+            ui.close();
+        }
+    });
     let mut act = |ui: &mut egui::Ui, a: LayerAction| {
         picked = Some(a);
         ui.close();
@@ -500,6 +506,12 @@ fn group_band(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<egui::Texture
             hint(ui, "surfaces only");
         }
         ui.menu_button(icon::DOTS_THREE, |ui| {
+            ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+                if let Some(n) = rename_menu(ui, ("stack_group_rename", g.id), &g.name) {
+                    g.name = n;
+                    ui.close();
+                }
+            });
             if crate::ui::command(ui, label(icon::MAGIC_WAND, "Add effect to the group…")).clicked() {
                 action = Some(GroupAction::BrowseEffects);
                 ui.close();
