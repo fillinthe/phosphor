@@ -285,7 +285,13 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             m.points = moved;
             touched = true;
         }
-        r.on_hover_text(format!("{}: drag to move the mask", m.name));
+        // What it does, on the canvas: a mask moved over the picture makes it vanish, which looked like a bug.
+        let what = if !m.enabled { "MASK (off)" } else if m.invert { "MASK: only inside shows" } else { "MASK: hides inside" };
+        let g = ui.painter().layout_no_wrap(what.to_string(), egui::FontId::proportional(10.0), color);
+        let at = to_screen(centre) + egui::vec2(-g.size().x / 2.0, 14.0);
+        ui.painter().rect_filled(egui::Rect::from_min_size(at, g.size()).expand(2.0), 3.0, Color32::from_black_alpha(190));
+        ui.painter().galley(at, g, color);
+        r.on_hover_text(format!("{}: drag to move the mask. {}", m.name, if m.invert { "Only the picture inside it shows: everything outside is black." } else { "The picture inside it is blacked out." }));
         let mut delete = None;
         let mut insert = None;
         let count = m.points.len();
@@ -547,6 +553,12 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     {
         let State { comp, output, .. } = st;
         let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
+        // A mask that limits the whole output, said in words (its outline on the canvas looks like the output's own).
+        if o.mapping.enabled
+            && let Some(m) = o.mapping.masks.iter().find(|m| m.enabled && m.invert)
+        {
+            ui.colored_label(MASK_COLOR, format!("{} Only the inside of the mask \"{}\" shows on this output: outside it is black. Move or delete the mask (orange) to change that.", icon::WARNING, m.name));
+        }
         crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on"))
                 .on_hover_text("When on, this output shows only its surfaces");

@@ -1752,7 +1752,8 @@ impl Mapping {
     /// A new mask of `shape` in the middle of an output `aspect` (width / height) wide, so circles look round.
     pub fn add_mask_shape(&mut self, id: u64, shape: MaskShape, aspect: f32) -> &mut Mask {
         let n = self.masks.len() + 1;
-        self.masks.push(Mask { id, name: format!("{} {n}", shape.name()), points: shape.points(aspect), ..Default::default() });
+        // "Mask 1 (rectangle)": a mask must never be mistaken for the output or a slice (both rectangles too).
+        self.masks.push(Mask { id, name: format!("Mask {n} ({})", shape.name().to_lowercase()), points: shape.points(aspect), ..Default::default() });
         self.masks.last_mut().unwrap()
     }
 
