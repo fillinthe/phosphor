@@ -3,9 +3,27 @@
 use super::*;
 
 impl PhosphorApp {
-    /// Puts the show back the way it was before an unexpected quit.
+    /// Puts the show back the way it was before an unexpected quit (and says so).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn restore(&mut self, s: crate::recovery::Snapshot) {
+        let streaming = s.streaming;
+        self.resume(s);
+        let st = &mut self.state;
+        self.recovered = Some(streaming);
+        // Opted in: the crash report goes by itself (once: this runs once per crash).
+        if st.bug.send_crashes {
+            let report = crate::support::diagnostics(st);
+            let sent = st.bug.sent.clone();
+            crate::crash_report::send(report, move |r| {
+                *sent.lock().unwrap() = Some(r);
+            });
+        }
+    }
+
+    /// Back where it was when it last closed (a normal quit or a crash): outputs open on their screens, movies at
+    /// the same place, the session and the audio input on. (The project itself comes back with the settings.)
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn resume(&mut self, s: crate::recovery::Snapshot) {
         let st = &mut self.state;
         st.comp.ensure_outputs();
         st.selected = s.selected.or(st.selected);
@@ -30,16 +48,6 @@ impl PhosphorApp {
         }
         if s.audio_open {
             let _ = st.audio.open(s.audio_device.as_deref());
-        }
-        self.recovered = Some(s.streaming);
-        // Opted in: the crash report goes by itself (once: this runs once per crash).
-        #[cfg(not(target_arch = "wasm32"))]
-        if st.bug.send_crashes {
-            let report = crate::support::diagnostics(st);
-            let sent = st.bug.sent.clone();
-            crate::crash_report::send(report, move |r| {
-                *sent.lock().unwrap() = Some(r);
-            });
         }
     }
 
