@@ -32,7 +32,8 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 ### Wanted
 - [ ] **Map any button:** every button, toggle, menu item and slider gets the same right-click Learn / map menu
-      (the kit's buttons gain it once, so nothing is missed).
+      (the kit's buttons gain it once, so nothing is missed). *Menu items done 2026-10-25 (all in the target list);
+      the kit buttons' own right-click still to do.*
 - [ ] **Organise in the Layers panel, not the Stack** (owner, 2026-10-25: likes Layers and the Mixer; the Stack is
       confusing). Bring groups and comps into Layers as foldable cards (comp = a group with its own size), with the
       quick buttons (eye, solo, mute, stop, fx count, rename), keep Clips as the grid; then retire the Stack or keep it
@@ -40,13 +41,13 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **A log of what you did, for reports:** every action (clip triggered, effect added / removed, layer changed,
       save, output moved) with the time, and how long each clip took to load and from which drive, written to the
       session log so it can be read back when something goes wrong. Report a Bug attaches the last few minutes.
-- [ ] **Scale X / Y / Z and Z position** in Transform.
+- [x] **Scale X / Y / Z and Z position** in Transform. *(2026-10-25: Scale X/Y, Z depth, Tilt X/Y in perspective.)*
 - [ ] **Speed next to the clip's preview** in the Inspector, so you can see the speed while changing it.
 - [ ] **Speed in the Mixer strips** (speed and opacity are what matter most live).
 - [ ] **A clip's in / out points saved with the media file**, so a clip cut once stays cut wherever it's used.
 - [ ] **Favourite a clip from a layer** (and see favourites later in Media).
-- [ ] **Map the Random clip button**, and run it on a timer or the beat (load a new random clip every N bars).
-- [ ] **Sort media by length** (View › Sort by: Name / Newest / Type / Length; needs each movie's duration, read
+- [x] **Map the Random clip button**, and run it on a timer or the beat (load a new random clip every N bars).
+- [x] **Sort media by length** (View › Sort by: Name / Newest / Type / Length; needs each movie's duration, read
       off the show's thread and kept with the media item).
 - [ ] **Effect count at a glance on every layer:** the fx badge on Stack strips, Layers cards and Mixer strips
       shows the number ("3 fx"), lit when on, dim when bypassed; groups and comps too. (The badge exists on the
@@ -60,7 +61,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **Effect previews load slowly or blank** when a lot are asked for at once (the Effects list tiles, and the
       preview when one is picked). Needs a look at how many previews the engine renders per frame and in what order
       (visible tiles first, then the rest). Size: S to M. Need an example: which list, how many tiles, what shows.
-- [ ] **"Plays on" picker at the top of Media** so a click shows which layer it lands on, with "next free clip
+- [x] **"Plays on" picker at the top of Media** *(done without "next free clip cell")* so a click shows which layer it lands on, with "next free clip
       cell" as an option. Size: S.
 
 ## VDMX + MadMapper parity (researched 2026-10-22), easiest first
