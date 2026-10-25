@@ -62,6 +62,8 @@ pub(crate) enum ClipAct {
     /// The layer's picture now becomes the clip's picture in the grid.
     Thumbnail,
     Clear,
+    /// The clip's file is a favourite in Media (or isn't any more).
+    Favorite,
 }
 
 /// One clip's settings: name, trigger (and its MIDI / key mapping), how a press plays it, sound, its own settings,
@@ -80,6 +82,10 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
                 && crate::ui::command(ui, label(icon::MAGIC_WAND, "Match the beat")).on_hover_text("Scan this movie's motion for its rhythm; the clip then starts on its first hit and is stretched so every hit lands on a beat").clicked()
             {
                 act = Some(ClipAct::MatchBeat);
+            }
+            let file = matches!(&layer.clip_slot_mut(c).source, SourceSpec::Movie { path: Some(_), .. } | SourceSpec::Image { path: Some(_), .. });
+            if file && crate::ui::command(ui, label(icon::STAR, "Favourite")).on_hover_text("Star this clip's file in Media (Media › Favourites lists them; click again to unstar)").clicked() {
+                act = Some(ClipAct::Favorite);
             }
             #[cfg(not(target_arch = "wasm32"))]
             if crate::ui::command(ui, label(icon::IMAGE, "Use this picture")).on_hover_text("The layer's picture right now becomes this clip's picture in the grid (right-click again for a new one)").clicked() {
@@ -139,6 +145,20 @@ pub(crate) fn apply_clip_act(st: &mut State, layer: u64, c: usize, act: ClipAct,
             }
         }
         ClipAct::Thumbnail => st.clip_thumb_request = Some((layer, c)),
+        ClipAct::Favorite => {
+            let Some((name, path)) = st.comp.layer(layer).and_then(|l| l.clips.get(c)).and_then(|k| match &k.source {
+                SourceSpec::Movie { name, path: Some(p) } | SourceSpec::Image { name, path: Some(p) } => Some((name.clone(), p.clone())),
+                _ => None,
+            }) else {
+                return;
+            };
+            // (In the media list first if it isn't yet.)
+            st.comp.add_media(&name, &path);
+            if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
+                m.favorite = !m.favorite;
+                st.notice = Some(if m.favorite { format!("{name} is a favourite (Media › Favourites)") } else { format!("{name} is no longer a favourite") });
+            }
+        }
         ClipAct::Clear => {
             if let Some(l) = st.comp.layer_mut(layer)
                 && c < l.clips.len()
