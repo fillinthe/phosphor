@@ -99,6 +99,8 @@ impl PhosphorApp {
         let render_state = cc.wgpu_render_state.clone();
         let engine = render_state.as_ref().map(|rs| Engine::new(rs.device.clone(), rs.queue.clone()));
         #[cfg(not(target_arch = "wasm32"))]
+        let gpu_guard = render_state.as_ref().map(|rs| crate::gpu_guard::GpuGuard::install(&rs.device));
+        #[cfg(not(target_arch = "wasm32"))]
         #[cfg(target_os = "macos")]
         crate::media::video::set_zero_copy(engine.is_some() && std::env::var_os("PHOSPHOR_COPY_VIDEO").is_none());
         #[cfg(target_os = "macos")]
@@ -181,6 +183,8 @@ impl PhosphorApp {
                 web_log: Vec::new(),
                 menu_requests: Vec::new(),
                 button_presses: Vec::new(),
+                #[cfg(not(target_arch = "wasm32"))]
+                gpu_guard,
                 #[cfg(not(target_arch = "wasm32"))]
                 dialogs: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]

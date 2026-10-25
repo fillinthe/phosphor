@@ -318,6 +318,9 @@ pub struct State {
     pub(crate) menu_requests: Vec<crate::menu::Action>,
     /// Mapped presses for buttons on screen (handed to `ui::press` each frame).
     pub(crate) button_presses: Vec<u64>,
+    /// GPU errors are logged instead of ending the show (`gpu_guard`).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) gpu_guard: Option<crate::gpu_guard::GpuGuard>,
     #[cfg(not(target_arch = "wasm32"))]
     pub dialogs: crate::dialogs::Dialogs,
     #[cfg(not(target_arch = "wasm32"))]
