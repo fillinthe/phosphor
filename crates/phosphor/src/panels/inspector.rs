@@ -467,7 +467,8 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
         crate::ui::toolbar(ui, |ui| {
             #[cfg(not(target_arch = "wasm32"))]
             if is_file {
-                if !std::path::Path::new(&d).exists() && !crate::media::sequence::exists(&d) {
+                // (Cached and checked off the show's thread: a slow or unplugged drive mustn't stall drawing.)
+                if crate::media::present::file_present(&d) == Some(false) {
                     ui.colored_label(WARN, format!("{} missing", icon::WARNING)).on_hover_text("The file isn't at this path any more: File › Find Missing Media");
                 }
                 if crate::ui::small_command(ui, icon::FOLDER_OPEN).on_hover_text("Show in Finder").clicked() {

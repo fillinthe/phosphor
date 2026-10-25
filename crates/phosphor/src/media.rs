@@ -15,6 +15,8 @@ pub mod live;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod preload;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod present;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod rhythm;
 pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]
