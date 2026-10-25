@@ -219,6 +219,7 @@ impl PhosphorApp {
                 stream_bar: None,
                 mouse_to_shaders: false,
                 templates_open: false,
+                projects: projects::ProjectsUi { at_start: stored(KEY_PROJECTS_AT_START).is_none_or(|v| v == "1"), ..Default::default() },
                 #[cfg(not(target_arch = "wasm32"))]
                 backgrounds: Default::default(),
                 fx_browser: None,
@@ -358,6 +359,14 @@ impl PhosphorApp {
         app.install_native_menu();
         // A fresh install (nothing saved yet): say hello once.
         app.welcome_open = fresh_install;
+        // The Projects window at start (not on the very first launch, in tests or in an exported show).
+        app.state.projects.open = app.state.projects.at_start && !fresh_install && app.bench.is_none() && !cfg!(target_arch = "wasm32") && {
+            #[cfg(not(target_arch = "wasm32"))]
+            let show = crate::show::bundled().is_some();
+            #[cfg(target_arch = "wasm32")]
+            let show = false;
+            !show
+        };
         theme::set_accent(accent);
         if app.ui_brightness != theme::DEFAULT_BRIGHTNESS || accent != 0 {
             theme::set_brightness(&cc.egui_ctx, app.ui_brightness);

@@ -35,6 +35,7 @@ mod auto_show;
 #[cfg(not(target_arch = "wasm32"))]
 mod backgrounds;
 mod welcome;
+pub(crate) mod projects;
 mod autopilot;
 mod step_fires;
 #[cfg(not(target_arch = "wasm32"))]
@@ -111,6 +112,7 @@ const KEY_RECENT_PROJECTS: &str = "recent_projects";
 pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_AUTOSAVE: &str = "autosave";
+const KEY_PROJECTS_AT_START: &str = "projects_at_start";
 /// How often autosave saves a changed project.
 pub(crate) const AUTOSAVE_MINUTES: u32 = 5;
 const KEY_WATCHED: &str = "watched_folders";
@@ -333,6 +335,8 @@ pub struct State {
     pub mouse_to_shaders: bool,
     /// File › New from Template is open.
     pub templates_open: bool,
+    /// File › Projects… (every saved project, one click to open).
+    pub(crate) projects: projects::ProjectsUi,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) backgrounds: backgrounds::Backgrounds,
     /// A snapshot of this output was asked for (Output panel); the app saves it.

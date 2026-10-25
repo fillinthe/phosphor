@@ -48,6 +48,7 @@ impl PhosphorApp {
                 }
             }
             A::OpenFromAccount => self.state.account_window = true,
+            A::Projects => self.state.projects.open = true,
             A::ImportResolume => {
                 #[cfg(not(target_arch = "wasm32"))]
                 st.dialogs.pick_file(crate::dialogs::Purpose::ImportResolume, Some(("Resolume composition or VDMX project", &["avc", "vdmx5"])));
