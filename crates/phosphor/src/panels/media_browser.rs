@@ -237,6 +237,7 @@ fn tools(ui: &mut egui::Ui, st: &mut State) {
             }
         }
     });
+    super::media::plays_on_picker(ui, st);
 }
 
 /// The grid for the source picked (with its header: path, account, collection).
@@ -414,8 +415,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         .rev()
         .map(|l| (l.id, l.name.clone()))
         .collect();
-    let click_target = st
-        .selected
+    let click_target = super::media::plays_on_layer(st)
         .and_then(|id| layers.iter().find(|(l, _)| *l == id))
         .map(|(_, n)| n.clone());
     let mut playing: std::collections::HashMap<String, Vec<String>> =
