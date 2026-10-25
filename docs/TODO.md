@@ -17,6 +17,12 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       measure it (log how long each load takes and from where). Test with a USB-C drive and a hub.
 - [ ] **X "Load more" stops** after a while for an account (no more posts come in).
 
+- [ ] **MIDI controllers don't come back after a disconnect.** MIDI ports are opened at start and on the Reconnect
+      button only: if the hub drops the controller (shared with the SSD on one USB-C hub), it stays dead until
+      Reconnect, which looks like lost mappings. (The mappings are saved: all 8 of the owner's are intact.) Fix: watch
+      for MIDI devices coming and going and reopen them by themselves; log connects / disconnects; show the
+      controller's state in the status bar.
+
 ### Fix soon
 - [ ] **Can't rename a collection:** clicking the name field in the Rename pop-up closes it.
 - [ ] **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
@@ -25,6 +31,12 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **Copy a media file's name** (tile / Inspector right-click) to report problems.
 
 ### Wanted
+- [ ] **Map any button:** every button, toggle, menu item and slider gets the same right-click Learn / map menu
+      (the kit's buttons gain it once, so nothing is missed).
+- [ ] **Organise in the Layers panel, not the Stack** (owner, 2026-10-25: likes Layers and the Mixer; the Stack is
+      confusing). Bring groups and comps into Layers as foldable cards (comp = a group with its own size), with the
+      quick buttons (eye, solo, mute, stop, fx count, rename), keep Clips as the grid; then retire the Stack or keep it
+      as an option. Ask the owner before changing the default layout again.
 - [ ] **A log of what you did, for reports:** every action (clip triggered, effect added / removed, layer changed,
       save, output moved) with the time, and how long each clip took to load and from which drive, written to the
       session log so it can be read back when something goes wrong. Report a Bug attaches the last few minutes.
