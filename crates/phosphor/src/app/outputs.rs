@@ -1,8 +1,25 @@
 //! Output windows (borderless, per screen), mapping sync and the phone remote sync.
 
 use super::*;
+use crate::ui::RightMenu;
 
 impl PhosphorApp {
+    /// An output filling a display (F, double-click, the right-click menu) is remembered in the project as that
+    /// output's screen, so it goes back there when its window reopens or the project is opened again.
+    pub(crate) fn remember_output_screens(&mut self) {
+        let displays = &self.state.displays;
+        let filled: Vec<(u64, u32)> = self.state.output.lock().unwrap().iter().filter(|(_, o)| o.fullscreen && o.place.is_none()).filter_map(|(id, o)| o.display.map(|d| (*id, d))).collect();
+        for (id, did) in filled {
+            let Some(d) = displays.iter().find(|d| d.id == did) else { continue };
+            let key = crate::screens::screen_key(displays, d);
+            if let Some(o) = self.state.comp.outputs.iter_mut().find(|o| o.id == id)
+                && o.screen != key
+            {
+                o.screen = key;
+            }
+        }
+    }
+
     /// Phone/tablet remote: apply what remotes sent, then publish the state (≈20 times a second).
     pub(crate) fn remote_sync(&mut self, now: f64) {
         if !self.state.net.running() {
@@ -153,12 +170,36 @@ impl PhosphorApp {
                 }
                 if !out.edit_mapping {
                     // No title bar, so dragging the picture moves the window (to the projector).
-                    let drag = ui.interact(rect, egui::Id::new("output_drag"), egui::Sense::drag());
+                    let drag = ui.interact(rect, egui::Id::new("output_drag"), egui::Sense::click_and_drag());
                     if drag.drag_started() && !fullscreen {
                         ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
                     if drag.double_clicked() {
                         if fullscreen { uncover(out) } else { cover_here(out) }
+                    }
+                    // Right-click: fill any display from here (no dragging across screens needed).
+                    let mut go: Option<crate::screens::Display> = None;
+                    let mut back = false;
+                    drag.right_menu(|ui| {
+                        crate::ui::heading(ui, "Fullscreen on");
+                        for d in crate::screens::displays() {
+                            let here = out.display == Some(d.id) && fullscreen;
+                            if crate::ui::pick_item(ui, here, format!("{} ({}×{})", d.name, d.w as u32, d.h as u32)).clicked() {
+                                go = Some(d);
+                                ui.close();
+                            }
+                        }
+                        ui.separator();
+                        if crate::ui::command_if(ui, fullscreen, "Back to a window (Esc)").clicked() {
+                            back = true;
+                            ui.close();
+                        }
+                    });
+                    if let Some(d) = go {
+                        out.place = Some((d, 2, 0));
+                    }
+                    if back {
+                        uncover(out);
                     }
                     if !fullscreen {
                         ui.painter().text(

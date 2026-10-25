@@ -726,13 +726,20 @@ impl State {
 
     /// Opens every enabled output's window, or closes them all if any is open.
     pub fn toggle_output(&mut self) {
-        let mut map = self.output.lock().unwrap();
-        let any = map.values().any(|o| o.open);
-        for o in self.comp.outputs.iter().filter(|o| o.enabled) {
-            map.entry(o.id).or_default().open = !any;
-        }
-        if any {
-            map.values_mut().for_each(|o| o.open = false);
+        let opened = {
+            let mut map = self.output.lock().unwrap();
+            let any = map.values().any(|o| o.open);
+            for o in self.comp.outputs.iter().filter(|o| o.enabled) {
+                map.entry(o.id).or_default().open = !any;
+            }
+            if any {
+                map.values_mut().for_each(|o| o.open = false);
+            }
+            !any
+        };
+        // Opened: each output goes back to the screen it filled last time (remembered in the project).
+        if opened {
+            self.send_outputs_to_screens();
         }
     }
 
