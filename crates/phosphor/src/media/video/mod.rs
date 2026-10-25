@@ -244,9 +244,18 @@ impl Shared {
 /// Opens a media file for FFmpeg: a plain file, or an image sequence's pattern ("…/frame_%04d.png") with its first
 /// frame number and frame rate (FFmpeg alone only looks for frames 0–4). Every file open goes through here.
 pub fn open_input(path: &str) -> Result<ff::format::context::Input, ff::Error> {
+    open_input_with(path, true)
+}
+
+/// `open_input` for a quick look (how long a movie is) that doesn't ask for a copy of a clip from another drive.
+pub fn probe_input(path: &str) -> Result<ff::format::context::Input, ff::Error> {
+    open_input_with(path, false)
+}
+
+fn open_input_with(path: &str, cache: bool) -> Result<ff::format::context::Input, ff::Error> {
     if !crate::media::sequence::is_sequence(path) {
         // A clip from another drive: this Mac's copy when there is one (and a copy asked for when there isn't).
-        let path = crate::media::clip_cache::resolve(path);
+        let path = if cache { crate::media::clip_cache::resolve(path) } else { path.to_string() };
         let mut input = ff::format::input(&path)?;
         mark_hap_r(&mut input);
         return Ok(input);

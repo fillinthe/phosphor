@@ -28,6 +28,9 @@ pub struct MediaItem {
     /// Where it came from and its licence, for files brought in from online libraries (the show's Credits list).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credit: Option<Credit>,
+    /// How long a movie is (seconds), once looked at (View › Sort by Length asks).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration: Option<f32>,
 }
 
 /// Who made a file and how it may be used: shown in the Credits list and copied out for a show's credits.
