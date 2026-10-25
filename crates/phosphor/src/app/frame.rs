@@ -141,6 +141,7 @@ impl PhosphorApp {
         self.remote_sync(now);
         self.sync_mapping_from_output();
         self.remember_output_screens();
+        crate::panels::follow_selection_comp(&mut self.state.comp, self.state.selected);
         {
             #[cfg(not(target_arch = "wasm32"))]
             let State { control, comp, clock, cue_run, ltc_out, notice, .. } = &mut self.state;

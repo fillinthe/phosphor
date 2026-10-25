@@ -98,7 +98,7 @@ impl Preloader {
 pub fn candidates(comp: &Composition, page: usize, per_page: usize) -> Vec<String> {
     let cols = page * per_page..(page + 1) * per_page;
     let mut per_layer: Vec<Vec<(usize, String)>> = Vec::new();
-    for l in comp.layers.iter().filter(|l| comp.in_open_comp(l)) {
+    for l in comp.layers.iter() {
         let playing = l.active_clip.and_then(|id| l.clips.iter().position(|c| c.id == id));
         let mut list: Vec<(usize, String)> = l
             .clips

@@ -1,91 +1,10 @@
-//! Comps in the UI (`phosphor_engine::Comp`): the tabs over Clips / Layers / Mixer that pick which comp they show
-//! (add, rename, reorder, delete from there), the Inspector for a selected comp, and "Move to comp" for a layer.
+//! Comps in the UI (`phosphor_engine::Comp`): the Inspector for a selected comp and "Move to comp" for a layer. Comps
+//! show as bands in Layers / Clips (and strips in the Mixer), not as tabs; new layers go to the selected one's comp
+//! (`follow_selection_comp`).
 
 use phosphor_engine::{Comp, Composition};
 
 use super::*;
-
-enum CompAct {
-    Rename(u64, String),
-    Select(u64),
-    Move(u64, bool),
-    Delete(u64),
-}
-
-/// The comp tabs: click one to show its layers here; right-click for its settings; + Comp makes another canvas.
-pub(crate) fn comp_tabs(ui: &mut egui::Ui, st: &mut State) {
-    let add_tip = "Another canvas with its own layers, size and effects, mixed into the master (or sent to outputs of its own)";
-    crate::ui::toolbar(ui, |ui| {
-        let mut act = None;
-        if let Some(mut open) = st.comp.open_comp() {
-            let options: Vec<(u64, String)> = st.comp.comps.iter().map(|c| (c.id, format!("{} {}", icon::FRAME_CORNERS, c.name))).collect();
-            let many = options.len() > 1;
-            segmented(ui, &mut open, &options, |_, r, id| {
-                let name = st.comp.comp(*id).map(|c| c.name.clone()).unwrap_or_default();
-                r.right_menu(|ui| {
-                    crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-                        if let Some(n) = rename_menu(ui, ("comp_rename", *id), &name) {
-                            act = Some(CompAct::Rename(*id, n));
-                            ui.close();
-                        }
-                    });
-                    if crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Settings (size, opacity, effects)")).clicked() {
-                        act = Some(CompAct::Select(*id));
-                        ui.close();
-                    }
-                    if crate::ui::command(ui, label(icon::MONITOR, "Preview in a window")).clicked() {
-                        request_preview(ui, MonitorSource::Group(*id));
-                        ui.close();
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if crate::ui::command(ui, label(icon::CAMERA, "Save a picture…")).on_hover_text("This comp's picture now, as a PNG").clicked() {
-                        super::request_snapshot(ui, *id);
-                        ui.close();
-                    }
-                    if many {
-                        ui.separator();
-                        if crate::ui::command(ui, label(icon::ARROW_LEFT, "Earlier (further down in the master)")).clicked() {
-                            act = Some(CompAct::Move(*id, false));
-                            ui.close();
-                        }
-                        if crate::ui::command(ui, label(icon::ARROW_RIGHT, "Later (on top in the master)")).clicked() {
-                            act = Some(CompAct::Move(*id, true));
-                            ui.close();
-                        }
-                        ui.separator();
-                        if danger_button(ui, label(icon::TRASH, "Delete comp (its layers move to the first)")).clicked() {
-                            act = Some(CompAct::Delete(*id));
-                            ui.close();
-                        }
-                    }
-                });
-                r.clone().on_hover_text("Its layers show here · right-click: rename, settings, order");
-            });
-            st.comp.open_comp = Some(open);
-        }
-        if crate::ui::small_command(ui, label(icon::PLUS, "Comp")).on_hover_text(add_tip).clicked() {
-            let n = st.comp.comps.len().max(1) + 1;
-            let id = st.comp.add_comp(&format!("Comp {n}"));
-            st.selected = Some(id);
-        }
-        match act {
-            Some(CompAct::Rename(id, n)) => {
-                if let Some(c) = st.comp.comp_mut(id) {
-                    c.name = n;
-                }
-            }
-            Some(CompAct::Select(id)) => st.selected = Some(id),
-            Some(CompAct::Move(id, later)) => st.comp.move_comp(id, later),
-            Some(CompAct::Delete(id)) => {
-                st.comp.remove_comp(id);
-                if st.selected == Some(id) {
-                    st.selected = None;
-                }
-            }
-            None => {}
-        }
-    });
-}
 
 /// The comps a layer of the open comp could move to (empty with one comp).
 pub(crate) fn other_comps(comp: &Composition) -> Vec<(u64, String)> {
@@ -161,4 +80,44 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
         fx_action = effects_editor(ui, &mut c.effects, clipboard_len);
     });
     (fx_action, send)
+}
+
+/// New layers go into the comp of what's selected (a layer, a group, the comp itself): with every comp in one list
+/// there are no tabs to say which is "open". Cheap: only when the selection moves to another comp.
+pub(crate) fn follow_selection_comp(comp: &mut Composition, selected: Option<u64>) {
+    let Some(sel) = selected else { return };
+    let target = if comp.comp(sel).is_some() {
+        Some(sel)
+    } else if let Some(l) = comp.layers.iter().find(|l| l.id == sel) {
+        comp.comp_of(l)
+    } else if let Some(l) = comp.layers.iter().find(|l| l.parent == Some(sel)) {
+        comp.comp_of(l)
+    } else {
+        None
+    };
+    if target.is_some() && target != comp.open_comp {
+        comp.open_comp = target;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use phosphor_engine::Composition;
+
+    /// Selecting a layer in Comp 2 makes new layers go to Comp 2 (no tabs to pick it with any more).
+    #[test]
+    fn new_layers_go_to_the_selected_layers_comp() {
+        let mut c = Composition::default();
+        let a = c.add_layer().id;
+        let side = c.add_comp("Side");
+        let b = c.add_layer().id;
+        let main = c.comps[0].id;
+        assert_eq!(c.layer(b).and_then(|l| l.comp), Some(side), "a new comp opens");
+        super::follow_selection_comp(&mut c, Some(a));
+        assert_eq!(c.open_comp, Some(main));
+        let n = c.add_layer().id;
+        assert_eq!(c.comp_of(c.layer(n).unwrap()), Some(main), "the new layer lands with the selected one");
+        super::follow_selection_comp(&mut c, Some(side));
+        assert_eq!(c.open_comp, Some(side), "selecting the comp itself");
+    }
 }
