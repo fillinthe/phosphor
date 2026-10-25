@@ -909,3 +909,22 @@ fn random_clip_picks_another_clip_on_the_press() {
         assert!(matches!(out.as_slice(), [crate::control::Deferred::Clip(l, s)] if *l == id && *s != 0), "{out:?}");
     }
 }
+
+/// Every menu item can be mapped: each has its own name, the name finds it again, and a press asks for it.
+#[test]
+fn menu_items_are_mappable_targets() {
+    let items = crate::menu::mappable();
+    assert!(items.len() > 30, "{}", items.len());
+    let keys: std::collections::HashSet<String> = items.iter().map(|(a, _)| crate::menu::action_key(*a)).collect();
+    assert_eq!(keys.len(), items.len(), "names are unique");
+    for (a, _) in &items {
+        assert_eq!(crate::menu::action_for(&crate::menu::action_key(*a)), Some(*a));
+    }
+    assert!(!items.iter().any(|(a, _)| *a == crate::menu::Action::Quit), "Quit can't be mapped");
+    let mut comp = Composition::default();
+    let target = ControlTarget::Menu(crate::menu::action_key(crate::menu::Action::AddLayer));
+    assert!(crate::control::all_targets(&comp).iter().any(|(t, n)| *t == target && n.contains("Add Layer")));
+    let mut out = Vec::new();
+    crate::control::set_target(&mut comp, &target, 1.0, &mut out);
+    assert_eq!(out, vec![crate::control::Deferred::Menu("AddLayer".into())]);
+}

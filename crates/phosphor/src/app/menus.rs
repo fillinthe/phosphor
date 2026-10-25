@@ -12,6 +12,7 @@ impl PhosphorApp {
             actions.extend(crate::menu::native::poll(ids));
         }
         actions.extend(ctx.data_mut(|d| d.remove_temp::<Vec<crate::menu::Action>>(egui::Id::new(MENU_REQUEST))).unwrap_or_default());
+        actions.append(&mut self.state.menu_requests);
         for a in actions {
             self.run_action(ctx, a, now);
         }
