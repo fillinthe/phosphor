@@ -326,18 +326,22 @@ fn ffgl_status(ui: &mut egui::Ui, ffgl: &crate::ffgl::Ffgl) {
 }
 
 pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
-    let target = target.or(st.selected).filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id));
+    let target = target.or(st.selected);
+    // An effect goes onto anything with an effect chain: MASTER, a layer, a group or a comp (it then runs over
+    // everything under it). A source only goes on a layer.
+    let chain_target = target.filter(|id| *id == MASTER_ID || st.comp.effects(*id).is_some());
+    let layer_target = target.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     if let Some(fx) = drag.effect {
-        let t = match target {
+        let t = match chain_target {
             Some(t) => t,
             None => st.add_layer(),
         };
         panels::add_effect_to(st, t, fx);
     }
     if let Some(g) = drag.generator {
-        let t = match target {
-            Some(t) if t != MASTER_ID => t,
-            _ => st.add_layer(),
+        let t = match layer_target {
+            Some(t) => t,
+            None => st.add_layer(),
         };
         if let Some(desc) = shaders::generator(g) {
             let now = st.mod_inputs.time as f64;
