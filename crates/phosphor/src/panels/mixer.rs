@@ -64,11 +64,13 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 let name = RichText::new(short(&layer.name)).small().strong();
                 let lit = layer.enabled && !muted;
                 if strip(ui, layer.id, *selected == Some(layer.id), tex(layer.id), aspect, lit, name, |ui| {
-                    fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
-                    // Speed under the fader (movies): with opacity, what's played with most live.
-                    if matches!(layer.source, SourceSpec::Movie { .. }) {
-                        crate::ui::Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).width(84.0).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
-                    }
+                    // Opacity and (movies) Speed side by side, both upright: what's played with most live.
+                    ui.horizontal_top(|ui| {
+                        fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
+                        if matches!(layer.source, SourceSpec::Movie { .. }) {
+                            crate::ui::Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).vertical(height).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
+                        }
+                    });
                     crate::ui::toolbar(ui, |ui| {
                         super::layers::show_button(ui, layer);
                         toggle(ui, &mut layer.solo, "S");
