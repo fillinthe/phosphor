@@ -654,6 +654,16 @@ pub(crate) fn media_tile(
             crate::os::reveal(&item.path);
             ui.close();
         }
+        // For reports: what the file is called and where it is.
+        let file_name = std::path::Path::new(&item.path).file_name().map_or_else(|| item.name.clone(), |n| n.to_string_lossy().into_owned());
+        if crate::ui::command(ui, label(icon::COPY, "Copy file name")).on_hover_text(file_name.clone()).clicked() {
+            ui.ctx().copy_text(file_name);
+            ui.close();
+        }
+        if crate::ui::command(ui, label(icon::COPY, "Copy full path")).clicked() {
+            ui.ctx().copy_text(item.path.clone());
+            ui.close();
+        }
         if crate::ui::command(ui, label(icon::TRASH, "Remove from bin")).clicked() {
             acts.push(MediaAct::Remove(i));
             ui.close();

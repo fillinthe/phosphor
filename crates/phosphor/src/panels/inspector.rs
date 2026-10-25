@@ -494,7 +494,19 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
             }
             #[cfg(target_arch = "wasm32")]
             let _ = is_file;
-            ui.add(egui::Label::new(RichText::new(&d).small().color(Color32::GRAY)).truncate()).on_hover_text(&d);
+            let path = ui.add(egui::Label::new(RichText::new(&d).small().color(Color32::GRAY)).truncate().sense(Sense::click())).on_hover_text(format!("{d}\nRight-click: copy the name or the path"));
+            // For reports: what this layer is playing and where it is.
+            path.right_menu(|ui| {
+                let file_name = std::path::Path::new(&d).file_name().map_or_else(|| d.clone(), |n| n.to_string_lossy().into_owned());
+                if crate::ui::command(ui, label(icon::COPY, "Copy file name")).clicked() {
+                    ui.ctx().copy_text(file_name);
+                    ui.close();
+                }
+                if crate::ui::command(ui, label(icon::COPY, "Copy full path")).clicked() {
+                    ui.ctx().copy_text(d.clone());
+                    ui.close();
+                }
+            });
         });
     }
     ui.separator();
