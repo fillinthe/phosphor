@@ -332,11 +332,11 @@ pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
     let chain_target = target.filter(|id| *id == MASTER_ID || st.comp.effects(*id).is_some());
     let layer_target = target.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     if let Some(fx) = drag.effect {
-        let t = match chain_target {
-            Some(t) => t,
-            None => st.add_layer(),
-        };
-        panels::add_effect_to(st, t, fx);
+        // Nothing to put it on: say so (a new layer of its own would have no source, so nothing to see).
+        match chain_target {
+            Some(t) => panels::add_effect_to(st, t, fx),
+            None => st.notice = Some("Select a layer, group, comp or MASTER first to put the effect on it (or drag the effect onto one)".into()),
+        }
     }
     if let Some(g) = drag.generator {
         let t = match layer_target {
