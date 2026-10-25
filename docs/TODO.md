@@ -34,6 +34,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **A clip's in / out points saved with the media file**, so a clip cut once stays cut wherever it's used.
 - [ ] **Favourite a clip from a layer** (and see favourites later in Media).
 - [ ] **Map the Random clip button**, and run it on a timer or the beat (load a new random clip every N bars).
+- [ ] **Sort media by length** (View › Sort by: Name / Newest / Type / Length; needs each movie's duration, read
+      off the show's thread and kept with the media item).
+- [ ] **Effect count at a glance on every layer:** the fx badge on Stack strips, Layers cards and Mixer strips
+      shows the number ("3 fx"), lit when on, dim when bypassed; groups and comps too. (The badge exists on the
+      Layers cards: check it shows everywhere and reads at a glance.)
 - [ ] **Mapping rectangles: Photoshop-style transform:** drag a whole side, scale and rotate the shape, not only
       its corner points.
 
