@@ -52,9 +52,14 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             }
             let (stop, play) = (label(icon::STOP, "Output"), label(icon::PLAY, "Output"));
             let text = if st.output_open() { stop.clone() } else { play.clone() };
-            if steady_button(ui, text, &[&stop, &play]).on_hover_text("Open the output window (F = fullscreen, E = edit mapping)").clicked() {
+            let r = steady_button(ui, text, &[&stop, &play]).on_hover_text("Open the output window (it goes back to the screen it filled last time) · right-click: pick a screen · F = fullscreen, E = edit mapping");
+            if r.clicked() {
                 st.toggle_output();
             }
+            r.right_menu(|ui| {
+                crate::ui::heading(ui, "Fullscreen on");
+                crate::ui::screen_menu(ui, st);
+            });
         });
     });
     let rect = ui.available_rect_before_wrap();

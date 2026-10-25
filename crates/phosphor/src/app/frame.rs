@@ -140,6 +140,7 @@ impl PhosphorApp {
         }
         self.remote_sync(now);
         self.sync_mapping_from_output();
+        self.remember_output_screens();
         {
             #[cfg(not(target_arch = "wasm32"))]
             let State { control, comp, clock, cue_run, ltc_out, .. } = &mut self.state;

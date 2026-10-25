@@ -1,6 +1,7 @@
 //! The top bar and the File/Edit/View/Output/Help menus (in-window and macOS) and their actions.
 
 use super::*;
+use crate::ui::RightMenu;
 
 impl PhosphorApp {
     /// Menu bar clicks (system and in-window) and their shortcuts.
@@ -331,9 +332,14 @@ impl PhosphorApp {
                 }
                 let (stop, play) = (named(icon::STOP, "Output"), named(icon::PLAY, "Output"));
                 let output_label = if self.state.output_open() { stop.clone() } else { play.clone() };
-                if crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output windows on / off. F = fullscreen, Esc = exit").clicked() {
+                let r = crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output windows on / off (they go back to the screens they filled last time) · right-click: pick a screen");
+                if r.clicked() {
                     self.state.toggle_output();
                 }
+                r.right_menu(|ui| {
+                    crate::ui::heading(ui, "Fullscreen on");
+                    crate::ui::screen_menu(ui, &mut self.state);
+                });
                 ui.separator();
                 if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
