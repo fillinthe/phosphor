@@ -285,6 +285,13 @@ pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerStat
         });
         let pick = crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Pick a clip by value…")).on_hover_text("One knob or fader picks among this row's clips (map it: right-click › Listen)");
         map_menu(ui, &pick, ControlTarget::LayerClipPick(layer.id));
+        let random = crate::ui::command(ui, label(icon::DICE_FIVE, "Random clip"))
+            .on_hover_text("Play another of this row's clips, at random · right-click: map it to a pad, a key or OSC · on a timer: Autopilot › Random, below");
+        map_menu(ui, &random, ControlTarget::LayerRandomClip(layer.id));
+        if random.clicked() {
+            *row_midi = Some(RowAct::Random);
+            ui.close();
+        }
         ui.separator();
         crate::ui::heading(ui, format!("{} Plays on", icon::STACK));
         hint(ui, "Share this row's clips over the layers beside it (same group): each clip on the next layer, or on one with nothing playing.");

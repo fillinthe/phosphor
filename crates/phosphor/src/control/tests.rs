@@ -888,3 +888,24 @@ fn midi_devices_coming_and_going_are_told_apart() {
     let (came, went) = super::device_changes(&s(&["IAC Bus"]), &s(&["IAC Bus", "nanoKONTROL2"]));
     assert!(went.is_empty() && came == s(&["nanoKONTROL2"]));
 }
+
+/// "Random clip" plays another of the row's clips (never the one already playing), and only on the press.
+#[test]
+fn random_clip_picks_another_clip_on_the_press() {
+    use phosphor_engine::{Clip, SourceSpec};
+    let mut comp = Composition::default();
+    let id = comp.add_layer().id;
+    let l = comp.layer_mut(id).unwrap();
+    for i in 0..3u64 {
+        l.clips.push(Clip { id: 100 + i, source: SourceSpec::Generator("plasma".into()), ..Default::default() });
+    }
+    l.active_clip = Some(100);
+    let mut out = Vec::new();
+    crate::control::set_target(&mut comp, &ControlTarget::LayerRandomClip(id), 0.0, &mut out);
+    assert!(out.is_empty(), "a release does nothing");
+    for _ in 0..20 {
+        out.clear();
+        crate::control::set_target(&mut comp, &ControlTarget::LayerRandomClip(id), 1.0, &mut out);
+        assert!(matches!(out.as_slice(), [crate::control::Deferred::Clip(l, s)] if *l == id && *s != 0), "{out:?}");
+    }
+}

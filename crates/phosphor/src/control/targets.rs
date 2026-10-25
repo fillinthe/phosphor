@@ -91,7 +91,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::SurfacePage => phosphor_engine::pick_unit(comp.surface.current_page(), comp.surface.pages.len()),
             _ => return None,
         },
-        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) => return None,
+        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) | ControlTarget::LayerRandomClip(_) => return None,
     })
 }
 
@@ -238,6 +238,17 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                     if l.clips.get(slot).is_some_and(|c| l.active_clip != Some(c.id)) {
                         out.push(Deferred::Clip(*layer, slot));
                     }
+                }
+            }
+        }
+        ControlTarget::LayerRandomClip(layer) => {
+            // On a press (not its release): another of the row's clips, picked at random.
+            if (v > 0.5 || v == FLIP)
+                && let Some(l) = comp.layers.iter().find(|l| l.id == *layer)
+            {
+                let slots: Vec<usize> = l.clips.iter().enumerate().filter(|(_, c)| !c.is_empty() && l.active_clip != Some(c.id)).map(|(i, _)| i).collect();
+                if let Some(slot) = crate::app::dice().pick(&slots).copied() {
+                    out.push(Deferred::Clip(*layer, slot));
                 }
             }
         }
@@ -436,6 +447,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         }
         if l.clips.iter().any(|c| !c.is_empty()) {
             out.push((ControlTarget::LayerClipPick(l.id), format!("{} · pick a clip (by value)", l.name)));
+            out.push((ControlTarget::LayerRandomClip(l.id), format!("{} · random clip", l.name)));
         }
         for (slot, clip) in l.clips.iter().enumerate() {
             if !clip.is_empty() {
@@ -480,6 +492,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
         ControlTarget::LayerText(id) => format!("/phosphor/layer/{id}/text"),
         ControlTarget::LayerClipPick(id) => format!("/phosphor/layer/{id}/clip/pick"),
+        ControlTarget::LayerRandomClip(id) => format!("/phosphor/layer/{id}/clip/random"),
         ControlTarget::LayerTextStep { layer, forward } => format!("/phosphor/layer/{layer}/text/{}", if *forward { "next" } else { "previous" }),
         ControlTarget::LayerJump { layer, forward } => format!("/phosphor/layer/{layer}/jump/{}", if *forward { "forward" } else { "back" }),
         ControlTarget::LayerVolume(id) => format!("/phosphor/layer/{id}/volume"),
