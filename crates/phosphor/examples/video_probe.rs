@@ -22,6 +22,13 @@ mod media {
         }
     }
 
+    /// The probe reads files where they are (no copy to this Mac).
+    pub mod clip_cache {
+        pub fn resolve(path: &str) -> String {
+            path.to_string()
+        }
+    }
+
     /// Laser files aren't probed here.
     pub mod ilda {
         pub fn is_ilda(_: &str) -> bool {
