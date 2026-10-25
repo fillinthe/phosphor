@@ -33,7 +33,7 @@ struct StackActs {
     palette: Option<(u64, crate::explorer::PaletteDrag)>,
 }
 
-enum CompBandAct {
+pub(crate) enum CompBandAct {
     Rename(String),
     Earlier,
     Later,
@@ -256,7 +256,7 @@ fn selected_layers(st: &State) -> Vec<u64> {
 }
 
 /// Clears what these layers play (with the launch fade, if Fade is on).
-fn stop_layers(st: &mut State, ids: &[u64], now: f64) {
+pub(crate) fn stop_layers(st: &mut State, ids: &[u64], now: f64) {
     let secs = if st.comp.launch.fade { st.comp.launch.fade_secs } else { 0.0 };
     for id in ids {
         if let Some(l) = st.comp.layer_mut(*id) {
@@ -553,7 +553,7 @@ fn group_band(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<egui::Texture
 }
 
 /// A comp's band: a group with its own size (and outputs). Returns (select, action, stop its layers).
-fn comp_band(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui::TextureId>, aspect: f32, is_selected: bool, members: usize, many: bool) -> (bool, Option<CompBandAct>, bool) {
+pub(crate) fn comp_band(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui::TextureId>, aspect: f32, is_selected: bool, members: usize, many: bool) -> (bool, Option<CompBandAct>, bool) {
     let mut select = false;
     let mut action = None;
     let mut stop = false;
@@ -659,6 +659,27 @@ fn master_strip(ui: &mut egui::Ui, comp: &mut Composition, is_selected: bool, ac
     });
 }
 
+
+/// Does what a comp band asked (Stack and Layers).
+pub(crate) fn apply_comp_band_act(st: &mut State, id: u64, a: CompBandAct) {
+    match a {
+        CompBandAct::Rename(n) => {
+            if let Some(c) = st.comp.comp_mut(id) {
+                c.name = n;
+            }
+        }
+        CompBandAct::Earlier => st.comp.move_comp(id, false),
+        CompBandAct::Later => st.comp.move_comp(id, true),
+        CompBandAct::Delete => {
+            st.comp.remove_comp(id);
+            if st.selected == Some(id) {
+                st.selected = None;
+            }
+        }
+        CompBandAct::BrowseEffects => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None)),
+    }
+}
+
 fn apply_stack_acts(st: &mut State, acts: StackActs, now: f64) {
     if let Some((from, onto)) = acts.drop {
         st.comp.drop_layer(from, onto);
@@ -670,22 +691,7 @@ fn apply_stack_acts(st: &mut State, acts: StackActs, now: f64) {
         super::groups::apply_group_action(st, gid, a);
     }
     if let Some((id, a)) = acts.comp {
-        match a {
-            CompBandAct::Rename(n) => {
-                if let Some(c) = st.comp.comp_mut(id) {
-                    c.name = n;
-                }
-            }
-            CompBandAct::Earlier => st.comp.move_comp(id, false),
-            CompBandAct::Later => st.comp.move_comp(id, true),
-            CompBandAct::Delete => {
-                st.comp.remove_comp(id);
-                if st.selected == Some(id) {
-                    st.selected = None;
-                }
-            }
-            CompBandAct::BrowseEffects => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None)),
-        }
+        apply_comp_band_act(st, id, a);
     }
     if !acts.stop.is_empty() {
         stop_layers(st, &acts.stop, now);
