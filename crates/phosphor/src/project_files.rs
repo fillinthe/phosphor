@@ -39,8 +39,8 @@ impl ProjectFiles {
         self.rx.is_some()
     }
 
-    /// Takes the results when they're in. Call each frame the window is open.
-    pub fn poll(&mut self) {
+    /// Takes the results when they're in (true then). Call each frame the window is open.
+    pub fn poll(&mut self) -> bool {
         if !self.searched {
             self.searched = true;
             self.search();
@@ -48,7 +48,9 @@ impl ProjectFiles {
         if let Some(found) = self.rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.found = found;
             self.rx = None;
+            return true;
         }
+        false
     }
 }
 
@@ -81,8 +83,9 @@ fn places() -> Vec<PathBuf> {
     }
     #[cfg(target_os = "macos")]
     if let Ok(rd) = std::fs::read_dir("/Volumes") {
-        // (The Mac's own disk shows up there as a link to "/": skipped.)
-        out.extend(rd.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_dir())).map(|e| e.path()));
+        // (The Mac's own disk shows up there as a link to "/": skipped. Network shares are skipped too: walking one is
+        // slow, and Spotlight covers the ones it indexes.)
+        out.extend(rd.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_dir())).map(|e| e.path()).filter(|p| !crate::folders::on_network(p)));
     }
     out
 }
@@ -162,4 +165,26 @@ mod tests {
         assert!(skipped("/Users/me/Desktop/Untitled Backups/Untitled 2026-10-25.phosphor"));
         assert!(skipped("/Users/me/.Trash/a.phosphor") && skipped("/Users/me/Library/x/a.phosphor") && !skipped("/Volumes/WD/shows/a.phosphor"));
     }
+}
+
+/// Where a project's picture is kept (a small picture of its output, saved with it): the settings folder's cache.
+pub fn picture_path(project: &str) -> Option<PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    project.hash(&mut h);
+    Some(crate::show::storage_dir()?.join("cache").join("project pictures").join(format!("{:016x}.png", h.finish())))
+}
+
+/// Saves a project's picture from the output's pixels (RGBA), made small, on a thread of its own.
+pub fn save_picture(project: &str, w: u32, h: u32, rgba: Vec<u8>) {
+    let Some(path) = picture_path(project) else { return };
+    let _ = std::thread::Builder::new().name("project-picture".into()).spawn(move || {
+        let Some(img) = image::RgbaImage::from_raw(w, h, rgba) else { return };
+        let small = image::imageops::thumbnail(&img, 480, (480 * h / w.max(1)).max(1));
+        let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
+        let part = path.with_extension("part.png");
+        if small.save(&part).is_ok() {
+            let _ = std::fs::rename(&part, &path);
+        }
+    });
 }

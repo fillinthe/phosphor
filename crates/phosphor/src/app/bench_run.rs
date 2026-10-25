@@ -791,6 +791,12 @@ impl PhosphorApp {
                 println!("CUES countdown={countdown:?} random_repeats={repeats} picks={:?}", picks.iter().map(|p| p.1.unwrap_or(99)).collect::<Vec<_>>());
                 continue;
             }
+            if name == "projects" {
+                // The Projects window open, for pictures.
+                self.state.projects.open = true;
+                println!("QUICK projects open");
+                continue;
+            }
             if name == "mapmode" {
                 // Map mode on (every mappable control shows its learn layer), for pictures.
                 self.state.map_mode = true;
