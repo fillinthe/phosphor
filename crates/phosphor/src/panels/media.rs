@@ -22,6 +22,55 @@ pub enum MediaSort {
     Length,
 }
 
+/// Where a click on a media tile plays it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum PlaysOn {
+    /// The selected layer (a new one if none is selected).
+    #[default]
+    Selected,
+    /// Always this layer, whatever is selected.
+    Layer(u64),
+    /// A new layer each time.
+    NewLayer,
+}
+
+/// The layer a media click plays on now (None = a new layer).
+pub(crate) fn plays_on_layer(st: &State) -> Option<u64> {
+    let exists = |id: u64| id != MASTER_ID && st.comp.layers.iter().any(|l| l.id == id);
+    match st.media_view.plays_on {
+        PlaysOn::Selected => st.selected.filter(|id| exists(*id)),
+        PlaysOn::Layer(id) => Some(id).filter(|id| exists(*id)),
+        PlaysOn::NewLayer => None,
+    }
+}
+
+/// "Plays on": which layer a click on a tile plays on (the selected one, a fixed one, or a new one each time).
+pub(crate) fn plays_on_picker(ui: &mut egui::Ui, st: &mut State) {
+    let name = |id: u64| st.comp.layer(id).map_or_else(|| "?".to_string(), |l| l.name.clone());
+    let current = match (st.media_view.plays_on, plays_on_layer(st)) {
+        (PlaysOn::Selected, Some(id)) => format!("selected ({})", name(id)),
+        (PlaysOn::Selected, None) => "selected (none: a new layer)".to_string(),
+        (PlaysOn::Layer(_), Some(id)) => name(id),
+        (_, _) => "a new layer".to_string(),
+    };
+    let layers: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
+    let mut pick = st.media_view.plays_on;
+    crate::ui::toolbar(ui, |ui| {
+        ui.label(RichText::new(format!("{} Plays on", icon::PLAY)).small());
+        crate::ui::dropdown(ui, "media_plays_on", 170.0).selected_text(current).show_ui(ui, |ui| {
+            crate::ui::pick_value(ui, &mut pick, PlaysOn::Selected, "The selected layer");
+            crate::ui::pick_value(ui, &mut pick, PlaysOn::NewLayer, "A new layer each time");
+            ui.separator();
+            for (id, n) in &layers {
+                crate::ui::pick_value(ui, &mut pick, PlaysOn::Layer(*id), n);
+            }
+        })
+        .response
+        .on_hover_text("Where a click on a tile plays it (dragging onto a layer or a clip cell still goes where you drop it)");
+    });
+    st.media_view.plays_on = pick;
+}
+
 /// How the Media panel is filtered and laid out (per session).
 pub struct MediaView {
     pub search: String,
@@ -38,6 +87,8 @@ pub struct MediaView {
     pub classic: bool,
     /// Videos / pictures only (`All`, `Videos`, `Images`).
     pub only: MediaFilter,
+    /// Where a click on a tile plays.
+    pub plays_on: PlaysOn,
     pub follow_open: bool,
     pub follow_text: String,
     #[cfg(not(target_arch = "wasm32"))]
@@ -68,6 +119,7 @@ impl Default for MediaView {
             dir: None,
             classic: false,
             only: MediaFilter::All,
+            plays_on: PlaysOn::Selected,
             follow_open: false,
             follow_text: String::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -285,7 +337,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
 
     // Where a click plays (the selected layer, else a new one) and every layer for "Play on".
     let layers: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
-    let click_target = st.selected.and_then(|id| layers.iter().find(|(l, _)| *l == id)).map(|(_, n)| n.clone());
+    let click_target = plays_on_layer(st).and_then(|id| layers.iter().find(|(l, _)| *l == id)).map(|(_, n)| n.clone());
     let mut playing: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
     for l in st.comp.layers.iter().filter(|l| l.enabled) {
         if let SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } = &l.source {
@@ -363,9 +415,9 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
         match act {
             MediaAct::Assign(i) => {
                 let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
-                let target = match st.selected {
-                    Some(id) if id != MASTER_ID && st.comp.layers.iter().any(|l| l.id == id) => id,
-                    _ => st.add_layer(),
+                let target = match plays_on_layer(st) {
+                    Some(id) => id,
+                    None => st.add_layer(),
                 };
                 st.launch_source(target, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
             }
@@ -435,9 +487,9 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
             MediaAct::RandomOne(shown) => {
                 let Some(i) = crate::app::dice().pick(&shown).copied() else { continue };
                 let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
-                let target = match st.selected {
-                    Some(id) if id != MASTER_ID && st.comp.layers.iter().any(|l| l.id == id) => id,
-                    _ => st.add_layer(),
+                let target = match plays_on_layer(st) {
+                    Some(id) => id,
+                    None => st.add_layer(),
                 };
                 st.selected = Some(target);
                 st.launch_source(target, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
