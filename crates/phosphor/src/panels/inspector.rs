@@ -61,6 +61,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let has_sound = st.media.has_sound(sel);
         let bpm = st.comp.bpm;
         let st_chapters = st.media.chapters(sel);
+        let inherited = st.comp.inherited_effects(sel);
         let mut seek_to: Option<f64> = None;
         let mut quick = None;
         let mut match_beat: Option<u64> = None;
@@ -106,7 +107,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, &format!("Editing {} layers: changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one.", also + 1));
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default() };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
             #[cfg(not(target_arch = "wasm32"))]
             if media.text_file.get() {
@@ -181,6 +182,8 @@ pub(crate) struct LayerMedia<'a> {
     pub text_file: std::cell::Cell<bool>,
     /// Set by the editor when the Match the beat button is pressed (the caller starts the scan).
     pub match_beat: std::cell::Cell<bool>,
+    /// Effects reaching this layer from its group, comp and MASTER: (where, which, running).
+    pub inherited: Vec<(String, String, bool)>,
 }
 
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
@@ -428,6 +431,20 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
     transform_editor(ui, layer);
     mixer_editor(ui, layer);
     ui.separator();
+    // Effects that also act on this layer from above its own chain (they don't show in the list below).
+    if !media.inherited.is_empty() {
+        crate::ui::toolbar(ui, |ui| {
+            hint(ui, "Also acting on this layer:");
+            for (scope, name, running) in &media.inherited {
+                let text = format!("{name} ({scope})");
+                if *running {
+                    ui.label(RichText::new(text).small().color(accent())).on_hover_text("Runs over this layer from there: select that group, comp or MASTER to change or remove it");
+                } else {
+                    hint(ui, text).on_hover_text("Bypassed or off");
+                }
+            }
+        });
+    }
     (effects_editor(ui, &mut layer.effects, clipboard_len), seek_to)
 }
 

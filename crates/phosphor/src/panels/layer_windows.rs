@@ -23,6 +23,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
     // What each layer's movie is doing (read before the layers are borrowed for editing).
     let media: HashMap<u64, (Option<String>, Option<(f64, f64)>, bool)> =
         st.comp.layers.iter().map(|l| (l.id, (st.media.video_info(l.id), st.media.position(l.id), st.media.has_sound(l.id)))).collect();
+    let comp_inherited: HashMap<u64, Vec<(String, String, bool)>> = st.comp.layers.iter().map(|l| (l.id, st.comp.inherited_effects(l.id))).collect();
     let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let mut layer_action: Option<(u64, LayerAction)> = None;
     let mut fx_actions: Vec<(u64, FxAction)> = Vec::new();
@@ -76,7 +77,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                         crate::ui::column_scroll(ui).id_salt(("lw_scroll", id)).auto_shrink(false).show(ui, |ui| {
                             ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(70.0);
                             let (info, position, has_sound) = media.get(&id).cloned().unwrap_or((None, None, false));
-                            let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, beat: None, bpm, chapters: Vec::new(), reload: Default::default(), text_file: Default::default(), match_beat: Default::default() };
+                            let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, beat: None, bpm, chapters: Vec::new(), reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited: comp_inherited.get(&id).cloned().unwrap_or_default() };
                             let (fx, seek) = layer_editor(ui, layer, &m, clipboard_len);
                             if m.match_beat.get() {
                                 beat_requests.push(id);
