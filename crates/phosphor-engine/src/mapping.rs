@@ -1626,6 +1626,41 @@ impl Surface {
         [(c[0][0] + c[1][0] + c[2][0] + c[3][0]) * 0.25, (c[0][1] + c[1][1] + c[2][1] + c[3][1]) * 0.25]
     }
 
+    /// Every point of the slice (corners, mesh, line) through `f`: the whole slice moved, scaled or turned. (Not 3D
+    /// model slices: they're placed by their own centre and size.)
+    pub fn map_points(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]) {
+        if self.model.is_some() {
+            return;
+        }
+        for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())).chain(self.line.iter_mut().flat_map(|l| l.points.iter_mut())) {
+            *c = f(*c);
+        }
+    }
+
+    /// The box round the slice's points: (top-left, bottom-right).
+    pub fn bounds(&self) -> ([f32; 2], [f32; 2]) {
+        let pts: Vec<[f32; 2]> = match (&self.line, &self.mesh) {
+            (Some(l), _) => l.points.clone(),
+            (None, Some(m)) => m.points.clone(),
+            _ => self.corners.to_vec(),
+        };
+        pts.iter().fold(([f32::MAX; 2], [f32::MIN; 2]), |(lo, hi), p| ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])]))
+    }
+
+    /// Scaled from `anchor` (a point that stays put): `sx` across, `sy` down.
+    pub fn scale_about(&mut self, anchor: [f32; 2], sx: f32, sy: f32) {
+        self.map_points(|p| [anchor[0] + (p[0] - anchor[0]) * sx, anchor[1] + (p[1] - anchor[1]) * sy]);
+    }
+
+    /// Turned round `centre` by `radians` (clockwise on screen), as it looks on an output `aspect` wide per high.
+    pub fn rotate_about(&mut self, centre: [f32; 2], radians: f32, aspect: f32) {
+        let (c, s) = (radians.cos(), radians.sin());
+        self.map_points(|p| {
+            let (x, y) = ((p[0] - centre[0]) * aspect, p[1] - centre[1]);
+            [centre[0] + (c * x - s * y) / aspect, centre[1] + s * x + c * y]
+        });
+    }
+
     pub fn translate(&mut self, dx: f32, dy: f32) {
         if let Some(m) = &mut self.model {
             m.center[0] += dx;
@@ -2342,5 +2377,28 @@ mod input_mesh_tests {
         let fewer = more.without_column(1).unwrap();
         assert_eq!(fewer.input.len(), fewer.points.len());
         assert_eq!(m.resized(4, 4).input.len(), 25);
+    }
+}
+
+#[cfg(test)]
+mod transform_box_tests {
+    use super::*;
+
+    /// Scaling from a side keeps that side put; a quarter turn on a wide output stays the same size on screen.
+    #[test]
+    fn slices_scale_from_a_side_and_turn_without_stretching() {
+        let mut s = Surface::new(1, 0);
+        s.corners = [[0.2, 0.2], [0.6, 0.2], [0.6, 0.4], [0.2, 0.4]];
+        s.scale_about([0.2, 0.0], 2.0, 1.0);
+        let b = s.bounds();
+        assert!((b.0[0] - 0.2).abs() < 1e-5 && (b.1[0] - 1.0).abs() < 1e-5 && (b.1[1] - 0.4).abs() < 1e-5, "{b:?}");
+        let aspect = 16.0 / 9.0;
+        let before = s.bounds();
+        let centre = [(before.0[0] + before.1[0]) / 2.0, (before.0[1] + before.1[1]) / 2.0];
+        s.rotate_about(centre, std::f32::consts::FRAC_PI_2, aspect);
+        let after = s.bounds();
+        // 0.8 wide (in output widths) = 0.8 * aspect heights tall after turning.
+        assert!(((after.1[1] - after.0[1]) - 0.8 * aspect).abs() < 1e-4, "{after:?}");
+        assert!(((after.1[0] - after.0[0]) - 0.2 / aspect).abs() < 1e-4, "{after:?}");
     }
 }

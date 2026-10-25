@@ -20,6 +20,10 @@ impl PhosphorApp {
         }
         if let Some(id) = run.cfg.select.take_if(|_| now - started >= 0.5) {
             self.state.selected = Some(id);
+            // (A slice's id selects that slice on the mapping canvas.)
+            if self.state.comp.outputs.iter().any(|o| o.mapping.surfaces.iter().any(|s| s.id == id)) {
+                self.state.selected_surface = Some(id);
+            }
         }
         // --tab all: every panel in turn, so one that panics when drawn fails the bench.
         if run.cfg.tab.as_deref() == Some("all") {
