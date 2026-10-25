@@ -234,7 +234,7 @@ fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Opti
         T::LayerOpacity(id) | T::LayerEnabled(id) | T::LayerSpeed(id) | T::LayerFxBypass(id) | T::LayerLoopIn(id) | T::LayerLoopOut(id) | T::LayerDirection(id) | T::LayerScrub(id) | T::LayerVolume(id) | T::LayerX(id) | T::LayerY(id) | T::LayerScale(id) | T::LayerRotation(id) => item(*id),
         T::GeneratorParam { layer, .. } | T::LayerJump { layer, .. } | T::LayerCorner { layer, .. } => item(*layer),
         T::LayerText(id) | T::LayerTextStep { layer: id, .. } => item(*id),
-        T::TriggerClip { layer, .. } | T::LayerClipPick(layer) => Some((Tab::Clips, Some(*layer), None)),
+        T::TriggerClip { layer, .. } | T::LayerClipPick(layer) | T::LayerRandomClip(layer) => Some((Tab::Clips, Some(*layer), None)),
         T::TriggerColumn(_) => Some((Tab::Clips, None, None)),
         T::EffectParam { effect, .. } | T::EffectMix(effect) | T::EffectEnabled(effect) => {
             let has = |chain: &[phosphor_engine::EffectState]| chain.iter().any(|e| e.id == *effect);

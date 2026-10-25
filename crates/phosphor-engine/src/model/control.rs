@@ -102,6 +102,8 @@ pub enum ControlTarget {
     SliceEnabled(u64),
     /// A light (LED / DMX fixture): `param` indexes `Fixture::PARAMS` (pan, tilt, dimmer, motion size, brightness).
     Fixture { fixture: u64, param: u8 },
+    /// Plays one of a layer's clips at random (not the one playing): a button, a pad, or a timer (Autopilot).
+    LayerRandomClip(u64),
 }
 
 /// App-wide mappable controls.

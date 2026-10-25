@@ -65,6 +65,8 @@ pub(crate) struct CellCtx<'a> {
 
 /// What a row's menu asked for (beyond fill / match the beat).
 pub(crate) enum RowAct {
+    /// Another of the row's clips, at random (`ControlTarget::LayerRandomClip`).
+    Random,
     Map(u8, u8),
     Shift(i32),
     ExportBank,
@@ -394,6 +396,7 @@ pub(crate) fn apply_row_out(st: &mut State, out: RowOut, now: f64) {
             st.comp.map_clip_row(id, ch, note);
             st.notice = Some(format!("Clip row on MIDI channel {} from note {note}", ch + 1));
         }
+        Some((id, RowAct::Random)) => st.set_control(&phosphor_engine::ControlTarget::LayerRandomClip(id), 1.0, now),
         Some((id, RowAct::Shift(by))) => st.comp.shift_clip_row(id, by),
         #[cfg(not(target_arch = "wasm32"))]
         Some((id, RowAct::ExportBank)) => {
