@@ -2,6 +2,17 @@
 
 Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` done (with what was checked).
 
+## From show testing (2026-10-25)
+
+- [ ] **Preview before live, ignoring the fader.** Media / Library: click a clip or effect and see it in a preview of
+      its own before it goes on a layer. A layer's preview shows its picture at full opacity even when its fader is
+      at 0 (what you're about to play), with a Go to send it live. Size: M (half a day).
+- [ ] **Effect previews load slowly or blank** when a lot are asked for at once (the Effects list tiles, and the
+      preview when one is picked). Needs a look at how many previews the engine renders per frame and in what order
+      (visible tiles first, then the rest). Size: S to M. Need an example: which list, how many tiles, what shows.
+- [ ] **"Plays on" picker at the top of Media** so a click shows which layer it lands on, with "next free clip
+      cell" as an option. Size: S.
+
 ## VDMX + MadMapper parity (researched 2026-10-22), easiest first
 
 Every feature of VDMX6 (about 430) and MadMapper 6 (about 490) was listed from their manuals and release notes
