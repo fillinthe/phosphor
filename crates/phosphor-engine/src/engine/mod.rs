@@ -229,6 +229,20 @@ struct OutputExtra {
     head: usize,
 }
 
+/// Shaders built at the same time on worker threads (Apple's shader compiler is heavy; more would stutter the show).
+const MAX_COMPILING: usize = 3;
+
+/// Why a preview is asked to draw again this frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PreviewRefresh {
+    /// Keep the picture it has (a still).
+    No,
+    /// A live tile (or hovered): draw it again; the last picture is fine until then.
+    Live,
+    /// Something else is in this slot now (the list scrolled or was searched): its old picture is someone else's.
+    Moved,
+}
+
 pub struct Engine {
     gpu: Gpu,
     layers: HashMap<u64, LayerResources>,
@@ -269,7 +283,7 @@ pub struct Engine {
     /// Background pictures behind outputs' slices (`OutputConfig::background`), by output id.
     output_backgrounds: HashMap<u64, Target>,
     meshes: MeshCache,
-    previews: Vec<(PreviewItem, bool)>,
+    previews: Vec<(PreviewItem, PreviewRefresh)>,
     /// Monitor requests this frame: (layer id or MASTER_ID, width, height).
     monitor_req: Vec<(u64, u32, u32)>,
     /// Monitor slots that keep last frame's picture this frame (frame-rate capped previews).
@@ -291,6 +305,9 @@ pub struct Engine {
     preview_source: u64,
     preview_src: Option<Target>,
     preview_targets: Vec<Option<Target>>,
+    /// Which previews hold a real picture of what's asked for now (not a shader still building, not another tile's
+    /// picture after the list moved).
+    preview_ready: Vec<bool>,
     custom_generation: u64,
     /// Imported shaders waiting to be compiled on first use: entry → WGSL (without prelude).
     pending_modules: HashMap<&'static str, String>,
@@ -356,6 +373,7 @@ impl Engine {
             preview_source: MASTER_ID,
             preview_src: None,
             preview_targets: Vec::new(),
+            preview_ready: Vec::new(),
             custom_generation: 0,
             pending_modules: HashMap::new(),
             failed_modules: HashMap::new(),
@@ -405,6 +423,13 @@ impl Engine {
     /// hitches: the layer draws blank until it arrives.
     fn ensure_module(&mut self, entry: &'static str) -> bool {
         if self.failed_modules.contains_key(entry) || self.compiling.contains(entry) {
+            return false;
+        }
+        if !self.pending_modules.contains_key(entry) {
+            return true;
+        }
+        // A few at a time (opening a big effects list asks for dozens at once): the rest wait their turn.
+        if self.compiling.len() >= MAX_COMPILING {
             return false;
         }
         let Some(src) = self.pending_modules.remove(entry) else { return true };
@@ -467,7 +492,7 @@ impl Engine {
     /// Asks for previews of effects (applied to `source`: a layer id or `MASTER_ID`) and
     /// generators on the next frame. Items flagged `false` keep last frame's picture and cost
     /// nothing, so a big library can show stills and only animate what you're looking at.
-    pub fn request_previews(&mut self, source: u64, items: Vec<(PreviewItem, bool)>) {
+    pub fn request_previews(&mut self, source: u64, items: Vec<(PreviewItem, PreviewRefresh)>) {
         self.preview_source = source;
         self.previews = items;
     }
@@ -505,7 +530,11 @@ impl Engine {
         self.monitor_targets.get(index)?.as_ref()
     }
 
+    /// A preview's picture, once it shows what was asked for (None while it's still coming).
     pub fn preview(&self, index: usize) -> Option<&Target> {
+        if !self.preview_ready.get(index).copied().unwrap_or(false) {
+            return None;
+        }
         self.preview_targets.get(index)?.as_ref()
     }
 
