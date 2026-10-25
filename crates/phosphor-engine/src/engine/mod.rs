@@ -953,19 +953,28 @@ fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModI
         p[5] = [inv[8], 0.0, 0.0, 1.0];
         return Some(p);
     }
+    let scale = modulate(t.scale, 0.01, 8.0, t.scale_mod.as_ref(), mods);
+    let rotation = modulate(t.rotation, -180.0, 180.0, t.rotation_mod.as_ref(), mods);
+    let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
+    let (x, y) = (modulate(t.x, -1.0, 1.0, t.x_mod.as_ref(), mods), modulate(t.y, -1.0, 1.0, t.y_mod.as_ref(), mods));
+    // Depth or tilt: the corners in perspective, drawn as a corner pin.
+    if t.is_3d()
+        && let Some(inv) = crate::mapping::quad_to_square(&t.corners_3d(aspect, scale, rotation, x, y))
+    {
+        p[3] = [inv[0], inv[1], inv[2], inv[3]];
+        p[4] = [inv[4], inv[5], inv[6], inv[7]];
+        p[5] = [inv[8], 0.0, 0.0, 1.0];
+        return Some(p);
+    }
     if (crate::LayerTransform { crop: [0.0; 4], corners: None, ..t.clone() }).is_identity() {
         // Only cropped: the transform stays off.
         return Some(p);
     }
-    let scale = modulate(t.scale, 0.01, 8.0, t.scale_mod.as_ref(), mods);
-    let rotation = modulate(t.rotation, -180.0, 180.0, t.rotation_mod.as_ref(), mods);
     let flip = |f: bool| if f { -1.0 } else { 1.0 };
     let sx = (scale * t.stretch_x).max(0.001) * flip(t.flip_x);
     let sy = (scale * t.stretch_y).max(0.001) * flip(t.flip_y);
     let a = rotation.to_radians();
-    let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
     // y is up for people, down in texture space.
-    let (x, y) = (modulate(t.x, -1.0, 1.0, t.x_mod.as_ref(), mods), modulate(t.y, -1.0, 1.0, t.y_mod.as_ref(), mods));
     p[0] = [x, -y, sx, sy];
     p[1] = [a.cos(), a.sin(), aspect, 1.0];
     Some(p)
