@@ -269,17 +269,49 @@ pub struct LayerTransform {
     /// top-right, bottom-right, bottom-left; 0..1, y down). Replaces move / scale / rotate while set.
     #[serde(default)]
     pub corners: Option<[[f32; 2]; 4]>,
+    /// Depth: positive moves the picture away (smaller, in perspective), negative brings it closer. Canvas heights.
+    pub z: f32,
+    /// Tilts in 3D (degrees): forward / back round the horizontal axis, and round the vertical one.
+    pub tilt_x: f32,
+    pub tilt_y: f32,
 }
 
 impl Default for LayerTransform {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, scale: 1.0, stretch_x: 1.0, stretch_y: 1.0, rotation: 0.0, flip_x: false, flip_y: false, scale_mod: None, rotation_mod: None, x_mod: None, y_mod: None, crop: [0.0; 4], corners: None }
+        Self { x: 0.0, y: 0.0, scale: 1.0, stretch_x: 1.0, stretch_y: 1.0, rotation: 0.0, flip_x: false, flip_y: false, scale_mod: None, rotation_mod: None, x_mod: None, y_mod: None, crop: [0.0; 4], corners: None, z: 0.0, tilt_x: 0.0, tilt_y: 0.0 }
     }
 }
 
 impl LayerTransform {
     pub fn is_identity(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Placed in 3D (a depth or a tilt)?
+    pub fn is_3d(&self) -> bool {
+        self.z.abs() > 1e-4 || self.tilt_x.abs() > 1e-3 || self.tilt_y.abs() > 1e-3
+    }
+
+    /// Where the picture's corners land on the canvas (top-left, top-right, bottom-right, bottom-left; 0..1, y down)
+    /// with this move / scale / rotation and then its depth and tilts, seen through a camera two canvas heights away.
+    /// `scale`, `rotation` (degrees), `x`, `y` are the values now (modulation applied). The composite draws it as a
+    /// corner pin (one homography).
+    pub fn corners_3d(&self, aspect: f32, scale: f32, rotation: f32, x: f32, y: f32) -> [[f32; 2]; 4] {
+        const CAMERA: f32 = 2.0;
+        let flip = |f: bool| if f { -1.0 } else { 1.0 };
+        let (sx, sy) = ((scale * self.stretch_x).max(0.001) * flip(self.flip_x), (scale * self.stretch_y).max(0.001) * flip(self.flip_y));
+        let (c, s) = (rotation.to_radians().cos(), rotation.to_radians().sin());
+        let (tx, ty) = (self.tilt_x.to_radians(), self.tilt_y.to_radians());
+        [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]].map(|p: [f32; 2]| {
+            // As the composite places it (in canvas heights, centred, y down)…
+            let (qx, qy) = ((p[0] - 0.5) * sx * aspect, (p[1] - 0.5) * sy);
+            let (qx, qy) = (c * qx - s * qy, s * qx + c * qy);
+            // …then tilted and pushed back, and seen in perspective.
+            let (y1, z1) = (qy * tx.cos(), qy * tx.sin());
+            let (x2, z2) = (qx * ty.cos() + z1 * ty.sin(), -qx * ty.sin() + z1 * ty.cos());
+            let k = CAMERA / (CAMERA + z2 + self.z).max(0.05);
+            [x2 * k / aspect + 0.5 + x, y1 * k + 0.5 - y]
+        })
     }
 }
 
@@ -436,5 +468,28 @@ impl LayerState {
             self.generator_values = desc.defaults();
             self.generator_mods.clear();
         }
+    }
+}
+
+#[cfg(test)]
+mod transform_3d_tests {
+    use super::*;
+
+    /// Flat, the 3D corners are exactly where the composite puts the picture; pushed back it shrinks round the
+    /// middle; tilted round the vertical axis one side gets taller than the other (perspective).
+    #[test]
+    fn depth_and_tilt_place_the_corners_in_perspective() {
+        let t = LayerTransform::default();
+        let flat = t.corners_3d(16.0 / 9.0, 1.0, 0.0, 0.0, 0.0);
+        for (got, want) in flat.iter().zip([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]) {
+            assert!((got[0] - want[0]).abs() < 1e-5 && (got[1] - want[1]).abs() < 1e-5, "{flat:?}");
+        }
+        let back = LayerTransform { z: 2.0, ..Default::default() }.corners_3d(16.0 / 9.0, 1.0, 0.0, 0.0, 0.0);
+        assert!((back[1][0] - back[0][0] - 0.5).abs() < 1e-4, "half as wide two heights further away: {back:?}");
+        let tilted = LayerTransform { tilt_y: 30.0, ..Default::default() }.corners_3d(16.0 / 9.0, 1.0, 0.0, 0.0, 0.0);
+        let left = tilted[3][1] - tilted[0][1];
+        let right = tilted[2][1] - tilted[1][1];
+        assert!((left - right).abs() > 0.05, "the edges differ in height: {tilted:?}");
+        assert!(LayerTransform { tilt_x: 10.0, ..Default::default() }.is_3d() && !LayerTransform::default().is_3d());
     }
 }
