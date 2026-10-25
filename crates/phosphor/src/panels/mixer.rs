@@ -27,6 +27,13 @@ fn short(name: &str) -> String {
     if name.chars().count() > 11 { format!("{}…", name.chars().take(10).collect::<String>()) } else { name.to_string() }
 }
 
+/// "3 fx" under a strip's fader (lit when running, grey when bypassed; nothing with no effects).
+fn fx_count(ui: &mut egui::Ui, effects: &[phosphor_engine::EffectState], bypass: &mut bool, target: ControlTarget) {
+    if let Some(r) = super::groups::fx_badge(ui, effects, bypass) {
+        map_menu(ui, &r, target);
+    }
+}
+
 /// ON toggle with Learn on right-click (layers and groups).
 fn on_toggle(ui: &mut egui::Ui, enabled: &mut bool, target: ControlTarget) {
     let on = toggle(ui, enabled, "ON");
@@ -44,7 +51,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     let tex = |id: u64| layer_textures.get(&id).map(|(t, _)| *t);
     // The open comp's layers (and, with several comps, a strip per comp before MASTER).
     let shown: Vec<bool> = comp.layers.iter().map(|l| comp.in_open_comp(l)).collect();
-    let phosphor_engine::Composition { layers, groups, comps, master_fade, master_fade_mod, .. } = comp;
+    let phosphor_engine::Composition { layers, groups, comps, master_fade, master_fade_mod, master_effects, master_fx_bypass, .. } = comp;
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
             let count = layers.len();
@@ -71,6 +78,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                         }
                     });
                     choice_combo(ui, ("mix_blend", layer.id), &mut layer.blend, 70.0, true);
+                    fx_count(ui, &layer.effects, &mut layer.fx_bypass, ControlTarget::LayerFxBypass(layer.id));
                 }) {
                     *selected = Some(layer.id);
                 }
@@ -85,6 +93,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                         fader(ui, &mut g.opacity, &mut g.opacity_mod, ControlTarget::LayerOpacity(g.id), height);
                         on_toggle(ui, &mut g.enabled, ControlTarget::LayerEnabled(g.id));
                         choice_combo(ui, ("mix_group_blend", g.id), &mut g.blend, 70.0, true);
+                        fx_count(ui, &g.effects, &mut g.fx_bypass, ControlTarget::LayerFxBypass(g.id));
                     }) {
                         *selected = Some(g.id);
                     }
@@ -97,6 +106,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                         fader(ui, &mut c.opacity, &mut c.opacity_mod, ControlTarget::LayerOpacity(c.id), height);
                         on_toggle(ui, &mut c.enabled, ControlTarget::LayerEnabled(c.id));
                         choice_combo(ui, ("mix_comp_blend", c.id), &mut c.blend, 70.0, true);
+                        fx_count(ui, &c.effects, &mut c.fx_bypass, ControlTarget::LayerFxBypass(c.id));
                     }) {
                         *selected = Some(c.id);
                     }
@@ -106,6 +116,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
             let name = RichText::new("MASTER").small().strong().color(accent());
             if strip(ui, MASTER_ID, *selected == Some(MASTER_ID), *texture, aspect, true, name, |ui| {
                 fader(ui, master_fade, master_fade_mod, ControlTarget::MasterFade, height);
+                fx_count(ui, master_effects, master_fx_bypass, ControlTarget::App(phosphor_engine::AppControl::MasterFxBypass));
             }) {
                 *selected = Some(MASTER_ID);
             }
