@@ -29,7 +29,10 @@ pub(crate) fn steady_width(ui: &egui::Ui, labels: &[&str], small: bool) -> f32 {
 /// A command button whose label changes: as wide as the widest of `labels` (`text` is one of them).
 pub(crate) fn steady_button(ui: &mut egui::Ui, text: impl Into<String>, labels: &[&str]) -> egui::Response {
     let w = steady_width(ui, labels, false);
-    ui.add(egui::Button::new(text.into()).min_size(egui::vec2(w, CONTROL_H)))
+    let mut r = ui.add(egui::Button::new(text.into()).min_size(egui::vec2(w, CONTROL_H)));
+    // (Named by its first label, so it's the same button whichever it shows.)
+    crate::ui::press::mappable(ui, &mut r, labels.first().copied().unwrap_or_default());
+    r
 }
 
 /// `steady_button`, small (tight rows).
@@ -37,8 +40,9 @@ pub(crate) fn steady_small_button(ui: &mut egui::Ui, text: impl Into<String>, la
     let w = steady_width(ui, labels, true);
     let old = ui.spacing().button_padding;
     ui.spacing_mut().button_padding.x = 4.0;
-    let r = ui.add(egui::Button::new(text.into()).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(w, CONTROL_H)));
+    let mut r = ui.add(egui::Button::new(text.into()).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(w, CONTROL_H)));
     ui.spacing_mut().button_padding = old;
+    crate::ui::press::mappable(ui, &mut r, labels.first().copied().unwrap_or_default());
     r
 }
 
@@ -50,7 +54,10 @@ pub(crate) fn steady_action_button(ui: &mut egui::Ui, act: Act, text: impl Into<
 
 /// A compact on/off button for tight rows (an icon or a letter): filled when on. Marks the response changed.
 pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let text: egui::WidgetText = text.into();
+    let label = text.text().to_string();
     let mut r = ui.add(egui::Button::new(text).selected(*on).min_size(egui::vec2(20.0, CONTROL_H)));
+    crate::ui::press::mappable(ui, &mut r, &label);
     if r.clicked() {
         *on = !*on;
         r.mark_changed();
@@ -62,6 +69,7 @@ pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui
 pub(crate) fn eye_toggle(ui: &mut egui::Ui, shown: &mut bool) -> egui::Response {
     let (glyph, color, tip) = if *shown { (icon::EYE, ui.visuals().text_color(), "Showing: click to hide") } else { (icon::EYE_SLASH, crate::theme::WARN, "Hidden: click to show") };
     let mut r = ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false).min_size(egui::vec2(22.0, CONTROL_H))).on_hover_text(tip);
+    crate::ui::press::mappable(ui, &mut r, "Show / hide");
     if r.clicked() {
         *shown = !*shown;
         r.mark_changed();
@@ -142,12 +150,21 @@ pub(crate) fn list_row(ui: &mut egui::Ui, picked: bool, text: &str, right: &str,
 }
 
 pub(crate) fn command<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>) -> egui::Response {
-    ui.add(egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend))
+    command_if(ui, true, text)
+}
+
+/// The words on a button (its name for mapping).
+fn words(atoms: &egui::Atoms<'_>) -> String {
+    atoms.text().map(|t| t.into_owned()).unwrap_or_default()
 }
 
 /// A command that can't be used right now (nothing to save, nothing selected): greyed out until it can.
 pub(crate) fn command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
-    ui.add_enabled(enabled, egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend))
+    let atoms = text.into_atoms();
+    let label = words(&atoms);
+    let mut r = ui.add_enabled(enabled, egui::Button::new(atoms).wrap_mode(egui::TextWrapMode::Extend));
+    crate::ui::press::mappable(ui, &mut r, &label);
+    r
 }
 
 /// A command for a tight row (an icon, a short word): narrower than `ui.button` but the same height, so it lines up
@@ -162,19 +179,30 @@ pub(crate) fn small_command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl 
     // button's size from a wrapping row, which then couldn't move it to the next line). Never wraps its words.
     let old = ui.spacing().button_padding;
     ui.spacing_mut().button_padding.x = 4.0;
-    let r = ui.add_enabled(enabled, egui::Button::new(text).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(0.0, CONTROL_H)));
+    let atoms = text.into_atoms();
+    let label = words(&atoms);
+    let mut r = ui.add_enabled(enabled, egui::Button::new(atoms).wrap_mode(egui::TextWrapMode::Extend).min_size(egui::vec2(0.0, CONTROL_H)));
     ui.spacing_mut().button_padding = old;
+    crate::ui::press::mappable(ui, &mut r, &label);
     r
 }
 
 /// A command at a set size (a column of same-width buttons, a grid cell's header).
 pub(crate) fn command_sized<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>, size: egui::Vec2) -> egui::Response {
-    ui.add_sized(size, egui::Button::new(text))
+    let atoms = text.into_atoms();
+    let label = words(&atoms);
+    let mut r = ui.add_sized(size, egui::Button::new(atoms));
+    crate::ui::press::mappable(ui, &mut r, &label);
+    r
 }
 
 /// A command at least `width` wide (a list of choices that should line up).
 pub(crate) fn wide_button<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>, width: f32) -> egui::Response {
-    ui.add(egui::Button::new(text).min_size(egui::vec2(width, CONTROL_H)))
+    let atoms = text.into_atoms();
+    let label = words(&atoms);
+    let mut r = ui.add(egui::Button::new(atoms).min_size(egui::vec2(width, CONTROL_H)));
+    crate::ui::press::mappable(ui, &mut r, &label);
+    r
 }
 
 /// Something asking for attention (Donate, an update is out, take back control): solid colour, dark bold text.
@@ -206,7 +234,10 @@ pub(crate) fn big_action_button(ui: &mut egui::Ui, act: Act, text: impl Into<Str
         Act::Record => Color32::from_rgb(225, 70, 60),
     };
     let ink = if act == Act::Go { Color32::from_gray(12) } else { Color32::WHITE };
-    ui.add(egui::Button::new(RichText::new(text.into()).strong().size(16.0).color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(egui::vec2(80.0, 30.0)))
+    let text: String = text.into();
+    let mut r = ui.add(egui::Button::new(RichText::new(&text).strong().size(16.0).color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(egui::vec2(80.0, 30.0)));
+    crate::ui::press::mappable(ui, &mut r, &text);
+    r
 }
 
 /// Width of the label column in `field` rows (labels line up down a panel).
@@ -371,8 +402,10 @@ pub(crate) fn action_button_sized(ui: &mut egui::Ui, act: Act, text: impl Into<S
         Act::Record => Color32::from_rgb(225, 70, 60),
     };
     let ink = if act == Act::Go { Color32::from_gray(12) } else { Color32::WHITE };
-    let b = egui::Button::new(RichText::new(text.into()).strong().color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(size);
-    let r = if size.x > 0.0 { ui.add_sized(size, b) } else { ui.add(b) };
+    let text: String = text.into();
+    let b = egui::Button::new(RichText::new(&text).strong().color(ink)).fill(fill).stroke(Stroke::NONE).corner_radius(6.0).min_size(size);
+    let mut r = if size.x > 0.0 { ui.add_sized(size, b) } else { ui.add(b) };
+    crate::ui::press::mappable(ui, &mut r, &text);
     if r.hovered() {
         ui.painter().rect_stroke(r.rect, 6.0, Stroke::new(1.5, Color32::WHITE.gamma_multiply(0.7)), StrokeKind::Inside);
     }
@@ -395,6 +428,7 @@ pub(crate) fn toggle_locked(ui: &mut egui::Ui, on: &mut bool, text: impl Into<St
     let elided = galley.elided;
     let size = egui::vec2(galley.size().x + 30.0, CONTROL_H);
     let (rect, mut r) = ui.allocate_exact_size(size, Sense::click());
+    crate::ui::press::mappable(ui, &mut r, &text);
     if r.clicked() && !locked {
         *on = !*on;
         r.mark_changed();

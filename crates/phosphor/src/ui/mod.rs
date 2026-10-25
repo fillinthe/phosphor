@@ -18,6 +18,7 @@ mod kit;
 mod learn;
 mod level;
 mod locks;
+pub(crate) mod press;
 mod modulation;
 mod saves;
 mod tool_window;

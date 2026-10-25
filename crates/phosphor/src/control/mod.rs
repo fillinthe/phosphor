@@ -22,6 +22,8 @@ pub enum Deferred {
     Jump(u64, bool),
     /// Run a menu action (`ControlTarget::Menu`; its name, `menu::action_key`).
     Menu(String),
+    /// Press a button on screen (`ControlTarget::Button`).
+    Button(u64),
 }
 
 /// Sent instead of a value when a pad or key press should flip an on/off control.

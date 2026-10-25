@@ -12,6 +12,11 @@ impl PhosphorApp {
         if !self.lock.active {
             self.handle_dropped_files(&ctx);
         }
+        // Buttons counted afresh; mapped presses handed to the buttons they're for.
+        crate::ui::press::begin_frame(&ctx, wall);
+        for key in std::mem::take(&mut self.state.button_presses) {
+            crate::ui::press::press(&ctx, key, wall);
+        }
         self.state.clip_cells.clear();
         self.state.comp.ensure_outputs();
         self.state.comp.sync_media_bin();

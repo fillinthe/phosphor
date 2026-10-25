@@ -273,7 +273,9 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Tab) {
+        crate::ui::press::set_panel(ui.ctx(), Some((&format!("{tab:?}"), &tab.title())));
         draw_tab(ui, self.st, *tab);
+        crate::ui::press::set_panel(ui.ctx(), None);
     }
 
     /// Closed panels come back from View ▸ Panels.
