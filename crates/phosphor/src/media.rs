@@ -21,6 +21,8 @@ pub mod clip_cache;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cuts;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod durations;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod rhythm;
 pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]

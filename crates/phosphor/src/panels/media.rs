@@ -18,6 +18,8 @@ pub enum MediaSort {
     Name,
     Newest,
     Type,
+    /// Longest first (movies' lengths are read in the background the first time).
+    Length,
 }
 
 /// How the Media panel is filtered and laid out (per session).
@@ -46,6 +48,9 @@ pub struct MediaView {
     pub refresh: Option<std::sync::Arc<std::sync::Mutex<crate::online::following::Progress>>>,
     #[cfg(not(target_arch = "wasm32"))]
     pub has_gallery_dl: Option<bool>,
+    /// Movies' lengths, read in the background (Sort by Length).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub durations: crate::media::durations::Durations,
     /// What the last "Keep in my library" did (set by its thread).
     #[cfg(not(target_arch = "wasm32"))]
     pub kept: std::sync::Arc<std::sync::Mutex<Option<String>>>,
@@ -75,6 +80,8 @@ impl Default for MediaView {
             has_gallery_dl: None,
             #[cfg(not(target_arch = "wasm32"))]
             kept: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            durations: Default::default(),
         }
     }
 }
@@ -172,6 +179,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Name, "Name");
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Newest, "Newest");
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Type, "Type");
+                crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Length, "Length");
             });
             crate::ui::toggle(ui, &mut st.media_view.by_folder, "Group by folder");
             Level::range(&mut st.media_view.tile, 72.0, 240.0, "Tile size").default(128.0).width(180.0).show(ui);
@@ -236,6 +244,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
         MediaSort::Name => shown.sort_by_key(|i| bin[*i].name.to_lowercase()),
         MediaSort::Newest => shown.reverse(),
         MediaSort::Type => shown.sort_by_key(|i| (!crate::media::is_movie(&bin[*i].name), bin[*i].name.to_lowercase())),
+        MediaSort::Length => shown.sort_by_key(|i| length_key(&bin[*i])),
     }
     let tile_w = view.tile;
     let groups: Vec<String> = if view.by_folder {
@@ -669,6 +678,11 @@ pub(crate) fn media_tile(
             ui.close();
         }
     });
+}
+
+/// Longest first; lengths not read yet go last.
+pub(crate) fn length_key(m: &phosphor_engine::MediaItem) -> std::cmp::Reverse<i64> {
+    std::cmp::Reverse(m.duration.map_or(-1, |d| (d * 1000.0) as i64))
 }
 
 /// Media bin items as clips (name without extension, source by file type).

@@ -5,6 +5,8 @@ use super::media_sources::{self as src, MediaSource, SourceAct};
 use super::*;
 
 pub(crate) fn media_browser(ui: &mut egui::Ui, st: &mut State) {
+    #[cfg(not(target_arch = "wasm32"))]
+    lengths(ui, st);
     let now = ui.ctx().input(|i| i.time);
     forget_gone_sources(st);
     #[cfg(not(target_arch = "wasm32"))]
@@ -42,6 +44,29 @@ pub(crate) fn media_browser(ui: &mut egui::Ui, st: &mut State) {
     tools(ui, st);
     browse(ui, st, &mut acts);
     apply_acts(st, acts, now);
+}
+
+/// Sort by Length: asks for the lengths not known yet (read in the background) and keeps the ones that came in.
+#[cfg(not(target_arch = "wasm32"))]
+fn lengths(ui: &egui::Ui, st: &mut State) {
+    let view = &mut st.media_view;
+    for (path, secs) in view.durations.take() {
+        if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
+            m.duration = Some(secs);
+        }
+    }
+    if view.sort != MediaSort::Length {
+        return;
+    }
+    let mut missing = false;
+    for m in st.comp.media_bin.iter().filter(|m| m.duration.is_none()) {
+        view.durations.want(&m.path);
+        missing = true;
+    }
+    if missing {
+        // (Lengths come in on their own thread: look again shortly.)
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+    }
 }
 
 /// A source whose folder stopped being watched, or whose collection was deleted, goes back to All media.
@@ -158,6 +183,7 @@ fn tools(ui: &mut egui::Ui, st: &mut State) {
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Name, "Name");
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Newest, "Newest");
                 crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Type, "Type");
+                crate::ui::pick_value(ui, &mut st.media_view.sort, MediaSort::Length, "Length");
             });
             Level::range(&mut st.media_view.tile, 72.0, 240.0, "Tile size")
                 .default(128.0)
@@ -343,6 +369,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
                     bin[*i].name.to_lowercase(),
                 )
             }),
+            MediaSort::Length => shown.sort_by_key(|i| super::media::length_key(&bin[*i])),
         }
     }
     let tile_w = view.tile;
