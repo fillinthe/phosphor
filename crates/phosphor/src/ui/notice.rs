@@ -13,7 +13,7 @@ const NEWS_SECS: f64 = 8.0;
 /// Does a message say something went wrong?
 pub fn is_problem(text: &str) -> bool {
     let t = text.to_lowercase();
-    ["couldn't", "can't", "cannot", "failed", "error", "wasn't", "didn't", "not connected", "took too long", "said no", "missing", "unexpected", "no such", "denied", "refused", "unsupported"].iter().any(|w| t.contains(w))
+    ["couldn't", "can't", "cannot", "failed", "error", "wasn't", "didn't", "not connected", "took too long", "said no", "missing", "unexpected", "no such", "denied", "refused", "unsupported", "disconnected"].iter().any(|w| t.contains(w))
 }
 
 pub(crate) fn notice_bar(ctx: &egui::Context, st: &mut State, now: f64) {

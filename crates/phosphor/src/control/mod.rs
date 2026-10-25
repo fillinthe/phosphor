@@ -115,6 +115,13 @@ pub enum ClockEvent {
     Stop,
 }
 
+
+/// Device names that appeared and disappeared between two lists.
+pub(crate) fn device_changes(had: &[String], now: &[String]) -> (Vec<String>, Vec<String>) {
+    let came = now.iter().filter(|n| !had.contains(n)).cloned().collect();
+    let went = had.iter().filter(|n| !now.contains(n)).cloned().collect();
+    (came, went)
+}
 pub struct ControlHub {
     rx: mpsc::Receiver<Incoming>,
     tx: mpsc::Sender<Incoming>,
@@ -133,6 +140,10 @@ pub struct ControlHub {
     pub midi_all: Vec<String>,
     /// MIDI inputs switched off in the Devices panel.
     pub midi_disabled: std::collections::BTreeSet<String>,
+    /// The MIDI devices on the system, from a watcher thread (lists them every 2 s): a controller unplugged and
+    /// plugged back (a USB hub dropping it) is reopened by itself.
+    #[cfg(not(target_arch = "wasm32"))]
+    midi_watch: Option<mpsc::Receiver<Vec<String>>>,
     pub activity: std::sync::Arc<std::sync::Mutex<Activity>>,
     pub osc_port: u16,
     /// More ports to listen on (apps that only send to their own port).
@@ -410,6 +421,8 @@ impl ControlHub {
             midi_ports: Vec::new(),
             midi_all: Vec::new(),
             midi_disabled: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            midi_watch: None,
             activity: Default::default(),
             osc_port: DEFAULT_OSC_PORT,
             osc_extra_ports: Vec::new(),
@@ -505,6 +518,56 @@ impl ControlHub {
 
     /// Drains incoming messages; binds the learning target if one is waiting.
     /// Takes in what controllers sent; true if anything came (someone's there: the idle cue waits).
+    /// MIDI devices that came or went since last time: reopens MIDI (the mappings carry on) and says what changed.
+    /// Cheap: the system is asked on a thread of its own every 2 s.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn watch_midi_devices(&mut self) -> Option<String> {
+        let rx = self.midi_watch.get_or_insert_with(|| {
+            let (tx, rx) = mpsc::channel();
+            let _ = std::thread::Builder::new().name("midi-devices".into()).spawn(move || {
+                // One client, asked again and again (a new one each time would leak system resources).
+                let Ok(probe) = midir::MidiInput::new("Phosphor devices") else { return };
+                let mut last: Option<Vec<String>> = None;
+                loop {
+                    let mut names: Vec<String> = probe.ports().iter().filter_map(|p| probe.port_name(p).ok()).collect();
+                    names.sort();
+                    if last.as_ref() != Some(&names) {
+                        if tx.send(names.clone()).is_err() {
+                            return;
+                        }
+                        last = Some(names);
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+            });
+            rx
+        });
+        let mut newest = None;
+        while let Ok(names) = rx.try_recv() {
+            newest = Some(names);
+        }
+        let names = newest?;
+        let mut had = self.midi_all.clone();
+        had.sort();
+        if names == had {
+            return None;
+        }
+        let (came, went) = device_changes(&had, &names);
+        let (all, open) = self.backend.open_midi(self.tx.clone(), self.clock_tx.clone(), &self.midi_disabled, self.activity.clone());
+        self.midi_all = all;
+        self.midi_ports = open;
+        let mut parts = Vec::new();
+        if !came.is_empty() {
+            parts.push(format!("connected: {}", came.join(", ")));
+        }
+        if !went.is_empty() {
+            parts.push(format!("disconnected: {}", went.join(", ")));
+        }
+        let text = format!("MIDI {}", parts.join(" · "));
+        log::info!("{text}");
+        Some(text)
+    }
+
     pub fn poll(&mut self, comp: &mut Composition) -> bool {
         let mut any = false;
         while let Ok(msg) = self.rx.try_recv() {

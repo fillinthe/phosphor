@@ -143,10 +143,15 @@ impl PhosphorApp {
         self.remember_output_screens();
         {
             #[cfg(not(target_arch = "wasm32"))]
-            let State { control, comp, clock, cue_run, ltc_out, .. } = &mut self.state;
+            let State { control, comp, clock, cue_run, ltc_out, notice, .. } = &mut self.state;
             #[cfg(target_arch = "wasm32")]
             let State { control, comp, clock, cue_run, .. } = &mut self.state;
             let heard = control.poll(comp);
+            // A controller unplugged and back (a USB hub dropping it): MIDI reopens by itself.
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(news) = control.watch_midi_devices() {
+                *notice = Some(news);
+            }
             control.poll_clock(now);
             control.tick_clock_out(clock.beats(now), clock.bpm);
             #[cfg(not(target_arch = "wasm32"))]
