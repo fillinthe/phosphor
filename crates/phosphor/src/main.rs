@@ -39,6 +39,8 @@ mod calendar;
 #[cfg(not(target_arch = "wasm32"))]
 mod backups;
 #[cfg(not(target_arch = "wasm32"))]
+mod project_files;
+#[cfg(not(target_arch = "wasm32"))]
 mod gpu_pick;
 #[cfg(target_os = "macos")]
 mod permissions;

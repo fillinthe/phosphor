@@ -70,6 +70,8 @@ pub enum Action {
     MergeProject,
     /// Pick a ready-made starting point.
     NewFromTemplate,
+    /// Every saved project in one window.
+    Projects,
 }
 
 /// A menu action's name for mapping (`ControlTarget::Menu`): stable across runs ("AddLayer", "Quick(Surprise)").
@@ -114,6 +116,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::NewProject, "New Project", Some((false, Key::N))),
             I(A::NewFromTemplate, "New from Template…", None),
             I(A::Open, "Open Project…", Some((false, Key::O))),
+            I(A::Projects, "Projects…", Some((true, Key::O))),
             D("Open Recent"),
             I(A::MergeProject, "Merge Project…", None),
             S,
