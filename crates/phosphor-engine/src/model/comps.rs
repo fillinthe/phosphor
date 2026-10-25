@@ -224,4 +224,22 @@ mod tests {
         assert!(old.comps.is_empty() && old.open_comp().is_none());
         assert!(Comp::default().is_plain());
     }
+
+    /// An effect added to a comp or a group goes on that chain (it runs over everything under it): both are
+    /// targets with an effect chain, like a layer, and the comp's lives apart from its layers'.
+    #[test]
+    fn a_comp_and_a_group_have_effect_chains_of_their_own() {
+        let mut c = Composition::default();
+        let a = c.add_layer().id;
+        let b = c.add_layer().id;
+        let g = c.create_group(&[a, b]).expect("a group");
+        let comp = c.add_comp("Side");
+        for target in [g, comp] {
+            let fx = c.new_effect("invert").or_else(|| c.new_effect("blur")).expect("some effect exists");
+            assert!(c.effects(target).is_some(), "{target} has a chain");
+            c.effects_mut(target).unwrap().push(fx);
+            assert_eq!(c.effects(target).unwrap().len(), 1);
+        }
+        assert!(c.layers.iter().all(|l| l.effects.is_empty()), "the layers underneath are untouched");
+    }
 }

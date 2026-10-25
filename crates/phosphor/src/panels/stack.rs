@@ -684,10 +684,7 @@ fn apply_stack_acts(st: &mut State, acts: StackActs, now: f64) {
                     st.selected = None;
                 }
             }
-            CompBandAct::BrowseEffects => {
-                st.selected = Some(id);
-                st.open_tab = Some(Tab::Library);
-            }
+            CompBandAct::BrowseEffects => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None)),
         }
     }
     if !acts.stop.is_empty() {
