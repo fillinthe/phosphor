@@ -94,6 +94,14 @@ impl Composition {
     /// The effects that reach a layer from above its own chain, nearest first: its group's, its comp's (when the
     /// project has comps), then MASTER's. Each is (where it is, which effect, whether it's running). A removed
     /// layer effect that "stays on" is usually one of these.
+    /// Is this layer in the show now (on, in the mix, not soloed away, its fader and crossfade side up)? A layer
+    /// that isn't can still be watched in its preview before it goes live.
+    pub fn layer_live(&self, layer: u64) -> bool {
+        let Some(l) = self.layers.iter().find(|l| l.id == layer) else { return false };
+        let any_solo = self.layers.iter().any(|l| l.solo);
+        l.enabled && l.in_mix && (!any_solo || l.solo) && l.opacity * l.group.gain(self.crossfader, self.fader_curve) > 0.001
+    }
+
     pub fn inherited_effects(&self, layer: u64) -> Vec<(String, String, bool)> {
         let Some(l) = self.layers.iter().find(|l| l.id == layer) else { return Vec::new() };
         let name = |id: &str| crate::shaders::effect(id).map_or_else(|| id.to_string(), |d| d.name.to_string());
@@ -341,4 +349,29 @@ mod tests {
         assert!(!c.inherited_effects(a)[1].2, "a bypassed chain shows as not running");
     }
 
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+
+    /// Live = on, in the mix, not soloed away, fader up and its crossfade side up.
+    #[test]
+    fn a_layer_is_live_only_when_it_shows() {
+        let mut c = Composition::default();
+        let a = c.add_layer().id;
+        let b = c.add_layer().id;
+        c.layer_mut(a).unwrap().opacity = 1.0;
+        c.layer_mut(b).unwrap().opacity = 1.0;
+        assert!(c.layer_live(a));
+        c.layer_mut(a).unwrap().opacity = 0.0;
+        assert!(!c.layer_live(a), "fader down");
+        c.layer_mut(a).unwrap().opacity = 1.0;
+        c.layer_mut(b).unwrap().solo = true;
+        assert!(!c.layer_live(a) && c.layer_live(b), "soloed away");
+        c.layer_mut(b).unwrap().solo = false;
+        c.layer_mut(a).unwrap().group = crate::CrossGroup::A;
+        c.crossfader = 1.0;
+        assert!(!c.layer_live(a), "crossfaded to B");
+    }
 }

@@ -670,6 +670,23 @@ impl State {
     }
 
     /// The crossfader glides to the side it's further from (A ↔ B) over the auto-fade time.
+    /// Go live with a layer that's only in its preview (fade it up over the auto-fade time, switching it on), or
+    /// take a live one out (fade it down).
+    pub fn go_live(&mut self, layer: u64, now: f64) {
+        let live = self.comp.layer_live(layer);
+        let secs = self.comp.auto_fade_secs;
+        let target = phosphor_engine::ControlTarget::LayerOpacity(layer);
+        let Some(l) = self.comp.layer_mut(layer) else { return };
+        let from = if live { l.opacity } else { 0.0 };
+        if !live {
+            (l.enabled, l.in_mix, l.opacity) = (true, true, 0.0);
+            if self.comp.layers.iter().any(|o| o.solo && o.id != layer) {
+                self.comp.layers.iter_mut().for_each(|o| o.solo = false);
+            }
+        }
+        self.control.glide_to(target, from, if live { 0.0 } else { 1.0 }, now as f32, secs);
+    }
+
     pub fn auto_fade(&mut self, now: f64) {
         let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Crossfader);
         let from = self.comp.crossfader;

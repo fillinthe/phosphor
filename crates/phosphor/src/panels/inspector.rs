@@ -79,16 +79,32 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         // The clip picked in the grid, when it's on this layer.
         let clip_slot = st.selected_clip.filter(|(l, _)| *l == sel).map(|(_, c)| c);
         let mut clip_act: Option<(usize, super::ClipAct)> = None;
+        let live = st.comp.layer_live(sel);
+        let mut go_live = false;
         let layer = st.comp.layer_mut(sel).unwrap();
         crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
-            thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);
+            let pic = thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);
+            if !live {
+                // Watching it before it's in the show.
+                let at = pic.rect.left_top() + egui::vec2(6.0, 6.0);
+                let g = ui.painter().layout_no_wrap("PREVIEW · not live".into(), egui::FontId::proportional(11.0), Color32::BLACK);
+                ui.painter().rect_filled(egui::Rect::from_min_size(at, g.size() + egui::vec2(10.0, 4.0)), 3.0, crate::theme::WARN);
+                ui.painter().galley(at + egui::vec2(5.0, 2.0), g, Color32::BLACK);
+            }
             // Speed and opacity right under the picture: watch what they do while changing them.
             if matches!(layer.source, SourceSpec::Movie { .. }) && layer.sync_beats <= 0.0 {
                 Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).width(w).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
             }
             Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).width(w).target(ControlTarget::LayerOpacity(layer.id)).show(ui);
+            crate::ui::toolbar(ui, |ui| {
+                let (go, out) = (format!("{} Go live", icon::PLAY), format!("{} Take out", icon::ARROW_DOWN));
+                let (text, tip) = if live { (out.clone(), "Fade it out of the show (auto-fade time)") } else { (go.clone(), "Fade it into the show (auto-fade time); until then you only see it here") };
+                if crate::ui::steady_action_button(ui, crate::ui::Act::Go, text, &[&go, &out]).on_hover_text(tip).clicked() {
+                    go_live = true;
+                }
+            });
             ui.horizontal(|ui| {
                 super::layers::show_button(ui, layer);
                 send = outputs_menu(ui, &outs).or(send);
@@ -129,6 +145,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 match_beat = Some(layer.id);
             }
         });
+        if go_live {
+            st.go_live(sel, ui.input(|i| i.time));
+        }
         if let Some((c, a)) = clip_act {
             let now = ui.ctx().input(|i| i.time);
             super::apply_clip_act(st, sel, c, a, now);
