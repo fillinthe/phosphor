@@ -219,6 +219,9 @@ impl PhosphorApp {
             if now >= st.media_memory_at {
                 st.media_memory_at = now + 0.5;
                 st.comp.remember_media_settings();
+                // A cut (In / Out) follows its file to every project.
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::media::cuts::sync(&mut st.comp);
             }
             if leading {
                 st.run_autopilot(now);
