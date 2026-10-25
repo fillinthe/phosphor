@@ -288,3 +288,42 @@ fn mouse_location_is_on_the_desktop() {
     let (x1, y1) = ds.iter().fold((f32::MIN, f32::MIN), |(a, b), d| (a.max((d.x + d.w) as f32), b.max((d.y + d.h) as f32)));
     assert!(x >= x0 && x <= x1 && y >= y0 && y <= y1, "({x}, {y}) outside {x0},{y0}–{x1},{y1}");
 }
+
+/// Keeps the displays awake (no display sleep, no screen saver, so no lock) while an output window is open: a show
+/// mustn't go dark because nobody touched the Mac. Off again when the last output closes. (macOS: an
+/// NSProcessInfo activity with NSActivityIdleDisplaySleepDisabled; other systems: nothing yet.)
+#[cfg(target_os = "macos")]
+pub fn keep_display_awake(on: bool) {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject};
+    use std::sync::Mutex;
+    /// The activity token, as a pointer (an Objective-C object isn't Send; it's only ever used from the main thread).
+    struct Token(*mut AnyObject);
+    // SAFETY: the token is created and ended on the main thread (this runs from the UI loop); the lock only holds it.
+    unsafe impl Send for Token {}
+    static TOKEN: Mutex<Option<Token>> = Mutex::new(None);
+    let mut token = TOKEN.lock().unwrap_or_else(|e| e.into_inner());
+    if on == token.is_some() {
+        return;
+    }
+    let Some(class) = AnyClass::get(c"NSProcessInfo") else { return };
+    // SAFETY: +processInfo, -beginActivityWithOptions:reason: and -endActivity: per NSProcessInfo.h.
+    unsafe {
+        let info: Option<Retained<AnyObject>> = msg_send![class, processInfo];
+        let Some(info) = info else { return };
+        if on {
+            // NSActivityIdleDisplaySleepDisabled | NSActivityUserInitiated
+            const OPTIONS: u64 = (1 << 40) | 0x00FF_FFFF;
+            let reason = objc2_foundation::NSString::from_str("Phosphor has an output window open");
+            let t: Option<Retained<AnyObject>> = msg_send![&*info, beginActivityWithOptions: OPTIONS, reason: &*reason];
+            *token = t.map(|t| Token(Retained::into_raw(t)));
+        } else if let Some(Token(raw)) = token.take() {
+            let t: Retained<AnyObject> = Retained::from_raw(raw).expect("the token we made");
+            let _: () = msg_send![&*info, endActivity: &*t];
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn keep_display_awake(_on: bool) {}
