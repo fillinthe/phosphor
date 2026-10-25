@@ -146,6 +146,15 @@ mod native {
             None => (key, THUMB_W),
         };
         let name = path.to_ascii_lowercase();
+        // A file's thumbnail is kept on this Mac's own disk (keyed by path, size and modification time): the next
+        // launch reads that instead of decoding the file again from an external drive while a show plays from it.
+        let cached = (!path.starts_with("https://")).then(|| cache_file(path, size)).flatten();
+        if let Some(c) = &cached
+            && let Ok(img) = image::open(c)
+        {
+            let rgba = img.to_rgba8();
+            return Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()));
+        }
         let img = if path.starts_with("https://") {
             let bytes = crate::online::get_bytes(path).ok()?;
             if path.split('?').next().is_some_and(|p| p.ends_with(".svg")) {
@@ -171,7 +180,30 @@ mod native {
             crate::media::decode_still(path).ok()?.thumbnail(size, size)
         };
         let rgba = img.to_rgba8();
+        if let Some(c) = cached {
+            if let Some(dir) = c.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            // Written beside, then renamed: a half-written file is never read back.
+            let part = c.with_extension("part");
+            if rgba.save_with_format(&part, image::ImageFormat::Png).is_ok() {
+                let _ = std::fs::rename(&part, &c);
+            }
+        }
         Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
+    }
+
+    /// Where a file's thumbnail at `size` is kept: Phosphor's cache folder, named by a hash of the path, the file's
+    /// length and modification time (an edited file gets a new one). None when the file can't be looked at.
+    pub(super) fn cache_file(path: &str, size: u32) -> Option<std::path::PathBuf> {
+        use std::hash::{Hash, Hasher};
+        // (A sequence pattern isn't a file: its first frame stands in.)
+        let probe = if crate::media::sequence::is_sequence(path) { crate::media::sequence::members(path).into_iter().next().map(|p| p.to_string_lossy().into_owned())? } else { path.to_string() };
+        let meta = std::fs::metadata(&probe).ok()?;
+        let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (path, meta.len(), modified, size).hash(&mut h);
+        Some(crate::show::storage_dir()?.join("cache").join("thumbs").join(format!("{:016x}.png", h.finish())))
     }
 }
 
@@ -184,6 +216,27 @@ mod tests {
         let big = super::native_build(&format!("{icon}{}{}", super::SIZE_SEP, 800)).expect("sized");
         assert_eq!(small.size[0].max(small.size[1]), super::THUMB_W as usize);
         assert_eq!(big.size[0].max(big.size[1]), 800);
+    }
+
+    /// A thumbnail made once is read back from the cache; an edited file (new length / time) gets a new one.
+    #[test]
+    fn thumbnails_are_cached_by_path_length_and_time() {
+        let dir = std::env::temp_dir().join(format!("phosphor-thumbcache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.png");
+        image::RgbaImage::from_pixel(400, 200, image::Rgba([10, 200, 30, 255])).save(&file).unwrap();
+        let p = file.to_string_lossy().into_owned();
+        let Some(c) = super::native::cache_file(&p, super::THUMB_W) else { return };  // (no settings folder in this test run)
+        let _ = std::fs::remove_file(&c);
+        let first = super::native_build(&p).expect("built");
+        assert!(c.exists(), "kept on disk");
+        let again = super::native_build(&p).expect("read back");
+        assert_eq!((first.size, first.pixels.len()), (again.size, again.pixels.len()));
+        // An edited file: another cache entry.
+        image::RgbaImage::from_pixel(300, 300, image::Rgba([0, 0, 0, 255])).save(&file).unwrap();
+        assert_ne!(super::native::cache_file(&p, super::THUMB_W), Some(c.clone()));
+        let _ = std::fs::remove_file(&c);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
