@@ -91,6 +91,28 @@ impl Composition {
         self.slice_mut(target).map(|s| &mut s.effects)
     }
 
+    /// The effects that reach a layer from above its own chain, nearest first: its group's, its comp's (when the
+    /// project has comps), then MASTER's. Each is (where it is, which effect, whether it's running). A removed
+    /// layer effect that "stays on" is usually one of these.
+    pub fn inherited_effects(&self, layer: u64) -> Vec<(String, String, bool)> {
+        let Some(l) = self.layers.iter().find(|l| l.id == layer) else { return Vec::new() };
+        let name = |id: &str| crate::shaders::effect(id).map_or_else(|| id.to_string(), |d| d.name.to_string());
+        let mut out = Vec::new();
+        let mut add = |scope: String, chain: &[EffectState], off: bool| {
+            for e in chain {
+                out.push((scope.clone(), name(&e.effect), e.enabled && !off));
+            }
+        };
+        if let Some(g) = l.parent.and_then(|id| self.group(id)) {
+            add(format!("group {}", g.name), &g.effects, g.fx_bypass);
+        }
+        if let Some(c) = self.comp_of(l).and_then(|id| self.comp(id)) {
+            add(format!("comp {}", c.name), &c.effects, c.fx_bypass);
+        }
+        add("MASTER".to_string(), &self.master_effects, self.master_fx_bypass);
+        out
+    }
+
     /// Every effect in the project (MASTER, layers, groups, comps, mapping slices).
     pub fn all_effects(&self) -> impl Iterator<Item = &EffectState> {
         self.master_effects
@@ -294,4 +316,29 @@ mod tests {
         c.ungroup(h);
         assert!(c.layers.iter().all(|l| l.parent != Some(h)) && c.group(h).is_none());
     }
+
+    /// Effects from the group, comp and MASTER are listed for a layer, so one that "stays on" can be found.
+    #[test]
+    fn a_layer_lists_the_effects_from_above_it() {
+        let mut c = Composition::default();
+        let a = c.add_layer().id;
+        let b = c.add_layer().id;
+        c.add_comp("Side");
+        // (The first comp, "Main", is made for the layers that exist: that's the layers' comp.)
+        let comp = c.comps[0].id;
+        let g = c.create_group(&[a, b]).expect("group");
+        for (target, fx) in [(g, "invert"), (comp, "kaleidoscope"), (crate::MASTER_ID, "blur")] {
+            if let Some(e) = c.new_effect(fx) {
+                c.effects_mut(target).unwrap().push(e);
+            }
+        }
+        let own = c.new_effect("invert").unwrap();
+        c.layer_mut(a).unwrap().effects.push(own);
+        let inh = c.inherited_effects(a);
+        let scopes: Vec<&str> = inh.iter().map(|(s, _, _)| s.split(' ').next().unwrap()).collect();
+        assert_eq!(scopes, ["group", "comp", "MASTER"], "nearest first; the layer's own chain isn't in it: {inh:?}");
+        c.comp_mut(comp).unwrap().fx_bypass = true;
+        assert!(!c.inherited_effects(a)[1].2, "a bypassed chain shows as not running");
+    }
+
 }
