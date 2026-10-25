@@ -878,3 +878,13 @@ fn only_while_on_screen() {
     hub.apply(&mut comp, 1.1);
     assert!((comp.master_fade - 0.2).abs() < 1e-6, "on screen: it moves");
 }
+
+/// A controller dropped by a USB hub and plugged back: the watcher tells which came and which went.
+#[test]
+fn midi_devices_coming_and_going_are_told_apart() {
+    let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+    let (came, went) = super::device_changes(&s(&["IAC Bus", "nanoKONTROL2"]), &s(&["IAC Bus"]));
+    assert!(came.is_empty() && went == s(&["nanoKONTROL2"]));
+    let (came, went) = super::device_changes(&s(&["IAC Bus"]), &s(&["IAC Bus", "nanoKONTROL2"]));
+    assert!(went.is_empty() && came == s(&["nanoKONTROL2"]));
+}
