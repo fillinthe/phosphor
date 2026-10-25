@@ -1632,8 +1632,15 @@ impl Surface {
         if self.model.is_some() {
             return;
         }
+        // Curved edges: their handles go where the transform takes them too (they're kept relative to the corners).
+        let handles: Option<Vec<[f32; 2]>> = self.bend.map(|b| (0..8).map(|k| f(b.handle_at(&self.corners, k))).collect());
         for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())).chain(self.line.iter_mut().flat_map(|l| l.points.iter_mut())) {
             *c = f(*c);
+        }
+        if let (Some(b), Some(handles)) = (self.bend.as_mut(), handles) {
+            for (k, h) in handles.into_iter().enumerate() {
+                b.set_handle(&self.corners, k, h);
+            }
         }
     }
 
@@ -2400,5 +2407,19 @@ mod transform_box_tests {
         // 0.8 wide (in output widths) = 0.8 * aspect heights tall after turning.
         assert!(((after.1[1] - after.0[1]) - 0.8 * aspect).abs() < 1e-4, "{after:?}");
         assert!(((after.1[0] - after.0[0]) - 0.2 / aspect).abs() < 1e-4, "{after:?}");
+    }
+
+    /// A curved slice keeps its curve when moved by the transform box: the handles go with the corners.
+    #[test]
+    fn curved_edges_follow_the_transform() {
+        let mut s = Surface::new(1, 0);
+        s.corners = [[0.2, 0.2], [0.6, 0.2], [0.6, 0.4], [0.2, 0.4]];
+        let mut b = Bend::default();
+        b.set_handle(&s.corners, 0, [0.3, 0.1]);
+        s.bend = Some(b);
+        let before = b.handle_at(&s.corners, 0);
+        s.scale_about([0.2, 0.2], 2.0, 2.0);
+        let after = s.bend.unwrap().handle_at(&s.corners, 0);
+        assert!((after[0] - (0.2 + (before[0] - 0.2) * 2.0)).abs() < 1e-4 && (after[1] - (0.2 + (before[1] - 0.2) * 2.0)).abs() < 1e-4, "{before:?} -> {after:?}");
     }
 }

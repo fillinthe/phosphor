@@ -277,14 +277,11 @@ pub fn gallery_list(url: &str, count: usize, browser: &str, cursor: Option<&str>
     Ok((body, cursors.join().unwrap_or_default()))
 }
 
-/// Where the next "Load more" should start: the cursor of the last page a listing began (not the one after it: the
-/// listing may have stopped partway through that page, and starting after it would skip the rest of it).
+/// Where the next "Load more" should start. gallery-dl reports a page's cursor after it has listed the page before
+/// (the cursor = where the next page starts), so the last one reported is the start of the page the listing was in
+/// when it stopped: starting there lists the rest of that page again (repeats are dropped) and skips nothing.
 pub fn resume_from(cursors: &[String]) -> Option<String> {
-    match cursors {
-        [] => None,
-        [only] => Some(only.clone()),
-        [.., before_last, _] => Some(before_last.clone()),
-    }
+    cursors.last().cloned()
 }
 
 /// How many media a listing held (any kind): none at all means the account has nothing older.
@@ -443,7 +440,8 @@ fn fetch_accounts(f: &Following, wants: Vec<(Account, Fetch)>, ctx: Option<efram
             let look = if *fetch == Fetch::More { PAGE } else { (f.per_account * 5).max(NEWEST_LOOK) };
             let listed = gallery_list(&a.profile(), look, &browser, from.as_deref());
             let result = listed.and_then(|(body, pages)| {
-                let media = media_count(&body);
+                // (No page reported at all on a Load more: the listing ended inside the page it started on.)
+                let media = if *fetch == Fetch::More && pages.is_empty() { 0 } else { media_count(&body) };
                 let items = parse(a, &body)?;
                 // Where the next Load more starts (a Refresh only sets it the first time: it may be further on).
                 if let Some(next) = resume_from(&pages)
@@ -499,7 +497,7 @@ mod tests {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         assert_eq!(resume_from(&s(&[])), None);
         assert_eq!(resume_from(&s(&["p2"])), Some("p2".into()));
-        assert_eq!(resume_from(&s(&["p2", "p3", "p4"])), Some("p3".into()));
+        assert_eq!(resume_from(&s(&["p2", "p3", "p4"])), Some("p4".into()), "the page it stopped in");
         assert_eq!(media_count(br#"[[2, {}], [3, "https://a/1.mp4", {}], [3, "https://a/2.jpg", {}]]"#), 2);
         assert_eq!(media_count(b"[]"), 0);
     }

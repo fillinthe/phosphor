@@ -51,19 +51,17 @@ pub(crate) fn media_browser(ui: &mut egui::Ui, st: &mut State) {
 fn lengths(ui: &egui::Ui, st: &mut State) {
     let view = &mut st.media_view;
     for (path, secs) in view.durations.take() {
-        if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
+        for m in st.comp.media_bin.iter_mut().filter(|m| m.path == path) {
             m.duration = Some(secs);
         }
     }
     if view.sort != MediaSort::Length {
         return;
     }
-    let mut missing = false;
     for m in st.comp.media_bin.iter().filter(|m| m.duration.is_none()) {
         view.durations.want(&m.path);
-        missing = true;
     }
-    if missing {
+    if view.durations.outstanding > 0 {
         // (Lengths come in on their own thread: look again shortly.)
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
     }

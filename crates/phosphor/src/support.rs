@@ -36,6 +36,8 @@ pub struct BugReport {
     pub sending: bool,
     /// macOS version, read once.
     os: Option<String>,
+    /// The diagnostics shown in the window, and when they were put together (redone every few seconds, not each frame).
+    shown: Option<(f64, String)>,
 }
 
 impl BugReport {
@@ -46,7 +48,47 @@ impl BugReport {
 }
 
 /// Everything a bug report should carry besides the words: version, system, project shape, the end of crash.log.
+/// The end of `text`, at most `max` bytes (never cutting a character in half).
+fn tail_of(text: &str, max: usize) -> &str {
+    if text.len() <= max {
+        return text;
+    }
+    let mut from = text.len() - max;
+    while !text.is_char_boundary(from) {
+        from += 1;
+    }
+    &text[from..]
+}
+
+/// A log line for a crash report sent by itself: only what kind of thing happened, no file paths or names (they're
+/// cut at the first path, quote or arrow).
+fn without_names(line: &str) -> &str {
+    let cut = line.find(['/', '"', '\'', '«', '“', '\u{2190}', '\u{2192}']).unwrap_or(line.len());
+    line[..cut].trim_end()
+}
+
+/// The diagnostics for a crash report sent by itself (after a relaunch): the run that crashed, nothing named.
+pub fn crash_diagnostics(st: &mut State) -> String {
+    diagnostics_from(st, true)
+}
+
+/// The Report a Bug window's diagnostics, put together at most every 2 s (it reads files).
+pub fn shown_diagnostics(st: &mut State, now: f64) -> String {
+    if let Some((at, text)) = &st.bug.shown
+        && now - at < 2.0
+    {
+        return text.clone();
+    }
+    let text = diagnostics(st);
+    st.bug.shown = Some((now, text.clone()));
+    text
+}
+
 pub fn diagnostics(st: &mut State) -> String {
+    diagnostics_from(st, false)
+}
+
+fn diagnostics_from(st: &mut State, crash: bool) -> String {
     let os = st.bug.os.get_or_insert_with(os_version).clone();
     let s = st.stats.latest;
     let comp = &st.comp;
@@ -74,10 +116,8 @@ pub fn diagnostics(st: &mut State) -> String {
         && let Ok(log) = std::fs::read_to_string(&path)
     {
         let tail: Vec<&str> = log.lines().rev().take(40).collect();
-        let mut tail: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
-        if tail.len() > 3000 {
-            tail = tail[tail.len() - 3000..].to_string();
-        }
+        let tail: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
+        let tail = tail_of(&tail, 3000).to_string();
         if !tail.trim().is_empty() {
             out.push_str("\ncrash.log (end):\n");
             out.push_str(&tail);
@@ -85,11 +125,13 @@ pub fn diagnostics(st: &mut State) -> String {
     }
     // What happened just before: the end of this run's session log (what was played, effects added, outputs, slow
     // frames, warnings), without the lines that only say a movie opened.
+    // (After a crash, Phosphor has been relaunched: the run that crashed is the previous log.)
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(path) = crate::session_log::path()
+    if let Some(path) = crate::session_log::path().map(|p| if crash { p.with_file_name("session-previous.log") } else { p })
         && let Ok(log) = std::fs::read_to_string(&path)
     {
         let tail = recent_activity(&log, 60);
+        let tail = if crash { tail.lines().map(without_names).collect::<Vec<_>>().join("\n") } else { tail };
         if !tail.trim().is_empty() {
             out.push_str("\nsession log (recent):\n");
             out.push_str(&tail);
@@ -112,11 +154,7 @@ pub fn recent_activity(log: &str, n: usize) -> String {
         })
         .collect();
     let from = keep.len().saturating_sub(n);
-    let mut tail = keep[from..].join("\n");
-    if tail.len() > 6000 {
-        tail = tail[tail.len() - 6000..].to_string();
-    }
-    tail
+    tail_of(&keep[from..].join("\n"), 6000).to_string()
 }
 
 fn os_version() -> String {
@@ -164,12 +202,12 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
             let ready = crate::crash_report::endpoint().is_some();
             ui.add_enabled_ui(ready, |ui| {
                 crate::ui::toggle(ui, &mut st.bug.send_crashes, "Send crash reports by themselves")
-                    .on_hover_text("After an unexpected quit, the diagnostics above (no project content, no file names) go privately to the Phosphor team")
+                    .on_hover_text("After an unexpected quit, the diagnostics go privately to the Phosphor team: version, macOS, the project's shape and what kind of things happened just before (no project content, no file, layer or device names)")
                     .on_disabled_hover_text("Not available yet: the crash server isn't set up");
             });
         }
         if st.bug.include_diagnostics {
-            let diag = diagnostics(st);
+            let diag = shown_diagnostics(st, ui.input(|i| i.time));
             crate::ui::section(ui, "bug_diag", "What gets included", false, |ui| {
                 ui.add(egui::Label::new(egui::RichText::new(diag).monospace().small()).wrap());
             });
@@ -239,5 +277,10 @@ mod tests {
         assert!(!t.contains("first frame"), "{t}");
         assert!(t.contains("09:00:01 effect added: invert on layer \"A\"") && t.contains("a frame took 180 ms"), "{t}");
         assert_eq!(super::recent_activity(log, 1).lines().count(), 1);
+        // A long tail is cut on a character, never inside one.
+        let long = "é".repeat(5000);
+        assert!(super::tail_of(&long, 6001).len() <= 6001);
+        // Crash reports keep the kind of event, not names or paths.
+        assert_eq!(super::without_names("12:00:01 clip played: layer \"Rings\" \u{2190} /Volumes/WD/a.mov"), "12:00:01 clip played: layer");
     }
 }

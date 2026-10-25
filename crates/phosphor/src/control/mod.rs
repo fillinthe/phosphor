@@ -148,6 +148,9 @@ pub struct ControlHub {
     /// plugged back (a USB hub dropping it) is reopened by itself.
     #[cfg(not(target_arch = "wasm32"))]
     midi_watch: Option<mpsc::Receiver<Vec<String>>>,
+    /// MIDI connections being made on another thread after a device came or went: (what changed, the connections).
+    #[cfg(target_os = "macos")]
+    midi_reopen: Option<mpsc::Receiver<(String, native::MidiSet)>>,
     pub activity: std::sync::Arc<std::sync::Mutex<Activity>>,
     pub osc_port: u16,
     /// More ports to listen on (apps that only send to their own port).
@@ -427,6 +430,8 @@ impl ControlHub {
             midi_disabled: Default::default(),
             #[cfg(not(target_arch = "wasm32"))]
             midi_watch: None,
+            #[cfg(target_os = "macos")]
+            midi_reopen: None,
             activity: Default::default(),
             osc_port: DEFAULT_OSC_PORT,
             osc_extra_ports: Vec::new(),
@@ -550,16 +555,22 @@ impl ControlHub {
         while let Ok(names) = rx.try_recv() {
             newest = Some(names);
         }
-        let names = newest?;
         let mut had = self.midi_all.clone();
         had.sort();
-        if names == had {
+        let Some(names) = newest.filter(|n| *n != had) else {
+            // Connections made on the helper thread (Mac): swapped in now, the old ones close.
+            #[cfg(target_os = "macos")]
+            if let Some((text, set)) = self.midi_reopen.as_ref().and_then(|r| r.try_recv().ok()) {
+                self.midi_reopen = None;
+                let (all, open) = self.backend.install_midi(set);
+                self.midi_all = all;
+                self.midi_ports = open;
+                log::info!("{text}");
+                return Some(text);
+            }
             return None;
-        }
+        };
         let (came, went) = device_changes(&had, &names);
-        let (all, open) = self.backend.open_midi(self.tx.clone(), self.clock_tx.clone(), &self.midi_disabled, self.activity.clone());
-        self.midi_all = all;
-        self.midi_ports = open;
         let mut parts = Vec::new();
         if !came.is_empty() {
             parts.push(format!("connected: {}", came.join(", ")));
@@ -568,8 +579,28 @@ impl ControlHub {
             parts.push(format!("disconnected: {}", went.join(", ")));
         }
         let text = format!("MIDI {}", parts.join(" · "));
-        log::info!("{text}");
-        Some(text)
+        // On the Mac a device can be opened twice, so the new connections are made on a thread of their own (making
+        // them can take a moment) while the old ones keep working; elsewhere the old ones must close first.
+        #[cfg(target_os = "macos")]
+        {
+            let (tx, clock_tx, disabled, activity) = (self.tx.clone(), self.clock_tx.clone(), self.midi_disabled.clone(), self.activity.clone());
+            let (done_tx, done_rx) = mpsc::channel();
+            self.midi_reopen = Some(done_rx);
+            let _ = std::thread::Builder::new().name("midi-reopen".into()).spawn(move || {
+                let _ = done_tx.send((text, native::connect_midi(tx, clock_tx, &disabled, activity)));
+            });
+            // (Until it's done, the list says what's there.)
+            self.midi_all = names;
+            None
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let (all, open) = self.backend.open_midi(self.tx.clone(), self.clock_tx.clone(), &self.midi_disabled, self.activity.clone());
+            self.midi_all = all;
+            self.midi_ports = open;
+            log::info!("{text}");
+            Some(text)
+        }
     }
 
     pub fn poll(&mut self, comp: &mut Composition) -> bool {

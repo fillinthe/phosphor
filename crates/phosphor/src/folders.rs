@@ -94,9 +94,31 @@ impl FolderWatcher {
     }
 }
 
+/// Does this disk update a folder's modified time when files come or go? The Mac's own formats do; exFAT / FAT
+/// (many external SSDs and cards) and network shares may not, so their folders are listed every time.
+fn folder_times_reliable(dir: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let Ok(c) = std::ffi::CString::new(dir.to_string_lossy().as_bytes()) else { return false };
+        let mut s: libc::statfs = unsafe { std::mem::zeroed() };
+        // SAFETY: statfs fills the struct for an existing path; f_fstypename is a NUL-terminated name.
+        if unsafe { libc::statfs(c.as_ptr(), &mut s) } != 0 {
+            return false;
+        }
+        let name = unsafe { std::ffi::CStr::from_ptr(s.f_fstypename.as_ptr()) }.to_string_lossy();
+        matches!(name.as_ref(), "apfs" | "hfs")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = dir;
+        true
+    }
+}
+
 fn walk(dir: &Path, depth: u32, budget: &mut usize, root: &str, out: &mut Found, dirs: &DirCache) {
     let Ok(modified) = std::fs::metadata(dir).and_then(|m| m.modified()) else { return };
-    let known = dirs.lock().ok().and_then(|d| d.get(dir).filter(|(t, _, _)| *t == modified).map(|(_, f, s)| (f.clone(), s.clone())));
+    let reliable = folder_times_reliable(dir);
+    let known = if reliable { dirs.lock().ok().and_then(|d| d.get(dir).filter(|(t, _, _)| *t == modified).map(|(_, f, s)| (f.clone(), s.clone()))) } else { None };
     let (files, subs) = match known {
         Some(listing) => listing,
         None => {
@@ -198,6 +220,13 @@ mod tests {
         let names: Vec<&str> = out.iter().map(|(n, _, _)| n.as_str()).collect();
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(names, ["a.mp4"]);
+    }
+
+    /// The Mac's own disk keeps folder times (listings can be reused); the test reads the temp folder's disk.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_macs_own_disk_keeps_folder_times() {
+        assert!(super::folder_times_reliable(&std::env::temp_dir()));
     }
 
     #[test]

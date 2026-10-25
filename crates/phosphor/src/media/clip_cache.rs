@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 
 /// How much the cache may hold.
 pub const CAP_BYTES: u64 = 25 << 30;
+/// Free space a copy must leave on this Mac's disk (recordings, saves and macOS itself need room).
+const KEEP_FREE: u64 = 30 << 30;
 /// Copy speed (bytes per second): well under what an external SSD gives, so playback from it keeps its share.
 const COPY_RATE: u64 = 150 << 20;
 
@@ -126,11 +128,21 @@ fn copy_one(dir: &Path, path: &str) {
     };
     let (len, modified) = (meta.len(), meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs()));
     let fresh = cache().and_then(|c| c.lock().ok()).is_some_and(|c| c.index.get(path).is_some_and(|e| e.len == len && e.modified == modified && Path::new(&e.local).is_file()));
-    if fresh || len == 0 || len > CAP_BYTES / 4 {
+    // Never fill the disk: the copy must leave plenty free.
+    let _ = std::fs::create_dir_all(dir);
+    let room = crate::convert::free_space(&dir.to_string_lossy()).is_none_or(|free| free > len + KEEP_FREE);
+    if fresh || !room || len == 0 || len > CAP_BYTES / 4 {
         if let Some(c) = cache()
             && let Ok(mut c) = c.lock()
         {
             done(&mut c);
+            // (Opened again: remember it was used, so the cache keeps the clips played most recently.)
+            if fresh {
+                save_index(&c);
+            }
+        }
+        if !room && !fresh {
+            log::info!(target: "phosphor::clip_cache", "not copied (this Mac's disk is nearly full): {path}");
         }
         return;
     }
@@ -154,10 +166,7 @@ fn copy_one(dir: &Path, path: &str) {
 
 /// A stable name for a path's copy.
 fn key(path: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    path.hash(&mut h);
-    h.finish()
+    phosphor_engine::stable_hash(&[path.as_bytes()])
 }
 
 /// Copies `from` to `to` (through a `.part` file) at no more than `COPY_RATE`.

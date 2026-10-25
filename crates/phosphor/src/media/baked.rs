@@ -12,13 +12,12 @@ pub struct Drawing {
 /// The movie `path` plays as (kept under `folder` in Phosphor's storage), made by `draw` from the file's bytes the
 /// first time. Call off the UI thread.
 pub fn cached_movie(path: &str, folder: &str, draw: impl FnOnce(&[u8]) -> Result<Drawing, String>) -> Result<String, String> {
-    use std::hash::{Hash, Hasher};
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
     let meta = std::fs::metadata(path).map_err(|e| format!("{name}: {e}"))?;
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (path, meta.len(), meta.modified().ok()).hash(&mut h);
+    let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+    let h = phosphor_engine::stable_hash(&[path.as_bytes(), &meta.len().to_le_bytes(), &modified.to_le_bytes()]);
     let dir = crate::show::storage_dir().unwrap_or_else(std::env::temp_dir).join(folder);
-    let movie = dir.join(format!("{:016x}.mov", h.finish()));
+    let movie = dir.join(format!("{h:016x}.mov"));
     let movie_path = movie.to_string_lossy().to_string();
     if movie.exists() {
         return Ok(movie_path);
@@ -26,7 +25,7 @@ pub fn cached_movie(path: &str, folder: &str, draw: impl FnOnce(&[u8]) -> Result
     let d = draw(&std::fs::read(path).map_err(|e| format!("{name}: {e}"))?).map_err(|e| format!("{name}: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     // Written under another name and renamed when whole, so a half-made movie is never reused.
-    let part = dir.join(format!("{:016x}.part.mov", h.finish()));
+    let part = dir.join(format!("{h:016x}.part.mov"));
     let part_path = part.to_string_lossy().to_string();
     use super::video::hap_encode::{HapKind, HapWriter};
     let mut writer = HapWriter::create(&part_path, d.size.0, d.size.1, d.fps, HapKind::HapQAlpha)?;

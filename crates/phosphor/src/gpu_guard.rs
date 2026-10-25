@@ -7,24 +7,25 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
 pub struct GpuGuard {
-    errors: Arc<Mutex<Vec<String>>>,
+    /// The first error since the last log line, and how many came in all.
+    errors: Arc<Mutex<(Option<String>, u64)>>,
+    /// When the log was last written (an error repeating every frame is one line a second).
+    logged: Arc<Mutex<Option<std::time::Instant>>>,
     lost: Arc<AtomicBool>,
     /// Already said on screen (once per run is enough).
     told: Arc<AtomicBool>,
 }
-
-/// How many errors are kept until the next frame looks (a broken shader can make one per frame).
-const KEEP: usize = 8;
 
 impl GpuGuard {
     pub fn install(device: &wgpu::Device) -> Self {
         let guard = GpuGuard::default();
         let errors = guard.errors.clone();
         device.on_uncaptured_error(Arc::new(move |e: wgpu::Error| {
-            if let Ok(mut list) = errors.lock()
-                && list.len() < KEEP
-            {
-                list.push(e.to_string());
+            if let Ok(mut errs) = errors.lock() {
+                if errs.0.is_none() {
+                    errs.0 = Some(e.to_string());
+                }
+                errs.1 += 1;
             }
         }));
         let lost = guard.lost.clone();
@@ -37,15 +38,25 @@ impl GpuGuard {
 
     /// Errors since the last look, written to the log; the first one ever (or a lost device) as a notice.
     pub fn poll(&self) -> Option<String> {
-        let errors: Vec<String> = self.errors.lock().map(|mut l| std::mem::take(&mut *l)).unwrap_or_default();
-        for e in &errors {
-            log::warn!(target: "phosphor::gpu", "skipped a GPU error: {}", e.lines().next().unwrap_or(e));
+        let lost = self.lost.swap(false, Ordering::Relaxed);
+        let mut logged = self.logged.lock().ok()?;
+        if logged.is_some_and(|t| t.elapsed().as_secs_f32() < 1.0) && !lost {
+            return None;
         }
-        if self.lost.swap(false, Ordering::Relaxed) {
+        let (first, count) = self.errors.lock().map(|mut e| std::mem::take(&mut *e)).unwrap_or_default();
+        let first = first.map(|e| e.lines().next().unwrap_or_default().to_string());
+        if let Some(e) = &first {
+            *logged = Some(std::time::Instant::now());
+            let more = if count > 1 { format!(" ({} like it in the last second)", count - 1) } else { String::new() };
+            log::warn!(target: "phosphor::gpu", "skipped a GPU error: {e}{more}");
+        }
+        if lost {
             return Some("The graphics card reset. Save and restart Phosphor (it reopens where you were).".into());
         }
-        if !errors.is_empty() && !self.told.swap(true, Ordering::Relaxed) {
-            return Some(format!("A GPU error was skipped (the show goes on; details in Help › Report a Bug): {}", errors[0].lines().next().unwrap_or_default()));
+        if let Some(e) = first
+            && !self.told.swap(true, Ordering::Relaxed)
+        {
+            return Some(format!("A GPU error was skipped (the show goes on; details in Help › Report a Bug): {e}"));
         }
         None
     }

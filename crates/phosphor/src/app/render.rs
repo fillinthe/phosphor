@@ -56,6 +56,7 @@ impl PhosphorApp {
             monitor_held,
             snapshot_source,
             snapshot_ready,
+            project_picture,
             monitor_textures,
             output_textures,
             #[cfg(target_os = "macos")]
@@ -232,6 +233,12 @@ impl PhosphorApp {
                 }
             }
         }
+        // A saved project's picture: the mix, small, read back without waiting (Projects window).
+        if project_picture.is_some() {
+            let w = 480;
+            mwants.push((crate::panels::PROJECT_PICTURE_KEY, phosphor_engine::MASTER_ID, w, (w * comp.height / comp.width.max(1)).max(1)));
+            engine.read_monitor(mwants.len() - 1, crate::panels::PROJECT_PICTURE_KEY as u64);
+        }
         // A picture of one layer / group / comp: read through a monitor slot this frame.
         if let Some(id) = snapshot_source.take() {
             mwants.push((crate::panels::SNAPSHOT_KEY, id, comp.width, comp.height));
@@ -317,6 +324,12 @@ impl PhosphorApp {
                     }
                 }
                 crate::panels::SNAPSHOT_KEY => *snapshot_ready = Some((f.width, f.height, f.rgba)),
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::panels::PROJECT_PICTURE_KEY => {
+                    if let Some(project) = project_picture.take() {
+                        crate::project_files::save_picture(&project, f.width, f.height, f.rgba);
+                    }
+                }
                 crate::scopes::MONITOR_KEY => {
                     scopes.give(&f.rgba, f.width, f.height, now);
                     for (id, img) in scopes.take_layer_pictures() {
