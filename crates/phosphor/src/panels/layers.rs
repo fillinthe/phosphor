@@ -27,17 +27,22 @@ pub(crate) enum LayerAction {
 }
 
 pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
-    comp_tabs(ui, st);
+    // Every comp is in this one list (a band over its layers, VDMX-style), not behind tabs.
     crate::ui::toolbar(ui, |ui| {
         if crate::ui::command(ui, label(icon::PLUS, "Add Layer")).clicked() {
             st.add_layer();
+        }
+        if crate::ui::command(ui, label(icon::FRAME_CORNERS, "Comp")).on_hover_text("A group of layers with a canvas of its own: its own size, mixed into the master or sent to outputs of its own").clicked() {
+            let n = st.comp.comps.len().max(1) + 1;
+            let id = st.comp.add_comp(&format!("Comp {n}"));
+            st.selected = Some(id);
         }
         hint(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
     });
     ui.add_space(2.0);
     let aspect = st.aspect();
     let output_tex = st.texture;
-    let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo && st.comp.in_open_comp(l));
+    let any_solo = st.comp.layers.iter().any(|l| l.enabled && l.solo);
     let feeds = feed_choices(&st.comp);
     let others = other_comps(&st.comp);
     let State { comp, selected, also_selected, media, layer_textures, .. } = st;
@@ -51,6 +56,8 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let mut palette_drop: Option<(u64, crate::explorer::PaletteDrag)> = None;
     let mut source_drop: Option<(u64, SourceDrag)> = None;
     let mut group_action: Option<(u64, GroupAction)> = None;
+    let mut comp_action: Option<(u64, super::stack::CompBandAct)> = None;
+    let mut comp_stop: Vec<u64> = Vec::new();
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass);
         if pick {
@@ -60,8 +67,32 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             palette_drop = Some((MASTER_ID, d));
         }
         ui.add_space(4.0);
+        // Comps: a band each, the later (on top in the master) first. No comps, or one plain one: just the layers.
+        let comp_ids: Vec<Option<u64>> = if comp.comps.is_empty() { vec![None] } else { comp.comps.iter().rev().map(|c| Some(c.id)).collect() };
+        let many = comp.comps.len() > 1;
+        for cid in comp_ids {
+        let band = cid.filter(|id| many || comp.comp(*id).is_some_and(|c| !c.is_plain()));
+        if let Some(id) = band {
+            let members: Vec<u64> = comp.layers.iter().filter(|l| comp.comp_of(l) == Some(id)).map(|l| l.id).collect();
+            let Some(c) = comp.comps.iter_mut().find(|c| c.id == id) else { continue };
+            let thumb = layer_textures.get(&id).map(|(t, _)| *t);
+            let (pick, act, stop) = super::stack::comp_band(ui, c, thumb, aspect, *selected == Some(id), members.len(), many);
+            if stop {
+                comp_stop.extend(members);
+            }
+            if pick {
+                *selected = Some(id);
+            }
+            if let Some(a) = act {
+                comp_action = Some((id, a));
+            }
+            ui.add_space(4.0);
+            if comp.comp(id).is_some_and(|c| c.collapsed) {
+                continue;
+            }
+        }
         for idx in (0..count).rev() {
-            if !comp.in_open_comp(&comp.layers[idx]) {
+            if comp.comp_of(&comp.layers[idx]) != cid {
                 continue;
             }
             // A group's card goes above its top member; folded groups hide their members.
@@ -132,6 +163,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             }
             ui.add_space(4.0);
         }
+        }
     });
     let media_launch = media_drop.and_then(|(idx, m)| Some((comp.layers.get(idx)?.id, comp.media_bin.get(m)?.clone())));
     if let Some((from, onto)) = drop {
@@ -145,6 +177,13 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     }
     if let Some((gid, a)) = group_action {
         apply_group_action(st, gid, a);
+    }
+    if let Some((id, a)) = comp_action {
+        super::stack::apply_comp_band_act(st, id, a);
+    }
+    if !comp_stop.is_empty() {
+        let now = ui.ctx().input(|i| i.time);
+        super::stack::stop_layers(st, &comp_stop, now);
     }
     if let Some((target, d)) = palette_drop {
         crate::explorer::apply_palette(st, d, Some(target));
