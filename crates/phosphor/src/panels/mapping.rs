@@ -1029,7 +1029,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             s.set_bend(true);
         }
     }));
-    ui.collapsing("Input region (part of the picture shown)", |ui| {
+    crate::ui::subsection(ui, ("input_region", s.id), "Input region (part of the picture shown)", false, |ui| {
         ui.horizontal(|ui| {
             Level::range(&mut s.input[0], 0.0, 1.0, "X").default(0.0).show(ui);
         });
