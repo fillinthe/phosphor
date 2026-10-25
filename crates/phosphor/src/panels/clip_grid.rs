@@ -89,6 +89,8 @@ pub(crate) struct RowOut {
     pub beat_row: Option<u64>,
     pub fill_row: Option<u64>,
     pub row_midi: Option<(u64, RowAct)>,
+    /// A clip's file starred / unstarred in Media.
+    pub favorite: Option<(u64, usize)>,
 }
 
 /// Tempo (tap, bpm, resync, beat dots, MIDI clock, Link, AUTO), the launch settings, the bank and columns.
@@ -345,6 +347,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
                     ClipAct::StoreCurrent => out.use_current = Some((idx, c)),
                     ClipAct::Clear => out.clear = Some((idx, c)),
                     ClipAct::Thumbnail => out.thumb_req = Some((layer.id, c)),
+                    ClipAct::Favorite => out.favorite = Some((layer.id, c)),
                 }
                 ui.close();
             }
@@ -354,6 +357,9 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
 
 /// Does what the cells asked: drops, plays, selection, row menus, releases.
 pub(crate) fn apply_row_out(st: &mut State, out: RowOut, now: f64) {
+    if let Some((layer, c)) = out.favorite {
+        apply_clip_act(st, layer, c, ClipAct::Favorite, now);
+    }
     // A media bin item or a live input dropped on a cell: that cell's clip (the way any clips are placed).
     let dropped = out.set_cell
         .and_then(|(idx, c, m)| st.comp.media_bin.get(m).map(|item| (idx, c, item.name.clone(), crate::media::spec_for_path(&item.path))))
