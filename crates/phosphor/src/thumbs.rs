@@ -93,6 +93,15 @@ impl Thumbs {
         self.cache.remove(path);
         self.pending.remove(path);
     }
+
+    /// `forget` for a `get_sized` picture.
+    pub fn forget_sized(&mut self, path: &str, max: u32) {
+        if max == THUMB_W {
+            self.forget(path);
+        } else {
+            self.forget(&format!("{path}{SIZE_SEP}{max}"));
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

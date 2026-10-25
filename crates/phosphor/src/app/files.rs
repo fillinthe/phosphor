@@ -169,6 +169,7 @@ impl PhosphorApp {
                     if let Some(p) = paths.first() {
                         st.set_project_path(&p.to_string_lossy());
                         st.save_project();
+                        st.save_project_picture();
                     }
                 }
                 Purpose::ExportShow => {

@@ -38,7 +38,11 @@ impl PhosphorApp {
                 #[cfg(target_arch = "wasm32")]
                 crate::web_files::pick_text(".phosphor,.json");
             }
-            A::Save => st.save_project(),
+            A::Save => {
+                st.save_project();
+                #[cfg(not(target_arch = "wasm32"))]
+                st.save_project_picture();
+            }
             A::SaveAs => st.save_project_as(),
             A::SaveToAccount => {
                 let name = st.cloud_project.as_ref().map(|(_, n)| n.clone()).unwrap_or_else(|| st.account_ui.name.trim().to_string());
