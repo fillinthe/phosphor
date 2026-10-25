@@ -161,6 +161,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
 
 pub fn duplicate_layer(st: &mut State, id: u64) {
     let Some(i) = st.comp.layers.iter().position(|l| l.id == id) else { return };
+    log::info!(target: "phosphor::action", "layer duplicated: {}", st.comp.layers[i].name);
     let mut copy = st.comp.adopt_layer(st.comp.layers[i].clone());
     copy.name = format!("{} copy", copy.name);
     st.selected = Some(copy.id);
@@ -169,6 +170,7 @@ pub fn duplicate_layer(st: &mut State, id: u64) {
 
 pub fn remove_layer(st: &mut State, id: u64) {
     let Some(i) = st.comp.layers.iter().position(|l| l.id == id) else { return };
+    log::info!(target: "phosphor::action", "layer removed: {}", st.comp.layers[i].name);
     st.comp.layers.remove(i);
     st.comp.normalize_groups();
     if st.selected == Some(id) {

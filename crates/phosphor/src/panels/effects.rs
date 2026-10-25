@@ -146,7 +146,8 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
         effects.swap(a, b);
     }
     if let Some(i) = remove {
-        effects.remove(i);
+        let gone = effects.remove(i);
+        log::info!(target: "phosphor::action", "effect removed: {} ({} left in that chain)", gone.effect, effects.len());
     }
     if let Some(i) = duplicate {
         action = Some(FxAction::Duplicate(i));
@@ -190,6 +191,8 @@ pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
     st.explorer.recent.retain(|r| r != effect);
     st.explorer.recent.insert(0, effect.to_string());
     st.explorer.recent.truncate(12);
+    let on = if target == phosphor_engine::MASTER_ID { "MASTER".to_string() } else { st.comp.layer(target).map(|l| format!("layer \"{}\"", l.name)).or_else(|| st.comp.group(target).map(|g| format!("group \"{}\"", g.name))).or_else(|| st.comp.comp(target).map(|c| format!("comp \"{}\"", c.name))).unwrap_or_else(|| "?".into()) };
+    log::info!(target: "phosphor::action", "effect added: {effect} on {on}");
     if let Some(chain) = st.comp.effects_mut(target) {
         chain.push(fx);
     }
