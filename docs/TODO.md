@@ -4,6 +4,39 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 ## From show testing (2026-10-25)
 
+### Breaks a show or loses work: first
+- [ ] **Saving removes the clip on the active layer.** Save with a clip playing on the selected layer: the clip is
+      gone afterwards. Data loss: find and fix before anything else.
+- [ ] **A removed effect keeps running** on the layer (it's gone from the list but still changes the picture).
+- [ ] **Moving an output's rectangle in Mapping makes the clip disappear.** Videos must keep playing while a
+      surface is moved.
+- [ ] **Rutt-Etra went wrong:** other clips started loading by themselves. Reproduce with Rutt-Etra on a layer.
+- [ ] **Clips from an external drive** (WD Black SSD over USB-C, sometimes through a hub): loading jitters the show,
+      clicking a clip lags, and a disconnected drive would make playing videos vanish. Load off the show's thread,
+      keep playing clips in memory (they keep playing if the drive goes), cache clips likely to be played, and
+      measure it (log how long each load takes and from where). Test with a USB-C drive and a hub.
+- [ ] **X "Load more" stops** after a while for an account (no more posts come in).
+
+### Fix soon
+- [ ] **Can't rename a collection:** clicking the name field in the Rename pop-up closes it.
+- [ ] **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
+- [ ] **Tooltip covers "Add a file"** while the mouse is on it: move tooltips so they never sit on their button.
+- [ ] **Some MIDI mappings** misbehave (details to come from the owner).
+- [ ] **Copy a media file's name** (tile / Inspector right-click) to report problems.
+
+### Wanted
+- [ ] **A log of what you did, for reports:** every action (clip triggered, effect added / removed, layer changed,
+      save, output moved) with the time, and how long each clip took to load and from which drive, written to the
+      session log so it can be read back when something goes wrong. Report a Bug attaches the last few minutes.
+- [ ] **Scale X / Y / Z and Z position** in Transform.
+- [ ] **Speed next to the clip's preview** in the Inspector, so you can see the speed while changing it.
+- [ ] **Speed in the Mixer strips** (speed and opacity are what matter most live).
+- [ ] **A clip's in / out points saved with the media file**, so a clip cut once stays cut wherever it's used.
+- [ ] **Favourite a clip from a layer** (and see favourites later in Media).
+- [ ] **Map the Random clip button**, and run it on a timer or the beat (load a new random clip every N bars).
+- [ ] **Mapping rectangles: Photoshop-style transform:** drag a whole side, scale and rotate the shape, not only
+      its corner points.
+
 - [ ] **Preview before live, ignoring the fader.** Media / Library: click a clip or effect and see it in a preview of
       its own before it goes on a layer. A layer's preview shows its picture at full opacity even when its fader is
       at 0 (what you're about to play), with a Go to send it live. Size: M (half a day).
