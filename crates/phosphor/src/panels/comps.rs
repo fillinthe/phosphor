@@ -23,7 +23,7 @@ pub(crate) fn comp_tabs(ui: &mut egui::Ui, st: &mut State) {
             segmented(ui, &mut open, &options, |_, r, id| {
                 let name = st.comp.comp(*id).map(|c| c.name.clone()).unwrap_or_default();
                 r.right_menu(|ui| {
-                    ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+                    crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                         if let Some(n) = rename_menu(ui, ("comp_rename", *id), &name) {
                             act = Some(CompAct::Rename(*id, n));
                             ui.close();

@@ -75,7 +75,7 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
                 super::mapping_points::select_slices(ui.ctx(), selected, members.clone());
             }
             r.right_menu(|ui| {
-                ui.menu_button(label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
+                crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                     if let Some(name) = rename_menu(ui, ("slice_group", g.id), &g.name) {
                         edits.push(Edit::Rename(g.id, name));
                         ui.close();
