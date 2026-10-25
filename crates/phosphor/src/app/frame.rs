@@ -12,6 +12,10 @@ impl PhosphorApp {
         if !self.lock.active {
             self.handle_dropped_files(&ctx);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(msg) = self.state.gpu_guard.as_ref().and_then(|g| g.poll()) {
+            self.state.notice = Some(msg);
+        }
         // Buttons counted afresh; mapped presses handed to the buttons they're for.
         crate::ui::press::begin_frame(&ctx, wall);
         for key in std::mem::take(&mut self.state.button_presses) {
