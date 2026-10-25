@@ -178,6 +178,11 @@ pub fn apply(ctx: &egui::Context) {
         // One control height for every row (`ui::CONTROL_H`).
         s.spacing.interact_size.y = crate::ui::CONTROL_H;
         s.spacing.menu_margin = egui::Margin::same(6);
+        // Tooltips only when the pointer rests (a second), not as it passes over a list: they sit right under the
+        // pointer and covered the next items ("Add a file" and the rows under it). Moving to a neighbour shows its
+        // tooltip at once only inside the grace time, so a list doesn't flicker either.
+        s.interaction.tooltip_delay = 1.0;
+        s.interaction.tooltip_grace_time = 0.1;
     });
     set_brightness(ctx, DEFAULT_BRIGHTNESS);
 }
