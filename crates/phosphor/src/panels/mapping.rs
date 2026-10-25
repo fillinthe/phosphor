@@ -32,6 +32,94 @@ fn bezier_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::R
     r
 }
 
+/// The selected slice's transform box: the box round it, a handle outside each side (drag that side, the other stays),
+/// one outside each corner (scale evenly from the opposite corner; Alt: from the centre) and one above the top (turn
+/// it round its centre). Its own corner / mesh points still move one at a time. Returns true when it changed it.
+fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut phosphor_engine::Surface, color: Color32) -> bool {
+    let (lo, hi) = s.bounds();
+    let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
+    if !(w.is_finite() && h.is_finite()) {
+        return false;
+    }
+    let to_screen = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
+    let rect = egui::Rect::from_min_max(to_screen(lo), to_screen(hi));
+    let faint = color.gamma_multiply(0.45);
+    ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, faint), egui::StrokeKind::Middle);
+    let alt = ui.input(|i| i.modifiers.alt);
+    let centre = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
+    const OUT: f32 = 14.0;
+    let mut changed = false;
+    // Never smaller than a sliver (and never turned inside out).
+    let factor = |from: f32, to: f32| if from.abs() < 1e-5 { 1.0 } else { (to / from).max(0.01 / from.abs()) };
+    // Sides: (screen point, which side: 0 left, 1 right, 2 top, 3 bottom).
+    let sides = [(rect.left_center() - egui::vec2(OUT, 0.0), 0), (rect.right_center() + egui::vec2(OUT, 0.0), 1), (rect.center_top() - egui::vec2(0.0, OUT), 2), (rect.center_bottom() + egui::vec2(0.0, OUT), 3)];
+    for (at, side) in sides {
+        let mut d = [0.0, 0.0];
+        let r = side_handle(ui, id.with(("box_side", side)), at, side < 2, frame, faint, &mut d);
+        if d != [0.0, 0.0] {
+            match side {
+                0 => s.scale_about(if alt { centre } else { [hi[0], 0.0] }, factor(if alt { w / 2.0 } else { w }, if alt { w / 2.0 - d[0] } else { w - d[0] }), 1.0),
+                1 => s.scale_about(if alt { centre } else { [lo[0], 0.0] }, factor(if alt { w / 2.0 } else { w }, if alt { w / 2.0 + d[0] } else { w + d[0] }), 1.0),
+                2 => s.scale_about(if alt { centre } else { [0.0, hi[1]] }, 1.0, factor(if alt { h / 2.0 } else { h }, if alt { h / 2.0 - d[1] } else { h - d[1] })),
+                _ => s.scale_about(if alt { centre } else { [0.0, lo[1]] }, 1.0, factor(if alt { h / 2.0 } else { h }, if alt { h / 2.0 + d[1] } else { h + d[1] })),
+            }
+            changed = true;
+        }
+        r.on_hover_text("Drag this side (the opposite side stays) · Alt: both sides");
+    }
+    // Corners: scale evenly, from the opposite corner (or the centre with Alt).
+    let corners = [(rect.left_top(), [-1.0f32, -1.0f32]), (rect.right_top(), [1.0, -1.0]), (rect.right_bottom(), [1.0, 1.0]), (rect.left_bottom(), [-1.0, 1.0])];
+    for (k, (at, dir)) in corners.into_iter().enumerate() {
+        let at = at + egui::vec2(dir[0], dir[1]) * (OUT * 0.75);
+        let mut d = [0.0, 0.0];
+        let r = point_handle(ui, id.with(("box_corner", k)), at, frame, faint, true, &mut d);
+        if d != [0.0, 0.0] {
+            // How far the corner moved outwards, along the box's diagonal (in output widths, aspect left out).
+            let diag = (w * w + h * h).sqrt().max(1e-5);
+            let along = (d[0] * dir[0] * w + d[1] * dir[1] * h) / diag;
+            let half = if alt { 0.5 } else { 1.0 };
+            let k = factor(diag * half, diag * half + along);
+            let anchor = if alt { centre } else { [if dir[0] < 0.0 { hi[0] } else { lo[0] }, if dir[1] < 0.0 { hi[1] } else { lo[1] }] };
+            s.scale_about(anchor, k, k);
+            changed = true;
+        }
+        r.on_hover_text("Drag to scale evenly (the opposite corner stays) · Alt: from the centre");
+    }
+    // Turn: a round handle above the top, joined to it.
+    let knob = rect.center_top() - egui::vec2(0.0, OUT + 22.0);
+    ui.painter().line_segment([rect.center_top() - egui::vec2(0.0, OUT), knob], Stroke::new(1.0, faint));
+    let r = ui.interact(egui::Rect::from_center_size(knob, egui::vec2(18.0, 18.0)), id.with("box_turn"), Sense::drag());
+    let lit = r.hovered() || r.dragged();
+    ui.painter().circle(knob, if lit { 7.0 } else { 5.5 }, if lit { Color32::WHITE } else { Color32::BLACK }, Stroke::new(1.5, faint));
+    if r.dragged()
+        && let Some(now) = r.interact_pointer_pos()
+    {
+        let c = to_screen(centre);
+        let before = now - r.drag_delta() - c;
+        let after = now - c;
+        let turn = after.y.atan2(after.x) - before.y.atan2(before.x);
+        if turn.abs() > 1e-5 {
+            s.rotate_about(centre, turn, frame.width() / frame.height().max(1.0));
+            changed = true;
+        }
+    }
+    r.on_hover_text("Drag to turn the slice round its centre");
+    changed
+}
+
+/// A side handle of the transform box: a short bar along that side.
+fn side_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, upright: bool, frame: egui::Rect, color: Color32, delta: &mut [f32; 2]) -> egui::Response {
+    let size = if upright { egui::vec2(8.0, 22.0) } else { egui::vec2(22.0, 8.0) };
+    let r = ui.interact(egui::Rect::from_center_size(at, size + egui::vec2(6.0, 6.0)), id, Sense::drag());
+    if r.dragged() {
+        let d = r.drag_delta();
+        *delta = [d.x / frame.width(), d.y / frame.height()];
+    }
+    let lit = r.hovered() || r.dragged();
+    ui.painter().rect_filled(egui::Rect::from_center_size(at, size), 2.0, if lit { Color32::WHITE } else { color });
+    r
+}
+
 pub(crate) const MASK_COLOR: Color32 = Color32::from_rgb(255, 130, 80);
 
 /// Draws every surface (corners or mesh grid) and mask over `frame` (the rect the output occupies
@@ -192,6 +280,10 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
                 r.on_hover_text("Drag to bend this edge (the picture follows)");
             }
             s.bend = Some(b);
+        }
+        // The transform box (Photoshop-style): drag a side, scale from a corner, turn from the top.
+        if is_selected && !locked && s.model.is_none() && many.len() <= 1 {
+            touched |= transform_box(ui, id, frame, s, base);
         }
         // 3D model calibration: click a model point to pin it, drag pins to where those points really are.
         if is_selected
