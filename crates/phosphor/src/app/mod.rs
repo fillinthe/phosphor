@@ -435,6 +435,7 @@ impl State {
     pub fn add_layer(&mut self) -> u64 {
         let id = self.comp.add_layer().id;
         self.selected = Some(id);
+        log::info!(target: "phosphor::action", "layer added: {}", self.comp.layer(id).map_or("?", |l| l.name.as_str()));
         id
     }
 
@@ -681,7 +682,26 @@ impl State {
         self.trigger(Trigger::Source { layer, source, values, name }, now);
     }
 
+    /// One line in the session log for a trigger that fires: which layer and clip, and where the file is (so a
+    /// report can say what was played and how long it took to load).
+    fn log_trigger(&self, t: &Trigger) {
+        match t {
+            Trigger::Clip { layer, slot } => {
+                if let Some(l) = self.comp.layer(*layer)
+                    && let Some(c) = l.clips.get(*slot)
+                {
+                    log::info!(target: "phosphor::action", "clip played: layer \"{}\" slot {}: {}", l.name, slot + 1, c.source.describe());
+                }
+            }
+            Trigger::Column(c) => log::info!(target: "phosphor::action", "column {} played", c + 1),
+            Trigger::Source { layer, source, name, .. } => {
+                log::info!(target: "phosphor::action", "source set: layer \"{}\": {} ({name})", self.comp.layer(*layer).map_or("?", |l| l.name.as_str()), source.describe());
+            }
+        }
+    }
+
     fn fire(&mut self, t: Trigger, now: f32) {
+        self.log_trigger(&t);
         match t {
             Trigger::Clip { layer, slot } => self.comp.press_clip(layer, slot, now),
             Trigger::Column(col) => self.comp.trigger_column(col, now),
@@ -739,6 +759,7 @@ impl State {
             }
             !any
         };
+        log::info!(target: "phosphor::action", "output windows {}", if opened { "opened" } else { "closed" });
         // Opened: each output goes back to the screen it filled last time (remembered in the project).
         if opened {
             self.send_outputs_to_screens();

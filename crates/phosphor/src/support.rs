@@ -83,7 +83,40 @@ pub fn diagnostics(st: &mut State) -> String {
             out.push_str(&tail);
         }
     }
+    // What happened just before: the end of this run's session log (what was played, effects added, outputs, slow
+    // frames, warnings), without the lines that only say a movie opened.
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(path) = crate::session_log::path()
+        && let Ok(log) = std::fs::read_to_string(&path)
+    {
+        let tail = recent_activity(&log, 60);
+        if !tail.trim().is_empty() {
+            out.push_str("\nsession log (recent):\n");
+            out.push_str(&tail);
+            out.push('\n');
+        }
+    }
     out
+}
+
+/// The last `n` meaningful lines of a session log: timestamps shortened, plumbing lines left out.
+pub fn recent_activity(log: &str, n: usize) -> String {
+    let keep: Vec<String> = log
+        .lines()
+        .filter(|l| !l.contains("first frame") && !l.contains("sound output:") && !l.contains("ISF "))
+        .map(|l| {
+            // "[2026-10-25T09:37:09Z INFO  phosphor::app::menus] menu: Save" -> "09:37:09 menu: Save"
+            let time = l.get(12..20).unwrap_or("");
+            let text = l.split_once("] ").map_or(l, |(_, t)| t);
+            format!("{time} {text}")
+        })
+        .collect();
+    let from = keep.len().saturating_sub(n);
+    let mut tail = keep[from..].join("\n");
+    if tail.len() > 6000 {
+        tail = tail[tail.len() - 6000..].to_string();
+    }
+    tail
 }
 
 fn os_version() -> String {
@@ -195,4 +228,16 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
     });
     st.bug.open = open;
     st.bug.detached = detached;
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_report_carries_the_recent_log_without_plumbing() {
+        let log = "[2026-10-25T09:00:00Z INFO  phosphor::media::video] clip.mov: opened in 6 ms\n[2026-10-25T09:00:00Z INFO  phosphor::media::video] first frame 0 ms after starting (1x1)\n[2026-10-25T09:00:01Z INFO  phosphor::action] effect added: invert on layer \"A\"\n[2026-10-25T09:00:02Z WARN  phosphor::hitch] a frame took 180 ms (render 3.0 ms, GPU 1.0 ms)";
+        let t = super::recent_activity(log, 10);
+        assert!(!t.contains("first frame"), "{t}");
+        assert!(t.contains("09:00:01 effect added: invert on layer \"A\"") && t.contains("a frame took 180 ms"), "{t}");
+        assert_eq!(super::recent_activity(log, 1).lines().count(), 1);
+    }
 }

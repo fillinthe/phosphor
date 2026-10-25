@@ -185,6 +185,14 @@ impl TextStyle {
 }
 
 impl SourceSpec {
+    /// For logs and reports: the label, and for a file where it is ("Movie clip.mov at /Volumes/SSD/clip.mov").
+    pub fn describe(&self) -> String {
+        match self {
+            SourceSpec::Image { path: Some(p), .. } | SourceSpec::Movie { path: Some(p), .. } => format!("{} at {p}", self.label()),
+            _ => self.label(),
+        }
+    }
+
     pub fn label(&self) -> String {
         match self {
             SourceSpec::None => "No source".into(),

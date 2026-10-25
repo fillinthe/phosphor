@@ -15,6 +15,7 @@ impl PhosphorApp {
             if let Some(o) = self.state.comp.outputs.iter_mut().find(|o| o.id == id)
                 && o.screen != key
             {
+                log::info!(target: "phosphor::action", "output \"{}\" now fills the screen \"{key}\"", o.name);
                 o.screen = key;
             }
         }

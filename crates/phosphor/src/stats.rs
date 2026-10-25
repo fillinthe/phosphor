@@ -47,13 +47,15 @@ pub struct Stats {
     last_cpu: Option<f64>,
     /// Wall-clock time of the last frame, and the longest gap in this second.
     last_frame: Option<web_time::Instant>,
+    /// When a long frame was last logged.
+    last_hitch_log: f64,
     worst: f64,
     pub latest: Snapshot,
 }
 
 impl Stats {
     pub fn new(now: f64) -> Self {
-        Self { window_start: now, frames: 0, render_total: 0.0, last_cpu: process_cpu_seconds(), last_frame: None, worst: 0.0, latest: Snapshot::default() }
+        Self { window_start: now, frames: 0, render_total: 0.0, last_cpu: process_cpu_seconds(), last_frame: None, last_hitch_log: f64::NEG_INFINITY, worst: 0.0, latest: Snapshot::default() }
     }
 
     /// Records one frame; returns a fresh snapshot once per second.
@@ -62,7 +64,14 @@ impl Stats {
         self.render_total += render_secs;
         let t = web_time::Instant::now();
         if let Some(last) = self.last_frame {
-            self.worst = self.worst.max(t.duration_since(last).as_secs_f64());
+            let gap = t.duration_since(last).as_secs_f64();
+            self.worst = self.worst.max(gap);
+            // A frame that took over a tenth of a second: in the log, with what the frame was doing (a clip loading
+            // from a slow drive, a heavy effect), at most one line a second.
+            if gap > 0.1 && now - self.last_hitch_log > 1.0 {
+                self.last_hitch_log = now;
+                log::warn!(target: "phosphor::hitch", "a frame took {:.0} ms (render {:.1} ms, GPU {:.1} ms)", gap * 1000.0, render_secs * 1000.0, gpu_ms);
+            }
         }
         self.last_frame = Some(t);
         let elapsed = now - self.window_start;
