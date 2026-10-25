@@ -2,11 +2,23 @@
 
 use super::*;
 
+/// Previews drawn fresh per frame at most.
+const NEW_PREVIEWS_PER_FRAME: usize = 6;
+
 impl Engine {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_previews(&mut self, master: &wgpu::TextureView, canvas: (u32, u32), time: f32, mods: &ModInputs, layers: &[LayerState], passes: &mut Vec<Pass>) {
         let items = std::mem::take(&mut self.previews);
-        if !items.iter().any(|(_, refresh)| *refresh) {
+        if self.preview_ready.len() < items.len() {
+            self.preview_ready.resize(items.len(), false);
+        }
+        // A tile whose slot now holds another item stops showing the old picture right away.
+        for (i, (_, refresh)) in items.iter().enumerate() {
+            if *refresh == PreviewRefresh::Moved {
+                self.preview_ready[i] = false;
+            }
+        }
+        if !items.iter().enumerate().any(|(i, (_, refresh))| *refresh != PreviewRefresh::No || !self.preview_ready[i]) {
             return;
         }
         let (w, h) = canvas;
@@ -28,10 +40,28 @@ impl Engine {
         if self.preview_targets.len() < items.len() {
             self.preview_targets.resize_with(items.len(), || None);
         }
+        // New pictures per frame (scrolling a big list would draw every tile on one frame); live ones are spread out
+        // by the app already.
+        let mut budget = NEW_PREVIEWS_PER_FRAME;
         for (i, (item, refresh)) in items.iter().enumerate() {
-            let has_picture = self.preview_targets[i].is_some();
-            if !*refresh && has_picture {
+            let ready = self.preview_ready[i];
+            if *refresh == PreviewRefresh::No && ready {
                 continue;
+            }
+            // An effect whose shader is still being built: ask for it (a few build at a time) and come back; drawing
+            // it now would only pass the picture through untouched.
+            if let PreviewItem::Effect(fx) = item
+                && let Some(d) = shaders::effect(&fx.effect).filter(|d| !shaders::is_external(d.entry))
+                && !self.ensure_module(d.entry)
+                && !self.failed_modules.contains_key(d.entry)
+            {
+                continue;
+            }
+            if !ready {
+                if budget == 0 {
+                    continue;
+                }
+                budget -= 1;
             }
             let rid = RESERVED_IDS + 1 + i as u64;
             let frame = match item {
@@ -53,6 +83,7 @@ impl Engine {
             let Some(Frame::Rgb { view, .. }) = frame else { continue };
             Target::ensure(&mut self.preview_targets[i], &self.gpu.device, "preview", PREVIEW_WIDTH, ph);
             copy(self.preview_targets[i].as_ref().unwrap().view.clone(), view, (PREVIEW_WIDTH, ph), passes);
+            self.preview_ready[i] = true;
         }
     }
 

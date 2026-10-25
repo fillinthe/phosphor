@@ -160,8 +160,14 @@ impl PhosphorApp {
                 .into_iter()
                 .enumerate()
                 .map(|(i, (key, item, live))| {
-                    let moved = preview_keys.get(i) != Some(&key);
-                    (item, live || stale || moved)
+                    let refresh = if preview_keys.get(i) != Some(&key) {
+                        phosphor_engine::PreviewRefresh::Moved
+                    } else if live || stale {
+                        phosphor_engine::PreviewRefresh::Live
+                    } else {
+                        phosphor_engine::PreviewRefresh::No
+                    };
+                    (item, refresh)
                 })
                 .collect();
             engine.request_previews(source, items);
