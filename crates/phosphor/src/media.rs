@@ -17,6 +17,8 @@ pub mod preload;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod present;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod clip_cache;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod rhythm;
 pub mod sequence;
 #[cfg(not(target_arch = "wasm32"))]
@@ -564,6 +566,9 @@ impl MediaManager {
     pub fn reload(&mut self, comp: &Composition, path: &str) {
         #[cfg(not(target_arch = "wasm32"))]
         drop(self.preload.take(path));
+        // Edited: the Mac's copy (of a clip from another drive) is out of date.
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::media::clip_cache::forget(path);
         for l in &comp.layers {
             if let SourceSpec::Image { path: Some(p), .. } | SourceSpec::Movie { path: Some(p), .. } = &l.source
                 && p == path
