@@ -238,23 +238,29 @@ pub fn handle(typed: &str) -> Option<(Option<Site>, String)> {
 pub const NO_TOOL: &str = "Needs gallery-dl (free): in Terminal, brew install gallery-dl";
 pub const NO_BROWSER: &str = "Pick the browser you're signed in with (X and Instagram only list an account's posts to people signed in)";
 
-/// gallery-dl's listing (JSON) of the first `count` media of `url`, using `browser`'s sign-in. At most two minutes.
-pub fn gallery_list(url: &str, first: usize, count: usize, browser: &str) -> Result<Vec<u8>, String> {
+/// gallery-dl's listing (JSON) of `count` media of `url` (from the start, or from `cursor`: where an earlier listing
+/// got to), using `browser`'s sign-in, and the page cursors it reported on the way (`resume_from` picks one). At most
+/// two minutes.
+pub fn gallery_list(url: &str, count: usize, browser: &str, cursor: Option<&str>) -> Result<(Vec<u8>, Vec<String>), String> {
     let tool = crate::web_media::find_gallery_dl().ok_or(NO_TOOL)?;
-    let mut child = Command::new(tool)
-        .args(["-j", "--range", &format!("{first}-{}", first + count.max(1) - 1), "--cookies-from-browser", browser])
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("couldn't start gallery-dl: {e}"))?;
-    // Its output is read on a thread so a full pipe never stalls it; it's stopped if it takes too long.
+    let mut cmd = Command::new(tool);
+    // -v: gallery-dl says "Cursor: …" for each page it asks for (debug lines, on stderr).
+    cmd.args(["-j", "-v", "--range", &format!("1-{}", count.max(1)), "--cookies-from-browser", browser]);
+    if let Some(c) = cursor {
+        cmd.args(["-o", &format!("cursor={c}")]);
+    }
+    let mut child = cmd.arg(url).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("couldn't start gallery-dl: {e}"))?;
+    // Both outputs are read on threads so a full pipe never stalls it; it's stopped if it takes too long.
     let mut out = child.stdout.take().ok_or("no output")?;
+    let err = child.stderr.take().ok_or("no output")?;
     let reader = std::thread::spawn(move || {
         let mut b = Vec::new();
         let _ = std::io::Read::read_to_end(&mut out, &mut b);
         b
+    });
+    let cursors = std::thread::spawn(move || {
+        use std::io::BufRead;
+        std::io::BufReader::new(err).lines().map_while(Result::ok).filter_map(|l| l.split_once("Cursor: ").map(|(_, c)| c.trim().to_string())).filter(|c| !c.is_empty()).collect::<Vec<String>>()
     });
     let until = Instant::now() + Duration::from_secs(120);
     loop {
@@ -267,7 +273,39 @@ pub fn gallery_list(url: &str, first: usize, count: usize, browser: &str) -> Res
         }
         std::thread::sleep(Duration::from_millis(200));
     }
-    reader.join().map_err(|_| "gallery-dl's output was lost".to_string())
+    let body = reader.join().map_err(|_| "gallery-dl's output was lost".to_string())?;
+    Ok((body, cursors.join().unwrap_or_default()))
+}
+
+/// Where the next "Load more" should start: the cursor of the last page a listing began (not the one after it: the
+/// listing may have stopped partway through that page, and starting after it would skip the rest of it).
+pub fn resume_from(cursors: &[String]) -> Option<String> {
+    match cursors {
+        [] => None,
+        [only] => Some(only.clone()),
+        [.., before_last, _] => Some(before_last.clone()),
+    }
+}
+
+/// How many media a listing held (any kind): none at all means the account has nothing older.
+pub fn media_count(body: &[u8]) -> usize {
+    serde_json::from_slice::<Value>(body).ok().and_then(|v| v.as_array().map(|a| a.iter().filter(|e| e.get(0).and_then(Value::as_i64) == Some(3)).count())).unwrap_or(0)
+}
+
+/// Each account's place for "Load more" (its own file, written only by the fetch thread: it can't race with the
+/// settings the panel saves).
+fn cursors_file() -> Option<PathBuf> {
+    crate::show::storage_dir().map(|d| d.join("following_cursors.json"))
+}
+
+fn load_cursors() -> std::collections::HashMap<String, String> {
+    cursors_file().and_then(|p| std::fs::read(p).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
+fn save_cursors(c: &std::collections::HashMap<String, String>) {
+    if let Some(p) = cursors_file() {
+        let _ = std::fs::write(p, serde_json::to_vec_pretty(c).unwrap_or_default());
+    }
 }
 
 /// The clips in gallery-dl's listing of an account: X's animated GIFs, Instagram's videos.
@@ -351,24 +389,34 @@ pub struct Progress {
 
 /// Refreshes every followed account on a thread: lists its newest clips and saves the ones not here yet.
 pub fn refresh(f: &Following, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
-    let wants = f.accounts.iter().map(|a| (a.clone(), f.per_account)).collect();
+    let wants = f.accounts.iter().map(|a| (a.clone(), Fetch::Newest)).collect();
     fetch_accounts(f, wants, ctx)
 }
 
-/// Load more: the next `per_account` older clips of one account (it has `have`).
-pub fn more(f: &Following, account: &Account, have: usize, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
-    fetch_accounts(f, vec![(account.clone(), have + f.per_account)], ctx)
+/// Load more: the next older clips of one account, from where the last listing got to.
+pub fn more(f: &Following, account: &Account, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
+    fetch_accounts(f, vec![(account.clone(), Fetch::More)], ctx)
 }
 
-/// Most of an account's posts' media looked through at once (Load more goes this far back).
-const MAX_LOOK: usize = 900;
+/// What a fetch is for.
+#[derive(Clone, Copy, PartialEq)]
+enum Fetch {
+    /// The newest clips (Refresh, a new follow).
+    Newest,
+    /// The next page of older posts (Load more).
+    More,
+}
 
-/// For each account, makes sure its newest `want` clips are here (on a thread, one fetch at a time).
-fn fetch_accounts(f: &Following, wants: Vec<(Account, usize)>, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
+/// Media looked at for the newest clips (posts carry photos and videos too, so a few times what's kept).
+const NEWEST_LOOK: usize = 60;
+/// One "Load more" page: the same size every time (it continues where the last one stopped, never from the top).
+const PAGE: usize = 150;
+
+fn fetch_accounts(f: &Following, wants: Vec<(Account, Fetch)>, ctx: Option<eframe::egui::Context>) -> Arc<Mutex<Progress>> {
     let shared = Arc::new(Mutex::new(Progress { running: true, ..Default::default() }));
     let (out, f) = (shared.clone(), f.clone());
     let _ = std::thread::Builder::new().name("following".into()).spawn(move || {
-        // One refresh at a time (following an account while Refresh runs): two would write the same files.
+        // One fetch at a time (following an account while Refresh runs): two would write the same files.
         static ONE: Mutex<()> = Mutex::new(());
         let _turn = ONE.lock().unwrap_or_else(|e| e.into_inner());
         let set = |who: String, what: String, new: usize| {
@@ -388,16 +436,33 @@ fn fetch_accounts(f: &Following, wants: Vec<(Account, usize)>, ctx: Option<efram
             }
             return;
         };
-        for (a, want) in &wants {
+        let mut cursors = load_cursors();
+        for (a, fetch) in &wants {
             set(a.label(), "looking…".into(), 0);
-            // Posts carry several media, and not all are clips: look a little further than needed.
-            let found = gallery_list(&a.profile(), 1, (want * 3).min(MAX_LOOK), &browser).and_then(|b| parse(a, &b));
-            match found.and_then(|items| save_newest(a, &items, *want)) {
-                Ok((0, kept)) if kept < *want => set(a.label(), format!("that's all ({kept})"), 0),
-                Ok((new, kept)) => set(a.label(), if new == 0 { format!("up to date ({kept})") } else { format!("{new} new") }, new),
+            let from = if *fetch == Fetch::More { cursors.get(&a.label()).cloned() } else { None };
+            let look = if *fetch == Fetch::More { PAGE } else { (f.per_account * 5).max(NEWEST_LOOK) };
+            let listed = gallery_list(&a.profile(), look, &browser, from.as_deref());
+            let result = listed.and_then(|(body, pages)| {
+                let media = media_count(&body);
+                let items = parse(a, &body)?;
+                // Where the next Load more starts (a Refresh only sets it the first time: it may be further on).
+                if let Some(next) = resume_from(&pages)
+                    && (*fetch == Fetch::More || !cursors.contains_key(&a.label()))
+                {
+                    cursors.insert(a.label(), next);
+                }
+                let new = save_new(a, &items, f.per_account)?;
+                Ok((media, new))
+            });
+            match result {
+                Ok((0, _)) if *fetch == Fetch::More => set(a.label(), "that's all: nothing older".into(), 0),
+                Ok((_, 0)) if *fetch == Fetch::More => set(a.label(), "no new clips on that page: press Load more again".into(), 0),
+                Ok((_, 0)) => set(a.label(), "up to date".into(), 0),
+                Ok((_, new)) => set(a.label(), format!("{new} new"), new),
                 Err(e) => set(a.label(), e, 0),
             }
         }
+        save_cursors(&cursors);
         if let Ok(mut p) = out.lock() {
             p.running = false;
         }
@@ -408,21 +473,36 @@ fn fetch_accounts(f: &Following, wants: Vec<(Account, usize)>, ctx: Option<efram
     shared
 }
 
-/// Saves the newest `count` of an account's clips that aren't here yet. Returns (new, how many it has).
-fn save_newest(a: &Account, items: &[Item], count: usize) -> Result<(usize, usize), String> {
+/// Saves up to `count` of these clips that aren't here yet (in listing order: newest first). Returns how many.
+fn save_new(a: &Account, items: &[Item], count: usize) -> Result<usize, String> {
     let dir = a.dir().ok_or("no downloads folder")?;
     let mut new = 0;
-    for item in items.iter().take(count) {
+    for item in items {
+        if new >= count {
+            break;
+        }
         if super::save_into(item, &dir)?.1 {
             new += 1;
         }
     }
-    Ok((new, items.len().min(count)))
+    Ok(new)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Load more starts at the last page a listing began (so a page cut short isn't skipped), and an empty listing
+    /// means there's nothing older.
+    #[test]
+    fn load_more_continues_where_the_last_listing_got_to() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(resume_from(&s(&[])), None);
+        assert_eq!(resume_from(&s(&["p2"])), Some("p2".into()));
+        assert_eq!(resume_from(&s(&["p2", "p3", "p4"])), Some("p3".into()));
+        assert_eq!(media_count(br#"[[2, {}], [3, "https://a/1.mp4", {}], [3, "https://a/2.jpg", {}]]"#), 2);
+        assert_eq!(media_count(b"[]"), 0);
+    }
 
     #[test]
     fn account_names_and_sites_are_read_from_what_was_typed() {
