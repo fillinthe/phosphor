@@ -791,6 +791,12 @@ impl PhosphorApp {
                 println!("CUES countdown={countdown:?} random_repeats={repeats} picks={:?}", picks.iter().map(|p| p.1.unwrap_or(99)).collect::<Vec<_>>());
                 continue;
             }
+            if name == "mapmode" {
+                // Map mode on (every mappable control shows its learn layer), for pictures.
+                self.state.map_mode = true;
+                println!("QUICK mapmode on");
+                continue;
+            }
             if name == "takeover" {
                 // Web control off: phones may only watch.
                 self.state.set_web_control(false);

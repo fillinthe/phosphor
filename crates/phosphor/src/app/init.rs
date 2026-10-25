@@ -180,6 +180,7 @@ impl PhosphorApp {
                 web_activity: None,
                 web_log: Vec::new(),
                 menu_requests: Vec::new(),
+                button_presses: Vec::new(),
                 #[cfg(not(target_arch = "wasm32"))]
                 dialogs: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]

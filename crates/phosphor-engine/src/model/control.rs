@@ -107,6 +107,8 @@ pub enum ControlTarget {
     /// A menu action (File › Save, Edit › Add Layer, Quick › Surprise…), by its name: anything in the menus can be
     /// mapped to a pad, a key or OSC.
     Menu(String),
+    /// Any button on screen, by its stable key (panel, label, which one) and the name shown for it.
+    Button { key: u64, name: String },
 }
 
 /// App-wide mappable controls.
