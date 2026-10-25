@@ -42,6 +42,9 @@ impl PhosphorApp {
     }
 
     pub(crate) fn output_windows(&self, ctx: &egui::Context) {
+        // Any output open: the displays stay awake (no display sleep / screen saver / lock in the middle of a show).
+        let any_open = self.state.output.lock().unwrap().values().any(|o| o.open);
+        crate::screens::keep_display_awake(any_open);
         let open: Vec<(u64, String)> =
             self.state.output.lock().unwrap().iter().filter(|(_, o)| o.open).map(|(id, o)| (*id, o.name.clone())).collect();
         for (oid, name) in open {
