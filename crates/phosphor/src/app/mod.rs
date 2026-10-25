@@ -83,6 +83,8 @@ pub(crate) use menus::*;
 const KEY_COMPOSITION: &str = "composition";
 const KEY_LAYOUTS: &str = "layouts";
 const KEY_DOCK: &str = "dock";
+/// Set once the Stack trial is over (Clips and Layers are the layout again).
+const KEY_STACK_RETIRED: &str = "stack_retired";
 const KEY_STREAM: &str = "stream";
 const KEY_RECORDERS: &str = "recorders";
 const KEY_KNOWN_TABS: &str = "known_tabs";

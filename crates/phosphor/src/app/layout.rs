@@ -328,8 +328,9 @@ pub(crate) fn layout_show() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Preview]);
     let surface = dock.main_surface_mut();
     let [left, _] = surface.split_right(NodeIndex::root(), 0.75, vec![Tab::Inspector]);
-    // The Stack (layers with their clips, groups as bands) replaced Clips + Layers (2026-10-24); those still open from View.
-    surface.split_below(left, 0.5, vec![Tab::Stack, Tab::Mixer, Tab::Cues, Tab::ShaderEditor]);
+    // (The Stack, layers with their clips in one list, was tried 2026-10-24 and is still under View; Clips + Layers
+    // stay the layout: the owner prefers them.)
+    surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Layers, Tab::Mixer, Tab::Cues, Tab::ShaderEditor]);
     // Media (the Library) open from the start: it's the daily tool.
     // (Wide enough for its sources list beside the tiles.)
     surface.split_left(NodeIndex::root(), 0.27, super::areas::LIBRARY.to_vec());
@@ -366,15 +367,14 @@ pub(crate) fn layout_locked() -> DockState<Tab> {
 }
 
 
-/// An arrangement saved before the Stack existed: its Clips tab becomes the Stack (the Layers tab stays; both old
-/// panels still open from the View menu).
-pub(crate) fn adopt_stack(dock: &mut DockState<Tab>) {
-    if dock.find_tab(&Tab::Stack).is_some() {
+/// An arrangement saved while the Stack was the default: its Stack tab becomes Clips again (unless it has Clips).
+pub(crate) fn retire_stack(dock: &mut DockState<Tab>) {
+    if dock.find_tab(&Tab::Clips).is_some() {
         return;
     }
     for (_, tab) in dock.iter_all_tabs_mut() {
-        if *tab == Tab::Clips {
-            *tab = Tab::Stack;
+        if *tab == Tab::Stack {
+            *tab = Tab::Clips;
             return;
         }
     }
@@ -385,17 +385,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn old_arrangements_get_the_stack_where_clips_was() {
+    fn arrangements_saved_during_the_stack_trial_get_clips_back() {
         let mut dock = DockState::new(vec![Tab::Preview]);
-        dock.main_surface_mut().split_below(NodeIndex::root(), 0.5, vec![Tab::Clips, Tab::Layers]);
-        adopt_stack(&mut dock);
-        assert!(dock.find_tab(&Tab::Stack).is_some() && dock.find_tab(&Tab::Clips).is_none());
+        dock.main_surface_mut().split_below(NodeIndex::root(), 0.5, vec![Tab::Stack, Tab::Layers]);
+        retire_stack(&mut dock);
+        assert!(dock.find_tab(&Tab::Clips).is_some() && dock.find_tab(&Tab::Stack).is_none());
         assert!(dock.find_tab(&Tab::Layers).is_some(), "Layers stays");
-        // Already has one: nothing changes (someone may have put Clips back on purpose).
-        dock.push_to_focused_leaf(Tab::Clips);
-        adopt_stack(&mut dock);
-        assert!(dock.find_tab(&Tab::Clips).is_some());
-        assert!(layout_show().iter_all_tabs().any(|(_, t)| *t == Tab::Stack), "the default show layout has the Stack");
+        assert!(layout_show().iter_all_tabs().any(|(_, t)| *t == Tab::Clips), "the default show layout has Clips again");
     }
 
     #[test]

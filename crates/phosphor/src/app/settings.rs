@@ -8,6 +8,7 @@ impl PhosphorApp {
             return;
         }
         storage.set_string(KEY_COMPOSITION, self.state.comp.to_json());
+        storage.set_string(KEY_STACK_RETIRED, "1".into());
         if let Some(text) = to_text(&self.dock) {
             storage.set_string(KEY_DOCK, text);
         }

@@ -36,7 +36,11 @@ impl PhosphorApp {
         let recorder_settings: Vec<crate::stream::StreamSettings> = stored(KEY_RECORDERS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let mut detached: Vec<Tab> = stored(KEY_DETACHED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let mut dock = stored(KEY_DOCK).and_then(|s| from_text(&s)).unwrap_or_else(default_layout);
-        super::layout::adopt_stack(&mut dock);
+        // The Stack trial (2026-10-24) is over: arrangements saved during it get Clips back, once.
+        let retire_stack = stored(KEY_STACK_RETIRED).is_none();
+        if retire_stack {
+            super::layout::retire_stack(&mut dock);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(s) = &snapshot {
             if let Some(d) = s.dock.as_ref().and_then(|v| match v {
@@ -74,8 +78,10 @@ impl PhosphorApp {
         } else {
             stored(KEY_AREA_DOCKS).and_then(|s| from_text::<Vec<(usize, DockState<Tab>, Vec<Tab>)>>(&s)).unwrap_or_default().into_iter().map(|(i, d, t)| (i, (d, t))).collect()
         };
-        for (d, _) in area_docks.values_mut() {
-            super::layout::adopt_stack(d);
+        if retire_stack {
+            for (d, _) in area_docks.values_mut() {
+                super::layout::retire_stack(d);
+            }
         }
         let area = if first_areas { 0 } else { stored(KEY_AREA).and_then(|s| s.parse().ok()).unwrap_or(0) };
         // The current area's arrangement is `dock` itself, not a saved copy.
