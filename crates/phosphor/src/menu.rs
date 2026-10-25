@@ -72,6 +72,27 @@ pub enum Action {
     NewFromTemplate,
 }
 
+/// A menu action's name for mapping (`ControlTarget::Menu`): stable across runs ("AddLayer", "Quick(Surprise)").
+pub fn action_key(a: Action) -> String {
+    format!("{a:?}")
+}
+
+/// Every menu item that can be mapped: (action, "File › Save").
+pub fn mappable() -> Vec<(Action, String)> {
+    MENUS
+        .iter()
+        .flat_map(|(group, entries)| entries.iter().filter_map(move |e| match e {
+            Entry::Item(a, label, _) if *a != Action::Quit => Some((*a, format!("{group} › {label}"))),
+            _ => None,
+        }))
+        .collect()
+}
+
+/// The menu action a mapped name stands for.
+pub fn action_for(key: &str) -> Option<Action> {
+    mappable().into_iter().map(|(a, _)| a).find(|a| action_key(*a) == key)
+}
+
 /// (shift, key) with ⌘ (Ctrl on Windows/Linux).
 pub type Shortcut = Option<(bool, Key)>;
 

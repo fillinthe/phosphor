@@ -104,6 +104,9 @@ pub enum ControlTarget {
     Fixture { fixture: u64, param: u8 },
     /// Plays one of a layer's clips at random (not the one playing): a button, a pad, or a timer (Autopilot).
     LayerRandomClip(u64),
+    /// A menu action (File › Save, Edit › Add Layer, Quick › Surprise…), by its name: anything in the menus can be
+    /// mapped to a pad, a key or OSC.
+    Menu(String),
 }
 
 /// App-wide mappable controls.

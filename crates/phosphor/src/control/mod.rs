@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use phosphor_engine::{AppControl, Choice, Composition, ControlMap, ControlSource, ControlTarget, EffectState, shaders};
 
 /// Controller actions the composition can't carry out by itself; the app handles them.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Deferred {
     Clip(u64, usize),
     /// A clip pad / key was let go (flash and piano clips react).
@@ -20,6 +20,8 @@ pub enum Deferred {
     Scrub(u64, f32),
     /// Jump a layer's movie one step back / forward.
     Jump(u64, bool),
+    /// Run a menu action (`ControlTarget::Menu`; its name, `menu::action_key`).
+    Menu(String),
 }
 
 /// Sent instead of a value when a pad or key press should flip an on/off control.

@@ -91,7 +91,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::SurfacePage => phosphor_engine::pick_unit(comp.surface.current_page(), comp.surface.pages.len()),
             _ => return None,
         },
-        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) | ControlTarget::LayerRandomClip(_) => return None,
+        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) | ControlTarget::LayerRandomClip(_) | ControlTarget::Menu(_) => return None,
     })
 }
 
@@ -239,6 +239,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                         out.push(Deferred::Clip(*layer, slot));
                     }
                 }
+            }
+        }
+        ControlTarget::Menu(key) => {
+            if v > 0.5 || v == FLIP {
+                out.push(Deferred::Menu(key.clone()));
             }
         }
         ControlTarget::LayerRandomClip(layer) => {
@@ -463,6 +468,8 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         }
         effects(&l.name, &l.effects, &mut out);
     }
+    // Every menu item (File › Save, Quick › Surprise…).
+    out.extend(crate::menu::mappable().into_iter().map(|(a, name)| (ControlTarget::Menu(crate::menu::action_key(a)), format!("Menu · {name}"))));
     out
 }
 
@@ -493,6 +500,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerText(id) => format!("/phosphor/layer/{id}/text"),
         ControlTarget::LayerClipPick(id) => format!("/phosphor/layer/{id}/clip/pick"),
         ControlTarget::LayerRandomClip(id) => format!("/phosphor/layer/{id}/clip/random"),
+        ControlTarget::Menu(key) => format!("/phosphor/menu/{}", key.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect::<String>().trim_matches('_')),
         ControlTarget::LayerTextStep { layer, forward } => format!("/phosphor/layer/{layer}/text/{}", if *forward { "next" } else { "previous" }),
         ControlTarget::LayerJump { layer, forward } => format!("/phosphor/layer/{layer}/jump/{}", if *forward { "forward" } else { "back" }),
         ControlTarget::LayerVolume(id) => format!("/phosphor/layer/{id}/volume"),

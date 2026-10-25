@@ -312,6 +312,8 @@ pub struct State {
     pub web_activity: Option<(f64, String)>,
     /// Changes made from phones / browsers, newest last (Devices panel).
     pub(crate) web_log: Vec<web_control::WebChange>,
+    /// Menu actions a pad, key or OSC asked for (run with the menus, next frame).
+    pub(crate) menu_requests: Vec<crate::menu::Action>,
     #[cfg(not(target_arch = "wasm32"))]
     pub dialogs: crate::dialogs::Dialogs,
     #[cfg(not(target_arch = "wasm32"))]
@@ -595,6 +597,7 @@ impl State {
             crate::control::Deferred::ClipRelease(layer, slot) => self.release_clip(layer, slot, now),
             crate::control::Deferred::Column(col) => self.trigger(Trigger::Column(col), now),
             crate::control::Deferred::App(a, v) => self.app_control(a, v, now),
+            crate::control::Deferred::Menu(key) => self.menu_requests.extend(crate::menu::action_for(&key)),
             crate::control::Deferred::Scrub(layer, v) => {
                 if let Some((_, dur)) = self.media.position(layer) {
                     self.media.seek(layer, v as f64 * dur);
