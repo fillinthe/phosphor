@@ -99,6 +99,11 @@ pub fn begin_session() -> Option<Snapshot> {
     serde_json::from_str(&json).ok()
 }
 
+/// The snapshot left by the last run, whatever way it ended (a normal quit writes one too): to reopen as it was.
+pub fn last_snapshot() -> Option<Snapshot> {
+    serde_json::from_str(&std::fs::read_to_string(snapshot_path()?).ok()?).ok()
+}
+
 /// A normal quit: the watchdog won't relaunch and the next start won't restore.
 pub fn end_session() {
     if let Some(lock) = lock_path() {

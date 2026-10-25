@@ -344,8 +344,15 @@ impl PhosphorApp {
             detached,
         };
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(s) = snapshot {
-            app.restore(s);
+        match snapshot {
+            Some(s) => app.restore(s),
+            // A normal start (not a test, not an exported show): back where it was when it last closed.
+            None if app.bench.is_none() && crate::show::bundled().is_none() => {
+                if let Some(s) = crate::recovery::last_snapshot() {
+                    app.resume(s);
+                }
+            }
+            None => {}
         }
         app.install_native_menu();
         // A fresh install (nothing saved yet): say hello once.
