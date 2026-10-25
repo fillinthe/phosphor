@@ -84,6 +84,11 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
             thumbnail(ui, thumb, egui::vec2(w, w / aspect), layer.enabled);
+            // Speed and opacity right under the picture: watch what they do while changing them.
+            if matches!(layer.source, SourceSpec::Movie { .. }) && layer.sync_beats <= 0.0 {
+                Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).width(w).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
+            }
+            Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).width(w).target(ControlTarget::LayerOpacity(layer.id)).show(ui);
             ui.horizontal(|ui| {
                 super::layers::show_button(ui, layer);
                 send = outputs_menu(ui, &outs).or(send);
@@ -107,7 +112,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, &format!("Editing {} layers: changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one.", also + 1));
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
             #[cfg(not(target_arch = "wasm32"))]
             if media.text_file.get() {
@@ -184,6 +189,8 @@ pub(crate) struct LayerMedia<'a> {
     pub match_beat: std::cell::Cell<bool>,
     /// Effects reaching this layer from its group, comp and MASTER: (where, which, running).
     pub inherited: Vec<(String, String, bool)>,
+    /// Speed is already shown under the picture (Inspector): Playback doesn't repeat it.
+    pub speed_above: bool,
 }
 
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
@@ -380,11 +387,13 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     r.on_hover_text("Drag to scratch through the movie (wraps round at the ends)");
                 });
             }
-            ui.horizontal(|ui| {
-                ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
-                    Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
+            if !(media.speed_above && layer.sync_beats <= 0.0) {
+                ui.horizontal(|ui| {
+                    ui.add_enabled_ui(layer.sync_beats <= 0.0, |ui| {
+                        Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
+                    });
                 });
-            });
+            }
             crate::ui::toolbar(ui, |ui| {
                 let mut sync = layer.sync_beats > 0.0;
                 if toggle(ui, &mut sync, label(icon::METRONOME, "BPM sync")).on_hover_text("Stretch the clip (or its loop) to a number of beats; it speeds up and slows down with the tempo").changed() {
