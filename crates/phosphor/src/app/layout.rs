@@ -88,6 +88,36 @@ impl PhosphorApp {
         n
     }
 
+    /// Shows Control Surface page `page` as its own panel: where it is if it's open, else a new floating window.
+    pub(crate) fn open_my_panel(&mut self, page: usize) {
+        let tab = Tab::MyPanel(page.min(255) as u8);
+        if self.dock.find_tab(&tab).is_some() || self.detached.contains(&tab) {
+            self.show_tab(tab);
+        } else {
+            // Below the top bar, towards the middle (not over the menus).
+            let at = self.dock.add_window(vec![tab]);
+            if let Some(w) = self.dock.get_window_state_mut(at) {
+                w.set_position(egui::pos2(360.0, 140.0)).set_size(egui::vec2(480.0, 380.0));
+            }
+        }
+    }
+
+    /// Page `page` was deleted: its panel closes and the panels of the pages after it follow their page down.
+    pub(crate) fn my_panel_gone(&mut self, page: usize) {
+        let gone = Tab::MyPanel(page.min(255) as u8);
+        if let Some(path) = self.dock.find_tab(&gone) {
+            self.dock.remove_tab(path);
+        }
+        self.detached.retain(|t| *t != gone);
+        for t in self.detached.iter_mut().chain(self.dock.iter_all_tabs_mut().map(|(_, t)| t)) {
+            if let Tab::MyPanel(n) = t
+                && *n as usize > page
+            {
+                *n -= 1;
+            }
+        }
+    }
+
     /// Brings a panel to the front, reopening it if it was closed.
     pub(crate) fn show_tab(&mut self, tab: Tab) {
         if self.detached.contains(&tab) {
@@ -330,7 +360,7 @@ pub(crate) fn layout_show() -> DockState<Tab> {
     let [left, _] = surface.split_right(NodeIndex::root(), 0.75, vec![Tab::Inspector]);
     // (The Stack, layers with their clips in one list, was tried 2026-10-24 and is still under View; Clips + Layers
     // stay the layout: the owner prefers them.)
-    surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Layers, Tab::Mixer, Tab::Cues, Tab::ShaderEditor]);
+    surface.split_below(left, 0.5, vec![Tab::Clips, Tab::Layers, Tab::Mixer, Tab::Modulators, Tab::Cues, Tab::ShaderEditor]);
     // Media (the Library) open from the start: it's the daily tool.
     // (Wide enough for its sources list beside the tiles.)
     surface.split_left(NodeIndex::root(), 0.27, super::areas::LIBRARY.to_vec());
@@ -346,12 +376,12 @@ pub(crate) fn layout_outputs() -> DockState<Tab> {
     dock
 }
 
-/// Controllers: MIDI / OSC mappings (and TouchOSC), your Control Surface, modulators.
+/// Controllers: MIDI / OSC mappings (and TouchOSC) and your Control Surface.
 pub(crate) fn layout_control() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Control]);
     let surface = dock.main_surface_mut();
-    let [_, right] = surface.split_right(NodeIndex::root(), 0.45, vec![Tab::Surface]);
-    surface.split_below(right, 0.66, vec![Tab::Modulators]);
+    // (The Modulators / LFOs live in Show now, next to the Mixer: where they're used.)
+    surface.split_right(NodeIndex::root(), 0.45, vec![Tab::Surface]);
     dock
 }
 

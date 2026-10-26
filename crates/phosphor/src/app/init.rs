@@ -206,6 +206,7 @@ impl PhosphorApp {
                 preview_refreshed: 0.0,
                 preview_textures: Vec::new(),
                 open_tab: None,
+                panel_browser: false,
                 maps_clipboard: Vec::new(),
                 snapshot_output: None,
                 clip_thumb_request: None,

@@ -9,10 +9,11 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let beats = st.mod_inputs.beats;
     let inputs = st.mod_inputs;
     crate::ui::toolbar(ui, |ui| {
-        if crate::ui::command(ui, label(icon::PLUS, "Modulator")).on_hover_text("A shared signal: pick it in any control's Modulate menu").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
+        if crate::ui::command(ui, label(icon::WAVE_SINE, "LFO")).on_hover_text("A shared LFO (change its shape, speed or source on it): any control can follow it from its Modulate menu").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
             let id = st.comp.new_id();
-            let n = st.comp.modulators.len() + 1;
-            st.comp.modulators.push(Modulator { id, name: format!("Mod {n}"), ..Default::default() });
+            let n = st.comp.modulators.iter().filter(|m| m.name.starts_with("LFO")).count() + 1;
+            let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::LfoSine, rate: 0.5, ..Default::default() };
+            st.comp.modulators.push(Modulator { id, name: format!("LFO {n}"), signal, ..Default::default() });
         }
         if crate::ui::command(ui, label(icon::SQUARES_FOUR, "Step track")).on_hover_text("A step sequencer track on the beat (levels or on/off gates) that any control can follow").clicked() && st.comp.modulators.len() < phosphor_engine::control::MAX_SHARED {
             let id = st.comp.new_id();
