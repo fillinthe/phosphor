@@ -396,11 +396,14 @@ fn a_slice_group_is_one_control() {
     mapping.group_slices(g, &[a, b]);
     let mut deferred = Vec::new();
     set_target(&mut comp, &ControlTarget::SliceOpacity(g), 0.4, &mut deferred);
-    assert_eq!(comp.slice(a).unwrap().opacity, 0.4);
-    assert_eq!(comp.slice(b).unwrap().opacity, 0.4);
-    comp.slice_mut(b).unwrap().enabled = false;
+    // The group's own fade, on top of each slice's: both show at 40%.
+    let m = &comp.outputs.iter().find(|o| o.id == out).unwrap().mapping;
+    let shown = phosphor_engine::Mapping::animated(std::borrow::Cow::Borrowed(m), &Default::default(), 1.0);
+    assert!(shown.surfaces.iter().all(|s| (s.opacity - 0.4).abs() < 1e-6));
+    assert_eq!(comp.slice(a).unwrap().opacity, 1.0, "each slice keeps its own");
     set_target(&mut comp, &ControlTarget::SliceEnabled(g), FLIP, &mut deferred);
-    assert!(!comp.slice(a).unwrap().enabled && !comp.slice(b).unwrap().enabled, "flips from the first one, all follow");
+    let m = &comp.outputs.iter().find(|o| o.id == out).unwrap().mapping;
+    assert_eq!(m.shown().count(), 0, "off: neither shows");
     assert!(all_targets(&comp).iter().any(|(t, _)| *t == ControlTarget::SliceOpacity(g)));
 }
 
@@ -986,4 +989,29 @@ fn soft_edges_mask_switches_and_colour_are_controls() {
     for t in [ControlTarget::MaskFeather(mid), ControlTarget::MaskInvert(mid), ControlTarget::SliceFeather(sid), gamma] {
         assert!(names.iter().any(|(x, _)| *x == t), "{t:?} is in the list");
     }
+}
+
+#[test]
+fn groups_and_layouts_are_controls() {
+    let mut comp = Composition::default();
+    let out = comp.add_output();
+    let (a, b, s1) = (comp.new_id(), comp.new_id(), comp.new_id());
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    o.mapping.add_surface(s1).opacity = 0.8;
+    o.mapping.add_layout(a);
+    o.mapping.add_layout(b);
+    let mut deferred = Vec::new();
+    // A group's fader is its own (the slice keeps its 80%).
+    set_target(&mut comp, &ControlTarget::SliceOpacity(a), 0.25, &mut deferred);
+    assert_eq!(comp.slice_group(a).unwrap().opacity, 0.25);
+    assert_eq!(comp.slice(s1).unwrap().opacity, 0.8);
+    assert_eq!(get_target(&comp, &ControlTarget::SliceOpacity(a)), Some(0.25));
+    set_target(&mut comp, &ControlTarget::SliceEnabled(a), 0.0, &mut deferred);
+    assert!(!comp.slice_group(a).unwrap().enabled);
+    // Switching to a layout is a press: the app fades.
+    set_target(&mut comp, &ControlTarget::Layout(b), 1.0, &mut deferred);
+    assert!(matches!(deferred.last(), Some(crate::control::Deferred::Layout(id)) if *id == b));
+    assert_eq!(comp.sibling_layouts(a), vec![a, b]);
+    assert_eq!(default_osc_address(&ControlTarget::Layout(b)), format!("/phosphor/layout/{b}"));
+    assert!(all_targets(&comp).iter().any(|(t, name)| *t == ControlTarget::Layout(b) && name.contains("switch")));
 }

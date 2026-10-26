@@ -342,7 +342,7 @@ pub(crate) fn layout_show() -> DockState<Tab> {
 pub(crate) fn layout_outputs() -> DockState<Tab> {
     let mut dock = DockState::new(vec![Tab::Studio, Tab::Stage]);
     let surface = dock.main_surface_mut();
-    surface.split_below(NodeIndex::root(), 0.68, vec![Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices, Tab::Scopes]);
+    surface.split_below(NodeIndex::root(), 0.8, vec![Tab::Output, Tab::Stream, Tab::Network, Tab::Leds, Tab::Audio, Tab::Devices, Tab::Scopes]);
     dock
 }
 

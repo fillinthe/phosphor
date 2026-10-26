@@ -24,6 +24,13 @@ impl Composition {
     /// mix, and the slice shows that layer. Returns the layer's id (None if the slice is gone).
     pub fn show_file_on_slice(&mut self, slice: u64, name: &str, source: SourceSpec) -> Option<u64> {
         self.slice(slice)?;
+        // A live input already on a slice of its own: share that layer (one camera / Syphon / NDI opened once).
+        if matches!(source, SourceSpec::Live { .. })
+            && let Some(id) = self.layers.iter().find(|l| !l.in_mix && l.source == source).map(|l| l.id)
+        {
+            self.slice_mut(slice)?.layer = Some(id);
+            return Some(id);
+        }
         let layer = self.add_layer();
         layer.name = name.to_string();
         layer.source = source;
@@ -281,3 +288,20 @@ impl Composition {
         self.slice_mut(owner).map(|s| &mut s.color)
     }
 }
+
+impl Composition {
+    /// A slice group or layout (on any output: ids are unique).
+    pub fn slice_group(&self, id: u64) -> Option<&crate::mapping::SliceGroup> {
+        self.outputs.iter().find_map(|o| o.mapping.group(id))
+    }
+
+    pub fn slice_group_mut(&mut self, id: u64) -> Option<&mut crate::mapping::SliceGroup> {
+        self.outputs.iter_mut().find_map(|o| o.mapping.groups.iter_mut().find(|g| g.id == id))
+    }
+
+    /// The layouts on the output that has layout `id` (their ids), `id` among them.
+    pub fn sibling_layouts(&self, id: u64) -> Vec<u64> {
+        self.outputs.iter().find(|o| o.mapping.group(id).is_some()).map(|o| o.mapping.layouts().map(|g| g.id).collect()).unwrap_or_default()
+    }
+}
+
