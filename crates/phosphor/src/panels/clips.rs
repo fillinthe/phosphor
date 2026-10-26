@@ -195,17 +195,14 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             column_headers(ui, &grid, ROW_HEADER_W, &mut out);
             let n = comp.layers.len();
-            // Every comp's rows, under its name (as in Layers), the later comp first; folded comps hide theirs.
+            // Every comp's rows, under its name (as in Layers), the later comp first. Always open here: a fold made in
+            // Layers hid a comp's clips with nothing here to open it again.
             let comp_ids: Vec<Option<u64>> = if comp.comps.is_empty() { vec![None] } else { comp.comps.iter().rev().map(|c| Some(c.id)).collect() };
             let many = comp.comps.len() > 1;
             for cid in comp_ids {
             if let Some(c) = cid.and_then(|id| comp.comp(id)).filter(|c| many || !c.is_plain()) {
-                let caret = if c.collapsed { icon::CARET_RIGHT } else { icon::CARET_DOWN };
-                ui.label(RichText::new(format!("{caret} {} {}", icon::FRAME_CORNERS, c.name)).strong().color(crate::theme::Hue::Output.color()))
-                    .on_hover_text("A comp (fold it, rename it and its settings: the Layers panel)");
-                if c.collapsed {
-                    continue;
-                }
+                ui.label(RichText::new(format!("{} {}", icon::FRAME_CORNERS, c.name)).strong().color(crate::theme::Hue::Output.color()))
+                    .on_hover_text("A comp: its layers' clip rows (rename it and its settings: the Layers panel)");
             }
             for idx in (0..n).rev() {
                 if comp.comp_of(&comp.layers[idx]) != cid {
