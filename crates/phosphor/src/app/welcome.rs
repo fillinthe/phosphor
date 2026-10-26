@@ -72,7 +72,7 @@ impl PhosphorApp {
                     }
                 });
                 ui.add_space(4.0);
-                crate::ui::hint(ui, "Help › What's New has everything else. This card shows once.");
+                crate::ui::help(ui, "Help › What's New has everything else. This card shows once.");
             });
         if let Some(tab) = action {
             self.show_tab(tab);

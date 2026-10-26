@@ -37,7 +37,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             let id = st.comp.add_comp(&format!("Comp {n}"));
             st.selected = Some(id);
         }
-        hint(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
+        help(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
     });
     ui.add_space(2.0);
     let aspect = st.aspect();
@@ -517,7 +517,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 layer.source = SourceSpec::Text(crate::text::default_style());
             }
             ui.menu_button(label(icon::ARROW_BEND_DOWN_RIGHT, "From another layer"), |ui| {
-                hint(ui, "Use another layer's finished picture (with its effects), or the program for video feedback.");
+                help(ui, "Use another layer's finished picture (with its effects), or the program for video feedback.");
                 for (id, name, _) in feeds.iter().filter(|(id, ..)| *id != layer.id) {
                     let active = matches!(&layer.source, SourceSpec::Feed { id: cur, before_fx: false, .. } if cur == id);
                     if crate::ui::pick_item(ui, active, name).clicked() {

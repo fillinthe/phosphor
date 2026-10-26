@@ -34,7 +34,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
         });
     });
     if effects.is_empty() {
-        hint(ui, "No effects yet. Effects run top to bottom; drag the handle to reorder.");
+        help(ui, "No effects yet. Effects run top to bottom; drag the handle to reorder.");
     }
     let mut remove = None;
     let mut swap = None;

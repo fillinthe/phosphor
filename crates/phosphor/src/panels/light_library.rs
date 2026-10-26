@@ -23,7 +23,7 @@ pub(crate) fn light_window(ctx: &egui::Context, st: &mut State) {
     let mut open = true;
     let mut add: Option<Fixture> = None;
     egui::Window::new(label(icon::LIGHTBULB, "A real light")).open(&mut open).default_width(440.0).default_height(420.0).show(ctx, |ui| {
-        hint(ui, "Type the maker or model, pick your light, then the DMX mode it's set to (on its menu or DIP switches). Lights from the Open Fixture Library.");
+        help(ui, "Type the maker or model, pick your light, then the DMX mode it's set to (on its menu or DIP switches). Lights from the Open Fixture Library.");
         crate::ui::text_field(ui, &mut query, "e.g. Chauvet Intimidator, ADJ par, Stairville", None);
         let lib = &mut st.ofl;
         match &lib.lights {

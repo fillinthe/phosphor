@@ -171,7 +171,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     let mut action: Option<TileAction> = None;
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if filtered.is_empty() {
-            crate::ui::hint(ui, "Nothing matches. Clear the search or pick another category.");
+            crate::ui::help(ui, "Nothing matches. Clear the search or pick another category.");
         }
         let tile_w = 152.0;
         let tile = egui::vec2(tile_w, tile_w / aspect + 30.0);
@@ -405,7 +405,7 @@ fn shadertoy_window(ctx: &egui::Context, st: &mut State) {
     let mut open = true;
     let mut done: Option<String> = None;
     egui::Window::new(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy")).open(&mut open).default_width(560.0).show(ctx, |ui| {
-        crate::ui::hint(ui, "Open a shader on shadertoy.com, copy all the code in its Image tab and paste it here. Shaders that read iChannel0 become effects on a layer's picture; the rest are sources. Check its licence before you share a show with it.");
+        crate::ui::help(ui, "Open a shader on shadertoy.com, copy all the code in its Image tab and paste it here. Shaders that read iChannel0 become effects on a layer's picture; the rest are sources. Check its licence before you share a show with it.");
         ui.horizontal(|ui| {
             ui.label("Name");
             ui.add(egui::TextEdit::singleline(&mut imp.name).hint_text("e.g. Star Nest").desired_width(180.0));
@@ -673,7 +673,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.add_space(20.0);
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Shader Editor").strong().size(16.0));
-            crate::ui::hint(ui, "Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
+            crate::ui::help(ui, "Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
             crate::ui::hint(ui, format!("Start from a template (New from template…), with + Effect, or right-click any effect in the explorer {} Edit a copy.", icon::ARROW_RIGHT));
         });
         return;
@@ -789,7 +789,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
         };
     });
     ui.ctx().data_mut(|d| d.insert_temp(code_id, show_code));
-    crate::ui::hint(ui, "Right-click the canvas to add a block · drag from a block's right dot to another's left dot to wire it · drag a wire's end away to unplug it · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
+    crate::ui::help(ui, "Right-click the canvas to add a block · drag from a block's right dot to another's left dot to wire it · drag a wire's end away to unplug it · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
     if show_code {
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             ui.add(egui::TextEdit::multiline(&mut sh.source.as_str()).code_editor().font(egui::FontId::monospace(12.0)).desired_width(f32::INFINITY));
@@ -1131,7 +1131,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
                 }
             });
         });
-        crate::ui::hint(ui, "Click adds and closes · Shift-click adds more · Esc closes");
+        crate::ui::help(ui, "Click adds and closes · Shift-click adds more · Esc closes");
     });
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         open = false;

@@ -14,7 +14,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
             st.add_layer();
         }
         Level::range(&mut col_w, 220.0, 520.0, "Width").default(300.0).width(180.0).show(ui);
-        hint(ui, "Each layer in its own window, top layer on the left. Click a picture to select it for the Inspector and controllers.");
+        help(ui, "Each layer in its own window, top layer on the left. Click a picture to select it for the Inspector and controllers.");
     });
     ui.ctx().data_mut(|d| d.insert_temp(width_id, col_w));
     let aspect = st.aspect();

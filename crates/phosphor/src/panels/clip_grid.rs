@@ -186,7 +186,7 @@ pub(crate) fn transport_bar(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command(ui, label(icon::PLUS, "Column")).clicked() {
             st.comp.clip_columns += 1;
         }
-        hint(ui, "Keys 1–9 trigger the lit bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
+        help(ui, "Keys 1–9 trigger the lit bank's columns · drop files or a folder onto a cell to fill the row · right-click a cell");
     });
 }
 

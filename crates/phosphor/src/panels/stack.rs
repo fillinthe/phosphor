@@ -163,7 +163,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             if comp.layers.is_empty() {
-                hint(ui, "No layers yet: + Layer above (or drop files onto the window).");
+                help(ui, "No layers yet: + Layer above (or drop files onto the window).");
             }
             ui.add_space(6.0);
             master_strip(ui, comp, *selected == Some(MASTER_ID), &mut acts, selected);
@@ -219,7 +219,7 @@ fn stack_toolbar(ui: &mut egui::Ui, st: &mut State, now: f64) {
         if crate::ui::icon_toggle(ui, &mut muted, icon::SPEAKER_SIMPLE_X).on_hover_text("Mute all sound").changed() {
             st.comp.sound_muted = muted;
         }
-        hint(ui, "Top of the list is the top of the stack · drag a picture to reorder · right-click a name for more");
+        help(ui, "Top of the list is the top of the stack · drag a picture to reorder · right-click a name for more");
     });
     for _ in 0..add {
         st.add_layer();

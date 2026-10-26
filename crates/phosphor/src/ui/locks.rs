@@ -51,7 +51,7 @@ pub(crate) fn limit_items(ui: &mut egui::Ui, target: &ControlTarget, unit: f32, 
     let now = limits(ui, target);
     ui.menu_button(label(icon::ARROWS_IN_LINE_HORIZONTAL, "Limits…"), |ui| {
         ui.set_min_width(240.0);
-        hint(ui, "Use only part of the slider: the mouse stays inside, and a controller's whole travel covers just that part.");
+        help(ui, "Use only part of the slider: the mouse stays inside, and a controller's whole travel covers just that part.");
         if let Some((lo, hi)) = now {
             ui.label(format!("Now: {} to {}", show(lo), show(hi)));
         }
@@ -108,7 +108,7 @@ pub(crate) fn snap_items(ui: &mut egui::Ui, target: &ControlTarget, unit: f32, s
     let points = snap_points(ui, target);
     ui.menu_button(label(icon::MAGNET, "Snap points…"), |ui| {
         ui.set_min_width(220.0);
-        hint(ui, "Hold Shift while dragging to land on a snap point (the ends, the default and 100% always count)");
+        help(ui, "Hold Shift while dragging to land on a snap point (the ends, the default and 100% always count)");
         if crate::ui::command(ui, label(icon::PLUS, &format!("Add one here ({})", show(unit)))).clicked() {
             ask(ui, PrefChange::AddSnap(target.clone(), unit));
         }

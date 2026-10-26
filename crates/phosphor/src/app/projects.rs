@@ -284,7 +284,7 @@ impl PhosphorApp {
                 if source == Source::Account && !signed_in {
                     ui.add_space(30.0);
                     ui.vertical_centered(|ui| {
-                        crate::ui::hint(ui, "Sign in to see the projects saved in your account.");
+                        crate::ui::help(ui, "Sign in to see the projects saved in your account.");
                         if crate::ui::command(ui, "Sign in…").clicked() {
                             pick = Some(Pick::SignIn);
                         }

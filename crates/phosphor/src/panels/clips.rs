@@ -229,7 +229,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             }
             }
             if n == 0 {
-                hint(ui, "Add layers first; each layer gets a row of clip slots.");
+                help(ui, "Add layers first; each layer gets a row of clip slots.");
             }
         });
     }
@@ -261,7 +261,7 @@ pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerStat
         }
         ui.separator();
         crate::ui::heading(ui, format!("{} MIDI notes", icon::PIANO_KEYS));
-        hint(ui, "The whole row on a run of notes (a pad grid's row): clip 1 = the first note, clip 2 = the next…");
+        help(ui, "The whole row on a run of notes (a pad grid's row): clip 1 = the first note, clip 2 = the next…");
         let key = ui.id().with(("row_midi", layer.id));
         let (mut ch, mut note): (u8, u8) = ui.data(|d| d.get_temp(key)).unwrap_or((0, 36));
         crate::ui::toolbar(ui, |ui| {
@@ -305,11 +305,11 @@ pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerStat
         }
         ui.separator();
         crate::ui::heading(ui, format!("{} Plays on", icon::STACK));
-        hint(ui, "Share this row's clips over the layers beside it (same group): each clip on the next layer, or on one with nothing playing.");
+        help(ui, "Share this row's clips over the layers beside it (same group): each clip on the next layer, or on one with nothing playing.");
         choice_buttons(ui, &mut layer.voices, |_, _| {});
         ui.separator();
         crate::ui::heading(ui, format!("{} Autopilot", icon::AIRPLANE_TILT));
-        hint(ui, "When this clip is done: play another one by itself, or clear the layer.");
+        help(ui, "When this clip is done: play another one by itself, or clear the layer.");
         for a in Autopilot::ALL {
             ui.radio_value(&mut layer.autopilot, a, a.name());
         }
@@ -330,7 +330,7 @@ pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerStat
                 }
             });
             if at_end {
-                hint(ui, "Stills, generators and live inputs have no end: they move on after 16 beats.");
+                help(ui, "Stills, generators and live inputs have no end: they move on after 16 beats.");
             }
         }
 }

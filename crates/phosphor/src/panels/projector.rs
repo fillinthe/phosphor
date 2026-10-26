@@ -11,7 +11,7 @@ use super::*;
 pub(crate) fn projector_settings(ui: &mut egui::Ui, o: &mut OutputConfig, projectors: &mut Projectors) {
     crate::ui::section(ui, ("pjlink", o.id), label(icon::PROJECTOR_SCREEN_CHART, "Projector (PJLink)"), o.projector.is_some(), |ui| {
         let Some(p) = &mut o.projector else {
-            hint(ui, "Switch this output's projector on and off, and close its shutter, over the network (most Epson, Panasonic, NEC, Sony, Optoma, Christie and Barco projectors).");
+            help(ui, "Switch this output's projector on and off, and close its shutter, over the network (most Epson, Panasonic, NEC, Sony, Optoma, Christie and Barco projectors).");
             if crate::ui::command(ui, label(icon::PLUS, "Add its projector")).clicked() {
                 o.projector = Some(Projector::default());
             }

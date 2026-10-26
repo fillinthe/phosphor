@@ -471,7 +471,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
                     ui.close();
                 }
                 if !smooth {
-                    hint(ui, "Turn on Smooth to curve the whole outline; points can then be sharp corners.");
+                    help(ui, "Turn on Smooth to curve the whole outline; points can then be sharp corners.");
                 }
                 if count > 3 && crate::ui::command(ui, label(icon::TRASH, "Delete point")).clicked() {
                     delete = Some(i);
@@ -735,7 +735,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
         st.selected_surface = Some(id);
     }
-    hint(ui, "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
+    help(ui, "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
 
     let State { comp, selected_surface, .. } = st;
     let others = picture_sources(comp, oid);
@@ -1007,7 +1007,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     });
     if s.line.is_none() && s.model.is_none() {
         crate::ui::subsection(ui, ("corner_numbers", s.id), "Corners, by number", false, |ui| {
-            hint(ui, "Each corner as a share of the output (0–100%); type or drag for a fine move. On the canvas: arrows nudge the selected slice, Shift = 10 px.");
+            help(ui, "Each corner as a share of the output (0–100%); type or drag for a fine move. On the canvas: arrows nudge the selected slice, Shift = 10 px.");
             for (k, name) in ["Top left", "Top right", "Bottom right", "Bottom left"].iter().enumerate() {
                 crate::ui::toolbar(ui, |ui| {
                     ui.label(RichText::new(*name).small());
@@ -1152,7 +1152,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
                 }
             }
         });
-        hint(ui, "Drag the dot on the canvas to move it, or Calibrate: click points on the model (blue), drag their pins (orange) to the real corners. The picture follows the model's UVs.");
+        help(ui, "Drag the dot on the canvas to move it, or Calibrate: click points on the model (blue), drag their pins (orange) to the real corners. The picture follows the model's UVs.");
     }
     ui.horizontal(|ui| {
         let mut on = s.line.is_some();

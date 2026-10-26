@@ -19,7 +19,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
                 }
             });
             ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
-                hint(ui, "The layer plays this collection by itself: next / previous / random (Inspector)");
+                help(ui, "The layer plays this collection by itself: next / previous / random (Inspector)");
                 for (id, lname) in &layers {
                     if crate::ui::command(ui, lname).clicked() {
                         acts.push(MediaAct::PlayCollection(name.to_string(), Some(*id)));
@@ -59,7 +59,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             });
         }
         if count == 0 {
-            hint(ui, "Empty: right-click files › Collections, or Add folder…");
+            help(ui, "Empty: right-click files › Collections, or Add folder…");
         }
     });
 }

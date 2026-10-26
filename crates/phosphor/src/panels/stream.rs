@@ -85,7 +85,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                     ui.label("Token");
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).hint_text("bearer token, if the service gives one").desired_width(260.0));
                 });
-                hint(ui, "WebRTC: under a second of delay. H.264 Baseline video, Opus audio. Goes out on its own (no second destination or copy).");
+                help(ui, "WebRTC: under a second of delay. H.264 Baseline video, Opus audio. Goes out on its own (no second destination or copy).");
             }
             Destination::File => {
                 ui.horizontal(|ui| {
@@ -100,7 +100,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                     ui.label("Format");
                     choice_combo(ui, "record_format", &mut s.file_format, 200.0, false);
                     if s.file_format != crate::stream::FileFormat::Auto {
-                        hint(ui, "Hap is encoded by Phosphor at the full canvas size; the movie plays back with almost no CPU in Phosphor, VDMX, Resolume and MadMapper.");
+                        help(ui, "Hap is encoded by Phosphor at the full canvas size; the movie plays back with almost no CPU in Phosphor, VDMX, Resolume and MadMapper.");
                     }
                 });
             }
@@ -186,7 +186,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         ui.colored_label(WARN, msg.as_str());
     }
     ui.add_space(6.0);
-    hint(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio. Movie sound adds the sound of the movies playing in Phosphor (both mix together).");
+    help(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio. Movie sound adds the sound of the movies playing in Phosphor (both mix together).");
     #[cfg(not(target_arch = "wasm32"))]
     if choose_file {
         st.dialogs.save_file(crate::dialogs::Purpose::StreamFile, ("Video", &["mp4", "mov"]), "Phosphor recording.mp4");

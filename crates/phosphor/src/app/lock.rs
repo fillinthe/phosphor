@@ -93,7 +93,7 @@ impl PhosphorApp {
                     ui.label("Password (optional)");
                     ui.add(egui::TextEdit::singleline(&mut self.lock.draft).password(true).desired_width(180.0));
                 });
-                crate::ui::hint(ui, "Leave it empty if anyone may unlock. Export Show can open the show locked too.");
+                crate::ui::help(ui, "Leave it empty if anyone may unlock. Export Show can open the show locked too.");
                 if crate::ui::command(ui, format!("{} Lock now", icon::LOCK)).clicked() {
                     action = Some(true);
                 }

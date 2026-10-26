@@ -8,7 +8,7 @@ pub(crate) fn inputs_panel(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(target_arch = "wasm32")]
     {
         let _ = st;
-        hint(ui, "Live inputs (cameras, screens, Syphon, NDI) work in the Mac and Windows apps.");
+        help(ui, "Live inputs (cameras, screens, Syphon, NDI) work in the Mac and Windows apps.");
     }
     #[cfg(not(target_arch = "wasm32"))]
     live_inputs(ui, st);
@@ -22,7 +22,7 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
     let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
     ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
         rescan = crate::ui::small_command(ui, icon::ARROWS_CLOCKWISE).on_hover_text("Look for cameras and capture cards again").clicked();
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| hint(ui, "Drag onto a layer or a clip cell, or use the buttons."));
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| help(ui, "Drag onto a layer or a clip cell, or use the buttons."));
     });
     let cams = crate::media::live::cameras_cached(ui.ctx(), rescan);
     let (list, notes) = inputs(&cams);

@@ -349,7 +349,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
     let State { comp, thumbs, .. } = st;
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if comp.media_bin.is_empty() {
-            hint(ui, "Empty. Import files, watch a folder, or drop files onto the window.");
+            help(ui, "Empty. Import files, watch a folder, or drop files onto the window.");
         } else if shown.is_empty() {
             hint(ui, "Nothing matches this filter.");
         }

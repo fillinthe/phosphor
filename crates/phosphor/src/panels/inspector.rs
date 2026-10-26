@@ -22,7 +22,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     }
     let aspect = st.aspect();
     let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id) || st.comp.group(*id).is_some() || st.comp.comp(*id).is_some()) else {
-        hint(ui, "Select a layer (or MASTER) to edit its source and effects.");
+        help(ui, "Select a layer (or MASTER) to edit its source and effects.");
         return;
     };
     let clipboard_len = st.fx_clipboard.len();
@@ -50,7 +50,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             let w = ui.available_width().min(360.0);
             thumbnail(ui, tex, egui::vec2(w, w / aspect), true);
             ui.label(RichText::new("MASTER").strong().color(accent()));
-            hint(ui, "These effects run over the whole mix, after every layer has been blended.");
+            help(ui, "These effects run over the whole mix, after every layer has been blended.");
             ui.separator();
             fx_action = effects_editor(ui, &mut st.comp.master_effects, clipboard_len);
         });
@@ -274,7 +274,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));
                 }
             });
-            hint(ui, "New files in the collection's folders join as they arrive. Put any clip or file on this layer yourself and it stops following the collection.");
+            help(ui, "New files in the collection's folders join as they arrive. Put any clip or file on this layer yourself and it stops following the collection.");
             ui.separator();
         }
         crate::ui::toolbar(ui, |ui| {
@@ -564,7 +564,7 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         None => label(icon::INTERSECT, "Blend shader"),
     };
     crate::ui::section(ui, ("mixer", layer.id), title, false, |ui| {
-        hint(ui, "Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies.");
+        help(ui, "Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies.");
         let mut pick = layer.mixer.clone();
         crate::ui::dropdown(ui, ("mixer_pick", layer.id), 200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut pick, None, "None (blend mode)");
@@ -655,7 +655,7 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
                 *t = Default::default();
             }
         });
-        hint(ui, "Tip: put an LFO on Rotation (~ button) to spin a layer, or the audio level on Scale to pulse it.");
+        help(ui, "Tip: put an LFO on Rotation (~ button) to spin a layer, or the audio level on Scale to pulse it.");
     });
 }
 
@@ -868,7 +868,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
     ui.horizontal(|ui| {
         Level::range(&mut style.line_spacing, 0.6, 2.0, "Line spacing").default(1.0).show(ui);
     });
-    hint(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
+    help(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
     from_file
 }
 
@@ -910,7 +910,7 @@ pub(crate) fn transition_effect_combo(ui: &mut egui::Ui, id: impl std::hash::Has
     let mut changed = false;
     egui::ComboBox::from_id_salt(id).selected_text(current.unwrap_or(empty)).width(150.0).height(360.0).show_ui(ui, |ui| {
         if list.is_empty() {
-            hint(ui, "No shader transitions found (they come with the ISF collection).");
+            help(ui, "No shader transitions found (they come with the ISF collection).");
         }
         for d in list {
             if crate::ui::pick_item(ui, d.id == effect.as_str(), d.name).clicked() {

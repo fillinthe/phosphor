@@ -90,7 +90,7 @@ impl PhosphorApp {
                 None => {}
             };
             if probe.has_audio && matches!(c.format, Format::Hap | Format::HapAlpha) {
-                crate::ui::hint(ui, "Hap has no sound: the converted file will be silent.");
+                crate::ui::help(ui, "Hap has no sound: the converted file will be silent.");
             }
             crate::ui::toggle(ui, &mut c.swap, "Use the converted file in this project (in place of the original)");
             ui.add_space(6.0);
@@ -100,7 +100,7 @@ impl PhosphorApp {
                         c.progress = Some(crate::convert::start(crate::convert::Job { src: c.src.clone(), format: c.format, quality: c.quality, size: c.size, probe: probe.clone() }));
                         c.swapped = false;
                     }
-                    crate::ui::hint(ui, "The new file goes next to the original; the original stays as it is.");
+                    crate::ui::help(ui, "The new file goes next to the original; the original stays as it is.");
                 }
                 Some(p) if !p.finished => {
                     ui.add(crate::ui::meter(p.done).show_percentage());

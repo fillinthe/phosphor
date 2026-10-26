@@ -262,7 +262,7 @@ pub fn bug_window(ctx: &egui::Context, st: &mut State) {
                 crate::os::reveal(&p);
             }
         });
-        crate::ui::hint(ui, "Everything stays on your Mac until you file or paste it.");
+        crate::ui::help(ui, "Everything stays on your Mac until you file or paste it.");
     });
     st.bug.open = open;
     st.bug.detached = detached;

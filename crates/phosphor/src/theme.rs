@@ -187,6 +187,18 @@ pub fn apply(ctx: &egui::Context) {
     set_brightness(ctx, DEFAULT_BRIGHTNESS);
 }
 
+/// Tooltips on or off (off: for people who know the app; (i) help still opens on a click).
+pub fn set_tooltips(ctx: &egui::Context, on: bool) {
+    TOOLTIPS.store(on, std::sync::atomic::Ordering::Relaxed);
+    ctx.all_styles_mut(|s| s.interaction.tooltip_delay = if on { 1.0 } else { f32::INFINITY });
+}
+
+static TOOLTIPS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub fn tooltips_on() -> bool {
+    TOOLTIPS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Interface brightness, 0 = darkest, 1 = light (0.35 is Phosphor's usual look). Above the middle the text turns
 /// dark and the accent deepens so everything stays readable.
 pub fn set_brightness(ctx: &egui::Context, b: f32) {
