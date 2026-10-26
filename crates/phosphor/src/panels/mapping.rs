@@ -786,7 +786,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 180.0).max(80.0);
         if o.mapping.surfaces.is_empty() {
-            hint(ui, "No surfaces yet. Add one, then drag its corners.");
+            help(ui, "No surfaces yet. Add one, then drag its corners.");
         }
         for (i, s) in o.mapping.surfaces.iter_mut().enumerate() {
             let is_selected = *selected_surface == Some(s.id);

@@ -83,7 +83,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                 } else if m.signal.source == phosphor_engine::ModSource::Hand {
                     ui.horizontal(|ui| {
                         Level::percent(&mut m.value, "Value").default(0.0).target(phosphor_engine::ControlTarget::Modulator(m.id)).show(ui);
-                        hint(ui, "right-click: Learn a MIDI knob");
+                        help(ui, "right-click: Learn a MIDI knob");
                     });
                     looper_row(ui, &mut m.looper, beats);
                 }
@@ -131,7 +131,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                             Level::percent(&mut c.amount, "Amount").default(1.0).show(ui);
                         });
                         if i == 0 || c.mode == ChainMode::Multiply && c.from == 0 {
-                            hint(ui, "chains take from modulators above this one");
+                            help(ui, "chains take from modulators above this one");
                         }
                     }
                 });

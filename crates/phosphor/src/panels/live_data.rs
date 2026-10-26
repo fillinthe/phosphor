@@ -36,7 +36,7 @@ pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
         if !d.place.is_empty() {
             hint(ui, format!("Weather in {}", d.place));
         } else if d.weather {
-            hint(ui, "Type a place and press Enter.");
+            help(ui, "Type a place and press Enter.");
         }
         crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut d.iss, "Space station").on_hover_text("Where the International Space Station is over the Earth (every 5 seconds; it goes round in 90 minutes)");

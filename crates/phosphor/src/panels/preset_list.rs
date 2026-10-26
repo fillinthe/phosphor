@@ -14,7 +14,7 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         let State { presets, preset_name, layer_presets, layer_preset_name, chain_presets, chain_preset_name, comp, .. } = &mut *st;
         crate::ui::section(ui, "presets_Looks", "Looks", true, |ui| {
-            hint(ui, "The whole project: layers, effects, mapping.");
+            help(ui, "The whole project: layers, effects, mapping.");
             crate::ui::toolbar(ui, |ui| {
                 ui.label("Fade in");
                 guarded!(ui, comp.launch.look_fade, egui::DragValue::new(&mut comp.launch.look_fade).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(1))

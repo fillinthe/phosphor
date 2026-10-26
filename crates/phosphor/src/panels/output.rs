@@ -465,7 +465,7 @@ pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputC
         .on_hover_text("A comp as this output's whole picture: each output its own mix (masters). With mapping on, its slices decide instead");
     });
     if o.program.is_some_and(|id| comps.iter().any(|(c, _, mixed)| *c == id && *mixed)) {
-        hint(ui, "That comp is also in the main mix: switch its \"In the master mix\" off (Comp settings) to show it only here.");
+        help(ui, "That comp is also in the main mix: switch its \"In the master mix\" off (Comp settings) to show it only here.");
     }
 }
 
