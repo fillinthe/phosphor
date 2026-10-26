@@ -57,13 +57,27 @@ fn av_status(media: &std::ffi::CStr) -> Status {
     }
 }
 
+#[link(name = "CoreGraphics", kind = "framework")]
+unsafe extern "C" {
+    fn CGPreflightScreenCaptureAccess() -> bool;
+    fn CGRequestScreenCaptureAccess() -> bool;
+}
+
 fn screen_status() -> Status {
-    #[link(name = "CoreGraphics", kind = "framework")]
-    unsafe extern "C" {
-        fn CGPreflightScreenCaptureAccess() -> bool;
-    }
+    if screen_allowed() { Status::Allowed } else { Status::Denied }
+}
+
+/// Screen recording is allowed (reads the status; never shows macOS's prompt).
+pub fn screen_allowed() -> bool {
     // SAFETY: no arguments; reads the status without asking.
-    if unsafe { CGPreflightScreenCaptureAccess() } { Status::Allowed } else { Status::Denied }
+    unsafe { CGPreflightScreenCaptureAccess() }
+}
+
+/// Asks macOS for screen recording: its prompt (once), and Phosphor appears in System Settings' list. Only when
+/// the user presses Allow: listing screens without permission made macOS ask again and again.
+pub fn ask_screen() {
+    // SAFETY: no arguments; shows the system prompt at most once per app.
+    std::thread::spawn(|| unsafe { CGRequestScreenCaptureAccess() });
 }
 
 #[cfg(test)]
