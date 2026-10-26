@@ -339,6 +339,25 @@ fn smoothed_mappings_glide() {
 }
 
 #[test]
+fn mask_transforms_are_controls() {
+    let mut comp = Composition::default();
+    let out = comp.add_output();
+    let mid = comp.new_id();
+    comp.outputs.iter_mut().find(|o| o.id == out).unwrap().mapping.add_mask(mid);
+    let mut deferred = Vec::new();
+    let x = ControlTarget::MaskTransform { mask: mid, part: 0 };
+    let turn = ControlTarget::MaskTransform { mask: mid, part: 4 };
+    assert_eq!(get_target(&comp, &x), Some(0.5), "centred");
+    set_target(&mut comp, &x, 0.75, &mut deferred);
+    set_target(&mut comp, &turn, 1.0, &mut deferred);
+    let t = &comp.mask(mid).unwrap().transform;
+    assert!((t.x - 0.5).abs() < 1e-5 && t.rotation == 180.0, "{t:?}");
+    assert_eq!(get_target(&comp, &x), Some(0.75));
+    assert_eq!(default_osc_address(&turn), format!("/phosphor/mask/{mid}/rotation"));
+    assert!(all_targets(&comp).iter().any(|(t, name)| *t == x && name.ends_with("position x")));
+}
+
+#[test]
 fn slices_are_controls() {
     let mut comp = Composition::default();
     let out = comp.add_output();

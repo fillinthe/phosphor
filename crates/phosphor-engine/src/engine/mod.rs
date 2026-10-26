@@ -795,7 +795,7 @@ impl Engine {
             if !mapping.active() {
                 u.opacity = fade;
                 passes.push(Pass { entry: "fs_finalize", target: view.clone(), tex0: master.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
-                self.push_masks(o.id, &mapping, &view, (ow, oh), &mut passes);
+                self.push_masks(o.id, &mapping, &view, (ow, oh), mods, &mut passes);
                 self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
                 self.push_scan(o.id, &view, (ow, oh), &mut passes);
                 continue;
@@ -930,7 +930,7 @@ impl Engine {
                 [u.p[7], u.p[8]] = s.color.uniforms();
                 passes.push(Pass { entry: s.blend.entry(false), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
-            self.push_masks(o.id, &mapping, &view, (ow, oh), &mut passes);
+            self.push_masks(o.id, &mapping, &view, (ow, oh), mods, &mut passes);
             self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
         }
         self.finish_outputs(comp, &device, &mut passes);

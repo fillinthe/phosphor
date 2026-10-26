@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 mod bend;
 mod groups;
 mod shadow;
+mod transform;
 pub use bend::{Bend, inside};
 pub use groups::SliceGroup;
+pub use transform::{CanvasShape, ShapeTransform};
 
 /// A corner-pinned quad. Coordinates are output-space 0..1 with the origin at the top-left.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1070,6 +1072,9 @@ pub struct Mask {
     /// Where the soft edge sits: centred on the outline, all inside it, or all outside it.
     #[serde(default)]
     pub edge: MaskEdge,
+    /// Moved, stretched and turned on top of its points; animatable (`ControlTarget::MaskTransform`).
+    #[serde(default)]
+    pub transform: ShapeTransform,
 }
 
 /// Where a mask's soft edge sits relative to its outline.
@@ -1111,7 +1116,7 @@ impl crate::model::Choice for MaskEdge {
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new(), edge: MaskEdge::Centre }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new(), edge: MaskEdge::Centre, transform: ShapeTransform::default() }
     }
 }
 
@@ -1774,6 +1779,23 @@ impl Mapping {
         self.masks.last_mut().unwrap()
     }
 
+    /// The enabled masks as they show at `mods`: placed, then moved / stretched / turned by their transform
+    /// (`aspect` = the output's width per height).
+    pub fn placed_masks_at(&self, mods: &crate::ModInputs, aspect: f32) -> Vec<Mask> {
+        let mut masks = self.placed_masks();
+        for m in &mut masks {
+            let t = std::mem::take(&mut m.transform);
+            t.apply(m, mods, aspect);
+            m.transform = t;
+        }
+        masks
+    }
+
+    /// The mask with this id (on any output: ids are unique).
+    pub fn mask_mut(&mut self, id: u64) -> Option<&mut Mask> {
+        self.masks.iter_mut().find(|m| m.id == id)
+    }
+
     /// The enabled masks with their points on the output (attached ones placed on their slice).
     pub fn placed_masks(&self) -> Vec<Mask> {
         self.masks
@@ -1857,32 +1879,6 @@ impl CanvasShape for Mask {
     }
 }
 
-/// Anything on the mapping canvas that moves, scales and turns as a whole (slices, masks): the transform box.
-pub trait CanvasShape {
-    /// Every point of the shape through `f`.
-    fn map_points(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]);
-    /// The points the box is drawn round.
-    fn shape_points(&self) -> Vec<[f32; 2]>;
-
-    /// The box round the shape's points: (top-left, bottom-right).
-    fn bounds(&self) -> ([f32; 2], [f32; 2]) {
-        self.shape_points().iter().fold(([f32::MAX; 2], [f32::MIN; 2]), |(lo, hi), p| ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])]))
-    }
-
-    /// Scaled from `anchor` (a point that stays put): `sx` across, `sy` down.
-    fn scale_about(&mut self, anchor: [f32; 2], sx: f32, sy: f32) {
-        self.map_points(|p| [anchor[0] + (p[0] - anchor[0]) * sx, anchor[1] + (p[1] - anchor[1]) * sy]);
-    }
-
-    /// Turned round `centre` by `radians` (clockwise on screen), as it looks on an output `aspect` wide per high.
-    fn rotate_about(&mut self, centre: [f32; 2], radians: f32, aspect: f32) {
-        let (c, s) = (radians.cos(), radians.sin());
-        self.map_points(|p| {
-            let (x, y) = ((p[0] - centre[0]) * aspect, p[1] - centre[1]);
-            [centre[0] + (c * x - s * y) / aspect, centre[1] + s * x + c * y]
-        });
-    }
-}
 
 /// A hand-drawn line with fewer points (Ramer–Douglas–Peucker): points closer than `tolerance` to the simplified
 /// line go; the tolerance grows until at most `max` points are left.

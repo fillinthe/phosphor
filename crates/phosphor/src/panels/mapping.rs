@@ -376,6 +376,19 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         if outline.len() >= 2 {
             ui.painter().add(egui::Shape::closed_line(outline, Stroke::new(if is_selected { 2.0 } else { 1.0 }, color)));
         }
+        // Moved or animated by its transform: where it is right now, dashed (the points above are the drawn shape).
+        if !m.transform.is_identity() {
+            let mut now = placed.clone();
+            m.transform.apply(&mut now, &crate::ui::mod_inputs(ui), frame.width() / frame.height().max(1.0));
+            let mut line: Vec<egui::Pos2> = now.outline().iter().map(|p| to_screen(*p)).collect();
+            if let Some(first) = line.first().copied() {
+                line.push(first);
+                ui.painter().extend(egui::Shape::dashed_line(&line, Stroke::new(1.5, color), 6.0, 4.0));
+            }
+            if m.transform.is_animated() {
+                ui.ctx().request_repaint();
+            }
+        }
         let n = out.len().max(1) as f32;
         let centre = out.iter().fold([0.0, 0.0], |a, p| [a[0] + p[0] / n, a[1] + p[1] / n]);
         let mut d = [0.0, 0.0];
@@ -1235,6 +1248,24 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
         })
         .response
         .on_hover_text("Where the fade sits: centred on the outline, all inside the shape, or all outside it");
+    }
+    shape_transform_editor(ui, &mut m.transform, |part| ControlTarget::MaskTransform { mask: m.id, part });
+}
+
+/// A shape's animatable transform (position, scale, rotation) as sliders: each one can be mapped, modulated (LFO,
+/// sound, beat…), put on the timeline or in a cue. `target` names the control for value `part`.
+pub(crate) fn shape_transform_editor(ui: &mut egui::Ui, t: &mut phosphor_engine::mapping::ShapeTransform, target: impl Fn(u8) -> ControlTarget) {
+    use phosphor_engine::mapping::ShapeTransform;
+    crate::ui::toolbar(ui, |ui| {
+        ui.label(RichText::new("Transform").strong());
+        if !t.is_identity() && crate::ui::small_command(ui, "Reset").on_hover_text("Back where it was drawn, no animation").clicked() {
+            *t = ShapeTransform::default();
+        }
+    });
+    for (i, p) in ShapeTransform::PARTS.iter().enumerate() {
+        let (value, modulation) = t.part_mut(i);
+        let level = Level::range(value, p.min, p.max, p.name).default(p.default).modulation(modulation).target(target(i as u8));
+        if p.log { level.log() } else { level }.show(ui);
     }
 }
 
