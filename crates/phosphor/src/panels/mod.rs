@@ -159,6 +159,8 @@ pub enum Tab {
     Online,
     /// Every layer with its controls and its clips side by side; groups and comps as bands (replaces Clips + Layers).
     Stack,
+    /// A panel you made (View › New Panel): Control Surface page N, your own buttons and sliders.
+    MyPanel(u8),
 }
 
 impl Tab {
@@ -203,7 +205,7 @@ impl Tab {
             Tab::Library | Tab::ShaderEditor => Hue::Effect,
             Tab::Inputs | Tab::Audio => Hue::Live,
             Tab::Output | Tab::Mapping | Tab::Studio | Tab::Stage | Tab::Stream | Tab::Network | Tab::Leds | Tab::LayerWindows => Hue::Output,
-            Tab::Control | Tab::Surface | Tab::Modulators | Tab::Devices => Hue::Control,
+            Tab::Control | Tab::Surface | Tab::MyPanel(_) | Tab::Modulators | Tab::Devices => Hue::Control,
             _ => return None,
         })
     }
@@ -211,6 +213,7 @@ impl Tab {
     pub fn title(self) -> String {
         match self {
             Tab::Monitor(n) => return format!("Preview {n}"),
+            Tab::MyPanel(n) => return format!("Panel {}", n + 1),
             _ => {}
         }
         match self {
@@ -225,7 +228,7 @@ impl Tab {
             Tab::Inputs => "Inputs",
             Tab::Online => "Online",
             Tab::Audio => "Audio",
-            Tab::Modulators => "Modulators",
+            Tab::Modulators => "LFOs & Modulators",
             Tab::Control => "MIDI / OSC",
             Tab::Mapping => "Mapping",
             Tab::Stream => "Stream & Record",
@@ -244,7 +247,7 @@ impl Tab {
             Tab::LayerWindows => "Layer Windows",
             Tab::Studio => "Mapping Studio",
             Tab::Stage => "Stage",
-            Tab::Monitor(_) => unreachable!(),
+            Tab::Monitor(_) | Tab::MyPanel(_) => unreachable!(),
         }
         .to_string()
     }
@@ -266,6 +269,10 @@ impl egui_dock::TabViewer for Viewer<'_> {
     fn title(&mut self, tab: &mut Tab) -> egui::WidgetText {
         match tab {
             Tab::Monitor(n) => format!("{} {}", icon::MONITOR, monitor_source_name(self.st, *n)).into(),
+            Tab::MyPanel(n) => {
+                let name = self.st.comp.surface.pages.get(*n as usize).cloned().unwrap_or_else(|| tab.title());
+                RichText::new(format!("{} {name}", icon::SLIDERS_HORIZONTAL)).color(crate::theme::Hue::Control.color()).into()
+            }
             // Coloured by what kind of panel it is.
             _ => match tab.hue() {
                 Some(h) => RichText::new(tab.title()).color(h.color()).into(),
@@ -291,6 +298,17 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     fn context_menu(&mut self, ui: &mut egui::Ui, tab: &mut Tab, _path: egui_dock::NodePath) {
+        if let Tab::MyPanel(n) = *tab
+            && let Some(name) = self.st.comp.surface.pages.get_mut(n as usize)
+        {
+            ui.label(RichText::new("Panel name").small());
+            ui.text_edit_singleline(name);
+            if self.st.comp.surface.pages.len() > 1 && crate::ui::danger_button(ui, label(icon::TRASH, "Delete this panel and its controls")).clicked() {
+                surface::remove_page(ui.ctx(), &mut self.st.comp.surface, n as usize);
+                ui.close();
+            }
+            ui.separator();
+        }
         if crate::ui::command(ui, label(icon::ARROW_SQUARE_OUT, "Detach to its own window")).on_hover_text("Move this panel to a separate window (drag it to another screen)").clicked() {
             self.detach = Some(*tab);
             ui.close();
@@ -331,6 +349,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Mixer => mixer(ui, st),
         Tab::Devices => devices(ui, st),
         Tab::Surface => surface(ui, st),
+        Tab::MyPanel(n) => surface::my_panel(ui, st, n as usize),
         Tab::Account => account(ui, st),
         Tab::Leds => leds(ui, st),
         Tab::Scopes => scopes::scopes(ui, st),

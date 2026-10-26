@@ -152,6 +152,14 @@ impl PhosphorApp {
                 let _ = self.add_monitor();
             }
             A::Gather => self.gather_windows = true,
+            A::NewPanel => {
+                let page = self.state.comp.surface.add_page();
+                if let Some(name) = self.state.comp.surface.pages.get_mut(page) {
+                    *name = format!("Panel {}", page + 1);
+                }
+                self.open_my_panel(page);
+            }
+            A::PanelBrowser => self.state.panel_browser = !self.state.panel_browser,
             A::ZoomIn => ctx.set_zoom_factor((ctx.zoom_factor() * 1.1).min(3.0)),
             A::ZoomOut => ctx.set_zoom_factor((ctx.zoom_factor() / 1.1).max(0.5)),
             A::ZoomReset => ctx.set_zoom_factor(1.0),
@@ -349,6 +357,9 @@ impl PhosphorApp {
                 ui.separator();
                 if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();
+                }
+                if crate::ui::icon_toggle(ui, &mut self.state.panel_browser, icon::SQUARES_FOUR).on_hover_text("Panel browser (Shift ⌘P): every panel here, open or closed: show, close, bring back").changed() {
+                    // (the toggle flips it)
                 }
                 if crate::ui::mode_button(ui, self.state.map_mode, format!("{} MAP", icon::PLUG))
                     .on_hover_text("Map mode (Shift ⌘M): click any control, then move a MIDI knob, send OSC or press a key to link them")

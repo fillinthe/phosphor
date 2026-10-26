@@ -69,6 +69,7 @@ mod recovery;
 mod render;
 mod settings;
 mod areas;
+mod panel_browser;
 mod web_control;
 pub(crate) use web_control::web_badge;
 #[cfg(not(target_arch = "wasm32"))]
@@ -340,6 +341,8 @@ pub struct State {
     pub(crate) preview_textures: Vec<(egui::TextureId, (u32, u32))>,
     /// A panel to bring to the front (set by explorer actions and the palette).
     pub open_tab: Option<Tab>,
+    /// The panel browser window is open (View › Panel Browser…).
+    pub panel_browser: bool,
     /// Dragging in the Preview moves the selected layer's shader points (ISF point inputs).
     pub mouse_to_shaders: bool,
     /// File › New from Template is open.

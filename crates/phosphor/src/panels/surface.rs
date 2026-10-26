@@ -17,10 +17,29 @@ enum Grab {
 }
 
 pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
+    surface_page(ui, st, None);
+}
+
+/// One page of the surface as a panel of its own (View › New Panel): your own buttons and sliders, wired to
+/// anything and to OSC, docked or floating anywhere.
+pub(crate) fn my_panel(ui: &mut egui::Ui, st: &mut State, page: usize) {
+    if page >= st.comp.surface.pages.len() {
+        help(ui, "This panel was deleted: close it.");
+        return;
+    }
+    // The page showing is this one while the panel draws (adding, duplicating and placing all work on it).
+    let showing = std::mem::replace(&mut st.comp.surface.page, page);
+    surface_page(ui, st, Some(page));
+    st.comp.surface.page = showing;
+}
+
+/// The surface (`only` = None: every page, with page tabs) or one page of it.
+fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     let now = ui.ctx().input(|i| i.time);
-    let edit_id = egui::Id::new("surface_edit");
-    let sel_id = egui::Id::new("surface_selected");
-    let grab_id = egui::Id::new("surface_grab");
+    let key = only.map_or(u64::MAX, |p| p as u64);
+    let edit_id = egui::Id::new(("surface_edit", key));
+    let sel_id = egui::Id::new(("surface_selected", key));
+    let grab_id = egui::Id::new(("surface_grab", key));
     let mut edit: bool = ui.ctx().data(|d| d.get_temp(edit_id)).unwrap_or(st.comp.surface.widgets.is_empty());
     let mut selected: Option<u64> = ui.ctx().data(|d| d.get_temp(sel_id)).flatten();
 
@@ -46,6 +65,9 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
         } else if st.comp.surface.on_page().next().is_none() {
             help(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
+        if only.is_some() {
+            return;
+        }
         let State { surface_presets, surface_preset_name, comp, .. } = &mut *st;
         let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Control Surface pages by name: reuse them in any project (Load replaces this project's surface; Undo brings it back).", surface_presets, surface_preset_name, "surface", || serde_json::to_string(&comp.surface).unwrap_or_default());
         match picked {
@@ -58,7 +80,9 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
         }
     });
 
-    page_tabs(ui, &mut st.comp.surface, edit);
+    if only.is_none() {
+        page_tabs(ui, &mut st.comp.surface, edit);
+    }
 
     let targets = crate::control::all_targets(&st.comp);
     let inspector = edit && selected.is_some_and(|id| st.comp.surface.widget(id).is_some());
@@ -77,7 +101,7 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
         let avail_h = ui.available_height() - 4.0;
         let cell = (canvas_w / cols).min(avail_h / rows.max(4.0)).max(24.0);
         let height = (rows * cell).max(avail_h);
-        crate::ui::column_scroll(ui).id_salt("surface_scroll").max_width(canvas_w).auto_shrink([false, false]).show(ui, |ui| {
+        crate::ui::column_scroll(ui).id_salt(("surface_scroll", key)).max_width(canvas_w).auto_shrink([false, false]).show(ui, |ui| {
             let (canvas, _) = ui.allocate_exact_size(egui::vec2(canvas_w, height), Sense::hover());
             let painter = ui.painter_at(canvas);
             if edit {
@@ -622,6 +646,10 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
                 r.right_menu(|ui| {
                     ui.label(RichText::new("Page name").small());
                     ui.text_edit_singleline(&mut sf.pages[i]);
+                    if crate::ui::command(ui, label(icon::ARROW_SQUARE_OUT, "Open as its own panel")).on_hover_text("This page as a panel you can dock anywhere or float").clicked() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(OPEN_MY_PANEL), i));
+                        ui.close();
+                    }
                     if sf.pages.len() > 1 && crate::ui::command(ui, label(icon::TRASH, "Delete page and its widgets")).clicked() {
                         remove = Some(i);
                         ui.close();
@@ -634,7 +662,21 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
         }
     });
     if let Some(i) = remove {
-        sf.remove_page(i);
+        remove_page(ui.ctx(), sf, i);
+    }
+}
+
+/// Temp-data key: open page N as its own panel (the app has the dock).
+pub(crate) const OPEN_MY_PANEL: &str = "phosphor_open_my_panel";
+/// Temp-data key: page N was deleted (its panel closes, later panels move down one).
+pub(crate) const MY_PANEL_GONE: &str = "phosphor_my_panel_gone";
+
+/// Deletes a page (and its widgets); its panel closes.
+pub(crate) fn remove_page(ctx: &egui::Context, sf: &mut phosphor_engine::ControlSurface, i: usize) {
+    let before = sf.pages.len();
+    sf.remove_page(i);
+    if sf.pages.len() < before {
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(MY_PANEL_GONE), i));
     }
 }
 

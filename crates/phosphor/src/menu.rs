@@ -31,6 +31,10 @@ pub enum Action {
     ResetLayout,
     AddMonitor,
     Gather,
+    /// A panel of your own (buttons and sliders you wire up).
+    NewPanel,
+    /// Every panel in this area: show, close, bring back.
+    PanelBrowser,
     ZoomIn,
     ZoomOut,
     ZoomReset,
@@ -174,6 +178,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Area(2), "Control", Some((false, Key::Num3))),
             S,
             D("Panels"),
+            I(A::PanelBrowser, "Panel Browser…", Some((true, Key::P))),
+            I(A::NewPanel, "New Panel (your own controls)", None),
             D("Layouts"),
             I(A::SaveLayout, "Save Current Layout…", None),
             I(A::ResetLayout, "Reset Layout", None),

@@ -589,6 +589,16 @@ impl PhosphorApp {
                 self.welcome_open = true;
                 continue;
             }
+            if name == "panels" {
+                // A panel of your own (with a fader on it) and the panel browser.
+                let page = self.state.comp.surface.add_page();
+                self.state.comp.surface.add(phosphor_engine::WidgetKind::Fader);
+                self.state.comp.surface.page = 0;
+                self.open_my_panel(page);
+                self.state.panel_browser = true;
+                println!("QUICK panels: panel {} open, browser open", page + 1);
+                continue;
+            }
             if name == "baroff" {
                 // Knock the bar two beats off, so the downbeat tracker has something to fix.
                 let b = self.state.clock.beats(now);

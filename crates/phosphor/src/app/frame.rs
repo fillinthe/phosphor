@@ -303,6 +303,7 @@ impl PhosphorApp {
             }
         });
         self.detached_windows(&ctx);
+        self.panel_browser(&ctx);
         crate::explorer::fx_browser_window(&ctx, &mut self.state);
         if !self.lock.active
             && let Some(cmd) = crate::explorer::palette(&ctx, &mut self.state)
@@ -312,6 +313,12 @@ impl PhosphorApp {
         self.lock_window(&ctx);
         if let Some(tab) = self.state.open_tab.take() {
             self.show_tab_anywhere(tab);
+        }
+        if let Some(page) = ctx.data_mut(|d| d.remove_temp::<usize>(egui::Id::new(panels::OPEN_MY_PANEL))) {
+            self.open_my_panel(page);
+        }
+        if let Some(page) = ctx.data_mut(|d| d.remove_temp::<usize>(egui::Id::new(panels::MY_PANEL_GONE))) {
+            self.my_panel_gone(page);
         }
         if let Some(src) = ctx.data_mut(|d| {
             let id = egui::Id::new(panels::PREVIEW_REQUEST);
