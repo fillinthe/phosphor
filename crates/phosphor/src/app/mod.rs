@@ -320,6 +320,8 @@ pub struct State {
     pub(crate) menu_requests: Vec<crate::menu::Action>,
     /// Mapped presses for buttons on screen (handed to `ui::press` each frame).
     pub(crate) button_presses: Vec<u64>,
+    /// Mapped values for on-screen sliders (`Deferred::Slider`), handed over at the start of a frame.
+    pub(crate) slider_values: Vec<(u64, f32)>,
     /// GPU errors are logged instead of ending the show (`gpu_guard`).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) gpu_guard: Option<crate::gpu_guard::GpuGuard>,
@@ -613,6 +615,7 @@ impl State {
             crate::control::Deferred::Column(col) => self.trigger(Trigger::Column(col), now),
             crate::control::Deferred::App(a, v) => self.app_control(a, v, now),
             crate::control::Deferred::Button(key) => self.button_presses.push(key),
+            crate::control::Deferred::Slider(key, v) => self.slider_values.push((key, v)),
             crate::control::Deferred::Menu(key) => self.menu_requests.extend(crate::menu::action_for(&key)),
             crate::control::Deferred::Scrub(layer, v) => {
                 if let Some((_, dur)) = self.media.position(layer) {

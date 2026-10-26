@@ -24,6 +24,8 @@ pub enum Deferred {
     Menu(String),
     /// Press a button on screen (`ControlTarget::Button`).
     Button(u64),
+    /// Move a slider on screen to 0..1 of its range (`ControlTarget::Slider`).
+    Slider(u64, f32),
 }
 
 /// Sent instead of a value when a pad or key press should flip an on/off control.

@@ -21,6 +21,9 @@ impl PhosphorApp {
         for key in std::mem::take(&mut self.state.button_presses) {
             crate::ui::press::press(&ctx, key, wall);
         }
+        for (key, v) in std::mem::take(&mut self.state.slider_values) {
+            crate::ui::press::slide(&ctx, key, v, wall);
+        }
         self.state.clip_cells.clear();
         self.state.comp.ensure_outputs();
         self.state.comp.sync_media_bin();

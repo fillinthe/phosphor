@@ -14,6 +14,8 @@ const PANEL: &str = "phosphor_press_panel";
 const SEEN: &str = "phosphor_press_seen";
 /// Mapped presses waiting for their button: key → when (seconds).
 const PRESSED: &str = "phosphor_press_pressed";
+/// Mapped values waiting for their slider: key → (0..1, when).
+const SLID: &str = "phosphor_press_slid";
 /// A press waits this long for its button to be drawn.
 const WAIT_SECS: f64 = 1.0;
 
@@ -27,7 +29,35 @@ pub(crate) fn begin_frame(ctx: &egui::Context, now: f64) {
     ctx.data_mut(|d| {
         d.remove_temp::<HashMap<(String, String), u32>>(egui::Id::new(SEEN));
         d.get_temp_mut_or_default::<HashMap<u64, f64>>(egui::Id::new(PRESSED)).retain(|_, t| now - *t < WAIT_SECS);
+        d.get_temp_mut_or_default::<HashMap<u64, (f32, f64)>>(egui::Id::new(SLID)).retain(|_, (_, t)| now - *t < WAIT_SECS);
     });
+}
+
+/// A mapped knob / OSC value (0..1) arrived for this slider (`ControlTarget::Slider`); the newest wins.
+pub(crate) fn slide(ctx: &egui::Context, key: u64, v: f32, now: f64) {
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<HashMap<u64, (f32, f64)>>(egui::Id::new(SLID)).insert(key, (v, now)));
+    ctx.request_repaint();
+}
+
+/// The value waiting for slider `key`, if any (taken).
+pub(crate) fn take_slide(ctx: &egui::Context, key: u64) -> Option<f32> {
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<HashMap<u64, (f32, f64)>>(egui::Id::new(SLID)).remove(&key)).map(|(v, _)| v)
+}
+
+/// The stable key and shown name of the next control of `kind` labelled `label` in the panel being drawn (counted per
+/// frame, so the second "Amount" in a panel is "#2"). Buttons and sliders share it.
+pub(crate) fn slot(ui: &egui::Ui, kind: &str, label: &str) -> (u64, String) {
+    let ctx = ui.ctx();
+    let (panel, title) = ctx.data(|d| d.get_temp::<Option<(String, String)>>(egui::Id::new(PANEL))).flatten().unwrap_or_default();
+    // Buttons keep their old keys (no kind in them): mappings saved before still find them.
+    let counted = if kind.is_empty() { label.to_string() } else { format!("{kind}:{label}") };
+    let n = ctx.data_mut(|d| {
+        let seen = d.get_temp_mut_or_default::<HashMap<(String, String), u32>>(egui::Id::new(SEEN));
+        let c = seen.entry((panel.clone(), counted.clone())).or_insert(0);
+        *c += 1;
+        *c - 1
+    });
+    (key_of(&panel, &counted, n), name_of(&title, label, n))
 }
 
 /// A mapped press arrived for this button.
@@ -56,19 +86,12 @@ pub(crate) fn mappable(ui: &egui::Ui, resp: &mut egui::Response, label: &str) {
     if label.is_empty() || !ui.is_visible() {
         return;
     }
+    let (key, name) = slot(ui, "", label);
     let ctx = ui.ctx();
-    let (panel, title) = ctx.data(|d| d.get_temp::<Option<(String, String)>>(egui::Id::new(PANEL))).flatten().unwrap_or_default();
-    let n = ctx.data_mut(|d| {
-        let seen = d.get_temp_mut_or_default::<HashMap<(String, String), u32>>(egui::Id::new(SEEN));
-        let c = seen.entry((panel.clone(), label.to_string())).or_insert(0);
-        *c += 1;
-        *c - 1
-    });
-    let key = key_of(&panel, label, n);
     if resp.enabled() && ctx.data_mut(|d| d.get_temp_mut_or_default::<HashMap<u64, f64>>(egui::Id::new(PRESSED)).remove(&key)).is_some() {
         resp.flags.insert(egui::response::Flags::FAKE_PRIMARY_CLICKED);
     }
-    let target = ControlTarget::Button { key, name: name_of(&title, label, n) };
+    let target = ControlTarget::Button { key, name };
     crate::ui::mapped_badge(ui, resp, &target);
 }
 
@@ -106,5 +129,29 @@ mod tests {
             out.textures_delta.clear();
         }
         assert_eq!(clicks, 1);
+    }
+
+    /// A mapped knob moves a settings slider that has no control of its own (once it's drawn), and buttons keep
+    /// the keys they had before sliders shared the counting.
+    #[test]
+    fn a_mapped_value_moves_a_plain_slider() {
+        let ctx = egui::Context::default();
+        let mut soft = 0.0f32;
+        let key = key_of("Mapping", "slider:Soft edge", 0);
+        for frame in 0..3 {
+            let mut out = ctx.run_ui(Default::default(), |ui| {
+                begin_frame(ui.ctx(), frame as f64 * 0.1);
+                set_panel(ui.ctx(), Some(("Mapping", "Mapping")));
+                if frame == 1 {
+                    slide(ui.ctx(), key, 1.0, 0.1);
+                }
+                egui::CentralPanel::default().show(ui, |ui| {
+                    crate::ui::Level::range(&mut soft, 0.0, 0.5, "Soft edge").show(ui);
+                    assert_eq!(slot(ui, "", "Stop").0, key_of("Mapping", "Stop", 0), "button keys unchanged");
+                });
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(soft, 0.5, "moved to the top of its range");
     }
 }

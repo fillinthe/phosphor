@@ -80,6 +80,12 @@ impl<'a> Level<'a> {
 
     pub fn show(self, ui: &mut egui::Ui) -> egui::Response {
         let Level { value, min, max, default, text, percent, modulation, target, width, vertical, tip, log } = self;
+        // A slider without a control of its own gets one from where it is (panel, label, which one): limits, lock,
+        // snap points and Learn for every slider, saved with the project.
+        let target = target.or_else(|| (!text.trim().is_empty() && ui.is_visible()).then(|| {
+            let (key, name) = super::press::slot(ui, "slider", &text);
+            ControlTarget::Slider { key, name }
+        }));
         // Where a value sits along the bar (0..1) and back.
         let to_t = |v: f32| if log { ((v / min).ln() / (max / min).ln()).clamp(0.0, 1.0) } else { ((v - min) / (max - min).max(f32::EPSILON)).clamp(0.0, 1.0) };
         let from_t = |t: f32| if log { min * (max / min).powf(t) } else { min + t * (max - min) };
@@ -100,6 +106,18 @@ impl<'a> Level<'a> {
         }
         snaps.extend(own_snaps.iter().copied());
         let shift = ui.input(|i| i.modifiers.shift);
+        // A mapped knob / OSC value for a slider that has no control of its own (it moves while it's on screen).
+        if let Some(ControlTarget::Slider { key, .. }) = &target
+            && !locked
+            && let Some(u) = super::press::take_slide(ui.ctx(), *key)
+        {
+            let u = limits.map_or(u, |(lo, hi)| u.clamp(lo, hi));
+            let v = from_t(u);
+            if v != *value {
+                *value = v;
+                r.mark_changed();
+            }
+        }
 
         // Primary button only: right-click opens the menu without moving the value.
         let primary = ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released());

@@ -236,7 +236,7 @@ fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Opti
         T::LayerText(id) | T::LayerTextStep { layer: id, .. } => item(*id),
         T::TriggerClip { layer, .. } | T::LayerClipPick(layer) | T::LayerRandomClip(layer) => Some((Tab::Clips, Some(*layer), None)),
         T::TriggerColumn(_) => Some((Tab::Clips, None, None)),
-        T::Menu(_) | T::Button { .. } => None,
+        T::Menu(_) | T::Button { .. } | T::Slider { .. } => None,
         T::EffectParam { effect, .. } | T::EffectMix(effect) | T::EffectEnabled(effect) => {
             let has = |chain: &[phosphor_engine::EffectState]| chain.iter().any(|e| e.id == *effect);
             if has(&comp.master_effects) {
