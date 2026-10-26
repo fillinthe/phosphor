@@ -16,23 +16,25 @@ pub struct Target {
     pub url: String,
 }
 
-/// What `targets` last found, and an error if listing failed (no permission).
-static TARGETS: Mutex<(Vec<Target>, Option<String>, bool)> = Mutex::new((Vec::new(), None, false));
+/// What `targets` last found, an error if listing failed (no permission), a look running, and when it finished.
+static TARGETS: Mutex<(Vec<Target>, Option<String>, bool, Option<std::time::Instant>)> = Mutex::new((Vec::new(), None, false, None));
 
-pub const NO_PERMISSION: &str = "Screen capture needs permission: System Settings › Privacy & Security › Screen & System Audio Recording › turn on Phosphor, then reopen it";
+pub const NO_PERMISSION: &str = "Screens and windows need permission: press Allow, or System Settings › Privacy & Security › Screen & System Audio Recording › turn on Phosphor, then reopen it";
 
 /// The displays and windows found last time (empty until the first look finishes), and an error; starts a fresh
 /// look in the background (one at a time).
 pub fn targets() -> (Vec<Target>, Option<String>) {
     let mut t = TARGETS.lock().unwrap_or_else(|e| e.into_inner());
-    if !t.2 {
+    // A fresh look every 3 seconds at most (windows come and go; asking every frame was wasted work).
+    if !t.2 && t.3.is_none_or(|at| at.elapsed().as_secs_f32() > 3.0) {
         t.2 = true;
         std::thread::spawn(|| {
             let found = list();
             let mut t = TARGETS.lock().unwrap_or_else(|e| e.into_inner());
+            let now = Some(std::time::Instant::now());
             match found {
-                Ok(v) => *t = (v, None, false),
-                Err(e) => *t = (Vec::new(), Some(e), false),
+                Ok(v) => *t = (v, None, false, now),
+                Err(e) => *t = (Vec::new(), Some(e), false, now),
             }
         });
     }
@@ -40,6 +42,10 @@ pub fn targets() -> (Vec<Target>, Option<String>) {
 }
 
 fn list() -> Result<Vec<Target>, String> {
+    // Without permission, asking ScreenCaptureKit makes macOS show its prompt again (every look): check quietly.
+    if !crate::permissions::screen_allowed() {
+        return Err(NO_PERMISSION.to_string());
+    }
     let content = SCShareableContent::get().map_err(|_| NO_PERMISSION.to_string())?;
     let mut out: Vec<Target> = content
         .displays()
