@@ -93,7 +93,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             AppControl::SurfacePage => phosphor_engine::pick_unit(comp.surface.current_page(), comp.surface.pages.len()),
             _ => return None,
         },
-        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) | ControlTarget::LayerRandomClip(_) | ControlTarget::Menu(_) | ControlTarget::Button { .. } => return None,
+        ControlTarget::TriggerClip { .. } | ControlTarget::TriggerColumn(_) | ControlTarget::LayerScrub(_) | ControlTarget::LayerJump { .. } | ControlTarget::LayerText(_) | ControlTarget::LayerTextStep { .. } | ControlTarget::LayerClipPick(_) | ControlTarget::LayerRandomClip(_) | ControlTarget::Menu(_) | ControlTarget::Button { .. } | ControlTarget::Slider { .. } => return None,
     })
 }
 
@@ -256,6 +256,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::Button { key, .. } => {
             if v > 0.5 || v == FLIP {
                 out.push(Deferred::Button(*key));
+            }
+        }
+        ControlTarget::Slider { key, .. } => {
+            if v != FLIP {
+                out.push(Deferred::Slider(*key, v.clamp(0.0, 1.0)));
             }
         }
         ControlTarget::Menu(key) => {
@@ -531,6 +536,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerClipPick(id) => format!("/phosphor/layer/{id}/clip/pick"),
         ControlTarget::LayerRandomClip(id) => format!("/phosphor/layer/{id}/clip/random"),
         ControlTarget::Button { key, .. } => format!("/phosphor/button/{key:x}"),
+        ControlTarget::Slider { key, .. } => format!("/phosphor/slider/{key:x}"),
         ControlTarget::Menu(key) => format!("/phosphor/menu/{}", key.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect::<String>().trim_matches('_')),
         ControlTarget::LayerTextStep { layer, forward } => format!("/phosphor/layer/{layer}/text/{}", if *forward { "next" } else { "previous" }),
         ControlTarget::LayerJump { layer, forward } => format!("/phosphor/layer/{layer}/jump/{}", if *forward { "forward" } else { "back" }),

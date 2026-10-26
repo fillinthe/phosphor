@@ -185,6 +185,7 @@ impl PhosphorApp {
                 web_log: Vec::new(),
                 menu_requests: Vec::new(),
                 button_presses: Vec::new(),
+                slider_values: Vec::new(),
                 #[cfg(not(target_arch = "wasm32"))]
                 gpu_guard,
                 #[cfg(not(target_arch = "wasm32"))]

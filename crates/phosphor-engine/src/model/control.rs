@@ -113,6 +113,9 @@ pub enum ControlTarget {
     MaskTransform { mask: u64, part: u8 },
     /// A slice's transform, the same five values (`mapping::ShapeTransform::PARTS`).
     SliceTransform { slice: u64, part: u8 },
+    /// Any slider on screen without a control of its own (a setting), by its stable key (panel, label, which one) and
+    /// the name shown for it: limits, lock, snaps and mappings for every slider.
+    Slider { key: u64, name: String },
 }
 
 /// App-wide mappable controls.
