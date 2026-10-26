@@ -16,9 +16,14 @@ pub(crate) struct FxDrag(u64);
 
 /// An effect chain editor: collapsible cards, drag to reorder, copy/paste whole chains.
 pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, clipboard_len: usize) -> Option<FxAction> {
+    effects_list(ui, "Effects", "No effects yet. Effects run top to bottom; drag the handle to reorder.", effects, clipboard_len)
+}
+
+/// `effects_editor` with its own heading and words for when it's empty (a clip's or file's chain).
+pub(crate) fn effects_list(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mut Vec<EffectState>, clipboard_len: usize) -> Option<FxAction> {
     let mut action: Option<FxAction> = None;
     crate::ui::toolbar(ui, |ui| {
-        crate::ui::heading(ui, "Effects");
+        crate::ui::heading(ui, heading);
         let add = crate::ui::command(ui, label(icon::PLUS, "Add effect")).on_hover_text("Browse effects with previews");
         if add.clicked() {
             action = Some(FxAction::Browse(Some(add.rect.left_bottom())));
@@ -34,7 +39,7 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
         });
     });
     if effects.is_empty() {
-        help(ui, "No effects yet. Effects run top to bottom; drag the handle to reorder.");
+        help(ui, empty);
     }
     let mut remove = None;
     let mut swap = None;
@@ -191,7 +196,7 @@ pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
     st.explorer.recent.retain(|r| r != effect);
     st.explorer.recent.insert(0, effect.to_string());
     st.explorer.recent.truncate(12);
-    let on = if target == phosphor_engine::MASTER_ID { "MASTER".to_string() } else { st.comp.layer(target).map(|l| format!("layer \"{}\"", l.name)).or_else(|| st.comp.group(target).map(|g| format!("group \"{}\"", g.name))).or_else(|| st.comp.comp(target).map(|c| format!("comp \"{}\"", c.name))).unwrap_or_else(|| "?".into()) };
+    let on = if target == phosphor_engine::MASTER_ID { "MASTER".to_string() } else if let Some(l) = phosphor_engine::chain_layer(target).and_then(|l| st.comp.layer(l)) { format!("the clip on layer \"{}\"", l.name) } else { st.comp.layer(target).map(|l| format!("layer \"{}\"", l.name)).or_else(|| st.comp.group(target).map(|g| format!("group \"{}\"", g.name))).or_else(|| st.comp.comp(target).map(|c| format!("comp \"{}\"", c.name))).unwrap_or_else(|| "?".into()) };
     log::info!(target: "phosphor::action", "effect added: {effect} on {on}");
     if let Some(chain) = st.comp.effects_mut(target) {
         chain.push(fx);

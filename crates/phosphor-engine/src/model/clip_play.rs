@@ -86,9 +86,9 @@ impl Autopilot {
 pub const AUTOPILOT_DEFAULT_BEATS: f32 = 16.0;
 
 impl LayerState {
-    /// The layer's playback settings and effects, as a clip keeps them.
+    /// The layer's playback settings, as a clip keeps them (a clip's effects are its own chain, `Clip::effects`).
     pub fn clip_settings(&self) -> ClipSettings {
-        self.clip_settings_with(true)
+        self.clip_settings_with(false)
     }
 
     /// The layer's settings to save into a clip; without effects when `with_effects` is false.
@@ -166,10 +166,11 @@ impl LayerState {
                     generator_values: self.generator_values.clone(),
                     mods: self.generator_mods.clone(),
                     trigger: TriggerMode::Normal,
-                    // Speed, loop and effects come back too when the flash ends.
-                    own: Some(self.clip_settings()),
+                    // Speed, loop and effects come back too when the flash ends (its clip's effects come with its id).
+                    own: Some(self.clip_settings_with(true)),
                     muted: false,
                     thumb: String::new(),
+                    effects: Vec::new(),
                 }));
                 self.trigger_clip(slot, now, secs)
             }
@@ -308,7 +309,7 @@ mod tests {
         let kaleido = || crate::EffectState { id: 9, effect: "kaleido".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() };
         let mut l = layer_with(2);
         l.effects = vec![kaleido()];
-        l.clips[0].own = Some(l.clip_settings());
+        l.clips[0].own = Some(l.clip_settings_with(true));
         l.clips[2].own = Some(ClipSettings { rate: 2.0, ..l.clip_settings_with(false) });
         assert_eq!(l.clips_with_effects(), 1);
         l.effects.clear();

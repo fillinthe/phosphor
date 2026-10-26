@@ -227,6 +227,8 @@ impl PhosphorApp {
             if leading {
                 st.comp.expire_transitions(now as f32);
             }
+            // The playing clip's (or file's) effects onto its layer.
+            st.comp.sync_clip_effects();
             // Movies remember how they last played (twice a second is plenty).
             if now >= st.media_memory_at {
                 st.media_memory_at = now + 0.5;

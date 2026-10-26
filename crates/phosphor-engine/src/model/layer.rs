@@ -241,6 +241,12 @@ pub struct LayerState {
     pub transition: Option<Transition>,
     #[serde(skip)]
     pub active_clip: Option<u64>,
+    /// The playing clip's (or file's) own effects: they run before the layer's and follow the clip / file.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub clip_effects: Vec<EffectState>,
+    /// Whose effects `clip_effects` are.
+    #[serde(skip_serializing_if = "crate::EffectsOwner::is_none")]
+    pub clip_effects_from: crate::EffectsOwner,
 }
 
 /// Where a layer sits in the composition (applied when it's mixed; effects run before it).
@@ -369,6 +375,8 @@ impl Default for LayerState {
             flash_return: None,
             transition: None,
             active_clip: None,
+            clip_effects: Vec::new(),
+            clip_effects_from: crate::EffectsOwner::None,
         }
     }
 }

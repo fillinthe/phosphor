@@ -8,6 +8,8 @@ mod comps;
 mod control;
 mod control_prefs;
 mod clip_play;
+mod clip_fx;
+pub use clip_fx::*;
 mod collections;
 mod routing;
 mod sequencer;

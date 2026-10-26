@@ -226,6 +226,9 @@ pub struct Clip {
     pub muted: bool,
     /// A picture chosen for its cell in the grid (a PNG path); empty = from the source.
     pub thumb: String,
+    /// The clip's own effects: they come with it wherever it plays, before the layer's effects.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<crate::EffectState>,
 }
 
 /// What a clip remembers when it keeps its own settings.

@@ -496,6 +496,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
                 out.push((ControlTarget::GeneratorParam { layer: l.id, index: i }, format!("{} · {} · {}", l.name, desc.name, p.name)));
             }
         }
+        effects(&format!("{} · clip", l.name), &l.clip_effects, &mut out);
         effects(&l.name, &l.effects, &mut out);
     }
     // Every menu item (File › Save, Quick › Surprise…).

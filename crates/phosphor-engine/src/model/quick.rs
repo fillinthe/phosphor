@@ -285,7 +285,8 @@ impl Composition {
                 source: SourceSpec::Generator(desc.id.to_string()),
                 generator_values: values,
                 mods,
-                own: Some(ClipSettings { effects, ..base.clone() }),
+                own: Some(base.clone()),
+                effects,
                 ..Default::default()
             };
             made += 1;
