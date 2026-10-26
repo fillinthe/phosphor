@@ -373,7 +373,7 @@ impl PhosphorApp {
                                 }
                             }
                         });
-                        crate::ui::hint(ui, "Darker for dark rooms and shows, lighter for daylight.");
+                        crate::ui::help(ui, "Darker for dark rooms and shows, lighter for daylight.");
                         ui.horizontal(|ui| {
                             ui.label(egui::RichText::new("Accent").small());
                             for (k, (name, dark, _)) in theme::ACCENTS.iter().enumerate() {
@@ -386,6 +386,17 @@ impl PhosphorApp {
                                     theme::set_accent(k);
                                     theme::set_brightness(ui.ctx(), self.ui_brightness);
                                 }
+                            }
+                        });
+                        ui.separator();
+                        crate::ui::toolbar(ui, |ui| {
+                            let mut icons = crate::ui::help_icons();
+                            if crate::ui::toggle(ui, &mut icons, "Help icons").on_hover_text("Help sentences in the panels shrink to a small (i): hover or click it to read them").changed() {
+                                crate::ui::set_help_icons(icons);
+                            }
+                            let mut tips = theme::tooltips_on();
+                            if crate::ui::toggle(ui, &mut tips, "Tooltips").on_hover_text("Off: no hover text over buttons (for people who know the app). (i) help still opens on a click").changed() {
+                                theme::set_tooltips(ui.ctx(), tips);
                             }
                         });
                     })
@@ -458,7 +469,7 @@ impl PhosphorApp {
                         }
                         Entry::Dynamic("Panels") => {
                             ui.menu_button("Panels", |ui| {
-                                crate::ui::hint(ui, "Drag any tab to move it; drag it outside to float it.");
+                                crate::ui::help(ui, "Drag any tab to move it; drag it outside to float it.");
                                 for (i, tab) in Tab::ALL.iter().enumerate() {
                                     let open = self.detached.contains(tab) || self.dock.find_tab(tab).is_some();
                                     if crate::ui::pick_item(ui, open, tab.title()).clicked() {

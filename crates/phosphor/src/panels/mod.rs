@@ -312,7 +312,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::Online => online_panel(ui, st),
         #[cfg(target_arch = "wasm32")]
         Tab::Online => {
-            hint(ui, "Online libraries work in the Mac, Windows and Linux apps.");
+            help(ui, "Online libraries work in the Mac, Windows and Linux apps.");
         }
         Tab::Notes => notes_panel(ui, st),
         Tab::Timeline => timeline::timeline_panel(ui, st),

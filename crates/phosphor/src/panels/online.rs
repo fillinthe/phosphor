@@ -434,7 +434,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let o = &mut st.online;
     let Some(search) = o.search.as_mut() else {
         crate::ui::heading(ui, label(icon::SPARKLE, "Start a show"));
-        hint(ui, "One click fills three layers of clips from these libraries for a mood (replaces the layers; outputs and mapping stay).");
+        help(ui, "One click fills three layers of clips from these libraries for a mood (replaces the layers; outputs and mapping stay).");
         ui.horizontal_wrapped(|ui| {
             for s in &crate::online::starter::STARTERS {
                 if crate::ui::command_if(ui, st.online.starter.is_none(), s.name).on_hover_text(s.about).clicked() {
@@ -450,7 +450,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             });
         }
         ui.add_space(6.0);
-        hint(ui, "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualisers. Downloads go into the media bin with their credit (Credits, below).");
+        help(ui, "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualisers. Downloads go into the media bin with their credit (Credits, below).");
         credits(ui, &st.comp);
         return;
     };
@@ -623,7 +623,7 @@ fn credits(ui: &mut egui::Ui, comp: &phosphor_engine::Composition) {
     let n = comp.media_bin.iter().filter(|m| m.credit.is_some()).count();
     crate::ui::section(ui, "online_credits", format!("{} Credits ({n})", icon::IDENTIFICATION_CARD), false, |ui| {
         if n == 0 {
-            hint(ui, "Files downloaded here keep who made them and their licence. Most need a credit when you show them in public: copy them all from here.");
+            help(ui, "Files downloaded here keep who made them and their licence. Most need a credit when you show them in public: copy them all from here.");
             return;
         }
         if crate::ui::command(ui, label(icon::COPY, "Copy all credits")).clicked() {

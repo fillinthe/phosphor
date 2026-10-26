@@ -47,7 +47,7 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
             send = outputs_menu(ui, outs).or(send);
             ui.add(egui::TextEdit::singleline(&mut c.name).desired_width(f32::INFINITY));
         });
-        hint(ui, "A comp is a canvas of its own: its layers mix at its size, then its effects run, then it mixes into the master like a layer. The screen button sends it to outputs of its own.");
+        help(ui, "A comp is a canvas of its own: its layers mix at its size, then its effects run, then it mixes into the master like a layer. The screen button sends it to outputs of its own.");
         crate::ui::toolbar(ui, |ui| {
             let mut same = c.width == 0;
             if toggle(ui, &mut same, "Master size").on_hover_text(format!("{}×{}", master.0, master.1)).changed() {

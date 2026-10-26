@@ -8,7 +8,7 @@ use super::*;
 pub(crate) fn live_data_section(ui: &mut egui::Ui, st: &mut State) {
     let on = st.comp.live_data.readings();
     crate::ui::section(ui, "live_data", label(icon::GLOBE_HEMISPHERE_WEST, "Live data"), !on.is_empty(), |ui| {
-        hint(ui, "Things happening in the world move your visuals: each reading is a modulator (0 to 1) any control can follow. Needs the internet; free, no sign-up.");
+        help(ui, "Things happening in the world move your visuals: each reading is a modulator (0 to 1) any control can follow. Needs the internet; free, no sign-up.");
         // A place found by name becomes the weather's place.
         if let Some(Ok((name, lat, lon))) = st.feeds.found.take() {
             let d = &mut st.comp.live_data;

@@ -174,7 +174,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command(ui, label(icon::SCAN, "Find with a camera…")).on_hover_text("The lights blink codes while a camera watches; each light is placed where the camera sees it").clicked() {
             open_led_scan_window(ui.ctx());
         }
-        hint(ui, "Drag the dots on the picture to place lights; the square moves the whole fixture.");
+        help(ui, "Drag the dots on the picture to place lights; the square moves the whole fixture.");
     });
 
     let mut remove = None;
@@ -244,7 +244,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                             guarded!(ui, f.motion_beats, egui::DragValue::new(&mut f.motion_beats).range(0.25..=64.0).speed(0.25).suffix(" beats"));
                         }
                     });
-                    hint(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
+                    help(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
                     // Channels after the layout's (gobo, prism, zoom, strobe…), each a control of its own.
                     let mut gone = None;
                     let custom = f.head == phosphor_engine::HeadLayout::Custom;
@@ -289,7 +289,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
             }
         }
         if st.comp.dmx.fixtures.is_empty() {
-            hint(ui, "Add an LED strip or matrix, place it on the picture, set its universe and channel, then turn on Send. Works with Art-Net and sACN controllers (e.g. PixLite, Enttec, WLED, Falcon).");
+            help(ui, "Add an LED strip or matrix, place it on the picture, set its universe and channel, then turn on Send. Works with Art-Net and sACN controllers (e.g. PixLite, Enttec, WLED, Falcon).");
         }
     });
     if let Some(i) = remove {
@@ -353,7 +353,7 @@ fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         let unis: Vec<u16> = st.dmx.sent.keys().copied().collect();
         if unis.is_empty() {
-            hint(ui, "Nothing going out (LED / DMX off, or no fixtures on).");
+            help(ui, "Nothing going out (LED / DMX off, or no fixtures on).");
             return;
         }
         let id = ui.id().with("dmx_monitor_uni");

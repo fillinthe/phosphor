@@ -25,10 +25,10 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
     let busy = st.led_scan.busy();
     let mut open = true;
     egui::Window::new(label(icon::SCAN, "Find LEDs with a camera")).open(&mut open).default_width(420.0).show(ctx, |ui| {
-        hint(ui, "The lights blink in coded patterns while a camera watches them; each light is placed where the camera saw it. Then the picture lands on the lights the way the camera sees them, however they're hung. Aim the camera at all the lights, keep it still and darken the room.");
+        help(ui, "The lights blink in coded patterns while a camera watches them; each light is placed where the camera saw it. Then the picture lands on the lights the way the camera sees them, however they're hung. Aim the camera at all the lights, keep it still and darken the room.");
         ui.add_enabled_ui(!busy, |ui| {
             if cameras.is_empty() {
-                hint(ui, "Add a layer showing your camera first (Live input), aimed at the lights. It can stay hidden.");
+                help(ui, "Add a layer showing your camera first (Live input), aimed at the lights. It can stay hidden.");
             } else {
                 camera_combo(ui, "led_scan_camera", &cameras, &mut camera);
             }

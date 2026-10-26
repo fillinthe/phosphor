@@ -6,7 +6,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     let control = &mut st.control;
     crate::ui::heading(ui, "MIDI");
     if control.midi_ports.is_empty() {
-        hint(ui, "No MIDI inputs found. Plug in a controller and press Reconnect.");
+        help(ui, "No MIDI inputs found. Plug in a controller and press Reconnect.");
     } else {
         hint(ui, format!("Listening on: {}", control.midi_ports.join(", ")));
     }
@@ -26,7 +26,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     });
     hint(ui, &control.osc_status);
     ui.horizontal_wrapped(|ui| {
-        hint(ui, "TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
+        help(ui, "TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
         #[cfg(not(target_arch = "wasm32"))]
         if ui
             .button(label(icon::EXPORT, "Export TouchOSC layout…"))
@@ -98,7 +98,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.menu_button(label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
             ui.set_min_width(260.0);
-            hint(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
+            help(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
             for (name, lights) in crate::control::CLIP_LIGHTS {
                 if crate::ui::pick_item(ui, control.clip_lights == lights, name).clicked() {
                     control.clip_lights = lights;
@@ -200,7 +200,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, format!("{} messages", control.recent.len()));
         });
         if control.recent.is_empty() {
-            hint(ui, "Nothing yet: move a knob, press a pad, or send OSC to this Mac.");
+            help(ui, "Nothing yet: move a knob, press a pad, or send OSC to this Mac.");
             return;
         }
         let now = web_time::Instant::now();
@@ -405,7 +405,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
     ui.menu_button(text, |ui| {
         ui.set_min_width(260.0);
         crate::ui::heading(ui, "On the way in");
-        hint(ui, "The controller's value goes through these, top to bottom, before its range.");
+        help(ui, "The controller's value goes through these, top to bottom, before its range.");
         let mut remove = None;
         for (k, f) in fx.iter_mut().enumerate() {
             ui.horizontal(|ui| {

@@ -113,6 +113,8 @@ pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_AUTOSAVE: &str = "autosave";
 const KEY_PROJECTS_AT_START: &str = "projects_at_start";
+const KEY_HELP_ICONS: &str = "help_icons";
+const KEY_TOOLTIPS: &str = "tooltips";
 /// How often autosave saves a changed project.
 pub(crate) const AUTOSAVE_MINUTES: u32 = 5;
 const KEY_WATCHED: &str = "watched_folders";

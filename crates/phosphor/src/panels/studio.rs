@@ -286,7 +286,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         // Saved sets: pick one to select those slices and show only them.
         ui.menu_button(label(icon::STACK, "Sets"), |ui| {
             if o.mapping.solo_sets.is_empty() {
-                hint(ui, "Select some slices, then save them as a set to show on their own in one click.");
+                help(ui, "Select some slices, then save them as a set to show on their own in one click.");
             }
             let mut remove = None;
             for (k, (name, ids)) in o.mapping.solo_sets.iter().enumerate() {
@@ -329,7 +329,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
     });
-    hint(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points");
+    help(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points");
     let area = ui.available_rect_before_wrap();
     let (out_area, in_area) = match vs.view {
         View::Split => {
@@ -477,7 +477,7 @@ fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
     let text = if o.stage_photo.is_empty() { label(icon::IMAGE, "Stage photo…") } else { label(icon::IMAGE, "Stage photo") };
     ui.menu_button(text, |ui| {
         ui.set_min_width(260.0);
-        hint(ui, "A photo of the stage taken from where the projector stands: line the slices up with it. Only shows here, never on the output.");
+        help(ui, "A photo of the stage taken from where the projector stands: line the slices up with it. Only shows here, never on the output.");
         if crate::ui::command(ui, label(icon::FOLDER_OPEN, if o.stage_photo.is_empty() { "Choose a photo…" } else { "Another photo…" })).clicked() {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(super::mapping::PICK_STAGE_PHOTO), o.id));
             ui.close();
@@ -513,7 +513,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         crate::ui::heading(ui, &s.name);
         if !others.is_empty() {
             ui.menu_button(label(icon::COPY, "Copy its look to"), |ui| {
-                hint(ui, "Opacity, soft edges, colour, blend and shape; not where it sits or what it shows");
+                help(ui, "Opacity, soft edges, colour, blend and shape; not where it sits or what it shows");
                 if crate::ui::command(ui, "Every other slice here").clicked() {
                     copy_to = others.iter().map(|(id, _)| *id).collect();
                     ui.close();

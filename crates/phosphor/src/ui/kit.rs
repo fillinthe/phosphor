@@ -326,7 +326,7 @@ pub(crate) fn outputs_menu(ui: &mut egui::Ui, outs: &[(u64, String, bool)]) -> O
     let mut out = None;
     ui.menu_button(text, |ui| {
         ui.label(RichText::new("Shows on").strong());
-        hint(ui, "An output of its own, besides the mix (a slice there: shape it in the Outputs area)");
+        help(ui, "An output of its own, besides the mix (a slice there: shape it in the Outputs area)");
         for (id, name, on) in outs {
             let mut v = *on;
             if ui.checkbox(&mut v, name).changed() {

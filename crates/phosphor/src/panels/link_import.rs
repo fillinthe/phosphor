@@ -72,7 +72,7 @@ pub(crate) fn link_window(ctx: &egui::Context, st: &mut State) {
     let mut open = true;
     let have_tool = crate::web_media::find_ytdlp().is_some();
     egui::Window::new(label(icon::LINK, "From a link")).open(&mut open).default_width(460.0).show(ctx, |ui| {
-        hint(ui, "Paste the link to a post on X, Instagram, TikTok, YouTube, Vimeo… Its video or GIF comes into Phosphor. Only use clips you have the right to show.");
+        help(ui, "Paste the link to a post on X, Instagram, TikTok, YouTube, Vimeo… Its video or GIF comes into Phosphor. Only use clips you have the right to show.");
         crate::ui::text_field(ui, &mut li.url, "https://x.com/…/status/…", None);
         crate::ui::toolbar(ui, |ui| {
             let current = li.browser.map_or("No sign-in".to_string(), |i| format!("Sign-in from {}", BROWSERS[i]));

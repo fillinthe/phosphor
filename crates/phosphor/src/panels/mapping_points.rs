@@ -138,7 +138,7 @@ pub(crate) fn point_keys(ui: &egui::Ui, mapping: &mut Mapping, selected: Option<
 /// The selected point's X / Y in output pixels (Studio properties). Nothing when no point of `s` is selected.
 pub(crate) fn point_fields(ui: &mut egui::Ui, s: &mut Surface, size: (u32, u32)) {
     let Some((_, i)) = selected_point(ui.ctx()).filter(|(sid, _)| *sid == s.id) else {
-        hint(ui, "Click a point on the canvas (or press Tab) to place it by number.");
+        help(ui, "Click a point on the canvas (or press Tab) to place it by number.");
         return;
     };
     let locked = s.locked;
@@ -153,7 +153,7 @@ pub(crate) fn point_fields(ui: &mut egui::Ui, s: &mut Surface, size: (u32, u32))
             }
         }
     });
-    hint(ui, "Tab / Shift-Tab: next / previous point · arrows nudge it (Shift = 10 px) · Esc: the whole slice again");
+    help(ui, "Tab / Shift-Tab: next / previous point · arrows nudge it (Shift = 10 px) · Esc: the whole slice again");
 }
 
 /// With Snap on: the selected point of slice `sid` jumps onto another slice's point within `radius` (output units,
@@ -222,7 +222,7 @@ mod tests {
 pub(crate) fn group_settings(ui: &mut egui::Ui, mapping: &mut Mapping, ids: &[u64]) {
     let Some(first) = mapping.surfaces.iter().find(|s| ids.contains(&s.id)).cloned() else { return };
     crate::ui::heading(ui, format!("{} {} slices selected", icon::SELECTION_ALL, ids.len()));
-    hint(ui, "Changes here apply to all of them · drag one to move them all · arrows nudge them · Shift-click to add or remove one");
+    help(ui, "Changes here apply to all of them · drag one to move them all · arrows nudge them · Shift-click to add or remove one");
     let all = |mapping: &mut Mapping, f: &dyn Fn(&mut Surface)| mapping.surfaces.iter_mut().filter(|s| ids.contains(&s.id)).for_each(f);
     let mut on = first.enabled;
     if toggle(ui, &mut on, "ON").changed() {

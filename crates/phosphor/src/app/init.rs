@@ -12,6 +12,8 @@ impl PhosphorApp {
         theme::apply(&cc.egui_ctx);
 
         let stored = |key: &str| if bench.is_none() { cc.storage.and_then(|s| s.get_string(key)) } else { None };
+        let help_icons = stored(KEY_HELP_ICONS).is_some_and(|v| v == "1") || std::env::var_os("PHOSPHOR_HELP_ICONS").is_some();
+        let tooltips_off = stored(KEY_TOOLTIPS).is_some_and(|v| v == "0");
         let accent = stored(KEY_ACCENT).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
         #[cfg(not(target_arch = "wasm32"))]
         let snapshot = if bench.is_none() { crate::recovery::begin_session() } else { None };
@@ -375,6 +377,11 @@ impl PhosphorApp {
             !show
         };
         theme::set_accent(accent);
+        // Help as (i) icons / tooltips off (the brightness menu). PHOSPHOR_HELP_ICONS=1: icons in a bench.
+        crate::ui::set_help_icons(help_icons);
+        if tooltips_off {
+            theme::set_tooltips(&cc.egui_ctx, false);
+        }
         if app.ui_brightness != theme::DEFAULT_BRIGHTNESS || accent != 0 {
             theme::set_brightness(&cc.egui_ctx, app.ui_brightness);
         }

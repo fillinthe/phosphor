@@ -498,7 +498,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                         up.window = false;
                     }
                 });
-                crate::ui::hint(ui, "Your projects, layouts and settings stay as they are.");
+                crate::ui::help(ui, "Your projects, layouts and settings stay as they are.");
             }
             Status::Downloading(r) => {
                 crate::ui::toolbar(ui, |ui| {
@@ -547,7 +547,7 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
                         up.install();
                     }
                 });
-                crate::ui::hint(ui, "Your projects, layouts and settings stay as they are.");
+                crate::ui::help(ui, "Your projects, layouts and settings stay as they are.");
             }
             Status::Failed(e) => {
                 ui.colored_label(crate::theme::WARN, e);

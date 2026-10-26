@@ -49,7 +49,7 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
             st.notice = Some(format!("{} follows the face now", crate::ui::layer_name(&st.comp.layers, id)));
         }
         if !st.comp.tracking.enabled {
-            hint(ui, "Turn it on, pick a camera layer, then right-click any slider › Modulate › a Track modulator. To cut people out of the background, add the Remove Background effect to the layer instead (no tracking needed).");
+            help(ui, "Turn it on, pick a camera layer, then right-click any slider › Modulate › a Track modulator. To cut people out of the background, add the Remove Background effect to the layer instead (no tracking needed).");
             return;
         }
         let status = if st.tracker.status.is_empty() { "Starting…".to_string() } else { st.tracker.status.clone() };

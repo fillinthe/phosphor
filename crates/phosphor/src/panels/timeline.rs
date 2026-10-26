@@ -56,7 +56,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     if st.comp.timeline.tracks.is_empty() {
-        hint(ui, "Right-click any slider or button › Key on the timeline: it gets a track here with a key at the playhead. Move the playhead, change the value, key it again.");
+        help(ui, "Right-click any slider or button › Key on the timeline: it gets a track here with a key at the playhead. Move the playhead, change the value, key it again.");
     }
     let names: HashMap<ControlTarget, String> = crate::control::all_targets(&st.comp).into_iter().collect();
     let length = st.comp.timeline.length.max(0.1);
@@ -237,7 +237,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
             }
         });
         crate::ui::toggle(ui, &mut o.from_start, "Timeline from the start");
-        hint(ui, "Frame by frame: every movie waits for its picture, so a heavy show comes out smooth. No faster than real time. The timeline's sound track goes in (not the movies' own sound; Hap files have no sound).");
+        help(ui, "Frame by frame: every movie waits for its picture, so a heavy show comes out smooth. No faster than real time. The timeline's sound track goes in (not the movies' own sound; Hap files have no sound).");
         if action_button(ui, Act::Record, label(icon::RECORD, "Render")).clicked() {
             let setup = st.offline_setup.clone();
             st.offline_start(&setup, now);
@@ -281,7 +281,7 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
                 }
             });
             Level::percent(&mut e.value, "to").default(1.0).width(200.0).show(ui);
-            hint(ui, "A clip or column: on plays it. A pick-one setting: the value picks.");
+            help(ui, "A clip or column: on plays it. A pick-one setting: the value picks.");
             let mut sends = e.send.is_some();
             if crate::ui::toggle(ui, &mut sends, "Sends").on_hover_text("Also sends the value out (OSC to the Control Surface's OSC out, or MIDI)").changed() {
                 e.send = sends.then(|| SendTo::Osc { address: "/phosphor/event".into() });

@@ -284,6 +284,32 @@ pub(crate) fn drop_payload<T: std::any::Any + Send + Sync>(r: &egui::Response) -
 
 /// Grey help text. In a row it shrinks to the space left (full text on hover) instead of
 /// overlapping its neighbours; on its own line it wraps.
+static HELP_ICONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Help sentences shown as a small (i) instead of words (the brightness menu's "Help as (i) icons").
+pub(crate) fn help_icons() -> bool {
+    HELP_ICONS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub(crate) fn set_help_icons(on: bool) {
+    HELP_ICONS.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// A help sentence: grey words like `hint`, or with "Help as (i) icons" on, a small (i) that shows it (hover, or
+/// click: that works with tooltips off too). Use `hint` for status words that must stay visible.
+pub(crate) fn help(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    if !help_icons() {
+        return hint(ui, text);
+    }
+    let r = ui
+        .menu_button(egui::RichText::new(icon::INFO).weak(), |ui| {
+            ui.set_max_width(320.0);
+            ui.label(text);
+        })
+        .response;
+    r.on_hover_text(text)
+}
+
 pub(crate) fn hint(ui: &mut egui::Ui, text: impl Into<egui::RichText>) -> egui::Response {
     let label = egui::Label::new(text.into().weak());
     if ui.layout().main_dir().is_horizontal() {

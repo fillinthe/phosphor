@@ -127,7 +127,7 @@ fn send_items(ui: &mut egui::Ui, target: &ControlTarget) {
     let title = if mine.is_empty() { "Send out…".to_string() } else { format!("Send out ({})", mine.len()) };
     ui.menu_button(label(icon::BROADCAST, &title), |ui| {
         ui.set_min_width(280.0);
-        hint(ui, "Whenever this changes, its value goes out too. OSC goes to the host and port set in the Control Surface (OSC out).");
+        help(ui, "Whenever this changes, its value goes out too. OSC goes to the host and port set in the Control Surface (OSC out).");
         for to in &mine {
             ui.horizontal(|ui| {
                 ui.label(to.label());
@@ -206,7 +206,7 @@ fn oscquery_browser(ui: &mut egui::Ui, target: &ControlTarget) {
     let found = shared.lock().unwrap().clone();
     match found {
         None => {
-            hint(ui, "TouchOSC, Chataigne, Resolume, MadMapper, another Phosphor… show their OSC Query port in their settings.");
+            help(ui, "TouchOSC, Chataigne, Resolume, MadMapper, another Phosphor… show their OSC Query port in their settings.");
         }
         Some(Err(e)) => {
             ui.colored_label(crate::theme::WARN, e);

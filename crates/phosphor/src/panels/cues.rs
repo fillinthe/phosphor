@@ -85,7 +85,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                 hint(ui, "waiting for MIDI timecode…");
             }
             None if st.comp.cues.timecode == TimecodeSource::Ltc => {
-                hint(ui, "waiting for LTC on the audio input (pick the interface in the Audio panel)…");
+                help(ui, "waiting for LTC on the audio input (pick the interface in the Audio panel)…");
             }
             None => {}
         }
@@ -147,7 +147,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             }
         }
     });
-    hint(ui, "Cues remember every layer and every mapping slice (on/off, opacity, corners). GO fades to the next one; sources change through each layer's transition, slices glide into place.");
+    help(ui, "Cues remember every layer and every mapping slice (on/off, opacity, corners). GO fades to the next one; sources change through each layer's transition, slices glide into place.");
     ui.add_space(4.0);
     let mut fire = None;
     let mut update = None;
@@ -203,7 +203,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     daily_editor(ui, cue);
                     let group_title = if cue.group.is_empty() { "Group".to_string() } else { cue.group.clone() };
                     ui.menu_button(label(icon::FOLDER, &group_title), |ui| {
-                        hint(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
+                        help(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
                         crate::ui::text_field(ui, &mut cue.group, "group name (empty = none)", Some(180.0));
                         for g in &group_names {
                             if crate::ui::pick_item(ui, cue.group == *g, g).clicked() {
@@ -214,7 +214,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     });
                     ui.menu_button(label(icon::FUNNEL, "Changes"), |ui| {
                         ui.set_min_width(240.0);
-                        hint(ui, "What going to this cue changes. Leave sources off to keep the media playing and only glide the numbers.");
+                        help(ui, "What going to this cue changes. Leave sources off to keep the media playing and only glide the numbers.");
                         toggle(ui, &mut cue.sets_sources, "Sources (clips, generators)");
                         toggle(ui, &mut cue.sets_master, "Master fade");
                         toggle(ui, &mut cue.sets_slices, "Mapping slices");
@@ -250,7 +250,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             });
         }
         if st.comp.cues.cues.is_empty() {
-            hint(ui, "Set up a look, press Record cue; change things, record again. Then GO steps through them.");
+            help(ui, "Set up a look, press Record cue; change things, record again. Then GO steps through them.");
         }
     });
     if let Some((i, id)) = add_layer

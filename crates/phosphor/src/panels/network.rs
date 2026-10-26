@@ -7,7 +7,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     follow_section(ui, st);
     let State { net, notice, .. } = &mut *st;
     crate::ui::heading(ui, "Session");
-    hint(ui, "Anyone on your network opens the link and sees the output live; they can send their music back.");
+    help(ui, "Anyone on your network opens the link and sees the output live; they can send their music back.");
     crate::ui::toolbar(ui, |ui| {
         ui.add_enabled_ui(!net.running(), |ui| {
             guarded!(ui, net.port, egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
@@ -39,7 +39,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::toolbar(ui, |ui| {
             ui.label("Easy to type");
             ui.monospace(net.local_url());
-            hint(ui, "Bonjour name: works on iPhones, iPads, Macs and most Android phones on the same Wi-Fi");
+            help(ui, "Bonjour name: works on iPhones, iPads, Macs and most Android phones on the same Wi-Fi");
         });
         if net.https {
             let secure = net.https_url();
@@ -50,14 +50,14 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
                     ui.ctx().copy_text(secure.clone());
                 }
             });
-            hint(ui, "Phones only share their microphone on a secure page. The certificate is Phosphor's own: the phone warns once (Show details, then visit the site) and remembers.");
+            help(ui, "Phones only share their microphone on a secure page. The certificate is Phosphor's own: the phone warns once (Show details, then visit the site) and remembers.");
         }
         ui.separator();
         audience_play(ui, st);
         let State { net, remote_password, require_password, .. } = &mut *st;
         ui.separator();
         crate::ui::heading(ui, format!("{} Phone / tablet remote", icon::DEVICE_MOBILE));
-        hint(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
+        help(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
         ui.horizontal(|ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");
@@ -96,7 +96,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             ui.colored_label(accent(), "Audio analysis is listening to session viewers");
         }
         ui.add_space(4.0);
-        hint(ui, "Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
+        help(ui, "Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
     }
     if let Some(msg) = &st.notice {
         ui.colored_label(WARN, msg.as_str());
@@ -107,7 +107,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
 fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.input(|i| i.time);
     crate::ui::heading(ui, format!("{} Audience play", icon::GAME_CONTROLLER));
-    hint(ui, "People scan the code, line up, and each gets the controls for a while: your Control Surface, clip columns, Surprise.");
+    help(ui, "People scan the code, line up, and each gets the controls for a while: your Control Surface, clip columns, Surprise.");
     let play = &mut st.comp.play;
     crate::ui::toggle(ui, &mut play.enabled, "Let the audience play");
     if !play.enabled {
@@ -154,7 +154,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     }
-    hint(ui, "Each control's guest settings (whether guests get it, how far they can push it) are in the Control Surface editor.");
+    help(ui, "Each control's guest settings (whether guests get it, how far they can push it) are in the Control Surface editor.");
     let style_changed = ui
         .horizontal(|ui| {
             ui.label("Code on the output");
@@ -243,7 +243,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
             {
                 st.follow_at_launch = if always { addr } else { String::new() };
             }
-            hint(ui, "This Mac plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
+            help(ui, "This Mac plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
         }
         None => {
             let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
@@ -254,7 +254,7 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
                     st.following = Some(crate::follow::Link::connect(&addr));
                 }
             });
-            hint(ui, "On the leading Mac, start its Session below. Then type its address here: both play the same show in sync, each on its own projectors.");
+            help(ui, "On the leading Mac, start its Session below. Then type its address here: both play the same show in sync, each on its own projectors.");
             ui.ctx().data_mut(|d| d.insert_temp(key, addr));
         }
     }

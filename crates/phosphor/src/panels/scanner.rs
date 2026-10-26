@@ -47,11 +47,11 @@ pub(crate) fn scan_window(ctx: &egui::Context, st: &mut State) {
     let mut open = true;
     let busy = st.scanner.scan.is_some() || st.scanner.status == Status::Decoding;
     egui::Window::new(label(icon::SCAN, &format!("Scan the stage: {name}"))).open(&mut open).default_width(420.0).show(ctx, |ui| {
-        hint(ui, "The projector shows black, white and striped pictures while a camera watches the stage. Phosphor works out which projector pixel lit each point the camera sees and draws the stage as the projector sees it: that becomes this output's stage photo, to line slices up with. Darken the room; keep the camera still.");
+        help(ui, "The projector shows black, white and striped pictures while a camera watches the stage. Phosphor works out which projector pixel lit each point the camera sees and draws the stage as the projector sees it: that becomes this output's stage photo, to line slices up with. Darken the room; keep the camera still.");
         ui.add_enabled_ui(!busy, |ui| {
             camera_combo(ui, "scan_camera", &cameras, &mut camera);
             if cameras.len() == 1 {
-                hint(ui, "Add a layer showing your camera first (Live input), aimed at the stage. It can stay hidden.");
+                help(ui, "Add a layer showing your camera first (Live input), aimed at the stage. It can stay hidden.");
             }
             ui.horizontal(|ui| {
                 let mut ms = (st.scanner.settle * 1000.0) as f32;

@@ -70,7 +70,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
     let key = a.key.get_or_insert_with(crate::ai_shader::load_key).clone();
     let mut open = true;
     egui::Window::new(label(icon::MAGIC_WAND, "Describe a shader")).open(&mut open).default_width(480.0).show(ctx, |ui| {
-        hint(ui, "Say what it should look like and the AI writes it: a new effect or source, or a change to the shader you have open. It opens in the Shader Editor, every slider ready to map.");
+        help(ui, "Say what it should look like and the AI writes it: a new effect or source, or a change to the shader you have open. It opens in the Shader Editor, every slider ready to map.");
         let mut options = vec![(Make::Effect, "New effect".to_string()), (Make::Generator, "New source".to_string())];
         if open_shader.is_some() {
             options.push((Make::Change, "Change the open shader".to_string()));
@@ -123,7 +123,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
                 });
             }
             None => {
-                hint(ui, "Needs your own Anthropic API key (console.anthropic.com › API keys). Each shader costs a few cents on your account. The key stays on this Mac, in the Keychain.");
+                help(ui, "Needs your own Anthropic API key (console.anthropic.com › API keys). Each shader costs a few cents on your account. The key stays on this Mac, in the Keychain.");
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut a.new_key).password(true).hint_text("sk-ant-…").desired_width(300.0));
                     if crate::ui::command_if(ui, !a.new_key.trim().is_empty(), "Save key").clicked() {

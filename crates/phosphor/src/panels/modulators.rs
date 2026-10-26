@@ -26,7 +26,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() };
             st.comp.modulators.push(Modulator { id, name: format!("Band {n}"), signal, band: Some([40.0, 120.0]), value: 0.0, ..Default::default() });
         }
-        hint(ui, "One source drives many controls: right-click any slider, Modulate, then pick it. Chain one into the next.");
+        help(ui, "One source drives many controls: right-click any slider, Modulate, then pick it. Chain one into the next.");
     });
     #[cfg(not(target_arch = "wasm32"))]
     super::tracking::tracking_section(ui, st);
@@ -149,7 +149,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     if st.comp.modulators.is_empty() {
-        hint(ui, "No modulators yet. Add one, set its signal (an LFO on the beat, the bass, a step sequence…), then pick it from any slider's Modulate menu.");
+        help(ui, "No modulators yet. Add one, set its signal (an LFO on the beat, the bass, a step sequence…), then pick it from any slider's Modulate menu.");
     }
 }
 

@@ -42,9 +42,9 @@ pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
             ui.label(RichText::new("Columns").small().color(Color32::GRAY));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
-            hint(ui, "Drag to move · corner to resize · right-click to map");
+            help(ui, "Drag to move · corner to resize · right-click to map");
         } else if st.comp.surface.on_page().next().is_none() {
-            hint(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
+            help(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
         let State { surface_presets, surface_preset_name, comp, .. } = &mut *st;
         let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Control Surface pages by name: reuse them in any project (Load replaces this project's surface; Undo brings it back).", surface_presets, surface_preset_name, "surface", || serde_json::to_string(&comp.surface).unwrap_or_default());
@@ -509,7 +509,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                     w.set_bar_count(n);
                 }
             });
-            hint(ui, "Each bar drives its own targets. Map a controller to the widget to move every bar at once, or to one bar (Surface › bar N in any target list).");
+            help(ui, "Each bar drives its own targets. Map a controller to the widget to move every bar at once, or to one bar (Surface › bar N in any target list).");
             for (i, b) in w.bars.iter_mut().enumerate() {
                 let title = format!("Bar {} drives{}", i + 1, if b.bindings.is_empty() { "" } else { " ·" });
                 crate::ui::section(ui, ("bar", id, i), title, i == 0, |ui| {
@@ -518,7 +518,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             }
         } else {
             crate::ui::heading(ui, axis);
-            hint(ui, "Each target gets this widget's value, rescaled to its from–to range.");
+            help(ui, "Each target gets this widget's value, rescaled to its from–to range.");
             binding_list(ui, ("bindings", id), targets, &mut w.bindings);
         }
         if w.kind == WidgetKind::Color {
@@ -528,7 +528,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             ui.add_space(4.0);
             crate::ui::heading(ui, "Blue drives");
             binding_list(ui, ("bindings_z", id), targets, &mut w.bindings_z);
-            hint(ui, "A controller on this widget moves the hue (its Y mapping: saturation).");
+            help(ui, "A controller on this widget moves the hue (its Y mapping: saturation).");
         }
         if w.kind == WidgetKind::XyPad {
             ui.add_space(4.0);

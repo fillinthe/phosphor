@@ -115,7 +115,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         let r = toggle(ui, follow_audio, label(icon::METRONOME, "Follow audio"))
             .on_hover_text("Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick");
         map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
-        hint(ui, "Also: Audio beat (kick) under any slider's wave button.");
+        help(ui, "Also: Audio beat (kick) under any slider's wave button.");
     });
     ui.add_space(4.0);
     hint(ui, format!("Press {} next to any slider to drive it with these signals or an LFO.", icon::WAVE_SINE));
@@ -162,7 +162,7 @@ fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
         Level::percent(&mut comp.volume, "Master volume").max(2.0).target(ControlTarget::App(AppControl::MasterVolume)).tip("Every movie's sound (each layer has its own volume too)").show(ui);
     });
     if comp.sound_muted {
-        hint(ui, "All sound is off. Streams and recordings started now have no audio; one already running keeps its audio device until it restarts.");
+        help(ui, "All sound is off. Streams and recordings started now have no audio; one already running keeps its audio device until it restarts.");
     }
     #[cfg(not(target_arch = "wasm32"))]
     sound_device(ui);
@@ -176,6 +176,6 @@ fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
     let r = crate::ui::toggle(ui, &mut comp.sound_auto_level, "Even out volume levels").on_hover_text("Each movie is brought towards the same loudness as it plays (up to 4× up or down; silence isn't boosted)");
     map_menu(ui, &r, ControlTarget::App(AppControl::AutoLevel));
     if comp.sound_auto_level {
-        hint(ui, "Loud and quiet clips now play about equally loud; each layer's volume still works on top.");
+        help(ui, "Loud and quiet clips now play about equally loud; each layer's volume still works on top.");
     }
 }

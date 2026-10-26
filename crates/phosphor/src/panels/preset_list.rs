@@ -25,13 +25,13 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::section(ui, "presets_Layers", "Layers", true, |ui| {
             match &layer {
                 Some(l) => hint(ui, format!("Saves the selected layer ({}). Load adds it above the selected one.", l.name)),
-                None => hint(ui, "Select a layer to save it. Load adds a saved one to this project."),
+                None => help(ui, "Select a layer to save it. Load adds a saved one to this project."),
             };
             let json = layer.as_ref().and_then(|l| serde_json::to_string(l).ok()).unwrap_or_default();
             layer_pick = named_saves(ui, layer_presets, layer_preset_name, "layer", || json);
         });
         crate::ui::section(ui, "presets_Effect chains", "Effect chains", true, |ui| {
-            hint(ui, "Saves the selected layer's (or MASTER's) effects. Load adds them to the selected one.");
+            help(ui, "Saves the selected layer's (or MASTER's) effects. Load adds them to the selected one.");
             let json = serde_json::to_string(&chain).unwrap_or_default();
             chain_pick = named_saves(ui, chain_presets, chain_preset_name, "chain", || json);
         });

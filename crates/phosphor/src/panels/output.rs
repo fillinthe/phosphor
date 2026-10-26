@@ -60,7 +60,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.label("Render at");
         crate::ui::toolbar(ui, |ui| {
             crate::ui::choice_combo(ui, "render_rate", &mut st.render_rate, 110.0, false);
-            crate::ui::hint(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
+            crate::ui::help(ui, "Projectors are 60 Hz; on a 120 Hz Mac display, 60 fps halves the work and heat.");
         });
         ui.end_row();
 
@@ -80,7 +80,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         }
         ui.end_row();
     });
-    hint(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
+    help(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
     ui.separator();
 
     let s = st.stats.latest;
@@ -157,7 +157,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         }
         super::mapping::outputs_actions(ui, st);
         ui.menu_button(label(icon::GRID_FOUR, "Split across"), |ui| {
-            hint(ui, "New outputs that each show one part of the picture (a wall of screens or projectors side by side)");
+            help(ui, "New outputs that each show one part of the picture (a wall of screens or projectors side by side)");
             for (c, r) in [(2, 1), (3, 1), (4, 1), (2, 2), (3, 3)] {
                 if crate::ui::command(ui, format!("{c} × {r}")).clicked() {
                     let n = st.comp.split_across(c, r).len();
@@ -509,7 +509,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
                 g.on = true;
             }
         }
-        hint(ui, "Grid shows over the show; the others cover it. Test card: red top left, green top right, blue bottom right, yellow bottom left.");
+        help(ui, "Grid shows over the show; the others cover it. Test card: red top left, green top right, blue bottom right, yellow bottom left.");
         ui.separator();
         crate::ui::heading(ui, "Grid");
         crate::ui::toolbar(ui, |ui| {
