@@ -32,10 +32,10 @@ fn bezier_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::R
     r
 }
 
-/// The selected slice's transform box: the box round it, a handle outside each side (drag that side, the other stays),
+/// The selected slice's (or mask's) transform box: the box round it, a handle outside each side (drag that side, the other stays),
 /// one outside each corner (scale evenly from the opposite corner; Alt: from the centre) and one above the top (turn
 /// it round its centre). Its own corner / mesh points still move one at a time. Returns true when it changed it.
-fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut phosphor_engine::Surface, color: Color32) -> bool {
+fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut impl phosphor_engine::mapping::CanvasShape, color: Color32) -> bool {
     let (lo, hi) = s.bounds();
     let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
     if !(w.is_finite() && h.is_finite()) {
@@ -390,12 +390,44 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             touched = true;
         }
         // What it does, on the canvas: a mask moved over the picture makes it vanish, which looked like a bug.
-        let what = if !m.enabled { "MASK (off)" } else if m.invert { "MASK: only inside shows" } else { "MASK: hides inside" };
+        let what = if !m.enabled {
+            "MASK (off)"
+        } else if m.invert && !placed.reaches_output() {
+            // (A window right off the output would black out everything: it's left out instead.)
+            "MASK: off the output, not used"
+        } else if m.invert {
+            "MASK: only inside shows"
+        } else {
+            "MASK: hides inside"
+        };
         let g = ui.painter().layout_no_wrap(what.to_string(), egui::FontId::proportional(10.0), color);
         let at = to_screen(centre) + egui::vec2(-g.size().x / 2.0, 14.0);
         ui.painter().rect_filled(egui::Rect::from_min_size(at, g.size()).expand(2.0), 3.0, Color32::from_black_alpha(190));
         ui.painter().galley(at, g, color);
         r.on_hover_text(format!("{}: drag to move the mask. {}", m.name, if m.invert { "Only the picture inside it shows: everything outside is black." } else { "The picture inside it is blacked out." }));
+        // The same transform box as slices: drag a side to stretch, a corner to scale, the knob to turn. It works on
+        // the mask as placed on the output, then goes back into an attached mask's slice square.
+        if is_selected && m.points.len() >= 3 {
+            let mut shape = placed.clone();
+            if transform_box(ui, id, frame, &mut shape, color) {
+                let points: Vec<[f32; 2]> = shape.points.iter().map(|p| output_to_mask(surfaces, m, *p)).collect();
+                let handles: Vec<Option<[f32; 2]>> = (0..points.len())
+                    .map(|i| {
+                        shape.handle(i).map(|h| {
+                            let tip = output_to_mask(surfaces, m, [shape.points[i][0] + h[0], shape.points[i][1] + h[1]]);
+                            [tip[0] - points[i][0], tip[1] - points[i][1]]
+                        })
+                    })
+                    .collect();
+                m.points = points;
+                for (i, h) in handles.into_iter().enumerate() {
+                    if m.handle(i).is_some() {
+                        m.set_handle(i, h);
+                    }
+                }
+                touched = true;
+            }
+        }
         let mut delete = None;
         let mut insert = None;
         let count = m.points.len();
@@ -659,7 +691,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         let Some(o) = comp.outputs.iter_mut().find(|o| o.id == oid) else { return };
         // A mask that limits the whole output, said in words (its outline on the canvas looks like the output's own).
         if o.mapping.enabled
-            && let Some(m) = o.mapping.masks.iter().find(|m| m.enabled && m.invert)
+            && let Some(m) = o.mapping.masks.iter().find(|m| m.enabled && m.invert && m.placed(&o.mapping.surfaces).reaches_output())
         {
             ui.colored_label(MASK_COLOR, format!("{} Only the inside of the mask \"{}\" shows on this output: outside it is black. Move or delete the mask (orange) to change that.", icon::WARNING, m.name));
         }

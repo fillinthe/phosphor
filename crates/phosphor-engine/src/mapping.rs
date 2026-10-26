@@ -1260,6 +1260,12 @@ impl Mask {
         Mask { points, handles, attached: None, ..self.clone() }
     }
 
+    /// Some of the shape is on the output (placed masks: output space). One moved right off it does nothing.
+    pub fn reaches_output(&self) -> bool {
+        let (lo, hi) = self.outline().iter().fold(([f32::MAX; 2], [f32::MIN; 2]), |(lo, hi), p| ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])]));
+        lo[0] < 1.0 && lo[1] < 1.0 && hi[0] > 0.0 && hi[1] > 0.0
+    }
+
     /// The outline as drawn: the points, or a curve through them (12 steps per side) when Smooth is on or a point
     /// has bezier handles.
     pub fn outline(&self) -> Vec<[f32; 2]> {
@@ -1335,7 +1341,7 @@ impl Mask {
     /// outline fades from black to clear.
     pub fn triangles(&self) -> Vec<[f32; 4]> {
         let Some((hole, mut band)) = self.edge_parts() else { return Vec::new() };
-        let mut out = if self.invert { fill(&OUTPUT, &[&hole], 1.0) } else { fill(&hole, &[], 1.0) };
+        let mut out = if self.invert { fill(&around(&[&hole]), &[&hole], 1.0) } else { fill(&hole, &[], 1.0) };
         out.append(&mut band);
         out
     }
@@ -1366,17 +1372,28 @@ impl Mask {
 }
 
 /// The whole output, for inverted masks.
-const OUTPUT: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+/// The rectangle an inverted mask darkens: the output, grown to hold any hole that pokes past its edge (a hole
+/// outside the outer shape can't be cut, and the whole output went black).
+fn around(holes: &[&[[f32; 2]]]) -> [[f32; 2]; 4] {
+    let (mut lo, mut hi) = ([0.0f32, 0.0], [1.0f32, 1.0]);
+    for p in holes.iter().flat_map(|h| h.iter()) {
+        lo = [lo[0].min(p[0] - 0.01), lo[1].min(p[1] - 0.01)];
+        hi = [hi[0].max(p[0] + 0.01), hi[1].max(p[1] + 0.01)];
+    }
+    [[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]]
+}
 
 /// Everything a set of masks blacks out. Inverted masks ("only show inside") work together: the output goes dark
 /// except inside any of them (two inverted masks = two windows), instead of each darkening the other's window.
 pub fn masks_triangles(masks: &[Mask]) -> Vec<[f32; 4]> {
-    let inverted: Vec<&Mask> = masks.iter().filter(|m| m.invert).collect();
-    let mut out: Vec<[f32; 4]> = masks.iter().filter(|m| !m.invert || inverted.len() == 1).flat_map(Mask::triangles).collect();
+    // A window moved right off the output shows nothing: it's left out rather than blacking out the whole output.
+    let masks: Vec<&Mask> = masks.iter().filter(|m| !m.invert || m.reaches_output()).collect();
+    let inverted: Vec<&Mask> = masks.iter().copied().filter(|m| m.invert).collect();
+    let mut out: Vec<[f32; 4]> = masks.iter().filter(|m| !m.invert || inverted.len() == 1).flat_map(|m| m.triangles()).collect();
     if inverted.len() > 1 {
         let parts: Vec<(Vec<[f32; 2]>, Vec<[f32; 4]>)> = inverted.iter().filter_map(|m| m.edge_parts()).collect();
         let holes: Vec<&[[f32; 2]]> = parts.iter().map(|(h, _)| h.as_slice()).collect();
-        out.extend(fill(&OUTPUT, &holes, 1.0));
+        out.extend(fill(&around(&holes), &holes, 1.0));
         out.extend(parts.into_iter().flat_map(|(_, band)| band));
     }
     out
@@ -1626,48 +1643,6 @@ impl Surface {
         [(c[0][0] + c[1][0] + c[2][0] + c[3][0]) * 0.25, (c[0][1] + c[1][1] + c[2][1] + c[3][1]) * 0.25]
     }
 
-    /// Every point of the slice (corners, mesh, line) through `f`: the whole slice moved, scaled or turned. (Not 3D
-    /// model slices: they're placed by their own centre and size.)
-    pub fn map_points(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]) {
-        if self.model.is_some() {
-            return;
-        }
-        // Curved edges: their handles go where the transform takes them too (they're kept relative to the corners).
-        let handles: Option<Vec<[f32; 2]>> = self.bend.map(|b| (0..8).map(|k| f(b.handle_at(&self.corners, k))).collect());
-        for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())).chain(self.line.iter_mut().flat_map(|l| l.points.iter_mut())) {
-            *c = f(*c);
-        }
-        if let (Some(b), Some(handles)) = (self.bend.as_mut(), handles) {
-            for (k, h) in handles.into_iter().enumerate() {
-                b.set_handle(&self.corners, k, h);
-            }
-        }
-    }
-
-    /// The box round the slice's points: (top-left, bottom-right).
-    pub fn bounds(&self) -> ([f32; 2], [f32; 2]) {
-        let pts: Vec<[f32; 2]> = match (&self.line, &self.mesh) {
-            (Some(l), _) => l.points.clone(),
-            (None, Some(m)) => m.points.clone(),
-            _ => self.corners.to_vec(),
-        };
-        pts.iter().fold(([f32::MAX; 2], [f32::MIN; 2]), |(lo, hi), p| ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])]))
-    }
-
-    /// Scaled from `anchor` (a point that stays put): `sx` across, `sy` down.
-    pub fn scale_about(&mut self, anchor: [f32; 2], sx: f32, sy: f32) {
-        self.map_points(|p| [anchor[0] + (p[0] - anchor[0]) * sx, anchor[1] + (p[1] - anchor[1]) * sy]);
-    }
-
-    /// Turned round `centre` by `radians` (clockwise on screen), as it looks on an output `aspect` wide per high.
-    pub fn rotate_about(&mut self, centre: [f32; 2], radians: f32, aspect: f32) {
-        let (c, s) = (radians.cos(), radians.sin());
-        self.map_points(|p| {
-            let (x, y) = ((p[0] - centre[0]) * aspect, p[1] - centre[1]);
-            [centre[0] + (c * x - s * y) / aspect, centre[1] + s * x + c * y]
-        });
-    }
-
     pub fn translate(&mut self, dx: f32, dy: f32) {
         if let Some(m) = &mut self.model {
             m.center[0] += dx;
@@ -1831,6 +1806,81 @@ impl Mapping {
     /// Everything the enabled masks black out, as one triangle list.
     pub fn mask_triangles(&self) -> Vec<[f32; 4]> {
         masks_triangles(&self.placed_masks())
+    }
+}
+
+impl CanvasShape for Surface {
+    /// Every point of the slice (corners, mesh, line) through `f`: the whole slice moved, scaled or turned. (Not 3D
+    /// model slices: they're placed by their own centre and size.)
+    fn map_points(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]) {
+        if self.model.is_some() {
+            return;
+        }
+        // Curved edges: their handles go where the transform takes them too (they're kept relative to the corners).
+        let handles: Option<Vec<[f32; 2]>> = self.bend.map(|b| (0..8).map(|k| f(b.handle_at(&self.corners, k))).collect());
+        for c in self.corners.iter_mut().chain(self.mesh.iter_mut().flat_map(|m| m.points.iter_mut())).chain(self.line.iter_mut().flat_map(|l| l.points.iter_mut())) {
+            *c = f(*c);
+        }
+        if let (Some(b), Some(handles)) = (self.bend.as_mut(), handles) {
+            for (k, h) in handles.into_iter().enumerate() {
+                b.set_handle(&self.corners, k, h);
+            }
+        }
+    }
+
+    fn shape_points(&self) -> Vec<[f32; 2]> {
+        match (&self.line, &self.mesh) {
+            (Some(l), _) => l.points.clone(),
+            (None, Some(m)) => m.points.clone(),
+            _ => self.corners.to_vec(),
+        }
+    }
+}
+
+impl CanvasShape for Mask {
+    /// Every point through `f`; bezier handles (offsets from their point) follow their tips.
+    fn map_points(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]) {
+        let tips: Vec<Option<[f32; 2]>> = (0..self.points.len()).map(|i| self.handle(i).map(|h| f([self.points[i][0] + h[0], self.points[i][1] + h[1]]))).collect();
+        for p in &mut self.points {
+            *p = f(*p);
+        }
+        for (i, tip) in tips.into_iter().enumerate() {
+            if let Some(t) = tip {
+                let p = self.points[i];
+                self.set_handle(i, Some([t[0] - p[0], t[1] - p[1]]));
+            }
+        }
+    }
+
+    fn shape_points(&self) -> Vec<[f32; 2]> {
+        self.points.clone()
+    }
+}
+
+/// Anything on the mapping canvas that moves, scales and turns as a whole (slices, masks): the transform box.
+pub trait CanvasShape {
+    /// Every point of the shape through `f`.
+    fn map_points(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]);
+    /// The points the box is drawn round.
+    fn shape_points(&self) -> Vec<[f32; 2]>;
+
+    /// The box round the shape's points: (top-left, bottom-right).
+    fn bounds(&self) -> ([f32; 2], [f32; 2]) {
+        self.shape_points().iter().fold(([f32::MAX; 2], [f32::MIN; 2]), |(lo, hi), p| ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])]))
+    }
+
+    /// Scaled from `anchor` (a point that stays put): `sx` across, `sy` down.
+    fn scale_about(&mut self, anchor: [f32; 2], sx: f32, sy: f32) {
+        self.map_points(|p| [anchor[0] + (p[0] - anchor[0]) * sx, anchor[1] + (p[1] - anchor[1]) * sy]);
+    }
+
+    /// Turned round `centre` by `radians` (clockwise on screen), as it looks on an output `aspect` wide per high.
+    fn rotate_about(&mut self, centre: [f32; 2], radians: f32, aspect: f32) {
+        let (c, s) = (radians.cos(), radians.sin());
+        self.map_points(|p| {
+            let (x, y) = ((p[0] - centre[0]) * aspect, p[1] - centre[1]);
+            [centre[0] + (c * x - s * y) / aspect, centre[1] + s * x + c * y]
+        });
     }
 }
 
@@ -2421,5 +2471,49 @@ mod transform_box_tests {
         s.scale_about([0.2, 0.2], 2.0, 2.0);
         let after = s.bend.unwrap().handle_at(&s.corners, 0);
         assert!((after[0] - (0.2 + (before[0] - 0.2) * 2.0)).abs() < 1e-4 && (after[1] - (0.2 + (before[1] - 0.2) * 2.0)).abs() < 1e-4, "{before:?} -> {after:?}");
+    }
+
+    /// Masks get the same box: scaled from a side, their bezier handles scale with them.
+    #[test]
+    fn masks_scale_with_their_handles() {
+        let mut m = Mask { points: vec![[0.2, 0.2], [0.6, 0.2], [0.6, 0.4], [0.2, 0.4]], ..Default::default() };
+        m.set_handle(0, Some([0.1, 0.0]));
+        m.scale_about([0.2, 0.0], 2.0, 1.0);
+        let b = m.bounds();
+        assert!((b.0[0] - 0.2).abs() < 1e-5 && (b.1[0] - 1.0).abs() < 1e-5 && (b.1[1] - 0.4).abs() < 1e-5, "{b:?}");
+        let h = m.handle(0).unwrap();
+        assert!((h[0] - 0.2).abs() < 1e-5 && h[1].abs() < 1e-5, "{h:?}");
+    }
+
+    /// Dark at `p`: inside any of the triangles.
+    fn covered(tris: &[[f32; 4]], p: [f32; 2]) -> bool {
+        tris.chunks(3).any(|t| {
+            let side = |a: [f32; 4], b: [f32; 4]| (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+            let (d1, d2, d3) = (side(t[0], t[1]), side(t[1], t[2]), side(t[2], t[0]));
+            !((d1 < 0.0 || d2 < 0.0 || d3 < 0.0) && (d1 > 0.0 || d2 > 0.0 || d3 > 0.0))
+        })
+    }
+
+    /// "Only inside shows" with a corner dragged past the output's edge: the inside still shows (it went all black).
+    #[test]
+    fn an_inverted_mask_past_the_edge_still_shows_its_inside() {
+        let m = Mask { points: vec![[0.2, 0.2], [1.4, 0.1], [0.9, 0.8], [0.2, 0.8]], invert: true, ..Default::default() };
+        let tris = m.triangles();
+        assert!(!covered(&tris, [0.5, 0.5]), "inside shows");
+        assert!(covered(&tris, [0.1, 0.5]), "outside is dark");
+        let two = [m.clone(), Mask { points: vec![[0.0, 0.85], [0.2, 0.85], [0.2, 1.2], [0.0, 1.2]], invert: true, ..Default::default() }];
+        let tris = masks_triangles(&two);
+        assert!(!covered(&tris, [0.5, 0.5]) && !covered(&tris, [0.1, 0.9]), "both windows show");
+        assert!(covered(&tris, [0.5, 0.95]));
+    }
+
+    /// A window dragged right off the output is left out (the whole output went black).
+    #[test]
+    fn an_inverted_mask_off_the_output_is_left_out() {
+        let off = Mask { points: vec![[1.2, 0.2], [1.8, 0.2], [1.8, 0.8], [1.2, 0.8]], invert: true, ..Default::default() };
+        assert!(!off.reaches_output());
+        assert!(masks_triangles(std::slice::from_ref(&off)).is_empty());
+        let hide = Mask { points: vec![[0.2, 0.2], [0.4, 0.2], [0.4, 0.4]], ..Default::default() };
+        assert!(!masks_triangles(&[off, hide]).is_empty(), "other masks still work");
     }
 }

@@ -744,3 +744,32 @@ f 1 2 3 4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12\nf 9 10
     let _ = std::fs::remove_file(&path);
     assert!(after > before + 100 && bright > after, "dark pixels {before} then {after}, still lit {bright}");
 }
+
+/// An output with mapping on and only a mask ("only inside shows"): the picture still shows inside it with a corner
+/// dragged past the output's edge, and all of it once the mask is dragged right off (it's left out).
+#[test]
+fn a_mask_past_the_edge_keeps_the_picture() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, next_id: 100, ..Default::default() };
+    let mut l = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    l.generator_values = vec![0.0, 1.0, 0.0];
+    comp.layers.push(l);
+    let out = comp.add_output();
+    let mid = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output_of(out).expect("output");
+        px[((h / 2 * w + w / 2) * 4 + 1) as usize]
+    };
+    let mask_id = comp.new_id();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    o.mapping.enabled = true;
+    let m = o.mapping.add_mask(mask_id);
+    m.points = vec![[0.2, 0.2], [0.8, 0.2], [0.8, 0.8], [0.2, 0.8]];
+    m.invert = true;
+    let inside = mid(&mut engine, &comp);
+    comp.outputs[0].mapping.masks[0].points[1] = [1.4, 0.1];
+    let past = mid(&mut engine, &comp);
+    comp.outputs[0].mapping.masks[0].points = vec![[1.2, 0.2], [1.8, 0.2], [1.8, 0.8], [1.2, 0.8]];
+    let off = mid(&mut engine, &comp);
+    assert!(inside > 200 && past > 200 && off > 200, "inside {inside} past the edge {past} all off {off}");
+}
