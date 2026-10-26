@@ -68,6 +68,9 @@ pub struct Surface {
     /// Curved edges: handles that bend each edge (and the picture inside), on the quad or the mesh.
     #[serde(default)]
     pub bend: Option<Bend>,
+    /// Moved, stretched and turned on top of its corners / mesh; animatable (`ControlTarget::SliceTransform`).
+    #[serde(default)]
+    pub transform: ShapeTransform,
 }
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
@@ -1573,6 +1576,7 @@ impl Default for Surface {
             flip: [false; 2],
             effects: Vec::new(),
             bend: None,
+            transform: ShapeTransform::default(),
         }
     }
 }
@@ -1789,6 +1793,21 @@ impl Mapping {
             m.transform = t;
         }
         masks
+    }
+
+    /// This mapping as it shows at `mods`: slices moved by their (maybe animated) transforms. Borrowed as it is when
+    /// none has one (`aspect` = the output's width per height). Masks attached to a slice follow it.
+    pub fn animated<'a>(this: std::borrow::Cow<'a, Mapping>, mods: &crate::ModInputs, aspect: f32) -> std::borrow::Cow<'a, Mapping> {
+        if this.surfaces.iter().all(|s| s.transform.is_identity()) {
+            return this;
+        }
+        let mut m = this.into_owned();
+        for s in &mut m.surfaces {
+            let t = std::mem::take(&mut s.transform);
+            t.apply(s, mods, aspect);
+            s.transform = t;
+        }
+        std::borrow::Cow::Owned(m)
     }
 
     /// The mask with this id (on any output: ids are unique).

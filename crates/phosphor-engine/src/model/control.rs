@@ -111,6 +111,8 @@ pub enum ControlTarget {
     Button { key: u64, name: String },
     /// A mask's transform: `part` indexes `mapping::ShapeTransform::PARTS` (position X / Y, scale X / Y, rotation).
     MaskTransform { mask: u64, part: u8 },
+    /// A slice's transform, the same five values (`mapping::ShapeTransform::PARTS`).
+    SliceTransform { slice: u64, part: u8 },
 }
 
 /// App-wide mappable controls.
