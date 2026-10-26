@@ -36,8 +36,16 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerOpacity(id) => comp.mix_controls(*id)?.0,
         ControlTarget::LayerEnabled(id) => on(comp.mix_controls(*id)?.1),
         // A slice group's id reaches all its slices (the first one's value is shown).
-        ControlTarget::SliceOpacity(id) => comp.slice(*comp.slices_reached(*id).first()?)?.opacity,
-        ControlTarget::SliceEnabled(id) => on(comp.slice(*comp.slices_reached(*id).first()?)?.enabled),
+        // A group (or layout) has its own on/off and opacity, on top of its slices'.
+        ControlTarget::SliceOpacity(id) => match comp.slice_group(*id) {
+            Some(g) => g.opacity,
+            None => comp.slice(*id)?.opacity,
+        },
+        ControlTarget::SliceEnabled(id) => match comp.slice_group(*id) {
+            Some(g) => on(g.enabled),
+            None => on(comp.slice(*id)?.enabled),
+        },
+        ControlTarget::Layout(id) => comp.slice_group(*id).map(|g| on(g.enabled && g.opacity > 0.5))?,
         ControlTarget::MaskTransform { mask, part } => comp.mask(*mask)?.transform.unit(*part as usize),
         ControlTarget::SliceTransform { slice, part } => comp.slice(*slice)?.transform.unit(*part as usize),
         ControlTarget::MaskFeather(id) => comp.mask(*id)?.feather / phosphor_engine::mapping::MASK_FEATHER_MAX,
@@ -357,10 +365,20 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             }
         }
         ControlTarget::SliceOpacity(id) => {
-            for sid in comp.slices_reached(*id) {
-                if let Some(s) = comp.slice_mut(sid) {
-                    s.opacity = v.clamp(0.0, 1.0);
-                }
+            if let Some(g) = comp.slice_group_mut(*id) {
+                g.opacity = v.clamp(0.0, 1.0);
+            } else if let Some(s) = comp.slice_mut(*id) {
+                s.opacity = v.clamp(0.0, 1.0);
+            }
+        }
+        ControlTarget::Layout(id) => {
+            if v > 0.5 {
+                out.push(Deferred::Layout(*id));
+            }
+        }
+        ControlTarget::SliceEnabled(id) if comp.slice_group(*id).is_some() => {
+            if let Some(g) = comp.slice_group_mut(*id) {
+                g.enabled = toggled(g.enabled, v);
             }
         }
         ControlTarget::SliceEnabled(id) => {
@@ -467,6 +485,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
                 out.push((ControlTarget::MaskTransform { mask: m.id, part: i as u8 }, format!("{} · {} · {}", o.name, m.name, part.name.to_lowercase())));
             }
         }
+        for g in o.mapping.layouts() {
+            out.push((ControlTarget::Layout(g.id), format!("{} · {} (layout) · switch to it", o.name, g.name)));
+        }
         for g in &o.mapping.groups {
             out.push((ControlTarget::SliceOpacity(g.id), format!("{} · {} (group) · opacity", o.name, g.name)));
             out.push((ControlTarget::SliceEnabled(g.id), format!("{} · {} (group) · on/off", o.name, g.name)));
@@ -554,6 +575,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
             let name = phosphor_engine::mapping::ShapeTransform::PARTS.get(*part as usize).map_or("part", |p| p.name);
             format!("/phosphor/{kind}/{id}/{}", name.to_lowercase().replace(' ', "_"))
         }
+        ControlTarget::Layout(id) => format!("/phosphor/layout/{id}"),
         ControlTarget::MaskFeather(id) => format!("/phosphor/mask/{id}/soft_edge"),
         ControlTarget::MaskEnabled(id) => format!("/phosphor/mask/{id}/on"),
         ControlTarget::MaskInvert(id) => format!("/phosphor/mask/{id}/invert"),

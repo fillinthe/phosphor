@@ -52,6 +52,10 @@ enum TreeAction {
     DeleteMany(u64, Vec<u64>),
     /// Put these slices of output `.0` into a new group.
     Group(u64, Vec<u64>),
+    AddLayout(u64),
+    SwitchLayout(u64),
+    /// Copy group / layout `.1` of output `.0` with everything in it.
+    DuplicateGroup(u64, u64),
 }
 
 pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
@@ -61,7 +65,7 @@ pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
     if !st.comp.outputs.iter().any(|o| o.id == st.mapping_output) {
         st.mapping_output = st.primary_output();
     }
-    output_strip(ui, st, 96.0);
+    output_strip(ui, st, 64.0);
     ui.separator();
     let layout = egui::Layout::top_down(egui::Align::Min);
     // Each part in its own clipped area, so nothing spills into its neighbour.
@@ -127,23 +131,10 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                     SliceAct::Group(ids) => action = Some(TreeAction::Group(o.id, ids)),
                     SliceAct::Duplicate(id) => action = Some(TreeAction::Duplicate(id)),
                     SliceAct::Delete(ids) => action = Some(TreeAction::DeleteMany(o.id, ids)),
+                    SliceAct::AddLayout => action = Some(TreeAction::AddLayout(o.id)),
+                    SliceAct::SwitchLayout(id) => action = Some(TreeAction::SwitchLayout(id)),
+                    SliceAct::DuplicateGroup(id) => action = Some(TreeAction::DuplicateGroup(o.id, id)),
                 }
-            }
-            for m in &mut o.mapping.masks {
-                crate::ui::toolbar(ui, |ui| {
-                    ui.add_space(14.0);
-                    crate::ui::eye_toggle(ui, &mut m.enabled);
-                    let r = crate::ui::pick_item(ui, *selected_surface == Some(m.id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR));
-                    if r.clicked() {
-                        *selected_surface = Some(m.id);
-                    }
-                    r.right_menu(|ui| {
-                        if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
-                            action = Some(TreeAction::Delete(o.id, m.id));
-                            ui.close();
-                        }
-                    });
-                });
             }
             crate::ui::toolbar(ui, |ui| {
                 ui.add_space(14.0);
@@ -162,12 +153,35 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
             ui.add_space(6.0);
         }
     });
+    if let Some(TreeAction::SwitchLayout(id)) = action {
+        st.switch_layout(id, ui.input(|i| i.time));
+        return;
+    }
     apply_action(st, action);
 }
 
 /// Adds, duplicates and deletes slices and masks (tree and canvas menus).
 fn apply_action(st: &mut State, action: Option<TreeAction>) {
     let canvas = (st.comp.width, st.comp.height);
+    // Anything new goes into the layout showing now.
+    let added = match &action {
+        Some(TreeAction::AddSlice(o) | TreeAction::AddSliceAt(o, _) | TreeAction::AddMask(o, _) | TreeAction::DrawnMask(o, _) | TreeAction::DrawnLine(o, _)) => Some(*o),
+        _ => None,
+    };
+    apply(st, action, canvas);
+    if let (Some(oid), Some(id)) = (added, st.selected_surface)
+        && let Some(o) = st.comp.output_mut(oid)
+    {
+        let layout = o.mapping.current_layout();
+        if let Some(s) = o.mapping.surfaces.iter_mut().find(|s| s.id == id && s.group.is_none()) {
+            s.group = layout;
+        } else if let Some(m) = o.mapping.masks.iter_mut().find(|m| m.id == id && m.group.is_none()) {
+            m.group = layout;
+        }
+    }
+}
+
+fn apply(st: &mut State, action: Option<TreeAction>, canvas: (u32, u32)) {
     match action {
         Some(TreeAction::AddSlice(oid)) => {
             let id = st.comp.new_id();
@@ -219,11 +233,12 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
                 st.selected_surface = Some(id);
             }
         }
-        Some(TreeAction::Delete(oid, id)) => apply_action(st, Some(TreeAction::DeleteMany(oid, vec![id]))),
+        Some(TreeAction::Delete(oid, id)) => apply(st, Some(TreeAction::DeleteMany(oid, vec![id])), canvas),
         Some(TreeAction::DeleteMany(oid, ids)) => {
             if let Some(o) = st.comp.output_mut(oid) {
                 o.mapping.remove_slices(|s| ids.contains(&s.id));
                 o.mapping.masks.retain(|m| !ids.contains(&m.id));
+                o.mapping.prune_groups();
             }
             if st.selected_surface.is_some_and(|s| ids.contains(&s)) {
                 st.selected_surface = None;
@@ -234,6 +249,33 @@ fn apply_action(st: &mut State, action: Option<TreeAction>) {
             if let Some(o) = st.comp.output_mut(oid) {
                 o.mapping.group_slices(id, &ids);
             }
+        }
+        Some(TreeAction::AddLayout(oid)) => {
+            let id = st.comp.new_id();
+            if let Some(o) = st.comp.output_mut(oid) {
+                // The first one takes in what's there; then one more to build the next arrangement in.
+                let first = o.mapping.layouts().next().is_none();
+                o.mapping.add_layout(id);
+                o.mapping.enabled = true;
+                if first {
+                    let next = st.comp.new_id();
+                    if let Some(o) = st.comp.output_mut(oid) {
+                        o.mapping.add_layout(next);
+                    }
+                }
+            }
+        }
+        // (Needs the clock: the tree does it.)
+        Some(TreeAction::SwitchLayout(_)) => {}
+        Some(TreeAction::DuplicateGroup(oid, gid)) => {
+            let mut next = st.comp.next_id;
+            if let Some(o) = st.comp.output_mut(oid) {
+                o.mapping.duplicate_group(gid, &mut || {
+                    next += 1;
+                    next - 1
+                });
+            }
+            st.comp.next_id = next;
         }
         None => {}
     }

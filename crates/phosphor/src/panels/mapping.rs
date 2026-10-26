@@ -162,7 +162,10 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     let shift = ui.input(|i| i.modifiers.shift);
     let mut group_move: Option<[f32; 2]> = None;
     let mut clicked: Option<u64> = None;
-    for s in &mut mapping.surfaces {
+    // Slices and masks in a group or layout that's off or faded out aren't drawn (unless selected): only what's
+    // showing gets in the way.
+    let hidden: Vec<u64> = mapping.surfaces.iter().filter(|s| s.group.is_some() && !mapping.group_mix(s.group).0).map(|s| s.id).chain(mapping.masks.iter().filter(|m| m.group.is_some() && !mapping.group_mix(m.group).0).map(|m| m.id)).filter(|id| *selected != Some(*id) && !many.contains(id)).collect();
+    for s in mapping.surfaces.iter_mut().filter(|s| !hidden.contains(&s.id)) {
         let is_selected = *selected == Some(s.id) || many.contains(&s.id);
         let base = if s.enabled { accent() } else { Color32::GRAY };
         let line = if is_selected { Stroke::new(2.0, base) } else { Stroke::new(1.0, base.gamma_multiply(0.55)) };
@@ -383,7 +386,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
     // it bezier handles.
     use phosphor_engine::mapping::{mask_to_output, output_to_mask};
     let surfaces = &mapping.surfaces;
-    for m in mapping.masks.iter_mut() {
+    for m in mapping.masks.iter_mut().filter(|m| !hidden.contains(&m.id)) {
         let id = ui.id().with(("mask", m.id));
         let color = if m.enabled { MASK_COLOR } else { Color32::GRAY };
         let is_selected = *selected == Some(m.id);
@@ -1248,6 +1251,9 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
         toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point for a sharp corner or bezier handles)");
     });
     ui.horizontal(|ui| {
+        Level::percent(&mut m.opacity, "Opacity").default(1.0).tip("How dark it makes what it covers (100% = black)").show(ui);
+    });
+    ui.horizontal(|ui| {
         Level::range(&mut m.feather, 0.0, phosphor_engine::mapping::MASK_FEATHER_MAX, "Soft edge").default(0.0).modulation(&mut m.feather_mod).target(ControlTarget::MaskFeather(m.id)).tip("Fade the mask's edge (0 = hard)").show(ui);
     });
     if m.feather > 0.0 {
@@ -1316,6 +1322,12 @@ pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping
         })
         .response
         .on_hover_text("Send one layer to just this surface (its own picture, with its effects), or show the whole composition (everything in the mix, with MASTER effects)");
+        // A camera, Syphon, NDI, screen or window straight onto this slice (a layer that stays out of the mix).
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(source) = super::layers::live_menu(ui, s.id) {
+            let what = SliceDrop::Source(super::SourceDrag { name: source.label(), source });
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(SLICE_DROP), (s.id, what)));
+        }
         let tip = "Off: only surfaces that pick it show it, not the mix or other surfaces";
         if let Some(l) = s.layer.and_then(|id| layers.iter_mut().find(|l| l.id == id)) {
             crate::ui::toggle(ui, &mut l.in_mix, "Also in the mix").on_hover_text(tip);

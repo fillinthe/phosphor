@@ -616,6 +616,7 @@ impl State {
             crate::control::Deferred::App(a, v) => self.app_control(a, v, now),
             crate::control::Deferred::Button(key) => self.button_presses.push(key),
             crate::control::Deferred::Slider(key, v) => self.slider_values.push((key, v)),
+            crate::control::Deferred::Layout(id) => self.switch_layout(id, now),
             crate::control::Deferred::Menu(key) => self.menu_requests.extend(crate::menu::action_for(&key)),
             crate::control::Deferred::Scrub(layer, v) => {
                 if let Some((_, dur)) = self.media.position(layer) {
@@ -709,6 +710,26 @@ impl State {
             None => 0.0,
         };
         self.control.glide_to(target, from, to, now as f32, self.comp.auto_fade_secs);
+    }
+
+    /// Switches an output to layout `id`: it fades in over the auto-fade time while the output's other layouts fade
+    /// out (a cut when the time is 0). Pressed again while it's showing: nothing changes.
+    pub fn switch_layout(&mut self, id: u64, now: f64) {
+        let secs = self.comp.auto_fade_secs;
+        for l in self.comp.sibling_layouts(id) {
+            let to = if l == id { 1.0 } else { 0.0 };
+            let target = phosphor_engine::ControlTarget::SliceOpacity(l);
+            let Some(g) = self.comp.slice_group_mut(l) else { continue };
+            if l == id {
+                g.enabled = true;
+            }
+            let from = g.opacity;
+            if secs <= 0.0 {
+                g.opacity = to;
+            } else if (from - to).abs() > 1e-4 {
+                self.control.glide_to(target, from, to, now as f32, secs);
+            }
+        }
     }
 
     /// A clip button was let go: flash clips go back, piano clips stop (right away, never quantized).

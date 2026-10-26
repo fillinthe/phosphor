@@ -1088,6 +1088,16 @@ pub struct Mask {
     /// The soft edge moving by itself (LFO, sound, beat…) around `feather`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feather_mod: Option<crate::Modulation>,
+    /// The group (or layout) it's in, like slices.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<u64>,
+    /// How dark it makes what it covers (1 = black).
+    #[serde(default = "one")]
+    pub opacity: f32,
+}
+
+fn one() -> f32 {
+    1.0
 }
 
 /// Where a mask's soft edge sits relative to its outline.
@@ -1129,7 +1139,7 @@ impl crate::model::Choice for MaskEdge {
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new(), edge: MaskEdge::Centre, transform: ShapeTransform::default(), feather_mod: None }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new(), edge: MaskEdge::Centre, transform: ShapeTransform::default(), feather_mod: None, group: None, opacity: 1.0 }
     }
 }
 
@@ -1361,6 +1371,12 @@ impl Mask {
         let Some((hole, mut band)) = self.edge_parts() else { return Vec::new() };
         let mut out = if self.invert { fill(&around(&[&hole]), &[&hole], 1.0) } else { fill(&hole, &[], 1.0) };
         out.append(&mut band);
+        let opacity = self.opacity.clamp(0.0, 1.0);
+        if opacity < 1.0 {
+            for v in &mut out {
+                v[2] *= opacity;
+            }
+        }
         out
     }
 
@@ -1750,7 +1766,7 @@ impl Mapping {
 
     /// The slices drawn now: enabled ones (only the solo ones while "show only selected" is on).
     pub fn shown(&self) -> impl Iterator<Item = &Surface> + '_ {
-        self.surfaces.iter().filter(|s| self.enabled && s.enabled && (self.solo.is_empty() || self.solo.contains(&s.id)))
+        self.surfaces.iter().filter(|s| self.enabled && s.enabled && (self.solo.is_empty() || self.solo.contains(&s.id)) && (s.group.is_none() || self.group_mix(s.group).0))
     }
 
     /// Surfaces are drawn when mapping is on and there is at least one enabled.
@@ -1809,13 +1825,21 @@ impl Mapping {
         masks
     }
 
-    /// This mapping as it shows at `mods`: slices moved by their (maybe animated) transforms and soft edges. Borrowed as it is when
+    /// This mapping as it shows at `mods`: slices moved by their (maybe animated) transforms and soft edges, faded by
+    /// their groups (layouts crossfading). Borrowed as it is when
     /// none has one (`aspect` = the output's width per height). Masks attached to a slice follow it.
     pub fn animated<'a>(this: std::borrow::Cow<'a, Mapping>, mods: &crate::ModInputs, aspect: f32) -> std::borrow::Cow<'a, Mapping> {
-        if this.surfaces.iter().all(|s| s.transform.is_identity() && s.feather_mod.is_none()) {
+        let faded = this.groups.iter().any(|g| g.opacity < 1.0);
+        if !faded && this.surfaces.iter().all(|s| s.transform.is_identity() && s.feather_mod.is_none()) {
             return this;
         }
         let mut m = this.into_owned();
+        if faded {
+            let fades: Vec<f32> = m.surfaces.iter().map(|s| m.group_mix(s.group).1).collect();
+            for (s, f) in m.surfaces.iter_mut().zip(fades) {
+                s.opacity *= f;
+            }
+        }
         for s in &mut m.surfaces {
             let t = std::mem::take(&mut s.transform);
             t.apply(s, mods, aspect);
@@ -1832,12 +1856,16 @@ impl Mapping {
         self.masks.iter_mut().find(|m| m.id == id)
     }
 
-    /// The enabled masks with their points on the output (attached ones placed on their slice).
+    /// The enabled masks with their points on the output (attached ones placed on their slice), faded by their
+    /// groups; masks in a group that's off are left out.
     pub fn placed_masks(&self) -> Vec<Mask> {
         self.masks
             .iter()
             .filter(|m| m.enabled)
-            .map(|m| m.placed(&self.surfaces))
+            .filter_map(|m| {
+                let (on, fade) = self.group_mix(m.group);
+                on.then(|| Mask { opacity: m.opacity * fade, ..m.placed(&self.surfaces) })
+            })
             .collect()
     }
 
