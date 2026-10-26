@@ -81,12 +81,13 @@ impl Engine {
         passes.push(Pass { entry: "fs_scan", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
     }
 
-    pub(super) fn push_masks(&mut self, output: u64, mapping: &mapping::Mapping, view: &wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>) {
+    pub(super) fn push_masks(&mut self, output: u64, mapping: &mapping::Mapping, view: &wgpu::TextureView, size: (u32, u32), mods: &crate::ModInputs, passes: &mut Vec<Pass>) {
         if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled) {
             return;
         }
-        // Attached masks are placed on their slice first, so the hash follows the slice too.
-        let placed = mapping.placed_masks();
+        // Attached masks are placed on their slice first, then moved by their (maybe animated) transform: the hash
+        // follows both, so the shape is rebuilt only on frames where it changed.
+        let placed = mapping.placed_masks_at(mods, size.0 as f32 / size.1.max(1) as f32);
         // Everything that changes the outline: points, handles, smooth, corners, invert, feather.
         let handles: Vec<[f32; 2]> = placed.iter().flat_map(|m| m.handles.iter().map(|h| h.unwrap_or([f32::NAN; 2]))).collect();
         let flags: Vec<u32> = placed

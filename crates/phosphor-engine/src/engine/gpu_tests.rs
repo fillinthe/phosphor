@@ -773,3 +773,26 @@ fn a_mask_past_the_edge_keeps_the_picture() {
     let off = mid(&mut engine, &comp);
     assert!(inside > 200 && past > 200 && off > 200, "inside {inside} past the edge {past} all off {off}");
 }
+
+/// A mask's transform moves what it hides on the output (and so can be animated): the hidden square moves right.
+#[test]
+fn a_mask_transform_moves_it_on_the_output() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, next_id: 100, ..Default::default() };
+    let mut l = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    l.generator_values = vec![0.0, 1.0, 0.0];
+    comp.layers.push(l);
+    let out = comp.add_output();
+    let mask_id = comp.new_id();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    o.mapping.enabled = true;
+    o.mapping.add_mask(mask_id).points = vec![[0.0, 0.0], [0.5, 0.0], [0.5, 1.0], [0.0, 1.0]];
+    let green_at = |engine: &mut Engine, comp: &Composition, x: f32| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output_of(out).expect("output");
+        px[((h / 2 * w + (x * w as f32) as u32) * 4 + 1) as usize]
+    };
+    assert!(green_at(&mut engine, &comp, 0.25) < 30 && green_at(&mut engine, &comp, 0.75) > 200, "the left half is hidden");
+    comp.outputs[0].mapping.masks[0].transform.x = 0.5;
+    assert!(green_at(&mut engine, &comp, 0.25) > 200 && green_at(&mut engine, &comp, 0.75) < 30, "moved: the right half is hidden");
+}

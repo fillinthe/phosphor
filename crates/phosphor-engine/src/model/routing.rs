@@ -146,6 +146,15 @@ impl Composition {
         self.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).find(|s| s.id == id)
     }
 
+    /// Mask `id` on whichever output has it.
+    pub fn mask(&self, id: u64) -> Option<&crate::mapping::Mask> {
+        self.outputs.iter().flat_map(|o| o.mapping.masks.iter()).find(|m| m.id == id)
+    }
+
+    pub fn mask_mut(&mut self, id: u64) -> Option<&mut crate::mapping::Mask> {
+        self.outputs.iter_mut().find_map(|o| o.mapping.mask_mut(id))
+    }
+
     pub fn slice_mut(&mut self, id: u64) -> Option<&mut crate::mapping::Surface> {
         self.outputs.iter_mut().flat_map(|o| o.mapping.surfaces.iter_mut()).find(|s| s.id == id)
     }

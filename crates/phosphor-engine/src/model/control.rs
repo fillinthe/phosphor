@@ -109,6 +109,8 @@ pub enum ControlTarget {
     Menu(String),
     /// Any button on screen, by its stable key (panel, label, which one) and the name shown for it.
     Button { key: u64, name: String },
+    /// A mask's transform: `part` indexes `mapping::ShapeTransform::PARTS` (position X / Y, scale X / Y, rotation).
+    MaskTransform { mask: u64, part: u8 },
 }
 
 /// App-wide mappable controls.
