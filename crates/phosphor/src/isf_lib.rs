@@ -344,7 +344,7 @@ fn load(path: &std::path::Path, stem: &str, slug: &str, fs: String) -> Option<Re
                 about = format!("{about}\nby {}", sh.credit);
             }
             let images = load_images(path, &sh.images);
-            Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), instances: sh.instances, wgsl: sh.wgsl, category: "ISF" })
+            Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), instances: sh.instances, wgsl: sh.wgsl, category: phosphor_category(&sh.categories, stem) })
         }
         Ok(sh) => Err(sh.unsupported.unwrap_or_default()),
         Err(e) => Err(format!("{e:?}")),
@@ -749,3 +749,47 @@ fn lut_split_follows_a_mask_layer() {
     let bright = middle(&mut engine, 1.0);
     assert!(dark < 80 && bright > 170, "black mask = LUT A (the same grey), white mask = LUT B (inverted): {dark} {bright}");
 }
+
+/// Where an ISF shader goes in the Effects panel: the first of its own CATEGORIES that means one of Phosphor's,
+/// else what its name says, else "ISF".
+pub(crate) fn phosphor_category(categories: &[String], name: &str) -> &'static str {
+    // (words → category), checked in this order.
+    const WORDS: &[(&[&str], &str)] = &[
+        (&["3d"], "3D"),
+        (&["blur", "sharpen", "bokeh", "defocus"], "Blur"),
+        (&["retro", "v002", "glitch", "vhs", "crt", "8bit", "8-bit", "pixel", "dither", "scanline"], "Retro"),
+        (&["film", "grain", "vignette", "sepia", "old movie"], "Film"),
+        (&["feedback", "trail", "echo", "delay", "time", "slit"], "Time"),
+        (&["mask", "key", "chroma", "alpha"], "Key"),
+        (&["glow", "bloom", "light", "flare", "shine", "god ray"], "Light"),
+        (&["halftone", "stylize", "drawing", "sketch", "edge", "toon", "cartoon", "posterize", "emboss", "ascii", "dots"], "Stylize"),
+        (&["distort", "warp", "wave", "kaleido", "tile", "mirror", "geometry", "twirl", "swirl", "bulge", "pinch", "ripple", "fisheye", "zoom", "rotate"], "Distort"),
+        (&["color", "colour", "hue", "saturat", "contrast", "levels", "histogram", "lut", "tint", "invert", "gamma", "exposure", "curves"], "Color"),
+        (&["pattern", "noise", "generator", "test pattern", "visualizer", "visualiser", "gradient", "stripes", "checker"], "Patterns"),
+        (&["motion", "move", "scroll", "strobe"], "Motion"),
+        (&["utility", "overlay", "transform", "crop", "flip", "scale", "position"], "Utility"),
+    ];
+    let pick = |text: &str| {
+        let text = text.to_lowercase();
+        WORDS.iter().find(|(words, _)| words.iter().any(|w| text.contains(w))).map(|(_, cat)| *cat)
+    };
+    categories.iter().find_map(|c| pick(c)).or_else(|| pick(name)).unwrap_or("ISF")
+}
+
+#[cfg(test)]
+mod category_tests {
+    use super::phosphor_category;
+
+    #[test]
+    fn isf_shaders_land_in_phosphors_categories() {
+        let cats = |c: &[&str]| c.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(phosphor_category(&cats(&["Color Effect"]), "x"), "Color");
+        assert_eq!(phosphor_category(&cats(&["Distortion Effect", "Stylize"]), "x"), "Distort");
+        assert_eq!(phosphor_category(&cats(&["v002"]), "x"), "Retro");
+        assert_eq!(phosphor_category(&cats(&["Halftone Effect"]), "x"), "Stylize");
+        assert_eq!(phosphor_category(&cats(&["Tile Effect"]), "x"), "Distort");
+        assert_eq!(phosphor_category(&[], "Gaussian Blur"), "Blur", "from its name");
+        assert_eq!(phosphor_category(&cats(&["Something"]), "Thing"), "ISF", "nothing to go by");
+    }
+}
+
