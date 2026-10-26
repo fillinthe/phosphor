@@ -328,6 +328,8 @@ fn load(path: &std::path::Path, stem: &str, slug: &str, fs: String) -> Option<Re
     let converted = std::panic::catch_unwind(|| phosphor_isf::import(slug, &fs, vs.as_deref()));
     let Ok(converted) = converted else { return Some(Err("converter crashed".into())) };
     let result = match converted {
+        // More buffers than there are bindings: it couldn't work.
+        Ok(sh) if sh.buffers.len() > shaders::MAX_BUFFERS => Err(format!("needs {} buffers (at most {})", sh.buffers.len(), shaders::MAX_BUFFERS)),
         Ok(sh) if sh.unsupported.is_none() && !sh.wgsl.is_empty() => {
             let prefix = if sh.is_transition {
                 shaders::ISF_TRANSITION
@@ -341,7 +343,10 @@ fn load(path: &std::path::Path, stem: &str, slug: &str, fs: String) -> Option<Re
                 about = if about.is_empty() { c.clone() } else { format!("{about} ({c})") };
             }
             if !sh.credit.is_empty() {
-                about = format!("{about}\nby {}", sh.credit);
+                // (Credits often say "by …" already.)
+                let credit = sh.credit.trim();
+                let credit = credit.strip_prefix("by ").or_else(|| credit.strip_prefix("By ")).unwrap_or(credit);
+                about = format!("{about}\nby {credit}");
             }
             let images = load_images(path, &sh.images);
             Ok(Loaded { id: format!("{prefix}{slug}"), name: display_name(stem), about, params: params_for(&sh), entry: sh.entry.clone(), plan: pass_plan(&sh), images, audio_slots: sh.audio_slots.clone(), vertex_entry: sh.vertex_entry.clone(), instances: sh.instances, wgsl: sh.wgsl, category: phosphor_category(&sh.categories, stem) })
@@ -793,3 +798,107 @@ mod category_tests {
     }
 }
 
+/// A preview tile that showed one effect and then shows another starts clean: an effect with memory (Interlace keeps
+/// the last frame) never shows the picture of the effect that was in that tile before.
+#[cfg(all(test, not(windows)))]
+#[test]
+fn a_preview_slot_forgets_the_effect_before() {
+    use phosphor_engine::{Composition, EffectState, LayerState, ModInputs, PreviewItem, PreviewRefresh, SourceSpec};
+    let isf = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/isf");
+    let Some(adapter) = pollster::block_on(wgpu::Instance::default().request_adapter(&Default::default())).ok() else { return };
+    let (w, h) = (160u32, 90u32);
+    // Busy: coloured noise (JPEG corruption shows on detail).
+    let picture: Vec<u8> = (0..w * h).flat_map(|i| {
+        let n = (i.wrapping_mul(2_654_435_761) >> 7) as u8;
+        [n, n.wrapping_mul(3), n.wrapping_add(90), 255]
+    }).collect();
+    // An engine with both effects built and a picture in the mix (the previews' source).
+    let engine = || {
+        let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).unwrap();
+        let mut engine = Engine::new(device, queue);
+        let mut ids = Vec::new();
+        for name in ["JPEG Block Corruption", "Interlace"] {
+            let path = isf.join(format!("{name}.fs"));
+            let slug = phosphor_engine::custom::slug(name);
+            let loaded = load(&path, name, &slug, std::fs::read_to_string(&path).unwrap()).unwrap().unwrap();
+            ids.push((loaded.id.clone(), loaded.entry.clone(), loaded.params.iter().map(|p| p.default).collect::<Vec<f32>>()));
+            register(&mut engine, loaded);
+        }
+        let mut comp = Composition { width: w, height: h, ..Default::default() };
+        comp.layers.push(LayerState { id: 7, source: SourceSpec::Movie { name: "p".into(), path: Some("p.png".into()) }, ..Default::default() });
+        engine.upload_rgba(7, w, h, &picture);
+        for (n, (id, ..)) in ids.iter().enumerate() {
+            comp.layers[0].effects.push(EffectState { id: 50 + n as u64, effect: id.clone(), enabled: false, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        }
+        let started = std::time::Instant::now();
+        while ids.iter().any(|(_, e, _)| engine.shader_pending(e)) && started.elapsed().as_secs() < 30 {
+            comp.layers[0].effects.iter_mut().for_each(|e| e.enabled = true);
+            engine.render(&comp, 0.0, &ModInputs::default());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        comp.layers[0].effects.iter_mut().for_each(|e| e.enabled = false);
+        (engine, comp, ids)
+    };
+    // The explorer's preview: one tile id per list position, whatever effect is in it.
+    let tile = |(id, _, values): &(String, String, Vec<f32>)| EffectState { id: 9_000_000, effect: id.clone(), enabled: true, values: values.clone(), mix: 1.0, mods: Vec::new(), blend: Default::default() };
+    let show = |engine: &mut Engine, comp: &Composition, fx: EffectState, frames: usize| {
+        for f in 0..frames {
+            let refresh = if f == 0 { PreviewRefresh::Moved } else { PreviewRefresh::Live };
+            engine.request_previews(phosphor_engine::MASTER_ID, vec![(PreviewItem::Effect(fx.clone()), refresh)]);
+            engine.render(comp, 0.0, &ModInputs::default());
+        }
+        engine.read_preview(0).expect("a preview").2
+    };
+    let (mut fresh, comp, ids) = engine();
+    let clean = show(&mut fresh, &comp, tile(&ids[1]), 6);
+    let (mut reused, comp, ids) = engine();
+    let jpeg = show(&mut reused, &comp, tile(&ids[0]), 6);
+    let after = show(&mut reused, &comp, tile(&ids[1]), 6);
+    let diff = |a: &[u8], b: &[u8]| a.iter().zip(b).map(|(x, y)| (*x as f32 - *y as f32).abs()).sum::<f32>() / a.len() as f32;
+    assert!(diff(&clean, &jpeg) > 5.0, "the two effects look different ({})", diff(&clean, &jpeg));
+    assert!(diff(&after, &clean) < 2.0, "Interlace after JPEG in the same tile looks like a fresh Interlace ({} away; {} from JPEG)", diff(&after, &clean), diff(&after, &jpeg));
+}
+
+
+/// Effects that drew black tiles in the Effects panel (2026-10-26) draw a picture: Key Frame Artifacts (frame count
+/// per effect), Color Relookup (an unconnected picture input is the effect's own picture), Micro Buffer RGB (a frame
+/// delay: a picture once its buffers fill), Bad TV.
+#[cfg(all(test, not(windows)))]
+#[test]
+fn effects_that_were_black_draw_a_picture() {
+    use phosphor_engine::{Composition, EffectState, LayerState, ModInputs, SourceSpec};
+    let isf = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/isf");
+    let Some(adapter) = pollster::block_on(wgpu::Instance::default().request_adapter(&Default::default())).ok() else { return };
+    let (w, h) = (160u32, 90u32);
+    let picture: Vec<u8> = (0..w * h).flat_map(|i| { let n = (i.wrapping_mul(2_654_435_761) >> 7) as u8; [n, n.wrapping_mul(3), n.wrapping_add(90), 255] }).collect();
+    for name in ["Bad TV", "Color Relookup", "Key Frame Artifacts", "Micro Buffer RGB"] {
+        let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).unwrap();
+        let mut engine = Engine::new(device, queue);
+        let path = isf.join(format!("{name}.fs"));
+        let slug = phosphor_engine::custom::slug(name);
+        let loaded = load(&path, name, &slug, std::fs::read_to_string(&path).unwrap()).unwrap().unwrap();
+        let (id, entry) = (loaded.id.clone(), loaded.entry.clone());
+        let values: Vec<f32> = loaded.params.iter().map(|p| p.default).collect();
+        register(&mut engine, loaded);
+        let mut comp = Composition { width: w, height: h, ..Default::default() };
+        let mut layer = LayerState { id: 7, source: SourceSpec::Movie { name: "p".into(), path: Some("p.png".into()) }, ..Default::default() };
+        // Added after the app has drawn a while (the frame count that broke Key Frame Artifacts).
+        for _ in 0..20 {
+            engine.render(&comp, 0.0, &ModInputs::default());
+        }
+        layer.effects.push(EffectState { id: 1, effect: id, enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        comp.layers.push(layer);
+        engine.upload_rgba(7, w, h, &picture);
+        let started = std::time::Instant::now();
+        while engine.shader_pending(&entry) && started.elapsed().as_secs() < 30 {
+            engine.render(&comp, 0.0, &ModInputs::default());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        for f in 0..40 {
+            engine.render(&comp, 1.0 + f as f32 / 30.0, &ModInputs { time: 1.0 + f as f32 / 30.0, ..Default::default() });
+        }
+        let (_, _, px) = engine.read_output().unwrap();
+        let brightness = px.chunks_exact(4).map(|p| p[0] as f32 + p[1] as f32 + p[2] as f32).sum::<f32>() / (px.len() as f32 / 4.0 * 3.0);
+        assert!(brightness > 20.0, "{name} draws a picture (brightness {brightness})");
+    }
+}

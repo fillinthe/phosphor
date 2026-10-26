@@ -202,6 +202,11 @@ impl Engine {
         self.read_target(self.layer_thumbnail(layer)?)
     }
 
+    /// A preview's picture now (blocking: tests).
+    pub fn read_preview(&self, index: usize) -> Option<(u32, u32, Vec<u8>)> {
+        self.read_target(self.preview(index)?)
+    }
+
     /// Same as `read_output`, for one configured output (after its mapping).
     pub fn read_output_of(&self, id: u64) -> Option<(u32, u32, Vec<u8>)> {
         self.read_target(self.output_texture(id)?)

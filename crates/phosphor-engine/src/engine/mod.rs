@@ -113,6 +113,9 @@ struct LayerResources {
 struct PassBuffers {
     slots: Vec<[Option<Target>; 2]>,
     front: Vec<usize>,
+    /// Frames this shader has drawn here (its FRAMEINDEX: ISF counts from when the effect starts, so "capture on the
+    /// first frames" works whenever it's added).
+    frames: u32,
 }
 
 /// Resource keys for the effect a "Through an effect" transition runs on the incoming / outgoing picture.

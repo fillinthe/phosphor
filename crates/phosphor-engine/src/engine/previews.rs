@@ -4,6 +4,8 @@ use super::*;
 
 /// Previews drawn fresh per frame at most.
 const NEW_PREVIEWS_PER_FRAME: usize = 6;
+/// Frames an effect with memory runs before a new preview tile takes its still.
+const WARM_UP_FRAMES: usize = 16;
 
 impl Engine {
     #[allow(clippy::too_many_arguments)]
@@ -64,16 +66,24 @@ impl Engine {
                 budget -= 1;
             }
             let rid = RESERVED_IDS + 1 + i as u64;
+            // A new tile for an effect with memory (delays, feedback, key frames): it starts clean, and its still is
+            // taken after it has run a few frames (a frame delay is black for its first frames).
+            let warm = if !ready && let PreviewItem::Effect(fx) = item && shaders::effect(&fx.effect).is_some_and(|d| shaders::pass_plan(d.entry).is_some()) {
+                if let Some(res) = self.layers.get_mut(&rid) {
+                    res.multipass.clear();
+                }
+                WARM_UP_FRAMES
+            } else {
+                1
+            };
             let frame = match item {
-                PreviewItem::Effect(fx) => Some(self.apply_effects(
-                    rid,
-                    std::slice::from_ref(fx),
-                    Frame::Rgb { view: src_view.clone(), w: PREVIEW_WIDTH, h: ph },
-                    time,
-                    mods,
-                    layers,
-                    passes,
-                )),
+                PreviewItem::Effect(fx) => {
+                    let mut out = None;
+                    for _ in 0..warm {
+                        out = Some(self.apply_effects(rid, std::slice::from_ref(fx), Frame::Rgb { view: src_view.clone(), w: PREVIEW_WIDTH, h: ph }, time, mods, layers, passes));
+                    }
+                    out
+                }
                 PreviewItem::Generator(id) => shaders::generator(id).and_then(|desc| {
                     self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), &desc.defaults(), &[], false, PREVIEW_WIDTH, ph, time, mods, passes)
                 }),

@@ -273,9 +273,10 @@ impl Engine {
         let device = self.gpu.device.clone();
         let blank = self.gpu.blank.clone();
         let extra = self.audio_extra(entry);
-        let frame = self.frame_index as f32;
         let n = plan.buffers.min(shaders::MAX_BUFFERS);
         let bufs = self.layers.entry(res_id).or_default().multipass.entry(key).or_default();
+        let frame = bufs.frames as f32;
+        bufs.frames = bufs.frames.saturating_add(1);
         bufs.slots.resize_with(n, Default::default);
         bufs.front.resize(n, 0);
         let var = |name: &str| -> Option<f64> {
@@ -394,14 +395,15 @@ impl Engine {
             } else if let Some(plan) = shaders::pass_plan(desc.entry) {
                 // Multi-pass shader (ISF PASSES): its own buffers, output into a free chain view.
                 let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
-                // Another layer's picture (a mask layer): its feed, picked by number; blank when there's none.
+                // Another layer's picture (a mask layer): its feed, picked by number; its own input when there's none.
                 let layer_views: Vec<(usize, wgpu::TextureView)> = plan
                     .layer_images
                     .iter()
                     .map(|&(slot, param)| {
                         let n = params.get(param).copied().unwrap_or(0.0).round() as usize;
                         let feed = n.checked_sub(1).and_then(|k| all_layers.get(k)).and_then(|l| self.layers.get(&l.id)).and_then(|r| r.feed.as_ref());
-                        (slot, feed.map_or_else(|| self.gpu.blank.clone(), |t| t.view.clone()))
+                        // No layer picked: the effect's own picture (blank made effects like Color Relookup draw black).
+                        (slot, feed.map_or_else(|| input.clone(), |t| t.view.clone()))
                     })
                     .collect();
                 let result = self.run_plan(res_id, fx_id, desc.entry, &plan, &params, input.clone(), views[i].clone(), (w, h), time, &layer_views, passes);
@@ -474,6 +476,12 @@ impl Engine {
                     let (_, a1, a2) = self.audio_extra(entry);
                     tex1 = tex1.or(a1);
                     tex2 = tex2.or(a2);
+                    // An imported shader's second / third picture input with nothing given: its own picture, not blank
+                    // (blank made Color Relookup draw black).
+                    if desc.id.starts_with(shaders::ISF_EFFECT) {
+                        tex1 = tex1.or_else(|| Some(input.clone()));
+                        tex2 = tex2.or_else(|| Some(input.clone()));
+                    }
                     passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
                     input = target;
                     input_idx = next_idx;
