@@ -20,8 +20,8 @@ impl PhosphorApp {
         }
         if let Some(id) = run.cfg.select.take_if(|_| now - started >= 0.5) {
             self.state.selected = Some(id);
-            // (A slice's id selects that slice on the mapping canvas.)
-            if self.state.comp.outputs.iter().any(|o| o.mapping.surfaces.iter().any(|s| s.id == id)) {
+            // (A slice's or mask's id selects it on the mapping canvas.)
+            if self.state.comp.outputs.iter().any(|o| o.mapping.surfaces.iter().any(|s| s.id == id) || o.mapping.masks.iter().any(|m| m.id == id)) {
                 self.state.selected_surface = Some(id);
             }
         }
