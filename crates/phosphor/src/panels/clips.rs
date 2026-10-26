@@ -93,6 +93,7 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
             }
         });
         let current = layer.clip_settings();
+        let layer_effects = current.effects.clone();
         let lid = layer.id;
         let k = layer.clip_slot_mut(c);
         crate::ui::toolbar(ui, |ui| {
@@ -108,6 +109,16 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
             .changed()
         {
             k.own = own.then_some(current);
+        }
+        if let Some(o) = &mut k.own {
+            let mut with = o.with_effects;
+            if crate::ui::toggle(ui, &mut with, "Brings its effects")
+                .on_hover_text("When it plays, the layer's effects become this clip's (they're saved with it). Off = the clip leaves the layer's effects as they are")
+                .changed()
+            {
+                o.with_effects = with;
+                o.effects = if with { layer_effects } else { Vec::new() };
+            }
         }
         ui.separator();
     }

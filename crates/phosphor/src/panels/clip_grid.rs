@@ -275,7 +275,12 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
                     TriggerMode::Flash => Some("F"),
                     TriggerMode::Piano => Some("P"),
                 };
-                let own = if k.own.is_some() { "S" } else { "" };
+                // S = keeps its own settings; fx = puts its own effects on the layer when it plays.
+                let own = match &k.own {
+                    Some(o) if o.with_effects => "S fx",
+                    Some(_) => "S",
+                    None => "",
+                };
                 let badge = format!("{}{own}", badge.unwrap_or(""));
                 if !badge.is_empty() {
                     p.text(egui::pos2(rect.right() - 4.0, rect.top() + 3.0), egui::Align2::RIGHT_TOP, badge, egui::FontId::monospace(11.0), accent());

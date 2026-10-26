@@ -575,7 +575,8 @@ impl Composition {
         for l in &self.layers {
             let SourceSpec::Movie { path: Some(path), .. } = &l.source else { continue };
             let Some(item) = self.media_bin.iter_mut().find(|m| m.path == *path) else { continue };
-            let settings = l.clip_settings();
+            // (Not its effects: a file dropped somewhere else shouldn't bring back an effect taken off here.)
+            let settings = l.clip_settings_with(false);
             let muted = l.muted || l.active_clip.is_some_and(|id| l.clips.iter().any(|k| k.id == id && k.muted));
             if item.settings.as_ref() != Some(&settings) || item.muted != muted {
                 item.settings = Some(settings);
@@ -588,7 +589,8 @@ impl Composition {
     pub fn media_memory(&self, source: &SourceSpec) -> Option<(crate::ClipSettings, bool)> {
         let SourceSpec::Movie { path: Some(path), .. } = source else { return None };
         let item = self.media_bin.iter().find(|m| m.path == *path)?;
-        item.settings.clone().map(|s| (s, item.muted))
+        // Older saves remembered effects too: those stay behind.
+        item.settings.clone().map(|s| (crate::ClipSettings { effects: Vec::new(), with_effects: false, ..s }, item.muted))
     }
 
     pub fn expire_transitions(&mut self, now: f32) {
@@ -768,6 +770,27 @@ mod media_memory_tests {
         let third = c.add_layer().id;
         c.set_layer_source(third, movie, Vec::new(), String::new(), 0.0);
         assert_eq!(c.layers.iter().find(|l| l.id == third).unwrap().rate, 0.5);
+    }
+
+    #[test]
+    fn a_movie_doesnt_bring_back_effects() {
+        let mut c = Composition::default();
+        let movie = SourceSpec::Movie { name: "a.mp4".into(), path: Some("/x/a.mp4".into()) };
+        c.add_media("a.mp4", "/x/a.mp4");
+        let id = c.add_layer().id;
+        c.set_layer_source(id, movie.clone(), Vec::new(), String::new(), 0.0);
+        c.layers[0].effects.push(crate::EffectState { id: 9, effect: "kaleido".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        c.remember_media_settings();
+        // (An older save that did remember them.)
+        c.media_bin[0].settings.as_mut().unwrap().effects = c.layers[0].effects.clone();
+        c.media_bin[0].settings.as_mut().unwrap().with_effects = true;
+        let other = c.add_layer().id;
+        c.place_clips(other, 0, vec![("a.mp4".into(), movie.clone())]);
+        c.press_clip(other, 0, 0.0);
+        assert!(c.layers.iter().find(|l| l.id == other).unwrap().effects.is_empty());
+        let third = c.add_layer().id;
+        c.set_layer_source(third, movie, Vec::new(), String::new(), 0.0);
+        assert!(c.layers.iter().find(|l| l.id == third).unwrap().effects.is_empty());
     }
 
     #[test]

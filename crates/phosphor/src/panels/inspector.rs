@@ -473,6 +473,17 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
         });
     }
+    // Clips that put their own effects back when they play (an effect taken off here returns with them).
+    let bringing = layer.clips_with_effects();
+    if bringing > 0 {
+        crate::ui::toolbar(ui, |ui| {
+            let what = if bringing == 1 { "1 clip on this layer puts its own effects back when it plays".to_string() } else { format!("{bringing} clips on this layer put their own effects back when they play") };
+            hint(ui, what).on_hover_text("Their speed and loop still come back; turn it off for one clip in its right-click menu (Brings its effects)");
+            if crate::ui::small_command(ui, "Stop that").on_hover_text("These clips leave the layer's effects as they are from now on").clicked() {
+                layer.clips_forget_effects();
+            }
+        });
+    }
     (effects_editor(ui, &mut layer.effects, clipboard_len), seek_to)
 }
 

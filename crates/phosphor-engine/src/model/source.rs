@@ -239,6 +239,13 @@ pub struct ClipSettings {
     pub loop_beats: f32,
     pub sync_beats: f32,
     pub effects: Vec<crate::EffectState>,
+    /// The effects come back too when it plays; false = it leaves the layer's effects as they are (older saves: yes).
+    #[serde(default = "brings_effects")]
+    pub with_effects: bool,
+}
+
+fn brings_effects() -> bool {
+    true
 }
 
 impl Clip {

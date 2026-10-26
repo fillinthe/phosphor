@@ -88,6 +88,11 @@ pub const AUTOPILOT_DEFAULT_BEATS: f32 = 16.0;
 impl LayerState {
     /// The layer's playback settings and effects, as a clip keeps them.
     pub fn clip_settings(&self) -> ClipSettings {
+        self.clip_settings_with(true)
+    }
+
+    /// The layer's settings to save into a clip; without effects when `with_effects` is false.
+    pub fn clip_settings_with(&self, with_effects: bool) -> ClipSettings {
         ClipSettings {
             rate: self.rate,
             direction: self.direction,
@@ -95,7 +100,8 @@ impl LayerState {
             loop_out: self.loop_out,
             loop_beats: self.loop_beats,
             sync_beats: self.sync_beats,
-            effects: self.effects.clone(),
+            effects: if with_effects { self.effects.clone() } else { Vec::new() },
+            with_effects,
         }
     }
 
@@ -106,16 +112,32 @@ impl LayerState {
         self.loop_out = s.loop_out;
         self.loop_beats = s.loop_beats;
         self.sync_beats = s.sync_beats;
-        self.effects = s.effects.clone();
+        if s.with_effects {
+            self.effects = s.effects.clone();
+        }
+    }
+
+    /// How many of this layer's clips put their own effects back on the layer when they play.
+    pub fn clips_with_effects(&self) -> usize {
+        self.clips.iter().filter(|k| !k.is_empty() && k.own.as_ref().is_some_and(|o| o.with_effects)).count()
+    }
+
+    /// This layer's clips stop bringing effects back (they keep their speed and loop). Returns how many changed.
+    pub fn clips_forget_effects(&mut self) -> usize {
+        let mut n = 0;
+        for o in self.clips.iter_mut().filter_map(|k| k.own.as_mut()).filter(|o| o.with_effects) {
+            o.with_effects = false;
+            o.effects.clear();
+            n += 1;
+        }
+        n
     }
 
     /// While a clip with its own settings plays, changes made on the layer are saved into the clip.
     pub fn keep_clip_settings(&mut self) {
         let Some(slot) = self.active_slot() else { return };
-        if self.clips[slot].own.is_none() {
-            return;
-        }
-        let now = self.clip_settings();
+        let Some(with_effects) = self.clips[slot].own.as_ref().map(|o| o.with_effects) else { return };
+        let now = self.clip_settings_with(with_effects);
         if self.clips[slot].own.as_ref() != Some(&now) {
             self.clips[slot].own = Some(now);
         }
@@ -279,6 +301,31 @@ mod tests {
         l.rate = 1.0;
         l.trigger_clip(0, 2.0, 0.0);
         assert_eq!(l.rate, 3.0, "the change made while it played was kept");
+    }
+
+    #[test]
+    fn a_clip_can_leave_the_effects_alone() {
+        let kaleido = || crate::EffectState { id: 9, effect: "kaleido".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() };
+        let mut l = layer_with(2);
+        l.effects = vec![kaleido()];
+        l.clips[0].own = Some(l.clip_settings());
+        l.clips[2].own = Some(ClipSettings { rate: 2.0, ..l.clip_settings_with(false) });
+        assert_eq!(l.clips_with_effects(), 1);
+        l.effects.clear();
+        l.trigger_clip(2, 0.0, 0.0);
+        assert!(l.effects.is_empty() && l.rate == 2.0, "speed comes back, the effect doesn't");
+        l.keep_clip_settings();
+        assert!(l.clips[2].own.as_ref().is_some_and(|o| !o.with_effects && o.effects.is_empty()), "and isn't saved into it while it plays");
+        l.trigger_clip(0, 1.0, 0.0);
+        assert_eq!(l.effects.len(), 1, "a clip that brings its effects still does");
+        assert_eq!(l.clips_forget_effects(), 1);
+        l.effects.clear();
+        l.trigger_clip(2, 2.0, 0.0);
+        l.trigger_clip(0, 3.0, 0.0);
+        assert!(l.effects.is_empty(), "forgotten");
+        // Saves from before: a clip's own settings brought its effects.
+        let old: ClipSettings = serde_json::from_str(r#"{"rate":1.0,"effects":[]}"#).unwrap();
+        assert!(old.with_effects);
     }
 }
 
