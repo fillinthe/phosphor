@@ -305,7 +305,7 @@ pub(crate) fn master_card(
                 if crate::ui::pick_item(ui, is_selected, RichText::new("MASTER").strong().size(12.5).color(accent())).clicked() {
                     select = true;
                 }
-                hint(ui, "Effects here run over all layers");
+                help(ui, "Effects here run over all layers");
                 if let Some(r) = super::groups::fx_badge(ui, effects, bypass) {
                     map_menu(ui, &r.on_hover_text("Click to bypass the master effects · right-click to map"), ControlTarget::App(phosphor_engine::AppControl::MasterFxBypass));
                 }

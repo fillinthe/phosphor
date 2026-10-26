@@ -114,7 +114,8 @@ pub const MENU_REQUEST: &str = "phosphor_menu_request";
 const KEY_PROJECT_PATH: &str = "project_path";
 const KEY_AUTOSAVE: &str = "autosave";
 const KEY_PROJECTS_AT_START: &str = "projects_at_start";
-const KEY_HELP_ICONS: &str = "help_icons";
+// (A new name: builds before 621 saved "off" without being asked, so their setting is left behind.)
+const KEY_HELP_ICONS: &str = "help_icons_chosen";
 const KEY_TOOLTIPS: &str = "tooltips";
 /// How often autosave saves a changed project.
 pub(crate) const AUTOSAVE_MINUTES: u32 = 5;
