@@ -22,6 +22,8 @@ mod stack;
 mod control;
 mod cues;
 mod devices;
+mod drag_ghost;
+pub(crate) use drag_ghost::drag_ghost;
 mod effects;
 mod groups;
 mod inspector;

@@ -635,18 +635,22 @@ pub(crate) fn media_tile(
     if !item.collections.is_empty() {
         p.text(thumb_rect.left_top() + egui::vec2(4.0, 3.0), egui::Align2::LEFT_TOP, icon::BOOKMARKS_SIMPLE, egui::FontId::proportional(11.0), Color32::from_white_alpha(180));
     }
-    if !item.effects.is_empty() {
-        // Has its own effects (they come with it wherever it plays).
-        p.text(thumb_rect.right_bottom() + egui::vec2(-5.0, -3.0), egui::Align2::RIGHT_BOTTOM, "fx", egui::FontId::monospace(11.0), accent());
-    }
+    // What comes with it when it plays: its own effects, changed speed / direction, a trim.
+    let comes_with = super::layers::badge_chip(p, thumb_rect, &media_extras(item));
     // Star (registered after the tile so it gets the click).
     let star_rect = egui::Rect::from_min_size(thumb_rect.right_top() + egui::vec2(-22.0, 2.0), egui::vec2(20.0, 20.0));
     let star = ui.interact(star_rect, ui.id().with(("star", &item.path)), Sense::click());
-    if item.favorite || resp.hovered() || star.hovered() {
-        let color = if item.favorite { Color32::from_rgb(255, 210, 90) } else { Color32::from_white_alpha(150) };
-        let glyph = if item.favorite { icon::STAR } else { icon::STAR_HALF };
-        ui.painter().text(star_rect.center(), egui::Align2::CENTER_CENTER, if item.favorite { glyph } else { icon::STAR }, egui::FontId::proportional(15.0), color);
+    // A favourite: a solid gold star. Not one yet: an outline only while the mouse is over the tile (so the picture
+    // stays clear), brighter over the star itself.
+    let hover = resp.hovered() || star.hovered();
+    if item.favorite || hover {
+        let font = if item.favorite { crate::theme::filled_icons(15.0) } else { egui::FontId::proportional(15.0) };
+        let color = if item.favorite { Color32::from_rgb(255, 210, 90) } else if star.hovered() { Color32::WHITE } else { Color32::from_white_alpha(150) };
+        let p = ui.painter();
+        p.text(star_rect.center() + egui::vec2(0.5, 1.0), egui::Align2::CENTER_CENTER, icon::STAR, font.clone(), Color32::from_black_alpha(160));
+        p.text(star_rect.center(), egui::Align2::CENTER_CENTER, icon::STAR, font, color);
     }
+    let star = star.on_hover_text(if item.favorite { "A favourite: click to unstar" } else { "Click to make it a favourite" });
     if star.clicked() {
         acts.push(MediaAct::Favorite(i));
     }
@@ -664,9 +668,7 @@ pub(crate) fn media_tile(
         n => format!("\nUsed by {n} layers and clips"),
     };
     let credit = item.credit.as_ref().map_or(String::new(), |c| format!("\nCredit: {}", c.line()));
-    let fx_names: Vec<&str> = item.effects.iter().map(|e| shaders::effect(&e.effect).map_or(e.effect.as_str(), |d| d.name)).collect();
-    let fx = if fx_names.is_empty() { String::new() } else { format!("\nIts own effects (they come with it): {}", fx_names.join(", ")) };
-    resp.on_hover_text(format!("{}{credit}{fx}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
+    resp.on_hover_text(format!("{}{credit}{comes_with}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
         ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
             for (id, name) in targets.layers {
                 if crate::ui::command(ui, name).clicked() {
@@ -750,6 +752,26 @@ pub(crate) fn media_tile(
 }
 
 /// Longest first; lengths not read yet go last.
+/// What a media file brings when it plays, as (icon, words): its own effects, its speed / direction, its trim.
+pub(crate) fn media_extras(item: &phosphor_engine::MediaItem) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if !item.effects.is_empty() {
+        let names: Vec<&str> = item.effects.iter().map(|e| shaders::effect(&e.effect).map_or(e.effect.as_str(), |d| d.name)).collect();
+        out.push((icon::MAGIC_WAND.to_string(), format!("Its own effects: {}", names.join(", "))));
+    }
+    if let Some(s) = &item.settings {
+        if s.changes_playback() {
+            let sync = if s.sync_beats > 0.0 { format!(", synced to {} beats", s.sync_beats) } else { String::new() };
+            out.push((icon::SLIDERS_HORIZONTAL.to_string(), format!("Plays {} at {:.2}x{sync}", s.direction.name().to_lowercase(), s.rate)));
+        }
+        if s.is_cut() {
+            let to = if s.loop_beats > 0.0 { format!(", a {}-beat loop", s.loop_beats) } else { format!(" to {:.0}%", s.loop_out * 100.0) };
+            out.push((icon::SCISSORS.to_string(), format!("Trimmed: from {:.0}%{to}", s.loop_in * 100.0)));
+        }
+    }
+    out
+}
+
 pub(crate) fn length_key(m: &phosphor_engine::MediaItem) -> std::cmp::Reverse<i64> {
     std::cmp::Reverse(m.duration.map_or(-1, |d| (d * 1000.0) as i64))
 }

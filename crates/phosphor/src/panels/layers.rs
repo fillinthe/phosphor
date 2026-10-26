@@ -230,6 +230,48 @@ pub(crate) struct CardOut {
     dropped_source: Option<SourceDrag>,
 }
 
+/// What's changed on a layer as (badge, what it means): the clip's effects, speed / direction, trim, moved,
+/// animated. The layer's own effects are the "N fx" toggle.
+pub(crate) fn mark_list(m: &phosphor_engine::LayerMarks) -> Vec<(String, &'static str)> {
+    let mut out = Vec::new();
+    if m.clip_fx > 0 {
+        out.push((format!("{} {}", icon::MAGIC_WAND, m.clip_fx), "Effects that came with the clip or file playing (Inspector › Clip effects)"));
+    }
+    if m.playback {
+        out.push((icon::SLIDERS_HORIZONTAL.to_string(), "Speed, direction or BPM sync changed"));
+    }
+    if m.cut {
+        out.push((icon::SCISSORS.to_string(), "Trimmed: In / Out points or a beat loop"));
+    }
+    if m.moved {
+        out.push((icon::ARROWS_OUT_CARDINAL.to_string(), "Moved, scaled, rotated, cropped or pinned (Inspector › Transform)"));
+    }
+    if m.animated > 0 {
+        out.push((format!("{} {}", icon::WAVE_SINE, m.animated), "Values moving by themselves (LFO, sound, beat…)"));
+    }
+    out
+}
+
+/// The badges in a row (hover each for what it means).
+pub(crate) fn layer_marks(ui: &mut egui::Ui, m: &phosphor_engine::LayerMarks) {
+    for (text, tip) in mark_list(m) {
+        ui.label(RichText::new(text).small().color(accent())).on_hover_text(tip);
+    }
+}
+
+/// Badges painted as one chip in a picture's bottom-right corner (media tiles, clip rows); returns the words for its tooltip.
+pub(crate) fn badge_chip(p: &egui::Painter, pic: egui::Rect, badges: &[(String, impl AsRef<str>)]) -> String {
+    if badges.is_empty() {
+        return String::new();
+    }
+    let text = badges.iter().map(|(b, _)| b.as_str()).collect::<Vec<_>>().join(" ");
+    let g = p.layout_no_wrap(text, egui::FontId::proportional(12.0), Color32::BLACK);
+    let at = pic.right_bottom() - egui::vec2(g.size().x + 10.0, g.size().y + 6.0);
+    p.rect_filled(egui::Rect::from_min_size(at, g.size() + egui::vec2(6.0, 2.0)), 3.0, accent());
+    p.galley(at + egui::vec2(3.0, 1.0), g, Color32::BLACK);
+    badges.iter().map(|(b, w)| format!("\n{b} {}", w.as_ref())).collect()
+}
+
 /// Drag payload from the media bin.
 #[derive(Clone, Copy)]
 pub struct MediaDrag(pub usize);
@@ -361,9 +403,11 @@ pub(crate) fn layer_card(
                         }
                     }
                     choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
-                    if let Some(r) = fx_badge(ui, &layer.effects, &mut layer.fx_bypass) {
+                    let marks = layer.marks();
+                    if let Some(r) = super::groups::fx_count_badge(ui, marks.clip_fx + marks.fx, &mut layer.fx_bypass) {
                         map_menu(ui, &r, ControlTarget::LayerFxBypass(layer.id));
                     }
+                    layer_marks(ui, &marks);
                 });
             });
         });

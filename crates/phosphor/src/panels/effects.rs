@@ -8,6 +8,8 @@ pub enum FxAction {
     Browse(Option<egui::Pos2>),
     CopyChain,
     PasteChain,
+    /// An effect dragged in from the Effects panel.
+    Add(&'static str),
 }
 
 /// Drag payload for reordering effects (distinct from the layer payload).
@@ -21,6 +23,29 @@ pub(crate) fn effects_editor(ui: &mut egui::Ui, effects: &mut Vec<EffectState>, 
 
 /// `effects_editor` with its own heading and words for when it's empty (a clip's or file's chain).
 pub(crate) fn effects_list(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mut Vec<EffectState>, clipboard_len: usize) -> Option<FxAction> {
+    let top = ui.cursor().min;
+    let action = effects_list_body(ui, heading, empty, effects, clipboard_len);
+    // An effect carried from the Effects panel drops anywhere on the list (it's added at the end).
+    if !egui::DragAndDrop::has_payload_of_type::<crate::explorer::PaletteDrag>(ui.ctx()) {
+        return action;
+    }
+    let area = egui::Rect::from_min_max(top, egui::pos2(ui.max_rect().right(), ui.cursor().min.y.max(top.y + 40.0)));
+    let zone = ui.interact(area, ui.id().with(("fx_drop", heading)), Sense::hover());
+    let carried = zone.dnd_hover_payload::<crate::explorer::PaletteDrag>().and_then(|p| p.effect);
+    let p = ui.painter();
+    if carried.is_some() {
+        p.rect_filled(area, 6.0, accent().gamma_multiply(0.12));
+        p.rect_stroke(area, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
+    } else {
+        p.rect_stroke(area, 6.0, Stroke::new(1.0, accent().gamma_multiply(0.5)), StrokeKind::Outside);
+    }
+    match crate::ui::drop_payload::<crate::explorer::PaletteDrag>(&zone).and_then(|p| p.effect) {
+        Some(id) => Some(FxAction::Add(id)),
+        None => action,
+    }
+}
+
+fn effects_list_body(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mut Vec<EffectState>, clipboard_len: usize) -> Option<FxAction> {
     let mut action: Option<FxAction> = None;
     crate::ui::toolbar(ui, |ui| {
         crate::ui::heading(ui, heading);
@@ -175,6 +200,7 @@ pub(crate) fn apply_fx_action(st: &mut State, target: u64, action: FxAction) {
             st.fx_clipboard = st.comp.effects(target).cloned().unwrap_or_default();
         }
         FxAction::PasteChain => append_effects(st, target, st.fx_clipboard.clone()),
+        FxAction::Add(id) => add_effect_to(st, target, id),
     }
 }
 

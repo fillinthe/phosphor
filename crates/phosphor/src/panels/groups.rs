@@ -125,7 +125,11 @@ pub(crate) fn group_card(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<eg
 
 /// "N fx" toggle: click to bypass a chain (layers and groups).
 pub(crate) fn fx_badge(ui: &mut egui::Ui, effects: &[EffectState], bypass: &mut bool) -> Option<egui::Response> {
-    let fx = effects.iter().filter(|e| e.enabled).count();
+    fx_count_badge(ui, effects.iter().filter(|e| e.enabled).count(), bypass)
+}
+
+/// `fx_badge` for `fx` effects that aren't one list (a layer's: its clip's and its own).
+pub(crate) fn fx_count_badge(ui: &mut egui::Ui, fx: usize, bypass: &mut bool) -> Option<egui::Response> {
     if fx == 0 {
         return None;
     }

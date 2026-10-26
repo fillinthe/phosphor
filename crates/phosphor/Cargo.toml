@@ -22,7 +22,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 web-time = "1"
 ehttp = "0.6"
 roxmltree = "0.20"
-egui-phosphor = "0.14"
+egui-phosphor = { version = "0.14", features = ["regular", "fill"] }
 ab_glyph = "0.2"
 ttf-parser = "0.25"
 epaint_default_fonts = "0.36"

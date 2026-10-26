@@ -153,12 +153,20 @@ pub fn logo(size: f32) -> egui::RichText {
     egui::RichText::new("PHOSPHOR").font(egui::FontId::new(size, egui::FontFamily::Name(LOGO_FAMILY.into()))).color(accent())
 }
 
+/// The solid icons (a filled star for a favourite): draw an `icon::` glyph with `filled_icons(size)`.
+const FILLED_ICONS: &str = "phosphor-fill";
+
+pub fn filled_icons(size: f32) -> egui::FontId {
+    egui::FontId::new(size, egui::FontFamily::Name(FILLED_ICONS.into()))
+}
+
 pub fn apply(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     // The logo's font (Orbitron Bold, OFL, assets/fonts): only for the PHOSPHOR wordmark (`logo`).
     fonts.font_data.insert(LOGO_FAMILY.into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../../assets/fonts/logo.ttf"))));
     fonts.families.insert(egui::FontFamily::Name(LOGO_FAMILY.into()), vec![LOGO_FAMILY.into()]);
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+    egui_phosphor::add_font_bytes_as_family(&mut fonts, FILLED_ICONS, egui_phosphor::Variant::Fill.font_bytes());
     ctx.set_fonts(fonts);
     ctx.all_styles_mut(|s| {
         use egui::{FontId, TextStyle};

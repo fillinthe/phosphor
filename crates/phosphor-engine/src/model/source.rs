@@ -251,6 +251,18 @@ fn brings_effects() -> bool {
     true
 }
 
+impl ClipSettings {
+    /// Plays other than plain forward at normal speed (speed, direction or BPM sync changed).
+    pub fn changes_playback(&self) -> bool {
+        (self.rate > 0.0 && (self.rate - 1.0).abs() > 0.005) || self.direction != crate::PlayDirection::Forward || self.sync_beats > 0.0
+    }
+
+    /// Trimmed: an In / Out point or a beat loop instead of the whole movie.
+    pub fn is_cut(&self) -> bool {
+        self.loop_in > 0.001 || (self.loop_out > 0.0 && self.loop_out < 0.999) || self.loop_beats > 0.0
+    }
+}
+
 impl Clip {
     pub fn is_empty(&self) -> bool {
         self.source == SourceSpec::None
