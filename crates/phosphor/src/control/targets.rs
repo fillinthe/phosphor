@@ -39,6 +39,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::SliceOpacity(id) => comp.slice(*comp.slices_reached(*id).first()?)?.opacity,
         ControlTarget::SliceEnabled(id) => on(comp.slice(*comp.slices_reached(*id).first()?)?.enabled),
         ControlTarget::MaskTransform { mask, part } => comp.mask(*mask)?.transform.unit(*part as usize),
+        ControlTarget::SliceTransform { slice, part } => comp.slice(*slice)?.transform.unit(*part as usize),
         ControlTarget::Fixture { fixture, param } => comp.dmx.fixtures.iter().find(|f| f.id == *fixture)?.param(*param)?,
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
@@ -205,6 +206,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::MaskTransform { mask, part } => {
             if let Some(m) = comp.mask_mut(*mask) {
                 m.transform.set_unit(*part as usize, v);
+            }
+        }
+        ControlTarget::SliceTransform { slice, part } => {
+            if let Some(s) = comp.slice_mut(*slice) {
+                s.transform.set_unit(*part as usize, v);
             }
         }
         ControlTarget::LayerCorner { layer, point } => {
@@ -409,6 +415,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         for s in &o.mapping.surfaces {
             out.push((ControlTarget::SliceOpacity(s.id), format!("{} · {} · opacity", o.name, s.name)));
             out.push((ControlTarget::SliceEnabled(s.id), format!("{} · {} · on/off", o.name, s.name)));
+            for (i, part) in phosphor_engine::mapping::ShapeTransform::PARTS.iter().enumerate() {
+                out.push((ControlTarget::SliceTransform { slice: s.id, part: i as u8 }, format!("{} · {} · {}", o.name, s.name, part.name.to_lowercase())));
+            }
             effects(&format!("{} · {}", o.name, s.name), &s.effects, &mut out);
         }
         for m in &o.mapping.masks {
@@ -497,9 +506,10 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerEnabled(id) => format!("/phosphor/layer/{id}/on"),
         ControlTarget::SliceOpacity(id) => format!("/phosphor/slice/{id}/opacity"),
         ControlTarget::SliceEnabled(id) => format!("/phosphor/slice/{id}/on"),
-        ControlTarget::MaskTransform { mask, part } => {
+        ControlTarget::MaskTransform { mask: id, part } | ControlTarget::SliceTransform { slice: id, part } => {
+            let kind = if matches!(target, ControlTarget::MaskTransform { .. }) { "mask" } else { "slice" };
             let name = phosphor_engine::mapping::ShapeTransform::PARTS.get(*part as usize).map_or("part", |p| p.name);
-            format!("/phosphor/mask/{mask}/{}", name.to_lowercase().replace(' ', "_"))
+            format!("/phosphor/{kind}/{id}/{}", name.to_lowercase().replace(' ', "_"))
         }
         ControlTarget::Fixture { fixture, param } => match phosphor_engine::Fixture::PARAMS.get(*param as usize) {
             Some(name) => format!("/phosphor/light/{fixture}/{}", name.replace(' ', "_")),

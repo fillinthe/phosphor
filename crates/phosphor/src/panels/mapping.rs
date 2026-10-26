@@ -119,6 +119,24 @@ fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut imp
     changed
 }
 
+/// A slice or mask moved by its transform: where it is right now, dashed (its handles stay on the shape as drawn).
+/// Repaints while it's animated.
+fn now_outline<S: phosphor_engine::mapping::CanvasShape>(ui: &egui::Ui, frame: egui::Rect, t: &phosphor_engine::mapping::ShapeTransform, mut shape: S, outline: impl Fn(&S) -> Vec<[f32; 2]>, color: Color32) {
+    if t.is_identity() {
+        return;
+    }
+    t.apply(&mut shape, &crate::ui::mod_inputs(ui), frame.width() / frame.height().max(1.0));
+    let to_screen = |p: [f32; 2]| egui::pos2(frame.left() + p[0] * frame.width(), frame.top() + p[1] * frame.height());
+    let mut line: Vec<egui::Pos2> = outline(&shape).into_iter().map(to_screen).collect();
+    if let Some(first) = line.first().copied() {
+        line.push(first);
+        ui.painter().extend(egui::Shape::dashed_line(&line, Stroke::new(1.5, color), 6.0, 4.0));
+    }
+    if t.is_animated() {
+        ui.ctx().request_repaint();
+    }
+}
+
 /// A side handle of the transform box: a short bar along that side.
 fn side_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, upright: bool, frame: egui::Rect, color: Color32, delta: &mut [f32; 2]) -> egui::Response {
     let size = if upright { egui::vec2(8.0, 22.0) } else { egui::vec2(22.0, 8.0) };
@@ -149,6 +167,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         let base = if s.enabled { accent() } else { Color32::GRAY };
         let line = if is_selected { Stroke::new(2.0, base) } else { Stroke::new(1.0, base.gamma_multiply(0.55)) };
         let id = ui.id().with(("surface", s.id));
+        now_outline(ui, frame, &s.transform, s.clone(), |s| s.outline(12), base);
         // Outline: the corner quad, the curved edges, or the mesh's curved grid lines.
         match &s.mesh {
             Some(m) => {
@@ -376,19 +395,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
         if outline.len() >= 2 {
             ui.painter().add(egui::Shape::closed_line(outline, Stroke::new(if is_selected { 2.0 } else { 1.0 }, color)));
         }
-        // Moved or animated by its transform: where it is right now, dashed (the points above are the drawn shape).
-        if !m.transform.is_identity() {
-            let mut now = placed.clone();
-            m.transform.apply(&mut now, &crate::ui::mod_inputs(ui), frame.width() / frame.height().max(1.0));
-            let mut line: Vec<egui::Pos2> = now.outline().iter().map(|p| to_screen(*p)).collect();
-            if let Some(first) = line.first().copied() {
-                line.push(first);
-                ui.painter().extend(egui::Shape::dashed_line(&line, Stroke::new(1.5, color), 6.0, 4.0));
-            }
-            if m.transform.is_animated() {
-                ui.ctx().request_repaint();
-            }
-        }
+        now_outline(ui, frame, &m.transform, placed.clone(), phosphor_engine::mapping::Mask::outline, color);
         let n = out.len().max(1) as f32;
         let centre = out.iter().fold([0.0, 0.0], |a, p| [a[0] + p[0] / n, a[1] + p[1] / n]);
         let mut d = [0.0, 0.0];
@@ -1038,6 +1045,8 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     ui.horizontal(|ui| {
         Level::percent(&mut s.opacity, "Opacity").default(1.0).target(ControlTarget::SliceOpacity(s.id)).show(ui);
     });
+    let sid = s.id;
+    shape_transform_editor(ui, &mut s.transform, |part| ControlTarget::SliceTransform { slice: sid, part });
     ui.horizontal(|ui| {
         if s.edges.is_none() {
             Level::range(&mut s.feather, 0.0, 0.5, "Soft edge").default(0.0).show(ui);
@@ -1249,7 +1258,8 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
         .response
         .on_hover_text("Where the fade sits: centred on the outline, all inside the shape, or all outside it");
     }
-    shape_transform_editor(ui, &mut m.transform, |part| ControlTarget::MaskTransform { mask: m.id, part });
+    let mid = m.id;
+    shape_transform_editor(ui, &mut m.transform, |part| ControlTarget::MaskTransform { mask: mid, part });
 }
 
 /// A shape's animatable transform (position, scale, rotation) as sliders: each one can be mapped, modulated (LFO,

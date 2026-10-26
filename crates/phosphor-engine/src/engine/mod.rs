@@ -771,9 +771,9 @@ impl Engine {
                 continue;
             }
             // Its mapping, or the comp it shows as its program (one full-size slice).
-            let mapping = o.effective_mapping();
             let (ow, oh) = o.size((w, h));
             let (ow, oh) = (ow.max(16), oh.max(16));
+            let mapping = mapping::Mapping::animated(o.effective_mapping(), mods, ow as f32 / oh as f32);
             let slot = self.output_targets.entry(o.id).or_insert(None);
             Target::ensure(slot, &device, "output", ow, oh);
             // Smooth edges: everything below draws at twice the size; `finish_outputs` scales it down.

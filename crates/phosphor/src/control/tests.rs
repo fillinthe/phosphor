@@ -355,6 +355,14 @@ fn mask_transforms_are_controls() {
     assert_eq!(get_target(&comp, &x), Some(0.75));
     assert_eq!(default_osc_address(&turn), format!("/phosphor/mask/{mid}/rotation"));
     assert!(all_targets(&comp).iter().any(|(t, name)| *t == x && name.ends_with("position x")));
+    // Slices: the same five values.
+    let sid = comp.new_id();
+    comp.outputs.iter_mut().find(|o| o.id == out).unwrap().mapping.add_surface(sid);
+    let sx = ControlTarget::SliceTransform { slice: sid, part: 2 };
+    set_target(&mut comp, &sx, 1.0, &mut deferred);
+    assert_eq!(comp.slice(sid).unwrap().transform.scale_x, 4.0);
+    assert_eq!(default_osc_address(&sx), format!("/phosphor/slice/{sid}/scale_x"));
+    assert!(all_targets(&comp).iter().any(|(t, _)| *t == sx));
 }
 
 #[test]

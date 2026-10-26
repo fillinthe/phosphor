@@ -796,3 +796,26 @@ fn a_mask_transform_moves_it_on_the_output() {
     comp.outputs[0].mapping.masks[0].transform.x = 0.5;
     assert!(green_at(&mut engine, &comp, 0.25) > 200 && green_at(&mut engine, &comp, 0.75) < 30, "moved: the right half is hidden");
 }
+
+/// A slice's transform moves its picture on the output (so it can be animated): the slice moves to the right half.
+#[test]
+fn a_slice_transform_moves_its_picture() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, next_id: 100, ..Default::default() };
+    let mut l = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    l.generator_values = vec![0.0, 1.0, 0.0];
+    comp.layers.push(l);
+    let out = comp.add_output();
+    let sid = comp.new_id();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    o.mapping.enabled = true;
+    o.mapping.add_surface(sid).corners = [[0.0, 0.0], [0.5, 0.0], [0.5, 1.0], [0.0, 1.0]];
+    let green_at = |engine: &mut Engine, comp: &Composition, x: f32| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output_of(out).expect("output");
+        px[((h / 2 * w + (x * w as f32) as u32) * 4 + 1) as usize]
+    };
+    assert!(green_at(&mut engine, &comp, 0.25) > 200 && green_at(&mut engine, &comp, 0.75) < 30, "on the left");
+    comp.outputs[0].mapping.surfaces[0].transform.x = 0.5;
+    assert!(green_at(&mut engine, &comp, 0.25) < 30 && green_at(&mut engine, &comp, 0.75) > 200, "moved right");
+}
