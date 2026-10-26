@@ -311,6 +311,18 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             }
             p.rect_filled(fill, 6.0, c.gamma_multiply(0.85));
             p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
+            if w.motion.is_some() {
+                // Where it's moving right now.
+                let line = if w.kind == WidgetKind::Fader {
+                    let y = rect.bottom() - rect.height() * w.live;
+                    [egui::pos2(rect.left() + 3.0, y), egui::pos2(rect.right() - 3.0, y)]
+                } else {
+                    let x = rect.left() + rect.width() * w.live;
+                    [egui::pos2(x, rect.top() + 3.0), egui::pos2(x, rect.bottom() - 3.0)]
+                };
+                p.line_segment(line, Stroke::new(2.5, Color32::WHITE));
+                p.ctx().request_repaint();
+            }
             let anchor = if w.kind == WidgetKind::Fader { (rect.center_top() + egui::vec2(0.0, 4.0), egui::Align2::CENTER_TOP) } else { (rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER) };
             p.text(anchor.0, anchor.1, &w.label, font.clone(), Color32::WHITE);
             if !edit {
@@ -517,6 +529,13 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                 });
             }
         } else {
+            if matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider) {
+                crate::ui::toolbar(ui, |ui| {
+                    ui.label("Moves by itself");
+                    crate::ui::mod_button(ui, &mut w.motion);
+                });
+                help(ui, "An LFO, the sound or the beat moves it around where you set it, and its targets follow (the white line shows where it is).");
+            }
             crate::ui::heading(ui, axis);
             help(ui, "Each target gets this widget's value, rescaled to its from–to range.");
             binding_list(ui, ("bindings", id), targets, &mut w.bindings);

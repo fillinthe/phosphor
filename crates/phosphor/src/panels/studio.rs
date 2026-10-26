@@ -832,7 +832,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
         } else if let Some(m) = o.mapping.masks.iter_mut().find(|m| Some(m.id) == *selected_surface) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::SELECTION).color(MASK_COLOR));
-                toggle(ui, &mut m.enabled, "ON");
+                crate::ui::toggle_mapped(ui, &mut m.enabled, "ON", ControlTarget::MaskEnabled(m.id));
                 ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(f32::INFINITY));
             });
             hint(ui, format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));

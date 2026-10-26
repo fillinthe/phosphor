@@ -111,6 +111,12 @@ pub struct SurfaceWidget {
     /// Computed value: the formula, and the controls it reads (`a`, `b`, `c`… in order).
     pub formula: String,
     pub inputs: Vec<super::ControlTarget>,
+    /// Fader / slider: moves by itself (LFO, sound, beat…) around where it's set; its targets follow.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motion: Option<crate::Modulation>,
+    /// Where a moving fader is right now (what its targets got).
+    #[serde(skip)]
+    pub live: f32,
 }
 
 /// One bar of a multi-slider: its value and what it drives.
@@ -126,7 +132,7 @@ pub const DEFAULT_BARS: usize = 8;
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None, bars: Vec::new(), formula: String::new(), inputs: Vec::new() }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None, bars: Vec::new(), formula: String::new(), inputs: Vec::new(), motion: None, live: 0.0 }
     }
 }
 

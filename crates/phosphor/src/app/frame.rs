@@ -128,6 +128,7 @@ impl PhosphorApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.state.run_timeline_sound(now);
         self.state.run_computed(now);
+        self.state.run_surface_motion(now);
         // Layer names for settings that pick a layer (mask layers), rebuilt only when they change.
         let id = egui::Id::new(crate::ui::LAYER_NAMES);
         let names = ctx.data(|d| d.get_temp::<std::sync::Arc<Vec<String>>>(id));

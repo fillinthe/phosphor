@@ -1049,7 +1049,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
     shape_transform_editor(ui, &mut s.transform, |part| ControlTarget::SliceTransform { slice: sid, part });
     ui.horizontal(|ui| {
         if s.edges.is_none() {
-            Level::range(&mut s.feather, 0.0, 0.5, "Soft edge").default(0.0).show(ui);
+            Level::range(&mut s.feather, 0.0, phosphor_engine::mapping::SLICE_FEATHER_MAX, "Soft edge").default(0.0).modulation(&mut s.feather_mod).target(ControlTarget::SliceFeather(sid)).show(ui);
         }
     });
     crate::ui::toolbar(ui, |ui| {
@@ -1244,11 +1244,11 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
 /// A mask's settings: invert, smooth curve, soft edge.
 pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping::Mask) {
     crate::ui::toolbar(ui, |ui| {
-        toggle(ui, &mut m.invert, "Invert").on_hover_text("Black out everything outside the shape instead");
+        crate::ui::toggle_mapped(ui, &mut m.invert, "Invert", ControlTarget::MaskInvert(m.id)).on_hover_text("Black out everything outside the shape instead");
         toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point for a sharp corner or bezier handles)");
     });
     ui.horizontal(|ui| {
-        Level::range(&mut m.feather, 0.0, 0.2, "Soft edge").default(0.0).tip("Fade the mask's edge (0 = hard)").show(ui);
+        Level::range(&mut m.feather, 0.0, phosphor_engine::mapping::MASK_FEATHER_MAX, "Soft edge").default(0.0).modulation(&mut m.feather_mod).target(ControlTarget::MaskFeather(m.id)).tip("Fade the mask's edge (0 = hard)").show(ui);
     });
     if m.feather > 0.0 {
         ui.horizontal(|ui| {

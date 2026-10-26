@@ -955,3 +955,35 @@ fn menu_items_are_mappable_targets() {
     crate::control::set_target(&mut comp, &target, 1.0, &mut out);
     assert_eq!(out, vec![crate::control::Deferred::Menu("AddLayer".into())]);
 }
+
+#[test]
+fn soft_edges_mask_switches_and_colour_are_controls() {
+    let mut comp = Composition::default();
+    let out = comp.add_output();
+    let (mid, sid) = (comp.new_id(), comp.new_id());
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    o.mapping.add_mask(mid);
+    o.mapping.add_surface(sid);
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &ControlTarget::MaskFeather(mid), 0.5, &mut deferred);
+    set_target(&mut comp, &ControlTarget::SliceFeather(sid), 1.0, &mut deferred);
+    set_target(&mut comp, &ControlTarget::MaskInvert(mid), 1.0, &mut deferred);
+    set_target(&mut comp, &ControlTarget::MaskEnabled(mid), 0.0, &mut deferred);
+    let m = comp.mask(mid).unwrap();
+    assert!((m.feather - 0.1).abs() < 1e-6 && m.invert && !m.enabled, "{m:?}");
+    assert_eq!(comp.slice(sid).unwrap().feather, phosphor_engine::mapping::SLICE_FEATHER_MAX);
+    assert_eq!(get_target(&comp, &ControlTarget::MaskFeather(mid)), Some(0.5));
+    // Colour of the output and of the slice: brightness centred, gamma on a log scale.
+    let bright = ControlTarget::Color { owner: out, part: 0 };
+    let gamma = ControlTarget::Color { owner: sid, part: 2 };
+    assert_eq!(get_target(&comp, &bright), Some(0.5));
+    set_target(&mut comp, &bright, 1.0, &mut deferred);
+    set_target(&mut comp, &gamma, 1.0, &mut deferred);
+    assert_eq!(comp.outputs.iter().find(|o| o.id == out).unwrap().color.brightness, 1.0);
+    assert_eq!(comp.slice(sid).unwrap().color.gamma, 3.0);
+    assert_eq!(default_osc_address(&bright), format!("/phosphor/colour/{out}/brightness"));
+    let names = all_targets(&comp);
+    for t in [ControlTarget::MaskFeather(mid), ControlTarget::MaskInvert(mid), ControlTarget::SliceFeather(sid), gamma] {
+        assert!(names.iter().any(|(x, _)| *x == t), "{t:?} is in the list");
+    }
+}

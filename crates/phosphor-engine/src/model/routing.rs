@@ -267,3 +267,17 @@ mod file_on_slice_tests {
         assert!(c.show_file_on_slice(999, "x", SourceSpec::None).is_none());
     }
 }
+
+impl Composition {
+    /// The colour settings of an output or a slice (`ControlTarget::Color`).
+    pub fn color(&self, owner: u64) -> Option<&crate::ColorGrade> {
+        self.outputs.iter().find(|o| o.id == owner).map(|o| &o.color).or_else(|| self.slice(owner).map(|s| &s.color))
+    }
+
+    pub fn color_mut(&mut self, owner: u64) -> Option<&mut crate::ColorGrade> {
+        if self.outputs.iter().any(|o| o.id == owner) {
+            return self.output_mut(owner).map(|o| &mut o.color);
+        }
+        self.slice_mut(owner).map(|s| &mut s.color)
+    }
+}
