@@ -284,7 +284,7 @@ pub(crate) fn drop_payload<T: std::any::Any + Send + Sync>(r: &egui::Response) -
 
 /// Grey help text. In a row it shrinks to the space left (full text on hover) instead of
 /// overlapping its neighbours; on its own line it wraps.
-static HELP_ICONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static HELP_ICONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 /// Help sentences shown as a small (i) instead of words (the brightness menu's "Help as (i) icons").
 pub(crate) fn help_icons() -> bool {

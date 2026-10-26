@@ -58,7 +58,7 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
         crate::ui::heading(ui, "Yours");
     }
     if store.user.is_empty() {
-        hint(ui, format!("Nothing saved yet. Name the current {what} above and save it."));
+        crate::ui::help(ui, &format!("Nothing saved yet. Name the current {what} above and save it."));
     }
     let mut delete = None;
     for p in &store.user {

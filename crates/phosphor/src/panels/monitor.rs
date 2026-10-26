@@ -111,7 +111,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
         .response
         .on_hover_text("How often this preview draws a new picture (lower saves the graphics card)");
         toggle(ui, &mut cfg.xy, label(icon::CURSOR_CLICK, "XY")).on_hover_text(format!("Click or drag on the picture to set two modulators, \"Preview {n} X\" and \"Preview {n} Y\": any slider can follow them (right-click › Modulate)"));
-        hint(ui, format!("Drag the tab anywhere, or right-click it {} Detach for its own window", icon::ARROW_RIGHT));
+        help(ui, &format!("Drag the tab anywhere, or right-click it {} Detach for its own window", icon::ARROW_RIGHT));
     });
     st.monitors.insert(n, cfg);
     let rect = ui.available_rect_before_wrap();

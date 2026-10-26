@@ -61,9 +61,9 @@ impl PhosphorApp {
                                 ui.label(format!("Zip: {}", z.display()));
                             }
                             if cfg!(windows) {
-                                crate::ui::hint(ui, format!("Copy the folder (or the zip) to the other PC and run the .exe inside. First time Windows warns: More info {} Run anyway.", icon::ARROW_RIGHT));
+                                crate::ui::help(ui, &format!("Copy the folder (or the zip) to the other PC and run the .exe inside. First time Windows warns: More info {} Run anyway.", icon::ARROW_RIGHT));
                             } else {
-                                crate::ui::hint(ui, format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
+                                crate::ui::help(ui, &format!("Copy it to the other Mac and double-click. First time macOS says it can't verify it: System Settings {} Privacy & Security {} Open Anyway.", icon::ARROW_RIGHT, icon::ARROW_RIGHT));
                             }
                             crate::ui::toolbar(ui, |ui| {
                                 if crate::ui::command(ui, label_text(icon::FOLDER_OPEN, if cfg!(windows) { "Show in Explorer" } else { "Show in Finder" })).clicked() {

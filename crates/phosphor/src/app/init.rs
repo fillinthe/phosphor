@@ -12,7 +12,8 @@ impl PhosphorApp {
         theme::apply(&cc.egui_ctx);
 
         let stored = |key: &str| if bench.is_none() { cc.storage.and_then(|s| s.get_string(key)) } else { None };
-        let help_icons = stored(KEY_HELP_ICONS).is_some_and(|v| v == "1") || std::env::var_os("PHOSPHOR_HELP_ICONS").is_some();
+        // (i) icons unless you chose words (the brightness menu): the room goes to the controls.
+        let help_icons = stored(KEY_HELP_ICONS).is_none_or(|v| v == "1") || std::env::var_os("PHOSPHOR_HELP_ICONS").is_some();
         let tooltips_off = stored(KEY_TOOLTIPS).is_some_and(|v| v == "0");
         let accent = stored(KEY_ACCENT).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
         #[cfg(not(target_arch = "wasm32"))]

@@ -93,6 +93,8 @@ pub(crate) struct RowOut {
     pub row_midi: Option<(u64, RowAct)>,
     /// A clip's file starred / unstarred in Media.
     pub favorite: Option<(u64, usize)>,
+    /// Stop this layer's clip (`MASTER_ID`: every layer's).
+    pub stop: Option<u64>,
 }
 
 /// Tempo (tap, bpm, resync, beat dots, MIDI clock, Link, AUTO), the launch settings, the bank and columns.
@@ -194,7 +196,15 @@ pub(crate) fn transport_bar(ui: &mut egui::Ui, st: &mut State) {
 pub(crate) fn column_headers(ui: &mut egui::Ui, grid: &Grid, head_w: f32, out: &mut RowOut) {
     // Column headers trigger whole columns.
     ui.horizontal(|ui| {
-        ui.allocate_exact_size(egui::vec2(head_w, 22.0), Sense::hover());
+        // Stop every layer (Resolume's clear-all): the space over the layer strips.
+        let all = ControlTarget::StopLayer(phosphor_engine::MASTER_ID);
+        let stop = command_sized(ui, label(icon::STOP, "Stop all"), egui::vec2((head_w - ui.spacing().item_spacing.x).max(40.0), CONTROL_H))
+            .on_hover_text("Stop every layer's clip (launch fade) · right-click to map it");
+        if stop.clicked() {
+            out.stop = Some(phosphor_engine::MASTER_ID);
+        }
+        mapped_badge(ui, &stop, &all);
+        stop.right_menu(|ui| learn_items(ui, &all));
         for c in 0..grid.cols {
             let keyed = c / CLIP_PAGE_SIZE == grid.bank;
             let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
@@ -361,6 +371,9 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
 
 /// Does what the cells asked: drops, plays, selection, row menus, releases.
 pub(crate) fn apply_row_out(st: &mut State, out: RowOut, now: f64) {
+    if let Some(id) = out.stop {
+        st.stop_clips(id, now);
+    }
     if let Some((layer, c)) = out.favorite {
         apply_clip_act(st, layer, c, ClipAct::Favorite, now);
     }

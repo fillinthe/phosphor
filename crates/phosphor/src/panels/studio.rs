@@ -877,7 +877,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
                 crate::ui::toggle_mapped(ui, &mut m.enabled, "ON", ControlTarget::MaskEnabled(m.id));
                 ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(f32::INFINITY));
             });
-            hint(ui, format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
+            help(ui, &format!("{} points · drag them on the canvas; the + between two points adds one; right-click a point to remove it, make it a sharp corner or give it bezier handles", m.points.len()));
             mask_settings(ui, m);
             let mid = m.id;
             super::mapping::mask_attach_row(ui, &mut o.mapping, mid);
@@ -898,7 +898,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             #[cfg(not(target_arch = "wasm32"))]
             super::projector::projector_settings(ui, o, projectors);
             ui.separator();
-            hint(ui, format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
+            help(ui, &format!("{} slices, {} masks. Select one on the left or click it on the canvas.", o.mapping.surfaces.len(), o.mapping.masks.len()));
         }
     });
     if let Some((sid, a)) = fx_action {

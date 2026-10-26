@@ -28,6 +28,8 @@ pub enum Deferred {
     Slider(u64, f32),
     /// Switch an output to this layout (`ControlTarget::Layout`).
     Layout(u64),
+    /// Stop a layer's clip (`MASTER_ID` = every layer's).
+    Stop(u64),
 }
 
 /// Sent instead of a value when a pad or key press should flip an on/off control.

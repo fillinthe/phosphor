@@ -137,7 +137,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             }
             None => {
                 let verb = if st.explorer.sources { "use it" } else { "add it" };
-                crate::ui::hint(ui, format!("Click to pick · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
+                crate::ui::help(ui, &format!("Click to pick · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
             }
         }
     });
@@ -674,7 +674,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Shader Editor").strong().size(16.0));
             crate::ui::help(ui, "Write your own effects and generators in WGSL. They compile as you type and show up in the Effects explorer.");
-            crate::ui::hint(ui, format!("Start from a template (New from template…), with + Effect, or right-click any effect in the explorer {} Edit a copy.", icon::ARROW_RIGHT));
+            crate::ui::help(ui, &format!("Start from a template (New from template…), with + Effect, or right-click any effect in the explorer {} Edit a copy.", icon::ARROW_RIGHT));
         });
         return;
     };

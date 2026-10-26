@@ -1046,7 +1046,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
         });
     }
     ui.horizontal(|ui| {
-        Level::percent(&mut s.opacity, "Opacity").default(1.0).target(ControlTarget::SliceOpacity(s.id)).show(ui);
+        Level::percent(&mut s.opacity, "Opacity").default(1.0).target(ControlTarget::SliceOpacity(s.id)).switch(&mut s.enabled, Some(ControlTarget::SliceEnabled(s.id))).show(ui);
     });
     let sid = s.id;
     shape_transform_editor(ui, &mut s.transform, |part| ControlTarget::SliceTransform { slice: sid, part });
@@ -1251,7 +1251,8 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
         toggle(ui, &mut m.smooth, "Smooth").on_hover_text("A smooth curve through the points instead of straight lines (+ between points adds one; right-click a point for a sharp corner or bezier handles)");
     });
     ui.horizontal(|ui| {
-        Level::percent(&mut m.opacity, "Opacity").default(1.0).tip("How dark it makes what it covers (100% = black)").show(ui);
+        let mid = m.id;
+        Level::percent(&mut m.opacity, "Opacity").default(1.0).tip("How dark it makes what it covers (100% = black)").switch(&mut m.enabled, Some(ControlTarget::MaskEnabled(mid))).show(ui);
     });
     ui.horizontal(|ui| {
         Level::range(&mut m.feather, 0.0, phosphor_engine::mapping::MASK_FEATHER_MAX, "Soft edge").default(0.0).modulation(&mut m.feather_mod).target(ControlTarget::MaskFeather(m.id)).tip("Fade the mask's edge (0 = hard)").show(ui);
