@@ -752,7 +752,10 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         paint_texture(ui.painter(), t, frame);
     }
     ui.painter().rect_stroke(frame, 0.0, Stroke::new(1.0, Color32::from_gray(70)), StrokeKind::Outside);
-    mapping_handles(ui, frame, &mut o.mapping, selected_surface, true);
+    // Handles stay on the canvas (the transform box moves inside a slice at the edge instead of onto the panel).
+    let mut canvas = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    canvas.set_clip_rect(rect.intersect(ui.clip_rect()));
+    mapping_handles(&mut canvas, frame, &mut o.mapping, selected_surface, true);
 
     ui.add_space(4.0);
     let mut remove = None;

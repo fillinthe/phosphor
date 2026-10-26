@@ -18,7 +18,10 @@ impl PhosphorApp {
         if let Some((w, h)) = run.cfg.window.take() {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
         }
-        if let Some(id) = run.cfg.select.take_if(|_| now - started >= 0.5) {
+        // (After any --quick actions: they can make what's selected, like slicefx's slices.)
+        if run.cfg.quick.is_none()
+            && let Some(id) = run.cfg.select.take_if(|_| now - started >= 0.5)
+        {
             self.state.selected = Some(id);
             // (A slice's or mask's id selects it on the mapping canvas.)
             if self.state.comp.outputs.iter().any(|o| o.mapping.surfaces.iter().any(|s| s.id == id) || o.mapping.masks.iter().any(|m| m.id == id)) {
