@@ -12,9 +12,9 @@ use phosphor_engine::{Composition, Engine, Mapping, ModInputs, wgpu};
 pub(crate) use files::file_drag_point;
 
 /// `State::preview_tex` for code that has split `State` into fields.
-pub(crate) fn preview_lookup(keys: &[String], textures: &[(egui::TextureId, (u32, u32))], key: &str) -> Option<egui::TextureId> {
+pub(crate) fn preview_lookup(keys: &[String], textures: &[Option<(egui::TextureId, (u32, u32), bool)>], key: &str) -> Option<egui::TextureId> {
     let i = keys.iter().position(|k| k == key)?;
-    textures.get(i).map(|(t, _)| *t)
+    textures.get(i).copied().flatten().filter(|(_, _, ready)| *ready).map(|(t, ..)| t)
 }
 pub use quick::{Quick, quick_menu, quick_row};
 use crate::audio::AudioInput;
@@ -339,7 +339,8 @@ pub struct State {
     pub(crate) preview_keys: Vec<String>,
     /// When stills were last refreshed.
     preview_refreshed: f64,
-    pub(crate) preview_textures: Vec<(egui::TextureId, (u32, u32))>,
+    /// Preview i's texture, its size, and whether it shows what was asked for now.
+    pub(crate) preview_textures: Vec<Option<(egui::TextureId, (u32, u32), bool)>>,
     /// A panel to bring to the front (set by explorer actions and the palette).
     pub open_tab: Option<Tab>,
     /// The panel browser window is open (View › Panel Browser…).

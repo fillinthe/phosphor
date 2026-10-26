@@ -512,19 +512,29 @@ impl PhosphorApp {
                 }
                 keep
             });
-            // Explorer / editor previews, one texture slot per index.
+            // Explorer / editor previews: texture slot i is preview i (a slot not ready yet keeps its place, so the tiles
+            // after it don't show their neighbour's picture), and only shows once it holds what was asked for.
+            if preview_textures.len() < keys.len() {
+                preview_textures.resize(keys.len(), None);
+            }
             for i in 0..keys.len() {
-                let Some(t) = engine.preview(i) else { continue };
+                let slot = &mut preview_textures[i];
+                let Some(t) = engine.preview(i) else {
+                    if let Some((_, _, ready)) = slot {
+                        *ready = false;
+                    }
+                    continue;
+                };
                 let key = (t.width, t.height);
-                match preview_textures.get_mut(i) {
-                    Some((_, k)) if *k == key => {}
-                    Some((id, k)) => {
+                match slot {
+                    Some((_, k, ready)) if *k == key => *ready = true,
+                    Some((id, k, ready)) => {
                         renderer.update_egui_texture_from_wgpu_texture(&rs.device, &t.view, linear, *id);
-                        *k = key;
+                        (*k, *ready) = (key, true);
                     }
                     None => {
                         let id = renderer.register_native_texture(&rs.device, &t.view, linear);
-                        preview_textures.push((id, key));
+                        *slot = Some((id, key, true));
                     }
                 }
             }

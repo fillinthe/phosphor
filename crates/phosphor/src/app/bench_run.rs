@@ -589,6 +589,12 @@ impl PhosphorApp {
                 self.welcome_open = true;
                 continue;
             }
+            if let Some(cat) = name.strip_prefix("explorer:") {
+                // The Effects panel on one category (checking its preview tiles).
+                self.state.explorer.category = cat.to_string();
+                println!("QUICK explorer: {cat}");
+                continue;
+            }
             if name == "panels" {
                 // A panel of your own (with a fader on it) and the panel browser.
                 let page = self.state.comp.surface.add_page();

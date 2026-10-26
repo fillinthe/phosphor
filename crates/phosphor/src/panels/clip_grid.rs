@@ -58,7 +58,7 @@ pub(crate) struct CellCtx<'a> {
     pub clip_cells: &'a mut Vec<(egui::Rect, u64, usize)>,
     pub preview_wants: &'a mut Vec<(String, phosphor_engine::PreviewItem, bool)>,
     pub preview_keys: &'a mut Vec<String>,
-    pub preview_textures: &'a mut Vec<(egui::TextureId, (u32, u32))>,
+    pub preview_textures: &'a mut Vec<Option<(egui::TextureId, (u32, u32), bool)>>,
     pub also_clips: &'a mut Vec<(u64, usize)>,
     pub ctx: egui::Context,
 }
