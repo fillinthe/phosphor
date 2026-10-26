@@ -278,6 +278,20 @@ fn show_surface(engine: &mut Engine, held: &mut Held, id: u64, outgoing: bool, p
 
 impl MediaManager {
     /// Loads newly assigned media and drops media for layers whose source changed.
+    /// Stops a layer's live inputs that draw straight onto it (screen capture, Syphon, NDI): one place for every
+    /// source change.
+    fn stop_live_inputs(&mut self, id: u64) {
+        #[cfg(target_os = "macos")]
+        {
+            self.captures.remove(&id);
+            self.syphon.remove(&id);
+            self.syphon_waiting.remove(&id);
+        }
+        #[cfg(any(target_os = "macos", windows))]
+        self.ndi.remove(&id);
+        let _ = id;
+    }
+
     pub fn sync(&mut self, comp: &Composition, engine: &mut Engine) {
         for layer in &comp.layers {
             if self.loaded.get(&layer.id) == Some(&layer.source) {
@@ -291,17 +305,13 @@ impl MediaManager {
                 if let Some(p) = self.players.remove(&layer.id) {
                     self.outgoing.insert(layer.id, p);
                 }
+                // Live inputs stop now: the fade goes from their last frame. (Left running, a screen capture kept
+                // drawing over the new clip: it flickered between the two.)
+                self.stop_live_inputs(layer.id);
             } else if !(matches!(self.loaded.get(&layer.id), Some(SourceSpec::Text(_))) && matches!(layer.source, SourceSpec::Text(_))) {
                 // (Retyped text keeps showing the old words until the new picture is ready: no flash.)
                 engine.clear_media(layer.id);
-                #[cfg(target_os = "macos")]
-                self.syphon.remove(&layer.id);
-                #[cfg(target_os = "macos")]
-                self.syphon_waiting.remove(&layer.id);
-                #[cfg(target_os = "macos")]
-                self.captures.remove(&layer.id);
-                #[cfg(any(target_os = "macos", windows))]
-                self.ndi.remove(&layer.id);
+                self.stop_live_inputs(layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.players.remove(&layer.id);
                 #[cfg(not(target_arch = "wasm32"))]
