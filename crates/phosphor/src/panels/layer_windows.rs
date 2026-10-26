@@ -85,8 +85,8 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                             if m.text_file.get() {
                                 text_file = Some(id);
                             }
-                            if let Some(a) = fx {
-                                fx_actions.push((id, a));
+                            if let Some(chain_and_action) = fx {
+                                fx_actions.push(chain_and_action);
                             }
                             if let Some(t) = seek {
                                 seeks.push((id, t));

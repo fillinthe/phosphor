@@ -93,7 +93,6 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
             }
         });
         let current = layer.clip_settings();
-        let layer_effects = current.effects.clone();
         let lid = layer.id;
         let k = layer.clip_slot_mut(c);
         crate::ui::toolbar(ui, |ui| {
@@ -105,19 +104,20 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
         }
         let mut own = k.own.is_some();
         if crate::ui::toggle(ui, &mut own, "Keeps its own settings")
-            .on_hover_text("Speed, direction, loop, BPM sync and effects are saved with this clip and come back when it's triggered (starts from the layer's current settings)")
+            .on_hover_text("Speed, direction, loop and BPM sync are saved with this clip and come back when it's triggered (starts from the layer's current settings). Its effects always are: Clip effects in the Inspector")
             .changed()
         {
             k.own = own.then_some(current);
         }
-        if let Some(o) = &mut k.own {
-            let mut with = o.with_effects;
-            if crate::ui::toggle(ui, &mut with, "Brings its effects")
-                .on_hover_text("When it plays, the layer's effects become this clip's (they're saved with it). Off = the clip leaves the layer's effects as they are")
+        // Projects from before clips had their own effects: such a clip swaps the layer's whole chain.
+        if let Some(o) = k.own.as_mut().filter(|o| o.with_effects) {
+            let mut with = true;
+            if crate::ui::toggle(ui, &mut with, "Swaps the layer's effects")
+                .on_hover_text("An older clip: when it plays, the layer's effects become the ones saved with it. Off = it leaves the layer's effects alone (put effects that belong to the clip in Clip effects)")
                 .changed()
             {
-                o.with_effects = with;
-                o.effects = if with { layer_effects } else { Vec::new() };
+                o.with_effects = false;
+                o.effects.clear();
             }
         }
         ui.separator();
@@ -146,13 +146,18 @@ pub(crate) fn apply_clip_act(st: &mut State, layer: u64, c: usize, act: ClipAct,
             let Some(l) = st.comp.layer_mut(layer) else { return };
             let (src, vals, mods, name, id) = (l.source.clone(), l.generator_values.clone(), l.generator_mods.clone(), l.name.clone(), l.id);
             if src != SourceSpec::None {
+                let effects = l.clip_effects.clone();
                 let slot = l.clip_slot_mut(c);
                 slot.source = src;
                 slot.generator_values = vals;
                 slot.mods = mods;
                 slot.name = name;
                 slot.id = id * 1000 + c as u64 + 1;
-                l.active_clip = Some(slot.id);
+                // The effects playing with it now become the clip's.
+                slot.effects = effects;
+                let id = slot.id;
+                l.active_clip = Some(id);
+                l.clip_effects_from = phosphor_engine::EffectsOwner::Clip(id);
             }
         }
         ClipAct::Thumbnail => st.clip_thumb_request = Some((layer, c)),

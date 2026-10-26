@@ -19,12 +19,15 @@ pub struct MediaItem {
     /// Your collections this item belongs to.
     #[serde(default)]
     pub collections: Vec<String>,
-    /// How it last played (speed, direction, loop, effects): it comes back with these when you use it again.
+    /// How it last played (speed, direction, loop): it comes back with these when you use it again.
     #[serde(default)]
     pub settings: Option<crate::ClipSettings>,
     /// Last played without sound.
     #[serde(default)]
     pub muted: bool,
+    /// The file's own effects: they come with it wherever it plays (before the layer's effects).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<EffectState>,
     /// Where it came from and its licence, for files brought in from online libraries (the show's Credits list).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credit: Option<Credit>,
@@ -383,7 +386,10 @@ impl Composition {
             if let Some(own) = &mut c.own {
                 own.effects = self.adopt_effects(std::mem::take(&mut own.effects));
             }
+            c.effects = self.adopt_effects(std::mem::take(&mut c.effects));
         }
+        layer.clip_effects = self.adopt_effects(std::mem::take(&mut layer.clip_effects));
+        layer.clip_effects_from = crate::EffectsOwner::None;
         layer.active_clip = None;
         layer.transition = None;
         layer
@@ -525,8 +531,8 @@ impl Composition {
         let Some(l) = self.layer_mut(layer) else { return 0 };
         let n = items.len();
         for (i, (((name, source), id), mem)) in items.into_iter().zip(ids).zip(memory).enumerate() {
-            let (own, muted) = mem.map_or((None, false), |(s, m)| (Some(s), m));
-            *l.clip_slot_mut(start + i) = Clip { id, name, source, own, muted, ..Default::default() };
+            let (own, muted, effects) = mem.map_or((None, false, Vec::new()), |(s, m, fx)| (s, m, fx));
+            *l.clip_slot_mut(start + i) = Clip { id, name, source, own, muted, effects, ..Default::default() };
         }
         self.clip_columns = self.clip_columns.max(start + n);
         n
@@ -555,7 +561,7 @@ impl Composition {
         let secs = self.launch_secs();
         let memory = self.media_memory(&source);
         if let Some(l) = self.layer_mut(layer) {
-            if let Some((settings, _)) = &memory {
+            if let Some((Some(settings), ..)) = &memory {
                 l.apply_clip_settings(settings);
             }
             l.start_transition(now, secs);
@@ -583,14 +589,16 @@ impl Composition {
                 item.muted = muted;
             }
         }
+        self.store_file_effects();
     }
 
-    /// What a media file remembers (settings, muted), for a clip or layer that's about to use it.
-    pub fn media_memory(&self, source: &SourceSpec) -> Option<(crate::ClipSettings, bool)> {
-        let SourceSpec::Movie { path: Some(path), .. } = source else { return None };
+    /// What a media file remembers (settings, muted, its own effects), for a clip or layer that's about to use it.
+    pub fn media_memory(&self, source: &SourceSpec) -> Option<(Option<crate::ClipSettings>, bool, Vec<EffectState>)> {
+        let path = crate::file_of(source)?;
         let item = self.media_bin.iter().find(|m| m.path == *path)?;
-        // Older saves remembered effects too: those stay behind.
-        item.settings.clone().map(|s| (crate::ClipSettings { effects: Vec::new(), with_effects: false, ..s }, item.muted))
+        // Settings are a movie's. Older saves remembered the layer's effects in them too: those stay behind.
+        let settings = item.settings.clone().filter(|_| matches!(source, SourceSpec::Movie { .. })).map(|s| crate::ClipSettings { effects: Vec::new(), with_effects: false, ..s });
+        Some((settings, item.muted, item.effects.clone()))
     }
 
     pub fn expire_transitions(&mut self, now: f32) {

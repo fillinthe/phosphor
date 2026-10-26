@@ -1114,7 +1114,7 @@ impl Engine {
                 } else if let Some(res) = self.layers.get_mut(&layer.id) {
                     res.feed_pre = None;
                 }
-                let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, &layer.effects, frame, time, mods, &comp.layers, passes) };
+                let frame = if layer.fx_bypass { frame } else { self.apply_effects(layer.id, layer.chain(), frame, time, mods, &comp.layers, passes) };
                 if layer.render_fps > 0.0 {
                     let (fw, fh) = frame.size();
                     let res = self.layers.entry(layer.id).or_default();

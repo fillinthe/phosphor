@@ -328,10 +328,10 @@ impl Engine {
     }
 
     /// Runs the layer's enabled effects at the source's native resolution (ping-pong).
-    pub(super) fn apply_effects(
+    pub(super) fn apply_effects<'a>(
         &mut self,
         res_id: u64,
-        effects: &[EffectState],
+        effects: impl IntoIterator<Item = &'a EffectState>,
         frame: Frame,
         time: f32,
         mods: &ModInputs,
@@ -339,7 +339,7 @@ impl Engine {
         passes: &mut Vec<Pass>,
     ) -> Frame {
         let chain: Vec<_> = effects
-            .iter()
+            .into_iter()
             .filter(|e| e.enabled)
             .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix, e.blend)))
             .collect();

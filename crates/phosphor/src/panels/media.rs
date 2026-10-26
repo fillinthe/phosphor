@@ -167,6 +167,8 @@ pub(crate) enum MediaAct {
     /// Open the file again from disk (it was edited).
     Reload(usize),
     Favorite(usize),
+    /// Drop the file's own effects.
+    ForgetEffects(usize),
     Toggle(usize, String),
     Rename(usize, String),
     Remove(usize),
@@ -450,6 +452,11 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                     m.favorite = !m.favorite;
                 }
             }
+            MediaAct::ForgetEffects(i) => {
+                if let Some(path) = st.comp.media_bin.get(i).map(|m| m.path.clone()) {
+                    st.comp.forget_file_effects(&path);
+                }
+            }
             MediaAct::Toggle(i, c) => {
                 if let Some(m) = st.comp.media_bin.get_mut(i) {
                     if let Some(k) = m.collections.iter().position(|x| *x == c) {
@@ -628,6 +635,10 @@ pub(crate) fn media_tile(
     if !item.collections.is_empty() {
         p.text(thumb_rect.left_top() + egui::vec2(4.0, 3.0), egui::Align2::LEFT_TOP, icon::BOOKMARKS_SIMPLE, egui::FontId::proportional(11.0), Color32::from_white_alpha(180));
     }
+    if !item.effects.is_empty() {
+        // Has its own effects (they come with it wherever it plays).
+        p.text(thumb_rect.right_bottom() + egui::vec2(-5.0, -3.0), egui::Align2::RIGHT_BOTTOM, "fx", egui::FontId::monospace(11.0), accent());
+    }
     // Star (registered after the tile so it gets the click).
     let star_rect = egui::Rect::from_min_size(thumb_rect.right_top() + egui::vec2(-22.0, 2.0), egui::vec2(20.0, 20.0));
     let star = ui.interact(star_rect, ui.id().with(("star", &item.path)), Sense::click());
@@ -653,7 +664,9 @@ pub(crate) fn media_tile(
         n => format!("\nUsed by {n} layers and clips"),
     };
     let credit = item.credit.as_ref().map_or(String::new(), |c| format!("\nCredit: {}", c.line()));
-    resp.on_hover_text(format!("{}{credit}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
+    let fx_names: Vec<&str> = item.effects.iter().map(|e| shaders::effect(&e.effect).map_or(e.effect.as_str(), |d| d.name)).collect();
+    let fx = if fx_names.is_empty() { String::new() } else { format!("\nIts own effects (they come with it): {}", fx_names.join(", ")) };
+    resp.on_hover_text(format!("{}{credit}{fx}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
         ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
             for (id, name) in targets.layers {
                 if crate::ui::command(ui, name).clicked() {
@@ -684,6 +697,10 @@ pub(crate) fn media_tile(
                 acts.push(MediaAct::NewCollection(name, Some(i)));
             }
         });
+        if !item.effects.is_empty() && crate::ui::command(ui, label(icon::X, "Forget its effects")).on_hover_text("Take this file's own effects off it (and off layers playing it now). Clips made from it keep theirs").clicked() {
+            acts.push(MediaAct::ForgetEffects(i));
+            ui.close();
+        }
         crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
             if let Some(name) = rename_menu(ui, ("rename", &item.path), &item.name) {
                 acts.push(MediaAct::Rename(i, name));

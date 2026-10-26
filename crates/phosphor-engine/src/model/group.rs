@@ -67,10 +67,14 @@ impl Composition {
         self.comp_mut(id).map(|c| MixControls { opacity: &mut c.opacity, enabled: &mut c.enabled, fx_bypass: &mut c.fx_bypass })
     }
 
-    /// The effect chain of MASTER (`MASTER_ID`), a layer, a group, a comp or a mapping slice.
+    /// The effect chain of MASTER (`MASTER_ID`), a layer, a layer's clip (`clip_chain`), a group, a comp or a
+    /// mapping slice.
     pub fn effects(&self, target: u64) -> Option<&Vec<EffectState>> {
         if target == crate::MASTER_ID {
             return Some(&self.master_effects);
+        }
+        if let Some(layer) = crate::chain_layer(target) {
+            return self.layer(layer).map(|l| &l.clip_effects);
         }
         self.layers.iter().find(|l| l.id == target).map(|l| &l.effects).or_else(|| self.group(target).map(|g| &g.effects)).or_else(|| self.comp(target).map(|c| &c.effects)).or_else(|| self.slice(target).map(|s| &s.effects))
     }
@@ -78,6 +82,9 @@ impl Composition {
     pub fn effects_mut(&mut self, target: u64) -> Option<&mut Vec<EffectState>> {
         if target == crate::MASTER_ID {
             return Some(&mut self.master_effects);
+        }
+        if let Some(layer) = crate::chain_layer(target) {
+            return self.layer_mut(layer).map(|l| &mut l.clip_effects);
         }
         if self.layers.iter().any(|l| l.id == target) {
             return self.layers.iter_mut().find(|l| l.id == target).map(|l| &mut l.effects);
@@ -121,11 +128,11 @@ impl Composition {
         out
     }
 
-    /// Every effect in the project (MASTER, layers, groups, comps, mapping slices).
+    /// Every effect in the project (MASTER, layers and the clips playing on them, groups, comps, mapping slices).
     pub fn all_effects(&self) -> impl Iterator<Item = &EffectState> {
         self.master_effects
             .iter()
-            .chain(self.layers.iter().flat_map(|l| l.effects.iter()))
+            .chain(self.layers.iter().flat_map(|l| l.chain()))
             .chain(self.groups.iter().flat_map(|g| g.effects.iter()))
             .chain(self.comps.iter().flat_map(|c| c.effects.iter()))
             .chain(self.outputs.iter().flat_map(|o| o.mapping.surfaces.iter().flat_map(|s| s.effects.iter())))
@@ -134,7 +141,7 @@ impl Composition {
     pub fn all_effects_mut(&mut self) -> impl Iterator<Item = &mut EffectState> {
         self.master_effects
             .iter_mut()
-            .chain(self.layers.iter_mut().flat_map(|l| l.effects.iter_mut()))
+            .chain(self.layers.iter_mut().flat_map(|l| l.clip_effects.iter_mut().chain(l.effects.iter_mut())))
             .chain(self.groups.iter_mut().flat_map(|g| g.effects.iter_mut()))
             .chain(self.comps.iter_mut().flat_map(|c| c.effects.iter_mut()))
             .chain(self.outputs.iter_mut().flat_map(|o| o.mapping.surfaces.iter_mut().flat_map(|s| s.effects.iter_mut())))

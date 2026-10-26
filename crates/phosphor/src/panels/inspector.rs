@@ -29,6 +29,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     let also = st.also_selected.len();
     let also_clips = st.also_clips.len();
     let mut fx_action: Option<FxAction> = None;
+    let mut fx_chain = sel;
     // "Shows on": the outputs, and whether the selection already shows on each.
     let outs: Vec<(u64, String, bool)> = {
         let showing = st.comp.outputs_showing(sel);
@@ -139,7 +140,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                     reload = Some(p.clone());
                 }
             }
-            fx_action = fx;
+            if let Some((chain, a)) = fx {
+                (fx_chain, fx_action) = (chain, Some(a));
+            }
             seek_to = seek;
             if media.match_beat.get() {
                 match_beat = Some(layer.id);
@@ -183,7 +186,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         st.notice = Some(if on { format!("Now on \"{oname}\" as a slice (Outputs area to shape it)") } else { format!("No longer on \"{oname}\" on its own") });
     }
     if let Some(action) = fx_action {
-        apply_fx_action(st, sel, action);
+        apply_fx_action(st, fx_chain, action);
     }
 }
 
@@ -215,7 +218,8 @@ pub(crate) struct LayerMedia<'a> {
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
 /// and effect chain (Inspector, and each column of the Layer Windows panel). Returns an effect-chain action and a
 /// seek the caller carries out.
-pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &LayerMedia, clipboard_len: usize) -> (Option<FxAction>, Option<f64>) {
+/// The effects action comes with the chain it's for (the layer's, or its clip's: `clip_chain`).
+pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &LayerMedia, clipboard_len: usize) -> (Option<(u64, FxAction)>, Option<f64>) {
     let (info, position, has_sound) = (media.info, media.position, media.has_sound);
     let mut seek_to: Option<f64> = None;
     source_line(ui, layer);
@@ -484,7 +488,23 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
         });
     }
-    (effects_editor(ui, &mut layer.effects, clipboard_len), seek_to)
+    // The playing clip's (or file's) own effects: they come and go with it, before the layer's.
+    let mut action = None;
+    let clip_chain = match &layer.clip_effects_from {
+        phosphor_engine::EffectsOwner::Clip(_) => Some(("Clip effects", "Effects added here belong to the clip: they come back whenever it plays, on any layer. The layer's effects below stay on the layer.")),
+        phosphor_engine::EffectsOwner::File(_) => Some(("File effects", "Effects added here belong to this file: they come back whenever it plays, on any layer or clip made from it. The layer's effects below stay on the layer.")),
+        phosphor_engine::EffectsOwner::None => None,
+    };
+    if let Some((heading, empty)) = clip_chain {
+        if let Some(a) = super::effects::effects_list(ui, heading, empty, &mut layer.clip_effects, clipboard_len) {
+            action = Some((phosphor_engine::clip_chain(layer.id), a));
+        }
+        ui.separator();
+    }
+    if let Some(a) = effects_editor(ui, &mut layer.effects, clipboard_len) {
+        action = Some((layer.id, a));
+    }
+    (action, seek_to)
 }
 
 /// What the layer is showing and where it comes from: generated, a file on disk (its path, Show in Finder, and a

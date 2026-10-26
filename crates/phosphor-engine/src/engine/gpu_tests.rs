@@ -235,6 +235,23 @@ fn outputs_freeze_delay_and_flip() {
     assert!(near(l, 0.0) && near(r, 1.0), "flipped: left {l} right {r}");
 }
 
+/// The playing clip's own effects run on its layer, then the layer's: one invert = 80%, two = back to 20%.
+#[test]
+fn a_clips_effects_run_before_the_layers() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 16, height: 16, next_id: 100, ..Default::default() };
+    let mut grey = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    grey.generator_values = vec![0.2, 0.2, 0.2];
+    grey.clip_effects.push(comp.new_effect("invert").unwrap());
+    comp.layers.push(grey);
+    let once = middle(&mut engine, &comp)[0] as f32 / 255.0;
+    let fx = comp.new_effect("invert").unwrap();
+    comp.layers[0].effects.push(fx);
+    let twice = middle(&mut engine, &comp)[0] as f32 / 255.0;
+    assert!((once - 0.8).abs() < 0.03, "the clip's invert: {once}");
+    assert!((twice - 0.2).abs() < 0.03, "then the layer's: {twice}");
+}
+
 /// A layer can show another layer's picture before or after that layer's effects.
 #[test]
 fn feeds_before_and_after_effects() {
