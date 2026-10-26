@@ -206,7 +206,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 p.text(egui::pos2(rect.left() + 6.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, cat, egui::FontId::proportional(10.0), Color32::GRAY);
                 let fav = st.explorer.favorites.iter().any(|f| f == desc.id);
                 if fav {
-                    p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, egui::FontId::proportional(14.0), Color32::from_rgb(255, 210, 90));
+                    p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, crate::theme::filled_icons(14.0), Color32::from_rgb(255, 210, 90));
                 }
                 let stroke = if st.explorer.picked == Some(desc.id) {
                     Stroke::new(2.5, accent())

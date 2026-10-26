@@ -357,7 +357,13 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         }
         let border = if is_selected { accent() } else if r.hovered() { ui.visuals().widgets.hovered.bg_stroke.color } else { ui.visuals().widgets.noninteractive.bg_stroke.color };
         p.rect_stroke(pic, 4.0, Stroke::new(if is_selected { 2.0 } else { 1.0 }, border), StrokeKind::Inside);
-        if r.on_hover_text("Click to edit this layer (Inspector)").clicked() {
+        let m = layer.marks();
+        let mut badges = super::layers::mark_list(&m);
+        if m.fx > 0 {
+            badges.insert(0, (format!("{} fx", m.fx), "The layer's own effects"));
+        }
+        let marks = super::layers::badge_chip(p, pic, &badges);
+        if r.on_hover_text(format!("Click to edit this layer (Inspector){marks}")).clicked() {
             *selected = Some(layer.id);
         }
         // Show/hide + opacity under the picture; mute + volume for layers with sound.

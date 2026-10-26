@@ -386,14 +386,42 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
             if let Some((pos, dur)) = position {
                 // Scratch: drag along the strip to move through the movie (a screen-width drag = 4 seconds), endlessly.
+                // The movie holds still while you scratch (measured from where the drag began, so seeks that
+                // haven't landed yet don't hold it back) and plays on when you let go.
                 ui.horizontal(|ui| {
                     ui.label("Scratch");
                     let (rect, r) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(260.0), 18.0), Sense::drag());
+                    let grooves_id = egui::Id::new(("scratch_grooves", layer.id));
+                    let drag_id = egui::Id::new(("scratch_drag", layer.id));
+                    let mut grooves: f32 = ui.data(|d| d.get_temp(grooves_id)).unwrap_or(0.0);
+                    if r.drag_started() {
+                        // (where it began, whether it was playing, how far the hand has gone)
+                        ui.data_mut(|d| d.insert_temp(drag_id, (pos, layer.playing, 0.0f64)));
+                        layer.playing = false;
+                    }
+                    if r.dragged()
+                        && let Some((start, was_playing, gone)) = ui.data(|d| d.get_temp::<(f64, bool, f64)>(drag_id))
+                    {
+                        let dx = r.drag_delta().x;
+                        if dx != 0.0 {
+                            let gone = gone + dx as f64;
+                            grooves += dx;
+                            ui.data_mut(|d| {
+                                d.insert_temp(drag_id, (start, was_playing, gone));
+                                d.insert_temp(grooves_id, grooves);
+                            });
+                            seek_to = Some((start + gone / 1600.0 * 4.0).rem_euclid(dur.max(1e-3)));
+                        }
+                    }
+                    if r.drag_stopped()
+                        && let Some((_, was_playing, _)) = ui.data_mut(|d| d.remove_temp::<(f64, bool, f64)>(drag_id))
+                    {
+                        layer.playing = was_playing;
+                    }
                     let p = ui.painter();
                     p.rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
-                    // Ridges that move with the playhead, like a record's grooves.
-                    let phase = (pos as f32 * 60.0).rem_euclid(12.0);
-                    let mut x = rect.left() - phase;
+                    // Ridges like a record's grooves: they move only with your hand.
+                    let mut x = rect.left() + grooves.rem_euclid(12.0) - 12.0;
                     while x < rect.right() {
                         if x > rect.left() {
                             p.line_segment([egui::pos2(x, rect.top() + 3.0), egui::pos2(x, rect.bottom() - 3.0)], egui::Stroke::new(1.0, ui.visuals().weak_text_color()));
@@ -402,10 +430,6 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     }
                     if r.hovered() || r.dragged() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                    }
-                    if r.dragged() {
-                        let dx = r.drag_delta().x as f64;
-                        seek_to = Some((pos + dx / 1600.0 * 4.0).rem_euclid(dur.max(1e-3)));
                     }
                     r.on_hover_text("Drag to scratch through the movie (wraps round at the ends)");
                 });

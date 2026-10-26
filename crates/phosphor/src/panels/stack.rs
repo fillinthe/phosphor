@@ -365,9 +365,11 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
                                 choice_combo(ui, ("stack_blend", layer.id), &mut layer.blend, 62.0, true);
                             }
                         }
-                        if let Some(r) = super::groups::fx_badge(ui, &layer.effects, &mut layer.fx_bypass) {
+                        let marks = layer.marks();
+                        if let Some(r) = super::groups::fx_count_badge(ui, marks.clip_fx + marks.fx, &mut layer.fx_bypass) {
                             map_menu(ui, &r, ControlTarget::LayerFxBypass(layer.id));
                         }
+                        super::layers::layer_marks(ui, &marks);
                     });
                     if let Some(e) = s.err {
                         ui.label(RichText::new(e).small().color(WARN));
