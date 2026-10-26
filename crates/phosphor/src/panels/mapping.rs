@@ -48,11 +48,20 @@ fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut pho
     let alt = ui.input(|i| i.modifiers.alt);
     let centre = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
     const OUT: f32 = 14.0;
+    // A handle that would land off the canvas (a slice filling the output) goes just inside the slice instead.
+    let visible = ui.clip_rect().shrink(6.0);
+    let place = |outside: egui::Pos2, inside: egui::Pos2| if visible.contains(outside) { outside } else { inside };
     let mut changed = false;
     // Never smaller than a sliver (and never turned inside out).
     let factor = |from: f32, to: f32| if from.abs() < 1e-5 { 1.0 } else { (to / from).max(0.01 / from.abs()) };
     // Sides: (screen point, which side: 0 left, 1 right, 2 top, 3 bottom).
-    let sides = [(rect.left_center() - egui::vec2(OUT, 0.0), 0), (rect.right_center() + egui::vec2(OUT, 0.0), 1), (rect.center_top() - egui::vec2(0.0, OUT), 2), (rect.center_bottom() + egui::vec2(0.0, OUT), 3)];
+    let (dx, dy) = (egui::vec2(OUT, 0.0), egui::vec2(0.0, OUT));
+    let sides = [
+        (place(rect.left_center() - dx, rect.left_center() + dx), 0),
+        (place(rect.right_center() + dx, rect.right_center() - dx), 1),
+        (place(rect.center_top() - dy, rect.center_top() + dy), 2),
+        (place(rect.center_bottom() + dy, rect.center_bottom() - dy), 3),
+    ];
     for (at, side) in sides {
         let mut d = [0.0, 0.0];
         let r = side_handle(ui, id.with(("box_side", side)), at, side < 2, frame, faint, &mut d);
@@ -70,7 +79,8 @@ fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut pho
     // Corners: scale evenly, from the opposite corner (or the centre with Alt).
     let corners = [(rect.left_top(), [-1.0f32, -1.0f32]), (rect.right_top(), [1.0, -1.0]), (rect.right_bottom(), [1.0, 1.0]), (rect.left_bottom(), [-1.0, 1.0])];
     for (k, (at, dir)) in corners.into_iter().enumerate() {
-        let at = at + egui::vec2(dir[0], dir[1]) * (OUT * 0.75);
+        // (Inside, further in: clear of the slice's own corner handle.)
+        let at = place(at + egui::vec2(dir[0], dir[1]) * (OUT * 0.75), at - egui::vec2(dir[0], dir[1]) * (OUT * 1.5));
         let mut d = [0.0, 0.0];
         let r = point_handle(ui, id.with(("box_corner", k)), at, frame, faint, true, &mut d);
         if d != [0.0, 0.0] {
@@ -86,8 +96,10 @@ fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut pho
         r.on_hover_text("Drag to scale evenly (the opposite corner stays) · Alt: from the centre");
     }
     // Turn: a round handle above the top, joined to it.
-    let knob = rect.center_top() - egui::vec2(0.0, OUT + 22.0);
-    ui.painter().line_segment([rect.center_top() - egui::vec2(0.0, OUT), knob], Stroke::new(1.0, faint));
+    let above = rect.center_top() - egui::vec2(0.0, OUT + 22.0);
+    let knob = place(above, rect.center_top() + egui::vec2(0.0, OUT + 22.0));
+    let stem = if knob == above { rect.center_top() - dy } else { rect.center_top() + dy };
+    ui.painter().line_segment([stem, knob], Stroke::new(1.0, faint));
     let r = ui.interact(egui::Rect::from_center_size(knob, egui::vec2(18.0, 18.0)), id.with("box_turn"), Sense::drag());
     let lit = r.hovered() || r.dragged();
     ui.painter().circle(knob, if lit { 7.0 } else { 5.5 }, if lit { Color32::WHITE } else { Color32::BLACK }, Stroke::new(1.5, faint));
@@ -855,6 +867,37 @@ pub(crate) fn apply_slice_drop(comp: &mut phosphor_engine::Composition, sid: u64
             {
                 s.layer = Some(l);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod transform_box_tests {
+    use super::*;
+
+    /// A slice filling the whole canvas: every handle of its transform box still lands where it can be grabbed.
+    #[test]
+    fn handles_stay_on_the_canvas() {
+        let ctx = egui::Context::default();
+        let mut mapping = Mapping::default();
+        let sid = 7;
+        mapping.add_surface(sid).corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let mut selected = Some(sid);
+        let (mut id, mut canvas) = (egui::Id::NULL, egui::Rect::NOTHING);
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(Default::default(), |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    canvas = ui.clip_rect();
+                    id = ui.id().with(("surface", sid));
+                    mapping_handles(ui, canvas, &mut mapping, &mut selected, false);
+                });
+            });
+            out.textures_delta.clear();
+        }
+        let handles: Vec<egui::Id> = (0..4).map(|k| id.with(("box_side", k))).chain((0..4).map(|k| id.with(("box_corner", k)))).chain([id.with("box_turn")]).collect();
+        for h in handles {
+            let r = ctx.read_response(h).expect("handle drawn");
+            assert!(canvas.contains(r.rect.center()), "{:?} off the canvas {canvas:?}", r.rect);
         }
     }
 }
