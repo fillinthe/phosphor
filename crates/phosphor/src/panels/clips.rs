@@ -216,7 +216,10 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
                 let layer = &mut comp.layers[idx];
                 ui.horizontal(|ui| {
                     let thumb = layer_textures.get(&layer.id).map(|(t, _)| *t);
-                    let (fill, beat_all, midi) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, grid.cell.y));
+                    let (fill, beat_all, midi, stop) = row_header(ui, layer, thumb, selected, egui::vec2(ROW_HEADER_W, grid.cell.y));
+                    if stop {
+                        out.stop = Some(layer.id);
+                    }
                     if let Some(m) = midi {
                         out.row_midi = Some((layer.id, m));
                     }
@@ -337,9 +340,10 @@ pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerStat
         }
 }
 
-fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool, Option<RowAct>) {
+fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb: Option<egui::TextureId>, selected: &mut Option<u64>, size: egui::Vec2) -> (bool, bool, Option<RowAct>, bool) {
     use phosphor_engine::Autopilot;
     let mut row_midi = None;
+    let mut stop = false;
     let mut fill = false;
     let mut beat_all = false;
     let is_selected = *selected == Some(layer.id);
@@ -370,7 +374,12 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             super::layers::show_button(ui, layer);
-            Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).width(size.x - 34.0).show(ui);
+            // Stop what it's playing (launch fade); right-click to map it.
+            let target = ControlTarget::StopLayer(layer.id);
+            let r = crate::ui::small_command_if(ui, layer.source != SourceSpec::None, icon::STOP).on_hover_text("Stop this layer's clip · right-click to map it");
+            crate::ui::map_menu(ui, &r, target);
+            stop = r.clicked();
+            Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).width(size.x - 60.0).show(ui);
         });
         if has_sound {
             crate::ui::toolbar(ui, |ui| {
@@ -400,7 +409,7 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             ui.label(RichText::new(format!("{} {} · {when}", icon::AIRPLANE_TILT, layer.autopilot.name())).small().color(accent()));
         }
     });
-    (fill, beat_all, row_midi)
+    (fill, beat_all, row_midi, stop)
 }
 
 

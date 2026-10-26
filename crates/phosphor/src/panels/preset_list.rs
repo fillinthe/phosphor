@@ -24,7 +24,7 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
         });
         crate::ui::section(ui, "presets_Layers", "Layers", true, |ui| {
             match &layer {
-                Some(l) => hint(ui, format!("Saves the selected layer ({}). Load adds it above the selected one.", l.name)),
+                Some(l) => help(ui, &format!("Saves the selected layer ({}). Load adds it above the selected one.", l.name)),
                 None => help(ui, "Select a layer to save it. Load adds a saved one to this project."),
             };
             let json = layer.as_ref().and_then(|l| serde_json::to_string(l).ok()).unwrap_or_default();

@@ -118,7 +118,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         help(ui, "Also: Audio beat (kick) under any slider's wave button.");
     });
     ui.add_space(4.0);
-    hint(ui, format!("Press {} next to any slider to drive it with these signals or an LFO.", icon::WAVE_SINE));
+    help(ui, &format!("Press {} next to any slider to drive it with these signals or an LFO.", icon::WAVE_SINE));
 }
 
 /// Mute all, master volume and levelling for everything Phosphor plays (Audio panel).

@@ -617,6 +617,7 @@ impl State {
             crate::control::Deferred::Button(key) => self.button_presses.push(key),
             crate::control::Deferred::Slider(key, v) => self.slider_values.push((key, v)),
             crate::control::Deferred::Layout(id) => self.switch_layout(id, now),
+            crate::control::Deferred::Stop(id) => self.stop_clips(id, now),
             crate::control::Deferred::Menu(key) => self.menu_requests.extend(crate::menu::action_for(&key)),
             crate::control::Deferred::Scrub(layer, v) => {
                 if let Some((_, dur)) = self.media.position(layer) {
@@ -710,6 +711,20 @@ impl State {
             None => 0.0,
         };
         self.control.glide_to(target, from, to, now as f32, self.comp.auto_fade_secs);
+    }
+
+    /// Stops what layer `id` plays (`MASTER_ID`: every layer in the open comp) with the launch fade; a collection
+    /// or autopilot stepping through it stops too.
+    pub fn stop_clips(&mut self, id: u64, now: f64) {
+        let secs = self.comp.launch_secs();
+        let all = id == phosphor_engine::MASTER_ID;
+        let in_comp: Vec<u64> = self.comp.layers.iter().filter(|l| self.comp.in_open_comp(l)).map(|l| l.id).collect();
+        for l in self.comp.layers.iter_mut().filter(|l| if all { in_comp.contains(&l.id) } else { l.id == id }) {
+            l.stop(now as f32, secs);
+            l.flash_return = None;
+            l.collection = None;
+            l.autopilot = phosphor_engine::Autopilot::Off;
+        }
     }
 
     /// Switches an output to layout `id`: it fades in over the auto-fade time while the output's other layouts fade

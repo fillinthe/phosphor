@@ -317,7 +317,7 @@ fn video_wall_menu(ui: &mut egui::Ui, st: &mut State) {
             guarded!(ui, v[3], egui::DragValue::new(&mut v[3]).range(1..=512).suffix(" px high"));
         });
         let start = next_free(&st.comp.dmx.fixtures);
-        hint(ui, format!("{} tiles of {} pixels, from universe {} (each tile starts a fresh universe). Set the wiring (zig-zag, order) on each after.", v[0] * v[1], v[2] * v[3], start.0));
+        help(ui, &format!("{} tiles of {} pixels, from universe {} (each tile starts a fresh universe). Set the wiring (zig-zag, order) on each after.", v[0] * v[1], v[2] * v[3], start.0));
         if crate::ui::command(ui, label(icon::PLUS, "Add the wall")).clicked() {
             let comp = &mut st.comp;
             let mut ids = Vec::new();

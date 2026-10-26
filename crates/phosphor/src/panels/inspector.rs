@@ -287,7 +287,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             if transition_effect_combo(ui, ("trans_fx", layer.id), layer.transition_kind, &mut layer.transition_effect) {
                 layer.transition_values.clear();
             }
-            hint(ui, "time and Cut/Fade: Launch settings (Clips panel)");
+            help(ui, "The fade time and Cut / Fade are in the Clips panel's Launch settings.");
         });
         transition_settings(ui, layer);
         crate::ui::field(ui, "Frame rate", |ui| {

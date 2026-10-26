@@ -131,8 +131,6 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
                 edits.push(Edit::Fold(gid));
             }
             let target = ControlTarget::SliceEnabled(gid);
-            let eye = crate::ui::eye_toggle(ui, &mut g.enabled).on_hover_text("Show or hide everything in it (right-click to map)");
-            crate::ui::map_menu(ui, &eye, target.clone());
             let all_picked = !members.is_empty() && members.iter().all(|m| picked.contains(m));
             let glyph = if is_layout { icon::STACK } else { icon::FOLDER };
             let text = RichText::new(format!("{glyph} {name}  ({})", members.len())).strong();
@@ -142,7 +140,8 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
                 super::mapping_points::select_slices(ui.ctx(), selected, members.clone());
             }
             // Its own fade, on top of each slice's and mask's (mappable; layouts crossfade with it).
-            Level::percent(&mut g.opacity, "").default(1.0).width(64.0).target(ControlTarget::SliceOpacity(gid)).show(ui);
+            // On / off without moving the fader (mappable).
+            Level::percent(&mut g.opacity, "").default(1.0).width(90.0).target(ControlTarget::SliceOpacity(gid)).switch(&mut g.enabled, Some(target.clone())).show(ui);
             r.right_menu(|ui| {
                 crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                     if let Some(name) = rename_menu(ui, ("slice_group", gid), &name) {

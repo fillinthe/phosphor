@@ -235,7 +235,7 @@ fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Opti
         T::GeneratorParam { layer, .. } | T::LayerJump { layer, .. } | T::LayerCorner { layer, .. } => item(*layer),
         T::LayerText(id) | T::LayerTextStep { layer: id, .. } => item(*id),
         T::TriggerClip { layer, .. } | T::LayerClipPick(layer) | T::LayerRandomClip(layer) => Some((Tab::Clips, Some(*layer), None)),
-        T::TriggerColumn(_) => Some((Tab::Clips, None, None)),
+        T::TriggerColumn(_) | T::StopLayer(_) => Some((Tab::Clips, None, None)),
         T::Menu(_) | T::Button { .. } | T::Slider { .. } => None,
         T::EffectParam { effect, .. } | T::EffectMix(effect) | T::EffectEnabled(effect) => {
             let has = |chain: &[phosphor_engine::EffectState]| chain.iter().any(|e| e.id == *effect);
@@ -338,7 +338,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     let mut remove = None;
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if comp.control_maps.is_empty() && map_draft.is_none() {
-            hint(ui, format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
+            help(ui, &format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
         }
         let places: Vec<_> = comp.control_maps.iter().map(|m| where_is(comp, &m.target)).collect();
         egui::Grid::new("mappings").num_columns(6).striped(true).spacing([6.0, 3.0]).show(ui, |ui| {

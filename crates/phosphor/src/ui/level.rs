@@ -1,5 +1,6 @@
 //! The one slider for levels and parameters: a plain filled bar with its name and value written inside.
-//! Click or drag anywhere on it to set the value, double-click to reset, hold Shift to land on snap points (the
+//! Click or drag anywhere on it to set the value, double-click to reset, `.switch()` = an on/off button at its left
+//! (off hides the thing fully and greys the bar; the value stays put), hold Shift to land on snap points (the
 //! ends, the default, 100% and your own); right-click to type a value, Lock, add snap points, Learn, Modulate,
 //! Stop the motion and Reset. When a modulation moves it, a bright line shows where it
 //! really is and a lit `~` opens the modulation. Used for opacity, volume, master fade, the Mixer faders and
@@ -20,19 +21,21 @@ pub(crate) struct Level<'a> {
     vertical: Option<f32>,
     tip: Option<&'a str>,
     log: bool,
+    /// An on/off button at the start of the bar (and the control it maps to).
+    switch: Option<(&'a mut bool, Option<ControlTarget>)>,
 }
 
 impl<'a> Level<'a> {
     /// A 0..1 value shown as a percentage.
     pub fn percent(value: &'a mut f32, text: impl Into<String>) -> Self {
-        Self { value, min: 0.0, max: 1.0, default: 1.0, text: text.into(), percent: true, modulation: None, target: None, width: None, vertical: None, tip: None, log: false }
+        Self { value, min: 0.0, max: 1.0, default: 1.0, text: text.into(), percent: true, modulation: None, target: None, width: None, vertical: None, tip: None, log: false, switch: None }
     }
 
     /// Any range, shown as a number.
     pub fn range(value: &'a mut f32, min: f32, max: f32, text: impl Into<String>) -> Self {
         // A range must run low to high.
         let (min, max) = (min.min(max), max.max(min));
-        Self { value, min, max, default: min, text: text.into(), percent: false, modulation: None, target: None, width: None, vertical: None, tip: None, log: false }
+        Self { value, min, max, default: min, text: text.into(), percent: false, modulation: None, target: None, width: None, vertical: None, tip: None, log: false, switch: None }
     }
 
     /// Up to this value as a percentage (volume goes to 200%).
@@ -73,13 +76,31 @@ impl<'a> Level<'a> {
         self
     }
 
+    /// An on/off button at the start of the bar: off = fully off without moving the value (opacity sliders).
+    /// `target` makes it mappable (right-click it).
+    pub fn switch(mut self, on: &'a mut bool, target: Option<ControlTarget>) -> Self {
+        self.switch = Some((on, target));
+        self
+    }
+
     pub fn tip(mut self, tip: &'a str) -> Self {
         self.tip = Some(tip);
         self
     }
 
     pub fn show(self, ui: &mut egui::Ui) -> egui::Response {
-        let Level { value, min, max, default, text, percent, modulation, target, width, vertical, tip, log } = self;
+        let Level { value, min, max, default, text, percent, modulation, target, width, vertical, tip, log, switch } = self;
+        // The on/off button first (it takes its room from the bar).
+        let mut off = false;
+        let mut switch_w = 0.0;
+        if let Some((on, switch_target)) = switch {
+            let r = crate::ui::icon_toggle(ui, on, icon::POWER).on_hover_text("On / off: off hides it fully without moving the slider · right-click to map");
+            if let Some(t) = switch_target {
+                map_menu(ui, &r, t);
+            }
+            switch_w = r.rect.width() + ui.spacing().item_spacing.x;
+            off = !*on;
+        }
         // A slider without a control of its own gets one from where it is (panel, label, which one): limits, lock,
         // snap points and Learn for every slider, saved with the project.
         let target = target.or_else(|| (!text.trim().is_empty() && ui.is_visible()).then(|| {
@@ -93,7 +114,7 @@ impl<'a> Level<'a> {
         let lit_mod = moving.is_some();
         let size = match vertical {
             Some(h) => egui::vec2(22.0, h),
-            None => egui::vec2(width.unwrap_or(ui.available_width() - if lit_mod { 22.0 } else { 0.0 }).max(40.0), ui.spacing().interact_size.y.max(18.0)),
+            None => egui::vec2((width.unwrap_or(ui.available_width() - if lit_mod { 22.0 } else { 0.0 }) - switch_w).max(40.0), ui.spacing().interact_size.y.max(18.0)),
         };
         let (rect, mut r) = ui.allocate_exact_size(size, Sense::click_and_drag());
         let locked = target.as_ref().is_some_and(|t| is_locked(ui, t));
@@ -160,7 +181,7 @@ impl<'a> Level<'a> {
             Some(_) => fill.min.y = rect.bottom() - t * rect.height(),
             None => fill.max.x = rect.left() + t * rect.width(),
         }
-        let base = if locked { Color32::from_gray(120) } else { accent() };
+        let base = if locked || off { Color32::from_gray(if off { 80 } else { 120 }) } else { accent() };
         p.rect_filled(fill, 0.0, base.gamma_multiply(if hovered { 0.75 } else { 0.55 }));
         // Outside its limits: shaded (it can't go there).
         if let Some((lo, hi)) = limits {

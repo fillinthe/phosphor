@@ -46,6 +46,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             None => on(comp.slice(*id)?.enabled),
         },
         ControlTarget::Layout(id) => comp.slice_group(*id).map(|g| on(g.enabled && g.opacity > 0.5))?,
+        ControlTarget::StopLayer(_) => 0.0,
         ControlTarget::MaskTransform { mask, part } => comp.mask(*mask)?.transform.unit(*part as usize),
         ControlTarget::SliceTransform { slice, part } => comp.slice(*slice)?.transform.unit(*part as usize),
         ControlTarget::MaskFeather(id) => comp.mask(*id)?.feather / phosphor_engine::mapping::MASK_FEATHER_MAX,
@@ -376,6 +377,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 out.push(Deferred::Layout(*id));
             }
         }
+        ControlTarget::StopLayer(id) => {
+            if v > 0.5 {
+                out.push(Deferred::Stop(*id));
+            }
+        }
         ControlTarget::SliceEnabled(id) if comp.slice_group(*id).is_some() => {
             if let Some(g) = comp.slice_group_mut(*id) {
                 g.enabled = toggled(g.enabled, v);
@@ -576,6 +582,8 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
             format!("/phosphor/{kind}/{id}/{}", name.to_lowercase().replace(' ', "_"))
         }
         ControlTarget::Layout(id) => format!("/phosphor/layout/{id}"),
+        ControlTarget::StopLayer(id) if *id == phosphor_engine::MASTER_ID => "/phosphor/stop".into(),
+        ControlTarget::StopLayer(id) => format!("/phosphor/layer/{id}/stop"),
         ControlTarget::MaskFeather(id) => format!("/phosphor/mask/{id}/soft_edge"),
         ControlTarget::MaskEnabled(id) => format!("/phosphor/mask/{id}/on"),
         ControlTarget::MaskInvert(id) => format!("/phosphor/mask/{id}/invert"),
