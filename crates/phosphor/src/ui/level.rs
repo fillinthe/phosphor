@@ -175,7 +175,32 @@ impl<'a> Level<'a> {
         for &t in if show_all { &snaps[..] } else { &own_snaps[..] } {
             tick(t, show_all);
         }
-        if (percent || log) && max > 1.0 && min < 1.0 {
+        if vertical.is_some() {
+            // A fader's scale (Mixer): ticks on both edges, numbers on the main ones (100 / 50 / 0 for levels; the
+            // speeds for speed). Marks low down give way to the value written at the bottom.
+            let values: Vec<f32> = if percent {
+                let mut v = vec![0.0, 0.25, 0.5, 0.75, 1.0];
+                if max > 1.0 {
+                    v.push(max);
+                }
+                v
+            } else {
+                [min, 0.25, 0.5, 1.0, 2.0, max].into_iter().filter(|v| *v >= min && *v <= max).collect()
+            };
+            let weak = ui_vis.weak_text_color();
+            for v in values {
+                let y = rect.bottom() - to_t(v) * rect.height();
+                let major = if percent { v == 0.0 || v == 0.5 || v >= 1.0 } else { true };
+                let len = if major { 6.0 } else { 3.0 };
+                let stroke = Stroke::new(1.0, weak);
+                p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.left() + len, y)], stroke);
+                p.line_segment([egui::pos2(rect.right() - len, y), egui::pos2(rect.right(), y)], stroke);
+                if major && rect.bottom() - y > 24.0 {
+                    let label = if percent { format!("{:.0}", v * 100.0) } else if v == 1.0 { "1\u{d7}".into() } else { format!("{v}") };
+                    p.text(egui::pos2(rect.center().x, y + 1.0), egui::Align2::CENTER_TOP, label, egui::FontId::proportional(8.5), weak);
+                }
+            }
+        } else if (percent || log) && max > 1.0 && min < 1.0 {
             // A mark at 100% / 1× on bars that go past it (volume, speed, scale).
             let u = to_t(1.0);
             let x = rect.left() + u * rect.width();
