@@ -473,21 +473,11 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
     let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
     crate::ui::section(ui, ("color_grade", id), title, false, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
-        ui.horizontal(|ui| {
-            Level::range(&mut g.brightness, -1.0, 1.0, "Brightness").default(0.0).show(ui);
-        });
-        ui.horizontal(|ui| {
-            Level::range(&mut g.contrast, 0.0, 3.0, "Contrast").default(1.0).show(ui);
-        });
-        ui.horizontal(|ui| {
-            Level::range(&mut g.gamma, 0.2, 3.0, "Gamma").default(1.0).log().show(ui);
-        });
-        ui.horizontal(|ui| {
-            Level::range(&mut g.saturation, 0.0, 2.0, "Saturation").default(1.0).show(ui);
-        });
-        for (k, name) in ["Red", "Green", "Blue"].iter().enumerate() {
+        // Each one mappable and on the timeline (`ControlTarget::Color`).
+        for (i, p) in phosphor_engine::ColorGrade::PARTS.iter().enumerate() {
             ui.horizontal(|ui| {
-                Level::range(&mut g.gains[k], 0.0, 2.0, *name).default(1.0).show(ui);
+                let level = Level::range(g.part_mut(i), p.min, p.max, p.name).default(p.default).target(ControlTarget::Color { owner: id, part: i as u8 });
+                if p.log { level.log() } else { level }.show(ui);
             });
         }
         if crate::ui::command_if(ui, !g.is_neutral(), label(icon::ARROW_COUNTER_CLOCKWISE, "Reset colour")).clicked() {

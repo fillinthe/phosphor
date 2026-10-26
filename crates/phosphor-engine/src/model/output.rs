@@ -56,6 +56,47 @@ impl ColorGrade {
     pub fn is_neutral(&self) -> bool {
         *self == Self::default()
     }
+
+    /// Brightness, contrast, gamma, saturation, red, green, blue (`part` in `ControlTarget::Color`).
+    pub const PARTS: [crate::mapping::TransformPart; 7] = {
+        use crate::mapping::TransformPart as P;
+        [
+            P { name: "Brightness", min: -1.0, max: 1.0, log: false, default: 0.0 },
+            P { name: "Contrast", min: 0.0, max: 3.0, log: false, default: 1.0 },
+            P { name: "Gamma", min: 0.2, max: 3.0, log: true, default: 1.0 },
+            P { name: "Saturation", min: 0.0, max: 2.0, log: false, default: 1.0 },
+            P { name: "Red", min: 0.0, max: 2.0, log: false, default: 1.0 },
+            P { name: "Green", min: 0.0, max: 2.0, log: false, default: 1.0 },
+            P { name: "Blue", min: 0.0, max: 2.0, log: false, default: 1.0 },
+        ]
+    };
+
+    pub fn part_mut(&mut self, part: usize) -> &mut f32 {
+        match part {
+            0 => &mut self.brightness,
+            1 => &mut self.contrast,
+            2 => &mut self.gamma,
+            3 => &mut self.saturation,
+            n => &mut self.gains[(n - 4).min(2)],
+        }
+    }
+
+    /// Value `part` as 0..1 across its range.
+    pub fn unit(&self, part: usize) -> f32 {
+        let v = match part {
+            0 => self.brightness,
+            1 => self.contrast,
+            2 => self.gamma,
+            3 => self.saturation,
+            n => self.gains[(n - 4).min(2)],
+        };
+        Self::PARTS[part.min(6)].to_unit(v)
+    }
+
+    pub fn set_unit(&mut self, part: usize, u: f32) {
+        let part = part.min(6);
+        *self.part_mut(part) = Self::PARTS[part].from_unit(u);
+    }
 }
 
 /// One physical output (projector, screen, LED wall): its own size and mapping surfaces.

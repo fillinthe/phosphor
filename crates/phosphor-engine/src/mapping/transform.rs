@@ -70,7 +70,19 @@ pub struct TransformPart {
 impl TransformPart {
     /// The default as 0..1 across the range.
     pub fn default_unit(&self) -> f32 {
-        if self.log { (self.default / self.min).ln() / (self.max / self.min).ln() } else { (self.default - self.min) / (self.max - self.min) }
+        self.to_unit(self.default)
+    }
+
+    /// A value as 0..1 across the range (a controller's value).
+    pub fn to_unit(&self, v: f32) -> f32 {
+        let v = v.clamp(self.min, self.max);
+        if self.log { (v / self.min).ln() / (self.max / self.min).ln() } else { (v - self.min) / (self.max - self.min) }
+    }
+
+    /// 0..1 across the range back to a value.
+    pub fn from_unit(&self, u: f32) -> f32 {
+        let u = u.clamp(0.0, 1.0);
+        if self.log { self.min * (self.max / self.min).powf(u) } else { self.min + u * (self.max - self.min) }
     }
 }
 
@@ -107,16 +119,12 @@ impl ShapeTransform {
 
     /// Value `part` as 0..1 across its range (a controller's value).
     pub fn unit(&self, part: usize) -> f32 {
-        let p = &Self::PARTS[part.min(4)];
-        let v = self.part(part).0.clamp(p.min, p.max);
-        if p.log { (v / p.min).ln() / (p.max / p.min).ln() } else { (v - p.min) / (p.max - p.min) }
+        Self::PARTS[part.min(4)].to_unit(self.part(part).0)
     }
 
     /// Sets value `part` from 0..1 across its range.
     pub fn set_unit(&mut self, part: usize, u: f32) {
-        let p = &Self::PARTS[part.min(4)];
-        let u = u.clamp(0.0, 1.0);
-        *self.part_mut(part).0 = if p.log { p.min * (p.max / p.min).powf(u) } else { p.min + u * (p.max - p.min) };
+        *self.part_mut(part).0 = Self::PARTS[part.min(4)].from_unit(u);
     }
 
     /// The five values now, modulation included.

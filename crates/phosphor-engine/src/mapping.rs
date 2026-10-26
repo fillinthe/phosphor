@@ -9,7 +9,7 @@ mod shadow;
 mod transform;
 pub use bend::{Bend, inside};
 pub use groups::SliceGroup;
-pub use transform::{CanvasShape, ShapeTransform};
+pub use transform::{CanvasShape, ShapeTransform, TransformPart};
 
 /// A corner-pinned quad. Coordinates are output-space 0..1 with the origin at the top-left.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -71,7 +71,14 @@ pub struct Surface {
     /// Moved, stretched and turned on top of its corners / mesh; animatable (`ControlTarget::SliceTransform`).
     #[serde(default)]
     pub transform: ShapeTransform,
+    /// The soft edge moving by itself (LFO, sound, beat…) around `feather`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feather_mod: Option<crate::Modulation>,
 }
+
+/// The widest soft edge a slice / a mask has (the sliders' and controllers' range).
+pub const SLICE_FEATHER_MAX: f32 = 0.5;
+pub const MASK_FEATHER_MAX: f32 = 0.2;
 
 /// A 3D model on a surface and the virtual camera that lines it up with the real object.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1078,6 +1085,9 @@ pub struct Mask {
     /// Moved, stretched and turned on top of its points; animatable (`ControlTarget::MaskTransform`).
     #[serde(default)]
     pub transform: ShapeTransform,
+    /// The soft edge moving by itself (LFO, sound, beat…) around `feather`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feather_mod: Option<crate::Modulation>,
 }
 
 /// Where a mask's soft edge sits relative to its outline.
@@ -1119,7 +1129,7 @@ impl crate::model::Choice for MaskEdge {
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new(), edge: MaskEdge::Centre, transform: ShapeTransform::default() }
+        Self { id: 0, name: "Mask".into(), enabled: true, points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], invert: false, feather: 0.0, smooth: false, corners: Vec::new(), attached: None, handles: Vec::new(), edge: MaskEdge::Centre, transform: ShapeTransform::default(), feather_mod: None }
     }
 }
 
@@ -1577,6 +1587,7 @@ impl Default for Surface {
             effects: Vec::new(),
             bend: None,
             transform: ShapeTransform::default(),
+            feather_mod: None,
         }
     }
 }
@@ -1791,14 +1802,17 @@ impl Mapping {
             let t = std::mem::take(&mut m.transform);
             t.apply(m, mods, aspect);
             m.transform = t;
+            if let Some(f) = &m.feather_mod {
+                m.feather = crate::control::modulate(m.feather, 0.0, MASK_FEATHER_MAX, Some(f), mods);
+            }
         }
         masks
     }
 
-    /// This mapping as it shows at `mods`: slices moved by their (maybe animated) transforms. Borrowed as it is when
+    /// This mapping as it shows at `mods`: slices moved by their (maybe animated) transforms and soft edges. Borrowed as it is when
     /// none has one (`aspect` = the output's width per height). Masks attached to a slice follow it.
     pub fn animated<'a>(this: std::borrow::Cow<'a, Mapping>, mods: &crate::ModInputs, aspect: f32) -> std::borrow::Cow<'a, Mapping> {
-        if this.surfaces.iter().all(|s| s.transform.is_identity()) {
+        if this.surfaces.iter().all(|s| s.transform.is_identity() && s.feather_mod.is_none()) {
             return this;
         }
         let mut m = this.into_owned();
@@ -1806,6 +1820,9 @@ impl Mapping {
             let t = std::mem::take(&mut s.transform);
             t.apply(s, mods, aspect);
             s.transform = t;
+            if let Some(f) = &s.feather_mod {
+                s.feather = crate::control::modulate(s.feather, 0.0, SLICE_FEATHER_MAX, Some(f), mods);
+            }
         }
         std::borrow::Cow::Owned(m)
     }
@@ -2178,6 +2195,30 @@ mod tests {
     fn degenerate_quad_is_rejected() {
         let line = [[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0]];
         assert!(quad_to_square(&line).is_none());
+    }
+}
+
+#[cfg(test)]
+mod feather_motion_tests {
+    use super::*;
+
+    #[test]
+    fn soft_edges_move_by_themselves() {
+        let lfo = crate::Modulation { source: crate::ModSource::LfoSine, range: true, ..Default::default() };
+        let mut m = Mapping::default();
+        m.add_surface(1);
+        m.add_mask(2);
+        m.surfaces[0].feather = 0.1;
+        m.masks[0].feather = 0.05;
+        assert!(matches!(Mapping::animated(std::borrow::Cow::Borrowed(&m), &Default::default(), 1.0), std::borrow::Cow::Borrowed(_)), "still: nothing to work out");
+        m.surfaces[0].feather_mod = Some(lfo.clone());
+        m.masks[0].feather_mod = Some(lfo);
+        let at = |t: f32| crate::ModInputs { time: t, beats: t * 2.0, ..Default::default() };
+        let slice: Vec<f32> = [0.0, 0.3, 0.6].iter().map(|t| Mapping::animated(std::borrow::Cow::Borrowed(&m), &at(*t), 1.0).surfaces[0].feather).collect();
+        let mask: Vec<f32> = [0.0, 0.3, 0.6].iter().map(|t| m.placed_masks_at(&at(*t), 1.0)[0].feather).collect();
+        assert!(slice.windows(2).any(|w| (w[0] - w[1]).abs() > 1e-3), "slice edge moves: {slice:?}");
+        assert!(mask.windows(2).any(|w| (w[0] - w[1]).abs() > 1e-3), "mask edge moves: {mask:?}");
+        assert!(slice.iter().all(|f| (0.0..=SLICE_FEATHER_MAX).contains(f)) && mask.iter().all(|f| (0.0..=MASK_FEATHER_MAX).contains(f)));
     }
 }
 

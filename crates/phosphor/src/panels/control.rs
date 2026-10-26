@@ -249,7 +249,9 @@ fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Opti
             let slice = comp.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).find(|s| has(&s.effects))?;
             Some((Tab::Mapping, None, Some(slice.id)))
         }
-        T::SliceOpacity(id) | T::SliceEnabled(id) | T::MaskTransform { mask: id, .. } | T::SliceTransform { slice: id, .. } => Some((Tab::Mapping, None, Some(*id))),
+        T::SliceOpacity(id) | T::SliceEnabled(id) | T::MaskTransform { mask: id, .. } | T::SliceTransform { slice: id, .. } | T::MaskFeather(id) | T::MaskEnabled(id) | T::MaskInvert(id) | T::SliceFeather(id) => Some((Tab::Mapping, None, Some(*id))),
+        T::Color { owner, .. } if comp.outputs.iter().any(|o| o.id == *owner) => Some((Tab::Output, None, None)),
+        T::Color { owner, .. } => Some((Tab::Mapping, None, Some(*owner))),
         T::Surface(_) | T::SurfaceY(_) | T::SurfaceBar { .. } => Some((Tab::Surface, None, None)),
         T::Modulator(_) => Some((Tab::Modulators, None, None)),
         T::Fixture { .. } => Some((Tab::Leds, None, None)),

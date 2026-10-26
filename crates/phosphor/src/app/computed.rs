@@ -27,4 +27,21 @@ impl State {
             self.set_control(&ControlTarget::Surface(id), v, now);
         }
     }
+
+    /// Faders and sliders that move by themselves: their targets follow where they are now (the fader keeps
+    /// where you set it). Nothing runs while none moves.
+    pub(crate) fn run_surface_motion(&mut self, now: f64) {
+        let mut sends = Vec::new();
+        for w in self.comp.surface.widgets.iter_mut().filter(|w| matches!(w.kind, WidgetKind::Fader | WidgetKind::Slider)) {
+            let Some(m) = &w.motion else { continue };
+            let v = phosphor_engine::control::modulate(w.value, 0.0, 1.0, Some(m), &self.mod_inputs);
+            if (v - w.live).abs() > 1e-4 {
+                w.live = v;
+                sends.extend(w.bindings.iter().map(|b| (b.target.clone(), b.range.apply(v))));
+            }
+        }
+        for (target, v) in sends {
+            self.set_control(&target, v, now);
+        }
+    }
 }

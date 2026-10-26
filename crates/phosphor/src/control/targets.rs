@@ -40,6 +40,11 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::SliceEnabled(id) => on(comp.slice(*comp.slices_reached(*id).first()?)?.enabled),
         ControlTarget::MaskTransform { mask, part } => comp.mask(*mask)?.transform.unit(*part as usize),
         ControlTarget::SliceTransform { slice, part } => comp.slice(*slice)?.transform.unit(*part as usize),
+        ControlTarget::MaskFeather(id) => comp.mask(*id)?.feather / phosphor_engine::mapping::MASK_FEATHER_MAX,
+        ControlTarget::MaskEnabled(id) => on(comp.mask(*id)?.enabled),
+        ControlTarget::MaskInvert(id) => on(comp.mask(*id)?.invert),
+        ControlTarget::SliceFeather(id) => comp.slice(*id)?.feather / phosphor_engine::mapping::SLICE_FEATHER_MAX,
+        ControlTarget::Color { owner, part } => comp.color(*owner)?.unit(*part as usize),
         ControlTarget::Fixture { fixture, param } => comp.dmx.fixtures.iter().find(|f| f.id == *fixture)?.param(*param)?,
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
         ControlTarget::LayerSpeed(id) => to_unit(layer(id)?.rate, 0.1, 4.0, true),
@@ -211,6 +216,27 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::SliceTransform { slice, part } => {
             if let Some(s) = comp.slice_mut(*slice) {
                 s.transform.set_unit(*part as usize, v);
+            }
+        }
+        ControlTarget::MaskFeather(id) => {
+            if let Some(m) = comp.mask_mut(*id) {
+                m.feather = v.clamp(0.0, 1.0) * phosphor_engine::mapping::MASK_FEATHER_MAX;
+            }
+        }
+        ControlTarget::MaskEnabled(id) | ControlTarget::MaskInvert(id) => {
+            if let Some(m) = comp.mask_mut(*id) {
+                let flag = if matches!(target, ControlTarget::MaskEnabled(_)) { &mut m.enabled } else { &mut m.invert };
+                *flag = toggled(*flag, v);
+            }
+        }
+        ControlTarget::SliceFeather(id) => {
+            if let Some(s) = comp.slice_mut(*id) {
+                s.feather = v.clamp(0.0, 1.0) * phosphor_engine::mapping::SLICE_FEATHER_MAX;
+            }
+        }
+        ControlTarget::Color { owner, part } => {
+            if let Some(c) = comp.color_mut(*owner) {
+                c.set_unit(*part as usize, v);
             }
         }
         ControlTarget::LayerCorner { layer, point } => {
@@ -416,16 +442,27 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         }
     };
     effects("MASTER", &comp.master_effects, &mut out);
+    let colors = |name: &str, owner: u64, out: &mut Vec<(ControlTarget, String)>| {
+        for (i, part) in phosphor_engine::ColorGrade::PARTS.iter().enumerate() {
+            out.push((ControlTarget::Color { owner, part: i as u8 }, format!("{name} · colour {}", part.name.to_lowercase())));
+        }
+    };
     for o in &comp.outputs {
+        colors(&o.name, o.id, &mut out);
         for s in &o.mapping.surfaces {
             out.push((ControlTarget::SliceOpacity(s.id), format!("{} · {} · opacity", o.name, s.name)));
             out.push((ControlTarget::SliceEnabled(s.id), format!("{} · {} · on/off", o.name, s.name)));
             for (i, part) in phosphor_engine::mapping::ShapeTransform::PARTS.iter().enumerate() {
                 out.push((ControlTarget::SliceTransform { slice: s.id, part: i as u8 }, format!("{} · {} · {}", o.name, s.name, part.name.to_lowercase())));
             }
+            out.push((ControlTarget::SliceFeather(s.id), format!("{} · {} · soft edge", o.name, s.name)));
+            colors(&format!("{} · {}", o.name, s.name), s.id, &mut out);
             effects(&format!("{} · {}", o.name, s.name), &s.effects, &mut out);
         }
         for m in &o.mapping.masks {
+            out.push((ControlTarget::MaskEnabled(m.id), format!("{} · {} · on/off", o.name, m.name)));
+            out.push((ControlTarget::MaskInvert(m.id), format!("{} · {} · invert", o.name, m.name)));
+            out.push((ControlTarget::MaskFeather(m.id), format!("{} · {} · soft edge", o.name, m.name)));
             for (i, part) in phosphor_engine::mapping::ShapeTransform::PARTS.iter().enumerate() {
                 out.push((ControlTarget::MaskTransform { mask: m.id, part: i as u8 }, format!("{} · {} · {}", o.name, m.name, part.name.to_lowercase())));
             }
@@ -516,6 +553,14 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
             let kind = if matches!(target, ControlTarget::MaskTransform { .. }) { "mask" } else { "slice" };
             let name = phosphor_engine::mapping::ShapeTransform::PARTS.get(*part as usize).map_or("part", |p| p.name);
             format!("/phosphor/{kind}/{id}/{}", name.to_lowercase().replace(' ', "_"))
+        }
+        ControlTarget::MaskFeather(id) => format!("/phosphor/mask/{id}/soft_edge"),
+        ControlTarget::MaskEnabled(id) => format!("/phosphor/mask/{id}/on"),
+        ControlTarget::MaskInvert(id) => format!("/phosphor/mask/{id}/invert"),
+        ControlTarget::SliceFeather(id) => format!("/phosphor/slice/{id}/soft_edge"),
+        ControlTarget::Color { owner, part } => {
+            let name = phosphor_engine::ColorGrade::PARTS.get(*part as usize).map_or("part", |p| p.name);
+            format!("/phosphor/colour/{owner}/{}", name.to_lowercase())
         }
         ControlTarget::Fixture { fixture, param } => match phosphor_engine::Fixture::PARAMS.get(*param as usize) {
             Some(name) => format!("/phosphor/light/{fixture}/{}", name.replace(' ', "_")),

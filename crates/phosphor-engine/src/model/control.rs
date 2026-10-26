@@ -113,6 +113,14 @@ pub enum ControlTarget {
     MaskTransform { mask: u64, part: u8 },
     /// A slice's transform, the same five values (`mapping::ShapeTransform::PARTS`).
     SliceTransform { slice: u64, part: u8 },
+    /// A mask's soft edge, on/off, inverted.
+    MaskFeather(u64),
+    MaskEnabled(u64),
+    MaskInvert(u64),
+    /// A slice's soft edge.
+    SliceFeather(u64),
+    /// An output's or a slice's colour: `part` indexes `ColorGrade::PARTS` (brightness, contrast, gamma…).
+    Color { owner: u64, part: u8 },
     /// Any slider on screen without a control of its own (a setting), by its stable key (panel, label, which one) and
     /// the name shown for it: limits, lock, snaps and mappings for every slider.
     Slider { key: u64, name: String },
