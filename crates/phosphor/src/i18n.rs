@@ -91,6 +91,11 @@ impl Lang {
     fn is_cjk(self) -> bool {
         matches!(self, Lang::Japanese | Lang::ChineseSimplified)
     }
+
+    /// This computer has the font to draw it (Japanese and Chinese need one from the system; the browser app has none).
+    pub fn drawable(self) -> bool {
+        !self.resolved().is_cjk() || cjk_font_file(self.resolved()).is_some()
+    }
 }
 
 /// The pack for a system language code ("es-MX", "pt_BR", "zh-Hans-CN", "ja-JP").
@@ -143,7 +148,8 @@ pub fn cjk_font() -> bool {
 /// Switches the interface to `lang` (also at start): its pack, and the fonts it needs.
 pub fn set_language(ctx: &egui::Context, lang: Lang) {
     *CHOSEN.lock().unwrap() = lang;
-    let now = lang.resolved();
+    // No font for its characters: English rather than boxes.
+    let now = if lang.drawable() { lang.resolved() } else { Lang::English };
     let catalog = now.pack().map(|text| Arc::new(Catalog::parse(text)));
     *CATALOG.lock().unwrap() = catalog.clone();
     eframe::egui::epaint::text::translation::set_translator(catalog.map(|c| Arc::new(move |s: &str| c.translate(s)) as Arc<eframe::egui::epaint::text::translation::Translator>));

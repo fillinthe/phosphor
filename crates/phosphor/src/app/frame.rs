@@ -363,6 +363,7 @@ impl PhosphorApp {
         }
         self.recovered_banner(&ctx);
         crate::ui::notice::notice_bar(&ctx, &mut self.state, now);
+        crate::ui::press::learn_menu(&ctx);
 
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let rect = ctx.content_rect();
