@@ -175,13 +175,15 @@ pub fn run_watchdog(pid: u32) {
             if stale < FROZEN_AFTER {
                 continue;
             }
-            // Frozen: end it so it can be reopened with the last settings.
+            // Frozen: write down where it's stuck (for the report), then end it so it can be reopened with the last
+            // settings.
+            let at = stuck_at(pid).map_or(String::new(), |s| format!("\n  stuck at: {s}"));
             if let Some(log) = crash_log_path() {
                 let _ = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(log)
-                    .and_then(|mut f| std::io::Write::write_all(&mut f, format!("[{}] froze (no heartbeat for {FROZEN_AFTER} s); restarted by the watchdog\n", unix_now()).as_bytes()));
+                    .and_then(|mut f| std::io::Write::write_all(&mut f, format!("[{}] froze (no heartbeat for {FROZEN_AFTER} s); restarted by the watchdog{at}\n", unix_now()).as_bytes()));
             }
             kill_process(pid);
             std::thread::sleep(std::time::Duration::from_millis(500));
@@ -231,6 +233,58 @@ fn process_alive(pid: u32) -> bool {
     }
 }
 
+/// Where a frozen Phosphor's main thread is (macOS: one second of `sample`): the source lines along its busiest
+/// stack, outermost first.
+#[cfg(target_os = "macos")]
+fn stuck_at(pid: u32) -> Option<String> {
+    let file = crash_log_path()?.with_file_name("freeze-sample.txt");
+    std::process::Command::new("/usr/bin/sample")
+        .args([&pid.to_string(), "1", "-mayDie", "-file"])
+        .arg(&file)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .ok()?;
+    let text = std::fs::read_to_string(&file).ok()?;
+    let path = main_thread_path(&text);
+    (!path.is_empty()).then(|| path.join(" > "))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn stuck_at(_pid: u32) -> Option<String> {
+    None
+}
+
+/// From a `sample` report: the main thread's busiest stack (the first child at each level), as the Phosphor source
+/// lines on it ("frame.rs:289").
+fn main_thread_path(report: &str) -> Vec<String> {
+    let mut lines = report.lines().skip_while(|l| !l.contains("com.apple.main-thread")).skip(1);
+    let mut out: Vec<String> = Vec::new();
+    let mut depth = 0;
+    for line in lines.by_ref() {
+        let Some(d) = line.find(|c: char| c.is_ascii_digit()) else { break };
+        if d <= depth {
+            break;
+        }
+        depth = d;
+        if !line.contains("phosphor") {
+            continue;
+        }
+        let Some(at) = line.split_whitespace().last().filter(|w| w.contains(".rs:")) else { continue };
+        // Rust's own plumbing (closures, boxes, unwinding, sorting) says nothing about where.
+        const PLUMBING: [&str; 9] = ["rt.rs", "backtrace.rs", "function.rs", "panic.rs", "panicking.rs", "unwind_safe.rs", "boxed.rs", "slice.rs", "mod.rs:135"];
+        if PLUMBING.iter().any(|p| at.starts_with(p)) {
+            continue;
+        }
+        if out.last().map(String::as_str) != Some(at) {
+            out.push(at.to_string());
+        }
+    }
+    // The innermost dozen.
+    let skip = out.len().saturating_sub(12);
+    out.split_off(skip)
+}
+
 /// Ends the frozen process we watch.
 #[cfg(unix)]
 fn kill_process(pid: u32) {
@@ -263,5 +317,14 @@ fn relaunch() {
         None => {
             let _ = std::process::Command::new(exe).spawn();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_freeze_sample_reads_as_source_lines() {
+        let report = "Call graph:\n    1290 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n    + 1290 start  (in dyld) + 6992  [0x1]\n    + ! 1290 main  (in phosphor) + 36  [0x2]  main.rs:214\n    + !   1290 f  (in phosphor) + 3  [0x3]  function.rs:250\n    + !     1287 run  (in phosphor) + 3  [0x3]  frame.rs:289\n    + !     : 900 media  (in phosphor) + 60  [0x4]  media.rs:202\n    + !     : 387 other  (in phosphor) + 60  [0x5]  layers.rs:9\n    + !     3 idle  (in AppKit) + 1\n    1 Thread_2\n";
+        assert_eq!(super::main_thread_path(report), ["main.rs:214", "frame.rs:289", "media.rs:202"]);
     }
 }
