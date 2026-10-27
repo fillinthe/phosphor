@@ -196,10 +196,15 @@ fn surface_widgets_send_osc_to_another_app() {
 }
 
 /// A virtual MIDI device on this Mac sends 128 BPM clock with a Start; the hub's MIDI clock locks to it.
+/// Only with PHOSPHOR_MIDI_TEST=1: the device is real for the whole Mac, so a Phosphor running at the same time sees it
+/// come and go ("MIDI disconnected: Phosphor Test Clock").
 #[cfg(target_os = "macos")]
 #[test]
 fn locks_to_midi_clock_from_a_real_midi_port() {
     use midir::os::unix::VirtualOutput;
+    if std::env::var_os("PHOSPHOR_MIDI_TEST").is_none() {
+        return;
+    }
     let Ok(out) = midir::MidiOutput::new("phosphor-test") else { return };
     let Ok(mut port) = out.create_virtual("Phosphor Test Clock") else { return };
     let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_581, feedback: false, feedback_port: 18_582, soft_takeover: false, dmx_in: false, ..Default::default() });
