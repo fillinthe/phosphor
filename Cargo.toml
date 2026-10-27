@@ -15,3 +15,7 @@ opt-level = 2
 # window keeps rendering the outputs at full rate on macOS. Re-apply when upgrading eframe.
 [patch.crates-io]
 eframe = { path = "vendor/eframe" }
+# egui + epaint with one patch each ("PHOSPHOR PATCH"): interface translation (epaint text/fonts.rs `translation`,
+# applied when a galley is laid out) and text fields kept untranslated (egui text_edit/builder.rs).
+egui = { path = "vendor/egui" }
+epaint = { path = "vendor/epaint" }

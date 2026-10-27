@@ -410,6 +410,23 @@ impl PhosphorApp {
                                 theme::set_tooltips(ui.ctx(), tips);
                             }
                         });
+                        crate::ui::field(ui, &format!("{} Language", icon::TRANSLATE), |ui| {
+                            let now = crate::i18n::chosen();
+                            let shown = if now == crate::i18n::Lang::Auto { format!("{} ({})", now.name(), now.resolved().name()) } else { now.name().to_string() };
+                            let mut pick = None;
+                            crate::ui::dropdown(ui, "language", 150.0).selected_text(shown).show_ui(ui, |ui| {
+                                for lang in crate::i18n::Lang::ALL {
+                                    if crate::ui::pick_item(ui, lang == now, lang.name()).clicked() {
+                                        pick = Some(lang);
+                                    }
+                                }
+                            });
+                            if let Some(lang) = pick {
+                                crate::i18n::set_language(ui.ctx(), lang);
+                                // The Mac menu bar isn't drawn by us: built again in the new language.
+                                self.install_native_menu();
+                            }
+                        });
                     })
                     .response
                     .on_hover_text("Interface brightness: from darkest to light");

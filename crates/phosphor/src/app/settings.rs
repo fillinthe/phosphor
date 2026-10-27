@@ -44,6 +44,7 @@ impl PhosphorApp {
         storage.set_string(KEY_PROJECT_PATH, self.state.project_path.clone().unwrap_or_default());
         storage.set_string(KEY_AUTOSAVE, if self.state.autosave { "1" } else { "0" }.into());
         storage.set_string(KEY_HELP_ICONS, if crate::ui::help_icons() { "1" } else { "0" }.into());
+        storage.set_string(KEY_LANGUAGE, crate::i18n::chosen().code().into());
         storage.set_string(KEY_TOOLTIPS, if crate::theme::tooltips_on() { "1" } else { "0" }.into());
         storage.set_string(KEY_PROJECTS_AT_START, if self.state.projects.at_start { "1" } else { "0" }.into());
         storage.set_string(KEY_UPDATE_SKIP, self.state.updater.skipped.clone());

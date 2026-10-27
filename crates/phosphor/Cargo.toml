@@ -70,7 +70,7 @@ objc2 = "0.6"
 muda = { version = "0.21", default-features = false }
 # Display / window capture and system sound (macOS 12.3+); off in the build for older Intel Macs.
 screencapturekit = { version = "11", optional = true }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSGeometry", "NSArray", "NSEnumerator"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSGeometry", "NSArray", "NSEnumerator", "NSLocale"] }
 objc2-metal = { version = "0.3", default-features = false, features = ["std", "MTLDevice", "MTLTexture", "MTLResource", "MTLCommandQueue", "MTLCommandBuffer", "MTLAllocation"] }
 objc2-vision = { version = "0.3", default-features = false, features = ["std", "VNRequest", "VNRequestHandler", "VNObservation", "VNDetectFaceRectanglesRequest", "VNDetectHumanHandPoseRequest", "VNDetectHumanBodyPoseRequest", "VNDetectedPoint", "VNGeometry", "VNTypes", "VNGeneratePersonSegmentationRequest", "VNStatefulRequest", "VNDetectBarcodesRequest", "VNRecognizeTextRequest", "objc2-core-video", "objc2-core-foundation"] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes"] }

@@ -1,5 +1,6 @@
 mod account;
 mod text;
+mod i18n;
 #[cfg(target_arch = "wasm32")]
 mod web_files;
 mod app;
