@@ -5,6 +5,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use phosphor_engine::wgpu;
+
 #[derive(Clone, Default)]
 pub struct GpuGuard {
     /// The first error since the last log line, and how many came in all.
