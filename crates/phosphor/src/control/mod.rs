@@ -138,7 +138,7 @@ pub fn also_moves(comp: &Composition, source: &ControlSource, target: &ControlTa
     if others.is_empty() {
         return None;
     }
-    let text = format!("{} also moves {} (one input, several controls: see Controls › Mappings)", source.label(), others.join(", "));
+    let text = format!("{} also moves {} (one input, several controls: see MIDI / OSC › Mappings)", source.label(), others.join(", "));
     log::info!("mapping clash: {text}");
     Some(text)
 }

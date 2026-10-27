@@ -3914,7 +3914,7 @@
 "{0} Web control off": "{0} Control web desactivado",
 "{0} Write it": "{0} Escribirlo",
 "{0} Your account": "{0} Tu cuenta",
-"{0} also moves {1} (one input, several controls: see Controls › Mappings)": "{0} también mueve {1} (una entrada, varios controles: ver Controles › Asignaciones)",
+"{0} also moves {1} (one input, several controls: see MIDI / OSC › Mappings)": "{0} también mueve {1} (una entrada, varios controles: ver MIDI / OSC › Asignaciones)",
 "{0} answered with an error ({1})": "{0} respondió con un error ({1})",
 "{0} blends layer {1}": "{0} fusiona la capa {1}",
 "{0} channels (its own mode)": "{0} canales (su propio modo)",
