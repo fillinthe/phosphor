@@ -360,9 +360,9 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
     };
     if source != MediaSource::Recent {
         match view.sort {
-            MediaSort::Name => shown.sort_by_key(|i| bin[*i].name.to_lowercase()),
+            MediaSort::Name => shown.sort_by_cached_key(|i| bin[*i].name.to_lowercase()),
             MediaSort::Newest => shown.sort_by_key(|i| std::cmp::Reverse(*i)),
-            MediaSort::Type => shown.sort_by_key(|i| {
+            MediaSort::Type => shown.sort_by_cached_key(|i| {
                 (
                     !crate::media::is_movie(&bin[*i].name),
                     bin[*i].name.to_lowercase(),
