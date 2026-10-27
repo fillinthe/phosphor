@@ -25,6 +25,8 @@ mod devices;
 mod drag_ghost;
 pub(crate) use drag_ghost::drag_ghost;
 mod effects;
+#[cfg(not(target_arch = "wasm32"))]
+mod file_info;
 mod groups;
 mod inspector;
 mod layer_windows;
@@ -87,6 +89,8 @@ pub(crate) use control::*;
 pub(crate) use cues::*;
 pub(crate) use devices::*;
 pub(crate) use effects::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use file_info::{FileInfo, file_info_window};
 pub(crate) use groups::*;
 pub(crate) use inspector::*;
 pub(crate) use layer_windows::*;

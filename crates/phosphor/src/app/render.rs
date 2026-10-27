@@ -49,7 +49,7 @@ impl PhosphorApp {
             preview_wants,
             preview_keys,
             preview_textures,
-            preview_refreshed,
+            preview_stills,
             selected,
             notice,
             monitor_wants,
@@ -154,16 +154,16 @@ impl PhosphorApp {
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
         let keys: Vec<String> = wants.iter().map(|(k, _, _)| k.clone()).collect();
         if !wants.is_empty() {
-            // Each tile renders once (a still); only hovered/live tiles keep updating.
-            let _ = preview_refreshed;
-            let stale = false;
+            // Each tile renders a still; hovered / live tiles keep updating, and stills are taken again now and then
+            // (`stills`).
+            let again = preview_stills.plan(now, keys != *preview_keys, keys.len());
             let items = wants
                 .into_iter()
                 .enumerate()
                 .map(|(i, (key, item, live))| {
                     let refresh = if preview_keys.get(i) != Some(&key) {
                         phosphor_engine::PreviewRefresh::Moved
-                    } else if live || stale {
+                    } else if live || again == super::stills::Again::All || again == super::stills::Again::One(i) {
                         phosphor_engine::PreviewRefresh::Live
                     } else {
                         phosphor_engine::PreviewRefresh::No

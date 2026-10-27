@@ -289,8 +289,74 @@ pub(crate) fn field<R>(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egu
 /// A panel's scrolling column: scrolls up and down and is never wider than the panel. (egui's own vertical scroll
 /// area widens itself to fit anything too wide, and stays wide, so one long row made every row under it lay out wider
 /// than the panel and get cut off.)
-pub(crate) fn column_scroll(ui: &egui::Ui) -> egui::ScrollArea {
-    egui::ScrollArea::vertical().max_width(ui.available_width())
+///
+/// It also scrolls while something is being dragged over it (egui stops the wheel during a drag): see `carry_scroll`.
+pub(crate) fn column_scroll(ui: &egui::Ui) -> ColumnScroll {
+    ColumnScroll(egui::ScrollArea::vertical().max_width(ui.available_width()))
+}
+
+/// `column_scroll`'s scroll area.
+pub(crate) struct ColumnScroll(egui::ScrollArea);
+
+impl ColumnScroll {
+    pub(crate) fn id_salt(self, id: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        Self(self.0.id_salt(id))
+    }
+
+    pub(crate) fn auto_shrink(self, shrink: impl Into<egui::Vec2b>) -> Self {
+        Self(self.0.auto_shrink(shrink))
+    }
+
+    pub(crate) fn max_height(self, h: f32) -> Self {
+        Self(self.0.max_height(h))
+    }
+
+    pub(crate) fn max_width(self, w: f32) -> Self {
+        Self(self.0.max_width(w))
+    }
+
+    pub(crate) fn stick_to_bottom(self, stick: bool) -> Self {
+        Self(self.0.stick_to_bottom(stick))
+    }
+
+    pub(crate) fn show<R>(self, ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> egui::scroll_area::ScrollAreaOutput<R> {
+        self.0.show(ui, |ui| {
+            let r = add(ui);
+            carry_scroll(ui);
+            r
+        })
+    }
+}
+
+/// While something is dragged (an effect, a clip, a file), the scroll area this is called in (at the end of its
+/// contents) still scrolls: with the wheel / trackpad, and by itself when the pointer is near its top or bottom edge.
+/// The innermost one under the pointer wins.
+pub(crate) fn carry_scroll(ui: &egui::Ui) {
+    let ctx = ui.ctx();
+    if !egui::DragAndDrop::has_any_payload(ctx) {
+        return;
+    }
+    let area = ui.clip_rect();
+    let Some(pos) = ctx.pointer_latest_pos().filter(|p| area.contains(*p)) else { return };
+    let pass = ctx.cumulative_pass_nr();
+    let done = egui::Id::new("carry_scroll_pass");
+    if ctx.data(|d| d.get_temp::<u64>(done)) == Some(pass) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(done, pass));
+    let mut dy = ctx.input(|i| i.smooth_scroll_delta.y);
+    // Near an edge: faster the closer it gets.
+    let edge = (area.height() * 0.15).clamp(12.0, 40.0);
+    let speed = 900.0 * ctx.input(|i| i.stable_dt).min(0.05);
+    if pos.y < area.top() + edge {
+        dy += speed * (1.0 - (pos.y - area.top()) / edge);
+    } else if pos.y > area.bottom() - edge {
+        dy -= speed * (1.0 - (area.bottom() - pos.y) / edge);
+    }
+    if dy != 0.0 {
+        ui.scroll_with_delta_animation(egui::vec2(0.0, dy), egui::style::ScrollAnimation::none());
+        ctx.request_repaint();
+    }
 }
 
 /// In a wrapping row, starts a new line when what comes next (`need` wide) won't fit in what's left of this one.
