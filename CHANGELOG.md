@@ -4,6 +4,58 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.4.0 (2026-10-27)
+
+Phosphor speaks eight languages now, maps like MadMapper, and lets you build your own control panels.
+
+**Languages**
+- English, Español, Deutsch, Français, Italiano, Português (Brasil), Japanese and Simplified Chinese: pick one in the
+  brightness (sun) menu › Language. "Automatic" follows your computer's language. Japanese and Chinese use the
+  fonts already on your Mac or PC.
+
+**Mapping (Outputs)**
+- **Layouts:** whole arrangements of slices and masks per output. Click one to fade to it; map them to pads, keys or OSC.
+- **Groups** of slices and masks with their own on/off and opacity; masks can be grouped and faded too.
+- Show a camera, screen, Syphon or NDI input on any slice.
+- A Photoshop-style transform box for slices and masks (sides stretch, corners scale, the knob turns).
+- Slices and masks animate: position, scale, rotation and soft edges, mappable and on the timeline and in cues.
+- Every opacity slider in the Studio has an on/off switch that hides the thing without moving the slider.
+
+**Your own panels**
+- View › New Panel: buttons, faders and pads wired to anything and to OSC, docked or floating.
+- Panel browser (View › Panel Browser…): every panel at a glance; show, close or bring back any of them.
+- LFOs and modulators have their own place in the Show layout.
+
+**Effects**
+- Effects follow clips and media files: a clip's own effects come back whenever it plays, on any layer.
+- Drag an effect from the Effects panel onto any effect list in the Inspector; panels scroll while you drag.
+- ISF effects sorted into the Effects panel's categories; previews fixed (each tile shows its own effect, none stay black).
+
+**Clips and media**
+- Stop all, and a stop button on each layer.
+- Media tiles and layers show badges when they carry effects, speed changes or trims.
+- File info (right-click a media file): everything about it, copyable, and its effects to copy.
+- Sort media by length, a "Plays on" picker, random clip on a layer, favourites from a clip.
+- Clips from an external drive are copied to this computer the first time they play, so shows don't stall on a slow drive.
+- Scratch moves only while you scratch; the playhead sits above Speed and Opacity in the Inspector.
+- A new start screen for projects (File › Projects…).
+
+**Controls**
+- Every slider and button can be mapped (MIDI, OSC, keys), locked, given snap points and **limits**: drag the small
+  brackets at a slider's ends to keep it from going lower or higher.
+- Every menu command can be mapped too.
+- MIDI controllers reconnect by themselves.
+
+**Interface**
+- Help sentences shrink to small (i) icons (hover or click to read); tooltips can be turned off.
+- "Saved" and other news show in the status bar instead of over the panels.
+- Preview before live: a layer you're preparing plays in the Inspector, then Go live fades it in.
+
+**Reliability**
+- GPU errors no longer end the show; output windows keep displays awake.
+- If Phosphor ever freezes, the crash report says where, so it can be fixed.
+- Many smaller fixes and speed-ups.
+
 ## 0.3.2 (2026-10-23)
 
 A big one: the rest of the VDMX and MadMapper list, free media from the internet, and a build for older Intel Macs.
