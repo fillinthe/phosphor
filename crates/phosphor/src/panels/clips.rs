@@ -236,6 +236,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             if n == 0 {
                 help(ui, "Add layers first; each layer gets a row of clip slots.");
             }
+            crate::ui::carry_scroll(ui);
         });
     }
     apply_row_out(st, out, now);

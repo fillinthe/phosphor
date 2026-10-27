@@ -75,6 +75,7 @@ pub(crate) use web_control::web_badge;
 #[cfg(not(target_arch = "wasm32"))]
 mod convert_window;
 mod status;
+mod stills;
 mod show;
 
 #[allow(unused_imports)]
@@ -283,6 +284,9 @@ pub struct State {
     /// The Convert window (right-click a media file > Convert…).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) convert: convert_window::ConvertUi,
+    /// The File info window's file (right-click a media file).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) file_info: Option<crate::panels::FileInfo>,
     /// Opening the default audio input failed once (don't retry on every Quick action).
     pub audio_declined: bool,
     /// Clip cells drawn last frame (screen rect, layer, slot): where files dropped from the Finder land.
@@ -337,8 +341,8 @@ pub struct State {
     /// Previews requested by panels this frame (key, item); rendered on the next frame.
     pub preview_wants: Vec<(String, phosphor_engine::PreviewItem, bool)>,
     pub(crate) preview_keys: Vec<String>,
-    /// When stills were last refreshed.
-    preview_refreshed: f64,
+    /// When preview stills are taken again.
+    preview_stills: stills::Stills,
     /// Preview i's texture, its size, and whether it shows what was asked for now.
     pub(crate) preview_textures: Vec<Option<(egui::TextureId, (u32, u32), bool)>>,
     /// A panel to bring to the front (set by explorer actions and the palette).

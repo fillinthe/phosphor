@@ -83,6 +83,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let live = st.comp.layer_live(sel);
         let mut go_live = false;
         let layer = st.comp.layer_mut(sel).unwrap();
+        let mut top_seek = None;
         crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
             ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
             let w = ui.available_width().min(360.0);
@@ -94,7 +95,12 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.painter().rect_filled(egui::Rect::from_min_size(at, g.size() + egui::vec2(10.0, 4.0)), 3.0, crate::theme::WARN);
                 ui.painter().galley(at + egui::vec2(5.0, 2.0), g, Color32::BLACK);
             }
-            // Speed and opacity right under the picture: watch what they do while changing them.
+            // The playhead, speed and opacity right under the picture: watch what they do while changing them.
+            if matches!(layer.source, SourceSpec::Movie { .. })
+                && let Some((pos, dur)) = position
+            {
+                top_seek = playhead(ui, layer, pos, dur);
+            }
             if matches!(layer.source, SourceSpec::Movie { .. }) && layer.sync_beats <= 0.0 {
                 Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).width(w).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
             }
@@ -118,7 +124,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 let title = format!("{} Clip {} · column {}", icon::SQUARES_FOUR, k.name, c + 1);
                 crate::ui::section(ui, "inspector_clip", title, true, |ui| {
                     if also_clips > 0 {
-                        hint(ui, &format!("Editing {} clips: how a press plays, sound and own settings go to all of them. Click a clip without Shift / Cmd to edit just one.", also_clips + 1));
+                        ui.horizontal(|ui| hint(ui, format!("Editing {} clips", also_clips + 1)).on_hover_text("How a press plays, sound and own settings go to all of them. Click a clip without Shift / Cmd to edit just one."));
                     }
                     if let Some(a) = super::clip_editor(ui, layer, c, true, is_movie) {
                         clip_act = Some((c, a));
@@ -126,7 +132,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
             if also > 0 {
-                hint(ui, &format!("Editing {} layers: changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one.", also + 1));
+                ui.horizontal(|ui| hint(ui, format!("Editing {} layers", also + 1)).on_hover_text("Changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one."));
             }
             ui.separator();
             let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true };
@@ -143,7 +149,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             if let Some((chain, a)) = fx {
                 (fx_chain, fx_action) = (chain, Some(a));
             }
-            seek_to = seek;
+            seek_to = seek.or(top_seek);
             if media.match_beat.get() {
                 match_beat = Some(layer.id);
             }
@@ -211,8 +217,19 @@ pub(crate) struct LayerMedia<'a> {
     pub match_beat: std::cell::Cell<bool>,
     /// Effects reaching this layer from its group, comp and MASTER: (where, which, running).
     pub inherited: Vec<(String, String, bool)>,
-    /// Speed is already shown under the picture (Inspector): Playback doesn't repeat it.
+    /// The playhead and speed are already shown under the picture (Inspector): Playback doesn't repeat them.
     pub speed_above: bool,
+}
+
+/// A movie's playhead: click or drag to jump, with its loop section's marks.
+fn playhead(ui: &mut egui::Ui, layer: &mut LayerState, pos: f64, dur: f64) -> Option<f64> {
+    let (mut lo, mut hi) = (layer.loop_in, layer.loop_out);
+    let seek = scrub_bar(ui, pos, dur, (layer.loop_beats <= 0.0).then_some((&mut lo, &mut hi)));
+    if (lo, hi) != (layer.loop_in, layer.loop_out) {
+        layer.loop_in = lo.min(hi - 0.01).max(0.0);
+        layer.loop_out = hi.max(lo + 0.01).min(1.0);
+    }
+    seek
 }
 
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
@@ -299,15 +316,14 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         ui.separator();
         if matches!(layer.source, SourceSpec::Movie { .. }) {
             crate::ui::heading(ui, "Playback");
+            // What the movie is, on one line (all of it on hover; File info in the Media panel can copy it).
             if let Some(info) = &info {
-                hint(ui, *info);
+                ui.horizontal(|ui| hint(ui, *info).on_hover_text(*info));
             }
             if let Some((pos, dur)) = position {
-                let (mut lo, mut hi) = (layer.loop_in, layer.loop_out);
-                seek_to = scrub_bar(ui, pos, dur, (layer.loop_beats <= 0.0).then_some((&mut lo, &mut hi)));
-                if (lo, hi) != (layer.loop_in, layer.loop_out) {
-                    layer.loop_in = lo.min(hi - 0.01).max(0.0);
-                    layer.loop_out = hi.max(lo + 0.01).min(1.0);
+                // The Inspector shows it under the picture already.
+                if !media.speed_above {
+                    seek_to = playhead(ui, layer, pos, dur);
                 }
                 let at = (pos / dur.max(1e-6)) as f32;
                 crate::ui::toolbar(ui, |ui| {
@@ -490,7 +506,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
     // Effects that also act on this layer from above its own chain (they don't show in the list below).
     if !media.inherited.is_empty() {
         crate::ui::toolbar(ui, |ui| {
-            hint(ui, "Also acting on this layer:");
+            hint(ui, "Also:").on_hover_text("Effects also acting on this layer, from its group, comp or MASTER");
             for (scope, name, running) in &media.inherited {
                 let text = format!("{name} ({scope})");
                 if *running {
@@ -505,8 +521,8 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
     let bringing = layer.clips_with_effects();
     if bringing > 0 {
         crate::ui::toolbar(ui, |ui| {
-            let what = if bringing == 1 { "1 clip on this layer puts its own effects back when it plays".to_string() } else { format!("{bringing} clips on this layer put their own effects back when they play") };
-            hint(ui, what).on_hover_text("Their speed and loop still come back; turn it off for one clip in its right-click menu (Brings its effects)");
+            let what = if bringing == 1 { "1 clip brings its effects".to_string() } else { format!("{bringing} clips bring their effects") };
+            hint(ui, what).on_hover_text("These clips put their own effects back when they play. Their speed and loop still come back; turn it off for one clip in its right-click menu (Brings its effects)");
             if crate::ui::small_command(ui, "Stop that").on_hover_text("These clips leave the layer's effects as they are from now on").clicked() {
                 layer.clips_forget_effects();
             }

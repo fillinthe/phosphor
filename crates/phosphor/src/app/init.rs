@@ -203,7 +203,7 @@ impl PhosphorApp {
                 palette: Default::default(),
                 preview_wants: Vec::new(),
                 preview_keys: Vec::new(),
-                preview_refreshed: 0.0,
+                preview_stills: Default::default(),
                 preview_textures: Vec::new(),
                 open_tab: None,
                 panel_browser: false,
@@ -320,6 +320,8 @@ impl PhosphorApp {
                 media_memory_at: 0.0,
                 #[cfg(not(target_arch = "wasm32"))]
                 convert: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
+                file_info: None,
                 mod_inputs: ModInputs::default(),
                 mod_phases: Default::default(),
             },

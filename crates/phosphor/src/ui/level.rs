@@ -168,6 +168,39 @@ impl<'a> Level<'a> {
             *value = default;
             r.mark_changed();
         }
+        // Limit handles (VDMX's slider envelope): a small bracket at each end, along the bar's lower edge; drag one in
+        // and the slider can't go lower / higher than it. Back to the end = no limit.
+        let mut limit_marks = Vec::new();
+        if let Some(t) = target.as_ref().filter(|_| !locked && !off) {
+            let (lo, hi) = limits.unwrap_or((0.0, 1.0));
+            for (low, at) in [(true, lo), (false, hi)] {
+                let hr = limit_handle(rect, vertical.is_some(), low, at);
+                let h = ui.interact(hr, r.id.with(("limit", low)), Sense::drag());
+                if h.dragged()
+                    && let Some(pos) = h.interact_pointer_pos()
+                {
+                    let u = match vertical {
+                        Some(_) => (rect.bottom() - pos.y) / rect.height(),
+                        None => (pos.x - rect.left()) / rect.width(),
+                    }
+                    .clamp(0.0, 1.0);
+                    let u = if low && u < 0.02 { 0.0 } else if !low && u > 0.98 { 1.0 } else { u };
+                    super::locks::ask(ui, super::locks::PrefChange::Limit(t.clone(), low, Some(u)));
+                    let shown = format_value(from_t(u), min, max, percent);
+                    h.clone().on_hover_text_at_pointer(format!("{} {shown}", if low { "Lowest" } else { "Highest" }));
+                    ui.ctx().request_repaint();
+                }
+                let set = if low { at > 0.0 } else { at < 1.0 };
+                let active = h.hovered() || h.dragged();
+                if active {
+                    ui.ctx().set_cursor_icon(if vertical.is_some() { egui::CursorIcon::ResizeVertical } else { egui::CursorIcon::ResizeHorizontal });
+                    if !h.dragged() {
+                        h.on_hover_text(if low { "Drag in: the lowest it can go" } else { "Drag in: the highest it can go" });
+                    }
+                }
+                limit_marks.push((hr, set, active));
+            }
+        }
 
         // Paint: track, fill, the real (modulated) position, then name and value.
         let ui_vis = ui.visuals();
@@ -262,6 +295,14 @@ impl<'a> Level<'a> {
         }
         if hovered {
             p.rect_stroke(rect, 0.0, Stroke::new(1.0, base), StrokeKind::Inside);
+        }
+        // The limit brackets: always when set, both while the pointer is on the bar.
+        let near = hovered || limit_marks.iter().any(|(_, _, a)| *a);
+        for (hr, set, active) in limit_marks {
+            if set || near {
+                let c = if active { crate::theme::WARN } else if set { crate::theme::WARN.gamma_multiply(0.8) } else { ui_vis.weak_text_color() };
+                p.rect_filled(hr, 0.0, c);
+            }
         }
         let font = egui::FontId::proportional(11.0);
         let color = ui_vis.strong_text_color();
@@ -395,5 +436,19 @@ mod tests {
         assert_eq!(parse_typed("300", 0.0, 2.0, true), Some(2.0));
         assert_eq!(parse_typed("0.5", 0.0, 4.0, false), Some(0.5));
         assert_eq!(parse_typed("abc", 0.0, 1.0, true), None);
+    }
+}
+
+/// Where a limit handle sits on a bar: a small block along its lower (or, on a fader, right) edge, inside the limit.
+fn limit_handle(rect: egui::Rect, vertical: bool, low: bool, at: f32) -> egui::Rect {
+    const LONG: f32 = 6.0;
+    if vertical {
+        let y = rect.bottom() - at * rect.height();
+        let (a, b) = if low { (y - LONG, y) } else { (y, y + LONG) };
+        egui::Rect::from_min_max(egui::pos2(rect.right() - rect.width() * 0.4, a), egui::pos2(rect.right(), b))
+    } else {
+        let x = rect.left() + at * rect.width();
+        let (a, b) = if low { (x, x + LONG) } else { (x - LONG, x) };
+        egui::Rect::from_min_max(egui::pos2(a, rect.bottom() - rect.height() * 0.3), egui::pos2(b, rect.bottom()))
     }
 }

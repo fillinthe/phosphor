@@ -1,5 +1,5 @@
-//! The message bar: whatever `State::notice` says, at the top of the window. Plain news (Saved, Watching…) goes by
-//! itself after a few seconds; a problem (Couldn't open…, failed…) stays until OK, with Report a problem (the bug
+//! Whatever `State::notice` says. Plain news (Saved, Watching…) is written in the status line at the bottom
+//! (`news`, so it covers nothing) and goes by itself after a few seconds; a problem (Couldn't open…, failed…) stays until OK, with Report a problem (the bug
 //! window, filled in) so anyone can tell the Phosphor team in one click.
 
 use eframe::egui;
@@ -24,7 +24,9 @@ pub(crate) fn notice_bar(ctx: &egui::Context, st: &mut State, now: f64) {
         return;
     }
     if !problem {
+        // Written in the status line (`news`).
         ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        return;
     }
     let fill = if problem { egui::Color32::from_rgb(54, 30, 24) } else { egui::Color32::from_rgb(24, 34, 30) };
     egui::Area::new(egui::Id::new("notice_bar")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
@@ -49,6 +51,11 @@ pub(crate) fn notice_bar(ctx: &egui::Context, st: &mut State, now: f64) {
             });
         });
     });
+}
+
+/// Plain news, for the status line: the words (None when there's none, or it's a problem: those pop up).
+pub(crate) fn news(st: &State) -> Option<&str> {
+    st.notice.as_deref().filter(|t| !is_problem(t))
 }
 
 #[cfg(test)]

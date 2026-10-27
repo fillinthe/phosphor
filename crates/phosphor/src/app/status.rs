@@ -16,6 +16,7 @@ impl PhosphorApp {
         let mut open_outputs = false;
         let mut unmute = false;
         let mut web_toggle = false;
+        let mut dismiss = false;
         egui::Panel::bottom("status_line").show(ui, |ui| {
             crate::ui::toolbar(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
@@ -70,6 +71,16 @@ impl PhosphorApp {
                 for (on, name) in [(midi, "MIDI"), (osc, "OSC")] {
                     ui.label(small(format!("{} {name}", icon::CIRCLE), if on { theme::accent() } else { Color32::from_gray(70) }));
                 }
+                // News (Saved…, Watching…): here, out of the way; it goes by itself.
+                if let Some(text) = crate::ui::notice::news(st) {
+                    ui.separator();
+                    // Leaves room for the frame rate and Library on the right.
+                    let room = egui::vec2((ui.available_width() - 420.0).max(60.0), ui.spacing().interact_size.y);
+                    let r = ui.allocate_ui(room, |ui| ui.add(egui::Label::new(small(format!("{} {text}", icon::INFO), theme::accent())).truncate().sense(egui::Sense::click()))).inner;
+                    if r.on_hover_text(format!("{text}\nClick to clear")).clicked() {
+                        dismiss = true;
+                    }
+                }
                 // Right: the side-column toggles (areas), then frame rate and load.
                 let s = self.state.stats.latest;
                 let perf = format!("{:.0} fps · engine {:.1} ms · CPU {:.0}% · {:.0} MB", s.fps, s.render_ms, s.cpu_percent, s.memory_mb);
@@ -85,6 +96,9 @@ impl PhosphorApp {
                 });
             });
         });
+        if dismiss {
+            self.state.notice = None;
+        }
         if web_toggle {
             let on = self.state.comp.web_control_off;
             self.state.set_web_control(on);

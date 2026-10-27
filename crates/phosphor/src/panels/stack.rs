@@ -167,6 +167,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
             }
             ui.add_space(6.0);
             master_strip(ui, comp, *selected == Some(MASTER_ID), &mut acts, selected);
+            crate::ui::carry_scroll(ui);
         });
     }
     apply_row_out(st, out, now);

@@ -164,6 +164,8 @@ pub(crate) enum MediaAct {
     PlayOn(usize, u64),
     /// Open the Convert window for this item.
     Convert(usize),
+    /// Open the File info window for this item.
+    Info(usize),
     /// Open the file again from disk (it was edited).
     Reload(usize),
     Favorite(usize),
@@ -431,6 +433,14 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                 #[cfg(target_arch = "wasm32")]
                 let _ = i;
             }
+            MediaAct::Info(i) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(item) = st.comp.media_bin.get(i) {
+                    st.file_info = Some(super::FileInfo::open(&item.path));
+                }
+                #[cfg(target_arch = "wasm32")]
+                let _ = i;
+            }
             MediaAct::Reload(i) => {
                 if let Some(item) = st.comp.media_bin.get(i).cloned() {
                     st.media.reload(&st.comp, &item.path);
@@ -681,6 +691,11 @@ pub(crate) fn media_tile(
                 ui.close();
             }
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        if crate::ui::command(ui, label(icon::INFO, "File info…")).on_hover_text("Everything about this file, and its effects, to read or copy").clicked() {
+            acts.push(MediaAct::Info(i));
+            ui.close();
+        }
         ui.separator();
         let fav = if item.favorite { "Remove from favourites" } else { "Add to favourites" };
         if crate::ui::command(ui, label(icon::STAR, fav)).clicked() {
