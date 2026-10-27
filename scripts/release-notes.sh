@@ -15,11 +15,11 @@ echo
 echo "Full history: [CHANGELOG.md](https://github.com/fillinthe/phosphor/blob/main/CHANGELOG.md)"
 echo
 echo "## Install"
-echo "**Mac (Apple silicon):** download Phosphor-mac.zip, unzip, drag Phosphor to Applications. First launch: macOS says it can't verify Phosphor (not notarized yet): click Done, then System Settings › Privacy & Security › scroll down › **Open Anyway**, once."
+echo "**Mac (Apple silicon):** download Phosphor-mac.zip, unzip, drag Phosphor to Applications and open it. It's signed and notarized by Apple, so it opens without warnings."
 case "$VER" in
   0.2.[0-9]|0.2.[1-4][0-9]) ;;
   *) echo
-     echo "**Windows 10/11 (preview):** download Phosphor-windows.zip, unzip anywhere, run Phosphor.exe. Windows warns once because the app isn't signed: **More info**, **Run anyway**." ;;
+     echo "**Windows 10/11 (preview):** run Phosphor-windows-setup.exe (or unzip Phosphor-windows.zip anywhere and run Phosphor.exe). Windows warns once because the app isn't signed: **More info**, **Run anyway**." ;;
 esac
 case "$VER" in
   0.[0-2].*|0.3.[01]) ;;
