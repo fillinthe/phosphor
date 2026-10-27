@@ -15,6 +15,9 @@ impl PhosphorApp {
         // (i) icons unless you chose words (the brightness menu): the room goes to the controls.
         let help_icons = stored(KEY_HELP_ICONS).is_none_or(|v| v == "1") || std::env::var_os("PHOSPHOR_HELP_ICONS").is_some();
         let tooltips_off = stored(KEY_TOOLTIPS).is_some_and(|v| v == "0");
+        // The interface language: as chosen, else the computer's (PHOSPHOR_LANG=de for a bench).
+        let lang = std::env::var("PHOSPHOR_LANG").ok().or_else(|| stored(KEY_LANGUAGE)).map_or(crate::i18n::Lang::Auto, |c| crate::i18n::Lang::from_code(&c));
+        crate::i18n::set_language(&cc.egui_ctx, lang);
         let accent = stored(KEY_ACCENT).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
         #[cfg(not(target_arch = "wasm32"))]
         let snapshot = if bench.is_none() { crate::recovery::begin_session() } else { None };

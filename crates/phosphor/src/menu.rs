@@ -310,13 +310,13 @@ pub mod native {
                 let mods = if shift { Modifiers::META | Modifiers::SHIFT } else { Modifiers::META };
                 code(k).map(|c| Accelerator::new(mods, c))
             });
-            MenuItem::with_id(id(a), label, true, accel)
+            MenuItem::with_id(id(a), crate::i18n::tr(label), true, accel)
         };
 
         let app = Submenu::new("Phosphor", true);
         let about = muda::AboutMetadata { name: Some("Phosphor".into()), version: Some(env!("CARGO_PKG_VERSION").into()), website: Some("https://phosphorfx.com".into()), ..Default::default() };
         app.append_items(&[
-            &PredefinedMenuItem::about(Some("About Phosphor"), Some(about)),
+            &PredefinedMenuItem::about(Some(&crate::i18n::tr("About Phosphor")), Some(about)),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::services(None),
             &PredefinedMenuItem::separator(),
@@ -332,7 +332,7 @@ pub mod native {
         menu.append(&app).ok()?;
 
         for (title, entries) in MENUS {
-            let sub = Submenu::new(*title, true);
+            let sub = Submenu::new(crate::i18n::tr(title), true);
             for e in entries.iter() {
                 match e {
                     Entry::Item(Action::Quit, ..) => {}
@@ -343,14 +343,14 @@ pub mod native {
                         sub.append(&PredefinedMenuItem::separator()).ok()?;
                     }
                     Entry::Dynamic("Panels") => {
-                        let s = Submenu::new("Panels", true);
+                        let s = Submenu::new(crate::i18n::tr("Panels"), true);
                         for (i, name) in panels.iter().enumerate() {
                             s.append(&item(Action::Panel(i), name, None, &mut actions)).ok()?;
                         }
                         sub.append(&s).ok()?;
                     }
                     Entry::Dynamic("Layouts") => {
-                        let s = Submenu::new("Layouts", true);
+                        let s = Submenu::new(crate::i18n::tr("Layouts"), true);
                         for (i, name) in layouts.iter().enumerate() {
                             s.append(&item(Action::Layout(i), name, None, &mut actions)).ok()?;
                         }
@@ -361,7 +361,7 @@ pub mod native {
                 }
             }
             if *title == "Help" {
-                let window = Submenu::new("Window", true);
+                let window = Submenu::new(crate::i18n::tr("Window"), true);
                 window
                     .append_items(&[&PredefinedMenuItem::minimize(None), &PredefinedMenuItem::fullscreen(None)])
                     .ok()?;

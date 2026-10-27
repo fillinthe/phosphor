@@ -160,14 +160,27 @@ pub fn filled_icons(size: f32) -> egui::FontId {
     egui::FontId::new(size, egui::FontFamily::Name(FILLED_ICONS.into()))
 }
 
-pub fn apply(ctx: &egui::Context) {
+/// The UI fonts, plus a font for Japanese / Chinese characters while that language is on (`i18n`).
+pub fn set_fonts(ctx: &egui::Context, cjk: Option<std::sync::Arc<Vec<u8>>>) {
     let mut fonts = egui::FontDefinitions::default();
     // The logo's font (Orbitron Bold, OFL, assets/fonts): only for the PHOSPHOR wordmark (`logo`).
     fonts.font_data.insert(LOGO_FAMILY.into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../../assets/fonts/logo.ttf"))));
     fonts.families.insert(egui::FontFamily::Name(LOGO_FAMILY.into()), vec![LOGO_FAMILY.into()]);
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     egui_phosphor::add_font_bytes_as_family(&mut fonts, FILLED_ICONS, egui_phosphor::Variant::Fill.font_bytes());
+    if let Some(bytes) = cjk {
+        // Hiragino sits higher than the UI font on a line: nudged down to share its baseline.
+        let tweak = egui::FontTweak { y_offset_factor: 0.07, ..Default::default() };
+        fonts.font_data.insert("cjk".into(), std::sync::Arc::new(egui::FontData::from_owned((*bytes).clone()).tweak(tweak)));
+        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+            fonts.families.entry(family).or_default().push("cjk".into());
+        }
+    }
     ctx.set_fonts(fonts);
+}
+
+pub fn apply(ctx: &egui::Context) {
+    set_fonts(ctx, None);
     ctx.all_styles_mut(|s| {
         use egui::{FontId, TextStyle};
         // Compact: smaller labels so more controls fit on screen.
@@ -316,6 +329,16 @@ fn ui_text_has_glyphs() {
                         }
                     }
                 }
+            }
+        }
+    }
+    // The language packs that use the UI font (Japanese and Chinese bring their own).
+    for code in ["es", "de", "fr", "it", "pt-BR"] {
+        let path = format!("{}/lang/{code}.json", env!("CARGO_MANIFEST_DIR"));
+        let pack: std::collections::HashMap<String, String> = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        for c in pack.values().flat_map(|t| t.chars()).filter(|c| !c.is_ascii() && !('\u{E000}'..='\u{F8FF}').contains(c)).collect::<std::collections::BTreeSet<char>>() {
+            if !ctx.fonts_mut(|f| f.has_glyph(&egui::FontId::proportional(14.0), c)) {
+                missing.push(format!("{c} (U+{:04X}) {path}", c as u32));
             }
         }
     }
