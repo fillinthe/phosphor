@@ -3914,7 +3914,7 @@
 "{0} Web control off": "{0} 网页控制已关",
 "{0} Write it": "{0} 写出来",
 "{0} Your account": "{0} 你的账户",
-"{0} also moves {1} (one input, several controls: see Controls › Mappings)": "{0} 还会控制 {1}（一个输入对应多个控件：见 控制 › 映射）",
+"{0} also moves {1} (one input, several controls: see MIDI / OSC › Mappings)": "{0} 还会控制 {1}（一个输入对应多个控件：见 MIDI / OSC › 映射）",
 "{0} answered with an error ({1})": "{0} 返回错误 ({1})",
 "{0} blends layer {1}": "{0} 混合图层 {1}",
 "{0} channels (its own mode)": "{0} 个通道(其自有模式)",

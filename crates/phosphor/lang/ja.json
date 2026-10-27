@@ -3914,7 +3914,7 @@
 "{0} Web control off": "{0} Webコントロール オフ",
 "{0} Write it": "{0} 書き込む",
 "{0} Your account": "{0} あなたのアカウント",
-"{0} also moves {1} (one input, several controls: see Controls › Mappings)": "{0} は {1} も動かします（1つの入力で複数のコントロール：コントロール › マッピングを参照）",
+"{0} also moves {1} (one input, several controls: see MIDI / OSC › Mappings)": "{0} は {1} も動かします（1つの入力で複数のコントロール：MIDI / OSC › 割り当てを参照）",
 "{0} answered with an error ({1})": "{0}がエラーを返しました({1})",
 "{0} blends layer {1}": "{0}がレイヤー{1}をブレンド",
 "{0} channels (its own mode)": "{0}チャンネル(独自モード)",
