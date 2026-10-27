@@ -169,8 +169,14 @@ impl PhosphorApp {
         let cloud_current = st.cloud_project.as_ref().map(|(id, _)| id.clone());
         #[cfg(not(target_arch = "wasm32"))]
         let (found, busy) = (st.projects.files.found.clone(), st.projects.files.busy());
+        // The browser has no files of its own to look through.
         #[cfg(target_arch = "wasm32")]
-        let (found, busy): (Vec<crate::project_files::Found>, bool) = (Vec::new(), false);
+        struct Found {
+            path: String,
+            modified: i64,
+        }
+        #[cfg(target_arch = "wasm32")]
+        let (found, busy): (Vec<Found>, bool) = (Vec::new(), false);
         let file_card = |path: &str, when: i64, there: bool| {
             #[cfg(not(target_arch = "wasm32"))]
             let picture = st.projects.pictures.contains(path).then(|| crate::project_files::picture_path(path)).flatten().map(|p| p.to_string_lossy().into_owned());
