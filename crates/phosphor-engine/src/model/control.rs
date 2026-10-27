@@ -461,6 +461,22 @@ impl crate::Composition {
         }
     }
 
+    /// Where mappings get in each other's way, for each mapping (by index): the others moved by the same input
+    /// (one knob, several things) and the others setting the same control (two inputs fight over it). Switched-off
+    /// mappings don't count, nor two "only while shown" mappings sharing an input (that's paging, on purpose).
+    pub fn mapping_clashes(&self) -> Vec<(Vec<usize>, Vec<usize>)> {
+        let maps = &self.control_maps;
+        (0..maps.len())
+            .map(|i| {
+                let m = &maps[i];
+                let others = || (0..maps.len()).filter(move |&j| j != i && m.enabled && maps[j].enabled);
+                let same_input = others().filter(|&j| maps[j].source == m.source && !(m.only_shown && maps[j].only_shown)).collect();
+                let same_control = others().filter(|&j| maps[j].target == m.target && maps[j].source != m.source).collect();
+                (same_input, same_control)
+            })
+            .collect()
+    }
+
     /// Copies of `maps` (input, range, value effects) aimed at `target` too; one already the same isn't added twice.
     pub fn paste_mappings(&mut self, maps: &[ControlMap], target: &ControlTarget) {
         for m in maps {
@@ -605,6 +621,26 @@ mod value_fx_tests {
         assert_eq!(c.control_maps.len(), 2, "pasted once");
         assert_eq!(c.control_maps[1].target, ControlTarget::LayerOpacity(3));
         assert_eq!(c.control_maps[1].fx, vec![ValueFx::Smooth(0.2)]);
+    }
+
+    #[test]
+    fn clashing_mappings_are_found() {
+        let mut c = crate::Composition::default();
+        let knob = ControlSource::MidiCc { channel: 0, cc: 7 };
+        c.control_maps.push(ControlMap::new(knob.clone(), ControlTarget::MasterFade));
+        c.control_maps.push(ControlMap::new(knob.clone(), ControlTarget::LayerOpacity(3)));
+        c.control_maps.push(ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 8 }, ControlTarget::MasterFade));
+        c.control_maps.push(ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 9 }, ControlTarget::LayerOpacity(4)));
+        let found = c.mapping_clashes();
+        assert_eq!(found[0], (vec![1], vec![2]), "same knob as 1, same control as 2");
+        assert_eq!(found[1], (vec![0], vec![]));
+        assert_eq!(found[3], (vec![], vec![]), "on its own");
+        c.control_maps[1].enabled = false;
+        assert_eq!(c.mapping_clashes()[0].0, Vec::<usize>::new(), "switched off doesn't count");
+        c.control_maps[1].enabled = true;
+        c.control_maps[0].only_shown = true;
+        c.control_maps[1].only_shown = true;
+        assert_eq!(c.mapping_clashes()[0].0, Vec::<usize>::new(), "paging on purpose");
     }
 
     #[test]

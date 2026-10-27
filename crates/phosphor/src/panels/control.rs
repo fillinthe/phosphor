@@ -224,6 +224,21 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
     });
 }
 
+/// What a mapping's clashes are, in words (None when it has none).
+fn clash_text(comp: &phosphor_engine::Composition, targets: &[(ControlTarget, String)], input: &[usize], control: &[usize]) -> Option<String> {
+    let name = |t: &ControlTarget| targets.iter().find(|(x, _)| x == t).map_or_else(|| crate::control::target_label(comp, t), |(_, n)| n.clone());
+    let mut lines = Vec::new();
+    if !input.is_empty() {
+        let moved: Vec<String> = input.iter().filter_map(|&j| comp.control_maps.get(j)).map(|m| name(&m.target)).collect();
+        lines.push(format!("This input also moves: {}", moved.join(", ")));
+    }
+    if !control.is_empty() {
+        let by: Vec<String> = control.iter().filter_map(|&j| comp.control_maps.get(j)).map(|m| m.source.label()).collect();
+        lines.push(format!("This control is also set by: {}", by.join(", ")));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
 /// Where a mapped control lives: the panel to open, the layer / group / comp to select (MASTER_ID = master), the
 /// slice to select. None when it's gone.
 fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Option<(Tab, Option<u64>, Option<u64>)> {
@@ -280,6 +295,11 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal(|ui| {
         crate::ui::heading(ui, "Mappings");
         hint(ui, format!("{}", comp.control_maps.len()));
+        let clashing = comp.mapping_clashes().iter().filter(|(a, b)| !a.is_empty() || !b.is_empty()).count();
+        if clashing > 0 {
+            ui.label(RichText::new(format!("{} {clashing} clashing", icon::WARNING)).color(crate::theme::WARN))
+                .on_hover_text("Mappings that share an input (one knob moves several things) or set the same control (two inputs fight). Hover the warning on a row to see which.");
+        }
         let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Sets of mappings by name, e.g. one per controller (Load replaces this project's mappings; Undo brings them back).", mapping_presets, mapping_preset_name, "mapping set", || if comp.control_maps.is_empty() { String::new() } else { serde_json::to_string(&comp.control_maps).unwrap_or_default() });
         match picked {
             Some(crate::ui::SaveAction::Load(json)) => match serde_json::from_str::<Vec<phosphor_engine::ControlMap>>(&json) {
@@ -341,13 +361,20 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
             help(ui, &format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
         }
         let places: Vec<_> = comp.control_maps.iter().map(|m| where_is(comp, &m.target)).collect();
+        let clashes = comp.mapping_clashes();
+        let says: Vec<Option<String>> = clashes.iter().map(|(input, control)| clash_text(comp, &targets, input, control)).collect();
         egui::Grid::new("mappings").num_columns(6).striped(true).spacing([6.0, 3.0]).show(ui, |ui| {
             for (i, m) in comp.control_maps.iter_mut().enumerate() {
                 let name = targets.iter().find(|(t, _)| *t == m.target).map_or("(removed)", |(_, n)| n.as_str());
                 if !q.is_empty() && !name.to_lowercase().contains(&q) && !m.source.label().to_lowercase().contains(&q) {
                     continue;
                 }
-                crate::ui::toggle(ui, &mut m.enabled, "").on_hover_text("On / off");
+                crate::ui::toolbar(ui, |ui| {
+                    crate::ui::toggle(ui, &mut m.enabled, "").on_hover_text("On / off");
+                    if let Some(said) = says.get(i).cloned().flatten() {
+                        ui.label(RichText::new(icon::WARNING).color(crate::theme::WARN)).on_hover_text(said);
+                    }
+                });
                 crate::ui::toolbar(ui, |ui| {
                     source_editor(ui, ("map_source", i), &mut m.source);
                     let relisten = *listen_for == Some(ListenFor::Replace(i)) && control.listen_source;

@@ -132,6 +132,17 @@ pub(crate) fn device_changes(had: &[String], now: &[String]) -> (Vec<String>, Ve
     let went = had.iter().filter(|n| !now.contains(n)).cloned().collect();
     (came, went)
 }
+/// Words for a Learn of `source` onto `target` when that input already moves other controls (a clash), else None.
+pub fn also_moves(comp: &Composition, source: &ControlSource, target: &ControlTarget) -> Option<String> {
+    let others: Vec<String> = comp.control_maps.iter().filter(|m| m.enabled && m.source == *source && m.target != *target).map(|m| target_label(comp, &m.target)).collect();
+    if others.is_empty() {
+        return None;
+    }
+    let text = format!("{} also moves {} (one input, several controls: see Controls › Mappings)", source.label(), others.join(", "));
+    log::info!("mapping clash: {text}");
+    Some(text)
+}
+
 pub struct ControlHub {
     rx: mpsc::Receiver<Incoming>,
     tx: mpsc::Sender<Incoming>,
@@ -166,6 +177,8 @@ pub struct ControlHub {
     pub last: Option<Incoming>,
     /// Target waiting for the next message to bind to.
     pub learning: Option<ControlTarget>,
+    /// Said once after a Learn whose input already moved something else (taken by the app for its notice).
+    pub learn_clash: Option<String>,
     /// Controls on screen last frame (for mappings that only work while theirs is showing).
     pub shown: Option<std::collections::HashSet<ControlTarget>>,
     /// Listen: catch the next input (any knob, pad, key or OSC message) into `heard`.
@@ -445,6 +458,7 @@ impl ControlHub {
             local_ip: None,
             last: None,
             learning: None,
+            learn_clash: None,
             shown: None,
             listen_source: false,
             heard: None,
@@ -648,6 +662,7 @@ impl ControlHub {
                 ControlSource::Osc { address } => colour_siblings(comp, &target).map(|gb| (address.clone(), gb)),
                 _ => None,
             };
+            self.learn_clash = also_moves(comp, &msg.source, &target);
             comp.control_maps.retain(|m| m.target != target);
             comp.control_maps.push(ControlMap::new(msg.source.clone(), target));
             if let Some((address, [g, b])) = siblings {

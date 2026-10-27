@@ -37,8 +37,14 @@ impl PhosphorApp {
             d.remove::<(phosphor_engine::ControlTarget, phosphor_engine::ControlSource)>(id);
             t
         }) {
+            if let Some(said) = crate::control::also_moves(&st.comp, &source, &target) {
+                st.notice = Some(said);
+            }
             st.comp.control_maps.retain(|m| m.target != target);
             st.comp.control_maps.push(phosphor_engine::ControlMap::new(source, target));
+        }
+        if let Some(said) = st.control.learn_clash.take() {
+            st.notice = Some(said);
         }
         if let Some(t) = ctx.data_mut(|d| {
             let id = egui::Id::new(panels::LEARN_REQUEST);
