@@ -18,6 +18,10 @@ const PRESSED: &str = "phosphor_press_pressed";
 const SLID: &str = "phosphor_press_slid";
 /// A press waits this long for its button to be drawn.
 const WAIT_SECS: f64 = 1.0;
+/// The right-clicked button's Learn menu: (its own menu's id, what it maps, where, which layer).
+const LEARN_MENU: &str = "phosphor_press_learn_menu";
+
+type LearnMenu = (egui::Id, ControlTarget, egui::Pos2, egui::LayerId);
 
 /// Called by the dock around each panel (None after it).
 pub(crate) fn set_panel(ctx: &egui::Context, panel: Option<(&str, &str)>) {
@@ -93,6 +97,32 @@ pub(crate) fn mappable(ui: &egui::Ui, resp: &mut egui::Response, label: &str) {
     }
     let target = ControlTarget::Button { key, name };
     crate::ui::mapped_badge(ui, resp, &target);
+    if resp.secondary_clicked() {
+        let at = resp.interact_pointer_pos().unwrap_or(resp.rect.left_bottom());
+        let menu: LearnMenu = (egui::Popup::default_response_id(resp), target, at, resp.layer_id);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(LEARN_MENU), Some(menu)));
+    }
+}
+
+/// End of a frame: a right-clicked button without a right-click menu of its own gets Learn / map (buttons that have
+/// one, like toggles with Map, keep theirs: it opened during the frame).
+pub(crate) fn learn_menu(ctx: &egui::Context) {
+    let id = egui::Id::new(LEARN_MENU);
+    let Some((own, target, at, layer)) = ctx.data(|d| d.get_temp::<Option<LearnMenu>>(id)).flatten() else { return };
+    let popup = egui::Id::new("phosphor_press_learn_popup");
+    let fresh = own != egui::Id::NULL;
+    if fresh {
+        if egui::Popup::is_id_open(ctx, own) {
+            ctx.data_mut(|d| d.remove_temp::<Option<LearnMenu>>(id));
+            return;
+        }
+        egui::Popup::open_id(ctx, popup);
+        ctx.data_mut(|d| d.insert_temp(id, Some((egui::Id::NULL, target.clone(), at, layer))));
+    }
+    let shown = egui::Popup::new(popup, ctx.clone(), at, layer).kind(egui::PopupKind::Menu).open_memory(None).show(|ui| crate::ui::learn_items(ui, &target));
+    if shown.is_none() {
+        ctx.data_mut(|d| d.remove_temp::<Option<LearnMenu>>(id));
+    }
 }
 
 #[cfg(test)]
@@ -153,5 +183,39 @@ mod tests {
             out.textures_delta.clear();
         }
         assert_eq!(soft, 0.5, "moved to the top of its range");
+    }
+
+    /// Right-clicking a plain button opens Learn / map for it; a button with its own right-click menu keeps that one.
+    #[test]
+    fn right_click_learns_a_button_without_a_menu() {
+        fn right_click(own_menu: bool) -> bool {
+            let ctx = egui::Context::default();
+            let at = egui::pos2(30.0, 20.0);
+            let mut learn_open = false;
+            for frame in 0..4 {
+                let mut input = egui::RawInput::default();
+                input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0)));
+                input.events.push(egui::Event::PointerMoved(at));
+                if frame == 1 || frame == 2 {
+                    input.events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: frame == 1, modifiers: Default::default() });
+                }
+                let mut out = ctx.run_ui(input, |ui| {
+                    begin_frame(ui.ctx(), frame as f64 * 0.1);
+                    set_panel(ui.ctx(), Some(("Clips", "Clips")));
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        let r = crate::ui::command(ui, "Stop all the clips");
+                        if own_menu {
+                            crate::ui::RightMenu::right_menu(&r, |ui| ui.label("its own"));
+                        }
+                    });
+                    learn_menu(ui.ctx());
+                    learn_open = egui::Popup::is_id_open(ui.ctx(), egui::Id::new("phosphor_press_learn_popup"));
+                });
+                out.textures_delta.clear();
+            }
+            learn_open
+        }
+        assert!(right_click(false), "plain button: Learn menu");
+        assert!(!right_click(true), "button with its own menu: not ours");
     }
 }
