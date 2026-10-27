@@ -159,7 +159,7 @@ mod tests {
         // (temp folders count as skipped places for the real list; check the walk and the order here.)
         let mut found: Vec<Found> = paths.iter().filter_map(|p| std::fs::metadata(p).ok().map(|m| (p, m))).map(|(p, m)| Found { path: p.to_string_lossy().into_owned(), modified: m.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64, size: m.len() }).collect();
         found.sort_by_key(|f| std::cmp::Reverse(f.modified));
-        let names: Vec<&str> = found.iter().map(|f| f.path.rsplit('/').next().unwrap()).collect();
+        let names: Vec<String> = found.iter().map(|f| std::path::Path::new(&f.path).file_name().unwrap().to_string_lossy().into_owned()).collect();
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(names, ["new.PHOSPHOR", "old.phosphor"]);
         assert!(skipped("/Users/me/Desktop/Untitled Backups/Untitled 2026-10-25.phosphor"));

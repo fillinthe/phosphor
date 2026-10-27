@@ -36,7 +36,7 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
             crate::ui::section(ui, ("inputs", kind as u8), title, kind != InputKind::Window, |ui| {
                 if let Some(n) = &note {
                     hint(ui, n.as_str());
-                    #[cfg(target_os = "macos")]
+                    #[cfg(all(target_os = "macos", feature = "screencapture"))]
                     if n == crate::screen_capture::NO_PERMISSION
                         && crate::ui::command(ui, "Allow screen capture").on_hover_text("macOS asks once; then turn on Phosphor in the list it opens, and reopen Phosphor").clicked()
                     {
