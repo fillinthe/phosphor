@@ -82,6 +82,8 @@ impl PhosphorApp {
             led_scan,
             #[cfg(not(target_arch = "wasm32"))]
             milkdrop,
+            #[cfg(not(target_arch = "wasm32"))]
+            gdrop,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -91,6 +93,8 @@ impl PhosphorApp {
         media.update_video(comp, engine, now);
         #[cfg(not(target_arch = "wasm32"))]
         milkdrop.update(comp, engine, audio, now, &mut media.errors);
+        #[cfg(not(target_arch = "wasm32"))]
+        gdrop.update(comp, engine, audio);
 
         net_audio.clear();
         net.take_audio(net_audio);

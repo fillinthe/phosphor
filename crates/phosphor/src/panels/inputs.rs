@@ -61,6 +61,20 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::ui::section(ui, "inputs_gdrop", format!("{} G-Drop visualizers ({})", icon::WAVEFORM, crate::gdrop::presets().count()), false, |ui| {
+            hint(ui, "From Gamp: they move with the sound Phosphor hears (Audio)");
+            let changing = crate::gdrop::source(None);
+            if let Some(to) = input_row(ui, "Changing", &changing, icon::SHUFFLE, selected, "A new one every 20-40 s, on a beat") {
+                put = Some((to, "G-Drop".to_string(), changing));
+            }
+            for p in crate::gdrop::presets() {
+                let source = crate::gdrop::source(Some(p));
+                if let Some(to) = input_row(ui, p, &source, icon::WAVEFORM, selected, "") {
+                    put = Some((to, p.to_string(), source));
+                }
+            }
+        });
         crate::ui::section(ui, "inputs_stream", format!("{} Network stream", icon::GLOBE), true, |ui| {
             let id = egui::Id::new("inputs_stream_url");
             let mut url: String = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_default();

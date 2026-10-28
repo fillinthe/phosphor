@@ -1805,6 +1805,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "gamp-vis"
+version = "0.1.0"
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3676,6 +3680,7 @@ dependencies = [
  "epaint_default_fonts",
  "ffmpeg-next",
  "flate2",
+ "gamp-vis",
  "gilrs",
  "image",
  "js-sys",

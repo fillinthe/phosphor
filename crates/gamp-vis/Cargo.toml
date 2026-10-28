@@ -1,0 +1,9 @@
+[package]
+name = "gamp-vis"
+description = "G-Drop: Gamp's MilkDrop-style visualizer, in pure Rust (from github.com/fillinthe/g-amp, same author, MIT)"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/fillinthe/g-amp"
+
+[dependencies]

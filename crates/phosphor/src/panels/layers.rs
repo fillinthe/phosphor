@@ -589,6 +589,24 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                     ui.close();
                 }
             });
+            #[cfg(not(target_arch = "wasm32"))]
+            ui.menu_button(label(icon::WAVEFORM, "G-Drop visualizers"), |ui| {
+                help(ui, "Gamp's MilkDrop-style visualizers: they move with the sound Phosphor hears.");
+                let now = match &layer.source {
+                    SourceSpec::Live { format, url, .. } if format == crate::gdrop::FORMAT => Some(url.clone()),
+                    _ => None,
+                };
+                if crate::ui::pick_item(ui, now.as_deref() == Some(""), "Changing (a new one every 20-40 s)").clicked() {
+                    layer.source = crate::gdrop::source(None);
+                    ui.close();
+                }
+                for p in crate::gdrop::presets() {
+                    if crate::ui::pick_item(ui, now.as_deref() == Some(p), p).clicked() {
+                        layer.source = crate::gdrop::source(Some(p));
+                        ui.close();
+                    }
+                }
+            });
             ui.separator();
             for g in shaders::GENERATORS {
                 let active = matches!(&layer.source, SourceSpec::Generator(id) if id == g.id);
