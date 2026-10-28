@@ -48,6 +48,8 @@ base64 = "0.22"
 elgato-streamdeck = "0.14"
 # MilkDrop presets (.milk) as layers: a MilkDrop engine on wgpu, rendering on Phosphor's own GPU device.
 lactea = "0.2"
+# G-Drop visualizers (from Gamp, same author, MIT) as layers: drawn on the CPU on a thread per layer.
+gamp-vis = { path = "../gamp-vis" }
 # Online media libraries (Library > Online): searches and downloads streamed to disk (already used by ehttp).
 ureq = "2"
 ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling", "device"] }

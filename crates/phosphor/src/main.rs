@@ -108,6 +108,8 @@ mod streamdeck;
 #[cfg(not(target_arch = "wasm32"))]
 mod milkdrop;
 #[cfg(not(target_arch = "wasm32"))]
+mod gdrop;
+#[cfg(not(target_arch = "wasm32"))]
 mod online;
 #[cfg(not(target_arch = "wasm32"))]
 mod live_data;

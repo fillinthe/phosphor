@@ -208,6 +208,8 @@ pub struct State {
     /// MilkDrop layers' engines.
     #[cfg(not(target_arch = "wasm32"))]
     pub milkdrop: crate::milkdrop::Visualizers,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub gdrop: crate::gdrop::GDrops,
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,
