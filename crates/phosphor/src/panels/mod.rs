@@ -17,6 +17,7 @@ pub(crate) use crate::ui::*;
 mod account;
 mod audio;
 mod clips;
+pub(crate) mod designer;
 pub(crate) mod clip_bar;
 mod clip_grid;
 mod stack;
@@ -162,6 +163,8 @@ pub enum Tab {
     Timeline,
     /// Free videos and pictures from online libraries (Library).
     Online,
+    /// A comp built as boxes wired together (pictures, effects, mixes).
+    Designer,
     /// Every layer with its controls and its clips side by side; groups and comps as bands (replaces Clips + Layers).
     Stack,
     /// A panel you made (View › New Panel): Control Surface page N, your own buttons and sliders.
@@ -169,7 +172,7 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: [Tab; 30] = [
+    pub const ALL: [Tab; 31] = [
         Tab::Preview,
         Tab::Stack,
         Tab::Layers,
@@ -200,6 +203,7 @@ impl Tab {
         Tab::Notes,
         Tab::Timeline,
         Tab::Online,
+        Tab::Designer,
     ];
 
     /// The kind of panel, shown by its tab's colour (`theme::Hue`); None = the show itself (preview, layers, clips…).
@@ -207,7 +211,7 @@ impl Tab {
         use crate::theme::Hue;
         Some(match self {
             Tab::Media | Tab::Online => Hue::Media,
-            Tab::Library | Tab::ShaderEditor => Hue::Effect,
+            Tab::Library | Tab::ShaderEditor | Tab::Designer => Hue::Effect,
             Tab::Inputs | Tab::Audio => Hue::Live,
             Tab::Output | Tab::Mapping | Tab::Studio | Tab::Stage | Tab::Stream | Tab::Network | Tab::Leds | Tab::LayerWindows => Hue::Output,
             Tab::Control | Tab::Surface | Tab::MyPanel(_) | Tab::Modulators | Tab::Devices => Hue::Control,
@@ -232,6 +236,7 @@ impl Tab {
             Tab::Presets => "Presets",
             Tab::Inputs => "Inputs",
             Tab::Online => "Online",
+            Tab::Designer => "Designer",
             Tab::Audio => "Audio",
             Tab::Modulators => "LFOs & Modulators",
             Tab::Control => "MIDI / OSC",
@@ -340,6 +345,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
             help(ui, "Online libraries work in the Mac, Windows and Linux apps.");
         }
         Tab::Notes => notes_panel(ui, st),
+        Tab::Designer => designer::designer_panel(ui, st),
         Tab::Timeline => timeline::timeline_panel(ui, st),
         // (Panels with no scrolling of their own scroll here, so nothing is hidden when they're short.)
         Tab::Audio => scrolled(ui, "audio_scroll", |ui| audio(ui, st)),

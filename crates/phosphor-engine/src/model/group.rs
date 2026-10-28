@@ -22,6 +22,8 @@ pub struct LayerGroup {
     pub fx_bypass: bool,
     /// Blended into the mix. Off = only mapping surfaces that pick this group show it.
     pub in_mix: bool,
+    /// Behind a Designer Mix box (`Comp::network`).
+    pub designer: bool,
     /// Members hidden in the Layers panel.
     pub collapsed: bool,
 }
@@ -35,7 +37,7 @@ pub struct MixControls<'a> {
 
 impl Default for LayerGroup {
     fn default() -> Self {
-        Self { id: 0, name: "Group".into(), enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false }
+        Self { id: 0, name: "Group".into(), enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false, designer: false }
     }
 }
 

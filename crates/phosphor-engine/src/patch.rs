@@ -621,13 +621,7 @@ pub struct Node {
     pub values: Vec<f32>,
 }
 
-/// The output of `from` feeds input `input` of `to`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Wire {
-    pub from: u32,
-    pub to: u32,
-    pub input: usize,
-}
+pub use crate::graph::Wire;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Patch {
@@ -682,44 +676,23 @@ impl Patch {
     /// Removes a block and its wires.
     pub fn remove(&mut self, id: u32) {
         self.nodes.retain(|n| n.id != id);
-        self.wires.retain(|w| w.from != id && w.to != id);
+        crate::graph::remove(&mut self.wires, id);
     }
 
     /// Wires `from`'s output into input `input` of `to` (replacing what was there). Refused (false) when it would
     /// make a loop, or the input doesn't exist.
     pub fn connect(&mut self, from: u32, to: u32, input: usize) -> bool {
         let inputs = self.node(to).and_then(|n| block(&n.block)).map_or(0, |b| b.inputs.len());
-        if from == to || input >= inputs || self.node(from).is_none() || self.feeds(to, from) {
-            return false;
-        }
-        self.wires.retain(|w| !(w.to == to && w.input == input));
-        self.wires.push(Wire { from, to, input });
-        true
+        self.node(from).is_some() && crate::graph::connect(&mut self.wires, from, to, input, inputs)
     }
 
     pub fn disconnect(&mut self, to: u32, input: usize) {
-        self.wires.retain(|w| !(w.to == to && w.input == input));
-    }
-
-    /// Whether `a`'s picture reaches `b` (so wiring b into a would loop).
-    fn feeds(&self, a: u32, b: u32) -> bool {
-        let mut todo = vec![a];
-        let mut seen = Vec::new();
-        while let Some(n) = todo.pop() {
-            if n == b {
-                return true;
-            }
-            if !seen.contains(&n) {
-                seen.push(n);
-                todo.extend(self.wires.iter().filter(|w| w.from == n).map(|w| w.to));
-            }
-        }
-        false
+        crate::graph::disconnect(&mut self.wires, to, input);
     }
 
     /// What's wired into input `input` of `to`.
     pub fn source_of(&self, to: u32, input: usize) -> Option<u32> {
-        self.wires.iter().find(|w| w.to == to && w.input == input).map(|w| w.from)
+        crate::graph::source_of(&self.wires, to, input)
     }
 
     fn output(&self) -> Option<&Node> {

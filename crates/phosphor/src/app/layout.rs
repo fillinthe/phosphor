@@ -350,7 +350,7 @@ pub(crate) struct AccountLayouts {
 }
 
 /// The three areas (top-bar buttons, ⌘1 / ⌘2 / ⌘3): each job in one place, nothing shown twice.
-pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] = &[("Show", layout_show), ("Outputs", layout_outputs), ("Control", layout_control)];
+pub(crate) const LAYOUTS: &[(&str, fn() -> DockState<Tab>)] = &[("Show", layout_show), ("Outputs", layout_outputs), ("Control", layout_control), ("Designer", layout_designer)];
 
 /// Building and playing the show: a big preview, the clip grid (each row is a layer) and the other show panels
 /// under it, the Inspector on the right. The Library opens on the left when you want it.
@@ -386,6 +386,13 @@ pub(crate) fn layout_control() -> DockState<Tab> {
 }
 
 
+
+/// Designer: a comp as boxes wired together, with the preview beside it.
+pub(crate) fn layout_designer() -> DockState<Tab> {
+    let mut dock = DockState::new(vec![Tab::Designer]);
+    dock.main_surface_mut().split_right(NodeIndex::root(), 0.7, vec![Tab::Preview]);
+    dock
+}
 
 /// Locked (player) mode: the preview with the mixer beside it, the clip grid underneath, nothing to edit with.
 pub(crate) fn layout_locked() -> DockState<Tab> {

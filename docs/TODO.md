@@ -2,63 +2,95 @@
 
 Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` done (with what was checked).
 
+## From the owner, 2026-10-28
+
+- [x] **IN / OUT activity lights** in the status bar (media, live, NDI, Syphon, sound, MIDI, OSC, DMX in; NDI,
+      Syphon, DMX out); click one to open its panel. *(installed in 643/646; checked on a screenshot)*
+- [x] **Blackout** (top bar; fade time in Outputs › Master; mappable; OSC /phosphor/blackout). *(GPU test; 646)*
+- [x] **G-Drop visualizers from Gamp** as layers (25 presets + Changing). *(checked drawing at 60 fps; 646. Not tried
+      with real music.)*
+- [x] **Can't move the loop / limit marks in the Inspector while its scroll bar shows; can't right-click the movie
+      bar.** Scroll bars keep their own room now; the movie bar has a right-click menu (loop starts / ends here, whole
+      movie, back to the start). *(646)*
+- [x] **Clip timeline, speed and opacity on the layer card** (the three most important): Clips and Layers cards now
+      show the movie's playhead (slim, with loop marks) and Speed beside Opacity. *(screenshot checked; not installed)*
+      Speed and Volume share one row on the Clips card, so their names are cut short ("Spe…", "V…"): say if that bothers you.
+- [x] **Loop points, ping-pong / reverse should stay with the clip, not the layer.** This existed but was hidden
+      (clip right-click › Keeps its own settings). Now also Inspector › Playback › **Keep these with the clip**.
+      *(not installed)* Open: should this be ON by default for new clips?
+- [x] **Setting points on the Timeline from a right-click in the Inspector.** Scale X / Y, depth, tilts and crop had
+      no control of their own, so "Key on the timeline" did nothing there. They're real controls now (mappable,
+      keyable, OSC). "Key on the timeline" is no longer offered where it can't work. *(test; not installed)*
+      Still without: text size / outline / line spacing, fade-style settings and mixer-plugin settings.
+- [x] **Mapping opacity in the Mixer should show in the Inspector** (it did, as a thin outline only): a mapped slider's
+      whole bar is gold now, everywhere. *(screenshot of Mixer + Inspector; not installed)*
+- [~] **Designer** (the TouchDesigner-style section, owner's name). Plan in `docs/design/nodes.md`. **Phase 1 done
+      2026-10-29** (not installed): Designer area (⌘4), Picture / Effect / Mix / Output boxes on the node canvas, each
+      backed by hidden layers; `--quick designer`. Checked on a screenshot + engine test; not yet with a real mouse.
+      Left: phase 2 number wires, phase 3 box groups, phase 4 points / 3D, phase 5 data. Small: undo for box changes,
+      Duplicate copying settings, settings of a half-visible box.
+- [ ] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
+      (then they're keyable and mappable like the rest).
+
 ## From show testing (2026-10-25)
 
 ### Breaks a show or loses work: first
-- [ ] **Saving removes the clip on the active layer.** Save with a clip playing on the selected layer: the clip is
+- [x] *(dropped by the owner, 2026-10-27)* **Saving removes the clip on the active layer.** *(No cause found in code or the log of 12 saves: need what disappears and when.)* Save with a clip playing on the selected layer: the clip is
       gone afterwards. Data loss: find and fix before anything else.
-- [ ] **A removed effect keeps running** on the layer (it's gone from the list but still changes the picture).
-- [ ] **Moving an output's rectangle in Mapping makes the clip disappear.** Videos must keep playing while a
+- [x] **A removed effect keeps running** *(it was the comp's own copy: the Inspector now lists group / comp / MASTER effects on each layer; clips no longer bring removed effects back)* on the layer (it's gone from the list but still changes the picture).
+- [x] *(an inverting mask named 'Rectangle 1'; masks are now named and labelled)* **Moving an output's rectangle in Mapping makes the clip disappear.** Videos must keep playing while a
       surface is moved.
-- [ ] **Rutt-Etra went wrong:** other clips started loading by themselves. Reproduce with Rutt-Etra on a layer.
-- [ ] **Clips from an external drive** (WD Black SSD over USB-C, sometimes through a hub): loading jitters the show,
+- [x] *(vertex budget 400,000 per pass; GPU errors caught)* **Rutt-Etra went wrong:** other clips started loading by themselves. Reproduce with Rutt-Etra on a layer.
+- [x] *(copied to this Mac on first open, thumbnail cache, no per-frame file check, lighter folder scans, load log)* **Clips from an external drive** (WD Black SSD over USB-C, sometimes through a hub): loading jitters the show,
       clicking a clip lags, and a disconnected drive would make playing videos vanish. Load off the show's thread,
       keep playing clips in memory (they keep playing if the drive goes), cache clips likely to be played, and
       measure it (log how long each load takes and from where). Test with a USB-C drive and a hub.
-- [ ] **X "Load more" stops** after a while for an account (no more posts come in).
+- [x] *(continues from the page cursor)* **X "Load more" stops** after a while for an account (no more posts come in).
 
-- [ ] **MIDI controllers don't come back after a disconnect.** MIDI ports are opened at start and on the Reconnect
+- [x] *(devices checked every 2 s, reopened, logged)* **MIDI controllers don't come back after a disconnect.** MIDI ports are opened at start and on the Reconnect
       button only: if the hub drops the controller (shared with the SSD on one USB-C hub), it stays dead until
       Reconnect, which looks like lost mappings. (The mappings are saved: all 8 of the owner's are intact.) Fix: watch
       for MIDI devices coming and going and reopen them by themselves; log connects / disconnects; show the
       controller's state in the status bar.
 
 ### Fix soon
-- [ ] **Can't rename a collection:** clicking the name field in the Rename pop-up closes it.
-- [ ] **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
-- [ ] **Tooltip covers "Add a file"** while the mouse is on it: move tooltips so they never sit on their button.
-- [ ] **Some MIDI mappings** misbehave (details to come from the owner).
-- [ ] **Copy a media file's name** (tile / Inspector right-click) to report problems.
+- [x] **Japanese / Chinese in the browser app showed boxes** (no font there): those languages are left out of the
+      menu where no font draws them, and a saved choice falls back to English. *(2026-10-27)*
+- [x] **Can't rename a collection:** clicking the name field in the Rename pop-up closes it.
+- [~] *(Stack is no longer in the default layout)* **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
+- [x] *(tooltips wait a second)* **Tooltip covers "Add a file"** while the mouse is on it: move tooltips so they never sit on their button.
+- [x] **Some MIDI mappings** misbehave *(owner: just show clashes. Done 2026-10-27: warnings in MIDI / OSC › Mappings, notice on Learn)*.
+- [x] **Copy a media file's name** (tile / Inspector right-click) to report problems.
 
 ### Wanted
-- [ ] **Map any button:** every button, toggle, menu item and slider gets the same right-click Learn / map menu
+- [x] **Map any button:** every button, toggle, menu item and slider gets the same right-click Learn / map menu
       (the kit's buttons gain it once, so nothing is missed). *Menu items done 2026-10-25 (all in the target list);
-      the kit buttons' own right-click still to do.*
-- [ ] **Organise in the Layers panel, not the Stack** (owner, 2026-10-25: likes Layers and the Mixer; the Stack is
+      right-click Learn on any kit button without its own menu done 2026-10-27, tested.*
+- [x] *(comps as bands in Layers; Clips + Layers is the Show layout again)* **Organise in the Layers panel, not the Stack** (owner, 2026-10-25: likes Layers and the Mixer; the Stack is
       confusing). Bring groups and comps into Layers as foldable cards (comp = a group with its own size), with the
       quick buttons (eye, solo, mute, stop, fx count, rename), keep Clips as the grid; then retire the Stack or keep it
       as an option. Ask the owner before changing the default layout again.
-- [ ] **A log of what you did, for reports:** every action (clip triggered, effect added / removed, layer changed,
+- [x] **A log of what you did, for reports:** every action (clip triggered, effect added / removed, layer changed,
       save, output moved) with the time, and how long each clip took to load and from which drive, written to the
       session log so it can be read back when something goes wrong. Report a Bug attaches the last few minutes.
 - [x] **Scale X / Y / Z and Z position** in Transform. *(2026-10-25: Scale X/Y, Z depth, Tilt X/Y in perspective.)*
-- [ ] **Speed next to the clip's preview** in the Inspector, so you can see the speed while changing it.
-- [ ] **Speed in the Mixer strips** (speed and opacity are what matter most live).
-- [ ] **A clip's in / out points saved with the media file**, so a clip cut once stays cut wherever it's used.
-- [ ] **Favourite a clip from a layer** (and see favourites later in Media).
+- [x] **Speed next to the clip's preview** in the Inspector, so you can see the speed while changing it.
+- [x] **Speed in the Mixer strips** (speed and opacity are what matter most live).
+- [x] **A clip's in / out points saved with the media file**, so a clip cut once stays cut wherever it's used.
+- [x] **Favourite a clip from a layer** (and see favourites later in Media).
 - [x] **Map the Random clip button**, and run it on a timer or the beat (load a new random clip every N bars).
 - [x] **Sort media by length** (View › Sort by: Name / Newest / Type / Length; needs each movie's duration, read
       off the show's thread and kept with the media item).
-- [ ] **Effect count at a glance on every layer:** the fx badge on Stack strips, Layers cards and Mixer strips
+- [x] *(Mixer strips, Layers cards)* **Effect count at a glance on every layer:** the fx badge on Stack strips, Layers cards and Mixer strips
       shows the number ("3 fx"), lit when on, dim when bypassed; groups and comps too. (The badge exists on the
       Layers cards: check it shows everywhere and reads at a glance.)
-- [ ] **Mapping rectangles: Photoshop-style transform:** drag a whole side, scale and rotate the shape, not only
+- [x] **Mapping rectangles: Photoshop-style transform:** drag a whole side, scale and rotate the shape, not only
       its corner points.
 
-- [ ] **Preview before live, ignoring the fader.** Media / Library: click a clip or effect and see it in a preview of
+- [x] *(PREVIEW · not live + Go live)* **Preview before live, ignoring the fader.** Media / Library: click a clip or effect and see it in a preview of
       its own before it goes on a layer. A layer's preview shows its picture at full opacity even when its fader is
       at 0 (what you're about to play), with a Go to send it live. Size: M (half a day).
-- [ ] **Effect previews load slowly or blank** when a lot are asked for at once (the Effects list tiles, and the
+- [x] *(3 builds at a time, 6 drawn per frame, retakes at 0.5 / 1.5 / 4 s, each tile its own)* **Effect previews load slowly or blank** when a lot are asked for at once (the Effects list tiles, and the
       preview when one is picked). Needs a look at how many previews the engine renders per frame and in what order
       (visible tiles first, then the rest). Size: S to M. Need an example: which list, how many tiles, what shows.
 - [x] **"Plays on" picker at the top of Media** *(done without "next free clip cell")* so a click shows which layer it lands on, with "next free clip
@@ -204,7 +236,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master, Average (each light averages its own patch: 9 samples), Video wall… (tiles across × down covering the picture, each patched on fresh universes). Checked: tests (CPU and GPU).
 - [x] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
 - [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
-- [~] 76. **NDI sound** in and out (V). Done: NDI sound out. Left: NDI sound in.
+- [x] 76. **NDI sound** in and out (V). Out: with the picture. In: Audio › input list has every NDI source ("NDI · name"); its sound drives the meters, beat and modulators (audio-only receiver, no picture over the network). Checked: loopback test (our own NDI sender's tone comes back at 48 kHz, right level).
 - [x] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
 - [x] 78. **Stream Deck** buttons for cues, clips and settings (M). Keys + Stream Deck + dials as input, key pictures; not tried with a real deck.
 - [x] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
@@ -263,15 +295,15 @@ library: your OK). Public webcams need a hand-picked list that's kept up to date
 - [~] O1. **Stock video and pictures** (NASA, Internet Archive, Wikimedia Commons done; Pexels, Pixabay, Coverr need keys): Pexels and Pixabay (free API keys; free to use, no credit needed), Coverr,
   NASA Image and Video Library (public domain, no key), Internet Archive (public-domain films, no key), Wikimedia
   Commons (CC, no key).
-- [~] O2. **Art and photos** (Openverse and the Art Institute of Chicago done; Unsplash needs a key; other museums next): Openverse (search across CC collections, no key), Unsplash (key), museum open-access
+- [~] O2. **Art and photos** (Openverse, the Art Institute of Chicago and the Cleveland Museum of Art (2026-10-27) done; Unsplash needs a key; other museums next): Openverse (search across CC collections, no key), Unsplash (key), museum open-access
   collections with APIs and CC0 pictures: the Met, Art Institute of Chicago, Smithsonian, Rijksmuseum, Europeana.
 - [~] O3. **Shaders** (Online › Shaders (ISF): isf.video's shared shaders, checked and loaded; Vidvox's ISF-Files ship with Phosphor; Shadertoy needs a key): the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
   effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label
   them). Overlaps #94.
-- [ ] O4. **Lottie animations**: LottieFiles' free animations (once Lottie clips land, #81).
+- [x] O4. **Lottie animations**: Online › Animations (Lottie): LottieFiles' free animations (no key, Lottie Simple License: free, also commercially), downloaded as .json and played as Lottie clips. Checked: parse test + a live search and download onto a layer (2026-10-27).
 - [~] O5. **Icons and vector shapes** (Iconify done: every open icon set, white SVG; emoji sets come with it): Iconify (200,000+ open-licence SVG icons, one API, no key), Phosphor icons,
   OpenMoji / Twemoji (emoji as SVG): as SVG clips or text-layer symbols.
-- [~] O6. **3D models, textures, HDRIs** (Poly Haven textures done; models and HDRIs next): Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
+- [~] O6. **3D models, textures, HDRIs** (Poly Haven textures and 360 panoramas (+ the 360 View effect) done; models next; ambientCG skipped 2026-10-27: its previews are spheres and its textures come only as zips): Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
   models, Smithsonian 3D: for 3D-model slices and textures.
 - [~] O7. **Music and sound** (Online › Music: Internet Archive netlabel releases, Creative Commons; Freesound / Jamendo need keys): Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
   audio, Pixabay music: clip sound, timeline sound tracks, and something for the beat detection to follow.
@@ -281,7 +313,7 @@ library: your OK). Public webcams need a hand-picked list that's kept up to date
 - [x] O10. **MilkDrop presets** (Online › Visualizers: the whole Cream of the Crop pack, searchable): projectM's preset packs ("cream of the crop") once #93 lands.
 - [x] O11. **Live data that moves visuals** (weather, ISS, earthquakes as modulators; news headlines and a city clock on text layers) (as modulators): weather (Open-Meteo, no key), earthquakes (USGS), the ISS
   position, RSS / news headlines into text layers, a clock in any city.
-- [ ] O12. **Live pictures**: public webcams and space feeds (NASA / ISS live streams) as live layers; GIFs from
+- [~] O12. **Live pictures** (2026-10-27: Inputs › Live from the internet: NASA ISS, Sen 4K ISS, Florida rocket pads, a volcano; any YouTube / Twitch live page pasted in Network stream; the page is saved and its stream looked up each start. Left: Giphy / Tenor (keys)): public webcams and space feeds (NASA / ISS live streams) as live layers; GIFs from
   Giphy / Tenor (keys). The "From a link" yt-dlp route already covers pasted video links.
 - [x] O13. **Starter shows** (Online › Start a show: Space, Nature, Retro, Club, Gallery): one click makes a ready show from these sources (a few clip banks, effects, a sound
   track), by mood ("club", "ambient", "corporate").
