@@ -35,6 +35,8 @@ pub enum Kind {
     Shader,
     /// Animated GIFs from X (small looping MP4s).
     Gif,
+    /// Lottie vector animations (a .json, drawn into a looping clip with see-through background).
+    Animation,
 }
 
 /// One search result.
@@ -88,6 +90,22 @@ fn request(url: &str) -> Result<ureq::Response, String> {
             format!("{host} didn't answer: it may be busy, or the internet connection is down")
         }
     })
+}
+
+/// A search sent as a POST with a JSON body (GraphQL), answer into memory.
+pub fn post_bytes(url: &str, body: &str) -> Result<Vec<u8>, String> {
+    let host = url.split('/').nth(2).unwrap_or(url).to_string();
+    let r = agent().post(url).set("Content-Type", "application/json").send_string(body).map_err(|e| match e {
+        ureq::Error::Status(429, _) => format!("{host} is busy (too many searches): try again in a minute"),
+        ureq::Error::Status(code, _) => format!("{host} answered with an error ({code})"),
+        ureq::Error::Transport(t) => {
+            log::warn!("online: {url}: {t}");
+            format!("{host} didn't answer: it may be busy, or the internet connection is down")
+        }
+    })?;
+    let mut out = Vec::new();
+    r.into_reader().take(MAX_SMALL).read_to_end(&mut out).map_err(|e| format!("download stopped: {e}"))?;
+    Ok(out)
 }
 
 /// A small download (a search answer, a thumbnail) into memory.
@@ -173,7 +191,11 @@ impl Search {
                             None => Err("type an X account, like @giphy".into()),
                         }
                     } else {
-                        let body = if source.whole_list() { get_cached(&url) } else { get_bytes(&url) };
+                        let body = match source.post_body(&query, page) {
+                            Some(question) => post_bytes(&url, &question),
+                            None if source.whole_list() => get_cached(&url),
+                            None => get_bytes(&url),
+                        };
                         body.and_then(|b| source.parse_page(kind, &query, page, &b))
                     };
                     let msg = match found {
@@ -284,6 +306,7 @@ pub fn file_name(item: &Item, url: &str) -> String {
             Kind::Music => "mp3",
             Kind::Shader => "fs",
             Kind::Gif => "mp4",
+            Kind::Animation => "json",
             Kind::Picture | Kind::Texture => "jpg",
         }
         .into()

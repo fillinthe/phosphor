@@ -21,6 +21,7 @@ enum Want {
     Fonts,
     Music,
     Shaders,
+    Animations,
     XGifs,
 }
 
@@ -36,6 +37,7 @@ impl Want {
             Want::Fonts => &[Kind::Font],
             Want::Music => &[Kind::Music],
             Want::Shaders => &[Kind::Shader],
+            Want::Animations => &[Kind::Animation],
             Want::XGifs => &[Kind::Gif],
         }
     }
@@ -92,7 +94,7 @@ impl Online {
     pub fn bench_search(&mut self, query: &str) {
         self.query = query.to_string();
         // (Not X: it needs your sign-in.)
-        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font, Kind::Music, Kind::Shader];
+        let kinds = [Kind::Video, Kind::Picture, Kind::Icon, Kind::Texture, Kind::Visualizer, Kind::Font, Kind::Music, Kind::Shader, Kind::Animation];
         self.search = Some(Search::start(query, &Source::ALL, &kinds, false, None));
         self.bench = true;
     }
@@ -123,6 +125,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             "font" => i.kind == Kind::Font,
             "music" => i.kind == Kind::Music,
             "shader" => i.kind == Kind::Shader,
+            "animation" => i.kind == Kind::Animation,
             _ => i.kind == Kind::Picture,
         };
         if let Some(item) = s.items.iter().find(wanted).cloned() {
@@ -399,6 +402,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::Fonts, "Fonts".to_string()),
             (Want::Music, "Music".to_string()),
             (Want::Shaders, "Shaders (ISF)".to_string()),
+            (Want::Animations, "Animations (Lottie)".to_string()),
             (Want::XGifs, "GIFs from X".to_string()),
         ];
         let before = o.want;
@@ -615,6 +619,7 @@ fn kind_icon(kind: Kind) -> &'static str {
         Kind::Music => icon::MUSIC_NOTES,
         Kind::Shader => icon::SPARKLE,
         Kind::Gif => icon::GIF,
+        Kind::Animation => icon::BEZIER_CURVE,
     }
 }
 
