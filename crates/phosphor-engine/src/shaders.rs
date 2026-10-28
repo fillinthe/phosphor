@@ -121,6 +121,12 @@ pub const EFFECTS: &[ShaderDesc] = &[
         params: &[p("Segments", 2.0, 16.0, 6.0), p("Rotation", 0.0, 1.0, 0.0), p("Zoom", 0.25, 4.0, 1.0)],
     },
     ShaderDesc {
+        id: "view_360",
+        name: "360 View",
+        entry: "fx_view_360",
+        params: &[p("Turn", 0.0, 1.0, 0.0), p("Tilt", -1.0, 1.0, 0.0), p("Field of view", 10.0, 170.0, 90.0), p("Spin", -2.0, 2.0, 0.0)],
+    },
+    ShaderDesc {
         id: "color_match",
         name: "Colour Match",
         entry: "fx_color_match",
@@ -684,6 +690,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "edge_glow" => ("Light", "Glowing outlines"),
         "rgb_shift" => ("Distort", "Split colour channels"),
         "kaleidoscope" => ("Distort", "Mirrored segments"),
+        "view_360" => ("Distort", "Look around inside a 360 panorama (sky, room, 360 video)"),
         "mirror" => ("Distort", "Mirror halves or quarters"),
         "zoom_rotate" => ("Distort", "Zoom and spin"),
         "wave" => ("Distort", "Wavy warp"),
