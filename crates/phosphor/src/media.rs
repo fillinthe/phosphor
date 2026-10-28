@@ -387,6 +387,12 @@ impl MediaManager {
                 // Drawn by `milkdrop::Visualizers` each frame.
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Live { format, .. } if format == crate::milkdrop::FORMAT => {}
+                // A live web page: its stream is looked up and opened on a thread (seconds), like a movie.
+                #[cfg(not(target_arch = "wasm32"))]
+                SourceSpec::Live { name, format, url } if format == live::PAGE => {
+                    let (name, url) = (name.clone(), url.clone());
+                    self.preload.open_with(layer.id, layer.source.clone(), move || live::open_page(&name, &url));
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Live { name, format, url } => match live::open(name, format, url) {
                     Ok(player) => {

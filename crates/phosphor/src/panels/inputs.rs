@@ -44,19 +44,32 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
                     }
                 }
                 for i in mine {
-                    if let Some(to) = input_row(ui, &i.label, &i.source, super::input_icon(kind), selected) {
+                    if let Some(to) = input_row(ui, &i.label, &i.source, super::input_icon(kind), selected, "") {
                         put = Some((to, i.label.clone(), i.source.clone()));
                     }
                 }
             });
         }
+        crate::ui::section(ui, "inputs_feeds", format!("{} Live from the internet ({})", icon::BROADCAST, crate::media::live::FEEDS.len()), true, |ui| {
+            if crate::web_media::find_ytdlp().is_none() {
+                hint(ui, "Needs yt-dlp (free): brew install yt-dlp");
+            }
+            for (name, page, about) in crate::media::live::FEEDS {
+                let source = crate::media::live::page_source(name, page);
+                if let Some(to) = input_row(ui, name, &source, icon::BROADCAST, selected, about) {
+                    put = Some((to, name.to_string(), source));
+                }
+            }
+        });
         crate::ui::section(ui, "inputs_stream", format!("{} Network stream", icon::GLOBE), true, |ui| {
             let id = egui::Id::new("inputs_stream_url");
             let mut url: String = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_default();
-            crate::ui::text_field(ui, &mut url, "rtsp://… srt://… https://….m3u8", None);
+            crate::ui::text_field(ui, &mut url, "rtsp://… srt://… https://….m3u8 · a YouTube / Twitch live page", None);
             if url.contains("://") {
-                let source = crate::media::live::stream_source(url.trim());
-                if let Some(to) = input_row(ui, url.trim(), &source, icon::GLOBE, selected) {
+                // A live page on a video site: kept as the page, its stream looked up each time (yt-dlp).
+                let page = ["youtube.com/", "youtu.be/", "twitch.tv/"].iter().any(|h| url.contains(h));
+                let source = if page { crate::media::live::page_source(url.trim(), url.trim()) } else { crate::media::live::stream_source(url.trim()) };
+                if let Some(to) = input_row(ui, url.trim(), &source, icon::GLOBE, selected, "") {
                     put = Some((to, url.trim().to_string(), source));
                 }
             }
@@ -80,7 +93,7 @@ fn live_inputs(ui: &mut egui::Ui, st: &mut State) {
 /// One input: a draggable name, then "on the selected layer" and "new layer" buttons. Returns where to put it
 /// (`Some(Some(layer))` / `Some(None)` = a new layer).
 #[cfg(not(target_arch = "wasm32"))]
-fn input_row(ui: &mut egui::Ui, name: &str, source: &SourceSpec, glyph: &str, selected: Option<u64>) -> Option<Option<u64>> {
+fn input_row(ui: &mut egui::Ui, name: &str, source: &SourceSpec, glyph: &str, selected: Option<u64>, about: &str) -> Option<Option<u64>> {
     let mut out = None;
     // Buttons on the right first, then the name fills what's left (cut short, full name on hover).
     let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
@@ -97,7 +110,8 @@ fn input_row(ui: &mut egui::Ui, name: &str, source: &SourceSpec, glyph: &str, se
             if r.double_clicked() {
                 out = Some(selected);
             }
-            r.on_hover_text(format!("{name}\nDrag onto a layer or a clip cell · double-click: the selected layer"));
+            let about = if about.is_empty() { String::new() } else { format!("\n{about}") };
+            r.on_hover_text(format!("{name}{about}\nDrag onto a layer or a clip cell · double-click: the selected layer"));
         });
     });
     out
