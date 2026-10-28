@@ -10,8 +10,13 @@
 //! - **Number**: a shared modulator (LFO, sound, beat, random, steps, knob). Its output wires into any setting of
 //!   another box (one number input per setting) as a linked modulation, and into another Number's "Chain" input
 //!   (scaled by / plus / min / max…: the maths).
+//! - **Group**: a box made of boxes: its own network inside, whose **Input** boxes are the group's inputs and whose
+//!   Output is the group's picture. The boxes inside are backed like any others (in the same comp). A group can be
+//!   saved by name (`SavedBox`) and added again anywhere.
 //!
 //! `Composition::sync_network` makes the layers match the boxes and wires; call it after the network changes.
+
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +30,9 @@ pub enum NodeKind {
     Mix,
     Output,
     Number,
+    Group,
+    /// Inside a Group: what's wired into one of the group's inputs (one Input box per input, in id order).
+    Input,
 }
 
 /// What a wire carries: a picture, or a number (0..1, changing over time).
@@ -35,7 +43,8 @@ pub enum PortKind {
 }
 
 impl NodeKind {
-    pub const ALL: [NodeKind; 5] = [NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Number, NodeKind::Output];
+    /// The kinds you add from the menu (Input only inside a Group; Output comes with every network).
+    pub const ALL: [NodeKind; 6] = [NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Number, NodeKind::Group, NodeKind::Output];
 
     /// What its output carries.
     pub fn output(self) -> PortKind {
@@ -49,6 +58,8 @@ impl NodeKind {
             NodeKind::Mix => "Mix",
             NodeKind::Output => "Output",
             NodeKind::Number => "Number",
+            NodeKind::Group => "Box of boxes",
+            NodeKind::Input => "Input",
         }
     }
 
@@ -59,17 +70,19 @@ impl NodeKind {
             NodeKind::Mix => "Blends B over A (blend mode and opacity)",
             NodeKind::Output => "What the comp shows: wire the finished picture in here",
             NodeKind::Number => "A moving number: an LFO, the sound, the beat, random, steps or a knob. Wire it into any setting of another box, or into another Number's Chain to combine them",
+            NodeKind::Group => "A box made of boxes: double-click to build inside it. Its Input boxes are its inputs, its Output its picture. Save it by name and add it again anywhere",
+            NodeKind::Input => "What's wired into this input of the box (from outside)",
         }
     }
 
-    /// The names of its inputs.
+    /// The names of its fixed inputs (a Group's come from its Input boxes).
     pub fn inputs(self) -> &'static [&'static str] {
         match self {
-            NodeKind::Picture => &[],
             NodeKind::Effect => &["In"],
             NodeKind::Mix => &["A", "B"],
             NodeKind::Output => &["In"],
             NodeKind::Number => &["Chain"],
+            NodeKind::Picture | NodeKind::Group | NodeKind::Input => &[],
         }
     }
 }
@@ -82,13 +95,17 @@ pub struct Node {
     /// Top-left corner on the canvas (points).
     pub pos: [f32; 2],
     /// What's behind it: Picture / Effect = [layer]; Mix = [group, layer A, layer B]; Number = [modulator];
-    /// Output = []. Empty until `sync_network` makes them.
+    /// Output / Group / Input = []. Empty until `sync_network` makes them.
     pub parts: Vec<u64>,
+    /// A Group's own network.
+    pub inner: Option<Network>,
+    /// The layer or group whose finished picture this box puts out (set by `sync_network`; 0 = none).
+    pub shows: u64,
 }
 
 impl Default for Node {
     fn default() -> Self {
-        Self { id: 0, kind: NodeKind::Picture, pos: [0.0, 0.0], parts: Vec::new() }
+        Self { id: 0, kind: NodeKind::Picture, pos: [0.0, 0.0], parts: Vec::new(), inner: None, shows: 0 }
     }
 }
 
@@ -97,6 +114,7 @@ impl Node {
     pub fn picture(&self) -> Option<u64> {
         match self.kind {
             NodeKind::Output | NodeKind::Number => None,
+            NodeKind::Group | NodeKind::Input => (self.shows != 0).then_some(self.shows),
             _ => self.parts.first().copied(),
         }
     }
@@ -124,6 +142,15 @@ impl Network {
         n
     }
 
+    /// What a new Group holds: an Input wired straight into its Output.
+    pub fn group_inner() -> Network {
+        let mut n = Network::default();
+        let from = n.add(NodeKind::Input, [40.0, 60.0]);
+        let to = n.add(NodeKind::Output, [420.0, 60.0]);
+        n.connect(from, to, 0);
+        n
+    }
+
     pub fn node(&self, id: u32) -> Option<&Node> {
         self.nodes.iter().find(|n| n.id == id)
     }
@@ -132,13 +159,29 @@ impl Network {
         self.nodes.iter_mut().find(|n| n.id == id)
     }
 
+    /// The network `path` deep (each step a Group box's id); `[]` = this one.
+    pub fn at(&self, path: &[u32]) -> Option<&Network> {
+        match path.split_first() {
+            None => Some(self),
+            Some((id, rest)) => self.node(*id)?.inner.as_ref()?.at(rest),
+        }
+    }
+
+    pub fn at_mut(&mut self, path: &[u32]) -> Option<&mut Network> {
+        match path.split_first() {
+            None => Some(self),
+            Some((id, rest)) => self.node_mut(*id)?.inner.as_mut()?.at_mut(rest),
+        }
+    }
+
     /// Adds a box and returns its id (its layers come with the next `sync_network`). One Output only.
     pub fn add(&mut self, kind: NodeKind, pos: [f32; 2]) -> u32 {
         if kind == NodeKind::Output && let Some(out) = self.nodes.iter().find(|n| n.kind == NodeKind::Output) {
             return out.id;
         }
         let id = self.nodes.iter().map(|n| n.id + 1).max().unwrap_or(1);
-        self.nodes.push(Node { id, kind, pos, parts: Vec::new() });
+        let inner = (kind == NodeKind::Group).then(Network::group_inner);
+        self.nodes.push(Node { id, kind, pos, inner, ..Default::default() });
         id
     }
 
@@ -150,9 +193,10 @@ impl Network {
         parts
     }
 
-    /// Wires two boxes' picture ports (number inputs depend on the boxes' settings: `Composition::connect_boxes`).
+    /// Wires two boxes' picture ports (number and Group inputs depend on the boxes' settings:
+    /// `Composition::connect_boxes`).
     pub fn connect(&mut self, from: u32, to: u32, input: usize) -> bool {
-        let inputs = self.node(to).map_or(0, |n| n.kind.inputs().len());
+        let inputs = self.node(to).map_or(0, |n| n.kind.inputs().len() + n.inner.as_ref().map_or(0, |i| i.input_boxes().len()));
         self.node(from).is_some_and(|n| n.kind.output() == PortKind::Picture) && graph::connect(&mut self.wires, from, to, input, inputs)
     }
 
@@ -170,15 +214,61 @@ impl Network {
         self.source_of(out.id, 0)
     }
 
-    /// Every layer and group the boxes own.
-    pub fn parts(&self) -> impl Iterator<Item = u64> + '_ {
-        self.nodes.iter().flat_map(|n| n.parts.iter().copied())
+    /// The Input boxes, in id order (a Group's inputs).
+    pub fn input_boxes(&self) -> Vec<u32> {
+        let mut v: Vec<u32> = self.nodes.iter().filter(|n| n.kind == NodeKind::Input).map(|n| n.id).collect();
+        v.sort_unstable();
+        v
+    }
+
+    /// Every layer, group and modulator the boxes own, the boxes inside Groups included.
+    pub fn parts(&self) -> Vec<u64> {
+        let mut v = Vec::new();
+        for n in &self.nodes {
+            v.extend(n.parts.iter().copied());
+            if let Some(inner) = &n.inner {
+                v.extend(inner.parts());
+            }
+        }
+        v
+    }
+
+    /// Forgets every box's layers (a copy to save: the next `sync_network` makes new ones).
+    pub fn clear_parts(&mut self) {
+        for n in &mut self.nodes {
+            n.parts.clear();
+            n.shows = 0;
+            if let Some(inner) = &mut n.inner {
+                inner.clear_parts();
+            }
+        }
     }
 }
 
+/// A Group box saved by name: its network (with no layers) and the settings of the boxes inside, by their path.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavedBox {
+    pub network: Network,
+    /// (path to the box inside, which of its parts, the layer).
+    pub layers: Vec<(Vec<u32>, usize, LayerState)>,
+    pub modulators: Vec<(Vec<u32>, Modulator)>,
+}
+
+/// What one level's sync found, for the whole network's bookkeeping.
+#[derive(Default)]
+struct Synced {
+    /// Layers in drawing order (sources first).
+    layers: Vec<u64>,
+    /// Modulators in order (chained-from first).
+    mods: Vec<u64>,
+    /// Mix members (they mix inside their group).
+    members: Vec<u64>,
+}
+
 impl Composition {
-    /// Every input of box `node` (in comp `cid`): its picture inputs, then one number input per setting it has (an
-    /// effect's or generator's parameters, a Mix's opacity, a Number's chain).
+    /// Every input of box `node`: its picture inputs (a Group's: one per Input box inside), then one number input per
+    /// setting it has (an effect's or generator's parameters, a Mix's opacity, a Number's chain).
     pub fn node_inputs(&self, node: &Node) -> Vec<(String, PortKind)> {
         let own = if node.kind == NodeKind::Number { PortKind::Number } else { PortKind::Picture };
         let mut v: Vec<(String, PortKind)> = node.kind.inputs().iter().map(|s| (s.to_string(), own)).collect();
@@ -197,35 +287,41 @@ impl Composition {
                 }
             }
             NodeKind::Mix => v.push(("Opacity".to_string(), PortKind::Number)),
+            NodeKind::Group => {
+                if let Some(inner) = &node.inner {
+                    v.extend(inner.input_boxes().iter().enumerate().map(|(k, _)| (format!("In {}", k + 1), PortKind::Picture)));
+                }
+            }
             _ => {}
         }
         v
     }
 
-    /// Wires box `from` into input `input` of box `to` in comp `cid`'s network, pictures to picture inputs and
-    /// numbers to number inputs. False when refused (a loop, the wrong kind, no such input).
-    pub fn connect_boxes(&mut self, cid: u64, from: u32, to: u32, input: usize) -> bool {
+    /// Wires box `from` into input `input` of box `to` in the network `path` deep in comp `cid`, pictures to picture
+    /// inputs and numbers to number inputs. False when refused (a loop, the wrong kind, no such input).
+    pub fn connect_boxes(&mut self, cid: u64, path: &[u32], from: u32, to: u32, input: usize) -> bool {
         let Some(mut net) = self.comp(cid).and_then(|c| c.network.clone()) else { return false };
-        let (Some(f), Some(t)) = (net.node(from).cloned(), net.node(to).cloned()) else { return false };
+        let Some(level) = net.at_mut(path) else { return false };
+        let (Some(f), Some(t)) = (level.node(from).cloned(), level.node(to).cloned()) else { return false };
         let inputs = self.node_inputs(&t);
         if f.kind == NodeKind::Output || inputs.get(input).is_none_or(|(_, k)| *k != f.kind.output()) {
             return false;
         }
-        let ok = graph::connect(&mut net.wires, from, to, input, inputs.len());
+        let ok = graph::connect(&mut level.wires, from, to, input, inputs.len());
         if ok && let Some(c) = self.comp_mut(cid) {
             c.network = Some(net);
         }
         ok
     }
 
-    /// Makes comp `comp_id`'s layers and modulators match its network: a layer (or a two-layer group) behind each
-    /// picture box and a shared modulator behind each Number, Feed sources along picture wires, linked modulations
-    /// along number wires, only the box wired into Output in the mix, sources before the boxes they feed. Parts of
-    /// boxes that are gone are removed. Does nothing for a comp without a network.
+    /// Makes comp `comp_id`'s layers and modulators match its network (Groups inside included): a layer (or a
+    /// two-layer group) behind each picture box and a shared modulator behind each Number, Feed sources along picture
+    /// wires, linked modulations along number wires, only the box wired into Output in the mix, sources before the
+    /// boxes they feed. Parts of boxes that are gone are removed. Does nothing for a comp without a network.
     pub fn sync_network(&mut self, comp_id: u64) {
         let Some(mut net) = self.comp(comp_id).and_then(|c| c.network.clone()) else { return };
         // Parts of boxes that are gone.
-        let owned: Vec<u64> = net.parts().collect();
+        let owned = net.parts();
         let stale: Vec<u64> = self.layers.iter().filter(|l| l.comp == Some(comp_id) && l.designer && !owned.contains(&l.id)).map(|l| l.id).collect();
         self.remove_parts(&stale);
         let stale_groups: Vec<u64> = self.groups.iter().filter(|g| g.designer && !owned.contains(&g.id)).map(|g| g.id).collect();
@@ -233,14 +329,65 @@ impl Composition {
             self.ungroup(g);
         }
         self.modulators.retain(|m| !m.designer || owned.contains(&m.id));
+        let mut found = Synced::default();
+        self.sync_level(comp_id, &mut net, &[], &mut found);
+        // Only the box wired into Output shows; Mix members mix inside their group.
+        let shown = net.shown().and_then(|id| net.node(id)).and_then(|n| n.picture());
+        for part in net.parts() {
+            let on = found.members.contains(&part) || Some(part) == shown;
+            if let Some(l) = self.layers.iter_mut().find(|l| l.id == part) {
+                l.in_mix = on;
+            } else if let Some(g) = self.groups.iter_mut().find(|g| g.id == part) {
+                g.in_mix = on;
+            }
+        }
+        // Sources before the boxes they feed (so a wire carries this frame's picture, not the last one's); a
+        // chained modulator after the one it takes from.
+        let order: Vec<u64> = found.layers.iter().copied().filter(|p| self.layers.iter().any(|l| l.id == *p)).collect();
+        if let Some(first) = self.layers.iter().position(|l| order.contains(&l.id)) {
+            let mut taken: Vec<LayerState> = Vec::new();
+            self.layers.retain_mut(|l| {
+                if order.contains(&l.id) {
+                    taken.push(l.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            let mut sorted: Vec<LayerState> = order.iter().filter_map(|id| taken.iter().find(|l| l.id == *id).cloned()).collect();
+            let at = first.min(self.layers.len());
+            self.layers.splice(at..at, sorted.drain(..));
+            self.normalize_groups();
+        }
+        let mut mods: Vec<Modulator> = Vec::new();
+        self.modulators.retain_mut(|m| {
+            if m.designer {
+                mods.push(m.clone());
+                false
+            } else {
+                true
+            }
+        });
+        self.modulators.extend(found.mods.iter().filter_map(|id| mods.iter().find(|m| m.id == *id).cloned()));
+        if let Some(c) = self.comp_mut(comp_id) {
+            c.network = Some(net);
+        }
+    }
+
+    /// One network (the top one, or inside a Group): parts for new boxes, sources and modulations along its wires.
+    /// `inputs` = the pictures wired into the Group from outside (one per Input box, 0 = nothing), for Input boxes.
+    fn sync_level(&mut self, comp_id: u64, net: &mut Network, inputs: &[u64], found: &mut Synced) {
         // Parts for new boxes.
         for i in 0..net.nodes.len() {
             let (kind, id) = (net.nodes[i].kind, net.nodes[i].id);
+            if kind == NodeKind::Group && net.nodes[i].inner.is_none() {
+                net.nodes[i].inner = Some(Network::group_inner());
+            }
             let have = net.nodes[i].parts.len();
             let need = match kind {
                 NodeKind::Picture | NodeKind::Effect | NodeKind::Number => 1,
                 NodeKind::Mix => 3,
-                NodeKind::Output => 0,
+                NodeKind::Output | NodeKind::Group | NodeKind::Input => 0,
             };
             if have == need {
                 continue;
@@ -271,38 +418,72 @@ impl Composition {
                         vec![mid]
                     }
                 }
-                NodeKind::Output => Vec::new(),
+                NodeKind::Output | NodeKind::Group | NodeKind::Input => Vec::new(),
             };
         }
-        // Wires to inputs a box no longer has (its effect changed) go.
-        let inputs: Vec<(u32, Vec<(String, PortKind)>)> = net.nodes.iter().map(|n| (n.id, self.node_inputs(n))).collect();
-        let count = |id: u32| inputs.iter().find(|(n, _)| *n == id).map_or(0, |(_, v)| v.len());
-        net.wires.retain(|w| w.input < count(w.to));
-        // Picture sources along the wires.
-        let feed = |net: &Network, to: u32, input: usize| -> SourceSpec {
-            match net.source_of(to, input).and_then(|from| net.node(from)).and_then(|n| n.picture().map(|p| (p, n))) {
-                Some((p, n)) => SourceSpec::Feed { id: p, name: format!("Box {}", n.id), before_fx: false },
+        // Wires to inputs a box no longer has (its effect changed, an Input box went) go.
+        let count: HashMap<u32, usize> = net.nodes.iter().map(|n| (n.id, self.node_inputs(n).len())).collect();
+        net.wires.retain(|w| w.input < count.get(&w.to).copied().unwrap_or(0));
+        // Each box's picture, sources first, so a wire can carry it on; a Group's boxes are made along the way.
+        let ids: Vec<u32> = net.nodes.iter().map(|n| n.id).collect();
+        let ordered = graph::order(&ids, &net.wires);
+        let mut pictures: HashMap<u32, u64> = HashMap::new();
+        let feed_from = |pictures: &HashMap<u32, u64>, net: &Network, to: u32, input: usize| -> SourceSpec {
+            match net.source_of(to, input).and_then(|from| pictures.get(&from).copied().filter(|p| *p != 0).map(|p| (from, p))) {
+                Some((from, p)) => SourceSpec::Feed { id: p, name: format!("Box {from}"), before_fx: false },
                 None => SourceSpec::None,
             }
         };
-        for n in &net.nodes {
-            match n.kind {
+        for id in ordered {
+            let Some(i) = net.nodes.iter().position(|n| n.id == id) else { continue };
+            let kind = net.nodes[i].kind;
+            let parts = net.nodes[i].parts.clone();
+            let pic = match kind {
+                NodeKind::Picture => {
+                    found.layers.push(parts[0]);
+                    parts[0]
+                }
                 NodeKind::Effect => {
-                    let s = feed(&net, n.id, 0);
-                    if let Some(l) = self.layer_mut(n.parts[0]) {
+                    let s = feed_from(&pictures, net, id, 0);
+                    if let Some(l) = self.layer_mut(parts[0]) {
                         l.source = s;
                     }
+                    found.layers.push(parts[0]);
+                    parts[0]
                 }
                 NodeKind::Mix => {
-                    for (k, part) in [n.parts[1], n.parts[2]].into_iter().enumerate() {
-                        let s = feed(&net, n.id, k);
+                    for (k, part) in [parts[1], parts[2]].into_iter().enumerate() {
+                        let s = feed_from(&pictures, net, id, k);
                         if let Some(l) = self.layer_mut(part) {
                             l.source = s;
                         }
+                        found.layers.push(part);
+                        found.members.push(part);
                     }
+                    parts[0]
                 }
-                _ => {}
-            }
+                NodeKind::Input => {
+                    let k = net.input_boxes().iter().position(|x| *x == id).unwrap_or(0);
+                    inputs.get(k).copied().unwrap_or(0)
+                }
+                NodeKind::Group => {
+                    let Some(mut inner) = net.nodes[i].inner.take() else { continue };
+                    let ins: Vec<u64> = (0..inner.input_boxes().len()).map(|k| net.source_of(id, k).and_then(|f| pictures.get(&f).copied()).unwrap_or(0)).collect();
+                    self.sync_level(comp_id, &mut inner, &ins, found);
+                    let pic = inner.shown().and_then(|s| inner.node(s)).and_then(|n| n.picture()).unwrap_or(0);
+                    net.nodes[i].inner = Some(inner);
+                    pic
+                }
+                NodeKind::Number => {
+                    if let Some(m) = parts.first() {
+                        found.mods.push(*m);
+                    }
+                    0
+                }
+                NodeKind::Output => 0,
+            };
+            net.nodes[i].shows = pic;
+            pictures.insert(id, pic);
         }
         // Numbers along the wires: each number input follows the Number box wired in (or stops following a box: a
         // link to a box's modulator, or to one that's gone, is dropped; a control's own modulation is left alone).
@@ -310,8 +491,8 @@ impl Composition {
         let existing: Vec<u64> = self.modulators.iter().map(|m| m.id).collect();
         let drop_link = move |id: u64| designer_mods.contains(&id) || !existing.contains(&id);
         for n in &net.nodes {
-            let pic_n = n.kind.inputs().len();
-            let total = count(n.id);
+            let pic_n = n.kind.inputs().len() + if n.kind == NodeKind::Group { n.inner.as_ref().map_or(0, |i| i.input_boxes().len()) } else { 0 };
+            let total = count.get(&n.id).copied().unwrap_or(0);
             for k in pic_n..total {
                 let from = net.source_of(n.id, k).and_then(|f| net.node(f)).and_then(|f| f.modulator());
                 self.follow_box(n, k - pic_n, from, &drop_link);
@@ -329,53 +510,6 @@ impl Composition {
                     };
                 }
             }
-        }
-        // Only the box wired into Output shows; Mix members mix inside their group.
-        let shown = net.shown().and_then(|id| net.node(id)).and_then(|n| n.picture());
-        for n in &net.nodes {
-            for (k, part) in n.parts.iter().enumerate() {
-                let member = n.kind == NodeKind::Mix && k > 0;
-                let on = member || Some(*part) == shown;
-                if let Some(l) = self.layers.iter_mut().find(|l| l.id == *part) {
-                    l.in_mix = on;
-                } else if let Some(g) = self.groups.iter_mut().find(|g| g.id == *part) {
-                    g.in_mix = on;
-                }
-            }
-        }
-        // Sources before the boxes they feed (so a wire carries this frame's picture, not the last one's); a
-        // chained modulator after the one it takes from.
-        let ids: Vec<u32> = net.nodes.iter().map(|n| n.id).collect();
-        let ordered = graph::order(&ids, &net.wires);
-        let order: Vec<u64> = ordered.iter().filter_map(|id| net.node(*id)).flat_map(|n| n.parts.iter().copied().filter(|p| self.layers.iter().any(|l| l.id == *p)).collect::<Vec<_>>()).collect();
-        if let Some(first) = self.layers.iter().position(|l| order.contains(&l.id)) {
-            let mut taken: Vec<LayerState> = Vec::new();
-            self.layers.retain_mut(|l| {
-                if order.contains(&l.id) {
-                    taken.push(l.clone());
-                    false
-                } else {
-                    true
-                }
-            });
-            let mut sorted: Vec<LayerState> = order.iter().filter_map(|id| taken.iter().find(|l| l.id == *id).cloned()).collect();
-            let at = first.min(self.layers.len());
-            self.layers.splice(at..at, sorted.drain(..));
-            self.normalize_groups();
-        }
-        let mod_order: Vec<u64> = ordered.iter().filter_map(|id| net.node(*id)).filter_map(|n| n.modulator()).collect();
-        let mut mods: Vec<Modulator> = Vec::new();
-        self.modulators.retain_mut(|m| {
-            if m.designer {
-                mods.push(m.clone());
-                false
-            } else {
-                true
-            }
-        });
-        self.modulators.extend(mod_order.iter().filter_map(|id| mods.iter().find(|m| m.id == *id).cloned()));
-        if let Some(c) = self.comp_mut(comp_id) {
-            c.network = Some(net);
         }
     }
 
@@ -423,6 +557,64 @@ impl Composition {
             c.network = Some(Network::new());
             self.sync_network(comp_id);
         }
+    }
+
+    /// The Group box `group` in the network `path` deep, with the settings of every box inside, to save by name.
+    pub fn save_box(&self, cid: u64, path: &[u32], group: u32) -> Option<SavedBox> {
+        let node = self.comp(cid)?.network.as_ref()?.at(path)?.node(group)?;
+        let mut network = node.inner.clone()?;
+        let mut saved = SavedBox::default();
+        self.gather_box(&network, &[], &mut saved);
+        network.clear_parts();
+        saved.network = network;
+        Some(saved)
+    }
+
+    fn gather_box(&self, net: &Network, prefix: &[u32], saved: &mut SavedBox) {
+        for n in &net.nodes {
+            let path: Vec<u32> = prefix.iter().copied().chain([n.id]).collect();
+            for (k, part) in n.parts.iter().enumerate() {
+                if let Some(l) = self.layer(*part) {
+                    saved.layers.push((path.clone(), k, l.clone()));
+                } else if let Some(m) = self.modulators.iter().find(|m| m.id == *part) {
+                    saved.modulators.push((path.clone(), m.clone()));
+                }
+            }
+            if let Some(inner) = &n.inner {
+                self.gather_box(inner, &path, saved);
+            }
+        }
+    }
+
+    /// Adds a saved box as a Group at `pos` in the network `path` deep of comp `cid`, its boxes set up as saved.
+    /// Returns the new box's id.
+    pub fn load_box(&mut self, cid: u64, path: &[u32], saved: &SavedBox, pos: [f32; 2]) -> Option<u32> {
+        let mut net = self.comp(cid)?.network.clone()?;
+        let level = net.at_mut(path)?;
+        let id = level.add(NodeKind::Group, pos);
+        level.node_mut(id)?.inner = Some(saved.network.clone());
+        self.comp_mut(cid)?.network = Some(net);
+        self.sync_network(cid);
+        // The saved settings onto the new parts (fresh ids for layers and effects), then the wires again.
+        let net = self.comp(cid)?.network.clone()?;
+        let group = net.at(path)?.node(id)?.inner.clone()?;
+        for (inner_path, k, layer) in &saved.layers {
+            let Some(part) = group.at(&inner_path[..inner_path.len() - 1]).and_then(|n| n.node(*inner_path.last()?)).and_then(|n| n.parts.get(*k).copied()) else { continue };
+            let fresh = self.adopt_layer(layer.clone());
+            if let Some(l) = self.layer_mut(part) {
+                let (id, name, comp, parent) = (l.id, l.name.clone(), l.comp, l.parent);
+                *l = LayerState { id, name, comp, parent, designer: true, in_mix: false, ..fresh };
+            }
+        }
+        for (inner_path, m) in &saved.modulators {
+            let Some(part) = group.at(&inner_path[..inner_path.len() - 1]).and_then(|n| n.node(*inner_path.last()?)).and_then(|n| n.modulator()) else { continue };
+            if let Some(mine) = self.modulators.iter_mut().find(|x| x.id == part) {
+                let (id, name) = (mine.id, mine.name.clone());
+                *mine = Modulator { id, name, designer: true, chain: None, ..m.clone() };
+            }
+        }
+        self.sync_network(cid);
+        Some(id)
     }
 
     /// A hidden layer for a box, at the end of its comp.
@@ -540,10 +732,10 @@ mod tests {
         let inputs = comp.node_inputs(net.node(fx).unwrap());
         assert_eq!(inputs[0], ("In".to_string(), PortKind::Picture));
         assert_eq!(inputs[1].1, PortKind::Number);
-        assert!(!comp.connect_boxes(cid, lfo, fx, 0), "a number into a picture input");
-        assert!(!comp.connect_boxes(cid, pic, fx, 1), "a picture into a number input");
-        assert!(comp.connect_boxes(cid, lfo, fx, 1));
-        assert!(comp.connect_boxes(cid, lfo2, lfo, 0), "chained");
+        assert!(!comp.connect_boxes(cid, &[], lfo, fx, 0), "a number into a picture input");
+        assert!(!comp.connect_boxes(cid, &[], pic, fx, 1), "a picture into a number input");
+        assert!(comp.connect_boxes(cid, &[], lfo, fx, 1));
+        assert!(comp.connect_boxes(cid, &[], lfo2, lfo, 0), "chained");
         comp.sync_network(cid);
         let m = &comp.layer(fx_layer).unwrap().effects[0].mods;
         assert_eq!((m.len(), m[0].index, m[0].m.link, m[0].m.range), (1, 0, m1, true));
@@ -559,5 +751,49 @@ mod tests {
         assert!(comp.layer(fx_layer).unwrap().effects[0].mods.is_empty());
         assert!(!comp.modulators.iter().any(|m| m.id == m2));
         assert_eq!(comp.modulators.iter().find(|m| m.id == m1).unwrap().chain, None);
+    }
+
+    /// A Group box: what's wired into it reaches its Input boxes inside, its inner Output is its picture, and it can
+    /// be saved by name and added again with its boxes set up as saved.
+    #[test]
+    fn a_box_of_boxes_wires_through_and_saves() {
+        let mut comp = Composition::default();
+        let cid = comp.add_comp("Designer");
+        comp.start_network(cid);
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+        let g = net.add(NodeKind::Group, [200.0, 60.0]);
+        let inner = net.node_mut(g).unwrap().inner.as_mut().unwrap();
+        let (gin, gout) = (inner.nodes[0].id, inner.nodes[1].id);
+        let fx = inner.add(NodeKind::Effect, [200.0, 60.0]);
+        inner.disconnect(gout, 0);
+        inner.connect(gin, fx, 0);
+        inner.connect(fx, gout, 0);
+        net.disconnect(out, 0);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        assert_eq!(comp.node_inputs(comp.comp(cid).unwrap().network.as_ref().unwrap().node(g).unwrap()), vec![("In 1".to_string(), PortKind::Picture)]);
+        assert!(comp.connect_boxes(cid, &[], pic, g, 0));
+        assert!(comp.connect_boxes(cid, &[], g, out, 0));
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let pic_layer = net.node(pic).unwrap().parts[0];
+        let fx_layer = net.at(&[g]).unwrap().node(fx).unwrap().parts[0];
+        assert_eq!(feed_of(&comp, fx_layer), Some(pic_layer), "the input reaches the effect inside");
+        assert_eq!(net.node(g).unwrap().picture(), Some(fx_layer), "the group's picture is its inner Output's");
+        assert!(comp.layer(fx_layer).unwrap().in_mix, "and that is what the comp shows");
+        // Set the effect, save the box, add it again: the copy has the effect on a fresh layer.
+        let e = comp.new_effect("invert").unwrap();
+        comp.layer_mut(fx_layer).unwrap().effects = vec![e];
+        let saved = comp.save_box(cid, &[], g).unwrap();
+        assert!(saved.network.parts().is_empty() && saved.layers.len() == 1);
+        let json = serde_json::to_string(&saved).unwrap();
+        let saved: SavedBox = serde_json::from_str(&json).unwrap();
+        let copy = comp.load_box(cid, &[], &saved, [300.0, 300.0]).unwrap();
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let copy_fx = net.at(&[copy]).unwrap().node(fx).unwrap().parts[0];
+        assert_ne!(copy_fx, fx_layer);
+        assert_eq!(comp.layer(copy_fx).unwrap().effects[0].effect, "invert");
+        assert_ne!(comp.layer(copy_fx).unwrap().effects[0].id, comp.layer(fx_layer).unwrap().effects[0].id, "fresh effect id");
     }
 }

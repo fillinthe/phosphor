@@ -29,8 +29,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       backed by hidden layers; `--quick designer`. Checked on a screenshot + engine test; not yet with a real mouse.
       **Phase 2 done 2026-10-29** (not installed): Number boxes (LFO / sound / beat / random / steps / knob), a blue
       number input per setting on every box, chaining as the maths. Checked on a screenshot + engine test.
-      Left: phase 3 box groups, phase 4 points / 3D, phase 5 data. Small: undo for box changes, Duplicate copying
-      settings, settings of a half-visible box, a Number box's own MIDI mapping (map its Knob from the box).
+      **Phase 3 done 2026-10-29** (not installed): Box of boxes (double-click to build inside, breadcrumb back, Input
+      boxes), saved by name (boxes preset folder) and added again from the canvas menu; Duplicate copies the inside.
+      Left: phase 4 points / 3D, phase 5 data. Small: number inputs on a box of boxes, wrapping existing boxes into
+      one, undo for box changes, Duplicate copying a plain box's settings, settings of a half-visible box, a Number
+      box's own MIDI mapping (map its Knob from the box).
 - [ ] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
       (then they're keyable and mappable like the rest).
 

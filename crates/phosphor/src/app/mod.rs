@@ -270,6 +270,8 @@ pub struct State {
     /// Saved layers and effect chains (Presets panel), with the names being typed.
     pub layer_presets: PresetStore,
     pub chain_presets: PresetStore,
+    /// Designer boxes saved by name.
+    pub box_presets: PresetStore,
     pub surface_presets: PresetStore,
     pub mapping_presets: PresetStore,
     /// Name typed for the next Control Surface / mappings save.
@@ -1140,7 +1142,7 @@ impl PhosphorApp {
                 crate::account::Event::Saves(text) => {
                     let added = crate::presets::merge_from_account(&text);
                     if added > 0 {
-                        for store in [&mut st.presets, &mut st.layer_presets, &mut st.chain_presets, &mut st.venues, &mut st.surface_presets, &mut st.mapping_presets] {
+                        for store in [&mut st.presets, &mut st.layer_presets, &mut st.chain_presets, &mut st.box_presets, &mut st.venues, &mut st.surface_presets, &mut st.mapping_presets] {
                             store.refresh();
                         }
                         st.notice = Some(format!("{added} saved look(s), venue(s), surface(s) or mapping set(s) came from your account"));

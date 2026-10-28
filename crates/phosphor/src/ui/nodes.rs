@@ -44,6 +44,12 @@ pub(crate) trait Graph {
     fn duplicate(&mut self, id: u32);
     /// The right-click menu's entries for adding a box at `at`. True when one was added.
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool;
+    /// A box's own right-click entries (before Duplicate / Delete). True when something changed.
+    fn extra_menu(&mut self, _ui: &mut egui::Ui, _id: u32) -> bool {
+        false
+    }
+    /// The box's title was double-clicked (a box of boxes opens).
+    fn open(&mut self, _id: u32) {}
 }
 
 /// A wire being dragged out of box `from`'s output.
@@ -148,8 +154,14 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
         // Saved once, when the box is let go.
         changed |= t.drag_stopped();
+        if t.double_clicked() {
+            graph.open(n);
+        }
         let removable = graph.removable(n);
         t.context_menu(|ui| {
+            if graph.extra_menu(ui, n) {
+                changed = true;
+            }
             if command(ui, label(icon::COPY, "Duplicate")).clicked() {
                 duplicate = Some(n);
                 ui.close();

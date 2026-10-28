@@ -597,9 +597,12 @@ impl PhosphorApp {
                 comp.start_network(cid);
                 let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
                 let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
-                let fx = net.add(NodeKind::Effect, [300.0, 60.0]);
-                net.nodes.iter_mut().find(|n| n.id == out).unwrap().pos = [560.0, 60.0];
-                net.connect(pic, fx, 0);
+                let fx = net.add(NodeKind::Effect, [560.0, 60.0]);
+                net.nodes.iter_mut().find(|n| n.id == out).unwrap().pos = [820.0, 60.0];
+                // A box of boxes passes the picture through (Input → Output inside) between the two.
+                let group = net.add(NodeKind::Group, [300.0, 60.0]);
+                net.connect(pic, group, 0);
+                net.connect(group, fx, 0);
                 net.connect(fx, out, 0);
                 comp.comp_mut(cid).unwrap().network = Some(net);
                 comp.sync_network(cid);
@@ -616,7 +619,7 @@ impl PhosphorApp {
                 let lfo = net2.add(NodeKind::Number, [300.0, 420.0]);
                 comp.comp_mut(cid).unwrap().network = Some(net2);
                 comp.sync_network(cid);
-                let wired = comp.connect_boxes(cid, lfo, fx, 1);
+                let wired = comp.connect_boxes(cid, &[], lfo, fx, 1);
                 comp.sync_network(cid);
                 let net = comp.comp(cid).unwrap().network.clone().unwrap();
                 println!("QUICK designer: {} boxes, shown={:?}, number wired={wired}", net.nodes.len(), net.shown());
