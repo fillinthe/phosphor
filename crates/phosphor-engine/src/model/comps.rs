@@ -34,11 +34,13 @@ pub struct Comp {
     pub in_mix: bool,
     /// Its layers folded away in the Stack panel.
     pub collapsed: bool,
+    /// Built as a network of boxes (Designer) rather than a stack: the boxes' layers live here, hidden.
+    pub network: Option<Network>,
 }
 
 impl Default for Comp {
     fn default() -> Self {
-        Self { id: 0, name: "Comp".into(), width: 0, height: 0, enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, fit: FitMode::Fit, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false }
+        Self { id: 0, name: "Comp".into(), width: 0, height: 0, enabled: true, opacity: 1.0, opacity_mod: None, blend: BlendMode::Normal, fit: FitMode::Fit, effects: Vec::new(), fx_bypass: false, in_mix: true, collapsed: false, network: None }
     }
 }
 

@@ -176,6 +176,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Area(0), "Show", Some((false, Key::Num1))),
             I(A::Area(1), "Outputs & Inputs", Some((false, Key::Num2))),
             I(A::Area(2), "Control", Some((false, Key::Num3))),
+            I(A::Area(3), "Designer", Some((false, Key::Num4))),
             S,
             D("Panels"),
             I(A::PanelBrowser, "Panel Browser…", Some((true, Key::P))),

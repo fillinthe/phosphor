@@ -12,6 +12,7 @@ use crate::app::{State, Trigger};
 use crate::theme::{accent, WARN};
 
 pub(crate) mod activity;
+pub(crate) mod nodes;
 mod binding;
 mod budget;
 pub(crate) mod eyedropper;

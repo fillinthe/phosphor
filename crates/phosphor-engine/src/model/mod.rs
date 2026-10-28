@@ -5,12 +5,14 @@
 mod choice;
 mod composition;
 mod comps;
+mod designer;
 mod control;
 mod control_prefs;
 mod clip_play;
 mod clip_fx;
 mod marks;
 pub use marks::*;
+pub use designer::{Network, Node as DesignerNode, NodeKind};
 pub use clip_fx::*;
 mod collections;
 mod routing;

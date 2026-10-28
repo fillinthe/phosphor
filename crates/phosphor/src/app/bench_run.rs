@@ -589,6 +589,32 @@ impl PhosphorApp {
                 self.welcome_open = true;
                 continue;
             }
+            if name == "designer" {
+                // A comp as a network: Plasma → an effect → Output, in the Designer area.
+                use phosphor_engine::NodeKind;
+                let comp = &mut self.state.comp;
+                let cid = comp.add_comp("Designer");
+                comp.start_network(cid);
+                let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+                let fx = net.add(NodeKind::Effect, [300.0, 60.0]);
+                net.nodes.iter_mut().find(|n| n.id == out).unwrap().pos = [560.0, 60.0];
+                net.connect(pic, fx, 0);
+                net.connect(fx, out, 0);
+                comp.comp_mut(cid).unwrap().network = Some(net);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let pic_layer = net.node(pic).unwrap().parts[0];
+                let fx_layer = net.node(fx).unwrap().parts[0];
+                comp.layer_mut(pic_layer).unwrap().set_generator("plasma");
+                let effect = comp.new_effect("kaleido").or_else(|| phosphor_engine::shaders::all_effects().first().and_then(|d| comp.new_effect(d.id)));
+                if let (Some(e), Some(l)) = (effect, comp.layer_mut(fx_layer)) {
+                    l.effects = vec![e];
+                }
+                println!("QUICK designer: {} boxes, shown={:?}", net.nodes.len(), net.shown());
+                self.switch_workspace(3);
+                continue;
+            }
             if let Some(cat) = name.strip_prefix("explorer:") {
                 // The Effects panel on one category (checking its preview tiles).
                 self.state.explorer.category = cat.to_string();
