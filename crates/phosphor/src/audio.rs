@@ -130,6 +130,8 @@ pub fn band_level(bins: &[f32], lo: f32, hi: f32) -> f32 {
 
 /// The input that listens to this Mac's own sound (every app but Phosphor, no loopback driver).
 pub const SYSTEM_SOUND: &str = "This Mac's sound (all apps)";
+/// Sound inputs named this way are an NDI source's sound ("NDI · STUDIO (OBS)").
+pub const NDI_PREFIX: &str = "NDI · ";
 
 pub const FFT_SIZE: usize = 2048;
 pub const SPECTRUM_BARS: usize = 32;
@@ -188,6 +190,9 @@ mod native {
         /// This Mac's sound (other apps), from ScreenCaptureKit.
         #[cfg(target_os = "macos")]
         system: Option<crate::screen_capture::SystemSound>,
+        /// An NDI source's sound (`NDI_PREFIX` + its name), and the rate it last came at.
+        #[cfg(any(target_os = "macos", windows))]
+        ndi: Option<(crate::ndi::NdiSound, Arc<std::sync::atomic::AtomicU32>)>,
         pub beats: BeatTracker,
         /// Play-through: hear the input on the sound output (`set_play_through`). New samples since the last frame
         /// wait in `fresh` while it's on.
@@ -234,6 +239,8 @@ mod native {
                 clips: false,
                 #[cfg(target_os = "macos")]
                 system: None,
+                #[cfg(any(target_os = "macos", windows))]
+                ndi: None,
                 beats: BeatTracker::default(),
                 through: None,
                 through_on: Default::default(),
@@ -266,6 +273,10 @@ mod native {
         pub fn is_open(&self) -> bool {
             #[cfg(target_os = "macos")]
             if self.system.is_some() {
+                return true;
+            }
+            #[cfg(any(target_os = "macos", windows))]
+            if self.ndi.is_some() {
                 return true;
             }
             self.stream.is_some() || self.network
@@ -372,22 +383,25 @@ mod native {
                 self.use_network();
                 return Ok(());
             }
+            #[cfg(any(target_os = "macos", windows))]
+            if let Some(source) = name.and_then(|n| n.strip_prefix(super::NDI_PREFIX)) {
+                let feed = self.feeder();
+                let rate = Arc::new(std::sync::atomic::AtomicU32::new(48_000));
+                let at = rate.clone();
+                let sound = crate::ndi::NdiSound::connect(source, move |frames, r| {
+                    at.store(r, std::sync::atomic::Ordering::Relaxed);
+                    feed(frames);
+                })?;
+                self.ndi = Some((sound, rate));
+                self.sample_rate = 48_000;
+                self.beats = BeatTracker::default();
+                self.current = name.map(str::to_string);
+                return Ok(());
+            }
             #[cfg(target_os = "macos")]
             if name == Some(super::SYSTEM_SOUND) {
-                let ring = self.ring.clone();
-                let (fresh, through_on) = (self.fresh.clone(), self.through_on.clone());
-                self.system = Some(crate::screen_capture::SystemSound::start(move |frames| {
-                    if through_on.load(std::sync::atomic::Ordering::Relaxed)
-                        && let Ok(mut f) = fresh.lock()
-                    {
-                        f.extend_from_slice(frames);
-                    }
-                    let mut q = ring.lock().unwrap();
-                    q.extend(frames.iter().copied());
-                    while q.len() > FFT_SIZE * 2 {
-                        q.pop_front();
-                    }
-                }));
+                let feed = self.feeder();
+                self.system = Some(crate::screen_capture::SystemSound::start(move |frames| feed(frames)));
                 self.sample_rate = crate::screen_capture::SYSTEM_SOUND_RATE;
                 self.beats = BeatTracker::default();
                 self.current = name.map(str::to_string);
@@ -494,6 +508,10 @@ mod native {
             if self.system.is_some() {
                 return true;
             }
+            #[cfg(any(target_os = "macos", windows))]
+            if self.ndi.is_some() {
+                return true;
+            }
             self.stream.is_some() || self.network || self.clips
         }
 
@@ -503,12 +521,34 @@ mod native {
             {
                 self.system = None;
             }
+            #[cfg(any(target_os = "macos", windows))]
+            {
+                self.ndi = None;
+            }
             self.network = false;
             self.clips = false;
             self.ring.lock().unwrap().clear();
             self.analysis = AudioAnalysis::default();
             self.spectrum.iter_mut().for_each(|v| *v = 0.0);
             self.beats.reset();
+        }
+
+        /// Where a sound source's frames go (on its own thread): the analyser's ring, and play-through while it's on.
+        fn feeder(&self) -> impl Fn(&[[f32; 2]]) + Send + Sync + 'static {
+            let ring = self.ring.clone();
+            let (fresh, through_on) = (self.fresh.clone(), self.through_on.clone());
+            move |frames| {
+                if through_on.load(std::sync::atomic::Ordering::Relaxed)
+                    && let Ok(mut f) = fresh.lock()
+                {
+                    f.extend_from_slice(frames);
+                }
+                let mut q = ring.lock().unwrap();
+                q.extend(frames.iter().copied());
+                while q.len() > FFT_SIZE * 2 {
+                    q.pop_front();
+                }
+            }
         }
 
         /// Analyses the newest samples; call once per frame.
@@ -520,6 +560,11 @@ mod native {
             if let Some(t) = &self.through {
                 let frames = std::mem::take(&mut *self.fresh.lock().unwrap());
                 t.push(&frames, self.sample_rate);
+            }
+            #[cfg(any(target_os = "macos", windows))]
+            if let Some(rate) = self.ndi.as_ref().map(|(_, r)| r.load(std::sync::atomic::Ordering::Relaxed)).filter(|r| *r > 0 && *r != self.sample_rate) {
+                self.sample_rate = rate;
+                self.beats = BeatTracker::default();
             }
             let now = web_time::Instant::now();
             let dt = self.last_update.map_or(1.0 / 60.0, |t| (now - t).as_secs_f32()).clamp(0.001, 0.1);

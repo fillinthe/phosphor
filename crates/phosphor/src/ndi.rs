@@ -88,7 +88,9 @@ struct RecvCreateV3 {
 
 const RECV_COLOR_RGBX_RGBA: c_int = 2;
 const RECV_BANDWIDTH_HIGHEST: c_int = 100;
+const RECV_BANDWIDTH_AUDIO_ONLY: c_int = 10;
 const FRAME_TYPE_VIDEO: c_int = 1;
+const FRAME_TYPE_AUDIO: c_int = 2;
 
 /// The receiving half of the NDI API (older runtimes may lack it).
 struct RecvFns {
@@ -98,6 +100,8 @@ struct RecvFns {
     recv_capture: unsafe extern "C" fn(*mut c_void, *mut VideoFrameV2, *mut c_void, *mut c_void, u32) -> c_int,
     recv_free_video: unsafe extern "C" fn(*mut c_void, *const VideoFrameV2),
     recv_destroy: unsafe extern "C" fn(*mut c_void),
+    /// Sound (NDI 5+): capture with an audio frame, and its free.
+    recv_audio: Option<(unsafe extern "C" fn(*mut c_void, *mut c_void, *mut AudioFrameV3, *mut c_void, u32) -> c_int, unsafe extern "C" fn(*mut c_void, *const AudioFrameV3))>,
 }
 
 struct Lib {
@@ -197,6 +201,13 @@ fn lib() -> Option<&'static Lib> {
                         recv_capture: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut VideoFrameV2, *mut c_void, *mut c_void, u32) -> c_int>(cap),
                         recv_free_video: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *const VideoFrameV2)>(free),
                         recv_destroy: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(rd),
+                        recv_audio: match (sym(c"NDIlib_recv_capture_v3"), sym(c"NDIlib_recv_free_audio_v3")) {
+                            (Some(cap), Some(free)) => Some((
+                                std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut c_void, *mut AudioFrameV3, *mut c_void, u32) -> c_int>(cap),
+                                std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *const AudioFrameV3)>(free),
+                            )),
+                            _ => None,
+                        },
                     }),
                     _ => None,
                 };
@@ -506,6 +517,73 @@ impl Drop for NdiReceiver {
     }
 }
 
+/// One NDI source's sound only (no picture is sent over the network), on its own thread: each block arrives as
+/// stereo (left, right) frames and their sample rate. For the audio analyser (sound input "NDI · name").
+pub struct NdiSound {
+    stop: Arc<AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl NdiSound {
+    pub fn connect(source: &str, mut on_sound: impl FnMut(&[[f32; 2]], u32) + Send + 'static) -> Result<Self, String> {
+        let r = lib().ok_or("NDI isn't installed on this computer (free NDI Tools from ndi.video)")?.recv.as_ref().ok_or("this NDI runtime can't receive")?;
+        let (capture, free) = r.recv_audio.ok_or("this NDI runtime can't receive sound (NDI 5 or newer needed)")?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let (stop2, name) = (stop.clone(), CString::new(source).map_err(|_| "bad source name")?);
+        let thread = std::thread::Builder::new()
+            .name(format!("ndi sound: {source}"))
+            .spawn(move || {
+                let recv_name = c"Phosphor sound";
+                let create = RecvCreateV3 {
+                    source_to_connect_to: Source { p_ndi_name: name.as_ptr(), p_url_address: std::ptr::null() },
+                    color_format: RECV_COLOR_RGBX_RGBA,
+                    bandwidth: RECV_BANDWIDTH_AUDIO_ONLY,
+                    allow_video_fields: false,
+                    p_ndi_recv_name: recv_name.as_ptr(),
+                };
+                // SAFETY: NDI C API; the receiver is used and destroyed on this thread only.
+                let recv = unsafe { (r.recv_create)(&create) };
+                if recv.is_null() {
+                    return;
+                }
+                let mut frames = Vec::new();
+                while !stop2.load(Ordering::Relaxed) {
+                    // SAFETY: plain C struct the receiver fills in.
+                    let mut a: AudioFrameV3 = unsafe { std::mem::zeroed() };
+                    let kind = unsafe { capture(recv, std::ptr::null_mut(), &mut a, std::ptr::null_mut(), 100) };
+                    if kind != FRAME_TYPE_AUDIO {
+                        continue;
+                    }
+                    let (n, channels, stride) = (a.no_samples.max(0) as usize, a.no_channels.max(0) as usize, a.channel_stride_in_bytes.max(0) as usize);
+                    if a.four_cc == FOURCC_FLTP && n > 0 && channels > 0 && stride >= n * 4 && !a.p_data.is_null() {
+                        // SAFETY: `channels` planes of `stride` bytes, valid until the frame is freed below.
+                        let data = unsafe { std::slice::from_raw_parts(a.p_data, stride * channels) };
+                        let plane = |c: usize| &data[c * stride..c * stride + n * 4];
+                        let sample = |c: usize, i: usize| f32::from_le_bytes(plane(c)[i * 4..i * 4 + 4].try_into().unwrap_or_default());
+                        frames.clear();
+                        frames.extend((0..n).map(|i| [sample(0, i), sample(1.min(channels - 1), i)]));
+                        on_sound(&frames, a.sample_rate.max(0) as u32);
+                    }
+                    // SAFETY: the frame came from this receiver's capture.
+                    unsafe { free(recv, &a) };
+                }
+                // SAFETY: valid receiver, destroyed once.
+                unsafe { (r.recv_destroy)(recv) };
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(Self { stop, thread: Some(thread) })
+    }
+}
+
+impl Drop for NdiSound {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -519,5 +597,47 @@ mod tests {
         assert_eq!(std::mem::size_of::<AudioFrameV3>(), 64);
         assert_eq!(to_planar(&[1.0, -1.0, 2.0, -2.0, 3.0, -3.0]), vec![1.0, 2.0, 3.0, -1.0, -2.0, -3.0]);
         assert_eq!(FOURCC_FLTP, u32::from_le_bytes(*b"FLTp"));
+    }
+
+    /// Sound sent by Phosphor's own NDI sender comes back through `NdiSound` (skipped without NDI on this computer).
+    #[test]
+    fn ndi_sound_comes_back_in() {
+        if Ndi::library().is_none() || lib().and_then(|l| l.recv.as_ref()).and_then(|r| r.recv_audio).is_none() {
+            return;
+        }
+        let name = format!("Phosphor sound test {}", std::process::id());
+        let mut out = Ndi::default();
+        out.sync(true, &name);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let source = loop {
+            if let Some(s) = sources().into_iter().find(|s| s.contains(&name)) {
+                break s;
+            }
+            assert!(std::time::Instant::now() < deadline, "our sender never showed up");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+        let heard = Arc::new(std::sync::Mutex::new((0usize, 0f32, 0u32)));
+        let h = heard.clone();
+        let _sound = NdiSound::connect(&source, move |frames, rate| {
+            let mut h = h.lock().unwrap();
+            h.0 += frames.len();
+            h.1 = frames.iter().fold(h.1, |m, f| m.max(f[0].abs()));
+            h.2 = rate;
+        })
+        .expect("connects");
+        // A quiet 440 Hz tone, a block at a time, with a small picture beside it (as the app sends).
+        let tone: Vec<f32> = (0..960).flat_map(|i| [0.25 * (i as f32 * 440.0 * std::f32::consts::TAU / 48_000.0).sin(); 2]).collect();
+        for _ in 0..200 {
+            out.push(16, 16, vec![0; 16 * 16 * 4], 60);
+            out.push_audio(&tone, 48_000);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            if heard.lock().unwrap().0 > 48_000 {
+                break;
+            }
+        }
+        let (n, peak, rate) = *heard.lock().unwrap();
+        assert!(n > 0, "no sound arrived");
+        assert_eq!(rate, 48_000);
+        assert!((0.2..0.3).contains(&peak), "the tone's level: {peak}");
     }
 }

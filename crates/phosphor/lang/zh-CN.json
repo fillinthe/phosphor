@@ -2957,6 +2957,7 @@
 "The signal pushes the slider up (or down) by Amount": "信号按“数量”把滑块向上(或向下)推",
 "The smooth outline makes a point here instead of curving through it": "平滑轮廓在此处形成一个尖点,而不是穿过它弯曲",
 "The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic": "Phosphor 中播放的影片声音:画面对你从网格播放的音乐做出反应,无需线缆或麦克风",
+"The sound sent with this NDI source": "此 NDI 源附带的声音",
 "The tempo follows the music by itself (your mic, an input, or the clips' own sound). Auto show plays the next column every few bars and a Surprise on drops.": "速度自动跟随音乐(你的麦克风、某个输入或片段自带的声音)。自动演出每隔几小节播放下一列,并在鼓点处触发惊喜。",
 "The timeline's sound: {0}": "时间线的声音:{0}",
 "The universe number your desk sends (Art-Net counts from 0, sACN from 1)": "你的控台发送的 universe 编号(Art-Net 从 0 计,sACN 从 1 计)",
