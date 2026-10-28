@@ -63,6 +63,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerScale(id) => to_unit(layer(id)?.transform.scale, 0.05, 4.0, true),
         ControlTarget::LayerRotation(id) => (layer(id)?.transform.rotation + 180.0) / 360.0,
         ControlTarget::LayerCorner { layer: id, point } => layer(id)?.transform.corners?[(*point as usize / 2).min(3)][*point as usize % 2].clamp(0.0, 1.0),
+        ControlTarget::LayerTransform { layer: id, part } => layer(id)?.transform.unit(*part as usize),
         ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
         ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
         ControlTarget::LayerDirection(id) => {
@@ -216,6 +217,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                     ControlTarget::LayerScale(_) => t.scale = unit_to(v, 0.05, 4.0, true),
                     _ => t.rotation = v * 360.0 - 180.0,
                 }
+            }
+        }
+        ControlTarget::LayerTransform { layer, part } => {
+            if let Some(l) = comp.layer_mut(*layer) {
+                l.transform.set_unit(*part as usize, v);
             }
         }
         ControlTarget::MaskTransform { mask, part } => {
@@ -527,6 +533,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         out.push((ControlTarget::LayerY(l.id), format!("{} · position Y", l.name)));
         out.push((ControlTarget::LayerScale(l.id), format!("{} · scale", l.name)));
         out.push((ControlTarget::LayerRotation(l.id), format!("{} · rotation", l.name)));
+        for (i, part) in phosphor_engine::LayerTransform::PARTS.iter().enumerate() {
+            out.push((ControlTarget::LayerTransform { layer: l.id, part: i as u8 }, format!("{} · {}", l.name, part.name.to_lowercase())));
+        }
         if l.transform.corners.is_some() {
             for (point, name) in ["top-left X", "top-left Y", "top-right X", "top-right Y", "bottom-right X", "bottom-right Y", "bottom-left X", "bottom-left Y"].iter().enumerate() {
                 out.push((ControlTarget::LayerCorner { layer: l.id, point: point as u8 }, format!("{} · corner {name}", l.name)));
@@ -582,6 +591,11 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
             let kind = if matches!(target, ControlTarget::MaskTransform { .. }) { "mask" } else { "slice" };
             let name = phosphor_engine::mapping::ShapeTransform::PARTS.get(*part as usize).map_or("part", |p| p.name);
             format!("/phosphor/{kind}/{id}/{}", name.to_lowercase().replace(' ', "_"))
+        }
+        ControlTarget::LayerTransform { layer, part } => {
+            let name = phosphor_engine::LayerTransform::PARTS.get(*part as usize).map_or("part", |p| p.name);
+            let slug: String = name.to_lowercase().chars().filter(|c| c.is_ascii_alphanumeric() || *c == ' ').collect::<String>().trim().replace(' ', "_");
+            format!("/phosphor/layer/{layer}/{slug}")
         }
         ControlTarget::Layout(id) => format!("/phosphor/layout/{id}"),
         ControlTarget::StopLayer(id) if *id == phosphor_engine::MASTER_ID => "/phosphor/stop".into(),

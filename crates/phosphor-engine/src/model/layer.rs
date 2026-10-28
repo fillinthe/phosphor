@@ -289,6 +289,52 @@ impl Default for LayerTransform {
 }
 
 impl LayerTransform {
+    /// The settings besides position / scale / rotation (`ControlTarget::LayerTransform { part }`): scale X / Y,
+    /// depth, tilts, crop.
+    pub const PARTS: [crate::mapping::TransformPart; 9] = {
+        use crate::mapping::TransformPart as P;
+        [
+            P { name: "Scale X", min: 0.05, max: 8.0, log: true, default: 1.0 },
+            P { name: "Scale Y", min: 0.05, max: 8.0, log: true, default: 1.0 },
+            P { name: "Z (depth)", min: -1.5, max: 8.0, log: false, default: 0.0 },
+            P { name: "Tilt X °", min: -80.0, max: 80.0, log: false, default: 0.0 },
+            P { name: "Tilt Y °", min: -80.0, max: 80.0, log: false, default: 0.0 },
+            P { name: "Crop left", min: 0.0, max: 0.5, log: false, default: 0.0 },
+            P { name: "Crop right", min: 0.0, max: 0.5, log: false, default: 0.0 },
+            P { name: "Crop top", min: 0.0, max: 0.5, log: false, default: 0.0 },
+            P { name: "Crop bottom", min: 0.0, max: 0.5, log: false, default: 0.0 },
+        ]
+    };
+
+    /// Setting `part` of `PARTS`.
+    pub fn part_mut(&mut self, part: usize) -> &mut f32 {
+        match part.min(8) {
+            0 => &mut self.stretch_x,
+            1 => &mut self.stretch_y,
+            2 => &mut self.z,
+            3 => &mut self.tilt_x,
+            4 => &mut self.tilt_y,
+            n => &mut self.crop[n - 5],
+        }
+    }
+
+    /// Setting `part` as 0..1 across its range.
+    pub fn unit(&self, part: usize) -> f32 {
+        let v = match part.min(8) {
+            0 => self.stretch_x,
+            1 => self.stretch_y,
+            2 => self.z,
+            3 => self.tilt_x,
+            4 => self.tilt_y,
+            n => self.crop[n - 5],
+        };
+        Self::PARTS[part.min(8)].to_unit(v)
+    }
+
+    pub fn set_unit(&mut self, part: usize, u: f32) {
+        *self.part_mut(part) = Self::PARTS[part.min(8)].from_unit(u);
+    }
+
     pub fn is_identity(&self) -> bool {
         *self == Self::default()
     }

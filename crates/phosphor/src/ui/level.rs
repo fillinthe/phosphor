@@ -214,7 +214,9 @@ impl<'a> Level<'a> {
             Some(_) => fill.min.y = rect.bottom() - t * rect.height(),
             None => fill.max.x = rect.left() + t * rect.width(),
         }
-        let base = if locked || off { Color32::from_gray(if off { 80 } else { 120 }) } else { accent() };
+        // Mapped to a controller: the bar itself is gold, wherever this control shows (Mixer, Inspector, cards…).
+        let mapped = target.as_ref().is_some_and(|t| super::is_mapped(ui, t));
+        let base = if locked || off { Color32::from_gray(if off { 80 } else { 120 }) } else if mapped { super::MAPPED } else { accent() };
         p.rect_filled(fill, 0.0, base.gamma_multiply(if hovered { 0.75 } else { 0.55 }));
         // Outside its limits: shaded (it can't go there).
         if let Some((lo, hi)) = limits {

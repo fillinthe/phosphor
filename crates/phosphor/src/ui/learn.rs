@@ -69,7 +69,9 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(ONLY_SHOWN_REQUEST), (target.clone(), want)));
         }
     }
-    if crate::ui::command(ui, label(icon::DIAMOND, "Key on the timeline")).on_hover_text("Keeps this value at the timeline's playhead (a track for it appears in the Timeline panel)").clicked() {
+    // (A slider without a control of its own has no value the timeline could set: it isn't offered there.)
+    let keyable = !matches!(target, ControlTarget::Slider { .. } | ControlTarget::Button { .. } | ControlTarget::Menu(_));
+    if keyable && crate::ui::command(ui, label(icon::DIAMOND, "Key on the timeline")).on_hover_text("Keeps this value at the timeline's playhead (a track for it appears in the Timeline panel)").clicked() {
         request(ui, KEY_REQUEST, target.clone());
         ui.close();
     }
