@@ -60,6 +60,28 @@ pub fn stream_source(url: &str) -> SourceSpec {
     SourceSpec::Live { name, format: String::new(), url: url.trim().to_string() }
 }
 
+/// Live sources that are a web page always showing a live stream (`FEEDS`, or any channel's /live page): the
+/// page is kept, and its current stream address is asked for each time it starts (`open_page`).
+pub const PAGE: &str = "page";
+
+/// Live pictures from the internet that are on all the time: (name, page, what it is).
+pub const FEEDS: [(&str, &str, &str); 4] = [
+    ("Earth from the ISS (NASA)", "https://www.youtube.com/@NASA/live", "NASA's live view from the International Space Station (dark half the time: the station's night)"),
+    ("Earth in 4K from the ISS (Sen)", "https://www.youtube.com/@Sen/live", "Sen's 4K cameras on the International Space Station, around the clock"),
+    ("Rocket pads, Florida (NASASpaceflight)", "https://www.youtube.com/@NASASpaceflight/live", "Cape Canaveral and Starbase pads, launches when they happen"),
+    ("Volcano watch (afarTV)", "https://www.youtube.com/@afarTV/live", "Live cameras on an active volcano"),
+];
+
+pub fn page_source(name: &str, page: &str) -> SourceSpec {
+    SourceSpec::Live { name: name.to_string(), format: PAGE.into(), url: page.trim().to_string() }
+}
+
+/// Opens a live page: its stream address now (yt-dlp), then the stream. Slow (seconds): off the UI thread only.
+pub fn open_page(name: &str, page: &str) -> Result<VideoPlayer, String> {
+    let url = crate::web_media::live_url(page).map_err(|e| format!("{name}: {e}"))?;
+    open(name, "", &url)
+}
+
 /// The source for another app's Syphon output (`label` from `syphon::ServerInfo::label`).
 pub fn syphon_source(label: &str) -> SourceSpec {
     SourceSpec::Live { name: label.to_string(), format: "syphon".into(), url: label.to_string() }

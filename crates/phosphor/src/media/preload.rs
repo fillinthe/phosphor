@@ -44,9 +44,13 @@ impl Default for Preloader {
 
 impl Preloader {
     fn spawn(&self, path: String, done: impl FnOnce(String, Result<VideoPlayer, String>) -> Opened + Send + 'static) {
+        self.spawn_with(path, VideoPlayer::open, done);
+    }
+
+    fn spawn_with(&self, path: String, open: impl FnOnce(&str) -> Result<VideoPlayer, String> + Send + 'static, done: impl FnOnce(String, Result<VideoPlayer, String>) -> Opened + Send + 'static) {
         let tx = self.tx.clone();
         let _ = std::thread::Builder::new().name("open movie".into()).spawn(move || {
-            let result = VideoPlayer::open(&path);
+            let result = open(&path);
             let _ = tx.send(done(path, result));
         });
     }
@@ -72,6 +76,11 @@ impl Preloader {
     /// Opens layer `layer`'s new movie in the background (`opened` returns it).
     pub fn open_for(&mut self, layer: u64, source: SourceSpec, path: String) {
         self.spawn(path, move |_, r| Opened::Layer(layer, source, r));
+    }
+
+    /// Like `open_for`, for a source that takes its own time to open (a live page: `live::open_page`).
+    pub fn open_with(&mut self, layer: u64, source: SourceSpec, open: impl FnOnce() -> Result<VideoPlayer, String> + Send + 'static) {
+        self.spawn_with(String::new(), move |_| open(), move |_, r| Opened::Layer(layer, source, r));
     }
 
     /// Movies opened since the last call for layers (warm ones go to the waiting list).

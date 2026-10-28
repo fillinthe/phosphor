@@ -195,6 +195,7 @@ impl Job {
 
     /// Finds the post's direct video link (to play live, nothing saved).
     pub fn stream(url: &str, browser: Option<&str>) -> Job {
+        // (`live_url` without a sign-in is the same question, for pages that are always live.)
         let (tx, rx) = mpsc::channel();
         let (u, b) = (url.trim().to_string(), browser.map(str::to_string));
         std::thread::spawn(move || {
@@ -233,6 +234,19 @@ impl Job {
         }
         finished
     }
+}
+
+/// The playable address behind a page that's always live (a channel's /live page): asked again each time it
+/// starts, since the address stops working after some hours. The picture only (live pages often send sound apart),
+/// at most 1080p (a 4K stream costs a lot to decode).
+/// Blocking: call off the UI thread.
+pub fn live_url(page: &str) -> Result<String, String> {
+    let tool = find_ytdlp().ok_or("needs yt-dlp (free): brew install yt-dlp")?;
+    let out = Command::new(tool).args(["-f", "bv[height<=1080]/b[height<=1080]/bv/b", "--print", "%(url)s", page.trim()]).output().map_err(|_| "couldn't start yt-dlp".to_string())?;
+    if !out.status.success() {
+        return Err(reason(&String::from_utf8_lossy(&out.stderr)));
+    }
+    String::from_utf8_lossy(&out.stdout).lines().next().map(str::trim).filter(|u| u.starts_with("http")).map(str::to_string).ok_or_else(|| "the page isn't live right now".to_string())
 }
 
 #[cfg(test)]
