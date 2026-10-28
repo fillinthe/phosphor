@@ -22,12 +22,14 @@ pub enum Source {
     MilkDrop,
     GoogleFonts,
     IsfOnline,
+    /// LottieFiles' free animations (searched with a POST: `post_body`).
+    LottieFiles,
     /// An X account's GIFs (`super::x`, through gallery-dl; the "query" is the account).
     X,
 }
 
 impl Source {
-    pub const ALL: [Source; 11] = [
+    pub const ALL: [Source; 12] = [
         Source::Nasa,
         Source::Commons,
         Source::Archive,
@@ -38,6 +40,7 @@ impl Source {
         Source::MilkDrop,
         Source::GoogleFonts,
         Source::IsfOnline,
+        Source::LottieFiles,
         Source::X,
     ];
 
@@ -58,6 +61,7 @@ impl Source {
             Source::MilkDrop => "MilkDrop presets",
             Source::GoogleFonts => "Google Fonts",
             Source::IsfOnline => "ISF shaders",
+            Source::LottieFiles => "LottieFiles",
             Source::X => "X (Twitter)",
         }
     }
@@ -73,6 +77,7 @@ impl Source {
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
             Source::X => "An X account's animated GIFs (needs gallery-dl and your browser's X sign-in).",
             Source::IsfOnline => "Thousands of effects and generators people shared on isf.video (licences vary: check the credit).",
+            Source::LottieFiles => "Over 100,000 free vector animations (Lottie): sharp at any size, with see-through backgrounds. Free to use, also in paid work.",
             Source::GoogleFonts => "About 1,900 open-licence font families for text layers.",
             Source::MilkDrop => "Nearly 10,000 MilkDrop visualisers (projectM's \"Cream of the Crop\" pack, sorted by Isosceles) that move to the music.",
         }
@@ -89,6 +94,7 @@ impl Source {
             Source::MilkDrop => &[Kind::Visualizer],
             Source::GoogleFonts => &[Kind::Font],
             Source::IsfOnline => &[Kind::Shader],
+            Source::LottieFiles => &[Kind::Animation],
             Source::X => &[Kind::Gif],
         }
     }
@@ -138,10 +144,17 @@ impl Source {
             Source::IsfOnline => format!("https://editor.isf.video/api/search?q={q}&page={}&from={}", page - 1, (page - 1) * ISF_PAGE),
             // Every family (the list behind fonts.google.com; no key), searched here.
             Source::GoogleFonts => "https://fonts.google.com/metadata/fonts".to_string(),
+            // GraphQL: the question goes in the body (`post_body`).
+            Source::LottieFiles => LOTTIE_API.to_string(),
             Source::Artic => format!(
                 "https://api.artic.edu/api/v1/artworks/search?q={q}&query%5Bterm%5D%5Bis_public_domain%5D=true&fields=id,title,artist_title,image_id&limit={PAGE}&page={page}"
             ),
         }
+    }
+
+    /// The body to POST to `search_url` instead of a plain GET (LottieFiles' GraphQL search).
+    pub fn post_body(self, query: &str, page: usize) -> Option<String> {
+        (self == Source::LottieFiles).then(|| lottie_query(query, page))
     }
 
     /// The items in a search answer (for a library without its own search: the matches for `query` on `page`).
@@ -171,9 +184,59 @@ impl Source {
             Source::MilkDrop => milkdrop(&v, "", 1),
             Source::GoogleFonts => google_fonts(&v, "", 1),
             Source::IsfOnline => isf_online(&v),
+            Source::LottieFiles => lottie_files(&v),
             Source::X => Vec::new(),
         })
     }
+}
+
+const LOTTIE_API: &str = "https://graphql.lottiefiles.com/2022-08";
+
+/// LottieFiles' search for one page: it pages by cursor, so page N asks for the first N pages and keeps the last
+/// (`lottie_files` drops the earlier ones by position).
+fn lottie_query(query: &str, page: usize) -> String {
+    let q = serde_json::to_string(query.trim()).unwrap_or_else(|_| "\"\"".into());
+    let fields = "id name jsonUrl imageUrl url createdBy { username firstName lastName }";
+    let gql = format!("query {{ searchPublicAnimations(query: {q}, first: {}) {{ edges {{ node {{ {fields} }} }} }} }}", PAGE * page.max(1));
+    serde_json::json!({ "query": gql, "variables": { "page": page.max(1) } }).to_string()
+}
+
+fn lottie_files(v: &Value) -> Vec<Item> {
+    let edges = v["data"]["searchPublicAnimations"]["edges"].as_array().cloned().unwrap_or_default();
+    // Only this page's (the answer holds every page up to it).
+    let start = edges.len().saturating_sub(PAGE);
+    edges[start..]
+        .iter()
+        .filter_map(|e| {
+            let n = &e["node"];
+            let file = text(&n["jsonUrl"]);
+            if file.is_empty() {
+                return None;
+            }
+            let by = &n["createdBy"];
+            let full = format!("{} {}", text(&by["firstName"]), text(&by["lastName"])).trim().to_string();
+            let author = if full.is_empty() { text(&by["username"]).trim_start_matches('/').to_string() } else { full };
+            let title = text(&n["name"]);
+            Some(Item {
+                source: Source::LottieFiles,
+                kind: Kind::Animation,
+                id: n["id"].to_string(),
+                title: title.clone(),
+                thumb: text(&n["imageUrl"]),
+                file: Some(file),
+                list: String::new(),
+                size: None,
+                credit: phosphor_engine::Credit {
+                    title,
+                    author,
+                    licence: "Lottie Simple License".into(),
+                    licence_url: "https://lottiefiles.com/page/license".into(),
+                    page: text(&n["url"]),
+                    source: "LottieFiles".into(),
+                },
+            })
+        })
+        .collect()
 }
 
 fn text(v: &Value) -> String {
@@ -822,6 +885,23 @@ mod tests {
         assert_eq!(sh.len(), 1, "private ones are left out");
         assert_eq!((sh[0].title.as_str(), sh[0].thumb.as_str()), ("Square Tunnel", "https://res.cloudinary.com/hrlz5rsqo/image/upload/w_256/z9tk.jpg"));
         assert!(!sh[0].credit.commercial(), "no licence stated: not for paid work");
+    }
+
+    /// LottieFiles answers by GraphQL: page N holds every page up to N, and only the last page's items are kept.
+    #[test]
+    fn lottie_files_answer_is_read_a_page_at_a_time() {
+        let node = |i: usize| format!(r#"{{"node":{{"id":{i},"name":"fire {i}","jsonUrl":"https://assets-v2.lottiefiles.com/a/{i}/x.json","imageUrl":"https://assets-v2.lottiefiles.com/a/{i}/x.png","url":"https://lottiefiles.com/free-animation/fire-{i}","createdBy":{{"username":"/abc","firstName":"Ana","lastName":"Lee"}}}}}}"#);
+        let page2: Vec<String> = (0..PAGE * 2).map(node).collect();
+        let body = format!(r#"{{"data":{{"searchPublicAnimations":{{"edges":[{}]}}}}}}"#, page2.join(","));
+        let items = Source::LottieFiles.parse(Kind::Animation, body.as_bytes()).unwrap();
+        assert_eq!(items.len(), PAGE);
+        assert_eq!(items[0].id, PAGE.to_string(), "starts after page 1");
+        assert_eq!((items[0].credit.author.as_str(), items[0].credit.licence.as_str()), ("Ana Lee", "Lottie Simple License"));
+        assert!(items[0].credit.commercial(), "free for paid work too");
+        assert_eq!(super::super::file_name(&items[0], items[0].file.as_deref().unwrap()).rsplit('.').next(), Some("json"));
+        let q: serde_json::Value = serde_json::from_str(&Source::LottieFiles.post_body("say \"hi\"", 2).unwrap()).unwrap();
+        assert!(q["query"].as_str().unwrap().contains(&format!("query: \"say \\\"hi\\\"\", first: {}", PAGE * 2)), "{q}");
+        assert!(Source::Nasa.post_body("x", 1).is_none());
     }
 
     #[test]
