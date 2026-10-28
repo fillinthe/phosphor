@@ -414,6 +414,14 @@ impl ControlHub {
         false
     }
 
+    /// DMX packets heard so far (0 while not listening).
+    pub fn dmx_packets(&self) -> u64 {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.dmx_listener.as_ref().map_or(0, |l| l.packets());
+        #[cfg(target_arch = "wasm32")]
+        0
+    }
+
     /// What the DMX listener has heard ("Art-Net on udp/6454 · 2 universes"), or why it can't listen.
     pub fn dmx_status(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]

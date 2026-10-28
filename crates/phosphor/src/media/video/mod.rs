@@ -662,6 +662,11 @@ impl VideoPlayer {
     }
 
     /// A live stream that ended or failed (it won't show anything new).
+    /// A live source (camera, stream) rather than a file.
+    pub fn is_live(&self) -> bool {
+        self.live
+    }
+
     pub fn live_stopped(&self) -> bool {
         self.live && (self.end.is_some() || self.error.is_some())
     }

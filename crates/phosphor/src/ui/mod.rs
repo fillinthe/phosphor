@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::app::{State, Trigger};
 use crate::theme::{accent, WARN};
 
+pub(crate) mod activity;
 mod binding;
 mod budget;
 pub(crate) mod eyedropper;

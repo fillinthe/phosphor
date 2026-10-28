@@ -202,6 +202,27 @@ pub struct MediaManager {
     /// Live pages (`live::PAGE`): layers whose stream is being looked up, and when each may try again.
     #[cfg(not(target_arch = "wasm32"))]
     pages: HashMap<u64, PageState>,
+    /// Frames that have arrived, by kind: the status line's activity lights watch these change.
+    pub flow: Flow,
+}
+
+/// Which kinds of live source are open now (the status line shows a light for each).
+#[derive(Default, Clone, Copy)]
+pub struct OpenInputs {
+    pub live: bool,
+    pub ndi: bool,
+    pub syphon: bool,
+}
+
+/// Frame counters per kind of source (only ever go up).
+#[derive(Default, Clone, Copy)]
+pub struct Flow {
+    /// Movies and clips (files).
+    pub movies: u64,
+    /// Cameras, screens, network streams and live pages.
+    pub live: u64,
+    pub ndi: u64,
+    pub syphon: u64,
 }
 
 /// A live page layer's connection: opening now, and the earliest time to try again (seconds, `update_video`'s clock).
@@ -564,6 +585,11 @@ impl MediaManager {
                 continue;
             }
             if let Some(frame) = player.poll_frame(now) {
+                if player.is_live() {
+                    self.flow.live += 1;
+                } else {
+                    self.flow.movies += 1;
+                }
                 show_frame(engine, &mut self.held, player, layer.id, false, frame);
             }
             // "Black at the end": the last frame goes (the next frame shown, after a seek or restart, brings it back).
@@ -598,6 +624,7 @@ impl MediaManager {
             if comp.layers.iter().any(|l| l.id == *id && l.enabled)
                 && let Some(tex) = client.new_frame(engine.device())
             {
+                self.flow.syphon += 1;
                 engine.set_layer_texture(*id, tex);
             }
         }
@@ -608,6 +635,7 @@ impl MediaManager {
             } else if let Some(pb) = c.take()
                 && comp.layers.iter().any(|l| l.id == *id && l.enabled)
             {
+                self.flow.live += 1;
                 show_surface(engine, &mut self.held, *id, false, pb);
             }
         }
@@ -616,6 +644,7 @@ impl MediaManager {
             if let Some((w, h, rgba)) = r.take()
                 && comp.layers.iter().any(|l| l.id == *id && l.enabled)
             {
+                self.flow.ndi += 1;
                 engine.upload_rgba(*id, w, h, &rgba);
             }
         }
@@ -637,6 +666,26 @@ impl MediaManager {
 }
 
 impl MediaManager {
+    /// Which kinds of live source are open (cameras / screens / streams, NDI, Syphon), waiting ones included.
+    pub fn open_inputs(&self) -> OpenInputs {
+        #[allow(unused_mut)]
+        let mut open = OpenInputs::default();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            open.live = self.players.values().any(|p| p.is_live()) || !self.pages.is_empty();
+        }
+        #[cfg(target_os = "macos")]
+        {
+            open.live |= !self.captures.is_empty();
+            open.syphon = !self.syphon.is_empty() || !self.syphon_waiting.is_empty();
+        }
+        #[cfg(any(target_os = "macos", windows))]
+        {
+            open.ndi = !self.ndi.is_empty();
+        }
+        open
+    }
+
     /// Opens `path` again from disk on every layer showing it (after it was edited), at the same place in a movie.
     pub fn reload(&mut self, comp: &Composition, path: &str) {
         #[cfg(not(target_arch = "wasm32"))]
