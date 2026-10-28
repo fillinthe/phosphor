@@ -42,8 +42,8 @@ impl Graph for Patch {
     fn colour(&self, id: u32) -> Color32 {
         self.node(id).and_then(|n| patch::block(&n.block)).map_or(Color32::GRAY, |b| group_colour(b.group))
     }
-    fn inputs(&self, id: u32) -> Vec<String> {
-        self.node(id).and_then(|n| patch::block(&n.block)).map_or_else(Vec::new, |b| b.inputs.iter().map(|s| s.to_string()).collect())
+    fn inputs(&self, id: u32) -> Vec<(String, phosphor_engine::PortKind)> {
+        self.node(id).and_then(|n| patch::block(&n.block)).map_or_else(Vec::new, |b| b.inputs.iter().map(|s| (s.to_string(), phosphor_engine::PortKind::Picture)).collect())
     }
     fn has_output(&self, id: u32) -> bool {
         self.node(id).is_some_and(|n| n.block != "output")

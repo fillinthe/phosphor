@@ -27,8 +27,10 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [~] **Designer** (the TouchDesigner-style section, owner's name). Plan in `docs/design/nodes.md`. **Phase 1 done
       2026-10-29** (not installed): Designer area (⌘4), Picture / Effect / Mix / Output boxes on the node canvas, each
       backed by hidden layers; `--quick designer`. Checked on a screenshot + engine test; not yet with a real mouse.
-      Left: phase 2 number wires, phase 3 box groups, phase 4 points / 3D, phase 5 data. Small: undo for box changes,
-      Duplicate copying settings, settings of a half-visible box.
+      **Phase 2 done 2026-10-29** (not installed): Number boxes (LFO / sound / beat / random / steps / knob), a blue
+      number input per setting on every box, chaining as the maths. Checked on a screenshot + engine test.
+      Left: phase 3 box groups, phase 4 points / 3D, phase 5 data. Small: undo for box changes, Duplicate copying
+      settings, settings of a half-visible box, a Number box's own MIDI mapping (map its Knob from the box).
 - [ ] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
       (then they're keyable and mappable like the rest).
 

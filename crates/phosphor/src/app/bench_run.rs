@@ -502,8 +502,8 @@ impl PhosphorApp {
                 // Two shared modulators, the second gated by the first, and the first layer's generator speed following it.
                 use phosphor_engine::{ChainMode, ModChain, ModSource, Modulation, Modulator};
                 let (a, b) = (self.state.comp.new_id(), self.state.comp.new_id());
-                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None });
-                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None });
+                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false });
+                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false });
                 if let Some(l) = self.state.comp.layers.first_mut() {
                     l.generator_mods.retain(|m| m.index != 0);
                     l.generator_mods.push(phosphor_engine::ParamMod { index: 0, m: Modulation { link: b, range: true, min: 0.0, max: 1.0, ..Default::default() } });
@@ -611,7 +611,15 @@ impl PhosphorApp {
                 if let (Some(e), Some(l)) = (effect, comp.layer_mut(fx_layer)) {
                     l.effects = vec![e];
                 }
-                println!("QUICK designer: {} boxes, shown={:?}", net.nodes.len(), net.shown());
+                // An LFO Number box into the effect's first setting.
+                let mut net2 = comp.comp(cid).unwrap().network.clone().unwrap();
+                let lfo = net2.add(NodeKind::Number, [300.0, 420.0]);
+                comp.comp_mut(cid).unwrap().network = Some(net2);
+                comp.sync_network(cid);
+                let wired = comp.connect_boxes(cid, lfo, fx, 1);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                println!("QUICK designer: {} boxes, shown={:?}, number wired={wired}", net.nodes.len(), net.shown());
                 self.switch_workspace(3);
                 continue;
             }

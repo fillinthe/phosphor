@@ -5,6 +5,7 @@
 
 use eframe::egui::{self, Color32, Sense, Stroke, StrokeKind};
 use egui_phosphor::regular as icon;
+use phosphor_engine::PortKind;
 
 use super::{accent, command, danger_button, label};
 
@@ -21,8 +22,13 @@ pub(crate) trait Graph {
     fn title(&self, id: u32) -> String;
     fn about(&self, id: u32) -> String;
     fn colour(&self, id: u32) -> Color32;
-    fn inputs(&self, id: u32) -> Vec<String>;
+    /// Its inputs: a name and what each takes (a picture or a number).
+    fn inputs(&self, id: u32) -> Vec<(String, PortKind)>;
     fn has_output(&self, id: u32) -> bool;
+    /// What its output carries.
+    fn output_kind(&self, _id: u32) -> PortKind {
+        PortKind::Picture
+    }
     fn removable(&self, id: u32) -> bool;
     fn width(&self, _id: u32) -> f32 {
         NODE_W
@@ -44,6 +50,16 @@ pub(crate) trait Graph {
 #[derive(Clone, Copy)]
 struct WireDrag {
     from: u32,
+    kind: PortKind,
+}
+
+/// Dots and wires: pictures in white, numbers in the controllers' colour.
+fn port_colour(kind: PortKind, lit: bool) -> Color32 {
+    match (kind, lit) {
+        (_, true) => accent(),
+        (PortKind::Picture, false) => Color32::from_gray(200),
+        (PortKind::Number, false) => crate::theme::Hue::Control.color(),
+    }
 }
 
 fn wire_shape(a: egui::Pos2, b: egui::Pos2, colour: Color32) -> egui::Shape {
@@ -89,24 +105,25 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     // Where each box and its ports are this frame.
     let ids = graph.ids();
     let mut rects: Vec<(u32, egui::Rect, usize)> = Vec::new();
-    let mut outputs: Vec<(u32, egui::Pos2)> = Vec::new();
-    let mut inputs: Vec<(u32, usize, egui::Pos2)> = Vec::new();
+    let mut outputs: Vec<(u32, egui::Pos2, PortKind)> = Vec::new();
+    let mut inputs: Vec<(u32, usize, egui::Pos2, PortKind)> = Vec::new();
     for &n in &ids {
-        let ins = graph.inputs(n).len();
+        let kinds = graph.inputs(n);
+        let ins = kinds.len();
         let size = egui::vec2(graph.width(n), TITLE_H + ins as f32 * INPUT_H + graph.body_height(n) + 6.0);
         let r = egui::Rect::from_min_size(at(graph.pos(n)), size);
         rects.push((n, r, ins));
         if graph.has_output(n) {
-            outputs.push((n, egui::pos2(r.max.x, r.min.y + TITLE_H * 0.5)));
+            outputs.push((n, egui::pos2(r.max.x, r.min.y + TITLE_H * 0.5), graph.output_kind(n)));
         }
-        for i in 0..ins {
-            inputs.push((n, i, egui::pos2(r.min.x, r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H)));
+        for (i, (_, kind)) in kinds.iter().enumerate() {
+            inputs.push((n, i, egui::pos2(r.min.x, r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H), *kind));
         }
     }
-    let out_pos = |id: u32| outputs.iter().find(|(n, _)| *n == id).map(|(_, p)| *p);
-    for (to, i, p) in &inputs {
+    let out_pos = |id: u32| outputs.iter().find(|(n, ..)| *n == id).map(|(_, p, _)| *p);
+    for (to, i, p, kind) in &inputs {
         if let Some(a) = graph.source_of(*to, *i).and_then(out_pos) {
-            painter.add(wire_shape(a, *p, Color32::from_gray(150)));
+            painter.add(wire_shape(a, *p, port_colour(*kind, false).gamma_multiply(0.75)));
         }
     }
 
@@ -143,9 +160,10 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             }
         });
         // Input names, and their dots (drag a wired one away to unplug it).
-        for (i, name) in graph.inputs(n).iter().enumerate() {
+        for (i, (name, kind)) in graph.inputs(n).iter().enumerate() {
             let y = r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H;
-            painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), Color32::from_gray(170));
+            let colour = if *kind == PortKind::Number { port_colour(*kind, false).gamma_multiply(0.8) } else { Color32::from_gray(170) };
+            painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), colour);
         }
         // The settings: drawn by the graph (they paint with their own clip: only when the whole body is on the canvas).
         let body_h = graph.body_height(n);
@@ -165,36 +183,37 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     }
 
     // Ports go last, on top of the boxes, so they win the pointer.
-    let hover_input = pointer.and_then(|p| inputs.iter().find(|(_, _, q)| q.distance(p) < PORT_R * 2.5).copied());
-    for (nid, pos) in &outputs {
+    // (A wire only lands on an input of its own kind.)
+    let hover_input = pointer.and_then(|p| inputs.iter().find(|(_, _, q, kind)| q.distance(p) < PORT_R * 2.5 && drag.is_none_or(|d| d.kind == *kind)).copied());
+    for (nid, pos, kind) in &outputs {
         let r = ui.interact(egui::Rect::from_center_size(*pos, egui::vec2(PORT_R * 3.0, PORT_R * 3.0)), id.with(("out", *nid)), Sense::drag());
         if r.drag_started() {
-            drag = Some(WireDrag { from: *nid });
+            drag = Some(WireDrag { from: *nid, kind: *kind });
         }
         let lit = r.hovered() || drag.is_some_and(|d| d.from == *nid);
-        painter.circle(*pos, PORT_R, if lit { accent() } else { Color32::from_gray(200) }, Stroke::new(1.0, Color32::BLACK));
+        painter.circle(*pos, PORT_R, port_colour(*kind, lit), Stroke::new(1.0, Color32::BLACK));
     }
-    for (nid, i, pos) in &inputs {
+    for (nid, i, pos, kind) in &inputs {
         let r = ui.interact(egui::Rect::from_center_size(*pos, egui::vec2(PORT_R * 3.0, PORT_R * 3.0)), id.with(("in", *nid, *i)), Sense::drag());
         let wired = graph.source_of(*nid, *i);
         if r.drag_started()
             && let Some(from) = wired
         {
             graph.disconnect(*nid, *i);
-            drag = Some(WireDrag { from });
+            drag = Some(WireDrag { from, kind: *kind });
             changed = true;
         }
-        let lit = drag.is_some() && hover_input.is_some_and(|(n, k, _)| n == *nid && k == *i);
-        let fill = if lit { accent() } else if wired.is_some() { Color32::from_gray(200) } else { Color32::from_gray(70) };
-        painter.circle(*pos, PORT_R, fill, Stroke::new(1.0, Color32::BLACK));
+        let lit = drag.is_some() && hover_input.is_some_and(|(n, k, ..)| n == *nid && k == *i);
+        let fill = if lit || wired.is_some() { port_colour(*kind, lit) } else { Color32::from_gray(70) };
+        painter.circle(*pos, if *kind == PortKind::Number { PORT_R - 1.0 } else { PORT_R }, fill, Stroke::new(1.0, Color32::BLACK));
     }
     if let Some(d) = drag {
         let (down, released) = ui.input(|i| (i.pointer.primary_down(), i.pointer.any_released()));
         if let (Some(a), Some(p)) = (out_pos(d.from), pointer) {
-            painter.add(wire_shape(a, hover_input.map_or(p, |(_, _, q)| q), accent()));
+            painter.add(wire_shape(a, hover_input.map_or(p, |(_, _, q, _)| q), port_colour(d.kind, true)));
         }
         if released || !down {
-            if let Some((to, i, _)) = hover_input
+            if let Some((to, i, ..)) = hover_input
                 && graph.connect(d.from, to, i)
             {
                 changed = true;
