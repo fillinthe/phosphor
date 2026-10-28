@@ -30,7 +30,7 @@ impl Pulse {
     }
 }
 
-/// One light with its name ("Media", "NDI"); `tip` says what it watches.
+/// One light with its name ("Media", "NDI"); `tip` says what it watches. Clicked = open its panel.
 pub(crate) fn light(ui: &mut egui::Ui, name: &str, flow: Flow, tip: &str) -> egui::Response {
     let lit = match flow {
         Flow::On(on) => on,
@@ -41,7 +41,9 @@ pub(crate) fn light(ui: &mut egui::Ui, name: &str, flow: Flow, tip: &str) -> egu
         }
     };
     let colour = if lit { crate::theme::accent() } else { Color32::from_gray(70) };
-    ui.label(RichText::new(format!("{} {name}", icon::CIRCLE)).small().color(colour)).on_hover_text(tip)
+    ui.add(egui::Label::new(RichText::new(format!("{} {name}", icon::CIRCLE)).small().color(colour)).sense(egui::Sense::click()))
+        .on_hover_text(tip)
+        .on_hover_text("Click to open its panel")
 }
 
 /// A group's heading ("IN", "OUT").

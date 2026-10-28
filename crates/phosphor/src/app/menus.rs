@@ -354,6 +354,14 @@ impl PhosphorApp {
                     crate::ui::heading(ui, "Fullscreen on");
                     crate::ui::screen_menu(ui, &mut self.state);
                 });
+                // Blackout: every output fades to black (and back on the next press); right-click maps it.
+                let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Blackout);
+                let black = self.state.comp.blackout_on;
+                let r = crate::ui::mode_button(ui, black, named(icon::MOON, "Blackout")).on_hover_text("Every output fades to black; press again to bring the show back (fade time: Outputs › Master) · right-click: map to a key or pad");
+                if r.clicked() && !crate::ui::is_locked(ui, &target) {
+                    self.state.comp.blackout_on = !black;
+                }
+                crate::ui::map_menu(ui, &r, target);
                 ui.separator();
                 if crate::ui::command(ui, named(icon::MAGNIFYING_GLASS, "Search  ⌘K")).on_hover_text("Command palette: effects, sources, panels, actions").clicked() {
                     self.state.palette.toggle();

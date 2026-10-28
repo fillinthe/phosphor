@@ -376,6 +376,44 @@ fn output_backgrounds_show_behind_slices() {
     assert!((bg[0] as i32 - 128).abs() < 10 && bg[1] < 20, "half-strength red behind: {bg:?}");
 }
 
+/// Blackout: a mapped output, its backdrop included, fades to black over the blackout time and back.
+#[test]
+fn blackout_takes_every_output_to_black_and_back() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, next_id: 100, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 1.0, 0.0], ..Default::default() });
+    let out = comp.add_output();
+    let sid = comp.new_id();
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    o.mapping.add_surface(sid).corners = [[0.0, 0.0], [0.5, 0.0], [0.5, 0.5], [0.0, 0.5]];
+    o.mapping.enabled = true;
+    o.background = "red.png".into();
+    o.background_opacity = 1.0;
+    let red: Vec<u8> = [255u8, 0, 0, 255].repeat(4 * 4);
+    engine.set_output_background(out, Some((4, 4, &red)));
+    let brightest = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (_, _, px) = engine.read_output_of(out).expect("output");
+        px.chunks(4).map(|p| p[0].max(p[1]).max(p[2])).max().unwrap_or(0)
+    };
+    assert!(brightest(&mut engine, &comp) > 240, "lit to start with");
+    comp.blackout_secs = 1.0;
+    comp.step_blackout(10.0);
+    comp.blackout_on = true;
+    comp.step_blackout(10.1);
+    assert!((comp.blackout - 0.1).abs() < 1e-4, "on its way: {}", comp.blackout);
+    for i in 2..20 {
+        comp.step_blackout(10.0 + i as f64 * 0.1);
+    }
+    assert_eq!(comp.blackout, 1.0);
+    assert_eq!(brightest(&mut engine, &comp), 0, "slice and backdrop black");
+    comp.blackout_on = false;
+    comp.blackout_secs = 0.0;
+    comp.step_blackout(13.0);
+    assert_eq!(comp.blackout, 0.0, "no fade time: straight back");
+    assert!(brightest(&mut engine, &comp) > 240, "lit again");
+}
+
 /// The particle fountain draws: some pixels lit, most of the picture dark.
 #[test]
 fn particles_draw_a_fountain() {

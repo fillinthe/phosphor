@@ -54,6 +54,8 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         ui.label("Master");
         ui.horizontal(|ui| {
             Level::percent(&mut st.comp.master_fade, "Fade").default(1.0).show(ui);
+            crate::ui::toggle_mapped(ui, &mut st.comp.blackout_on, "Blackout", ControlTarget::App(phosphor_engine::AppControl::Blackout)).on_hover_text("Every output fades to black (and back when it's off)");
+            guarded!(ui, st.comp.blackout_secs, egui::DragValue::new(&mut st.comp.blackout_secs).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Blackout fade time (0 = at once)");
         });
         ui.end_row();
 
