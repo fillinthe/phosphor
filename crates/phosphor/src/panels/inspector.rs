@@ -99,10 +99,10 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             if matches!(layer.source, SourceSpec::Movie { .. })
                 && let Some((pos, dur)) = position
             {
-                top_seek = playhead(ui, layer, pos, dur);
+                top_seek = super::clip_bar::loop_bar(ui, layer, pos, dur, 18.0);
             }
-            if matches!(layer.source, SourceSpec::Movie { .. }) && layer.sync_beats <= 0.0 {
-                Level::range(&mut layer.rate, 0.1, 4.0, "Speed").log().default(1.0).width(w).target(ControlTarget::LayerSpeed(layer.id)).show(ui);
+            if matches!(layer.source, SourceSpec::Movie { .. }) {
+                super::clip_bar::speed_level(ui, layer, w);
             }
             Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).width(w).target(ControlTarget::LayerOpacity(layer.id)).show(ui);
             crate::ui::toolbar(ui, |ui| {
@@ -221,17 +221,6 @@ pub(crate) struct LayerMedia<'a> {
     pub speed_above: bool,
 }
 
-/// A movie's playhead: click or drag to jump, with its loop section's marks.
-fn playhead(ui: &mut egui::Ui, layer: &mut LayerState, pos: f64, dur: f64) -> Option<f64> {
-    let (mut lo, mut hi) = (layer.loop_in, layer.loop_out);
-    let seek = scrub_bar(ui, pos, dur, (layer.loop_beats <= 0.0).then_some((&mut lo, &mut hi)));
-    if (lo, hi) != (layer.loop_in, layer.loop_out) {
-        layer.loop_in = lo.min(hi - 0.01).max(0.0);
-        layer.loop_out = hi.max(lo + 0.01).min(1.0);
-    }
-    seek
-}
-
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
 /// and effect chain (Inspector, and each column of the Layer Windows panel). Returns an effect-chain action and a
 /// seek the caller carries out.
@@ -316,6 +305,18 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         ui.separator();
         if matches!(layer.source, SourceSpec::Movie { .. }) {
             crate::ui::heading(ui, "Playback");
+            // The clip on the layer can keep these (speed, direction, loop, BPM sync) as its own: they come back
+            // whenever it's triggered, on any layer (the same switch as the clip's right-click menu).
+            if let Some(slot) = layer.active_slot() {
+                let current = layer.clip_settings();
+                let mut own = layer.clips[slot].own.is_some();
+                if crate::ui::toggle(ui, &mut own, "Keep these with the clip")
+                    .on_hover_text("Speed, direction (ping-pong, reverse), loop section and BPM sync stay with the clip that's playing and come back each time it's triggered. Off = they belong to the layer")
+                    .changed()
+                {
+                    layer.clips[slot].own = own.then_some(current);
+                }
+            }
             // What the movie is, on one line (all of it on hover; File info in the Media panel can copy it).
             if let Some(info) = &info {
                 ui.horizontal(|ui| hint(ui, *info).on_hover_text(*info));
@@ -323,7 +324,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             if let Some((pos, dur)) = position {
                 // The Inspector shows it under the picture already.
                 if !media.speed_above {
-                    seek_to = playhead(ui, layer, pos, dur);
+                    seek_to = super::clip_bar::loop_bar(ui, layer, pos, dur, 18.0);
                 }
                 let at = (pos / dur.max(1e-6)) as f32;
                 crate::ui::toolbar(ui, |ui| {
