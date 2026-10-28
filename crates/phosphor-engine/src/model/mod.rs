@@ -12,7 +12,7 @@ mod clip_play;
 mod clip_fx;
 mod marks;
 pub use marks::*;
-pub use designer::{Network, Node as DesignerNode, NodeKind, PortKind};
+pub use designer::{Network, Node as DesignerNode, NodeKind, PortKind, SavedBox};
 pub use clip_fx::*;
 mod collections;
 mod routing;

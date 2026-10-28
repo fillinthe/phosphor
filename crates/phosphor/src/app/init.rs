@@ -154,6 +154,7 @@ impl PhosphorApp {
                 venues: PresetStore::venues(),
                 layer_presets: PresetStore::layers(),
                 chain_presets: PresetStore::chains(),
+                box_presets: PresetStore::boxes(),
                 surface_presets: PresetStore::surfaces(),
                 mapping_presets: PresetStore::mappings(),
                 surface_preset_name: String::new(),

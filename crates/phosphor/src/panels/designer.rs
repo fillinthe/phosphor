@@ -1,14 +1,17 @@
-//! Designer: a comp built as boxes wired together (Picture, Effect, Mix, Number, Output) on the node canvas. The
-//! boxes are `phosphor_engine::Network` (behind each one: ordinary layers or a shared modulator in the comp, see the
-//! engine's `designer`), so each box shows its live picture or value and its settings are the same sliders as
-//! anywhere else (mappable, modulated). Every setting is also a number input: wire a Number box into it.
+//! Designer: a comp built as boxes wired together (Picture, Effect, Mix, Number, Group, Output) on the node canvas.
+//! The boxes are `phosphor_engine::Network` (behind each one: ordinary layers or a shared modulator in the comp, see
+//! the engine's `designer`), so each box shows its live picture or value and its settings are the same sliders as
+//! anywhere else (mappable, modulated). Every setting is also a number input: wire a Number box into it. A Group
+//! (box of boxes) opens on a double-click: the panel then edits the network inside it (a breadcrumb leads back), and
+//! a Group can be saved by name (`State::box_presets`) and added again from the canvas menu.
 
 use std::collections::HashMap;
 
 use phosphor_engine::control::MAX_SHARED;
-use phosphor_engine::{ChainMode, Composition, DesignerNode, ModSource, Network, NodeKind, PortKind};
+use phosphor_engine::{ChainMode, Composition, DesignerNode, ModSource, Network, NodeKind, PortKind, SavedBox};
 
 use super::*;
+use crate::presets::PresetStore;
 use crate::ui::nodes::{Graph, node_canvas};
 
 const BOX_W: f32 = 230.0;
@@ -35,21 +38,49 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
         return;
     }
     let cid = cid.unwrap();
+    // Where we are: the top network, or inside a box of boxes (each step a Group's id).
+    let path_id = egui::Id::new(("designer_path", cid));
+    let mut path: Vec<u32> = ui.ctx().data(|d| d.get_temp(path_id)).unwrap_or_default();
     let shared = st.mod_inputs.shared;
-    let State { comp, layer_textures, .. } = st;
+    let State { comp, layer_textures, box_presets, notice, .. } = st;
     let net = comp.comp(cid).and_then(|c| c.network.clone()).unwrap_or_default();
+    if net.at(&path).is_none() {
+        path.clear();
+    }
     let name = comp.comp(cid).map_or(String::new(), |c| c.name.clone());
     crate::ui::toolbar(ui, |ui| {
-        crate::ui::heading(ui, format!("{} {name}", icon::GRAPH));
-        help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots)");
+        let top = format!("{} {name}", icon::GRAPH);
+        if path.is_empty() {
+            crate::ui::heading(ui, top);
+        } else if crate::ui::command(ui, top).on_hover_text("Back to the whole network").clicked() {
+            path.clear();
+        }
+        for i in 0..path.len() {
+            ui.label(RichText::new(icon::CARET_RIGHT).small());
+            let last = i + 1 == path.len();
+            let crumb = format!("Box {}", path[i]);
+            if last {
+                crate::ui::heading(ui, crumb);
+            } else if crate::ui::command(ui, crumb).clicked() {
+                path.truncate(i + 1);
+            }
+        }
+        help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · double-click a box of boxes to build inside it");
     });
-    let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().any(|p| p == *id)).collect();
+    let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id)).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
-    let mut view = View { net, comp, cid, textures: layer_textures, shared, feeds, aspect, resync: false };
-    let changed = node_canvas(ui, &mut view, &format!("designer:{cid}"));
-    let View { net, resync, .. } = view;
+    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None };
+    let changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
+    let View { net, resync, go, error, .. } = view;
+    if let Some(e) = error {
+        *notice = Some(e);
+    }
+    if let Some(p) = go {
+        path = p;
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(path_id, path.clone()));
     // (A network from a file made by hand, or a box added elsewhere, may still be without its layers.)
-    let unmade = net.nodes.iter().any(|n| n.kind != NodeKind::Output && n.parts.is_empty());
+    let unmade = net.at(&path).is_some_and(|l| l.nodes.iter().any(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Group | NodeKind::Input) && n.parts.is_empty()));
     if changed || resync || unmade {
         if let Some(c) = comp.comp_mut(cid) {
             c.network = Some(net);
@@ -59,26 +90,52 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
 }
 
 /// The network with what its boxes need to draw themselves: their layers and modulators (in the comp), pictures
-/// and this frame's values.
+/// and this frame's values; `path` = which network inside it is on the canvas.
 struct View<'a> {
     net: Network,
     comp: &'a mut Composition,
     cid: u64,
+    path: Vec<u32>,
     textures: &'a HashMap<u64, (egui::TextureId, (u32, u32))>,
     shared: [(u64, f32); MAX_SHARED],
     feeds: Vec<(u64, String, bool)>,
     aspect: f32,
     /// Boxes came or went, or wires changed: the layers must follow.
     resync: bool,
+    boxes: &'a mut PresetStore,
+    /// Open this network (a box of boxes was double-clicked, or a crumb).
+    go: Option<Vec<u32>>,
+    error: Option<String>,
 }
 
 impl View<'_> {
+    fn level(&self) -> Option<&Network> {
+        self.net.at(&self.path)
+    }
+
+    fn level_mut(&mut self) -> Option<&mut Network> {
+        self.net.at_mut(&self.path)
+    }
+
     fn node(&self, id: u32) -> Option<&DesignerNode> {
-        self.net.node(id)
+        self.level()?.node(id)
     }
 
     fn preview_h(&self) -> f32 {
         (BOX_W - 12.0) / self.aspect
+    }
+
+    /// The comp's copy of the network follows this one (before the comp is asked to wire or load).
+    fn store(&mut self) {
+        if let Some(c) = self.comp.comp_mut(self.cid) {
+            c.network = Some(self.net.clone());
+        }
+    }
+
+    fn reload(&mut self) {
+        if let Some(net) = self.comp.comp(self.cid).and_then(|c| c.network.clone()) {
+            self.net = net;
+        }
     }
 
     /// The live picture of the layer / group `part` (or, for Output, of what's wired in).
@@ -142,17 +199,30 @@ impl View<'_> {
         });
         changed
     }
+
+    /// Adds a saved box here.
+    fn add_saved(&mut self, json: &str, at: [f32; 2]) -> bool {
+        let Ok(saved) = serde_json::from_str::<SavedBox>(json) else {
+            self.error = Some("That saved box can't be read".into());
+            return false;
+        };
+        self.store();
+        let path = self.path.clone();
+        let added = self.comp.load_box(self.cid, &path, &saved, at).is_some();
+        self.reload();
+        added
+    }
 }
 
 impl Graph for View<'_> {
     fn ids(&self) -> Vec<u32> {
-        self.net.nodes.iter().map(|n| n.id).collect()
+        self.level().map_or_else(Vec::new, |l| l.nodes.iter().map(|n| n.id).collect())
     }
     fn pos(&self, id: u32) -> [f32; 2] {
         self.node(id).map_or([0.0; 2], |n| n.pos)
     }
     fn set_pos(&mut self, id: u32, pos: [f32; 2]) {
-        if let Some(n) = self.net.node_mut(id) {
+        if let Some(n) = self.level_mut().and_then(|l| l.node_mut(id)) {
             n.pos = pos;
         }
     }
@@ -162,6 +232,8 @@ impl Graph for View<'_> {
             NodeKind::Picture => n.parts.first().and_then(|p| self.comp.layer(*p)).map_or_else(|| "Picture".to_string(), |l| l.source.label()),
             NodeKind::Effect => n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first()).and_then(|e| shaders::effect(&e.effect)).map_or_else(|| "Effect".to_string(), |d| d.name.to_string()),
             NodeKind::Number => n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m)).map_or_else(|| "Number".to_string(), |m| m.signal.source.name().to_string()),
+            NodeKind::Group => format!("Box {id}"),
+            NodeKind::Input => format!("In {}", self.level().map_or(0, |l| l.input_boxes().iter().position(|x| *x == id).unwrap_or(0)) + 1),
             other => other.name().to_string(),
         }
     }
@@ -170,10 +242,11 @@ impl Graph for View<'_> {
     }
     fn colour(&self, id: u32) -> Color32 {
         match self.node(id).map(|n| n.kind) {
-            Some(NodeKind::Picture) => crate::theme::Hue::Media.color(),
+            Some(NodeKind::Picture | NodeKind::Input) => crate::theme::Hue::Media.color(),
             Some(NodeKind::Effect) => crate::theme::Hue::Effect.color(),
             Some(NodeKind::Mix) => crate::theme::Hue::Live.color(),
             Some(NodeKind::Number) => crate::theme::Hue::Control.color(),
+            Some(NodeKind::Group) => crate::theme::Hue::Text.color(),
             _ => accent(),
         }
     }
@@ -196,14 +269,14 @@ impl Graph for View<'_> {
         let Some(n) = self.node(id) else { return 0.0 };
         let pic = self.preview_h() + 3.0;
         match n.kind {
-            NodeKind::Picture => pic + ROW_H,
+            NodeKind::Picture | NodeKind::Group => pic + ROW_H,
             NodeKind::Effect => {
                 let params = n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first()).and_then(|e| shaders::effect(&e.effect)).map_or(0, |d| d.params.len());
                 pic + ROW_H + (params as f32 + 1.0) * PARAM_H
             }
             NodeKind::Mix => pic + ROW_H + PARAM_H,
             NodeKind::Number => METER_H + ROW_H + PARAM_H * 2.0 + 6.0,
-            NodeKind::Output => pic,
+            NodeKind::Output | NodeKind::Input => pic,
         }
     }
     fn body(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
@@ -259,51 +332,115 @@ impl Graph for View<'_> {
                 }
             }
             NodeKind::Number => return self.number_body(ui, &n, id),
+            NodeKind::Group => {
+                self.preview(ui, n.picture());
+                let boxes = n.inner.as_ref().map_or(0, |i| i.nodes.len());
+                hint(ui, format!("{boxes} boxes inside · double-click to build inside"));
+            }
+            NodeKind::Input => self.preview(ui, n.picture()),
             NodeKind::Output => {
-                let shown = self.net.shown().and_then(|s| self.node(s)).and_then(|n| n.picture());
+                let shown = self.level().and_then(|l| l.shown()).and_then(|s| self.node(s)).and_then(|n| n.picture());
                 self.preview(ui, shown);
             }
         }
         false
     }
     fn source_of(&self, to: u32, input: usize) -> Option<u32> {
-        self.net.source_of(to, input)
+        self.level()?.source_of(to, input)
     }
     fn connect(&mut self, from: u32, to: u32, input: usize) -> bool {
         // (The comp knows every box's inputs, numbers included: it does the wiring.)
-        if let Some(c) = self.comp.comp_mut(self.cid) {
-            c.network = Some(self.net.clone());
-        }
-        let ok = self.comp.connect_boxes(self.cid, from, to, input);
-        if ok && let Some(net) = self.comp.comp(self.cid).and_then(|c| c.network.clone()) {
-            self.net = net;
+        self.store();
+        let path = self.path.clone();
+        let ok = self.comp.connect_boxes(self.cid, &path, from, to, input);
+        if ok {
+            self.reload();
             self.resync = true;
         }
         ok
     }
     fn disconnect(&mut self, to: u32, input: usize) {
-        self.net.disconnect(to, input);
+        if let Some(l) = self.level_mut() {
+            l.disconnect(to, input);
+        }
         self.resync = true;
     }
     fn remove(&mut self, id: u32) {
-        self.net.remove(id);
+        if let Some(l) = self.level_mut() {
+            l.remove(id);
+        }
         self.resync = true;
     }
     fn duplicate(&mut self, id: u32) {
-        if let Some(n) = self.node(id).cloned() {
-            self.net.add(n.kind, [n.pos[0] + 24.0, n.pos[1] + 24.0]);
-            self.resync = true;
+        let Some(n) = self.node(id).cloned() else { return };
+        if let Some(l) = self.level_mut() {
+            let copy = l.add(n.kind, [n.pos[0] + 24.0, n.pos[1] + 24.0]);
+            // A box of boxes is copied with everything inside (its layers come fresh).
+            if let (Some(inner), Some(c)) = (n.inner, l.node_mut(copy)) {
+                let mut inner = inner;
+                inner.clear_parts();
+                c.inner = Some(inner);
+            }
         }
+        self.resync = true;
     }
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool {
-        let has_output = self.net.nodes.iter().any(|n| n.kind == NodeKind::Output);
-        for kind in NodeKind::ALL.into_iter().filter(|k| *k != NodeKind::Output || !has_output) {
+        let inside = !self.path.is_empty();
+        let has_output = self.level().is_some_and(|l| l.nodes.iter().any(|n| n.kind == NodeKind::Output));
+        let kinds = NodeKind::ALL.into_iter().filter(|k| *k != NodeKind::Output || !has_output).chain(inside.then_some(NodeKind::Input));
+        for kind in kinds {
             if crate::ui::command(ui, kind.name()).on_hover_text(kind.about()).clicked() {
-                self.net.add(kind, at);
+                if let Some(l) = self.level_mut() {
+                    l.add(kind, at);
+                }
                 self.resync = true;
                 return true;
             }
         }
+        self.boxes.ensure_loaded();
+        let saved: Vec<(String, String)> = self.boxes.builtins().chain(self.boxes.user.iter().cloned()).map(|p| (p.name, p.json)).collect();
+        if !saved.is_empty() {
+            ui.separator();
+            hint(ui, "Saved boxes:");
+            for (name, json) in saved {
+                if crate::ui::command(ui, label(icon::PACKAGE, &name)).clicked() {
+                    return self.add_saved(&json, at);
+                }
+            }
+        }
         false
+    }
+    fn extra_menu(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
+        if self.node(id).is_none_or(|n| n.kind != NodeKind::Group) {
+            return false;
+        }
+        if crate::ui::command(ui, label(icon::ARROW_SQUARE_IN, "Open")).on_hover_text("Build inside it (or double-click its title)").clicked() {
+            self.open(id);
+            ui.close();
+        }
+        let mut saved = false;
+        ui.menu_button(label(icon::FLOPPY_DISK, "Save as a box…"), |ui| {
+            if let Some(name) = crate::ui::new_name_menu(ui, ("save_box", id), "Name this box", "Save") {
+                self.store();
+                let path = self.path.clone();
+                match self.comp.save_box(self.cid, &path, id).and_then(|b| serde_json::to_string(&b).ok()) {
+                    Some(json) => match self.boxes.save(&name, &json) {
+                        Ok(()) => saved = true,
+                        Err(e) => self.error = Some(e),
+                    },
+                    None => self.error = Some("Nothing to save in that box".into()),
+                }
+                ui.close();
+            }
+        });
+        ui.separator();
+        saved
+    }
+    fn open(&mut self, id: u32) {
+        if self.node(id).is_some_and(|n| n.kind == NodeKind::Group) {
+            let mut p = self.path.clone();
+            p.push(id);
+            self.go = Some(p);
+        }
     }
 }

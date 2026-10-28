@@ -36,6 +36,11 @@ impl PresetStore {
         Self { user: Vec::new(), loaded: false, folder: "effect-chains", ext: "chain", builtin: &[] }
     }
 
+    /// Designer boxes made of boxes (`phosphor_engine::SavedBox`), to add to any network.
+    pub fn boxes() -> Self {
+        Self { user: Vec::new(), loaded: false, folder: "boxes", ext: "box", builtin: &[] }
+    }
+
     /// Output + mapping setups per venue (Mapping panel).
     pub fn venues() -> Self {
         Self { user: Vec::new(), loaded: false, folder: "venues", ext: "venue", builtin: &[] }
@@ -50,11 +55,12 @@ impl PresetStore {
     }
 
     /// Every kind of named save, by the key used in the account copy.
-    pub fn all_kinds() -> [(&'static str, PresetStore); 6] {
+    pub fn all_kinds() -> [(&'static str, PresetStore); 7] {
         [
             ("looks", Self::looks()),
             ("layers", Self::layers()),
             ("chains", Self::chains()),
+            ("boxes", Self::boxes()),
             ("venues", Self::venues()),
             ("surfaces", Self::surfaces()),
             ("mappings", Self::mappings()),
