@@ -199,7 +199,22 @@ pub struct MediaManager {
     /// Movies opening in the background, and clips kept ready to start at once.
     #[cfg(not(target_arch = "wasm32"))]
     pub preload: preload::Preloader,
+    /// Live pages (`live::PAGE`): layers whose stream is being looked up, and when each may try again.
+    #[cfg(not(target_arch = "wasm32"))]
+    pages: HashMap<u64, PageState>,
 }
+
+/// A live page layer's connection: opening now, and the earliest time to try again (seconds, `update_video`'s clock).
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+struct PageState {
+    opening: bool,
+    retry_at: f64,
+}
+
+/// A live page that stops (stream addresses expire after some hours, networks drop) is looked up again this often.
+#[cfg(not(target_arch = "wasm32"))]
+const PAGE_RETRY_SECS: f64 = 10.0;
 
 /// Per (layer, outgoing): recent zero-copy frames (kept alive while the GPU may read them) and the GPU
 /// wrappers made for each decoder buffer (reused when the decoder cycles back to it: no per-frame setup).
@@ -389,10 +404,7 @@ impl MediaManager {
                 SourceSpec::Live { format, .. } if format == crate::milkdrop::FORMAT => {}
                 // A live web page: its stream is looked up and opened on a thread (seconds), like a movie.
                 #[cfg(not(target_arch = "wasm32"))]
-                SourceSpec::Live { name, format, url } if format == live::PAGE => {
-                    let (name, url) = (name.clone(), url.clone());
-                    self.preload.open_with(layer.id, layer.source.clone(), move || live::open_page(&name, &url));
-                }
+                SourceSpec::Live { format, .. } if format == live::PAGE => self.open_page(layer.id, &layer.source),
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Live { name, format, url } => match live::open(name, format, url) {
                     Ok(player) => {
@@ -463,10 +475,53 @@ impl MediaManager {
         }
     }
 
+    /// Looks a live page's stream up and opens it, on a thread (`live::open_page`).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn open_page(&mut self, layer: u64, source: &SourceSpec) {
+        let SourceSpec::Live { name, url, .. } = source else { return };
+        let (name, url) = (name.clone(), url.clone());
+        self.pages.entry(layer).or_default().opening = true;
+        self.preload.open_with(layer, source.clone(), move || live::open_page(&name, &url));
+    }
+
+    /// Live pages that stopped or never opened try again every `PAGE_RETRY_SECS` while their layer is on.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn keep_pages_live(&mut self, comp: &Composition, now: f64) {
+        self.pages.retain(|id, _| comp.layers.iter().any(|l| l.id == *id && matches!(&l.source, SourceSpec::Live { format, .. } if format == live::PAGE)));
+        for layer in comp.layers.iter().filter(|l| l.enabled && matches!(&l.source, SourceSpec::Live { format, .. } if format == live::PAGE)) {
+            let state = self.pages.entry(layer.id).or_default();
+            if state.opening {
+                continue;
+            }
+            let down = self.players.get(&layer.id).is_none_or(|p| p.live_stopped());
+            if !down {
+                continue;
+            }
+            if state.retry_at == 0.0 {
+                // Just noticed: the first try waits a little (a stream that failed at once isn't asked again at once).
+                state.retry_at = now + PAGE_RETRY_SECS;
+                continue;
+            }
+            if now >= state.retry_at {
+                state.retry_at = now + PAGE_RETRY_SECS;
+                log::info!("live page {:?}: stopped, looking it up again", layer.source.label());
+                self.players.remove(&layer.id);
+                self.errors.remove(&layer.id);
+                let source = layer.source.clone();
+                self.open_page(layer.id, &source);
+            }
+        }
+    }
+
     pub fn update_video(&mut self, comp: &Composition, engine: &mut Engine, now: f64) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.keep_pages_live(comp, now);
         // Movies opened in the background: in place if the layer still wants them.
         #[cfg(not(target_arch = "wasm32"))]
         for (id, spec, result) in self.preload.opened() {
+            if let Some(p) = self.pages.get_mut(&id) {
+                p.opening = false;
+            }
             if !comp.layers.iter().any(|l| l.id == id && l.source == spec) {
                 continue;
             }

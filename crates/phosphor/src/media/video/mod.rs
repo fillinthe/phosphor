@@ -661,6 +661,11 @@ impl VideoPlayer {
         }
     }
 
+    /// A live stream that ended or failed (it won't show anything new).
+    pub fn live_stopped(&self) -> bool {
+        self.live && (self.end.is_some() || self.error.is_some())
+    }
+
     /// Not looping and played to the end (holding its last frame).
     pub fn finished(&self) -> bool {
         !self.looping && self.end.is_some_and(|end| self.clock >= end - 1e-3)
@@ -687,7 +692,8 @@ impl VideoPlayer {
                         self.shared.recycle(old);
                     }
                 }
-                Msg::End(_) => {}
+                // (A live stream ending: the network or the far end stopped it; `live_stopped` says so.)
+                Msg::End(at) => self.end = Some(at),
                 Msg::Error(e) => {
                     log::warn!("{e}");
                     self.error = Some(e);
