@@ -470,6 +470,31 @@ fn a_user_blend_mode_blends() {
     assert!((v - 0.65).abs() < 0.03, "half way back to 0.8: {v}");
 }
 
+/// 360 View: a panorama whose middle half (in front) is green and the rest red: looking ahead shows green, turned
+/// half way round red, and tilted straight up the top row's colour.
+#[test]
+fn view_360_looks_around_a_panorama() {
+    let Some(mut engine) = test_engine() else { return };
+    // (The output has the panorama's shape: a master effect sees the finished picture, which a square would crop.)
+    let mut comp = Composition { width: 64, height: 32, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Image { name: "pano".into(), path: None }, ..Default::default() });
+    let (w, h) = (64u32, 32u32);
+    let pano: Vec<u8> = (0..w * h).flat_map(|i| if (16..48).contains(&(i % w)) { [0, 255, 0, 255] } else { [255, 0, 0, 255] }).collect();
+    engine.upload_rgba(1, w, h, &pano);
+    comp.master_effects.push(EffectState { id: 9, effect: "view_360".into(), enabled: true, values: vec![0.0, 0.0, 60.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+    let centre = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output().expect("output");
+        let i = (((h / 2) * w + w / 2) * 4) as usize;
+        (px[i], px[i + 1])
+    };
+    let (r, g) = centre(&mut engine, &comp);
+    assert!(g > 200 && r < 50, "ahead: green ({r}, {g})");
+    comp.master_effects[0].values[0] = 0.5;
+    let (r, g) = centre(&mut engine, &comp);
+    assert!(r > 200 && g < 50, "turned round: red ({r}, {g})");
+}
+
 /// Hide Face (black): the face's spot goes dark, the rest of the picture stays.
 #[test]
 fn hide_face_covers_only_the_face() {

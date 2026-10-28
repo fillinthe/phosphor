@@ -126,6 +126,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
             "music" => i.kind == Kind::Music,
             "shader" => i.kind == Kind::Shader,
             "animation" => i.kind == Kind::Animation,
+            "pano" => i.source == Source::PolyHaven && i.kind == Kind::Picture,
             _ => i.kind == Kind::Picture,
         };
         if let Some(item) = s.items.iter().find(wanted).cloned() {
@@ -181,8 +182,14 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
         // Its title from the library reads better than the file name.
         let name = if item.credit.title.trim().is_empty() { crate::media::clip_name(&path) } else { item.credit.title.chars().take(60).collect() };
         st.comp.add_media(&name, &path);
+        // A 360 panorama brings its own 360 View (the file's effects: it looks around wherever it plays).
+        let panorama = item.source == Source::PolyHaven && item.kind == Kind::Picture;
+        let view = panorama.then(|| st.comp.new_effect("view_360")).flatten();
         if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
             m.credit = Some(item.credit.clone());
+            if let Some(v) = view.filter(|_| m.effects.is_empty()) {
+                m.effects.push(v);
+            }
         }
         st.online.here.insert(item.key(), path.clone());
         if let Then::Cell(layer, slot) = then {
@@ -205,6 +212,10 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
         };
         if let Some(layer) = layer {
             st.selected = Some(layer);
+            // Stretched: the whole panorama fills the layer (letterbox bars would show at the top and bottom).
+            if panorama && let Some(l) = st.comp.layer_mut(layer) {
+                l.fit = phosphor_engine::FitMode::Stretch;
+            }
             st.launch_source(layer, crate::media::spec_for_path(&path), Vec::new(), name, now);
         }
     }

@@ -43,6 +43,24 @@ fn fx_kaleidoscope(in: VOut) -> @location(0) vec4f {
     return textureSampleLevel(tex0, samp_mirror, q + 0.5, 0.0);
 }
 
+// 360 View: the picture is a 360 panorama (equirectangular: across = all the way round, down = straight up to
+// straight down) and this is a camera inside it. Turn (0..1 = all the way round), Tilt (-1..1 = down..up, 80 degrees
+// at the ends), Field of view (degrees), Spin (turns a minute, on top of Turn).
+@fragment
+fn fx_view_360(in: VOut) -> @location(0) vec4f {
+    let fov = clamp(P(2u), 10.0, 170.0) * TAU / 360.0;
+    let f = 1.0 / tan(fov * 0.5);
+    let d0 = normalize(vec3f((in.uv.x - 0.5) * 2.0 * aspect(), (0.5 - in.uv.y) * 2.0, f));
+    let pitch = clamp(P(1u), -1.0, 1.0) * TAU * 80.0 / 360.0;
+    let yaw = (P(0u) + P(3u) * u.time / 60.0) * TAU;
+    let d1 = vec3f(d0.x, d0.y * cos(pitch) + d0.z * sin(pitch), -d0.y * sin(pitch) + d0.z * cos(pitch));
+    let d = vec3f(d1.x * cos(yaw) + d1.z * sin(yaw), d1.y, -d1.x * sin(yaw) + d1.z * cos(yaw));
+    let lon = atan2(d.x, d.z);
+    let lat = asin(clamp(d.y, -1.0, 1.0));
+    let uv = vec2f(fract(lon / TAU + 0.5), clamp(0.5 - lat / (TAU * 0.5), 0.0, 1.0));
+    return textureSampleLevel(tex0, samp, uv, 0.0);
+}
+
 @fragment
 fn fx_pixelate(in: VOut) -> @location(0) vec4f {
     let cell = max(P(0u), 1.0) / u.resolution;

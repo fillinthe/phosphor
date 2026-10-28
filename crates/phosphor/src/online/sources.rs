@@ -79,7 +79,7 @@ impl Source {
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
             Source::Cleveland => "Over 30,000 artworks from the Cleveland Museum of Art's open access collection (CC0): paintings, prints, photos.",
             Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
-            Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
+            Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) and about 1,000 360 panoramas of skies and places (look around in them with the 360 View effect). CC0.",
             Source::X => "An X account's animated GIFs (needs gallery-dl and your browser's X sign-in).",
             Source::IsfOnline => "Thousands of effects and generators people shared on isf.video (licences vary: check the credit).",
             Source::LottieFiles => "Over 100,000 free vector animations (Lottie): sharp at any size, with see-through backgrounds. Free to use, also in paid work.",
@@ -95,7 +95,7 @@ impl Source {
             Source::Archive => &[Kind::Video, Kind::Music],
             Source::Openverse | Source::Artic | Source::Cleveland => &[Kind::Picture],
             Source::Iconify => &[Kind::Icon],
-            Source::PolyHaven => &[Kind::Texture],
+            Source::PolyHaven => &[Kind::Texture, Kind::Picture],
             Source::MilkDrop => &[Kind::Visualizer],
             Source::GoogleFonts => &[Kind::Font],
             Source::IsfOnline => &[Kind::Shader],
@@ -141,7 +141,8 @@ impl Source {
             // Iconify pages hold at least 32.
             Source::Iconify => format!("https://api.iconify.design/search?query={q}&limit=32&start={}", (page - 1) * 32),
             // Poly Haven has no search: the whole list (filtered here, `poly_haven`).
-            Source::PolyHaven => "https://api.polyhaven.com/assets?type=textures".to_string(),
+            // Pictures: its 360 panoramas (the HDRIs, as ordinary JPGs).
+            Source::PolyHaven => format!("https://api.polyhaven.com/assets?type={}", if kind == Kind::Picture { "hdris" } else { "textures" }),
             Source::MilkDrop => format!("https://api.github.com/repos/{MILK_REPO}/git/trees/master?recursive=1"),
             // Not an address: gallery-dl lists the account (`super::x::list`).
             Source::X => format!("x:{}", query.trim()),
@@ -168,7 +169,7 @@ impl Source {
         if self.whole_list() {
             let v: Value = serde_json::from_slice(unguard(body)).map_err(|_| format!("{} sent something unreadable", self.name()))?;
             return Ok(match self {
-                Source::PolyHaven => poly_haven(&v, query, page),
+                Source::PolyHaven => poly_haven(&v, kind, query, page),
                 Source::GoogleFonts => google_fonts(&v, query, page),
                 _ => milkdrop(&v, query, page),
             });
@@ -187,7 +188,7 @@ impl Source {
             Source::Artic => artic(&v),
             Source::Cleveland => cleveland(&v),
             Source::Iconify => iconify(&v),
-            Source::PolyHaven => poly_haven(&v, "", 1),
+            Source::PolyHaven => poly_haven(&v, kind, "", 1),
             Source::MilkDrop => milkdrop(&v, "", 1),
             Source::GoogleFonts => google_fonts(&v, "", 1),
             Source::IsfOnline => isf_online(&v),
@@ -548,7 +549,7 @@ fn iconify(v: &Value) -> Vec<Item> {
 }
 
 /// Poly Haven's texture list, matched against every word of `query` (name, tags, categories), most downloaded first.
-fn poly_haven(v: &Value, query: &str, page: usize) -> Vec<Item> {
+fn poly_haven(v: &Value, kind: Kind, query: &str, page: usize) -> Vec<Item> {
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     let Some(all) = v.as_object() else { return Vec::new() };
     let mut found: Vec<(&String, &Value)> = all
@@ -571,11 +572,12 @@ fn poly_haven(v: &Value, query: &str, page: usize) -> Vec<Item> {
         .take(PAGE)
         .map(|(id, a)| {
             let author = a["authors"].as_object().map(|m| m.keys().cloned().collect::<Vec<_>>().join(", ")).unwrap_or_default();
+            let title = if kind == Kind::Picture { format!("{} (360)", text(&a["name"])) } else { text(&a["name"]) };
             Item {
                 source: Source::PolyHaven,
-                kind: Kind::Texture,
+                kind,
                 id: id.clone(),
-                title: text(&a["name"]),
+                title,
                 thumb: format!("https://cdn.polyhaven.com/asset_img/thumbs/{id}.png?width=256&height=256"),
                 file: None,
                 list: format!("https://api.polyhaven.com/files/{id}"),
@@ -815,6 +817,12 @@ pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), Stri
             })
             .ok_or_else(|| "The Internet Archive has no MP4 of this film".into())
         }
+        // A panorama: the tone-mapped JPG (8K across, about 25 MB: sharp when the 360 View looks at a part of it).
+        Source::PolyHaven if item.kind == Kind::Picture => {
+            let f = &v["tonemapped"];
+            let url = text(&f["url"]);
+            if url.is_empty() { Err("Poly Haven has no picture of this panorama".into()) } else { Ok((url, f["size"].as_u64())) }
+        }
         Source::PolyHaven => {
             // The colour picture at 2K (a few MB; 4K and up are for close-ups).
             let diffuse = &v["Diffuse"];
@@ -898,6 +906,12 @@ mod tests {
         assert!(Source::PolyHaven.parse_page(Kind::Texture, "wall", 2, ph).unwrap().is_empty());
         let files = br#"{"Diffuse":{"2k":{"jpg":{"size":2802005,"url":"https://dl.polyhaven.org/x_diff_2k.jpg"}}}}"#;
         assert_eq!(pick_file(&found[0], files).unwrap(), ("https://dl.polyhaven.org/x_diff_2k.jpg".into(), Some(2802005)));
+        // Its panoramas come as pictures: the tone-mapped JPG, named as 360.
+        let pano = Source::PolyHaven.parse_page(Kind::Picture, "brick", 1, ph).unwrap();
+        assert_eq!((pano[0].kind, pano[0].title.as_str()), (Kind::Picture, "Red Brick (360)"));
+        let files = br#"{"hdri":{},"tonemapped":{"url":"https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/red_brick.jpg","size":23626563}}"#;
+        assert_eq!(pick_file(&pano[0], files).unwrap().1, Some(23626563));
+        assert!(Source::PolyHaven.search_url("", Kind::Picture, 1, false).ends_with("type=hdris"));
 
         let tree = br#"{"tree":[{"path":"Dancer/Aurora","type":"tree"},{"path":"Dancer/Aurora/$$$ Royal - Mashup (257).milk"},{"path":"Fractal/Geiss - Spiral.milk"},{"path":"README.md"}]}"#;
         let m = Source::MilkDrop.parse_page(Kind::Visualizer, "aurora", 1, tree).unwrap();
