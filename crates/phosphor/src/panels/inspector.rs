@@ -650,6 +650,20 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
 }
 
 /// Position, scale, rotation and flips of a layer (all mappable; scale and rotation can be modulated).
+/// One of `LayerTransform::PARTS` as a slider with its own control (mappable, keyable on the timeline).
+fn part_row(ui: &mut egui::Ui, t: &mut phosphor_engine::LayerTransform, layer: u64, part: usize, tip: &str) {
+    let p = &phosphor_engine::LayerTransform::PARTS[part];
+    ui.horizontal(|ui| {
+        let target = ControlTarget::LayerTransform { layer, part: part as u8 };
+        let value = t.part_mut(part);
+        let level = if part >= 5 { Level::percent(value, p.name).max(p.max) } else { Level::range(value, p.min, p.max, p.name) };
+        let level = level.default(p.default).target(target);
+        let level = if p.log { level.log() } else { level };
+        let level = if tip.is_empty() { level } else { level.tip(tip) };
+        level.show(ui);
+    });
+}
+
 fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
     let id = layer.id;
     let t = &mut layer.transform;
@@ -671,22 +685,11 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         row(ui, &mut t.y, -1.0..=1.0, "Y", ControlTarget::LayerY(id), Some(&mut t.y_mod), false, 0.0);
         row(ui, &mut t.scale, 0.05..=4.0, "Scale", ControlTarget::LayerScale(id), Some(&mut t.scale_mod), true, 1.0);
         row(ui, &mut t.rotation, -180.0..=180.0, "Rotation °", ControlTarget::LayerRotation(id), Some(&mut t.rotation_mod), false, 0.0);
-        // Scale X / Y apart (with Scale above, a multiplier), and depth / tilts in 3D (perspective).
-        ui.horizontal(|ui| {
-            Level::range(&mut t.stretch_x, 0.05, 8.0, "Scale X").log().default(1.0).show(ui);
-        });
-        ui.horizontal(|ui| {
-            Level::range(&mut t.stretch_y, 0.05, 8.0, "Scale Y").log().default(1.0).show(ui);
-        });
-        ui.horizontal(|ui| {
-            Level::range(&mut t.z, -1.5, 8.0, "Z (depth)").default(0.0).show(ui).on_hover_text("Further away (smaller, in perspective) or closer");
-        });
-        ui.horizontal(|ui| {
-            Level::range(&mut t.tilt_x, -80.0, 80.0, "Tilt X °").default(0.0).show(ui).on_hover_text("Tip it forward / back in 3D");
-        });
-        ui.horizontal(|ui| {
-            Level::range(&mut t.tilt_y, -80.0, 80.0, "Tilt Y °").default(0.0).show(ui).on_hover_text("Turn it left / right in 3D");
-        });
+        // Scale X / Y apart (with Scale above, a multiplier), depth / tilts in 3D (perspective); crop comes later.
+        let tips = ["", "", "Further away (smaller, in perspective) or closer", "Tip it forward / back in 3D", "Turn it left / right in 3D"];
+        for (i, tip) in tips.iter().enumerate() {
+            part_row(ui, t, id, i, tip);
+        }
         // Corner pin: the picture into any four points (drag them on the preview, or type them here).
         let mut pinned = t.corners.is_some();
         if toggle(ui, &mut pinned, label(icon::PERSPECTIVE, "Corner pin")).on_hover_text("Stretch the picture into four corners you drag on the preview (perspective); replaces move / scale / rotate").changed() {
@@ -704,10 +707,8 @@ fn transform_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
             }
         }
         // Crop: one bar per edge.
-        for (k, side) in ["Crop left", "Crop right", "Crop top", "Crop bottom"].into_iter().enumerate() {
-            ui.horizontal(|ui| {
-                Level::percent(&mut t.crop[k], side).max(0.5).default(0.0).show(ui);
-            });
+        for i in 5..9 {
+            part_row(ui, t, id, i, "");
         }
         crate::ui::toolbar(ui, |ui| {
             toggle(ui, &mut t.flip_x, format!("Flip {}", icon::ARROWS_LEFT_RIGHT));

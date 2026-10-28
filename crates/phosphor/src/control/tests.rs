@@ -484,6 +484,24 @@ fn corner_pin_corners_are_controls() {
     assert_eq!(default_osc_address(&t), format!("/phosphor/layer/{id}/corner/3/y"));
 }
 
+/// Scale X / Y, depth, tilts and crop are controls too (mappable, keyable on the timeline), with their own OSC address.
+#[test]
+fn transform_parts_are_controls() {
+    let mut comp = Composition::default();
+    let id = comp.add_layer().id;
+    let tilt = ControlTarget::LayerTransform { layer: id, part: 3 };
+    let crop = ControlTarget::LayerTransform { layer: id, part: 8 };
+    assert!(all_targets(&comp).iter().any(|(x, _)| *x == tilt));
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &tilt, 1.0, &mut deferred);
+    set_target(&mut comp, &crop, 0.5, &mut deferred);
+    let t = &comp.layer_mut(id).unwrap().transform;
+    assert_eq!((t.tilt_x, t.crop[3]), (80.0, 0.25));
+    assert_eq!(get_target(&comp, &crop), Some(0.5));
+    assert_eq!(default_osc_address(&tilt), format!("/phosphor/layer/{id}/tilt_x"));
+    assert_eq!(default_osc_address(&ControlTarget::LayerTransform { layer: id, part: 2 }), format!("/phosphor/layer/{id}/z_depth"));
+}
+
 /// Lights are controls: a moving head's pan / tilt / dimmer / motion size and any light's brightness.
 #[test]
 fn lights_are_controls() {
