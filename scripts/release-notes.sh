@@ -15,7 +15,10 @@ echo
 echo "Full history: [CHANGELOG.md](https://github.com/fillinthe/phosphor/blob/main/CHANGELOG.md)"
 echo
 echo "## Install"
-echo "**Mac (Apple silicon):** download Phosphor-mac.zip, unzip, drag Phosphor to Applications and open it. It's signed and notarized by Apple, so it opens without warnings."
+case "$VER" in
+  0.[0-3].*|0.4.0) echo "**Mac (Apple silicon):** download Phosphor-mac.zip, unzip, drag Phosphor to Applications and open it. It's signed and notarized by Apple, so it opens without warnings." ;;
+  *) echo "**Mac (Apple silicon):** download Phosphor-mac.dmg, open it and drag Phosphor onto Applications (or unzip Phosphor-mac.zip). It's signed and notarized by Apple, so it opens without warnings." ;;
+esac
 case "$VER" in
   0.2.[0-9]|0.2.[1-4][0-9]) ;;
   *) echo

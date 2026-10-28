@@ -13,14 +13,23 @@ if ! git diff --quiet HEAD -- crates scripts Cargo.toml Cargo.lock assets || [ -
   echo "Uncommitted code changes: commit them (and let the Windows build run) before releasing."; exit 1
 fi
 scripts/release-notes.sh "$VER" >/dev/null || { echo "Add a '## $VER (date)' section to CHANGELOG.md first."; exit 1; }
-# Don't swap /Applications/Phosphor.app under a Phosphor that's running from it.
-if pgrep -f "/Applications/Phosphor.app/Contents/MacOS" >/dev/null 2>&1; then
-  scripts/bundle-mac.sh --no-install
+# With the Developer ID certificate: notarized zip + installer disk image (scripts/notarize-mac.sh). Without it: an
+# unnotarized zip only (people then need right-click › Open the first time).
+DMG=""
+if security find-identity -v -p codesigning | grep -q 'Developer ID Application'; then
+  bash scripts/notarize-mac.sh
+  DMG=dist/Phosphor-mac.dmg
 else
-  scripts/bundle-mac.sh
+  echo "No Developer ID certificate: the Mac download won't be notarized." >&2
+  # Don't swap /Applications/Phosphor.app under a Phosphor that's running from it.
+  if pgrep -f "/Applications/Phosphor.app/Contents/MacOS" >/dev/null 2>&1; then
+    scripts/bundle-mac.sh --no-install
+  else
+    scripts/bundle-mac.sh
+  fi
+  rm -f dist/Phosphor-mac.zip
+  (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
 fi
-rm -f dist/Phosphor-mac.zip
-(cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
 # Only /Applications/Phosphor.app should be openable: the build copy goes (Spotlight / Launchpad could open it).
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$PWD/dist/Phosphor.app" 2>/dev/null || true
 rm -rf dist/Phosphor.app
@@ -32,7 +41,7 @@ if [ -z "$NOTES" ]; then
 fi
 git tag -f "$TAG"
 git push -f origin "$TAG"
-ASSETS="dist/Phosphor-mac.zip"
+ASSETS="dist/Phosphor-mac.zip${DMG:+ $DMG}"
 # The Windows build of the newest code commit (docs-only commits don't build; see paths-ignore in windows.yml).
 CODE_SHA=$(git log -1 --format=%H -- . ':(exclude)docs' ':(exclude)*.md')
 WIN_RUN=$(bash scripts/windows-run.sh --success || true)
