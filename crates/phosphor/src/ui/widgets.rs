@@ -217,27 +217,29 @@ pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
 
 /// A video scrub bar: shows where the clip is, click or drag to jump. Returns the time asked for.
 /// With `region` (loop in/out as 0..1 of the clip), the loop is shaded and its two edges can be dragged.
-pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, region: Option<(&mut f32, &mut f32)>) -> Option<f64> {
+pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Option<(&mut f32, &mut f32)>) -> Option<f64> {
     let width = ui.available_width().max(120.0);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 18.0), Sense::click_and_drag());
     let frac = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) as f32 } else { 0.0 };
-    let x_of = |f: f32| rect.left() + rect.width() * f.clamp(0.0, 1.0);
-    let f_of = |x: f32| ((x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+    // The marks sit inside the bar (a mark at either end can still be grabbed).
+    let inner = rect.shrink2(egui::vec2(5.0, 0.0));
+    let x_of = |f: f32| inner.left() + inner.width() * f.clamp(0.0, 1.0);
+    let f_of = |x: f32| ((x - inner.left()) / inner.width()).clamp(0.0, 1.0);
     let p = ui.painter().clone();
     p.rect_filled(rect, 0.0, Color32::from_gray(32));
-    let mut done = rect;
-    done.set_width(rect.width() * frac);
+    let done = egui::Rect::from_x_y_ranges(rect.left()..=x_of(frac), rect.y_range());
     p.rect_filled(done, 0.0, accent().gamma_multiply(0.5));
-    if let Some((lo, hi)) = region {
-        if *lo > 0.0 || *hi < 1.0 {
-            let r = egui::Rect::from_x_y_ranges(x_of(*lo)..=x_of(*hi), rect.y_range());
+    let mut edges = Vec::new();
+    if let Some((lo, hi)) = region.as_mut() {
+        if **lo > 0.0 || **hi < 1.0 {
+            let r = egui::Rect::from_x_y_ranges(x_of(**lo)..=x_of(**hi), rect.y_range());
             p.rect_filled(r, 0.0, Color32::from_rgba_unmultiplied(255, 196, 70, 40));
         }
-        for (i, v) in [lo, hi].into_iter().enumerate() {
+        for (i, v) in [&mut **lo, &mut **hi].into_iter().enumerate() {
             let x = x_of(*v);
             let grab = egui::Rect::from_center_size(egui::pos2(x, rect.center().y), egui::vec2(10.0, rect.height() + 6.0));
-            let h = ui.interact(grab, ui.id().with(("loop_edge", i)), Sense::drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
-            if h.dragged()
+            let h = ui.interact(grab, ui.id().with(("loop_edge", i)), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+            if h.dragged_by(egui::PointerButton::Primary)
                 && let Some(at) = h.interact_pointer_pos()
             {
                 *v = f_of(at.x);
@@ -246,6 +248,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, region: Option<(&
             p.line_segment([egui::pos2(x, rect.top() - 2.0), egui::pos2(x, rect.bottom() + 2.0)], Stroke::new(2.0, color));
             let tip = if i == 0 { [egui::pos2(x, rect.top() - 2.0), egui::pos2(x + 6.0, rect.top() - 2.0), egui::pos2(x, rect.top() + 4.0)] } else { [egui::pos2(x, rect.top() - 2.0), egui::pos2(x - 6.0, rect.top() - 2.0), egui::pos2(x, rect.top() + 4.0)] };
             p.add(egui::Shape::convex_polygon(tip.to_vec(), color, Stroke::NONE));
+            edges.push(h.on_hover_text(if i == 0 { "Loop start: drag · right-click for more" } else { "Loop end: drag · right-click for more" }));
         }
     }
     let x = x_of(frac);
@@ -253,6 +256,34 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, region: Option<(&
     let fmt = |t: f64| format!("{}:{:04.1}", (t / 60.0) as u32, t % 60.0);
     p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, fmt(pos), egui::FontId::monospace(10.0), Color32::WHITE);
     p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, fmt(dur), egui::FontId::monospace(10.0), Color32::GRAY);
+    // Right-click (the bar or a mark): set the loop's ends at the playhead, or play the whole movie again.
+    let mut seek = None;
+    for r in std::iter::once(&resp).chain(edges.iter()) {
+        r.right_menu(|ui| {
+            if let Some((lo, hi)) = region.as_mut() {
+                if command_if(ui, frac < **hi, format!("{} Loop starts here (at the playhead)", icon::BRACKETS_SQUARE)).clicked() {
+                    **lo = frac;
+                    ui.close();
+                }
+                if command_if(ui, frac > **lo, format!("{} Loop ends here (at the playhead)", icon::BRACKETS_SQUARE)).clicked() {
+                    **hi = frac;
+                    ui.close();
+                }
+                if command_if(ui, **lo > 0.0 || **hi < 1.0, format!("{} Whole movie (no loop section)", icon::ARROWS_OUT_LINE_HORIZONTAL)).clicked() {
+                    (**lo, **hi) = (0.0, 1.0);
+                    ui.close();
+                }
+                ui.separator();
+            }
+            if command(ui, format!("{} Back to the start", icon::SKIP_BACK)).clicked() {
+                seek = Some(region.as_ref().map_or(0.0, |(lo, _)| **lo as f64) * dur);
+                ui.close();
+            }
+        });
+    }
+    if seek.is_some() {
+        return seek;
+    }
     if (resp.clicked() || resp.dragged_by(egui::PointerButton::Primary))
         && let Some(at) = resp.interact_pointer_pos()
     {

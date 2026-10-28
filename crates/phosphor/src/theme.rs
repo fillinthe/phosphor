@@ -199,6 +199,10 @@ pub fn apply(ctx: &egui::Context) {
         // One control height for every row (`ui::CONTROL_H`).
         s.spacing.interact_size.y = crate::ui::CONTROL_H;
         s.spacing.menu_margin = egui::Margin::same(6);
+        // A scroll bar keeps room of its own: nothing sits under it (a slider's or loop mark's right end couldn't be
+        // grabbed while a panel's bar was showing).
+        let sc = &mut s.spacing.scroll;
+        sc.floating_allocated_width = sc.bar_inner_margin + sc.bar_width + sc.bar_outer_margin;
         // Tooltips only when the pointer rests (a second), not as it passes over a list: they sit right under the
         // pointer and covered the next items ("Add a file" and the rows under it). Moving to a neighbour shows its
         // tooltip at once only inside the grace time, so a list doesn't flicker either.
