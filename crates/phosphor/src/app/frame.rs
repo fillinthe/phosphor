@@ -229,6 +229,7 @@ impl PhosphorApp {
             if leading {
                 st.comp.expire_transitions(now as f32);
             }
+            st.comp.step_blackout(now);
             // The playing clip's (or file's) effects onto its layer.
             st.comp.sync_clip_effects();
             // Movies remember how they last played (twice a second is plenty).

@@ -18,6 +18,8 @@ impl PhosphorApp {
         let mut unmute = false;
         let mut web_toggle = false;
         let mut dismiss = false;
+        let mut open_tab = None;
+        let mut lift_blackout = false;
         egui::Panel::bottom("status_line").show(ui, |ui| {
             crate::ui::toolbar(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
@@ -45,6 +47,11 @@ impl PhosphorApp {
                     let what = if st.stream.settings.destination == crate::stream::Destination::File { "REC" } else { "LIVE" };
                     ui.label(small(format!("{} {what} {:02}:{:02}", icon::RECORD, t / 60, t % 60), LIVE));
                 }
+                if st.comp.blackout > 0.0
+                    && ui.add(egui::Label::new(small(format!("{} BLACKOUT", icon::MOON), LIVE)).sense(egui::Sense::click())).on_hover_text("Every output is fading or faded to black: click to bring the show back").clicked()
+                {
+                    lift_blackout = true;
+                }
                 if st.comp.sound_muted
                     && ui.add(egui::Label::new(small(format!("{} Sound muted", icon::SPEAKER_SIMPLE_X), crate::theme::WARN)).sense(egui::Sense::click())).on_hover_text("All sound is off: click to turn it back on").clicked()
                 {
@@ -60,19 +67,29 @@ impl PhosphorApp {
                 use crate::ui::activity::{Flow, heading, light};
                 ui.separator();
                 heading(ui, "IN", "What's coming in (lit while it keeps arriving)");
-                light(ui, "Media", Flow::Count(st.media.flow.movies), "Movies and clips: frames being played");
+                if light(ui, "Media", Flow::Count(st.media.flow.movies), "Movies and clips: frames being played").clicked() {
+                    open_tab = Some(crate::panels::Tab::Media);
+                }
                 let open = st.media.open_inputs();
                 if open.live {
-                    light(ui, "Live", Flow::Count(st.media.flow.live), "Cameras, screens and network streams: frames arriving");
+                    if light(ui, "Live", Flow::Count(st.media.flow.live), "Cameras, screens and network streams: frames arriving").clicked() {
+                        open_tab = Some(crate::panels::Tab::Inputs);
+                    }
                 }
                 if open.ndi {
-                    light(ui, "NDI", Flow::Count(st.media.flow.ndi), "NDI sources on layers: frames arriving");
+                    if light(ui, "NDI", Flow::Count(st.media.flow.ndi), "NDI sources on layers: frames arriving").clicked() {
+                        open_tab = Some(crate::panels::Tab::Inputs);
+                    }
                 }
                 if open.syphon {
-                    light(ui, if cfg!(windows) { "Spout" } else { "Syphon" }, Flow::Count(st.media.flow.syphon), "Other apps' pictures on layers: frames arriving");
+                    if light(ui, if cfg!(windows) { "Spout" } else { "Syphon" }, Flow::Count(st.media.flow.syphon), "Other apps' pictures on layers: frames arriving").clicked() {
+                        open_tab = Some(crate::panels::Tab::Inputs);
+                    }
                 }
                 if st.audio.is_open() {
-                    light(ui, "Sound", Flow::On(st.audio.analysis().level > 0.01), "Sound in (the input chosen under Audio): lit while it isn't silent");
+                    if light(ui, "Sound", Flow::On(st.audio.analysis().level > 0.01), "Sound in (the input chosen under Audio): lit while it isn't silent").clicked() {
+                        open_tab = Some(crate::panels::Tab::Audio);
+                    }
                 }
                 // Controllers.
                 let fresh = |t: web_time::Instant| t.elapsed().as_secs_f32() < 1.5;
@@ -80,35 +97,43 @@ impl PhosphorApp {
                     let a = st.control.activity.lock().unwrap();
                     (a.midi_seen.values().any(|t| fresh(*t)), a.osc.values().any(|s| fresh(s.last_seen)))
                 };
-                light(ui, "MIDI", Flow::On(midi), "MIDI from controllers");
-                light(ui, "OSC", Flow::On(osc), "OSC messages");
+                if light(ui, "MIDI", Flow::On(midi), "MIDI from controllers").clicked() {
+                    open_tab = Some(crate::panels::Tab::Control);
+                }
+                if light(ui, "OSC", Flow::On(osc), "OSC messages").clicked() {
+                    open_tab = Some(crate::panels::Tab::Control);
+                }
                 if st.control.dmx_in() {
-                    light(ui, "DMX", Flow::Count(st.control.dmx_packets()), "DMX in (Art-Net / sACN) from a lighting desk");
+                    if light(ui, "DMX", Flow::Count(st.control.dmx_packets()), "DMX in (Art-Net / sACN) from a lighting desk").clicked() {
+                        open_tab = Some(crate::panels::Tab::Control);
+                    }
                 }
                 // Out: only what's switched on.
                 let mut outs = Vec::new();
                 #[cfg(any(target_os = "macos", windows))]
                 if st.comp.ndi.enabled {
-                    outs.push(("NDI", Flow::On(st.ndi.connections() > 0), format!("NDI out: {} watching", st.ndi.connections())));
+                    outs.push(("NDI", crate::panels::Tab::Output, Flow::On(st.ndi.connections() > 0), format!("NDI out: {} watching", st.ndi.connections())));
                 }
                 #[cfg(target_os = "macos")]
                 if st.comp.share_out() {
                     let n = st.syphon.clients();
-                    outs.push(("Syphon", Flow::On(n > 0), format!("Syphon out: {n} app(s) taking a picture")));
+                    outs.push(("Syphon", crate::panels::Tab::Output, Flow::On(n > 0), format!("Syphon out: {n} app(s) taking a picture")));
                 }
                 #[cfg(windows)]
                 if st.comp.share_out() {
-                    outs.push(("Spout", Flow::On(true), "Spout out".to_string()));
+                    outs.push(("Spout", crate::panels::Tab::Output, Flow::On(true), "Spout out".to_string()));
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 if st.comp.dmx.enabled {
-                    outs.push(("DMX", Flow::Count(st.dmx.packets), "DMX out to the lights (Art-Net / sACN / USB)".to_string()));
+                    outs.push(("DMX", crate::panels::Tab::Leds, Flow::Count(st.dmx.packets), "DMX out to the lights (Art-Net / sACN / USB)".to_string()));
                 }
                 if !outs.is_empty() {
                     ui.separator();
                     heading(ui, "OUT", "What's going out (lit while something takes it)");
-                    for (name, flow, tip) in outs {
-                        light(ui, name, flow, &tip);
+                    for (name, tab, flow, tip) in outs {
+                        if light(ui, name, flow, &tip).clicked() {
+                            open_tab = Some(tab);
+                        }
                     }
                 }
                 // News (Saved…, Watching…): here, out of the way; it goes by itself.
@@ -136,6 +161,12 @@ impl PhosphorApp {
                 });
             });
         });
+        if lift_blackout {
+            self.state.comp.blackout_on = false;
+        }
+        if let Some(tab) = open_tab {
+            self.show_tab_anywhere(tab);
+        }
         if dismiss {
             self.state.notice = None;
         }

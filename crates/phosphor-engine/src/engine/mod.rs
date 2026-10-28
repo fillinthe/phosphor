@@ -760,7 +760,8 @@ impl Engine {
             }
         }
         self.render_previews(&master, (w, h), time, mods, &comp.layers, &mut passes);
-        let fade = modulate(comp.master_fade, 0.0, 1.0, comp.master_fade_mod.as_ref(), mods);
+        let lit = 1.0 - comp.blackout.clamp(0.0, 1.0);
+        let fade = modulate(comp.master_fade, 0.0, 1.0, comp.master_fade_mod.as_ref(), mods) * lit;
         // Program feed: the mix with the master fader (preview, streaming, snapshots).
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [w as f32, h as f32];
@@ -809,7 +810,7 @@ impl Engine {
             if let Some(bg) = self.output_backgrounds.get(&o.id).filter(|_| o.background_opacity > 0.0 && !o.background.is_empty()) {
                 let mut bu = Uniforms::with_params(&[]);
                 bu.resolution = [ow as f32, oh as f32];
-                bu.opacity = o.background_opacity.clamp(0.0, 1.0);
+                bu.opacity = o.background_opacity.clamp(0.0, 1.0) * lit;
                 bu.uv_xform = fit::fit_transform((bg.width, bg.height), (ow, oh), FitMode::Fill);
                 passes.push(Pass { entry: "fs_composite", target: view.clone(), tex0: bg.view.clone(), tex1: None, tex2: None, uniforms: bu, mesh: None, bufs: Vec::new() });
             }

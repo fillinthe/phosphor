@@ -83,6 +83,16 @@ pub struct Composition {
     pub width: u32,
     pub height: u32,
     pub master_fade: f32,
+    /// Blackout: the whole show (every output, slice and backdrop) fades to black and back, over `blackout_secs`.
+    /// Not saved: a show always opens lit. `blackout` = how far it has gone (0 = lit, 1 = black).
+    #[serde(skip)]
+    pub blackout_on: bool,
+    #[serde(skip)]
+    pub blackout: f32,
+    /// When `step_blackout` last ran (seconds).
+    #[serde(skip)]
+    pub blackout_clock: f64,
+    pub blackout_secs: f32,
     /// Index 0 is the bottom of the stack.
     pub layers: Vec<LayerState>,
     /// Layer groups (members point at them with `LayerState::parent`).
@@ -182,7 +192,7 @@ pub const FORMAT: u32 = 1;
 
 impl Default for Composition {
     fn default() -> Self {
-        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), live_data: LiveData::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), deep_color: false, crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, sound_eq: [0.0; 3], timeline: Timeline::default(), seen_code: String::new(), seen_text: String::new(), web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
+        Self { version: 1, width: 1920, height: 1080, master_fade: 1.0, blackout_on: false, blackout: 0.0, blackout_clock: 0.0, blackout_secs: 1.0, layers: Vec::new(), groups: Vec::new(), comps: Vec::new(), open_comp: None, next_id: 1, mapping: Mapping::default(), outputs: Vec::new(), master_effects: Vec::new(), control_maps: Vec::new(), control_sends: Vec::new(), control_prefs: ControlPrefs::default(), tracking: Tracking::default(), live_data: LiveData::default(), master_fx_bypass: false, media_bin: Vec::new(), clip_columns: 8, bpm: 120.0, master_fade_mod: None, launch: LaunchSettings::default(), syphon: true, spout: false, ndi: NdiSettings::default(), surface: ControlSurface::default(), play: AudiencePlay::default(), auto_show: AutoShow::default(), modulators: Vec::new(), media_collections: Vec::new(), collection_folders: Vec::new(), deep_color: false, crossfader: 0.5, fader_curve: FaderCurve::default(), master_speed: 1.0, notes: String::new(), auto_fade_secs: 2.0, outputs_on_open: false, volume: 1.0, sound_muted: false, sound_auto_level: false, sound_eq: [0.0; 3], timeline: Timeline::default(), seen_code: String::new(), seen_text: String::new(), web_control_off: false, dmx: DmxSettings::default(), cues: CueList::default() }
     }
 }
 
@@ -292,6 +302,15 @@ impl Composition {
         let at = self.layers.iter().rposition(|l| self.comp_of(l) == comp).map_or(self.layers.len(), |i| i + 1);
         self.layers.insert(at, LayerState { id, name, transition_kind, comp, ..Default::default() });
         &mut self.layers[at]
+    }
+
+    /// Moves the blackout along towards black (on) or lit (off); call once per frame with the time now (seconds).
+    pub fn step_blackout(&mut self, now: f64) {
+        let dt = ((now - self.blackout_clock) as f32).clamp(0.0, 0.25);
+        self.blackout_clock = now;
+        let to = if self.blackout_on { 1.0 } else { 0.0 };
+        let step = if self.blackout_secs <= 0.0 { 1.0 } else { dt / self.blackout_secs };
+        self.blackout = if self.blackout < to { (self.blackout + step).min(to) } else { (self.blackout - step).max(to) };
     }
 
     /// How loud a layer's movie sound plays: its volume × the master volume; silent while the layer or its

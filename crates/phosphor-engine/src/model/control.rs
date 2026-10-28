@@ -182,10 +182,12 @@ pub enum AppControl {
     DmxMaster,
     /// Every movie's speed (0..1 = a quarter to four times, the middle = as set).
     MasterSpeed,
+    /// Every output fades to black (on) / back up (off).
+    Blackout,
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 33] = [
+    pub const ALL: [AppControl; 34] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -219,6 +221,7 @@ impl AppControl {
         AppControl::CueRandom,
         AppControl::DmxMaster,
         AppControl::MasterSpeed,
+        AppControl::Blackout,
     ];
 
     pub fn name(self) -> &'static str {
@@ -256,6 +259,7 @@ impl AppControl {
             AppControl::CueRandom => "Cue list: a random cue",
             AppControl::DmxMaster => "LED / DMX master",
             AppControl::MasterSpeed => "Master speed (every movie)",
+            AppControl::Blackout => "Blackout (every output to black / back)",
         }
     }
 
@@ -295,12 +299,13 @@ impl AppControl {
             AppControl::CueRandom => "cue/random",
             AppControl::DmxMaster => "dmx/master",
             AppControl::MasterSpeed => "speed",
+            AppControl::Blackout => "blackout",
         }
     }
 
     /// On/off controls: pads and keys flip them on each press.
     pub fn is_toggle(self) -> bool {
-        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel | AppControl::WebControl | AppControl::ProjectorsShutter | AppControl::FreezeOutputs)
+        matches!(self, AppControl::FollowAudio | AppControl::LaunchFade | AppControl::MasterFxBypass | AppControl::Syphon | AppControl::Ndi | AppControl::Dmx | AppControl::Link | AppControl::MuteSound | AppControl::AutoLevel | AppControl::WebControl | AppControl::ProjectorsShutter | AppControl::FreezeOutputs | AppControl::Blackout)
     }
 }
 
