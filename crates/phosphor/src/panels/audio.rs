@@ -23,6 +23,16 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
             if crate::ui::pick_item(ui, audio.is_clips(), "Clip sound (what Phosphor plays)").on_hover_text("The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic").clicked() {
                 audio.use_clips();
             }
+            // NDI sources on the network: their sound (the finder runs once NDI is looked at).
+            #[cfg(any(target_os = "macos", windows))]
+            for source in crate::ndi::sources() {
+                let name = format!("{}{source}", crate::audio::NDI_PREFIX);
+                if crate::ui::pick_item(ui, audio.current() == Some(name.as_str()), &name).on_hover_text("The sound sent with this NDI source").clicked()
+                    && let Err(e) = audio.open(Some(&name))
+                {
+                    *notice = Some(e);
+                }
+            }
             for d in devices {
                 if crate::ui::pick_item(ui, audio.current() == Some(d.as_str()), &d).clicked()
                     && let Err(e) = audio.open(Some(&d))

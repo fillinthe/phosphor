@@ -2957,6 +2957,7 @@
 "The signal pushes the slider up (or down) by Amount": "Das Signal schiebt den Regler um die Stärke nach oben (oder unten)",
 "The smooth outline makes a point here instead of curving through it": "Der glatte Umriss macht hier einen Knick, statt durchzukurven",
 "The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic": "Der Ton der in Phosphor laufenden Filme: Visuals reagieren auf Musik, die du vom Raster spielst, ohne Kabel oder Mikrofon",
+"The sound sent with this NDI source": "Der Ton, der mit dieser NDI-Quelle kommt",
 "The tempo follows the music by itself (your mic, an input, or the clips' own sound). Auto show plays the next column every few bars and a Surprise on drops.": "Das Tempo folgt der Musik von selbst (dein Mikrofon, ein Eingang oder der Eigenton der Clips). Auto-Show spielt alle paar Takte die nächste Spalte und eine Überraschung bei Drops.",
 "The timeline's sound: {0}": "Der Ton der Timeline: {0}",
 "The universe number your desk sends (Art-Net counts from 0, sACN from 1)": "Die Universe-Nummer, die dein Pult sendet (Art-Net zählt ab 0, sACN ab 1)",

@@ -2957,6 +2957,7 @@
 "The signal pushes the slider up (or down) by Amount": "O sinal empurra o slider para cima (ou para baixo) pela Quantidade",
 "The smooth outline makes a point here instead of curving through it": "O contorno suave faz um ponto aqui em vez de curvar passando por ele",
 "The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic": "O som dos filmes tocando no Phosphor: os visuais reagem à música que você toca na grade, sem cabo nem microfone",
+"The sound sent with this NDI source": "O som enviado com esta fonte NDI",
 "The tempo follows the music by itself (your mic, an input, or the clips' own sound). Auto show plays the next column every few bars and a Surprise on drops.": "O tempo segue a música sozinho (seu microfone, uma entrada ou o som dos clipes). Auto show toca a próxima coluna a cada alguns compassos e uma Surpresa nas quedas.",
 "The timeline's sound: {0}": "O som da linha do tempo: {0}",
 "The universe number your desk sends (Art-Net counts from 0, sACN from 1)": "O número do universo que sua mesa envia (Art-Net conta de 0, sACN de 1)",

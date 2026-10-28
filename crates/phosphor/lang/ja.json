@@ -2957,6 +2957,7 @@
 "The signal pushes the slider up (or down) by Amount": "信号がスライダーを量だけ上(または下)に押します",
 "The smooth outline makes a point here instead of curving through it": "スムーズな輪郭がここでは曲線を描かず、角になります",
 "The sound of the movies playing in Phosphor: visuals react to the music you play from the grid, no cable or mic": "Phosphorで再生中のムービーのサウンド: グリッドから再生する音楽にビジュアルが反応します。ケーブルもマイクも不要",
+"The sound sent with this NDI source": "このNDIソースと一緒に送られてくる音声",
 "The tempo follows the music by itself (your mic, an input, or the clips' own sound). Auto show plays the next column every few bars and a Surprise on drops.": "テンポが音楽に自動追従します(マイク、入力、またはクリップ自身のサウンド)。オートショーは数小節ごとに次のカラムを再生し、ドロップでサプライズします。",
 "The timeline's sound: {0}": "タイムラインのサウンド: {0}",
 "The universe number your desk sends (Art-Net counts from 0, sACN from 1)": "卓が送るユニバース番号(Art-Netは0から、sACNは1から数えます)",
