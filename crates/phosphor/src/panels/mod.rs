@@ -17,6 +17,7 @@ pub(crate) use crate::ui::*;
 mod account;
 mod audio;
 mod clips;
+pub(crate) mod clip_bar;
 mod clip_grid;
 mod stack;
 mod control;

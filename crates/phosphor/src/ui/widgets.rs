@@ -217,9 +217,9 @@ pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
 
 /// A video scrub bar: shows where the clip is, click or drag to jump. Returns the time asked for.
 /// With `region` (loop in/out as 0..1 of the clip), the loop is shaded and its two edges can be dragged.
-pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Option<(&mut f32, &mut f32)>) -> Option<f64> {
-    let width = ui.available_width().max(120.0);
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 18.0), Sense::click_and_drag());
+pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Option<(&mut f32, &mut f32)>, height: f32) -> Option<f64> {
+    let width = ui.available_width().max(60.0);
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click_and_drag());
     let frac = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) as f32 } else { 0.0 };
     // The marks sit inside the bar (a mark at either end can still be grabbed).
     let inner = rect.shrink2(egui::vec2(5.0, 0.0));
@@ -254,8 +254,12 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
     let x = x_of(frac);
     p.line_segment([egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())], Stroke::new(2.0, Color32::WHITE));
     let fmt = |t: f64| format!("{}:{:04.1}", (t / 60.0) as u32, t % 60.0);
-    p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, fmt(pos), egui::FontId::monospace(10.0), Color32::WHITE);
-    p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, fmt(dur), egui::FontId::monospace(10.0), Color32::GRAY);
+    // (A slim bar has no room for the times: they're in its tooltip.)
+    if height >= 16.0 {
+        p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, fmt(pos), egui::FontId::monospace(10.0), Color32::WHITE);
+        p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, fmt(dur), egui::FontId::monospace(10.0), Color32::GRAY);
+    }
+    let resp = if height < 16.0 { resp.on_hover_text(format!("{} / {}", fmt(pos), fmt(dur))) } else { resp };
     // Right-click (the bar or a mark): set the loop's ends at the playhead, or play the whole movie again.
     let mut seek = None;
     for r in std::iter::once(&resp).chain(edges.iter()) {

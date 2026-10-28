@@ -353,7 +353,8 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         ui.set_max_width(size.x);
         // Live picture: click to select (and edit in the Inspector).
         let has_sound = matches!(layer.source, SourceSpec::Movie { .. });
-        let pic_h = (size.y - if has_sound { 56.0 } else { 34.0 }).clamp(36.0, 60.0);
+        // A movie also gets its playhead (slim) and speed beside the volume.
+        let pic_h = (size.y - if has_sound { 72.0 } else { 34.0 }).clamp(30.0, 60.0);
         let (pic, r) = ui.allocate_exact_size(egui::vec2(size.x - 6.0, pic_h), Sense::click());
         let p = ui.painter();
         p.rect_filled(pic, 4.0, Color32::BLACK);
@@ -383,10 +384,13 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
             Level::percent(&mut layer.opacity, "Opacity").modulation(&mut layer.opacity_mod).target(ControlTarget::LayerOpacity(layer.id)).width(size.x - 60.0).show(ui);
         });
         if has_sound {
+            super::clip_bar::card_bar(ui, layer, size.x - 6.0);
             crate::ui::toolbar(ui, |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 super::inspector::mute_button(ui, &mut layer.muted, "this layer");
-                super::inspector::volume_bar(ui, layer, size.x - 34.0);
+                let half = ((size.x - 40.0) / 2.0).max(40.0);
+                super::clip_bar::speed_level(ui, layer, half);
+                super::inspector::volume_bar(ui, layer, if layer.sync_beats <= 0.0 { half } else { size.x - 34.0 });
             });
         }
         let name: String = layer.name.chars().take(20).collect();

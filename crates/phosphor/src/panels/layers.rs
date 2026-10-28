@@ -392,6 +392,11 @@ pub(crate) fn layer_card(
                     action = Some(a);
                 }
                 opacity_row(ui, layer);
+                if matches!(layer.source, SourceSpec::Movie { .. }) {
+                    let w = ui.available_width();
+                    super::clip_bar::card_bar(ui, layer, w);
+                    super::clip_bar::speed_level(ui, layer, w);
+                }
                 crate::ui::toolbar(ui, |ui| {
                     // A mixer plugin blends it instead of its blend mode (Inspector › Mixer plugin).
                     match layer.mixer.as_deref().and_then(shaders::mixer) {
