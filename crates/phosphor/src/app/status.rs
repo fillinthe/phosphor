@@ -1,5 +1,6 @@
 //! The status line along the bottom: what's going out and coming in, whichever area is open. Outputs (green dot =
-//! window open), streaming / recording, the phone session, Syphon / Spout / NDI, MIDI and OSC activity.
+//! window open), streaming / recording, the phone session, and IN / OUT activity lights (media, live inputs, NDI,
+//! Syphon / Spout, sound, MIDI, OSC, DMX).
 //! Clicking the outputs opens the Outputs area; Library opens or closes the Library column.
 
 use eframe::egui::{self, Color32, RichText};
@@ -55,21 +56,60 @@ impl PhosphorApp {
                     ui.label(small(format!("{} Session · {n} connected", icon::DEVICE_MOBILE), Color32::GRAY));
                 }
                 web_toggle = super::web_badge(ui, st, now);
-                if st.comp.share_out() {
-                    ui.label(small(format!("{} {}", icon::SHARE_NETWORK, if cfg!(windows) { "Spout" } else { "Syphon" }), Color32::GRAY));
+                // What's coming in and going out: each light is on while something keeps flowing.
+                use crate::ui::activity::{Flow, heading, light};
+                ui.separator();
+                heading(ui, "IN", "What's coming in (lit while it keeps arriving)");
+                light(ui, "Media", Flow::Count(st.media.flow.movies), "Movies and clips: frames being played");
+                let open = st.media.open_inputs();
+                if open.live {
+                    light(ui, "Live", Flow::Count(st.media.flow.live), "Cameras, screens and network streams: frames arriving");
                 }
-                #[cfg(any(target_os = "macos", windows))]
-                if st.comp.ndi.enabled {
-                    ui.label(small(format!("{} NDI · {} watching", icon::BROADCAST, st.ndi.connections()), Color32::GRAY));
+                if open.ndi {
+                    light(ui, "NDI", Flow::Count(st.media.flow.ndi), "NDI sources on layers: frames arriving");
                 }
-                // Controllers: lit while something arrived in the last second and a half.
+                if open.syphon {
+                    light(ui, if cfg!(windows) { "Spout" } else { "Syphon" }, Flow::Count(st.media.flow.syphon), "Other apps' pictures on layers: frames arriving");
+                }
+                if st.audio.is_open() {
+                    light(ui, "Sound", Flow::On(st.audio.analysis().level > 0.01), "Sound in (the input chosen under Audio): lit while it isn't silent");
+                }
+                // Controllers.
                 let fresh = |t: web_time::Instant| t.elapsed().as_secs_f32() < 1.5;
                 let (midi, osc) = {
                     let a = st.control.activity.lock().unwrap();
                     (a.midi_seen.values().any(|t| fresh(*t)), a.osc.values().any(|s| fresh(s.last_seen)))
                 };
-                for (on, name) in [(midi, "MIDI"), (osc, "OSC")] {
-                    ui.label(small(format!("{} {name}", icon::CIRCLE), if on { theme::accent() } else { Color32::from_gray(70) }));
+                light(ui, "MIDI", Flow::On(midi), "MIDI from controllers");
+                light(ui, "OSC", Flow::On(osc), "OSC messages");
+                if st.control.dmx_in() {
+                    light(ui, "DMX", Flow::Count(st.control.dmx_packets()), "DMX in (Art-Net / sACN) from a lighting desk");
+                }
+                // Out: only what's switched on.
+                let mut outs = Vec::new();
+                #[cfg(any(target_os = "macos", windows))]
+                if st.comp.ndi.enabled {
+                    outs.push(("NDI", Flow::On(st.ndi.connections() > 0), format!("NDI out: {} watching", st.ndi.connections())));
+                }
+                #[cfg(target_os = "macos")]
+                if st.comp.share_out() {
+                    let n = st.syphon.clients();
+                    outs.push(("Syphon", Flow::On(n > 0), format!("Syphon out: {n} app(s) taking a picture")));
+                }
+                #[cfg(windows)]
+                if st.comp.share_out() {
+                    outs.push(("Spout", Flow::On(true), "Spout out".to_string()));
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if st.comp.dmx.enabled {
+                    outs.push(("DMX", Flow::Count(st.dmx.packets), "DMX out to the lights (Art-Net / sACN / USB)".to_string()));
+                }
+                if !outs.is_empty() {
+                    ui.separator();
+                    heading(ui, "OUT", "What's going out (lit while something takes it)");
+                    for (name, flow, tip) in outs {
+                        light(ui, name, flow, &tip);
+                    }
                 }
                 // News (Saved…, Watching…): here, out of the way; it goes by itself.
                 if let Some(text) = crate::ui::notice::news(st) {

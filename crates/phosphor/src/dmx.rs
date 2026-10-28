@@ -173,6 +173,7 @@ static OWN_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::ne
 pub struct DmxListener {
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     status: std::sync::Arc<std::sync::Mutex<String>>,
+    packets: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl DmxListener {
@@ -180,6 +181,7 @@ impl DmxListener {
         use std::sync::atomic::Ordering;
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let status = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let packets = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
         let mut sockets = Vec::new();
         let mut open = Vec::new();
         for (port, name) in [(6454u16, "Art-Net"), (5568, "sACN")] {
@@ -199,7 +201,7 @@ impl DmxListener {
         }
         *status.lock().unwrap() = open.join(" · ");
         for sock in sockets {
-            let (stop, tx, status) = (stop.clone(), tx.clone(), status.clone());
+            let (stop, tx, status, packets) = (stop.clone(), tx.clone(), status.clone(), packets.clone());
             let _ = std::thread::Builder::new().name("phosphor-dmx-in".into()).spawn(move || {
                 let mut last: BTreeMap<u16, [u8; 512]> = BTreeMap::new();
                 let mut buf = [0u8; 700];
@@ -209,6 +211,7 @@ impl DmxListener {
                         continue;
                     }
                     let Some((universe, slots)) = parse_dmx(&buf[..n]) else { continue };
+                    packets.fetch_add(1, Ordering::Relaxed);
                     let fresh = !last.contains_key(&universe);
                     let prev = last.entry(universe).or_insert([0; 512]);
                     for (i, v) in slots.iter().enumerate() {
@@ -228,7 +231,12 @@ impl DmxListener {
                 }
             });
         }
-        Self { stop, status }
+        Self { stop, status, packets }
+    }
+
+    /// DMX packets heard so far.
+    pub fn packets(&self) -> u64 {
+        self.packets.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn status(&self) -> String {
