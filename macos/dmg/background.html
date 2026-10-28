@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- The Mac installer window's picture. After editing, re-render both sizes with headless Chrome:
+     --headless --hide-scrollbars --window-size=660,420 --force-device-scale-factor=1 (background.png) / =2 (background@2x.png) --screenshot=…
+     660 × 420 points; the icons sit at (170, 200) and (490, 200), 128 points (dmg-settings.py). -->
+<html><head><meta charset="utf-8"><style>
+@font-face { font-family: Logo; src: url("../../assets/fonts/logo.ttf"); }
+html, body { margin: 0; width: 660px; height: 420px; overflow: hidden; }
+body {
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 48%, rgba(91, 232, 154, 0.13), transparent 70%),
+    radial-gradient(ellipse 90% 70% at 50% 110%, rgba(91, 232, 154, 0.08), transparent 60%),
+    #141618;
+  font-family: -apple-system, "Helvetica Neue", sans-serif;
+  position: relative;
+}
+/* Faint scanlines: the phosphor screen look. */
+body::before { content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 3px); }
+.logo { position: absolute; top: 30px; width: 100%; text-align: center; font-family: Logo; font-size: 26px;
+  letter-spacing: 6px; color: #78ffaa; text-shadow: 0 0 18px rgba(120, 255, 170, 0.45); }
+/* Mid-grey pads: Finder writes icon names black (light mode) or white (dark mode); both read on this grey. */
+.pad { position: absolute; top: 112px; width: 176px; height: 192px; border-radius: 22px; background: #767a78;
+  box-shadow: 0 0 0 1px rgba(120, 255, 170, 0.35), 0 10px 30px rgba(0, 0, 0, 0.45); }
+.pad.app { left: 82px; }
+.pad.apps { left: 402px; }
+.arrow { position: absolute; left: 272px; top: 176px; width: 116px; height: 48px; }
+.say { position: absolute; top: 336px; width: 100%; text-align: center; color: #e8ebef; font-size: 17px; font-weight: 600; }
+.small { position: absolute; top: 364px; width: 100%; text-align: center; color: #959aa3; font-size: 12.5px; }
+</style></head><body>
+<div class="logo">PHOSPHOR</div>
+<div class="pad app"></div>
+<div class="pad apps"></div>
+<svg class="arrow" viewBox="0 0 116 48">
+  <defs><filter id="g" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="3"/></filter></defs>
+  <g stroke="#78ffaa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M8 24 H96 M80 9 L100 24 L80 39" filter="url(#g)" opacity="0.6"/>
+    <path d="M8 24 H96 M80 9 L100 24 L80 39"/>
+  </g>
+</svg>
+<div class="say">Drag Phosphor onto Applications</div>
+<div class="small">Then open it from your Applications folder or Launchpad.</div>
+</body></html>

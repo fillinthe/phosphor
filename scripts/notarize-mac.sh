@@ -20,11 +20,8 @@ SIGN_ID="$SIGN_ID" scripts/bundle-mac.sh --no-install
 
 VERSION=$(grep -m1 '^version' crates/phosphor/Cargo.toml | cut -d'"' -f2)
 DMG="dist/Phosphor-${VERSION}.dmg"
-STAGE=$(mktemp -d)
-cp -R dist/Phosphor.app "$STAGE/"
-ln -s /Applications "$STAGE/Applications"
-rm -f "$DMG"
-hdiutil create -volname Phosphor -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+# The installer window: Phosphor, an arrow and Applications on the Phosphor picture.
+scripts/make-dmg.sh dist/Phosphor.app "$DMG"
 codesign --force --timestamp --sign "$SIGN_ID" "$DMG"
 
 xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
