@@ -17,6 +17,8 @@ pub enum Source {
     Commons,
     Archive,
     Artic,
+    /// The Cleveland Museum of Art's open access (CC0) collection.
+    Cleveland,
     Iconify,
     PolyHaven,
     MilkDrop,
@@ -29,12 +31,13 @@ pub enum Source {
 }
 
 impl Source {
-    pub const ALL: [Source; 12] = [
+    pub const ALL: [Source; 13] = [
         Source::Nasa,
         Source::Commons,
         Source::Archive,
         Source::Openverse,
         Source::Artic,
+        Source::Cleveland,
         Source::Iconify,
         Source::PolyHaven,
         Source::MilkDrop,
@@ -56,6 +59,7 @@ impl Source {
             Source::Commons => "Wikimedia Commons",
             Source::Archive => "Internet Archive",
             Source::Artic => "Art Institute of Chicago",
+            Source::Cleveland => "Cleveland Museum of Art",
             Source::Iconify => "Iconify",
             Source::PolyHaven => "Poly Haven",
             Source::MilkDrop => "MilkDrop presets",
@@ -73,6 +77,7 @@ impl Source {
             Source::Commons => "Wikipedia's media library: photos and videos under open licences.",
             Source::Archive => "Old public-domain films from the Prelinger Archives, and Creative Commons music from netlabels.",
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
+            Source::Cleveland => "Over 30,000 artworks from the Cleveland Museum of Art's open access collection (CC0): paintings, prints, photos.",
             Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) for 3D models and backgrounds. CC0.",
             Source::X => "An X account's animated GIFs (needs gallery-dl and your browser's X sign-in).",
@@ -88,7 +93,7 @@ impl Source {
         match self {
             Source::Nasa | Source::Commons => &[Kind::Video, Kind::Picture],
             Source::Archive => &[Kind::Video, Kind::Music],
-            Source::Openverse | Source::Artic => &[Kind::Picture],
+            Source::Openverse | Source::Artic | Source::Cleveland => &[Kind::Picture],
             Source::Iconify => &[Kind::Icon],
             Source::PolyHaven => &[Kind::Texture],
             Source::MilkDrop => &[Kind::Visualizer],
@@ -146,6 +151,7 @@ impl Source {
             Source::GoogleFonts => "https://fonts.google.com/metadata/fonts".to_string(),
             // GraphQL: the question goes in the body (`post_body`).
             Source::LottieFiles => LOTTIE_API.to_string(),
+            Source::Cleveland => format!("https://openaccess-api.clevelandart.org/api/artworks/?q={q}&has_image=1&cc0=1&limit={PAGE}&skip={}", (page - 1) * PAGE),
             Source::Artic => format!(
                 "https://api.artic.edu/api/v1/artworks/search?q={q}&query%5Bterm%5D%5Bis_public_domain%5D=true&fields=id,title,artist_title,image_id&limit={PAGE}&page={page}"
             ),
@@ -179,6 +185,7 @@ impl Source {
             Source::Commons => commons(&v, kind),
             Source::Archive => archive(&v, kind),
             Source::Artic => artic(&v),
+            Source::Cleveland => cleveland(&v),
             Source::Iconify => iconify(&v),
             Source::PolyHaven => poly_haven(&v, "", 1),
             Source::MilkDrop => milkdrop(&v, "", 1),
@@ -471,6 +478,37 @@ fn artic(v: &Value) -> Vec<Item> {
                     source: "Art Institute of Chicago".into(),
                 },
                 id,
+            })
+        })
+        .collect()
+}
+
+fn cleveland(v: &Value) -> Vec<Item> {
+    let data = v["data"].as_array().cloned().unwrap_or_default();
+    data.iter()
+        .filter_map(|d| {
+            let images = &d["images"];
+            // The print copy (up to ~3,400 px) is plenty for a screen; the full one is a huge TIFF.
+            let file = [&images["print"], &images["web"]].iter().map(|i| text(&i["url"])).find(|u| !u.is_empty())?;
+            let size = images["print"]["filesize"].as_str().and_then(|s| s.parse().ok()).filter(|_| !text(&images["print"]["url"]).is_empty());
+            let title = text(&d["title"]);
+            Some(Item {
+                source: Source::Cleveland,
+                kind: Kind::Picture,
+                id: d["id"].to_string(),
+                title: title.clone(),
+                thumb: text(&images["web"]["url"]),
+                file: Some(file),
+                list: String::new(),
+                size,
+                credit: phosphor_engine::Credit {
+                    title,
+                    author: text(&d["creators"][0]["description"]),
+                    licence: "CC0".into(),
+                    licence_url: "https://creativecommons.org/publicdomain/zero/1.0/".into(),
+                    page: text(&d["url"]),
+                    source: "Cleveland Museum of Art".into(),
+                },
             })
         })
         .collect()
@@ -885,6 +923,17 @@ mod tests {
         assert_eq!(sh.len(), 1, "private ones are left out");
         assert_eq!((sh[0].title.as_str(), sh[0].thumb.as_str()), ("Square Tunnel", "https://res.cloudinary.com/hrlz5rsqo/image/upload/w_256/z9tk.jpg"));
         assert!(!sh[0].credit.commercial(), "no licence stated: not for paid work");
+    }
+
+    #[test]
+    fn cleveland_answer_is_read() {
+        let body = br#"{"data":[{"id":86110,"title":"Sunset Glow","url":"https://clevelandart.org/art/2015.590","creators":[{"description":"Sessh (Japanese, 1420-1506)"}],"images":{"web":{"url":"https://openaccess-cdn.clevelandart.org/2015.590/2015.590_web.jpg"},"print":{"url":"https://openaccess-cdn.clevelandart.org/2015.590/2015.590_print.jpg","filesize":"1851111"}}},{"id":2,"title":"no picture","images":null}]}"#;
+        let c = Source::Cleveland.parse(Kind::Picture, body).unwrap();
+        assert_eq!(c.len(), 1, "works without a picture are left out");
+        assert_eq!(c[0].file.as_deref(), Some("https://openaccess-cdn.clevelandart.org/2015.590/2015.590_print.jpg"));
+        assert_eq!((c[0].thumb.as_str(), c[0].size), ("https://openaccess-cdn.clevelandart.org/2015.590/2015.590_web.jpg", Some(1851111)));
+        assert_eq!((c[0].credit.author.as_str(), c[0].credit.licence.as_str()), ("Sessh (Japanese, 1420-1506)", "CC0"));
+        assert!(Source::Cleveland.search_url("sun set", Kind::Picture, 2, false).ends_with(&format!("q=sun%20set&has_image=1&cc0=1&limit={PAGE}&skip={PAGE}")));
     }
 
     /// LottieFiles answers by GraphQL: page N holds every page up to N, and only the last page's items are kept.
