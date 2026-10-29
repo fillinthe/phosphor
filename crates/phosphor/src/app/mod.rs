@@ -214,6 +214,8 @@ pub struct State {
     pub models: crate::models::Models,
     /// Data boxes (readings, web, timers, tables) and events.
     pub data: crate::data::DataRun,
+    /// Designer undo: each comp's network as it was before each change (newest last).
+    pub designer_undo: HashMap<u64, Vec<phosphor_engine::Network>>,
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,

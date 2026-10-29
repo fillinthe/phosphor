@@ -46,9 +46,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       `docs/design/nodes.md` are built. Points left: no depth buffer (a mesh's far faces can draw over near ones; backs are
       hidden instead), lines are 1 px (their Size scales the picture down like Rutt-Etra), particles step at 1/60 s
       whatever the rate, a Model box's render must be set to Read: In order by hand, effects after a render on the
-      same layer as a Model run at the model's texel size. Small: number inputs on a box of boxes, wrapping existing
-      boxes into one, undo for box changes, Duplicate copying a plain box's settings, settings of a half-visible box,
-      a Number box's own MIDI mapping (map its Knob from the box).
+      same layer as a Model run at the model's texel size. **Small items done 2026-10-30:** Number input boxes on a
+      box of boxes, Wrap in a box (one box at a time: no multi-select on the canvas yet), Undo (toolbar button and
+      Cmd-Z over the canvas, 50 steps per comp, boxes and wires only: a slider change isn't undone), Duplicate copies
+      a box's settings, a half-visible box shows the settings that fit, a Number box's Knob is mappable (right-click ›
+      Learn). Left: multi-select to wrap several boxes at once.
 - [ ] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
       (then they're keyable and mappable like the rest).
 
