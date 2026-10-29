@@ -892,8 +892,14 @@ impl PhosphorApp {
                 if let Ok(file) = std::env::var("PHOSPHOR_LASER_FILE") {
                     look.shapes.push(phosphor_engine::LaserShape { id: comp.new_id(), kind: phosphor_engine::LaserShapeKind::File, file, size: 0.3, x: 0.6, y: 0.6, count: 30.0, ..Default::default() });
                 }
+                // PHOSPHOR_LASER_TRACE=1: the mix traced too (its picture arrives once the app renders).
+                if std::env::var_os("PHOSPHOR_LASER_TRACE").is_some() {
+                    look.shapes.push(phosphor_engine::LaserShape { id: comp.new_id(), kind: phosphor_engine::LaserShapeKind::Trace, size: 1.0, count: 12.0, shape: 0.5, ..Default::default() });
+                }
+                // PHOSPHOR_LASER_TEST=1: the projector shows the test pattern.
+                let test_pattern = std::env::var_os("PHOSPHOR_LASER_TEST").is_some();
                 let id = comp.new_id();
-                comp.lasers.projectors.push(phosphor_engine::LaserProjector { id, look: look.id, ..Default::default() });
+                comp.lasers.projectors.push(phosphor_engine::LaserProjector { id, look: look.id, test_pattern, ..Default::default() });
                 comp.lasers.looks.push(look);
                 comp.lasers.projectors[0].floor = -0.6;
                 let p = &comp.lasers.projectors[0];

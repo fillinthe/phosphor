@@ -326,8 +326,10 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       video clips. *(engine tests for tracing / budget / safety; screenshots; bench --quick lasers prints LASER.
       **Not tried on a real laser**: needs you with one.)* **ILDA files and text as laser looks done 2026-10-30**
       (Text shape: Hershey single-stroke fonts, 6 styles, several lines; Laser file shape: .ild frames at their own
-      speed, read off the UI thread; busy frames wait less at jumps and corners to stay in budget). Next: a picture
-      traced into lines, zones, a test pattern.
+      speed, read off the UI thread; busy frames wait less at jumps and corners to stay in budget). **Test pattern and video
+      trace done 2026-10-30** (projector Test pattern switch; Video trace shape: a layer / the mix read back small
+      (128 wide, 25 a second, only while used), marching squares + Douglas–Peucker, longest outlines kept; crowded
+      frames drop the shortest lines and the Designer says so). Next: zones.
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
       colours to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
       system, to see what it accepts.
