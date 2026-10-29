@@ -102,6 +102,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command_if(ui, steps > 0, label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text("The boxes and wires as they were before the last change (Cmd-Z on the canvas)").clicked() {
             undo_box_change = true;
         }
+        crate::ui::nodes::zoom_controls(ui, &format!("designer:{cid}:{path:?}"));
         help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · double-click a box of boxes to build inside it");
     });
     let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id)).collect();

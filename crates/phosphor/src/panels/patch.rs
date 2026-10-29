@@ -115,19 +115,22 @@ impl Graph for Patch {
 /// Draws and edits `patch`; `key` keeps this patch's view (scroll position) apart from others. Returns true when
 /// the patch changed (blocks, wires or settings).
 pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> bool {
-    node_canvas(ui, patch, &format!("patch:{key}"))
+    let key = format!("patch:{key}");
+    crate::ui::toolbar(ui, |ui| crate::ui::nodes::zoom_controls(ui, &key));
+    node_canvas(ui, patch, &key)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Runs the canvas for one frame with these pointer events (the canvas fills the screen from 0,0).
+    /// Runs the canvas for one frame with these pointer events (the canvas alone, without its zoom bar, filling the
+    /// screen from 0,0: the boxes are on egui's transformed layer, so this also checks pointers reach them there).
     fn frame(ctx: &egui::Context, patch: &mut Patch, events: Vec<egui::Event>) -> bool {
         let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 600.0))), events, ..Default::default() };
         let mut changed = false;
         let mut out = ctx.run_ui(input, |ui| {
-            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| changed = patch_canvas(ui, patch, "test"));
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| changed = node_canvas(ui, patch, "patch:test"));
         });
         out.textures_delta.clear();
         changed
@@ -182,5 +185,19 @@ mod tests {
         frame(&ctx, &mut p, vec![]);
         assert!(drag(&ctx, &mut p, egui::pos2(60.0, 50.0), egui::pos2(160.0, 150.0)), "saved when let go");
         assert_eq!(p.nodes[0].pos, [120.0, 140.0]);
+    }
+
+    /// Zoomed out to half: a box is drawn half size, found under the pointer there, and a drag on screen moves it
+    /// twice as far on the canvas.
+    #[test]
+    fn zoomed_boxes_take_the_pointer() {
+        let ctx = egui::Context::default();
+        let mut p = Patch::new("Test", false);
+        let id = egui::Id::new(("node_canvas", "patch:test"));
+        ctx.data_mut(|d| d.insert_temp(id.with("zoom"), 0.5f32));
+        frame(&ctx, &mut p, vec![]);
+        // The first block sits at (20, 40): its title at half size is about (10..105, 20..31).
+        assert!(drag(&ctx, &mut p, egui::pos2(30.0, 25.0), egui::pos2(130.0, 125.0)));
+        assert_eq!(p.nodes[0].pos, [220.0, 240.0]);
     }
 }
