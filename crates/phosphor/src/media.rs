@@ -174,6 +174,10 @@ pub struct MediaManager {
     /// Images decoding on background threads: (layer, source, result).
     #[cfg(not(target_arch = "wasm32"))]
     decoded: Option<(std::sync::mpsc::Sender<Decoded>, std::sync::mpsc::Receiver<Decoded>)>,
+    /// Text layers whose picture is being drawn: one at a time a layer, the newest words / style next (a knob or
+    /// the timeline moving the size doesn't start a thread every frame).
+    #[cfg(not(target_arch = "wasm32"))]
+    text_busy: std::collections::HashSet<u64>,
     /// Players for the outgoing side of a transition; they keep playing until it ends.
     #[cfg(not(target_arch = "wasm32"))]
     outgoing: HashMap<u64, video::VideoPlayer>,
@@ -333,6 +337,10 @@ impl MediaManager {
             if self.loaded.get(&layer.id) == Some(&layer.source) {
                 continue;
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            if matches!(layer.source, SourceSpec::Text(_)) && self.text_busy.contains(&layer.id) {
+                continue;
+            }
             // A transition keeps the old source alive as the outgoing picture.
             let transitioning = layer.transition.as_ref().is_some_and(|t| self.loaded.get(&layer.id) == Some(&t.from));
             if transitioning {
@@ -388,6 +396,7 @@ impl MediaManager {
                         let (tx, _) = self.decoded.get_or_insert_with(std::sync::mpsc::channel);
                         let tx = tx.clone();
                         let (id, spec, style) = (layer.id, layer.source.clone(), style.clone());
+                        self.text_busy.insert(id);
                         std::thread::spawn(move || {
                             let _ = tx.send((id, spec, crate::text::render(&style, w, h)));
                         });
@@ -561,8 +570,12 @@ impl MediaManager {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some((_, rx)) = &self.decoded {
             for (id, spec, result) in rx.try_iter() {
-                // Only if the layer still shows that image.
-                if !comp.layers.iter().any(|l| l.id == id && l.source == spec) {
+                // Only if the layer still shows that image (text: still text; newer words or style follow).
+                let text = matches!(spec, SourceSpec::Text(_));
+                if text {
+                    self.text_busy.remove(&id);
+                }
+                if !comp.layers.iter().any(|l| l.id == id && (l.source == spec || text && matches!(l.source, SourceSpec::Text(_)))) {
                     continue;
                 }
                 match result {

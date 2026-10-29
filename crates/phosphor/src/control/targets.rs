@@ -64,6 +64,20 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerRotation(id) => (layer(id)?.transform.rotation + 180.0) / 360.0,
         ControlTarget::LayerCorner { layer: id, point } => layer(id)?.transform.corners?[(*point as usize / 2).min(3)][*point as usize % 2].clamp(0.0, 1.0),
         ControlTarget::LayerTransform { layer: id, part } => layer(id)?.transform.unit(*part as usize),
+        ControlTarget::TextPart { layer: id, part } => match &layer(id)?.source {
+            phosphor_engine::SourceSpec::Text(style) => style.unit(*part as usize),
+            _ => return None,
+        },
+        ControlTarget::TransitionParam { layer: id, index } => {
+            let l = layer(id)?;
+            let p = shaders::transition(&l.transition_effect)?.params.get(*index)?;
+            param_unit(p, l.transition_values.get(*index).copied().unwrap_or(p.default))
+        }
+        ControlTarget::MixerParam { layer: id, index } => {
+            let l = layer(id)?;
+            let p = shaders::mixer(l.mixer.as_deref()?)?.params.get(*index)?;
+            param_unit(p, l.mixer_values.get(*index).copied().unwrap_or(p.default))
+        }
         ControlTarget::LayerLoopIn(id) => layer(id)?.loop_in,
         ControlTarget::LayerLoopOut(id) => layer(id)?.loop_out,
         ControlTarget::LayerDirection(id) => {
@@ -222,6 +236,33 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::LayerTransform { layer, part } => {
             if let Some(l) = comp.layer_mut(*layer) {
                 l.transform.set_unit(*part as usize, v);
+            }
+        }
+        ControlTarget::TextPart { layer, part } => {
+            if let Some(phosphor_engine::LayerState { source: phosphor_engine::SourceSpec::Text(style), .. }) = comp.layer_mut(*layer) {
+                style.set_unit(*part as usize, v);
+            }
+        }
+        ControlTarget::TransitionParam { layer, index } => {
+            if let Some(l) = comp.layer_mut(*layer)
+                && let Some(desc) = shaders::transition(&l.transition_effect)
+                && let Some(p) = desc.params.get(*index)
+            {
+                if l.transition_values.len() != desc.params.len() {
+                    l.transition_values = desc.defaults();
+                }
+                l.transition_values[*index] = scaled(p, v);
+            }
+        }
+        ControlTarget::MixerParam { layer, index } => {
+            if let Some(l) = comp.layer_mut(*layer)
+                && let Some(desc) = l.mixer.as_deref().and_then(shaders::mixer)
+                && let Some(p) = desc.params.get(*index)
+            {
+                if l.mixer_values.len() != desc.params.len() {
+                    l.mixer_values.resize(desc.params.len(), 0.0);
+                }
+                l.mixer_values[*index] = scaled(p, v);
             }
         }
         ControlTarget::MaskTransform { mask, part } => {
@@ -571,6 +612,24 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
                 out.push((ControlTarget::GeneratorParam { layer: l.id, index: i }, format!("{} · {} · {}", l.name, desc.name, p.name)));
             }
         }
+        if let phosphor_engine::SourceSpec::Text(_) = &l.source {
+            for (i, part) in phosphor_engine::TextStyle::PARTS.iter().enumerate() {
+                out.push((ControlTarget::TextPart { layer: l.id, part: i as u8 }, format!("{} · text {}", l.name, part.name.to_lowercase())));
+            }
+        }
+        if l.transition_kind == phosphor_engine::TransitionKind::Shader
+            && let Some(desc) = shaders::transition(&l.transition_effect)
+        {
+            let progress = shaders::progress_index(desc);
+            for (i, p) in desc.params.iter().enumerate().filter(|(i, _)| Some(*i) != progress) {
+                out.push((ControlTarget::TransitionParam { layer: l.id, index: i }, format!("{} · fade · {}", l.name, p.name)));
+            }
+        }
+        if let Some(desc) = l.mixer.as_deref().and_then(shaders::mixer) {
+            for (i, p) in desc.params.iter().enumerate() {
+                out.push((ControlTarget::MixerParam { layer: l.id, index: i }, format!("{} · {} · {}", l.name, desc.name, p.name)));
+            }
+        }
         effects(&format!("{} · clip", l.name), &l.clip_effects, &mut out);
         effects(&l.name, &l.effects, &mut out);
     }
@@ -613,6 +672,12 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
             None => format!("/phosphor/light/{fixture}/extra/{}", param - 4),
         },
         ControlTarget::GeneratorParam { layer, index } => format!("/phosphor/layer/{layer}/source/{}", index + 1),
+        ControlTarget::TextPart { layer, part } => {
+            let name = phosphor_engine::TextStyle::PARTS.get(*part as usize).map_or("part", |p| p.name);
+            format!("/phosphor/layer/{layer}/text_{}", name.to_lowercase().replace(' ', "_"))
+        }
+        ControlTarget::TransitionParam { layer, index } => format!("/phosphor/layer/{layer}/fade/{}", index + 1),
+        ControlTarget::MixerParam { layer, index } => format!("/phosphor/layer/{layer}/mixer/{}", index + 1),
         ControlTarget::EffectParam { effect, index } => format!("/phosphor/fx/{effect}/{}", index + 1),
         ControlTarget::EffectMix(id) => format!("/phosphor/fx/{id}/mix"),
         ControlTarget::EffectEnabled(id) => format!("/phosphor/fx/{id}/on"),

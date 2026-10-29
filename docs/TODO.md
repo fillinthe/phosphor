@@ -21,7 +21,6 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [x] **Setting points on the Timeline from a right-click in the Inspector.** Scale X / Y, depth, tilts and crop had
       no control of their own, so "Key on the timeline" did nothing there. They're real controls now (mappable,
       keyable, OSC). "Key on the timeline" is no longer offered where it can't work. *(test; not installed)*
-      Still without: text size / outline / line spacing, fade-style settings and mixer-plugin settings.
 - [x] **Mapping opacity in the Mixer should show in the Inspector** (it did, as a thin outline only): a mapped slider's
       whole bar is gold now, everywhere. *(screenshot of Mixer + Inspector; not installed)*
 - [~] **Designer** (the TouchDesigner-style section, owner's name). Plan in `docs/design/nodes.md`. **Phase 1 done
@@ -52,8 +51,9 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       Cmd-Z over the canvas, 50 steps per comp, boxes and wires only: a slider change isn't undone), Duplicate copies
       a box's settings, a half-visible box shows the settings that fit, a Number box's Knob is mappable (right-click ›
       Learn). Multi-select done 2026-10-30: Shift-click titles, drag moves them together, right-click › Wrap N boxes.
-- [ ] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
-      (then they're keyable and mappable like the rest).
+- [x] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
+      (then they're keyable and mappable like the rest). *(2026-10-30, test; not installed)* OSC: /phosphor/layer/N/text_size,
+      …/fade/K, …/mixer/K. A text layer redraws one picture at a time while its size moves (no pile-up of threads).
 
 ## From show testing (2026-10-25)
 

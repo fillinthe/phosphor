@@ -639,11 +639,12 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         }
         if let Some(d) = layer.mixer.as_deref().and_then(shaders::mixer) {
             layer.mixer_values.resize(d.params.len(), 0.0);
-            for (p, v) in d.params.iter().zip(layer.mixer_values.iter_mut()) {
+            let id = layer.id;
+            for (i, (p, v)) in d.params.iter().zip(layer.mixer_values.iter_mut()).enumerate() {
                 if p.name.eq_ignore_ascii_case("opacity") {
                     continue;
                 }
-                ui.horizontal(|ui| Level::range(v, p.min, p.max, p.name).default(p.default).show(ui));
+                ui.horizontal(|ui| Level::range(v, p.min, p.max, p.name).default(p.default).target(ControlTarget::MixerParam { layer: id, index: i }).show(ui));
             }
         }
     });
@@ -921,15 +922,13 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             });
         });
     });
-    ui.horizontal(|ui| {
-        Level::range(&mut style.size, 0.02, 0.8, "Size").default(0.18).tip("Text height, as a share of the picture's height").show(ui);
-    });
-    ui.horizontal(|ui| {
-        Level::range(&mut style.outline, 0.0, 0.15, "Outline").default(0.0).show(ui);
-    });
-    ui.horizontal(|ui| {
-        Level::range(&mut style.line_spacing, 0.6, 2.0, "Line spacing").default(1.0).show(ui);
-    });
+    // Size, outline, line spacing: controls of their own (mappable, keyable on the timeline, OSC).
+    for (i, part) in phosphor_engine::TextStyle::PARTS.iter().enumerate() {
+        ui.horizontal(|ui| {
+            let level = Level::range(style.part_mut(i), part.min, part.max, part.name).default(part.default).target(ControlTarget::TextPart { layer: id, part: i as u8 });
+            if i == 0 { level.tip("Text height, as a share of the picture's height") } else { level }.show(ui);
+        });
+    }
     help(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
     from_file
 }
@@ -953,8 +952,9 @@ fn transition_settings(ui: &mut egui::Ui, layer: &mut LayerState) {
             if Some(i) == progress {
                 continue;
             }
+            let target = ControlTarget::TransitionParam { layer: layer.id, index: i };
             ui.horizontal(|ui| {
-                Level::range(&mut layer.transition_values[i], p.min, p.max, p.name).default(p.default).show(ui);
+                Level::range(&mut layer.transition_values[i], p.min, p.max, p.name).default(p.default).target(target).show(ui);
             });
         }
     });

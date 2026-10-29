@@ -247,7 +247,7 @@ fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Opti
     match target {
         T::MasterFade => item(phosphor_engine::MASTER_ID),
         T::LayerOpacity(id) | T::LayerEnabled(id) | T::LayerSpeed(id) | T::LayerFxBypass(id) | T::LayerLoopIn(id) | T::LayerLoopOut(id) | T::LayerDirection(id) | T::LayerScrub(id) | T::LayerVolume(id) | T::LayerX(id) | T::LayerY(id) | T::LayerScale(id) | T::LayerRotation(id) => item(*id),
-        T::GeneratorParam { layer, .. } | T::LayerJump { layer, .. } | T::LayerCorner { layer, .. } | T::LayerTransform { layer, .. } => item(*layer),
+        T::GeneratorParam { layer, .. } | T::LayerJump { layer, .. } | T::LayerCorner { layer, .. } | T::LayerTransform { layer, .. } | T::TextPart { layer, .. } | T::TransitionParam { layer, .. } | T::MixerParam { layer, .. } => item(*layer),
         T::LayerText(id) | T::LayerTextStep { layer: id, .. } => item(*id),
         T::TriggerClip { layer, .. } | T::LayerClipPick(layer) | T::LayerRandomClip(layer) => Some((Tab::Clips, Some(*layer), None)),
         T::TriggerColumn(_) | T::StopLayer(_) => Some((Tab::Clips, None, None)),
