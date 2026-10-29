@@ -2,7 +2,7 @@
 //! and the Laser Designer (looks made of shapes, drawn on a canvas the way the laser draws them: the traced path,
 //! glowing). Output: `crate::lasers`; geometry: `phosphor_engine::laser`.
 
-use phosphor_engine::laser::{LaserFiles, look_paths, trace};
+use phosphor_engine::laser::{LaserInputs, left_out, look_paths, test_pattern, trace};
 use phosphor_engine::{LaserLook, LaserProjector, LaserShape, LaserShapeKind, MASTER_ID};
 
 use super::*;
@@ -104,6 +104,8 @@ fn projectors(ui: &mut egui::Ui, st: &mut State) {
                 Level::range(&mut p.rotate, -180.0, 180.0, "Turn").default(0.0).width(110.0).show(ui);
                 crate::ui::toggle(ui, &mut p.flip_x, "Flip across");
                 crate::ui::toggle(ui, &mut p.flip_y, "Flip up/down");
+                crate::ui::toggle(ui, &mut p.test_pattern, "Test pattern")
+                    .on_hover_text("Draws a pattern instead of the look, to line the laser up: the edge of its area, a circle, a cross, an arrow pointing up, and a corner in each colour (red top left, green top right, blue bottom right, white bottom left)");
             });
             crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut p.floor, -1.0, 1.0, "Floor").default(-1.0).width(150.0).tip("Audience safety: nothing is drawn below this height (-1 = no limit)").show(ui);
@@ -130,9 +132,9 @@ fn projectors(ui: &mut egui::Ui, st: &mut State) {
 
 fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     #[cfg(not(target_arch = "wasm32"))]
-    let files = st.lasers.files(&st.comp.lasers);
+    let inputs = st.lasers.inputs(&st.comp.lasers);
     #[cfg(target_arch = "wasm32")]
-    let files = LaserFiles::default();
+    let inputs = LaserInputs::default();
     crate::ui::heading(ui, format!("{} Laser Designer", icon::PEN_NIB));
     let comp = &mut st.comp;
     if comp.lasers.looks.is_empty() {
@@ -183,6 +185,7 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
                         let shape = match kind {
                             LaserShapeKind::Text => LaserShape { size: 0.8, ..shape },
                             LaserShapeKind::File => LaserShape { size: 1.0, count: 30.0, motion: 0.0, ..shape },
+                            LaserShapeKind::Trace => LaserShape { size: 1.0, count: 12.0, shape: 0.5, motion: 0.0, color: [1.0; 3], ..shape },
                             _ => shape,
                         };
                         look.shapes.push(shape);
@@ -204,13 +207,13 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     }
     ui.columns(2, |cols| {
         let mods = st.mod_inputs;
-        canvas(&mut cols[0], &look, t, &mods, picked, &mut st.comp.lasers, &files);
+        canvas(&mut cols[0], &look, t, &mods, picked, &mut st.comp.lasers, &inputs);
         shape_list(&mut cols[1], st, picked);
     });
 }
 
 /// The look drawn as the laser draws it (the traced path, lit parts glowing); click a shape to pick it, drag it to move it.
-fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::ModInputs, picked: &mut Picked, lasers: &mut phosphor_engine::Lasers, files: &LaserFiles) {
+fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::ModInputs, picked: &mut Picked, lasers: &mut phosphor_engine::Lasers, inputs: &LaserInputs) {
     let side = ui.available_width().min(560.0).max(160.0);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click_and_drag());
     let p = ui.painter_at(rect);
@@ -230,7 +233,9 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         p.rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(255, 40, 30, 24));
         p.line_segment([to_screen(-1.0, floor), to_screen(1.0, floor)], egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 60, 40)));
     }
-    let frame = trace(&look_paths(look, t, mods, files), budget as usize);
+    // (A projector showing the test pattern: the pattern.)
+    let paths = if projector.is_some_and(|p| p.test_pattern) { test_pattern() } else { look_paths(look, t, mods, inputs) };
+    let frame = trace(&paths, budget as usize);
     for w in frame.windows(2) {
         if !(w[0].lit() && w[1].lit()) {
             continue;
@@ -267,6 +272,11 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         }
     }
     hint(ui, &format!("{} of {budget} points a frame", frame.len()));
+    let out = left_out(&paths, budget as usize);
+    if out > 0 {
+        ui.colored_label(egui::Color32::from_rgb(255, 170, 80), format!("Too much for one frame: {out} short lines left out"))
+            .on_hover_text("Fewer shapes or outlines, shorter words, or more points a second (if the laser takes them) draw everything");
+    }
     ui.ctx().request_repaint();
 }
 
@@ -277,7 +287,8 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     #[cfg(target_arch = "wasm32")]
     let file_error = |_: &str| None::<String>;
     let mut choose_file = None;
-    let Some(look) = st.comp.lasers.look_mut(picked.look) else { return };
+    let (layers, lasers) = (&st.comp.layers, &mut st.comp.lasers);
+    let Some(look) = lasers.look_mut(picked.look) else { return };
     let mut remove = None;
     for (n, s) in look.shapes.iter_mut().enumerate() {
         crate::ui::toolbar(ui, |ui| {
@@ -328,6 +339,17 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
             if let Some(e) = file_error(&s.file) {
                 ui.colored_label(egui::Color32::from_rgb(255, 120, 90), format!("Can't play it: {e}"));
             }
+        }
+        LaserShapeKind::Trace => {
+            crate::ui::toolbar(ui, |ui| {
+                let shown = if s.source == 0 { "The mix".to_string() } else { crate::ui::layer_name(layers, s.source) };
+                crate::ui::dropdown(ui, ("laser_trace", s.id), 160.0).selected_text(shown).show_ui(ui, |ui| {
+                    crate::ui::pick_value(ui, &mut s.source, 0, "The mix");
+                    crate::ui::layer_items(ui, layers, &mut s.source, |id| id);
+                });
+                crate::ui::toggle(ui, &mut s.picture_colors, "Its colours").on_hover_text("Lines take the picture's colours (off: this shape's colour)");
+            });
+            help(ui, "Outlines where the picture's brightness crosses the Level: bright shapes on dark work best (a silhouette, a logo, a camera with Remove background).");
         }
         _ => {}
     }

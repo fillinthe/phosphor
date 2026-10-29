@@ -3,6 +3,11 @@
 //! off (and waits for the mirrors to arrive before lighting up), lingers at corners so they come out sharp, and
 //! spaces the points so a whole frame fits the laser's points-a-second budget. `project` places the picture in a
 //! projector's scan area, applies its colour balance and brightness, and blanks anything below its safety floor.
+//! `test_pattern` lines a laser up; `outline` traces pictures (Video trace shapes).
+
+mod outline;
+
+pub use outline::Picture;
 
 use std::collections::HashMap;
 use std::f32::consts::TAU;
@@ -50,12 +55,43 @@ const CORNER_WAIT: usize = 3;
 /// A beam (dot): points spent on it.
 const DOT_POINTS: usize = 24;
 
-/// Laser files' frames, by the file's path (the app reads them; see `LaserShape::file`).
-pub type LaserFiles = HashMap<String, Arc<Vec<Vec<ilda::Point>>>>;
+/// What shapes draw from outside the look (the app fills these in).
+#[derive(Clone, Debug, Default)]
+pub struct LaserInputs {
+    /// Laser files' frames, by the file's path (`LaserShape::file`).
+    pub files: HashMap<String, Arc<Vec<Vec<ilda::Point>>>>,
+    /// Small pictures for Video trace shapes, by source (`LaserShape::source`; `MASTER_ID` = the mix).
+    pub pictures: HashMap<u64, Arc<Picture>>,
+}
 
-/// Every enabled shape's lines at `t` seconds (`files`: laser files read so far).
-pub fn look_paths(look: &LaserLook, t: f64, mods: &ModInputs, files: &LaserFiles) -> Vec<Path> {
-    look.shapes.iter().filter(|s| s.enabled).flat_map(|s| shape_paths(s, t, mods, files)).collect()
+/// The source a Video trace shape reads (its layer, group or comp; the mix when 0).
+pub fn trace_source(s: &LaserShape) -> u64 {
+    if s.source == 0 { crate::MASTER_ID } else { s.source }
+}
+
+/// Every enabled shape's lines at `t` seconds (`inputs`: laser files and pictures so far).
+pub fn look_paths(look: &LaserLook, t: f64, mods: &ModInputs, inputs: &LaserInputs) -> Vec<Path> {
+    look.shapes.iter().filter(|s| s.enabled).flat_map(|s| shape_paths(s, t, mods, inputs)).collect()
+}
+
+/// Lining a laser up: the scan area's edge, a circle, a cross in the middle, an arrow pointing up, and a corner
+/// in each colour (red top left, green top right, blue bottom right, white bottom left) to check flips and colours.
+pub fn test_pattern() -> Vec<Path> {
+    const WHITE: [f32; 3] = [1.0; 3];
+    let line = |pts: &[[f32; 2]], rgb: [f32; 3], closed: bool| Path { points: pts.iter().map(|p| (*p, rgb)).collect(), closed, dots: false };
+    let corner = |x: f32, y: f32, rgb| line(&[[x, y - 0.25 * y.signum()], [x, y], [x - 0.25 * x.signum(), y]], rgb, false);
+    let circle: Vec<[f32; 2]> = (0..48).map(|i| (i as f32 / 48.0 * TAU).sin_cos()).map(|(s, c)| [c * 0.5, s * 0.5]).collect();
+    vec![
+        line(&[[-0.95, -0.95], [0.95, -0.95], [0.95, 0.95], [-0.95, 0.95]], WHITE, true),
+        line(&circle, WHITE, true),
+        line(&[[-0.15, 0.0], [0.15, 0.0]], WHITE, false),
+        line(&[[0.0, -0.15], [0.0, 0.15]], WHITE, false),
+        line(&[[-0.1, 0.65], [0.0, 0.8], [0.1, 0.65]], WHITE, false),
+        corner(-1.0, 1.0, [1.0, 0.0, 0.0]),
+        corner(1.0, 1.0, [0.0, 1.0, 0.0]),
+        corner(1.0, -1.0, [0.0, 0.0, 1.0]),
+        corner(-1.0, -1.0, WHITE),
+    ]
 }
 
 /// A shape's lines before they're placed: around (0, 0), about -1..1 big, with their own colours when they have them.
@@ -67,7 +103,7 @@ struct Unit {
 }
 
 /// One shape's lines at `t` seconds (`mods`: its modulation).
-pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs, files: &LaserFiles) -> Vec<Path> {
+pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs, inputs: &LaserInputs) -> Vec<Path> {
     let x = modulate(s.x, -1.0, 1.0, s.mods.x.as_ref(), mods);
     let y = modulate(s.y, -1.0, 1.0, s.mods.y.as_ref(), mods);
     let size = modulate(s.size, 0.0, 1.0, s.mods.size.as_ref(), mods);
@@ -81,7 +117,12 @@ pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs, files: &LaserFiles)
     let count = s.count.max(0.5);
     let units = match s.kind {
         LaserShapeKind::Text => text_strokes(&s.text, s.font),
-        LaserShapeKind::File => files.get(&s.file).map(|frames| file_frame(frames, t, count)).unwrap_or_default(),
+        LaserShapeKind::File => inputs.files.get(&s.file).map(|frames| file_frame(frames, t, count)).unwrap_or_default(),
+        LaserShapeKind::Trace => inputs
+            .pictures
+            .get(&trace_source(s))
+            .map(|pic| outline::outlines(pic, s.shape.clamp(0.02, 0.98), count.round().max(1.0) as usize, s.picture_colors))
+            .unwrap_or_default(),
         kind => {
             let (points, closed, dots) = unit_shape(kind, count, s.shape.clamp(0.0, 1.0), phase);
             vec![Unit { points, colors: None, closed, dots }]
@@ -258,8 +299,8 @@ fn unit_shape(kind: LaserShapeKind, count: f32, shape: f32, phase: f32) -> (Vec<
             let r = if n == 1 { 0.0 } else { shape.max(0.02) };
             (ring(n, r, TAU / 4.0 + phase).collect(), false, true)
         }
-        // (Made from their words or file: `text_strokes`, `file_frame`.)
-        LaserShapeKind::Text | LaserShapeKind::File => (Vec::new(), false, false),
+        // (Made from their words, file or picture: `text_strokes`, `file_frame`, `outline::outlines`.)
+        LaserShapeKind::Text | LaserShapeKind::File | LaserShapeKind::Trace => (Vec::new(), false, false),
     }
 }
 
@@ -318,7 +359,7 @@ fn cut(path: &Path, part: f32) -> Path {
 /// Paths → the points of one frame: ordered nearest first, joined by blanked travel, at most `budget` points
 /// (points a second ÷ frames a second). Starts and ends dark at (0, 0) so frames join cleanly.
 pub fn trace(paths: &[Path], budget: usize) -> Vec<LaserPoint> {
-    let paths: Vec<&Path> = paths.iter().filter(|p| !p.points.is_empty()).collect();
+    let paths = fitting(paths, budget);
     if paths.is_empty() || budget < 8 {
         return vec![LaserPoint::default()];
     }
@@ -379,7 +420,7 @@ pub fn trace(paths: &[Path], budget: usize) -> Vec<LaserPoint> {
     let (blank_wait, corner_wait) = waits.iter().copied().find(|&(b, c)| cost(b, c) <= budget * 3 / 4).unwrap_or(waits[waits.len() - 1]);
     let fixed = cost(blank_wait, corner_wait);
     let lit_length: f32 = lines.iter().zip(&dots).filter(|(_, d)| !**d).map(|(pts, _)| pts.windows(2).map(|w| dist(w[0].0, w[1].0)).sum::<f32>()).sum();
-    let room = budget.saturating_sub(fixed).max(budget / 4);
+    let room = budget.saturating_sub(fixed).max(1);
     let step = (lit_length / room as f32).max(LIT_STEP);
     // Too much for the budget even so: beams get fewer points each.
     let dot_points = if fixed > budget { (DOT_POINTS * budget / fixed.max(1)).max(4) } else { DOT_POINTS };
@@ -417,6 +458,38 @@ pub fn trace(paths: &[Path], budget: usize) -> Vec<LaserPoint> {
     }
     blank_to(&mut out, from, [0.0, 0.0], blank_wait);
     out
+}
+
+/// The paths a frame of `budget` points can hold: with too many lines even at the shortest waits (many outlines,
+/// long words), the shortest go.
+fn fitting(paths: &[Path], budget: usize) -> Vec<&Path> {
+    let mut paths: Vec<&Path> = paths.iter().filter(|p| !p.points.is_empty()).collect();
+    while paths.len() > 1 && least_cost(&paths) > budget * 9 / 10 {
+        let shortest = (0..paths.len()).min_by(|&a, &b| path_length(paths[a]).total_cmp(&path_length(paths[b]))).expect("paths are left");
+        paths.remove(shortest);
+    }
+    paths
+}
+
+/// How many of `paths` a frame of `budget` points leaves out (`trace` drops the shortest when crowded).
+pub fn left_out(paths: &[Path], budget: usize) -> usize {
+    paths.iter().filter(|p| !p.points.is_empty()).count() - fitting(paths, budget).len()
+}
+
+/// About the fewest points `paths` take outside their lit lines (shortest waits, drawn in the given order).
+fn least_cost(paths: &[&Path]) -> usize {
+    let mut fixed = 0;
+    let mut from = [0.0f32, 0.0];
+    for p in paths {
+        fixed += travel_points(from, p.points[0].0, 2);
+        fixed += if p.dots { p.points.len() * 4 + travel_between_dots(&p.points, 2) } else { 2 + corners(&p.points) + p.points.len() };
+        from = p.points[p.points.len() - 1].0;
+    }
+    fixed
+}
+
+fn path_length(p: &Path) -> f32 {
+    if p.dots { p.points.len() as f32 * 0.05 } else { p.points.windows(2).map(|w| dist(w[0].0, w[1].0)).sum() }
 }
 
 fn travel_points(a: [f32; 2], b: [f32; 2], wait: usize) -> usize {
@@ -509,10 +582,24 @@ mod tests {
     }
 
     /// A two-frame laser file: a square (one dark move, then lit), then a line and a lone dot.
-    fn files() -> LaserFiles {
+    /// ... and a picture of the mix: a bright disc on black.
+    fn files() -> LaserInputs {
         let square = vec![pt(-0.5, -0.5, true), pt(0.5, -0.5, false), pt(0.5, 0.5, false), pt(-0.5, 0.5, false), pt(-0.5, -0.5, false)];
         let second = vec![pt(-0.8, 0.0, true), pt(0.8, 0.0, false), pt(0.0, 0.6, true), pt(0.0, 0.6, false)];
-        LaserFiles::from([("test.ild".to_string(), Arc::new(vec![square, second]))])
+        let files = HashMap::from([("test.ild".to_string(), Arc::new(vec![square, second]))]);
+        let pictures = HashMap::from([(crate::MASTER_ID, Arc::new(outline::tests::disc(64, 36, [255, 120, 0])))]);
+        LaserInputs { files, pictures }
+    }
+
+    /// The test pattern fits a frame, keeps its corners' colours and reaches the scan area's corners.
+    #[test]
+    fn test_pattern_fits_and_shows_colours() {
+        let frame = trace(&test_pattern(), 30_000 / FPS as usize);
+        assert!(frame.len() <= 600, "{}", frame.len());
+        for c in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]] {
+            assert!(frame.iter().any(|p| p.rgb == c), "{c:?} corner");
+        }
+        assert!(frame.iter().any(|p| p.lit() && p.x == 1.0 && p.y == 1.0), "reaches the scan area's corner");
     }
 
     /// Text: one stroke a path, fitted to the shape's size and centred; lines stack; nothing for empty words.
@@ -573,6 +660,20 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// More lines than a frame can hold: the shortest go, the frame keeps its budget and the longest line.
+    #[test]
+    fn crowded_frames_drop_the_shortest_lines() {
+        let mut paths: Vec<Path> = (0..120).map(|i| {
+            let (x, y) = ((i % 12) as f32 * 0.16 - 0.9, (i / 12) as f32 * 0.18 - 0.9);
+            Path { points: vec![([x, y], [1.0; 3]), ([x + 0.05, y], [1.0; 3]), ([x + 0.05, y + 0.05], [1.0; 3])], closed: false, dots: false }
+        }).collect();
+        paths.push(Path { points: vec![([-1.0, 0.95], [1.0, 0.0, 0.0]), ([1.0, 0.95], [1.0, 0.0, 0.0])], closed: false, dots: false });
+        let frame = trace(&paths, 600);
+        assert!(frame.len() <= 600, "{}", frame.len());
+        assert!(frame.iter().any(|p| p.rgb == [1.0, 0.0, 0.0]), "the longest line stays");
+        assert!(left_out(&paths, 600) > 0 && left_out(&paths, 100_000) == 0);
     }
 
     /// A small budget makes lines coarser instead of dropping them; a big one spaces points at the finest step.

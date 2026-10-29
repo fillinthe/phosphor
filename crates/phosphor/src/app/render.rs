@@ -275,6 +275,18 @@ impl PhosphorApp {
                 engine.read_monitor(mwants.len() - 1, key as u64);
             }
         }
+        // Video trace shapes: their pictures, small, read back a few times a second.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (pics, due) = lasers.pictures_wanted(&comp.lasers, (comp.width, comp.height), now);
+            for (i, (src, w, h)) in pics.into_iter().enumerate() {
+                let key = crate::lasers::FIRST_KEY + i as u8;
+                mwants.push((key, src, w, h));
+                if due {
+                    engine.read_monitor(mwants.len() - 1, key as u64);
+                }
+            }
+        }
         let mkeys: Vec<u8> = mwants.iter().map(|m| m.0).collect();
         engine.request_monitors(mwants.iter().map(|m| (m.1, m.2, m.3)).collect());
         let held = std::mem::take(monitor_held);
@@ -331,6 +343,8 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::tracking::MONITOR_KEY => tracker.give(f.rgba, f.width, f.height, &comp.tracking),
                 crate::stream::MONITOR_KEY => stream.push(f.width, f.height, f.rgba),
+                #[cfg(not(target_arch = "wasm32"))]
+                k if (crate::lasers::FIRST_KEY..crate::lasers::FIRST_KEY + crate::lasers::MAX_PICTURES as u8).contains(&k) => lasers.give_picture(k, f.width, f.height, f.rgba),
                 k if (crate::app::recorders::FIRST_KEY..crate::app::recorders::FIRST_KEY + crate::app::recorders::MAX as u8).contains(&k) => {
                     if let Some(r) = recorders.get_mut((k - crate::app::recorders::FIRST_KEY) as usize) {
                         r.push(f.width, f.height, f.rgba);

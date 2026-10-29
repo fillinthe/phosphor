@@ -22,10 +22,12 @@ pub enum LaserShapeKind {
     Text,
     /// A laser show file (.ild) playing (`LaserShape::file`).
     File,
+    /// A layer's or the mix's picture traced into outlines (`LaserShape::source`).
+    Trace,
 }
 
 impl LaserShapeKind {
-    pub const ALL: [LaserShapeKind; 10] = [
+    pub const ALL: [LaserShapeKind; 11] = [
         LaserShapeKind::Line,
         LaserShapeKind::Circle,
         LaserShapeKind::Polygon,
@@ -36,6 +38,7 @@ impl LaserShapeKind {
         LaserShapeKind::Beams,
         LaserShapeKind::Text,
         LaserShapeKind::File,
+        LaserShapeKind::Trace,
     ];
 
     pub fn name(self) -> &'static str {
@@ -50,6 +53,7 @@ impl LaserShapeKind {
             LaserShapeKind::Beams => "Beams",
             LaserShapeKind::Text => "Text",
             LaserShapeKind::File => "Laser file",
+            LaserShapeKind::Trace => "Video trace",
         }
     }
 
@@ -63,6 +67,7 @@ impl LaserShapeKind {
             LaserShapeKind::Spiral => Some(("Turns", 1.0, 8.0)),
             LaserShapeKind::Beams => Some(("Beams", 1.0, 24.0)),
             LaserShapeKind::File => Some(("Frames a second", 1.0, 60.0)),
+            LaserShapeKind::Trace => Some(("Outlines", 1.0, 40.0)),
             LaserShapeKind::Line | LaserShapeKind::Circle | LaserShapeKind::Text => None,
         }
     }
@@ -74,6 +79,7 @@ impl LaserShapeKind {
             LaserShapeKind::Wave => Some("Height"),
             LaserShapeKind::Lissajous => Some("Up and down"),
             LaserShapeKind::Beams => Some("Ring size"),
+            LaserShapeKind::Trace => Some("Level"),
             _ => None,
         }
     }
@@ -138,6 +144,10 @@ pub struct LaserShape {
     pub font: LaserFont,
     /// Laser file shapes: the .ild file.
     pub file: String,
+    /// Video trace shapes: the layer, group or comp traced (0 = the whole mix), and whether the lines take the
+    /// picture's colours (off: the shape's colour).
+    pub source: u64,
+    pub picture_colors: bool,
 }
 
 /// Modulation (LFO, sound, beat…) of a shape's settings.
@@ -172,6 +182,8 @@ impl Default for LaserShape {
             text: "PHOSPHOR".into(),
             font: LaserFont::Simple,
             file: String::new(),
+            source: 0,
+            picture_colors: true,
         }
     }
 }
@@ -263,6 +275,9 @@ pub struct LaserProjector {
     pub color: [f32; 3],
     /// Audience safety: nothing is drawn below this height (-1 = the bottom of the scan area, no limit).
     pub floor: f32,
+    /// Draws the test pattern instead of its look (lining the laser up). Never saved.
+    #[serde(skip)]
+    pub test_pattern: bool,
 }
 
 impl Default for LaserProjector {
@@ -283,6 +298,7 @@ impl Default for LaserProjector {
             flip_y: false,
             color: [1.0; 3],
             floor: -1.0,
+            test_pattern: false,
         }
     }
 }

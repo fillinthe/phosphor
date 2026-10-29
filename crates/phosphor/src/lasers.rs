@@ -9,12 +9,18 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 
 use laser_dac::{Frame, FrameSession, FrameSessionConfig};
-use phosphor_engine::laser::{LaserFiles, LaserPoint, look_paths, project, trace};
+use phosphor_engine::laser::{LaserInputs, LaserPoint, Picture, look_paths, project, test_pattern, trace, trace_source};
 use phosphor_engine::{Lasers, ModInputs};
 
 pub use phosphor_engine::laser::FPS;
 /// Seconds between looks for controller boxes while the Lasers panel is open.
 const SCAN_EVERY: f64 = 4.0;
+/// Monitor keys for Video trace pictures: `FIRST_KEY + i` for the i-th source (up to `MAX_PICTURES`).
+pub const FIRST_KEY: u8 = 240;
+pub const MAX_PICTURES: usize = 8;
+/// Video trace pictures: this wide (the height follows the canvas), read this many times a second.
+const PICTURE_WIDTH: u32 = 128;
+const PICTURES_FPS: u32 = 25;
 
 /// A controller box found on the network or USB.
 #[derive(Clone, Debug, PartialEq)]
@@ -42,14 +48,21 @@ pub struct LaserOut {
     /// What each projector is doing, for the panel ("sending", "can't open: …").
     pub status: HashMap<u64, String>,
     /// Laser files' frames (read off the UI thread when a look first uses them) and what went wrong reading any.
-    files: Arc<Mutex<LaserFiles>>,
+    files: Arc<Mutex<HashMap<String, Arc<Vec<Vec<phosphor_engine::ilda::Point>>>>>>,
     reading: Arc<Mutex<HashMap<String, Option<String>>>>,
+    /// Video trace pictures, by source, and the sources last asked for (in tag order).
+    pictures: HashMap<u64, Arc<Picture>>,
+    asked: Vec<u64>,
+    /// When the Lasers panel last showed (its Designer traces pictures too).
+    shown: Option<web_time::Instant>,
     pacer: crate::pacing::FramePacer,
+    picture_pacer: crate::pacing::FramePacer,
 }
 
 impl LaserOut {
     /// Looks for controller boxes now and then (call while the Lasers panel shows). Off the UI thread.
     pub fn scan(&mut self, now: f64) {
+        self.shown = Some(web_time::Instant::now());
         if now - self.last_scan < SCAN_EVERY || self.scanning.swap(true, Ordering::AcqRel) {
             return;
         }
@@ -67,8 +80,9 @@ impl LaserOut {
         self.found.lock().unwrap().clone()
     }
 
-    /// The laser files `lasers` use, as read so far; files not read yet start reading (each once).
-    pub fn files(&mut self, lasers: &Lasers) -> LaserFiles {
+    /// What looks draw from: the laser files `lasers` use, as read so far (files not read yet start reading, each
+    /// once), and the latest Video trace pictures.
+    pub fn inputs(&mut self, lasers: &Lasers) -> LaserInputs {
         for path in lasers.looks.iter().flat_map(|l| &l.shapes).filter(|s| s.kind == phosphor_engine::LaserShapeKind::File && !s.file.is_empty()).map(|s| &s.file) {
             if self.reading.lock().unwrap().contains_key(path) {
                 continue;
@@ -86,7 +100,33 @@ impl LaserOut {
                 }
             });
         }
-        self.files.lock().unwrap().clone()
+        LaserInputs { files: self.files.lock().unwrap().clone(), pictures: self.pictures.clone() }
+    }
+
+    /// The pictures Video trace shapes need now (looks on armed projectors, and every look while the panel shows),
+    /// as (source, width, height) monitors (keys `FIRST_KEY + i`), and whether to read them back this frame.
+    pub fn pictures_wanted(&mut self, lasers: &Lasers, size: (u32, u32), now: f64) -> (Vec<(u64, u32, u32)>, bool) {
+        let previewing = self.shown.is_some_and(|t| t.elapsed().as_secs_f32() < 0.5);
+        let in_use = |look: u64| previewing || lasers.armed && lasers.projectors.iter().any(|p| p.enabled && !p.test_pattern && lasers.look(p.look).is_some_and(|l| l.id == look));
+        let mut sources: Vec<u64> = Vec::new();
+        for s in lasers.looks.iter().filter(|l| in_use(l.id)).flat_map(|l| &l.shapes).filter(|s| s.enabled && s.kind == phosphor_engine::LaserShapeKind::Trace) {
+            let src = trace_source(s);
+            if !sources.contains(&src) && sources.len() < MAX_PICTURES {
+                sources.push(src);
+            }
+        }
+        self.pictures.retain(|src, _| sources.contains(src));
+        self.asked = sources.clone();
+        let h = (PICTURE_WIDTH * size.1 / size.0.max(1)).max(2);
+        let due = !sources.is_empty() && self.picture_pacer.due(now, PICTURES_FPS);
+        (sources.into_iter().map(|s| (s, PICTURE_WIDTH, h)).collect(), due)
+    }
+
+    /// A picture read back (monitor key `key`).
+    pub fn give_picture(&mut self, key: u8, width: u32, height: u32, rgba: Vec<u8>) {
+        if let Some(&src) = key.checked_sub(FIRST_KEY).and_then(|i| self.asked.get(i as usize)) {
+            self.pictures.insert(src, Arc::new(Picture { width: width as usize, height: height as usize, rgba }));
+        }
     }
 
     /// Why a laser file couldn't be read (None: fine, or still reading).
@@ -164,18 +204,19 @@ impl LaserOut {
             return;
         }
         let master = lasers.master * (1.0 - blackout.clamp(0.0, 1.0));
-        let files = self.files(lasers);
+        let inputs = self.inputs(lasers);
         for p in &lasers.projectors {
             let Some(live) = self.live.get(&p.id) else { continue };
-            let points = frame_for(lasers, p, t, mods, master, &files);
+            let points = frame_for(lasers, p, t, mods, master, &inputs);
             live.session.send_frame(Frame::new(points.iter().map(to_dac).collect()));
         }
     }
 }
 
-/// What projector `p` draws at `t` seconds: its look traced to fit its points a second, then placed and dimmed.
-pub fn frame_for(lasers: &Lasers, p: &phosphor_engine::LaserProjector, t: f64, mods: &ModInputs, master: f32, files: &LaserFiles) -> Vec<LaserPoint> {
-    let paths = lasers.look(p.look).map(|l| look_paths(l, t, mods, files)).unwrap_or_default();
+/// What projector `p` draws at `t` seconds: its look (or the test pattern) traced to fit its points a second, then
+/// placed and dimmed.
+pub fn frame_for(lasers: &Lasers, p: &phosphor_engine::LaserProjector, t: f64, mods: &ModInputs, master: f32, inputs: &LaserInputs) -> Vec<LaserPoint> {
+    let paths = if p.test_pattern { test_pattern() } else { lasers.look(p.look).map(|l| look_paths(l, t, mods, inputs)).unwrap_or_default() };
     project(&trace(&paths, (p.pps / FPS) as usize), p, master)
 }
 

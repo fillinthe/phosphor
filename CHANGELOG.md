@@ -19,6 +19,12 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Italic, Gothic), the kind of letters lasers draw cleanly.
 - Laser show files (.ild, ILDA) as part of a look: they play at their own speed, placed, sized, spun and drawn on
   like any shape, mixed with your own shapes and words.
+- Video trace: any layer, or the whole mix, traced live into laser outlines in the picture's colours. Bright shapes
+  on dark work best: a silhouette, a logo, a camera with Remove background.
+- A test pattern per projector for lining lasers up: the edge of its area, a circle, a cross, an arrow pointing up
+  and a corner in each colour to check flips and colour balance.
+- When a look has more lines than a laser can draw in one frame, the shortest are left out (the Designer says how
+  many) instead of the laser slowing down.
 - Each projector has its look, brightness, size, position, rotation, flips and colour balance.
 - Safety first: lasers light up only while armed, every project opens with them off, Blackout and closing Phosphor
   turn them off, and each projector has a floor (nothing drawn below it, to keep beams off the audience).

@@ -9,7 +9,7 @@ pub const FPS: u32 = 30;
 /// The movie's size: square, as a laser's scan area is.
 pub const SIZE: u32 = 1024;
 
-pub use phosphor_engine::ilda::{Point, default_palette, parse};
+pub use phosphor_engine::ilda::{Point, parse};
 
 pub fn is_ilda(path: &str) -> bool {
     path.rsplit_once('.').is_some_and(|(_, e)| e.eq_ignore_ascii_case("ild"))
@@ -123,7 +123,7 @@ mod tests {
         let frames = parse(&f).unwrap();
         assert_eq!(frames[0][0].rgb, [0, 255, 0]);
         assert_eq!(frames[1][0].rgb, [1, 2, 3]);
-        let p = default_palette();
+        let p = phosphor_engine::ilda::default_palette();
         assert_eq!((p.len(), p[0], p[16], p[40], p[48], p[56]), (64, [255, 0, 0], [255, 255, 0], [0, 0, 255], [255, 0, 255], [255, 255, 255]));
     }
 
