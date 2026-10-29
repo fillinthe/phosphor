@@ -181,11 +181,11 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             let colour = if *kind == PortKind::Number { port_colour(*kind, false).gamma_multiply(0.8) } else { Color32::from_gray(170) };
             painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), colour);
         }
-        // The settings: drawn by the graph (they paint with their own clip: only when the whole body is on the canvas).
+        // The settings: drawn by the graph, clipped to the canvas (a box half off the canvas shows what fits).
         let body_h = graph.body_height(n);
         if body_h > 0.0 {
             let body = egui::Rect::from_min_size(egui::pos2(r.min.x + 6.0, r.min.y + TITLE_H + ins as f32 * INPUT_H + 2.0), egui::vec2(r.width() - 12.0, body_h));
-            if area.contains_rect(body) {
+            if area.intersects(body) {
                 let inner = ui
                     .scope_builder(egui::UiBuilder::new().max_rect(body).id_salt(("body", n)), |ui| {
                         ui.set_clip_rect(area);

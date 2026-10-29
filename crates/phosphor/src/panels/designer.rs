@@ -71,12 +71,15 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     // Event boxes pick a target: the list once per frame, only while one exists.
     let targets = if st.comp.modulators.iter().any(|m| m.designer && m.event.is_some()) { crate::control::all_targets(&st.comp) } else { Vec::new() };
-    let State { comp, layer_textures, box_presets, notice, .. } = st;
+    let State { comp, layer_textures, box_presets, notice, designer_undo, .. } = st;
     let net = comp.comp(cid).and_then(|c| c.network.clone()).unwrap_or_default();
+    let before = net.clone();
+    let undo_now = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z) && !i.modifiers.shift);
     if net.at(&path).is_none() {
         path.clear();
     }
     let name = comp.comp(cid).map_or(String::new(), |c| c.name.clone());
+    let mut undo_box_change = false;
     crate::ui::toolbar(ui, |ui| {
         let top = format!("{} {name}", icon::GRAPH);
         if path.is_empty() {
@@ -94,13 +97,37 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
                 path.truncate(i + 1);
             }
         }
+        let steps = designer_undo.get(&cid).map_or(0, Vec::len);
+        if crate::ui::command_if(ui, steps > 0, label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text("The boxes and wires as they were before the last change (Cmd-Z on the canvas)").clicked() {
+            undo_box_change = true;
+        }
         help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · double-click a box of boxes to build inside it");
     });
     let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id)).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
-    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, action: None, targets, restart: None, pick_table: None };
-    let changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
-    let View { net, resync, go, error, preset, action, restart, pick_table, .. } = view;
+    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, action: None, targets, restart: None, pick_table: None, hovered: false };
+    let canvas_changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
+    view.hovered = ui.ui_contains_pointer();
+    let View { net, resync, go, error, preset, action, restart, pick_table, hovered, .. } = view;
+    // Undo: the network as it was before the last change (kept per comp, 50 deep).
+    if (undo_box_change || (undo_now && hovered))
+        && let Some(prev) = designer_undo.get_mut(&cid).and_then(Vec::pop)
+    {
+        if let Some(c) = comp.comp_mut(cid) {
+            c.network = Some(prev);
+        }
+        comp.sync_network(cid);
+        ui.ctx().data_mut(|d| d.insert_temp(path_id, path.clone()));
+        return;
+    }
+    let changed = canvas_changed;
+    if changed || resync {
+        let stack = designer_undo.entry(cid).or_default();
+        stack.push(before);
+        if stack.len() > 50 {
+            stack.remove(0);
+        }
+    }
     if let Some(mid) = restart {
         st.data.restart(mid);
     }
@@ -206,6 +233,8 @@ struct View<'a> {
     restart: Option<u64>,
     /// A Table box wants its file picked (its modulator).
     pick_table: Option<u64>,
+    /// The mouse is over the canvas (Cmd-Z undoes a box change then).
+    hovered: bool,
 }
 
 impl View<'_> {
@@ -273,7 +302,8 @@ impl View<'_> {
             }
         });
         if m.signal.source == ModSource::Hand {
-            Level::percent(&mut m.value, "Value").default(0.5).width(width).show(ui);
+            // (Mappable: right-click › Learn maps a MIDI / OSC knob to it.)
+            Level::percent(&mut m.value, "Value").default(0.5).width(width).target(ControlTarget::Modulator(mid)).show(ui);
         } else if m.signal.source.is_audio() {
             hint(ui, "Follows the sound Phosphor hears (Audio)");
         } else if m.signal.sync {
@@ -425,6 +455,7 @@ impl Graph for View<'_> {
             ),
             NodeKind::Group => format!("Box {id}"),
             NodeKind::Input => format!("In {}", self.level().map_or(0, |l| l.input_boxes().iter().position(|x| *x == id).unwrap_or(0)) + 1),
+            NodeKind::NumberInput => format!("Number {}", self.level().map_or(0, |l| l.number_input_boxes().iter().position(|x| *x == id).unwrap_or(0)) + 1),
             other => other.name().to_string(),
         }
     }
@@ -439,7 +470,7 @@ impl Graph for View<'_> {
             Some(NodeKind::Picture | NodeKind::Input) => crate::theme::Hue::Media.color(),
             Some(NodeKind::Effect) => crate::theme::Hue::Effect.color(),
             Some(NodeKind::Mix) => crate::theme::Hue::Live.color(),
-            Some(NodeKind::Number) => crate::theme::Hue::Control.color(),
+            Some(NodeKind::Number | NodeKind::NumberInput) => crate::theme::Hue::Control.color(),
             Some(NodeKind::Group) => crate::theme::Hue::Text.color(),
             _ => accent(),
         }
@@ -480,6 +511,7 @@ impl Graph for View<'_> {
                 METER_H + ROW_H + PARAM_H * (2.0 + data + event) + 6.0
             }
             NodeKind::Output | NodeKind::Input => pic,
+            NodeKind::NumberInput => METER_H + 6.0,
         }
     }
     fn body(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
@@ -552,6 +584,10 @@ impl Graph for View<'_> {
                 hint(ui, format!("{boxes} boxes inside · double-click to build inside"));
             }
             NodeKind::Input => self.preview(ui, n.picture()),
+            NodeKind::NumberInput => {
+                let value = n.modulator().and_then(|m| self.shared.iter().find(|(k, _)| *k == m)).map_or(0.0, |x| x.1);
+                ui.add(crate::ui::meter(value).desired_width(width).desired_height(METER_H)).on_hover_text("The number wired into the box, now");
+            }
             NodeKind::Output => {
                 let shown = self.level().and_then(|l| l.shown()).and_then(|s| self.node(s)).and_then(|n| n.picture());
                 self.preview(ui, shown);
@@ -586,22 +622,18 @@ impl Graph for View<'_> {
         self.resync = true;
     }
     fn duplicate(&mut self, id: u32) {
-        let Some(n) = self.node(id).cloned() else { return };
-        if let Some(l) = self.level_mut() {
-            let copy = l.add(n.kind, [n.pos[0] + 24.0, n.pos[1] + 24.0]);
-            // A box of boxes is copied with everything inside (its layers come fresh).
-            if let (Some(inner), Some(c)) = (n.inner, l.node_mut(copy)) {
-                let mut inner = inner;
-                inner.clear_parts();
-                c.inner = Some(inner);
-            }
+        // (The comp copies the box with its settings; a box of boxes with everything inside.)
+        self.store();
+        let path = self.path.clone();
+        if self.comp.duplicate_box(self.cid, &path, id).is_some() {
+            self.reload();
         }
         self.resync = true;
     }
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool {
         let inside = !self.path.is_empty();
         let has_output = self.level().is_some_and(|l| l.nodes.iter().any(|n| n.kind == NodeKind::Output));
-        let kinds = NodeKind::ALL.into_iter().filter(|k| *k != NodeKind::Output || !has_output).chain(inside.then_some(NodeKind::Input));
+        let kinds = NodeKind::ALL.into_iter().filter(|k| *k != NodeKind::Output || !has_output).chain(inside.then_some(NodeKind::Input)).chain(inside.then_some(NodeKind::NumberInput));
         for kind in kinds {
             if crate::ui::command(ui, kind.name()).on_hover_text(kind.about()).clicked() {
                 if let Some(l) = self.level_mut() {
@@ -660,7 +692,19 @@ impl Graph for View<'_> {
         false
     }
     fn extra_menu(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
-        if self.node(id).is_none_or(|n| n.kind != NodeKind::Group) {
+        let Some(n) = self.node(id).cloned() else { return false };
+        if !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput)
+            && crate::ui::command(ui, label(icon::PACKAGE, "Wrap in a box")).on_hover_text("Puts this box inside a new box of boxes, its wires kept (then build around it inside)").clicked()
+        {
+            let inputs: Vec<PortKind> = self.comp.node_inputs(&n).iter().map(|(_, k)| *k).collect();
+            if let Some(l) = self.level_mut() {
+                l.wrap(id, &inputs);
+            }
+            self.resync = true;
+            ui.close();
+            return true;
+        }
+        if n.kind != NodeKind::Group {
             return false;
         }
         if crate::ui::command(ui, label(icon::ARROW_SQUARE_IN, "Open")).on_hover_text("Build inside it (or double-click its title)").clicked() {
