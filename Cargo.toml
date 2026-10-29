@@ -19,3 +19,6 @@ eframe = { path = "vendor/eframe" }
 # applied when a galley is laid out) and text fields kept untranslated (egui text_edit/builder.rs).
 egui = { path = "vendor/egui" }
 epaint = { path = "vendor/epaint" }
+# egui_dock with one patch ("PHOSPHOR PATCH", widgets/dock_area/show/leaf.rs): a tab's close X takes the tab's text
+# colour (black on the focused tab's colour fill). Re-apply when upgrading egui_dock.
+egui_dock = { path = "vendor/egui_dock" }
