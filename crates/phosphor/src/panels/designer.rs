@@ -12,7 +12,20 @@ use phosphor_engine::{ChainMode, Composition, DesignerNode, ModSource, Network, 
 
 use super::*;
 use crate::presets::PresetStore;
-use crate::ui::nodes::{Graph, node_canvas};
+use crate::ui::nodes::{Graph, POINTS_COLOUR, node_canvas};
+
+/// The Points submenu of the canvas: (name, what the box gets, true = a generator on a Picture box, false = an
+/// effect on an Effect box).
+const POINTS_BOXES: [(&str, &str, bool); 8] = [
+    ("Shape", "pts_shape", true),
+    ("Model (an OBJ file)…", "model", true),
+    ("Relief (a picture as points)", "pts_relief", false),
+    ("Move", "pts_move", false),
+    ("Particles", "pts_particles", false),
+    ("Dots", "pts_dots", false),
+    ("Lines", "pts_lines", false),
+    ("Mesh", "pts_mesh", false),
+];
 
 const BOX_W: f32 = 230.0;
 const ROW_H: f32 = 26.0;
@@ -42,6 +55,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     let path_id = egui::Id::new(("designer_path", cid));
     let mut path: Vec<u32> = ui.ctx().data(|d| d.get_temp(path_id)).unwrap_or_default();
     let shared = st.mod_inputs.shared;
+    let now = ui.ctx().input(|i| i.time);
     let State { comp, layer_textures, box_presets, notice, .. } = st;
     let net = comp.comp(cid).and_then(|c| c.network.clone()).unwrap_or_default();
     if net.at(&path).is_none() {
@@ -69,9 +83,9 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     });
     let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id)).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
-    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None };
+    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, action: None };
     let changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
-    let View { net, resync, go, error, .. } = view;
+    let View { net, resync, go, error, preset, action, .. } = view;
     if let Some(e) = error {
         *notice = Some(e);
     }
@@ -86,6 +100,26 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
             c.network = Some(net);
         }
         comp.sync_network(cid);
+    }
+    // A box added from the Points menu: its shader, now that it has its layer (a Model box asks for its file).
+    let mut action = action;
+    if let Some((id, shader, generator)) = preset {
+        let part = comp.comp(cid).and_then(|c| c.network.as_ref()).and_then(|n| n.at(&path)).and_then(|l| l.node(id)).and_then(|n| n.parts.first().copied());
+        let fx = (!generator).then(|| comp.new_effect(shader)).flatten();
+        if let Some(l) = part.and_then(|p| comp.layer_mut(p)) {
+            if shader == crate::models::FORMAT {
+                action = Some((l.id, super::layers::LayerAction::OpenModel));
+            } else if generator {
+                l.set_generator(shader);
+            } else if let Some(fx) = fx {
+                l.effects = vec![fx];
+            }
+        }
+        comp.sync_network(cid);
+    }
+    // A box's source picker asked for a file or the browser.
+    if let Some((layer, a)) = action {
+        super::layers::apply_layer_action(st, layer, a, now);
     }
 }
 
@@ -106,6 +140,10 @@ struct View<'a> {
     /// Open this network (a box of boxes was double-clicked, or a crumb).
     go: Option<Vec<u32>>,
     error: Option<String>,
+    /// A box just added from the Points menu: (box, shader id, true = a generator) to set once it has its layer.
+    preset: Option<(u32, &'static str, bool)>,
+    /// What a box's source picker asked for (a file, the browser), for its layer.
+    action: Option<(u64, super::layers::LayerAction)>,
 }
 
 impl View<'_> {
@@ -241,6 +279,9 @@ impl Graph for View<'_> {
         self.node(id).map_or_else(String::new, |n| n.kind.about().to_string())
     }
     fn colour(&self, id: u32) -> Color32 {
+        if self.node(id).is_some_and(|n| self.comp.node_output(n) == PortKind::Points) {
+            return POINTS_COLOUR;
+        }
         match self.node(id).map(|n| n.kind) {
             Some(NodeKind::Picture | NodeKind::Input) => crate::theme::Hue::Media.color(),
             Some(NodeKind::Effect) => crate::theme::Hue::Effect.color(),
@@ -257,7 +298,7 @@ impl Graph for View<'_> {
         self.node(id).is_some_and(|n| n.kind != NodeKind::Output)
     }
     fn output_kind(&self, id: u32) -> PortKind {
-        self.node(id).map_or(PortKind::Picture, |n| n.kind.output())
+        self.node(id).map_or(PortKind::Picture, |n| self.comp.node_output(n))
     }
     fn removable(&self, id: u32) -> bool {
         self.has_output(id)
@@ -287,7 +328,10 @@ impl Graph for View<'_> {
                 self.preview(ui, n.parts.first().copied());
                 let before = n.parts.first().and_then(|p| self.comp.layer(*p)).map(|l| l.source.clone());
                 if let Some(l) = n.parts.first().and_then(|p| self.comp.layer_mut(*p)) {
-                    super::layers::source_picker(ui, l, &self.feeds);
+                    let id = l.id;
+                    if let Some(a) = super::layers::source_picker(ui, l, &self.feeds) {
+                        self.action = Some((id, a));
+                    }
                     // A new generator has other settings: its number inputs change.
                     return before.as_ref() != Some(&l.source);
                 }
@@ -396,6 +440,26 @@ impl Graph for View<'_> {
                 self.resync = true;
                 return true;
             }
+        }
+        let mut added = false;
+        ui.menu_button("Points", |ui| {
+            hint(ui, "Points in space: a Shape or a Relief makes them, Move and Particles change them, Dots, Lines or Mesh draw them (camera and light inside)");
+            for (name, shader, generator) in POINTS_BOXES {
+                let about = shaders::info(shader).1;
+                if crate::ui::command(ui, name).on_hover_text(about).clicked() {
+                    let kind = if generator { NodeKind::Picture } else { NodeKind::Effect };
+                    if let Some(l) = self.level_mut() {
+                        let id = l.add(kind, at);
+                        self.preset = Some((id, shader, generator));
+                    }
+                    self.resync = true;
+                    added = true;
+                    ui.close();
+                }
+            }
+        });
+        if added {
+            return true;
         }
         self.boxes.ensure_loaded();
         let saved: Vec<(String, String)> = self.boxes.builtins().chain(self.boxes.user.iter().cloned()).map(|p| (p.name, p.json)).collect();

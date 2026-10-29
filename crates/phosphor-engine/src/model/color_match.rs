@@ -72,7 +72,7 @@ impl Composition {
         }
         values[18] = n as f32;
         let id = self.new_id();
-        let fx = EffectState { id, effect: desc.id.to_string(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() };
+        let fx = EffectState { id, effect: desc.id.to_string(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 };
         self.effects_mut(owner)?.push(fx);
         Some(id)
     }
@@ -81,7 +81,7 @@ impl Composition {
     pub fn add_color_match(&mut self, owner: u64, from: [(f32, f32); 3], to: [(f32, f32); 3]) -> Option<u64> {
         let desc = crate::shaders::effect("color_match")?;
         let id = self.new_id();
-        let fx = EffectState { id, effect: desc.id.to_string(), enabled: true, values: match_values(from, to), mix: 1.0, mods: Vec::new(), blend: Default::default() };
+        let fx = EffectState { id, effect: desc.id.to_string(), enabled: true, values: match_values(from, to), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 };
         self.effects_mut(owner)?.push(fx);
         Some(id)
     }

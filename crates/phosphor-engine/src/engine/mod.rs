@@ -86,8 +86,10 @@ struct LayerResources {
     /// RGB copies of incoming/outgoing (when YUV) and the blended result.
     trans: [Option<Target>; 3],
     fx: [Option<Target>; 3],
-    /// Reduced-size target for Rutt-Etra; its scale sets the apparent line width.
+    /// Reduced-size target for Rutt-Etra (and Points: Lines); its scale sets the apparent line width.
     rutt: Option<Target>,
+    /// What a points render (dots, mesh) draws into: the canvas size, whatever size the points came at.
+    pts: Option<Target>,
     /// Previous outputs of history effects (trails), per effect id, ping-ponged by frame parity.
     history: HashMap<u64, [Option<Target>; 2]>,
     /// Multi-pass shader buffers, per effect id (or `GENERATOR_KEY` for the layer's source).
@@ -214,7 +216,7 @@ mod timing;
 #[cfg(test)]
 mod gpu_tests;
 
-use fit::{fit_transform, push_fit_copy};
+use fit::{fit_transform, push_fit_copy, push_raw_copy};
 use mesh::{MeshCache, MeshDraw, hash_points};
 
 /// Per-frame timing reported back to the app.
@@ -253,6 +255,8 @@ pub struct Engine {
     accum: [Option<Target>; 4],
     /// What the mix and effect chains draw into: 8-bit, or 16-bit with deep colour.
     mix_format: wgpu::TextureFormat,
+    /// The size of the comp being mixed (what a points render draws at).
+    canvas: (u32, u32),
     /// Each comp's own stack (at its size) when comps are drawn apart; swapped into `accum` while it's mixed.
     comp_accum: HashMap<u64, [Option<Target>; 4]>,
     output: Option<Target>,
@@ -339,6 +343,7 @@ impl Engine {
             layers: HashMap::new(),
             accum: [None, None, None, None],
             mix_format: crate::gpu::FORMAT,
+            canvas: (1920, 1080),
             comp_accum: HashMap::new(),
             output: None,
             output_generation: 0,
@@ -1034,6 +1039,7 @@ impl Engine {
     /// Returns which accum holds the result, and how many layers were drawn.
     fn mix_stack(&mut self, comp: &Composition, only: Option<u64>, any_solo: bool, feeds: &mut HashMap<u64, wgpu::TextureView>, ctx: &MixCtx, passes: &mut Vec<Pass>) -> (Option<usize>, usize) {
         let (w, h) = ctx.canvas;
+        self.canvas = (w, h);
         let (time, mods, thumb_h, wanted, monitors) = (ctx.time, ctx.mods, ctx.thumb_h, ctx.wanted, ctx.monitors);
         let device = self.gpu.device.clone();
         let mut current: Option<usize> = None;
@@ -1095,7 +1101,7 @@ impl Engine {
                                 && let Some(d) = crate::shaders::effect(&t.effect)
                             {
                                 let p = t.progress(time);
-                                let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new(), blend: Default::default() };
+                                let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new(), blend: Default::default(), other: 0 };
                                 frame = self.apply_effects(layer.id ^ TRANSITION_IN, std::slice::from_ref(&fx), frame, time, mods, &comp.layers, passes);
                                 out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, passes);
                             }
@@ -1133,10 +1139,21 @@ impl Engine {
             };
             self.push_thumbnail(layer.id, layer.fit, &frame, (w, h), thumb_h, passes);
             if wanted.contains(&layer.id) {
+                // Points keep their own size and precision (a model's vertices aren't resampled into the canvas).
+                let data = layer.is_data();
+                let (fw, fh, fmt) = if data {
+                    let (a, b) = frame.size();
+                    (a, b, crate::gpu::DATA_FORMAT)
+                } else {
+                    (w, h, crate::gpu::FORMAT)
+                };
                 let res = self.layers.entry(layer.id).or_default();
-                Target::ensure(&mut res.feed, &device, "layer feed", w, h);
+                Target::ensure_format(&mut res.feed, &device, "layer feed", fw, fh, fmt);
                 let view = res.feed.as_ref().unwrap().view.clone();
-                push_fit_copy(view.clone(), &frame, (w, h), layer.fit, (w, h), passes);
+                match (&frame, data) {
+                    (Frame::Rgb { view: from, .. }, true) => push_raw_copy(view.clone(), from.clone(), (fw, fh), passes),
+                    _ => push_fit_copy(view.clone(), &frame, (fw, fh), layer.fit, (fw, fh), passes),
+                }
                 feeds.insert(layer.id, view);
             } else if let Some(res) = self.layers.get_mut(&layer.id) {
                 res.feed = None;

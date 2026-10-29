@@ -19,6 +19,9 @@ pub struct EffectState {
     /// How the effect's result lands on what went into it (Normal = the plain dry / wet mix).
     #[serde(default)]
     pub blend: BlendMode,
+    /// Another layer whose picture the effect uses as well (a points render's colours), by id; 0 = none.
+    #[serde(default)]
+    pub other: u64,
 }
 
 fn default_transition_effect() -> String {
@@ -431,6 +434,15 @@ impl Default for LayerState {
 }
 
 impl LayerState {
+    /// Its pictures hold points (a Points shape, or a points effect in its chain): the engine keeps them 16-bit
+    /// float and at their own size (see points.wgsl).
+    pub fn is_data(&self) -> bool {
+        matches!(&self.source, SourceSpec::Generator(id) if crate::shaders::is_points(id))
+            || matches!(&self.source, SourceSpec::Live { format, .. } if format == crate::shaders::MODEL_POINTS)
+            || self.effects.iter().any(|e| e.enabled && crate::shaders::is_points(&e.effect))
+    }
+
+
     /// Playback speed: the speed slider, or with BPM sync the speed that makes the movie (or its loop) last
     /// `sync_beats` beats at `bpm`.
     pub fn play_rate(&self, duration: Option<f64>, bpm: f32) -> f32 {

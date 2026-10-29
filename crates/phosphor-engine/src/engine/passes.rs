@@ -35,7 +35,8 @@ impl Engine {
                 let device = &self.gpu.device;
                 let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
-                Target::ensure(slot, device, "generator", w, h);
+                let format = if shaders::is_points(desc.id) { crate::gpu::DATA_FORMAT } else { crate::gpu::FORMAT };
+                Target::ensure_format(slot, device, "generator", w, h, format);
                 let target = slot.as_ref().unwrap();
                 // Built-in generators' Speed: smooth when changed (`SpeedPhase`).
                 let mut params = resolve_params(desc, values, value_mods, mods);
@@ -69,19 +70,25 @@ impl Engine {
             }
             SourceSpec::Feed { id, before_fx, .. } => {
                 // Copied into the layer's own texture, so a layer can feed on itself (feedback) safely.
-                let (view, fw, fh) = if *id == MASTER_ID {
-                    self.output.as_ref().map(|t| (t.view.clone(), t.width, t.height))?
+                let (view, fw, fh, format) = if *id == MASTER_ID {
+                    self.output.as_ref().map(|t| (t.view.clone(), t.width, t.height, crate::gpu::FORMAT))?
                 } else {
                     let res = self.layers.get(id)?;
                     let t = if *before_fx { res.feed_pre.as_ref() } else { res.feed.as_ref() };
-                    t.map(|t| (t.view.clone(), t.width, t.height))?
+                    t.map(|t| (t.view.clone(), t.width, t.height, t.texture.format()))?
                 };
+                // Points (a data feed) come over as they are: their own size, still float.
+                let (w, h) = if format == crate::gpu::DATA_FORMAT { (fw, fh) } else { (w, h) };
                 let device = &self.gpu.device;
                 let res = self.layers.entry(layer_id).or_default();
                 let slot = if outgoing { &mut res.generator_out } else { &mut res.generator };
-                Target::ensure(slot, device, "feed copy", w, h);
+                Target::ensure_format(slot, device, "feed copy", w, h, format);
                 let target = slot.as_ref().unwrap().view.clone();
-                push_fit_copy(target.clone(), &Frame::Rgb { view, w: fw, h: fh }, (w, h), crate::FitMode::Stretch, (w, h), passes);
+                if format == crate::gpu::DATA_FORMAT {
+                    push_raw_copy(target.clone(), view, (w, h), passes);
+                } else {
+                    push_fit_copy(target.clone(), &Frame::Rgb { view, w: fw, h: fh }, (w, h), crate::FitMode::Stretch, (w, h), passes);
+                }
                 Some(Frame::Rgb { view: target, w, h })
             }
             SourceSpec::Image { .. } | SourceSpec::Movie { .. } | SourceSpec::Live { .. } | SourceSpec::Text(_) => {
@@ -342,15 +349,19 @@ impl Engine {
         let chain: Vec<_> = effects
             .into_iter()
             .filter(|e| e.enabled)
-            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix, e.blend)))
+            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix, e.blend, e.other)))
             .collect();
         if chain.is_empty() {
             return frame;
         }
         let (w, h) = frame.size();
+        // What comes out: the input's size, or the canvas once a points render has drawn.
+        let mut out = (w, h);
+        let canvas = self.canvas;
         let device = &self.gpu.device;
         let res = self.layers.entry(res_id).or_default();
-        let format = self.mix_format;
+        // Points stay 16-bit float through the chain.
+        let format = if chain.iter().any(|c| shaders::is_points(c.0.id)) { crate::gpu::DATA_FORMAT } else { self.mix_format };
         for slot in &mut res.fx {
             Target::ensure_format(slot, device, "fx", w, h, format);
         }
@@ -378,7 +389,7 @@ impl Engine {
             }
         };
         let parity = (self.frame_index % 2) as usize;
-        for (desc, fx_id, values, param_mods, mix, blend) in chain {
+        for (desc, fx_id, values, param_mods, mix, blend, other) in chain {
             let external = shaders::is_external(desc.entry);
             if !external && !self.ensure_module(desc.entry) {
                 continue;
@@ -428,7 +439,30 @@ impl Engine {
                         let (rows, cols) = rutt_grid(u.p[0][0], u.p[0][1], 3);
                         (u.p[0][0], u.p[0][1]) = (rows, cols);
                     }
-                    let target = if entry == "fs_rutt" || entry == "fs_rutt_points" {
+                    let target = if shaders::points_render(entry) {
+                        // A points render: the grid it reads (or every texel in order), its colours from another
+                        // layer's picture, drawn at the canvas size (lines at a reduced size: their width).
+                        let listed = params.get(13).copied().unwrap_or(0.0) > 0.5;
+                        let (cols, rows) = if listed { (w, (h * w).min(shaders::POINTS_BUDGET) / w.max(1)) } else { shaders::points_grid(params.first().copied().unwrap_or(1000.0), w as f32 / h.max(1) as f32) };
+                        u.p[14] = [w as f32, h as f32, cols as f32, rows as f32];
+                        tex2 = (other != 0).then(|| self.layers.get(&other).and_then(|r| r.feed.as_ref()).map(|t| t.view.clone())).flatten();
+                        if tex2.is_none() {
+                            u.p[2][0] = 0.0;
+                        }
+                        let res = self.layers.entry(res_id).or_default();
+                        let (tw, th) = if entry == "fs_pts_lines" {
+                            let scale = params.get(1).copied().unwrap_or(1.0).max(1.0);
+                            let size = ((canvas.0 as f32 / scale) as u32, (canvas.1 as f32 / scale) as u32);
+                            Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", size.0, size.1);
+                            size
+                        } else {
+                            Target::ensure_format(&mut res.pts, &self.gpu.device, "points", canvas.0, canvas.1, self.mix_format);
+                            canvas
+                        };
+                        u.resolution = [tw.max(1) as f32, th.max(1) as f32];
+                        out = canvas;
+                        if entry == "fs_pts_lines" { res.rutt.as_ref().unwrap().view.clone() } else { res.pts.as_ref().unwrap().view.clone() }
+                    } else if entry == "fs_rutt" || entry == "fs_rutt_points" {
                         let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
                         let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
                         // Optional displacement from another layer's picture (its live thumbnail).
@@ -440,12 +474,12 @@ impl Engine {
                         Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", rw, rh);
                         u.resolution = [rw.max(1) as f32, rh.max(1) as f32];
                         res.rutt.as_ref().unwrap().view.clone()
-                    } else if entry == "fx_trails" || entry == "fx_slitscan" || entry == "fx_flow_keep" {
+                    } else if entry == "fx_trails" || entry == "fx_slitscan" || entry == "fx_flow_keep" || entry == "fx_pts_particles" {
                         // History effects write one slot while reading the other.
                         let res = self.layers.entry(res_id).or_default();
                         let slots = res.history.entry(fx_id).or_default();
                         for slot in slots.iter_mut() {
-                            Target::ensure(slot, &self.gpu.device, "history", w, h);
+                            Target::ensure_format(slot, &self.gpu.device, "history", w, h, format);
                         }
                         tex1 = Some(slots[1 - parity].as_ref().unwrap().view.clone());
                         slots[parity].as_ref().unwrap().view.clone()
@@ -497,7 +531,7 @@ impl Engine {
                 input_idx = Some(i);
             }
         }
-        Frame::Rgb { view: input, w, h }
+        Frame::Rgb { view: input, w: out.0, h: out.1 }
     }
 }
 

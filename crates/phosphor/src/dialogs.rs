@@ -28,6 +28,8 @@ pub enum Purpose {
     RelinkFolder,
     /// A 3D model (OBJ) for this mapping surface.
     Model3d(u64),
+    /// A 3D model (OBJ) whose vertices this layer shows as points.
+    ModelPoints(u64),
     /// A stage photo for this output (mapping editor background).
     StagePhoto(u64),
     /// A picture or movie for this mapping slice to show (`Composition::show_file_on_slice`).

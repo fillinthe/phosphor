@@ -626,6 +626,56 @@ impl PhosphorApp {
                 self.switch_workspace(3);
                 continue;
             }
+            if name == "points" {
+                // Designer phase 4: a sphere of points, turned by an LFO, drawn as dots coloured by a plasma.
+                use phosphor_engine::NodeKind;
+                let comp = &mut self.state.comp;
+                let cid = comp.add_comp("Points");
+                comp.start_network(cid);
+                let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+                net.nodes.iter_mut().find(|n| n.id == pic).unwrap().pos = [40.0, 420.0];
+                net.nodes.iter_mut().find(|n| n.id == out).unwrap().pos = [1080.0, 60.0];
+                let shape = net.add(NodeKind::Picture, [40.0, 60.0]);
+                let mv = net.add(NodeKind::Effect, [300.0, 60.0]);
+                let render = net.add(NodeKind::Effect, [560.0, 60.0]);
+                let lfo = net.add(NodeKind::Number, [820.0, 420.0]);
+                net.disconnect(out, 0);
+                comp.comp_mut(cid).unwrap().network = Some(net);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let part = |id: u32| net.node(id).unwrap().parts[0];
+                comp.layer_mut(part(pic)).unwrap().set_generator("plasma");
+                // PHOSPHOR_POINTS_MODEL=file.obj: the model's vertices instead of the sphere, read in order.
+                let model = std::env::var("PHOSPHOR_POINTS_MODEL").ok();
+                match &model {
+                    Some(path) => comp.layer_mut(part(shape)).unwrap().source = crate::models::source(path),
+                    None => comp.layer_mut(part(shape)).unwrap().set_generator("pts_shape"),
+                }
+                let e = comp.new_effect("pts_move").unwrap();
+                comp.layer_mut(part(mv)).unwrap().effects = vec![e];
+                let mut e = comp.new_effect("pts_dots").unwrap();
+                if model.is_some() {
+                    e.values[13] = 1.0;
+                    e.values[1] = 6.0;
+                }
+                comp.layer_mut(part(render)).unwrap().effects = vec![e];
+                let mut wired = comp.connect_boxes(cid, &[], shape, mv, 0);
+                wired &= comp.connect_boxes(cid, &[], mv, render, 0);
+                wired &= comp.connect_boxes(cid, &[], pic, render, 1);
+                wired &= comp.connect_boxes(cid, &[], render, out, 0);
+                // The LFO turns the shape (Move's Turn Y: input 1 + 4).
+                wired &= comp.connect_boxes(cid, &[], lfo, mv, 5);
+                comp.sync_network(cid);
+                if let Some(m) = comp.modulators.iter_mut().find(|m| m.designer) {
+                    m.signal.source = phosphor_engine::ModSource::LfoSaw;
+                    m.signal.rate = 0.1;
+                }
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                println!("QUICK points: {} boxes, shown={:?}, wired={wired}", net.nodes.len(), net.shown());
+                self.switch_workspace(3);
+                continue;
+            }
             if let Some(cat) = name.strip_prefix("explorer:") {
                 // The Effects panel on one category (checking its preview tiles).
                 self.state.explorer.category = cat.to_string();

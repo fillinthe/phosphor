@@ -1,8 +1,15 @@
 # Designer: a TouchDesigner-style section for Phosphor (notes, 2026-10-28)
 
 Asked: "maybe we should do the TouchDesigner side as well… it would be another section of the app."
-Status: phase 1 built 2026-10-29 (Designer area, Picture / Effect / Mix / Output boxes backed by hidden layers,
-shared node canvas with Patches). See docs/NOTES.md for what was checked.
+Status: phases 1–4 built 2026-10-29 (Designer area, Picture / Effect / Mix / Output boxes backed by hidden layers,
+shared node canvas with Patches; Number boxes; boxes of boxes; points). See docs/NOTES.md for what was checked.
+
+Phase 4 as built: points travel as **point pictures** (one point a texel: xyz in rgb, brightness in alpha), which
+the engine keeps 16-bit float and at their own size (`LayerState::is_data`, `gpu::DATA_FORMAT`, a raw copy for
+feeds). So every points box is an ordinary shader (`points.wgsl`: `pts_shape` generator, `pts_relief`, `pts_move`,
+`pts_particles` effects with history, `pts_dots` / `pts_lines` / `pts_mesh` renders with a vertex stage, camera and
+light inside, coloured from `EffectState::other`), a Model box is a layer whose source is `Live { format: "model" }`
+(`models::Models` uploads the OBJ's vertices once), and the Designer only adds a Points port kind. No depth buffer yet.
 
 ## What TouchDesigner is, in short
 
@@ -89,7 +96,7 @@ Saved projects: a network is a new, optional part of a comp (empty by default), 
 | 1. Picture network | Designer area; source / effect / mix / feedback / output boxes; live preview on each box; drives one comp | large (about a week of work) |
 | 2. Number network | Modulators, audio, MIDI / OSC in, math, smooth, logic, trigger boxes; wire a number into any setting | medium |
 | 3. Reusable groups | Box-of-boxes, saved by name, shared between projects; settings shown on the outside of the box | medium |
-| 4. Points and 3D | Particles / point clouds / lines on the GPU, model loading, camera and lights (overlaps the 3D model slices) | large |
+| 4. Points and 3D | Particles / point clouds / lines on the GPU, model loading, camera and lights (overlaps the 3D model slices). *Built: shapes, relief, model, move, particles, dots / lines / mesh with camera and light.* | large |
 | 5. Data | Tables, text, web / JSON in (the live data feeds as boxes), timers and events | medium |
 
 Phase 1 is the decision point: once a network can stand in for a layer stack, the rest is adding boxes.

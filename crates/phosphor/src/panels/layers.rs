@@ -5,6 +5,8 @@ use super::*;
 pub(crate) enum LayerAction {
     BrowseSources,
     OpenFile,
+    /// Pick a 3D model (OBJ) to show as points.
+    OpenModel,
     BrowseEffects,
     Monitor,
     Up,
@@ -595,6 +597,14 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 }
             });
             #[cfg(not(target_arch = "wasm32"))]
+            {
+                let model = matches!(&layer.source, SourceSpec::Live { format, .. } if format == crate::models::FORMAT);
+                if crate::ui::pick_item(ui, model, label(icon::CUBE, "3D model as points (OBJ)…")).on_hover_text("The model's vertices as points: draw them with a Points: Dots, Lines or Mesh effect (Read: In order)").clicked() {
+                    action = Some(LayerAction::OpenModel);
+                    ui.close();
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
             ui.menu_button(label(icon::WAVEFORM, "G-Drop visualizers"), |ui| {
                 help(ui, "Gamp's MilkDrop-style visualizers: they move with the sound Phosphor hears.");
                 let now = match &layer.source {
@@ -748,6 +758,10 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
                 let exts = crate::media::dialog_extensions();
                 st.dialogs.pick_file(crate::dialogs::Purpose::LayerSource(id), Some(("Media", &exts)));
             }
+        }
+        LayerAction::OpenModel => {
+            #[cfg(not(target_arch = "wasm32"))]
+            st.dialogs.pick_file(crate::dialogs::Purpose::ModelPoints(id), Some(("3D model (OBJ)", &["obj"])));
         }
         LayerAction::BrowseEffects => st.fx_browser = Some(crate::explorer::FxBrowser::new(id, false, None)),
         LayerAction::Monitor => st.new_monitor = Some(MonitorSource::Layer(id)),

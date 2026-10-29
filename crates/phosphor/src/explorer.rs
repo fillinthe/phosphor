@@ -60,7 +60,7 @@ fn matches(desc: &shaders::ShaderDesc, query: &str) -> bool {
 
 /// Stable fake effect ids for previews, so feedback effects keep their history between frames.
 fn preview_fx(desc: &shaders::ShaderDesc, index: usize) -> EffectState {
-    EffectState { id: 9_000_000 + index as u64, effect: desc.id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new(), blend: Default::default() }
+    EffectState { id: 9_000_000 + index as u64, effect: desc.id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 }
 }
 
 enum TileAction {

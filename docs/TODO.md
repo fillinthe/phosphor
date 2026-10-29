@@ -31,9 +31,16 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       number input per setting on every box, chaining as the maths. Checked on a screenshot + engine test.
       **Phase 3 done 2026-10-29** (not installed): Box of boxes (double-click to build inside, breadcrumb back, Input
       boxes), saved by name (boxes preset folder) and added again from the canvas menu; Duplicate copies the inside.
-      Left: phase 4 points / 3D, phase 5 data. Small: number inputs on a box of boxes, wrapping existing boxes into
-      one, undo for box changes, Duplicate copying a plain box's settings, settings of a half-visible box, a Number
-      box's own MIDI mapping (map its Knob from the box).
+      **Phase 4 done 2026-10-29** (not installed): points. Points: Shape (grid / sphere / cube / ring / helix /
+      random), Relief (a picture as points), Model (an OBJ file's vertices), Move, Particles, and Dots / Lines / Mesh
+      renders with a camera (distance, lens, turn) and a light (shade, fog), coloured from a second picture input;
+      a green Points wire kind; `--quick points` (+ `PHOSPHOR_POINTS_MODEL=file.obj`). Checked on screenshots + a
+      GPU test. Left: phase 5 data. Points left: no depth buffer (a mesh's far faces can draw over near ones; backs are
+      hidden instead), lines are 1 px (their Size scales the picture down like Rutt-Etra), particles step at 1/60 s
+      whatever the rate, a Model box's render must be set to Read: In order by hand, effects after a render on the
+      same layer as a Model run at the model's texel size. Small: number inputs on a box of boxes, wrapping existing
+      boxes into one, undo for box changes, Duplicate copying a plain box's settings, settings of a half-visible box,
+      a Number box's own MIDI mapping (map its Knob from the box).
 - [ ] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
       (then they're keyable and mappable like the rest).
 

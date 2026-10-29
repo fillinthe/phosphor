@@ -221,6 +221,19 @@ impl PhosphorApp {
                         o.stage_photo = p.to_string_lossy().to_string();
                     }
                 }
+                Purpose::ModelPoints(id) => {
+                    if let Some(p) = paths.first() {
+                        let path = p.to_string_lossy().to_string();
+                        phosphor_engine::mapping::forget_obj(&path);
+                        if let Some(l) = st.comp.layer_mut(id) {
+                            l.source = crate::models::source(&path);
+                        }
+                        st.notice = Some(match phosphor_engine::mapping::obj_mesh(&path).as_ref() {
+                            Ok(mesh) => format!("{}: {} triangles as points (draw them with Points: Dots, Lines or Mesh, Read: In order)", name_of(p), mesh.tris.len()),
+                            Err(e) => format!("Couldn't read {}: {e}", name_of(p)),
+                        });
+                    }
+                }
                 Purpose::Model3d(sid) => {
                     if let Some(p) = paths.first() {
                         let path = p.to_string_lossy().to_string();

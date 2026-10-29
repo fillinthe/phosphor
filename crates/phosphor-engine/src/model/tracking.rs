@@ -92,7 +92,7 @@ impl super::Composition {
         let id = self.new_id();
         // Each follows its modulator straight (range mode over the whole 0..1). Face order: X, Y, Size, Found.
         let mods = links.iter().enumerate().map(|(index, &link)| super::ParamMod { index, m: super::Modulation { link, range: true, min: 0.0, max: 1.0, amount: 1.0, ..Default::default() } }).collect();
-        let fx = super::EffectState { id, effect: desc.id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods, blend: Default::default() };
+        let fx = super::EffectState { id, effect: desc.id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods, blend: Default::default(), other: 0 };
         self.effects_mut(owner)?.push(fx);
         Some(id)
     }

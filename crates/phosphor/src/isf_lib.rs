@@ -562,7 +562,7 @@ fn isf_sheet() {
         let layer_id = 1000 + n as u64;
         let mut comp = Composition { width: w, height: h, ..Default::default() };
         let mut layer = LayerState { id: layer_id, source: SourceSpec::Movie { name: "p".into(), path: Some("p.png".into()) }, ..Default::default() };
-        layer.effects.push(EffectState { id: 1, effect: id, enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        layer.effects.push(EffectState { id: 1, effect: id, enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
         comp.layers.push(layer);
         engine.upload_rgba(layer_id, w, h, &picture);
         // Built on a worker thread: draw until it's ready.
@@ -655,7 +655,7 @@ fn an_edited_shader_replaces_the_old_one() {
         let (id, entry) = (loaded.id.clone(), loaded.entry.clone());
         install(engine, loaded, replace);
         comp.layers = vec![LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() }];
-        comp.layers[0].effects.push(EffectState { id: 2, effect: id, enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        comp.layers[0].effects.push(EffectState { id: 2, effect: id, enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
         let started = std::time::Instant::now();
         loop {
             engine.render(&comp, 0.0, &ModInputs::default());
@@ -737,7 +737,7 @@ fn lut_split_follows_a_mask_layer() {
         // The mask (layer 1, underneath) and a 20% grey on top graded by LUT Split › Mask layer = layer 1.
         let mut top = solid(2, 0.2);
         // LUT A, LUT B, Split by (4 = Mask layer), Point, Softness, Amount, Mask layer #.
-        top.effects.push(EffectState { id: 3, effect: id.clone(), enabled: true, values: vec![0.0, 1.0, 4.0, 0.5, 0.05, 1.0, 1.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        top.effects.push(EffectState { id: 3, effect: id.clone(), enabled: true, values: vec![0.0, 1.0, 4.0, 0.5, 0.05, 1.0, 1.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
         comp.layers = vec![solid(1, mask), top];
         assert_eq!(comp.effect_layer_picks(), vec![1], "the mask layer's picture is wanted");
         let started = std::time::Instant::now();
@@ -828,7 +828,7 @@ fn a_preview_slot_forgets_the_effect_before() {
         comp.layers.push(LayerState { id: 7, source: SourceSpec::Movie { name: "p".into(), path: Some("p.png".into()) }, ..Default::default() });
         engine.upload_rgba(7, w, h, &picture);
         for (n, (id, ..)) in ids.iter().enumerate() {
-            comp.layers[0].effects.push(EffectState { id: 50 + n as u64, effect: id.clone(), enabled: false, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() });
+            comp.layers[0].effects.push(EffectState { id: 50 + n as u64, effect: id.clone(), enabled: false, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
         }
         let started = std::time::Instant::now();
         while ids.iter().any(|(_, e, _)| engine.shader_pending(e)) && started.elapsed().as_secs() < 30 {
@@ -840,7 +840,7 @@ fn a_preview_slot_forgets_the_effect_before() {
         (engine, comp, ids)
     };
     // The explorer's preview: one tile id per list position, whatever effect is in it.
-    let tile = |(id, _, values): &(String, String, Vec<f32>)| EffectState { id: 9_000_000, effect: id.clone(), enabled: true, values: values.clone(), mix: 1.0, mods: Vec::new(), blend: Default::default() };
+    let tile = |(id, _, values): &(String, String, Vec<f32>)| EffectState { id: 9_000_000, effect: id.clone(), enabled: true, values: values.clone(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 };
     let show = |engine: &mut Engine, comp: &Composition, fx: EffectState, frames: usize| {
         for f in 0..frames {
             let refresh = if f == 0 { PreviewRefresh::Moved } else { PreviewRefresh::Live };
@@ -886,7 +886,7 @@ fn effects_that_were_black_draw_a_picture() {
         for _ in 0..20 {
             engine.render(&comp, 0.0, &ModInputs::default());
         }
-        layer.effects.push(EffectState { id: 1, effect: id, enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        layer.effects.push(EffectState { id: 1, effect: id, enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
         comp.layers.push(layer);
         engine.upload_rgba(7, w, h, &picture);
         let started = std::time::Instant::now();

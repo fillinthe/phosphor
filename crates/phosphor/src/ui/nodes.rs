@@ -59,12 +59,16 @@ struct WireDrag {
     kind: PortKind,
 }
 
-/// Dots and wires: pictures in white, numbers in the controllers' colour.
+/// Points (point pictures) on the canvas: their dots, wires and boxes.
+pub const POINTS_COLOUR: Color32 = Color32::from_rgb(110, 205, 170);
+
+/// Dots and wires: pictures in white, numbers in the controllers' colour, points in their own.
 fn port_colour(kind: PortKind, lit: bool) -> Color32 {
     match (kind, lit) {
         (_, true) => accent(),
         (PortKind::Picture, false) => Color32::from_gray(200),
         (PortKind::Number, false) => crate::theme::Hue::Control.color(),
+        (PortKind::Points, false) => POINTS_COLOUR,
     }
 }
 
