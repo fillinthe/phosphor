@@ -13,6 +13,15 @@ pub(super) fn push_fit_copy(target: wgpu::TextureView, frame: &Frame, canvas: (u
     passes.push(Pass { entry: "fs_composite", target, tex0, tex1: None, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
 }
 
+/// Copies `view` into `target` (both `size`) as it is: a point picture keeps its negative values and its alpha.
+pub(super) fn push_raw_copy(target: wgpu::TextureView, view: wgpu::TextureView, size: (u32, u32), passes: &mut Vec<Pass>) {
+    let mut u = Uniforms::with_params(&[]);
+    u.resolution = [size.0 as f32, size.1 as f32];
+    u.opacity = 1.0;
+    u.uv_xform = [1.0, 1.0, 0.0, 0.0];
+    passes.push(Pass { entry: "fs_copy_raw", target, tex0: view, tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+}
+
 /// Maps target uv → source uv so the source is fitted, filled, or stretched.
 pub(super) fn fit_transform(source: (u32, u32), target: (u32, u32), mode: FitMode) -> [f32; 4] {
     let (sw, sh) = (source.0.max(1) as f32, source.1.max(1) as f32);

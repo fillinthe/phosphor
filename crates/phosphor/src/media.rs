@@ -426,6 +426,8 @@ impl MediaManager {
                 // Drawn by `gdrop::GDrops` each frame.
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Live { format, .. } if format == crate::gdrop::FORMAT => {}
+                // Uploaded once by `models::Models`.
+                SourceSpec::Live { format, .. } if format == crate::models::FORMAT => {}
                 // A live web page: its stream is looked up and opened on a thread (seconds), like a movie.
                 #[cfg(not(target_arch = "wasm32"))]
                 SourceSpec::Live { format, .. } if format == live::PAGE => self.open_page(layer.id, &layer.source),

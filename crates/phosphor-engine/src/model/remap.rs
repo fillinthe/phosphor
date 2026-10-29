@@ -66,7 +66,7 @@ mod tests {
     fn settings_follow_their_parameter_by_name() {
         let mut c = Composition::default();
         let l = c.add_layer().id;
-        let fx = EffectState { id: 50, effect: "custom:p".into(), enabled: true, values: vec![0.1, 0.2, 0.3], mix: 1.0, mods: vec![ParamMod { index: 2, m: Modulation::default() }, ParamMod { index: 0, m: Modulation::default() }], blend: Default::default() };
+        let fx = EffectState { id: 50, effect: "custom:p".into(), enabled: true, values: vec![0.1, 0.2, 0.3], mix: 1.0, mods: vec![ParamMod { index: 2, m: Modulation::default() }, ParamMod { index: 0, m: Modulation::default() }], blend: Default::default(), other: 0 };
         c.layer_mut(l).unwrap().effects.push(fx);
         c.control_maps.push(ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 1 }, ControlTarget::EffectParam { effect: 50, index: 2 }));
         c.control_maps.push(ControlMap::new(ControlSource::MidiCc { channel: 0, cc: 1 }, ControlTarget::EffectParam { effect: 50, index: 0 }));

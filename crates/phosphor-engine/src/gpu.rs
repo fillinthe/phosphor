@@ -16,6 +16,9 @@ static DEEP_COLOUR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBoo
 /// What deep colour draws into: 16 bits a channel, still 0..1 like 8-bit (looks stay the same, only finer).
 pub const DEEP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Unorm;
 
+/// What point pictures are kept in (points.wgsl): 16-bit float, so places aren't rounded to colour steps.
+pub const DATA_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
 /// Can this adapter draw into `DEEP_FORMAT`? Then the device must also be made with `deep_colour_features`.
 pub fn deep_colour_usable(adapter: &wgpu::Adapter) -> bool {
     let needed = wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
@@ -241,6 +244,8 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
     // Rutt-Etra draws additive line lists generated in the vertex shader.
     let rutt = entry == "fs_rutt" || entry == "fs_rutt_points";
     let points = entry == "fs_rutt_points";
+    // Points renders (points.wgsl) make their vertices from the point picture: dots and a mesh as triangles, lines.
+    let pts = shaders::points_render(entry);
     let additive = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add };
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(entry),
@@ -255,6 +260,12 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
                 "vs_mesh"
             } else if points {
                 "vs_rutt_points"
+            } else if entry == "fs_pts_dots" {
+                "vs_pts_dots"
+            } else if entry == "fs_pts_lines" {
+                "vs_pts_lines"
+            } else if entry == "fs_pts_mesh" {
+                "vs_pts_mesh"
             } else if rutt {
                 "vs_rutt"
             } else {
@@ -266,7 +277,7 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
         primitive: wgpu::PrimitiveState {
             topology: if points {
                 wgpu::PrimitiveTopology::PointList
-            } else if rutt {
+            } else if rutt || entry == "fs_pts_lines" {
                 wgpu::PrimitiveTopology::LineList
             } else {
                 wgpu::PrimitiveTopology::TriangleList
@@ -289,8 +300,10 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
                     slice_blend(wgpu::BlendFactor::Dst, wgpu::BlendFactor::OneMinusSrcAlpha)
                 } else if surface || mesh || entry == "fs_grid" {
                     Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
-                } else if rutt {
+                } else if rutt || (pts && entry != "fs_pts_mesh") {
                     Some(wgpu::BlendState { color: additive, alpha: additive })
+                } else if pts {
+                    Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                 } else if shaders::instances(entry).is_some() {
                     // Instanced copies (particles) land over each other, straight alpha like every source.
                     Some(wgpu::BlendState::ALPHA_BLENDING)

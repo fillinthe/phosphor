@@ -178,7 +178,7 @@ mod tests {
     fn file_info_reads_like_a_list() {
         let mut item: MediaItem = serde_json::from_str(r#"{"name":"a.mov","path":"/x/a.mov"}"#).unwrap();
         let invert = shaders::all_effects().first().expect("an effect").id;
-        item.effects.push(EffectState { id: 1, effect: invert.into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        item.effects.push(EffectState { id: 1, effect: invert.into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
         let probe = Ok(crate::convert::Probe { width: 1920, height: 1080, fps: 30.0, seconds: 75.5, bytes: 3 << 20, codec: "hap".into(), has_audio: false });
         let t = describe(&item, Some(&probe), 2);
         for want in ["Name: a.mov", "File: /x/a.mov", "1920×1080 · hap", "Length: 1:15.50", "Size on disk: 3.0 MB", "Used by 2 layers", "Its own effects", "1. "] {

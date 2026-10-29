@@ -222,6 +222,98 @@ pub const EFFECTS: &[ShaderDesc] = &[
             p("Lighting", 0.0, 1.0, 0.0),
         ],
     },
+    ShaderDesc {
+        id: "pts_relief",
+        name: "Points: Relief",
+        entry: "fx_pts_relief",
+        params: &[p("Depth", -1.0, 1.0, 0.3), p("Threshold", 0.0, 1.0, 0.0), Param { name: "Place", min: 0.0, max: 1.0, default: 0.0, labels: &["By brightness", "By colour (RGB as XYZ)"] }],
+    },
+    ShaderDesc {
+        id: "pts_move",
+        name: "Points: Move",
+        entry: "fx_pts_move",
+        params: &[
+            p("Move X", -1.0, 1.0, 0.0),
+            p("Move Y", -1.0, 1.0, 0.0),
+            p("Move Z", -1.0, 1.0, 0.0),
+            p("Turn X", -1.0, 1.0, 0.0),
+            p("Turn Y", -1.0, 1.0, 0.0),
+            p("Turn Z", -1.0, 1.0, 0.0),
+            p("Size", 0.0, 4.0, 1.0),
+            p("Wobble", 0.0, 1.0, 0.0),
+            p("Wobble size", 0.5, 8.0, 2.0),
+            p("Wobble speed", 0.0, 4.0, 1.0),
+        ],
+    },
+    ShaderDesc {
+        id: "pts_particles",
+        name: "Points: Particles",
+        entry: "fx_pts_particles",
+        params: &[p("Speed", 0.0, 2.0, 0.5), p("Gravity", -2.0, 2.0, -0.3), p("Wind", -1.0, 1.0, 0.0), p("Swirl", 0.0, 2.0, 0.5), p("Life (seconds)", 0.2, 10.0, 3.0), p("Spread", 0.0, 1.0, 0.1)],
+    },
+    ShaderDesc {
+        id: "pts_dots",
+        name: "Points: Dots",
+        entry: "fs_pts_dots",
+        params: &[
+            p("Points", 100.0, 250_000.0, 20_000.0),
+            p("Size (px)", 0.5, 24.0, 3.0),
+            p("Brightness", 0.0, 3.0, 1.0),
+            p("Distance", 0.6, 6.0, 1.6),
+            p("Lens (degrees)", 10.0, 120.0, 50.0),
+            p("Turn X", -1.0, 1.0, 0.0),
+            p("Turn Y", -1.0, 1.0, 0.0),
+            p("Turn Z", -1.0, 1.0, 0.0),
+            p("From the picture", 0.0, 1.0, 1.0),
+            p("Tint", 0.0, 1.0, 0.0),
+            p("Shade", 0.0, 1.0, 0.0),
+            p("Fog", 0.0, 1.0, 0.0),
+            p("Soft edge", 0.02, 1.0, 0.5),
+            Param { name: "Read", min: 0.0, max: 1.0, default: 0.0, labels: &["As a grid", "In order (a model)"] },
+        ],
+    },
+    ShaderDesc {
+        id: "pts_lines",
+        name: "Points: Lines",
+        entry: "fs_pts_lines",
+        params: &[
+            p("Points", 100.0, 250_000.0, 20_000.0),
+            p("Size (px)", 0.5, 24.0, 3.0),
+            p("Brightness", 0.0, 3.0, 1.0),
+            p("Distance", 0.6, 6.0, 1.6),
+            p("Lens (degrees)", 10.0, 120.0, 50.0),
+            p("Turn X", -1.0, 1.0, 0.0),
+            p("Turn Y", -1.0, 1.0, 0.0),
+            p("Turn Z", -1.0, 1.0, 0.0),
+            p("From the picture", 0.0, 1.0, 1.0),
+            p("Tint", 0.0, 1.0, 0.0),
+            p("Shade", 0.0, 1.0, 0.0),
+            p("Fog", 0.0, 1.0, 0.0),
+            Param { name: "Join", min: 0.0, max: 2.0, default: 0.0, labels: &["Across", "Down", "Both"] },
+            Param { name: "Read", min: 0.0, max: 1.0, default: 0.0, labels: &["As a grid", "In order (a model)"] },
+        ],
+    },
+    ShaderDesc {
+        id: "pts_mesh",
+        name: "Points: Mesh",
+        entry: "fs_pts_mesh",
+        params: &[
+            p("Points", 100.0, 250_000.0, 20_000.0),
+            p("Size (px)", 0.5, 24.0, 3.0),
+            p("Brightness", 0.0, 3.0, 1.0),
+            p("Distance", 0.6, 6.0, 1.6),
+            p("Lens (degrees)", 10.0, 120.0, 50.0),
+            p("Turn X", -1.0, 1.0, 0.0),
+            p("Turn Y", -1.0, 1.0, 0.0),
+            p("Turn Z", -1.0, 1.0, 0.0),
+            p("From the picture", 0.0, 1.0, 1.0),
+            p("Tint", 0.0, 1.0, 0.0),
+            p("Shade", 0.0, 1.0, 0.0),
+            p("Fog", 0.0, 1.0, 0.0),
+            Param { name: "Backs", min: 0.0, max: 1.0, default: 0.0, labels: &["Hidden", "Shown"] },
+            Param { name: "Read", min: 0.0, max: 1.0, default: 0.0, labels: &["As a grid", "In order (a model)"] },
+        ],
+    },
     ShaderDesc { id: "blur", name: "Gaussian Blur", entry: "fx_blur", params: &[p("Radius (px)", 0.0, 64.0, 8.0)] },
     ShaderDesc {
         id: "zoom_blur",
@@ -394,6 +486,17 @@ pub const GENERATORS: &[ShaderDesc] = &[
         name: "Particles",
         entry: "gen_particles",
         params: &[p("Count", 10.0, 300.0, 120.0), p("Speed", 0.1, 3.0, 1.0), p("Gravity", -2.0, 2.0, 0.6), p("Spread", 0.0, 1.0, 0.35), p("Size", 0.002, 0.05, 0.012), p("Emitter X", 0.0, 1.0, 0.5), p("Emitter Y", 0.0, 1.0, 0.15)],
+    },
+    ShaderDesc {
+        id: "pts_shape",
+        name: "Points: Shape",
+        entry: "gen_pts_shape",
+        params: &[
+            Param { name: "Shape", min: 0.0, max: 5.0, default: 1.0, labels: &["Grid", "Sphere", "Cube", "Ring", "Helix", "Random"] },
+            p("Size", 0.1, 2.0, 1.0),
+            p("Scatter", 0.0, 1.0, 0.0),
+            p("Seed", 0.0, 100.0, 0.0),
+        ],
     },
     ShaderDesc {
         id: "spiral",
@@ -569,6 +672,40 @@ pub fn instances(entry: &str) -> Option<Instances> {
     INSTANCES.read().ok()?.iter().find(|(e, _)| *e == entry).map(|(_, i)| *i)
 }
 
+/// The live-source format of a layer that shows a 3D model's vertices as points (the app uploads them).
+pub const MODEL_POINTS: &str = "model";
+
+/// A points shader (`pts_…`): its layer's pictures hold points, not colours, and run 16-bit float (see points.wgsl).
+pub fn is_points(id: &str) -> bool {
+    id.starts_with("pts_")
+}
+
+/// Its picture is points (a shape, a relief, moved or particle points) rather than something to look at.
+pub fn points_out(id: &str) -> bool {
+    matches!(id, "pts_shape" | "pts_relief" | "pts_move" | "pts_particles")
+}
+
+/// It takes points in (the renders, Move, Particles); Relief takes a picture.
+pub fn points_in(id: &str) -> bool {
+    matches!(id, "pts_move" | "pts_particles" | "pts_dots" | "pts_lines" | "pts_mesh")
+}
+
+/// A render (points in, a picture out): takes a second picture (`EffectState::other`) for the points' colours.
+pub fn points_render(entry: &str) -> bool {
+    entry.starts_with("fs_pts_")
+}
+
+/// The most points one render draws (dots are six vertices each).
+pub const POINTS_BUDGET: u32 = 250_000;
+
+/// Columns and rows of points for a count, in the picture's aspect (so a grid shape keeps its proportions).
+pub fn points_grid(count: f32, aspect: f32) -> (u32, u32) {
+    let n = count.clamp(4.0, POINTS_BUDGET as f32);
+    let cols = (n * aspect.max(0.1)).sqrt().round().max(2.0) as u32;
+    let rows = (n / cols as f32).round().max(2.0) as u32;
+    (cols, rows)
+}
+
 /// Any shader at all wants audio pictures (the app refreshes them each frame only then).
 pub fn any_audio_slots() -> bool {
     AUDIO_SLOTS.read().is_ok_and(|a| !a.is_empty())
@@ -707,6 +844,13 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "slitscan" => ("Time", "Time smeared across the frame"),
         "rutt_etra" => ("3D", "Scan-processor lines (v002)"),
         "rutt_etra_points" => ("3D", "Scan-processor points (v002)"),
+        "pts_shape" => ("Points", "Points on a grid, sphere, cube, ring or helix, or at random (draw them with Points: Dots, Lines or Mesh)"),
+        "pts_relief" => ("Points", "The picture as points, raised by brightness (then Points: Dots / Lines / Mesh draw them)"),
+        "pts_move" => ("Points", "Moves, turns, sizes and wobbles points"),
+        "pts_particles" => ("Points", "Every point becomes a particle: born where the point is, it drifts, fades and is born again"),
+        "pts_dots" => ("Points", "Draws points as soft dots through a camera"),
+        "pts_lines" => ("Points", "Draws points as lines between neighbours through a camera"),
+        "pts_mesh" => ("Points", "Draws points as a lit surface through a camera"),
         "chroma_key" => ("Key", "Make a colour transparent"),
         "remove_bg" => ("Key", "Keep the people, lose the background (Mac)"),
         "blur_bg" => ("Key", "People sharp, the background blurred (or the other way round) (Mac)"),
@@ -757,6 +901,7 @@ pub(crate) fn wgsl_source() -> String {
         include_str!("shaders/generators.wgsl"),
         include_str!("shaders/mapping.wgsl"),
         include_str!("shaders/ruttetra.wgsl"),
+        include_str!("shaders/points.wgsl"),
     ]
     .join("\n")
 }

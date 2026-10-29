@@ -429,6 +429,62 @@ fn particles_draw_a_fountain() {
     assert!(lit > 0.002 && lit < 0.5, "{lit} of the pixels lit");
 }
 
+/// Points (points.wgsl): a sphere of points, moved and turned, drawn as dots, lines and a mesh, through a layer
+/// feed (16-bit float, so the places survive the trip) and coloured from another layer. Each render lights some
+/// of the picture and leaves most of it dark; particles born from the sphere draw too.
+#[test]
+fn points_shapes_travel_as_feeds_and_render() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 160, height: 90, next_id: 100, ..Default::default() };
+    let shape = crate::shaders::generator("pts_shape").expect("built in");
+    // 1 = the sphere, 2 = a colour, 3 = Move on a feed of 1, 4 = the render on a feed of 3 coloured by 2.
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("pts_shape".into()), generator_values: shape.defaults(), in_mix: false, ..Default::default() });
+    comp.layers.push(LayerState { id: 2, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 0.2, 0.2], in_mix: false, ..Default::default() });
+    let mv = comp.new_effect("pts_move").unwrap();
+    comp.layers.push(LayerState { id: 3, source: SourceSpec::Feed { id: 1, name: "sphere".into(), before_fx: false }, effects: vec![mv], in_mix: false, ..Default::default() });
+    let mut render = comp.new_effect("pts_dots").unwrap();
+    render.other = 2;
+    // (A few hundred points: thousands of added-up dots on so small a picture go white.)
+    render.values[0] = 400.0;
+    comp.layers.push(LayerState { id: 4, source: SourceSpec::Feed { id: 3, name: "moved".into(), before_fx: false }, effects: vec![render], ..Default::default() });
+    comp.layers[2].effects[0].values[4] = 0.15;
+    let lit = |engine: &mut Engine, comp: &Composition| {
+        for i in 0..3 {
+            engine.render(comp, i as f32 * 0.1, &ModInputs { time: i as f32 * 0.1, ..Default::default() });
+        }
+        let (_, _, px) = engine.read_output().expect("output");
+        let n = (px.len() / 4) as f32;
+        let lit = px.chunks(4).filter(|p| p[0].max(p[1]).max(p[2]) > 40).count() as f32 / n;
+        // (The feed must carry negative places: the sphere's left half is x < 0.)
+        let left = px.chunks(4).enumerate().filter(|(i, p)| i % 160 < 70 && p[0].max(p[1]).max(p[2]) > 40).count();
+        let right = px.chunks(4).enumerate().filter(|(i, p)| i % 160 > 90 && p[0].max(p[1]).max(p[2]) > 40).count();
+        assert!(left > 20 && right > 20, "both halves drawn: {left} left, {right} right");
+        let reddish = px.chunks(4).filter(|p| p[0] > 60 && p[0] as u16 > p[1] as u16 + 20).count() as f32 / n;
+        (lit, reddish)
+    };
+    let (dots, red) = lit(&mut engine, &comp);
+    assert!(dots > 0.02 && dots < 0.7, "dots: {dots} lit");
+    assert!(red > 0.01, "coloured from the other layer: {red}");
+    assert!(comp.layers[2].is_data() && comp.layers[3].is_data() && !comp.layers[1].is_data());
+    for id in ["pts_lines", "pts_mesh"] {
+        let mut fx = comp.new_effect(id).unwrap();
+        fx.other = 2;
+        fx.values[0] = 400.0;
+        comp.layers[3].effects = vec![fx];
+        let (frac, _) = lit(&mut engine, &comp);
+        assert!(frac > 0.01 && frac < 0.9, "{id}: {frac} lit");
+    }
+    // Particles from the sphere: alive after a few frames, drawn as dots.
+    let particles = comp.new_effect("pts_particles").unwrap();
+    comp.layers[2].effects.push(particles);
+    let mut dots = comp.new_effect("pts_dots").unwrap();
+    dots.values[0] = 400.0;
+    comp.layers[3].effects = vec![dots];
+    let (frac, _) = lit(&mut engine, &comp);
+    assert!(frac > 0.005 && frac < 0.7, "particles: {frac} lit");
+    assert!(engine.failed_modules.is_empty(), "shader failures: {:?}", engine.failed_modules.keys().collect::<Vec<_>>());
+}
+
 /// A look fade: the old picture shows first and gives way to the new one over the fade.
 #[test]
 fn a_new_look_fades_in() {
@@ -519,7 +575,7 @@ fn view_360_looks_around_a_panorama() {
     let (w, h) = (64u32, 32u32);
     let pano: Vec<u8> = (0..w * h).flat_map(|i| if (16..48).contains(&(i % w)) { [0, 255, 0, 255] } else { [255, 0, 0, 255] }).collect();
     engine.upload_rgba(1, w, h, &pano);
-    comp.master_effects.push(EffectState { id: 9, effect: "view_360".into(), enabled: true, values: vec![0.0, 0.0, 60.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+    comp.master_effects.push(EffectState { id: 9, effect: "view_360".into(), enabled: true, values: vec![0.0, 0.0, 60.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
     let centre = |engine: &mut Engine, comp: &Composition| {
         engine.render(comp, 0.0, &ModInputs::default());
         let (w, h, px) = engine.read_output().expect("output");
@@ -541,7 +597,7 @@ fn hide_face_covers_only_the_face() {
     comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
     // Face at the top left quarter (Y counts up), black style.
     let values = vec![0.25, 0.75, 0.3, 1.0, 2.0, 24.0];
-    comp.master_effects.push(EffectState { id: 9, effect: "hide_face".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
+    comp.master_effects.push(EffectState { id: 9, effect: "hide_face".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
     engine.render(&comp, 0.0, &ModInputs::default());
     let (w, _, px) = engine.read_output().expect("output");
     let at = |x: u32, y: u32| px[((y * w + x) * 4) as usize];
@@ -564,7 +620,7 @@ fn blur_background_keeps_the_person_sharp() {
     if let Some(v) = layer.generator_values.get_mut(1) {
         *v = 0.0;
     }
-    layer.effects.push(EffectState { id: 5, effect: "blur_bg".into(), enabled: true, values: vec![1.0, 0.5, 0.05, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+    layer.effects.push(EffectState { id: 5, effect: "blur_bg".into(), enabled: true, values: vec![1.0, 0.5, 0.05, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
     comp.layers.push(layer);
     let mask: Vec<u8> = (0..32 * 16).map(|i| if i % 32 < 16 { 255 } else { 0 }).collect();
     engine.set_matte(1, 32, 16, &mask);
@@ -597,7 +653,7 @@ fn palette_snaps_to_the_nearest_colour() {
         let mut values = crate::shaders::effect("palette").unwrap().defaults();
         values[..6].copy_from_slice(&[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
         values[18] = 2.0;
-        l.effects.push(EffectState { id: 2, effect: "palette".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        l.effects.push(EffectState { id: 2, effect: "palette".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
         comp.layers.push(l);
         engine.render(&comp, 0.0, &ModInputs::default());
         engine.read_output().expect("output").2[0]
@@ -703,7 +759,7 @@ fn deep_colour_keeps_fine_detail() {
     comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
     comp.layers.push(LayerState { id: 2, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 0.0, 0.0], opacity: 0.998, ..Default::default() });
     for id in 10..13 {
-        comp.master_effects.push(crate::EffectState { id, effect: "color_match".into(), enabled: true, values: vec![4.0, 4.0, 4.0, 0.0, 0.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default() });
+        comp.master_effects.push(crate::EffectState { id, effect: "color_match".into(), enabled: true, values: vec![4.0, 4.0, 4.0, 0.0, 0.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
     }
     if !crate::gpu::deep_colour() {
         return;

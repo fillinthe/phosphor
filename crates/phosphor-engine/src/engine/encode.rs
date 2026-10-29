@@ -115,6 +115,7 @@ impl Engine {
                     (horizontal + vertical + diagonal) * 2
                 }
                 "fs_rutt_points" => (pass.uniforms.p[0][0] as u32).max(2) * (pass.uniforms.p[0][1] as u32).max(2),
+                e if crate::shaders::points_render(e) => points_vertices(e, &pass.uniforms.p),
                 // An ISF vertex shader moves a quad: six vertices.
                 e if crate::shaders::vertex_entry(e).is_some() => 6,
                 _ => 3,
@@ -131,7 +132,7 @@ impl Engine {
                         // Instanced shaders blend their copies over a clear (transparent) picture.
                         load: if surface {
                             wgpu::LoadOp::Load
-                        } else if instances.is_some() {
+                        } else if instances.is_some() || crate::shaders::points_render(pass.entry) {
                             wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
                         } else {
                             wgpu::LoadOp::Clear(wgpu::Color::BLACK)
@@ -240,5 +241,25 @@ impl Engine {
             pixels.extend_from_slice(&row[..(w * 4) as usize]);
         }
         Some((w, h, pixels))
+    }
+}
+
+/// How many vertices a points render draws for its grid (p[14].zw = columns, rows; p[13].x = listed, p[3].x = a
+/// lines render's join mode): dots are six each, lines two an end, a mesh two triangles a cell.
+pub(crate) fn points_vertices(entry: &str, p: &[[f32; 4]; 16]) -> u32 {
+    let (cols, rows) = ((p[14][2] as u32).max(1), (p[14][3] as u32).max(1));
+    let n = cols * rows;
+    let listed = p[3][1] > 0.5;
+    match entry {
+        "fs_pts_dots" => n * 6,
+        "fs_pts_lines" if listed => n & !1,
+        "fs_pts_lines" => {
+            let mode = (p[3][0] + 0.5) as u32;
+            let across = if mode == 1 { 0 } else { rows * (cols.saturating_sub(1)) };
+            let down = if mode == 0 { 0 } else { cols * (rows.saturating_sub(1)) };
+            (across + down) * 2
+        }
+        _ if listed => n - n % 3,
+        _ => cols.saturating_sub(1) * rows.saturating_sub(1) * 6,
     }
 }

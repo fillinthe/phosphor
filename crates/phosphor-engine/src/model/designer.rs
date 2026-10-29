@@ -35,18 +35,20 @@ pub enum NodeKind {
     Input,
 }
 
-/// What a wire carries: a picture, or a number (0..1, changing over time).
+/// What a wire carries: a picture, a number (0..1, changing over time), or points (a point picture: one point a
+/// texel, see points.wgsl; made by a Points: Shape / Relief box, drawn by Points: Dots / Lines / Mesh).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PortKind {
     Picture,
     Number,
+    Points,
 }
 
 impl NodeKind {
     /// The kinds you add from the menu (Input only inside a Group; Output comes with every network).
     pub const ALL: [NodeKind; 6] = [NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Number, NodeKind::Group, NodeKind::Output];
 
-    /// What its output carries.
+    /// What its output carries (a Picture or Effect box's may be points, by its shader: `Composition::node_output`).
     pub fn output(self) -> PortKind {
         if self == NodeKind::Number { PortKind::Number } else { PortKind::Picture }
     }
@@ -267,8 +269,26 @@ struct Synced {
 }
 
 impl Composition {
-    /// Every input of box `node`: its picture inputs (a Group's: one per Input box inside), then one number input per
-    /// setting it has (an effect's or generator's parameters, a Mix's opacity, a Number's chain).
+    /// What box `node` puts out: a number, a picture, or points (a Points: Shape, or an effect that makes points).
+    pub fn node_output(&self, node: &Node) -> PortKind {
+        let layer = node.parts.first().and_then(|p| self.layer(*p));
+        match node.kind {
+            NodeKind::Number => PortKind::Number,
+            NodeKind::Picture if matches!(layer.map(|l| &l.source), Some(SourceSpec::Generator(id)) if crate::shaders::points_out(id)) => PortKind::Points,
+            NodeKind::Picture if matches!(layer.map(|l| &l.source), Some(SourceSpec::Live { format, .. }) if format == crate::shaders::MODEL_POINTS) => PortKind::Points,
+            NodeKind::Effect if layer.and_then(|l| l.effects.first()).is_some_and(|e| crate::shaders::points_out(&e.effect)) => PortKind::Points,
+            _ => PortKind::Picture,
+        }
+    }
+
+    /// How many of box `node`'s inputs take a picture or points (the rest take numbers).
+    pub fn node_picture_inputs(&self, node: &Node) -> usize {
+        self.node_inputs(node).iter().filter(|(_, k)| *k != PortKind::Number).count()
+    }
+
+    /// Every input of box `node`: its picture inputs (a Group's: one per Input box inside; a points effect's take
+    /// points, a render's second one a picture for the colours), then one number input per setting it has (an
+    /// effect's or generator's parameters, a Mix's opacity, a Number's chain).
     pub fn node_inputs(&self, node: &Node) -> Vec<(String, PortKind)> {
         let own = if node.kind == NodeKind::Number { PortKind::Number } else { PortKind::Picture };
         let mut v: Vec<(String, PortKind)> = node.kind.inputs().iter().map(|s| (s.to_string(), own)).collect();
@@ -276,6 +296,12 @@ impl Composition {
         match node.kind {
             NodeKind::Effect => {
                 if let Some(d) = layer.and_then(|l| l.effects.first()).and_then(|e| crate::shaders::effect(&e.effect)) {
+                    if crate::shaders::points_in(d.id) {
+                        v[0] = ("Points".to_string(), PortKind::Points);
+                        if crate::shaders::points_render(d.entry) {
+                            v.push(("Colour".to_string(), PortKind::Picture));
+                        }
+                    }
                     v.extend(d.params.iter().map(|p| (p.name.to_string(), PortKind::Number)));
                 }
             }
@@ -304,7 +330,7 @@ impl Composition {
         let Some(level) = net.at_mut(path) else { return false };
         let (Some(f), Some(t)) = (level.node(from).cloned(), level.node(to).cloned()) else { return false };
         let inputs = self.node_inputs(&t);
-        if f.kind == NodeKind::Output || inputs.get(input).is_none_or(|(_, k)| *k != f.kind.output()) {
+        if f.kind == NodeKind::Output || inputs.get(input).is_none_or(|(_, k)| *k != self.node_output(&f)) {
             return false;
         }
         let ok = graph::connect(&mut level.wires, from, to, input, inputs.len());
@@ -445,8 +471,13 @@ impl Composition {
                 }
                 NodeKind::Effect => {
                     let s = feed_from(&pictures, net, id, 0);
+                    // A render's second input: the picture its points take their colour from.
+                    let colour = net.source_of(id, 1).and_then(|from| pictures.get(&from).copied()).unwrap_or(0);
                     if let Some(l) = self.layer_mut(parts[0]) {
                         l.source = s;
+                        if let Some(fx) = l.effects.first_mut() {
+                            fx.other = if crate::shaders::effect(&fx.effect).is_some_and(|d| crate::shaders::points_render(d.entry)) { colour } else { 0 };
+                        }
                     }
                     found.layers.push(parts[0]);
                     parts[0]
@@ -491,7 +522,7 @@ impl Composition {
         let existing: Vec<u64> = self.modulators.iter().map(|m| m.id).collect();
         let drop_link = move |id: u64| designer_mods.contains(&id) || !existing.contains(&id);
         for n in &net.nodes {
-            let pic_n = n.kind.inputs().len() + if n.kind == NodeKind::Group { n.inner.as_ref().map_or(0, |i| i.input_boxes().len()) } else { 0 };
+            let pic_n = self.node_picture_inputs(n);
             let total = count.get(&n.id).copied().unwrap_or(0);
             for k in pic_n..total {
                 let from = net.source_of(n.id, k).and_then(|f| net.node(f)).and_then(|f| f.modulator());
@@ -751,6 +782,55 @@ mod tests {
         assert!(comp.layer(fx_layer).unwrap().effects[0].mods.is_empty());
         assert!(!comp.modulators.iter().any(|m| m.id == m2));
         assert_eq!(comp.modulators.iter().find(|m| m.id == m1).unwrap().chain, None);
+    }
+
+    /// Points boxes: a Picture box with a Points: Shape puts out points, a render takes points and a picture for
+    /// the colours (its `other`), and a picture can't go where points are wanted (or the other way round).
+    #[test]
+    fn points_boxes_carry_points_and_a_render_takes_a_colour_picture() {
+        let mut comp = Composition::default();
+        let cid = comp.add_comp("Designer");
+        comp.start_network(cid);
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+        let shape = net.add(NodeKind::Picture, [40.0, 300.0]);
+        let mv = net.add(NodeKind::Effect, [200.0, 300.0]);
+        let render = net.add(NodeKind::Effect, [400.0, 300.0]);
+        net.disconnect(out, 0);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let part = |id: u32| net.node(id).unwrap().parts[0];
+        comp.layer_mut(part(shape)).unwrap().set_generator("pts_shape");
+        comp.layer_mut(part(pic)).unwrap().set_generator("plasma");
+        let e = comp.new_effect("pts_move").unwrap();
+        comp.layer_mut(part(mv)).unwrap().effects = vec![e];
+        let e = comp.new_effect("pts_dots").unwrap();
+        comp.layer_mut(part(render)).unwrap().effects = vec![e];
+        let n = |comp: &Composition, id: u32| comp.comp(cid).unwrap().network.as_ref().unwrap().node(id).unwrap().clone();
+        assert_eq!(comp.node_output(&n(&comp, shape)), PortKind::Points);
+        assert_eq!(comp.node_output(&n(&comp, mv)), PortKind::Points);
+        assert_eq!(comp.node_output(&n(&comp, render)), PortKind::Picture);
+        let ins = comp.node_inputs(&n(&comp, render));
+        assert_eq!((ins[0].1, ins[1].1, ins[2].1), (PortKind::Points, PortKind::Picture, PortKind::Number));
+        assert_eq!(comp.node_picture_inputs(&n(&comp, render)), 2);
+        assert!(!comp.connect_boxes(cid, &[], pic, mv, 0), "a picture into a points input");
+        assert!(!comp.connect_boxes(cid, &[], shape, out, 0), "points into Output");
+        assert!(comp.connect_boxes(cid, &[], shape, mv, 0));
+        assert!(comp.connect_boxes(cid, &[], mv, render, 0));
+        assert!(comp.connect_boxes(cid, &[], pic, render, 1), "the colour picture");
+        assert!(comp.connect_boxes(cid, &[], render, out, 0));
+        comp.sync_network(cid);
+        assert_eq!(feed_of(&comp, part(render)), Some(part(mv)));
+        assert_eq!(comp.layer(part(render)).unwrap().effects[0].other, part(pic), "colours from the plasma");
+        assert!(comp.layer(part(render)).unwrap().in_mix);
+        assert!(comp.layer(part(mv)).unwrap().is_data());
+        // Unwire the colour: the render forgets it.
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        net.disconnect(render, 1);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        assert_eq!(comp.layer(part(render)).unwrap().effects[0].other, 0);
     }
 
     /// A Group box: what's wired into it reaches its Input boxes inside, its inner Output is its picture, and it can

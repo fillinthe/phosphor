@@ -161,6 +161,12 @@ fn fs_composite(in: VOut) -> @location(0) vec4f {
     return vec4f(mix(dst.rgb, blended, a), a + dst.a * (1.0 - a));
 }
 
+// A plain copy (point pictures: nothing clamped, blended or scaled by alpha).
+@fragment
+fn fs_copy_raw(in: VOut) -> @location(0) vec4f {
+    return textureSampleLevel(tex0, samp, in.uv * u.uv_xform.xy + u.uv_xform.zw, 0.0);
+}
+
 // Converts a YUV source to RGB so the effect chain can work on it.
 @fragment
 fn fs_to_rgb(in: VOut) -> @location(0) vec4f {

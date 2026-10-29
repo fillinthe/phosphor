@@ -84,6 +84,7 @@ impl PhosphorApp {
             milkdrop,
             #[cfg(not(target_arch = "wasm32"))]
             gdrop,
+            models,
             ..
         } = &mut self.state;
         let Some(engine) = engine.as_mut() else { return };
@@ -95,6 +96,9 @@ impl PhosphorApp {
         milkdrop.update(comp, engine, audio, now, &mut media.errors);
         #[cfg(not(target_arch = "wasm32"))]
         gdrop.update(comp, engine, audio);
+        for (id, e) in models.update(comp, engine) {
+            media.errors.insert(id, e);
+        }
 
         net_audio.clear();
         net.take_audio(net_audio);
