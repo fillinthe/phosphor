@@ -5,7 +5,9 @@
 //! effects as the same shader with its settings, Quartz Composer / Core Image ones as the nearest built-in), and
 //! the main output's effects as the master effects.
 
-use phosphor_engine::{BlendMode, FitMode};
+use phosphor_engine::FitMode;
+#[cfg(test)]
+use phosphor_engine::BlendMode;
 
 use super::keyed::Ar;
 use super::looks::{LayerLook, LookEffect};
@@ -92,7 +94,7 @@ pub fn parse(text: &str, name: &str) -> Result<AvcFile, String> {
                     Some((path.to_string(), name))
                 })
                 .enumerate()
-                .map(|(col, (path, name))| AvcClip { layer: 0, column: col, name, path: Some(path) })
+                .map(|(col, (path, name))| AvcClip { layer: 0, column: col, name, path: Some(path), generator: None })
                 .collect();
             let name = page.get("name").and_then(Value::str).filter(|n| !n.is_empty()).map_or_else(|| format!("Page {}", i + 1), str::to_string);
             AvcDeck { name, columns: clips.len(), clips }
@@ -137,7 +139,7 @@ fn layer_setup(tree: &Ar) -> (Vec<LayerLook>, Vec<LookEffect>, Option<(u32, u32)
             LayerLook {
                 name: ly.get("name").and_then(Ar::str).filter(|n| !n.is_empty()).map_or_else(|| format!("Layer {}", i + 1), str::to_string),
                 opacity: ly.at(&["CmpCtrlr", "opacity", "val"]).and_then(Ar::num).map(|v| v as f32),
-                blend: blend_for(&pick("compMode")),
+                blend: super::looks::blend_named(&pick("compMode")),
                 fit,
                 effects: effects(ly.get("FXCtrlr")),
             }
@@ -167,34 +169,6 @@ fn effects(fx: Option<&Ar>) -> Vec<LookEffect> {
             }
         })
         .collect()
-}
-
-/// VDMX's layer composition modes ("OpenGL- Add", "OpenGL- Over", "CI Multiply"…) as blend modes.
-fn blend_for(mode: &str) -> Option<BlendMode> {
-    let has = |w: &str| mode.contains(w);
-    Some(if mode.is_empty() {
-        return None;
-    } else if has("add") || has("plus") {
-        BlendMode::Add
-    } else if has("multiply") {
-        BlendMode::Multiply
-    } else if has("screen") {
-        BlendMode::Screen
-    } else if has("overlay") {
-        BlendMode::Overlay
-    } else if has("difference") {
-        BlendMode::Difference
-    } else if has("subtract") {
-        BlendMode::Subtract
-    } else if has("lighten") || has("lighter") {
-        BlendMode::Lighten
-    } else if has("darken") || has("darker") {
-        BlendMode::Darken
-    } else if has("exclusion") {
-        BlendMode::Exclusion
-    } else {
-        BlendMode::Normal
-    })
 }
 
 #[cfg(test)]

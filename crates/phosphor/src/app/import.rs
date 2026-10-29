@@ -12,6 +12,9 @@ pub struct AvcImport {
     pub chosen: Vec<bool>,
     /// From VDMX (pages) rather than Resolume (decks).
     pub vdmx: bool,
+    /// Resolume's Advanced Output in use last (screens and slices), and whether to bring it too.
+    pub screens: Option<crate::import::resolume_output::ScreenSetup>,
+    pub with_screens: bool,
 }
 
 /// Paths found by a relink search: (old path, new path), and how many were looked for.
@@ -32,8 +35,10 @@ impl State {
         let result = if vdmx { crate::import::vdmx::read(path) } else { read(path) };
         match result {
             Ok(file) => {
-                let chosen = file.decks.iter().map(|d| d.files() > 0).collect();
-                self.avc_import = Some(AvcImport { file, chosen, vdmx });
+                let chosen = file.decks.iter().map(|d| d.files() > 0 || d.clips.iter().any(|c| c.generator.is_some())).collect();
+                let screens = if vdmx { None } else { crate::import::resolume_output::current().and_then(|p| crate::import::resolume_output::read(&p).ok()) };
+                let with_screens = screens.is_some();
+                self.avc_import = Some(AvcImport { file, chosen, vdmx, screens, with_screens });
             }
             Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
         }
@@ -44,12 +49,22 @@ impl State {
     pub fn finish_avc_import(&mut self) {
         let Some(imp) = self.avc_import.take() else { return };
         let decks: Vec<usize> = imp.chosen.iter().enumerate().filter(|(_, c)| **c).map(|(i, _)| i).collect();
-        let (comp, skipped) = to_composition(&imp.file, &decks);
+        let (mut comp, skipped) = to_composition(&imp.file, &decks);
+        let screens = match imp.screens.as_ref().filter(|_| imp.with_screens) {
+            Some(setup) => {
+                let ids: Vec<u64> = comp.layers.iter().map(|l| l.id).collect();
+                Some(crate::import::resolume_output::add_to(&mut comp, setup, &ids))
+            }
+            None => None,
+        };
         self.load_composition(comp);
         self.project_path = None;
         self.clip_page = 0;
         let missing = self.missing_media().len();
         let mut msg = format!("Imported {} from {}.", imp.file.name, if imp.vdmx { "VDMX" } else { "Resolume" });
+        if let Some((outs, slices, masks)) = screens {
+            msg.push_str(&format!(" Advanced Output: {outs} outputs, {slices} slices, {masks} masks."));
+        }
         if skipped > 0 {
             msg.push_str(&format!(" {skipped} clips without a media file (generators, audio, Resolume sources) were left out."));
         }
@@ -181,9 +196,14 @@ impl PhosphorApp {
                 if imp.vdmx {
                     "The media bin's pages and clips come across, and the layers of the first preset: names, opacity, blend, fit and effects (ISF effects as the same shader; others as the nearest built-in one). VDMX's data sources and controller mappings don't."
                 } else {
-                    "Layers, clips (video and image files), clip names, tempo and canvas size come across. Resolume's generators, effects and mapping don't."
+                    "Layers (opacity, blend, effects), clips (video and image files; generators as the nearest built-in one, text as text clips), the composition's effects, tempo and canvas size come across. Effects are drawn by the nearest built-in one."
                 },
             );
+            if let Some(setup) = &imp.screens {
+                let slices: usize = setup.screens.iter().map(|s| s.slices.len()).sum();
+                let text = format!("Advanced Output too: {} ({} screens, {slices} slices)", setup.name, setup.screens.len());
+                crate::ui::toggle(ui, &mut imp.with_screens, text).on_hover_text("The screen setup Resolume used last: each screen becomes an output with its slices and masks");
+            }
             ui.add_space(6.0);
             go = crate::ui::command_if(ui, imp.chosen.iter().any(|c| *c), crate::ui::label(icon::CHECK, "Open as a new project")).clicked();
         });

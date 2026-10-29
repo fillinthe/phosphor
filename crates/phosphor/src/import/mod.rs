@@ -6,4 +6,5 @@ pub mod looks;
 pub mod madmapper;
 mod qt_stream;
 pub mod resolume;
+pub mod resolume_output;
 pub mod vdmx;
