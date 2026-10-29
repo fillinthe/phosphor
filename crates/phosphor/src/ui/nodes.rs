@@ -33,7 +33,8 @@ pub(crate) trait Graph {
     fn width(&self, _id: u32) -> f32 {
         NODE_W
     }
-    /// How tall the settings under the inputs are.
+    /// How tall the settings under the inputs are (a first guess: the canvas then sizes each box to what its
+    /// settings really took, so a box never cuts its last row off).
     fn body_height(&self, id: u32) -> f32;
     /// Draws the settings into `ui` (sized to `body_height`). True when something changed.
     fn body(&mut self, ui: &mut egui::Ui, id: u32) -> bool;
@@ -124,7 +125,9 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     let origin = area.min + pan;
     let at = |p: [f32; 2]| origin + egui::vec2(p[0], p[1]);
 
-    // Where each box and its ports are this frame.
+    // Where each box and its ports are this frame. Settings are as tall as they were last drawn (the guess before).
+    let measured_id = id.with("body_h");
+    let mut measured: std::collections::HashMap<u32, f32> = ui.ctx().data(|d| d.get_temp(measured_id)).unwrap_or_default();
     let ids = graph.ids();
     let mut rects: Vec<(u32, egui::Rect, usize)> = Vec::new();
     let mut outputs: Vec<(u32, egui::Pos2, PortKind)> = Vec::new();
@@ -132,7 +135,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     for &n in &ids {
         let kinds = graph.inputs(n);
         let ins = kinds.len();
-        let size = egui::vec2(graph.width(n), TITLE_H + ins as f32 * INPUT_H + graph.body_height(n) + 6.0);
+        let size = egui::vec2(graph.width(n), TITLE_H + ins as f32 * INPUT_H + shown_body(&measured, &*graph, n) + 6.0);
         let r = egui::Rect::from_min_size(at(graph.pos(n)), size);
         rects.push((n, r, ins));
         if graph.has_output(n) {
@@ -210,18 +213,22 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), colour);
         }
         // The settings: drawn by the graph, clipped to the canvas (a box half off the canvas shows what fits).
-        let body_h = graph.body_height(n);
-        if body_h > 0.0 {
-            let body = egui::Rect::from_min_size(egui::pos2(r.min.x + 6.0, r.min.y + TITLE_H + ins as f32 * INPUT_H + 2.0), egui::vec2(r.width() - 12.0, body_h));
+        let guess = shown_body(&measured, &*graph, n);
+        if guess > 0.0 || graph.body_height(n) > 0.0 {
+            let body = egui::Rect::from_min_size(egui::pos2(r.min.x + 6.0, r.min.y + TITLE_H + ins as f32 * INPUT_H + 2.0), egui::vec2(r.width() - 12.0, guess.max(1.0)));
             if area.intersects(body) {
-                let inner = ui
-                    .scope_builder(egui::UiBuilder::new().max_rect(body).id_salt(("body", n)), |ui| {
-                        ui.set_clip_rect(area);
-                        ui.spacing_mut().item_spacing.y = 3.0;
-                        graph.body(ui, n)
-                    })
-                    .inner;
-                changed |= inner;
+                let inner = ui.scope_builder(egui::UiBuilder::new().max_rect(body).id_salt(("body", n)), |ui| {
+                    ui.set_clip_rect(area);
+                    ui.spacing_mut().item_spacing.y = 3.0;
+                    graph.body(ui, n)
+                });
+                changed |= inner.inner;
+                // What the settings really took: the box fits it from the next frame.
+                let took = inner.response.rect.height();
+                if (took - guess).abs() > 0.5 {
+                    measured.insert(n, took);
+                    ui.ctx().request_repaint();
+                }
             }
         }
     }
@@ -297,6 +304,13 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         d.insert_temp(id.with("pan"), pan);
         d.insert_temp(id.with("wire"), drag);
         d.insert_temp(id.with("sel"), selected);
+        measured.retain(|n, _| ids.contains(n));
+        d.insert_temp(measured_id, measured);
     });
     changed
+}
+
+/// A box's settings height: as tall as they were last drawn, else the graph's guess.
+fn shown_body(measured: &std::collections::HashMap<u32, f32>, graph: &dyn Graph, n: u32) -> f32 {
+    measured.get(&n).copied().unwrap_or_else(|| graph.body_height(n))
 }

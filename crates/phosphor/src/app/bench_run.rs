@@ -655,7 +655,7 @@ impl PhosphorApp {
                         if ev {
                             m.signal.source = phosphor_engine::ModSource::LfoSine;
                             m.signal.rate = 0.5;
-                            m.event = Some(phosphor_engine::Trigger { threshold: 0.5, target: Some(phosphor_engine::ControlTarget::MasterFade), value: 1.0, both_ways: false });
+                            m.event = Some(phosphor_engine::Trigger { threshold: 0.5, target: Some(phosphor_engine::ControlTarget::MasterFade), value: 1.0, both_ways: false, send: None });
                         }
                     }
                 }

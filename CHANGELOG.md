@@ -76,6 +76,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Mapping clashes are pointed out (one knob moving several things, two inputs fighting over one control).
 
 **Interface**
+- Designer boxes are as tall as their settings (a Timer's or Event's last switch no longer hangs below the box).
+- Designer Event boxes can send OSC / MIDI / an Arduino pin out as well as (or instead of) setting a control.
 - The section you're in and the panel you last clicked show in their colour; a tab's close X takes its colour too
   (black on the tab you're in).
 - Surprise moved from the top bar to the Quick menu and the Layers panel.

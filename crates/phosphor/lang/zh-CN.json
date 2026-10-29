@@ -324,6 +324,7 @@
 "Also record a copy": "同时录制副本",
 "Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.": "此部件的值一变动(无论谁操作)就同时发送给另一个应用(TouchDesigner、灯光、Resolume…)。目的地在面板顶部的 OSC 输出中设置。",
 "Also send to": "同时发送到",
+"Also sends the value out (OSC to the Control Surface's OSC out, MIDI, an Arduino pin)": "同时把数值发送出去（OSC 到控制面板的 OSC 输出、MIDI、Arduino 引脚）",
 "Also sends the value out (OSC to the Control Surface's OSC out, or MIDI)": "同时发送该值(OSC 发到控制面板的 OSC 输出,或 MIDI)",
 "Also:": "另外:",
 "Also: Audio beat (kick) under any slider's wave button.": "另外:音频节拍(底鼓)在任意滑块的波形按钮下。",

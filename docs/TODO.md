@@ -51,6 +51,8 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       Cmd-Z over the canvas, 50 steps per comp, boxes and wires only: a slider change isn't undone), Duplicate copies
       a box's settings, a half-visible box shows the settings that fit, a Number box's Knob is mappable (right-click ›
       Learn). Multi-select done 2026-10-30: Shift-click titles, drag moves them together, right-click › Wrap N boxes.
+      **2026-10-30 (later):** boxes size to what their settings drew (`ui::nodes` measures each body), Event boxes
+      send OSC / MIDI / Arduino out (`Trigger.send`).
 - [x] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
       (then they're keyable and mappable like the rest). *(2026-10-30, test; not installed)* OSC: /phosphor/layer/N/text_size,
       …/fade/K, …/mixer/K. A text layer redraws one picture at a time while its size moves (no pile-up of threads).
