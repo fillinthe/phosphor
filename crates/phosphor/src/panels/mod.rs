@@ -50,6 +50,7 @@ mod modulators;
 mod sequencer;
 mod leds;
 mod laser_box;
+mod timeline_lasers;
 mod laser_zones;
 mod lasers;
 mod mapping;

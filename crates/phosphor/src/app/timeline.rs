@@ -61,7 +61,20 @@ impl State {
                 self.control.send_to(&self.comp, to, e.value);
             }
         }
-        if self.comp.timeline.tracks.is_empty() || self.timeline_applied == Some(self.timeline_pos) {
+        if self.timeline_applied == Some(self.timeline_pos) {
+            return;
+        }
+        // Laser lanes: each projector shows the look the playhead is in.
+        if !self.comp.timeline.laser_looks.is_empty() {
+            let (tl, lasers) = (&self.comp.timeline, &mut self.comp.lasers);
+            for p in &mut lasers.projectors {
+                if let Some(look) = tl.look_at(p.id, self.timeline_pos) {
+                    p.look = look;
+                }
+            }
+        }
+        if self.comp.timeline.tracks.is_empty() {
+            self.timeline_applied = Some(self.timeline_pos);
             return;
         }
         // Recording: a control moved by hand since the timeline last set it gets a key here instead.

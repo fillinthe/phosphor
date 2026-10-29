@@ -24,6 +24,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Drawing shapes: click on the Laser Designer's canvas to draw a line, drag its corners to adjust it.
 - A transform box round the picked laser shape: drag its corners to size it, the knob to turn it, the middle to move
   it; Fill area sizes it to fill the laser's area.
+- Laser looks on the Timeline: each projector gets a lane of looks (Timeline › + Laser look adds one at the
+  playhead); drag a look to move when it starts, right-click for another look.
 - Laser shape colours as sliders (red, green, blue and a hue sweep), so colour can be keyed on the timeline, cued or
   mapped like any other setting.
 - Onion skin: a picture shown faintly behind the Laser Designer's canvas, to trace over by hand or line shapes up
