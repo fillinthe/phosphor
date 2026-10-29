@@ -9,7 +9,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 
 use laser_dac::{Frame, FrameSession, FrameSessionConfig};
-use phosphor_engine::laser::{LaserInputs, LaserPoint, Picture, look_paths, project, test_pattern, trace, trace_source};
+use phosphor_engine::laser::{LaserInputs, LaserPoint, Picture, project, projector_paths, trace, trace_source};
 use phosphor_engine::{Lasers, ModInputs};
 
 pub use phosphor_engine::laser::FPS;
@@ -107,7 +107,11 @@ impl LaserOut {
     /// as (source, width, height) monitors (keys `FIRST_KEY + i`), and whether to read them back this frame.
     pub fn pictures_wanted(&mut self, lasers: &Lasers, size: (u32, u32), now: f64) -> (Vec<(u64, u32, u32)>, bool) {
         let previewing = self.shown.is_some_and(|t| t.elapsed().as_secs_f32() < 0.5);
-        let in_use = |look: u64| previewing || lasers.armed && lasers.projectors.iter().any(|p| p.enabled && !p.test_pattern && lasers.look(p.look).is_some_and(|l| l.id == look));
+        let shows = |p: &phosphor_engine::LaserProjector, look: u64| {
+            let is = |id: u64| lasers.look(id).is_some_and(|l| l.id == look);
+            if p.zones.is_empty() { is(p.look) } else { p.zones.iter().any(|z| z.enabled && is(if z.look == 0 { p.look } else { z.look })) }
+        };
+        let in_use = |look: u64| previewing || lasers.armed && lasers.projectors.iter().any(|p| p.enabled && !p.test_pattern && shows(p, look));
         let mut sources: Vec<u64> = Vec::new();
         for s in lasers.looks.iter().filter(|l| in_use(l.id)).flat_map(|l| &l.shapes).filter(|s| s.enabled && s.kind == phosphor_engine::LaserShapeKind::Trace) {
             let src = trace_source(s);
@@ -213,10 +217,10 @@ impl LaserOut {
     }
 }
 
-/// What projector `p` draws at `t` seconds: its look (or the test pattern) traced to fit its points a second, then
-/// placed and dimmed.
+/// What projector `p` draws at `t` seconds: its look, its zones' looks or the test pattern, traced to fit its points a
+/// second, then placed and dimmed.
 pub fn frame_for(lasers: &Lasers, p: &phosphor_engine::LaserProjector, t: f64, mods: &ModInputs, master: f32, inputs: &LaserInputs) -> Vec<LaserPoint> {
-    let paths = if p.test_pattern { test_pattern() } else { lasers.look(p.look).map(|l| look_paths(l, t, mods, inputs)).unwrap_or_default() };
+    let paths = projector_paths(lasers, p, t, mods, inputs);
     project(&trace(&paths, (p.pps / FPS) as usize), p, master)
 }
 

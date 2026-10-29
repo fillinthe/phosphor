@@ -21,7 +21,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   like any shape, mixed with your own shapes and words.
 - Video trace: any layer, or the whole mix, traced live into laser outlines in the picture's colours. Bright shapes
   on dark work best: a silhouette, a logo, a camera with Remove background.
-- A test pattern per projector for lining lasers up: the edge of its area, a circle, a cross, an arrow pointing up
+- Laser zones: split a projector's area into zones, each showing its own look with its own brightness, placed by
+  dragging its corners (straighten a wall or screen seen at an angle). Dark areas: parts of the area the beam never
+  lights, whatever is drawn (a balcony, a doorway).
+- A test pattern per projector for lining lasers up (in each zone when it has zones): the edge of its area, a circle, a cross, an arrow pointing up
   and a corner in each colour to check flips and colour balance.
 - When a look has more lines than a laser can draw in one frame, the shortest are left out (the Designer says how
   many) instead of the laser slowing down.
@@ -58,7 +61,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Mapping clashes are pointed out (one knob moving several things, two inputs fighting over one control).
 
 **Interface**
-- The section you're in and the panel you last clicked show in their colour.
+- The section you're in and the panel you last clicked show in their colour; a tab's close X takes its colour too
+  (black on the tab you're in).
 - Surprise moved from the top bar to the Quick menu and the Layers panel.
 - The top bar, effect lists, slice groups and the mixer no longer run out of room, in any language.
 - Fixes to translations (status lines that were half English).

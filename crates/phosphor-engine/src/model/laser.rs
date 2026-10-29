@@ -278,6 +278,61 @@ pub struct LaserProjector {
     /// Draws the test pattern instead of its look (lining the laser up). Never saved.
     #[serde(skip)]
     pub test_pattern: bool,
+    /// Zones: parts of its area, each showing a look (none = its look fills the area).
+    pub zones: Vec<LaserZone>,
+    /// Areas the beam never lights (a balcony, a doorway), in its scan area.
+    pub dark: Vec<LaserArea>,
+}
+
+/// A part of a projector's area showing its own look, placed and straightened (its corners pinned onto a surface
+/// seen at an angle).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LaserZone {
+    pub id: u64,
+    pub name: String,
+    pub enabled: bool,
+    /// The look it shows (0 = the projector's look).
+    pub look: u64,
+    pub brightness: f32,
+    /// The look inside the zone: position, size, turn.
+    pub x: f32,
+    pub y: f32,
+    pub size: f32,
+    pub rotate: f32,
+    /// Where the zone's corners land in the scan area: bottom left, bottom right, top right, top left.
+    pub corners: [[f32; 2]; 4],
+}
+
+impl Default for LaserZone {
+    fn default() -> Self {
+        Self { id: 0, name: "Zone 1".into(), enabled: true, look: 0, brightness: 1.0, x: 0.0, y: 0.0, size: 1.0, rotate: 0.0, corners: FULL_AREA }
+    }
+}
+
+/// The whole scan area's corners (bottom left, bottom right, top right, top left).
+pub const FULL_AREA: [[f32; 2]; 4] = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+
+/// A rectangle in a projector's scan area (-1..1).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LaserArea {
+    pub left: f32,
+    pub bottom: f32,
+    pub right: f32,
+    pub top: f32,
+}
+
+impl Default for LaserArea {
+    fn default() -> Self {
+        Self { left: -0.2, bottom: -0.2, right: 0.2, top: 0.2 }
+    }
+}
+
+impl LaserArea {
+    pub fn contains(&self, x: f32, y: f32) -> bool {
+        (self.left.min(self.right)..=self.left.max(self.right)).contains(&x) && (self.bottom.min(self.top)..=self.bottom.max(self.top)).contains(&y)
+    }
 }
 
 impl Default for LaserProjector {
@@ -299,6 +354,8 @@ impl Default for LaserProjector {
             color: [1.0; 3],
             floor: -1.0,
             test_pattern: false,
+            zones: Vec::new(),
+            dark: Vec::new(),
         }
     }
 }
@@ -357,6 +414,23 @@ impl Lasers {
     pub fn projector_mut(&mut self, id: u64) -> Option<&mut LaserProjector> {
         self.projectors.iter_mut().find(|p| p.id == id)
     }
+
+    /// A projector's or a zone's brightness (`ControlTarget::LaserBrightness` takes either id).
+    pub fn brightness(&self, id: u64) -> Option<f32> {
+        self.projectors.iter().find_map(|p| if p.id == id { Some(p.brightness) } else { p.zones.iter().find(|z| z.id == id).map(|z| z.brightness) })
+    }
+
+    pub fn brightness_mut(&mut self, id: u64) -> Option<&mut f32> {
+        for p in &mut self.projectors {
+            if p.id == id {
+                return Some(&mut p.brightness);
+            }
+            if let Some(z) = p.zones.iter_mut().find(|z| z.id == id) {
+                return Some(&mut z.brightness);
+            }
+        }
+        None
+    }
 }
 
 #[cfg(test)]
@@ -372,7 +446,8 @@ mod tests {
             n += 1;
             n
         });
-        comp.lasers.projectors.push(LaserProjector { id: 50, look: look.id, floor: -0.4, ..Default::default() });
+        let zones = vec![LaserZone { id: 60, look: look.id, corners: [[-1.0, -1.0], [0.0, -0.9], [0.0, 1.0], [-1.0, 0.8]], ..Default::default() }];
+        comp.lasers.projectors.push(LaserProjector { id: 50, look: look.id, floor: -0.4, zones, dark: vec![LaserArea::default()], ..Default::default() });
         comp.lasers.looks.push(look);
         comp.lasers.armed = true;
         let back: crate::Composition = serde_json::from_str(&serde_json::to_string(&comp).unwrap()).unwrap();

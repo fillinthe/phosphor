@@ -58,7 +58,7 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
             to_unit(comp.lasers.shape(*shape)?.field(*field as usize)?, min, max, false)
         }
         ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => comp.lasers.master,
-        ControlTarget::LaserBrightness(id) => comp.lasers.projectors.iter().find(|p| p.id == *id)?.brightness,
+        ControlTarget::LaserBrightness(id) => comp.lasers.brightness(*id)?,
         ControlTarget::Color { owner, part } => comp.color(*owner)?.unit(*part as usize),
         ControlTarget::Fixture { fixture, param } => comp.dmx.fixtures.iter().find(|f| f.id == *fixture)?.param(*param)?,
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
@@ -290,8 +290,8 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         }
         ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => comp.lasers.master = v.clamp(0.0, 1.0),
         ControlTarget::LaserBrightness(id) => {
-            if let Some(p) = comp.lasers.projector_mut(*id) {
-                p.brightness = v.clamp(0.0, 1.0);
+            if let Some(b) = comp.lasers.brightness_mut(*id) {
+                *b = v.clamp(0.0, 1.0);
             }
         }
         ControlTarget::MaskFeather(id) => {
@@ -658,6 +658,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     }
     for p in &comp.lasers.projectors {
         out.push((ControlTarget::LaserBrightness(p.id), format!("{} · brightness", p.name)));
+        for z in &p.zones {
+            out.push((ControlTarget::LaserBrightness(z.id), format!("{} · {} · brightness", p.name, z.name)));
+        }
     }
     for look in &comp.lasers.looks {
         for (n, s) in look.shapes.iter().enumerate() {
