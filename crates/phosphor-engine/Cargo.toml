@@ -6,6 +6,9 @@ edition = "2024"
 description = "Phosphor real-time video engine (wgpu: Metal natively, WebGPU in the browser)"
 
 [dependencies]
+# Single-stroke letters for laser text (Hershey fonts; acknowledgement shown in the Lasers panel and the README).
+vector-text-core = "0.1"
+vector-text-hershey = "0.1"
 earcutr = "0.5"
 wgpu = { version = "30", default-features = false, features = ["wgsl"] }
 bytemuck = { version = "1.25", features = ["derive"] }

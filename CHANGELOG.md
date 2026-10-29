@@ -15,6 +15,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - **Laser Designer** (Designer area › Lasers): make your own looks from circles, lines, polygons, stars, waves,
   Lissajous figures, spirals and beams. Spin them, draw them on, run rainbows along them, move them with LFOs and
   the music. The canvas draws the look the way the laser will, within the laser's points a second.
+- Words as laser looks: type text (several lines too) in six single-stroke styles (Simple, Bold, Serif, Script,
+  Italic, Gothic), the kind of letters lasers draw cleanly.
+- Laser show files (.ild, ILDA) as part of a look: they play at their own speed, placed, sized, spun and drawn on
+  like any shape, mixed with your own shapes and words.
 - Each projector has its look, brightness, size, position, rotation, flips and colour balance.
 - Safety first: lasers light up only while armed, every project opens with them off, Blackout and closing Phosphor
   turn them off, and each projector has a floor (nothing drawn below it, to keep beams off the audience).

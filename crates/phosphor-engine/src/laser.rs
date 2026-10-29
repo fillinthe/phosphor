@@ -4,10 +4,13 @@
 //! spaces the points so a whole frame fits the laser's points-a-second budget. `project` places the picture in a
 //! projector's scan area, applies its colour balance and brightness, and blanks anything below its safety floor.
 
+use std::collections::HashMap;
 use std::f32::consts::TAU;
+use std::sync::Arc;
 
 use crate::control::modulate;
-use crate::model::{LaserLook, LaserProjector, LaserShape, LaserShapeKind};
+use crate::ilda;
+use crate::model::{LaserFont, LaserLook, LaserProjector, LaserShape, LaserShapeKind};
 use crate::ModInputs;
 
 /// One point the laser draws: -1..1 across and up, colour 0..1 (all 0 = beam off).
@@ -47,13 +50,24 @@ const CORNER_WAIT: usize = 3;
 /// A beam (dot): points spent on it.
 const DOT_POINTS: usize = 24;
 
-/// Every enabled shape's lines at `t` seconds.
-pub fn look_paths(look: &LaserLook, t: f64, mods: &ModInputs) -> Vec<Path> {
-    look.shapes.iter().filter(|s| s.enabled).flat_map(|s| shape_paths(s, t, mods)).collect()
+/// Laser files' frames, by the file's path (the app reads them; see `LaserShape::file`).
+pub type LaserFiles = HashMap<String, Arc<Vec<Vec<ilda::Point>>>>;
+
+/// Every enabled shape's lines at `t` seconds (`files`: laser files read so far).
+pub fn look_paths(look: &LaserLook, t: f64, mods: &ModInputs, files: &LaserFiles) -> Vec<Path> {
+    look.shapes.iter().filter(|s| s.enabled).flat_map(|s| shape_paths(s, t, mods, files)).collect()
+}
+
+/// A shape's lines before they're placed: around (0, 0), about -1..1 big, with their own colours when they have them.
+struct Unit {
+    points: Vec<[f32; 2]>,
+    colors: Option<Vec<[f32; 3]>>,
+    closed: bool,
+    dots: bool,
 }
 
 /// One shape's lines at `t` seconds (`mods`: its modulation).
-pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs) -> Vec<Path> {
+pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs, files: &LaserFiles) -> Vec<Path> {
     let x = modulate(s.x, -1.0, 1.0, s.mods.x.as_ref(), mods);
     let y = modulate(s.y, -1.0, 1.0, s.mods.y.as_ref(), mods);
     let size = modulate(s.size, 0.0, 1.0, s.mods.size.as_ref(), mods);
@@ -65,21 +79,126 @@ pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs) -> Vec<Path> {
     let turn = (rotate.to_radians() as f64 + s.spin as f64 * t * std::f64::consts::TAU) as f32;
     let phase = ((s.motion as f64 * t).fract() as f32) * TAU;
     let count = s.count.max(0.5);
-    let (unit, closed, dots) = unit_shape(s.kind, count, s.shape.clamp(0.0, 1.0), phase);
+    let units = match s.kind {
+        LaserShapeKind::Text => text_strokes(&s.text, s.font),
+        LaserShapeKind::File => files.get(&s.file).map(|frames| file_frame(frames, t, count)).unwrap_or_default(),
+        kind => {
+            let (points, closed, dots) = unit_shape(kind, count, s.shape.clamp(0.0, 1.0), phase);
+            vec![Unit { points, colors: None, closed, dots }]
+        }
+    };
     let (sin, cos) = turn.sin_cos();
-    let n = unit.len().max(1) as f32;
-    let mut path = Path { closed, dots, points: Vec::with_capacity(unit.len()) };
-    for (i, [ux, uy]) in unit.into_iter().enumerate() {
-        let (px, py) = (ux * size, uy * size);
-        let p = [x + px * cos - py * sin, y + px * sin + py * cos];
-        // Rainbow: the hue runs along the shape (and round over time when the shape moves).
-        let rgb = if s.rainbow > 0.0 { blend(s.color, hue(i as f32 / n + phase / TAU), s.rainbow) } else { s.color };
-        path.points.push((p, rgb));
-    }
+    // Rainbow: the hue runs along the whole shape (and round over time when the shape moves).
+    let n = units.iter().map(|u| u.points.len()).sum::<usize>().max(1) as f32;
+    let mut i = 0usize;
+    let mut paths: Vec<Path> = units
+        .into_iter()
+        .map(|u| {
+            let mut path = Path { closed: u.closed, dots: u.dots, points: Vec::with_capacity(u.points.len()) };
+            for (k, [ux, uy]) in u.points.into_iter().enumerate() {
+                let (px, py) = (ux * size, uy * size);
+                let p = [x + px * cos - py * sin, y + px * sin + py * cos];
+                let own = u.colors.as_ref().and_then(|c| c.get(k).copied()).unwrap_or(s.color);
+                let rgb = if s.rainbow > 0.0 { blend(own, hue(i as f32 / n + phase / TAU), s.rainbow) } else { own };
+                path.points.push((p, rgb));
+                i += 1;
+            }
+            path
+        })
+        .collect();
     if draw < 1.0 {
-        path = cut(&path, draw);
+        paths = cut_all(&paths, draw);
     }
-    vec![path]
+    paths
+}
+
+/// Words as single strokes (Hershey's fonts: each stroke drawn once, no outlines), lines stacked, centred and
+/// fitted to -1..1 across.
+fn text_strokes(text: &str, font: LaserFont) -> Vec<Unit> {
+    use vector_text_core::Renderer;
+    use vector_text_hershey::{HersheyFont, HersheyRenderer};
+    let hershey = |f: LaserFont| match f {
+        LaserFont::Simple => HersheyFont::Romans,
+        LaserFont::Bold => HersheyFont::Romand,
+        LaserFont::Serif => HersheyFont::Romanc,
+        LaserFont::Script => HersheyFont::Scripts,
+        LaserFont::Italic => HersheyFont::Italicc,
+        LaserFont::Gothic => HersheyFont::Gotheng,
+    };
+    /// Hershey units from one line to the next.
+    const LINE: f32 = 32.0;
+    let mut strokes: Vec<Vec<[f32; 2]>> = Vec::new();
+    for (row, line) in text.lines().enumerate() {
+        let mut stroke: Vec<[f32; 2]> = Vec::new();
+        for p in HersheyRenderer::render_text(line, hershey(font)) {
+            // (Hershey's y runs down the page.)
+            let q = [p.x as f32, -(p.y as f32) - row as f32 * LINE];
+            if !p.pen && !stroke.is_empty() {
+                strokes.push(std::mem::take(&mut stroke));
+            }
+            stroke.push(q);
+        }
+        if !stroke.is_empty() {
+            strokes.push(stroke);
+        }
+    }
+    strokes.retain(|s| s.len() > 1);
+    let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+    for p in strokes.iter().flatten() {
+        lo = [lo[0].min(p[0]), lo[1].min(p[1])];
+        hi = [hi[0].max(p[0]), hi[1].max(p[1])];
+    }
+    let span = (hi[0] - lo[0]).max(hi[1] - lo[1]);
+    if span <= 0.0 {
+        return Vec::new();
+    }
+    let (mid, scale) = ([(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5], 2.0 / span);
+    strokes
+        .into_iter()
+        .map(|s| Unit { points: s.into_iter().map(|p| [(p[0] - mid[0]) * scale, (p[1] - mid[1]) * scale]).collect(), colors: None, closed: false, dots: false })
+        .collect()
+}
+
+/// The frame of a laser file showing at `t` seconds (`fps` frames a second, looping), as lit lines with the file's
+/// colours; a point lit on its own is a beam.
+fn file_frame(frames: &[Vec<ilda::Point>], t: f64, fps: f32) -> Vec<Unit> {
+    if frames.is_empty() {
+        return Vec::new();
+    }
+    let frame = &frames[((t.max(0.0) * fps as f64) as usize) % frames.len()];
+    let mut out = Vec::new();
+    let mut run: (Vec<[f32; 2]>, Vec<[f32; 3]>) = (Vec::new(), Vec::new());
+    let finish = |run: &mut (Vec<[f32; 2]>, Vec<[f32; 3]>), out: &mut Vec<Unit>| {
+        let (mut points, mut colors) = std::mem::take(run);
+        // Every point on one spot: a beam (the laser stays there).
+        if points.windows(2).all(|w| dist(w[0], w[1]) < 1e-4) {
+            points.truncate(1);
+            colors = vec![colors.iter().copied().find(|c| *c != [0.0; 3]).unwrap_or([0.0; 3])];
+        }
+        if points.len() >= 2 || colors.first().is_some_and(|c| *c != [0.0; 3]) {
+            let dots = points.len() == 1;
+            out.push(Unit { points, colors: Some(colors), closed: false, dots });
+        }
+    };
+    for p in frame {
+        let rgb = p.rgb.map(|c| c as f32 / 255.0);
+        if p.blank || rgb == [0.0; 3] {
+            // The beam travels dark to here; the next lit point draws from here.
+            finish(&mut run, &mut out);
+            run.0.push([p.x, p.y]);
+            run.1.push([0.0; 3]);
+            continue;
+        }
+        if let Some(c) = run.1.last_mut().filter(|c| **c == [0.0; 3]) {
+            *c = rgb;
+        }
+        run.0.push([p.x, p.y]);
+        run.1.push(rgb);
+    }
+    finish(&mut run, &mut out);
+    // A lone dark start point (the beam only travelled there) isn't drawn.
+    out.retain(|u| u.points.len() >= 2 || u.colors.as_ref().is_some_and(|c| c[0] != [0.0; 3]));
+    out
 }
 
 /// A shape's corners around (0, 0), about -1..1 big: (points, closed, dots).
@@ -139,7 +258,32 @@ fn unit_shape(kind: LaserShapeKind, count: f32, shape: f32, phase: f32) -> (Vec<
             let r = if n == 1 { 0.0 } else { shape.max(0.02) };
             (ring(n, r, TAU / 4.0 + phase).collect(), false, true)
         }
+        // (Made from their words or file: `text_strokes`, `file_frame`.)
+        LaserShapeKind::Text | LaserShapeKind::File => (Vec::new(), false, false),
     }
+}
+
+/// The first `part` (0..1) of a shape's paths, by length, drawn in order.
+fn cut_all(paths: &[Path], part: f32) -> Vec<Path> {
+    if paths.len() == 1 {
+        return vec![cut(&paths[0], part)];
+    }
+    let len = |p: &Path| if p.dots { p.points.len() as f32 * 0.05 } else { p.points.windows(2).map(|w| dist(w[0].0, w[1].0)).sum::<f32>() };
+    let mut left = paths.iter().map(len).sum::<f32>() * part;
+    let mut out = Vec::new();
+    for p in paths {
+        let l = len(p);
+        if l <= left {
+            out.push(p.clone());
+            left -= l;
+        } else {
+            if left > 0.0 && l > 0.0 {
+                out.push(cut(p, left / l));
+            }
+            break;
+        }
+    }
+    out
 }
 
 /// The first `part` (0..1) of a path, by length.
@@ -214,22 +358,27 @@ pub fn trace(paths: &[Path], budget: usize) -> Vec<LaserPoint> {
         .collect();
     let dots: Vec<bool> = order.iter().map(|&(i, _)| paths[i].dots).collect();
 
-    // What the frame costs besides the lit lines: travel, waits, corners, beams. The lit points get the rest.
-    let mut fixed = 0usize;
-    let mut lit_length = 0.0f32;
-    let mut from = [0.0f32, 0.0];
-    for (pts, &dot) in lines.iter().zip(&dots) {
-        fixed += travel_points(from, pts[0].0);
-        if dot {
-            fixed += pts.len() * DOT_POINTS + travel_between_dots(pts);
-        } else {
-            // (Each segment takes one point at least, however short.)
-            fixed += 2 * CORNER_WAIT + corners(pts) * CORNER_WAIT + pts.len().saturating_sub(1);
-            lit_length += pts.windows(2).map(|w| dist(w[0].0, w[1].0)).sum::<f32>();
+    // What the frame costs besides the lit lines: travel, waits, corners, beams. The lit points get the rest. A
+    // busy frame (words, many strokes) waits less at jumps and corners before its lines get coarser.
+    let cost = |blank_wait: usize, corner_wait: usize| {
+        let mut fixed = 0usize;
+        let mut from = [0.0f32, 0.0];
+        for (pts, &dot) in lines.iter().zip(&dots) {
+            fixed += travel_points(from, pts[0].0, blank_wait);
+            if dot {
+                fixed += pts.len() * DOT_POINTS + travel_between_dots(pts, blank_wait);
+            } else {
+                // (Each segment takes one point at least, however short.)
+                fixed += 2 * corner_wait + corners(pts) * corner_wait + pts.len().saturating_sub(1);
+            }
+            from = pts[pts.len() - 1].0;
         }
-        from = pts[pts.len() - 1].0;
-    }
-    fixed += travel_points(from, [0.0, 0.0]);
+        fixed + travel_points(from, [0.0, 0.0], blank_wait)
+    };
+    let waits = [(BLANK_WAIT, CORNER_WAIT), (4, 2), (3, 1), (2, 1)];
+    let (blank_wait, corner_wait) = waits.iter().copied().find(|&(b, c)| cost(b, c) <= budget * 3 / 4).unwrap_or(waits[waits.len() - 1]);
+    let fixed = cost(blank_wait, corner_wait);
+    let lit_length: f32 = lines.iter().zip(&dots).filter(|(_, d)| !**d).map(|(pts, _)| pts.windows(2).map(|w| dist(w[0].0, w[1].0)).sum::<f32>()).sum();
     let room = budget.saturating_sub(fixed).max(budget / 4);
     let step = (lit_length / room as f32).max(LIT_STEP);
     // Too much for the budget even so: beams get fewer points each.
@@ -238,17 +387,17 @@ pub fn trace(paths: &[Path], budget: usize) -> Vec<LaserPoint> {
     let mut out = Vec::with_capacity(budget);
     let mut from = [0.0f32, 0.0];
     for (pts, &dot) in lines.iter().zip(&dots) {
-        blank_to(&mut out, from, pts[0].0);
+        blank_to(&mut out, from, pts[0].0, blank_wait);
         if dot {
             for (k, (p, rgb)) in pts.iter().enumerate() {
                 if k > 0 {
-                    blank_to(&mut out, pts[k - 1].0, *p);
+                    blank_to(&mut out, pts[k - 1].0, *p, blank_wait);
                 }
                 out.extend(std::iter::repeat_n(LaserPoint { x: p[0], y: p[1], rgb: *rgb }, dot_points));
             }
         } else {
             let (p0, c0) = pts[0];
-            out.extend(std::iter::repeat_n(LaserPoint { x: p0[0], y: p0[1], rgb: c0 }, CORNER_WAIT));
+            out.extend(std::iter::repeat_n(LaserPoint { x: p0[0], y: p0[1], rgb: c0 }, corner_wait));
             for (k, w) in pts.windows(2).enumerate() {
                 let ((a, ca), (b, cb)) = (w[0], w[1]);
                 let n = (dist(a, b) / step).floor() as usize + 1;
@@ -258,35 +407,35 @@ pub fn trace(paths: &[Path], budget: usize) -> Vec<LaserPoint> {
                     out.push(LaserPoint { x: p[0], y: p[1], rgb: lerp3(ca, cb, f) });
                 }
                 if k + 2 < pts.len() && sharp(a, b, pts[k + 2].0) {
-                    out.extend(std::iter::repeat_n(LaserPoint { x: b[0], y: b[1], rgb: cb }, CORNER_WAIT));
+                    out.extend(std::iter::repeat_n(LaserPoint { x: b[0], y: b[1], rgb: cb }, corner_wait));
                 }
             }
             let (pn, cn) = pts[pts.len() - 1];
-            out.extend(std::iter::repeat_n(LaserPoint { x: pn[0], y: pn[1], rgb: cn }, CORNER_WAIT));
+            out.extend(std::iter::repeat_n(LaserPoint { x: pn[0], y: pn[1], rgb: cn }, corner_wait));
         }
         from = pts[pts.len() - 1].0;
     }
-    blank_to(&mut out, from, [0.0, 0.0]);
+    blank_to(&mut out, from, [0.0, 0.0], blank_wait);
     out
 }
 
-fn travel_points(a: [f32; 2], b: [f32; 2]) -> usize {
-    2 * BLANK_WAIT + (dist(a, b) / BLANK_STEP).ceil() as usize
+fn travel_points(a: [f32; 2], b: [f32; 2], wait: usize) -> usize {
+    2 * wait + (dist(a, b) / BLANK_STEP).ceil() as usize
 }
 
-fn travel_between_dots(pts: &[([f32; 2], [f32; 3])]) -> usize {
-    pts.windows(2).map(|w| travel_points(w[0].0, w[1].0)).sum()
+fn travel_between_dots(pts: &[([f32; 2], [f32; 3])], wait: usize) -> usize {
+    pts.windows(2).map(|w| travel_points(w[0].0, w[1].0, wait)).sum()
 }
 
 /// Beam off: wait where we are, move, wait for the mirrors to settle.
-fn blank_to(out: &mut Vec<LaserPoint>, a: [f32; 2], b: [f32; 2]) {
+fn blank_to(out: &mut Vec<LaserPoint>, a: [f32; 2], b: [f32; 2], wait: usize) {
     let dark = |p: [f32; 2]| LaserPoint { x: p[0], y: p[1], rgb: [0.0; 3] };
-    out.extend(std::iter::repeat_n(dark(a), BLANK_WAIT));
+    out.extend(std::iter::repeat_n(dark(a), wait));
     let n = (dist(a, b) / BLANK_STEP).ceil() as usize;
     for j in 1..=n {
         out.push(dark(lerp(a, b, j as f32 / n as f32)));
     }
-    out.extend(std::iter::repeat_n(dark(b), BLANK_WAIT));
+    out.extend(std::iter::repeat_n(dark(b), wait));
 }
 
 /// Corners sharper than about 45°.
@@ -351,8 +500,59 @@ mod tests {
     use super::*;
 
     fn look(kinds: &[LaserShapeKind]) -> LaserLook {
-        let shapes = kinds.iter().enumerate().map(|(i, &kind)| LaserShape { id: i as u64 + 1, kind, x: i as f32 * 0.3 - 0.3, size: 0.3, ..Default::default() }).collect();
+        let shapes = kinds.iter().enumerate().map(|(i, &kind)| LaserShape { id: i as u64 + 1, kind, x: i as f32 * 0.3 - 0.3, size: 0.3, file: "test.ild".into(), ..Default::default() }).collect();
         LaserLook { id: 1, name: "Test".into(), shapes }
+    }
+
+    fn pt(x: f32, y: f32, blank: bool) -> ilda::Point {
+        ilda::Point { x, y, rgb: [255, 0, 0], blank }
+    }
+
+    /// A two-frame laser file: a square (one dark move, then lit), then a line and a lone dot.
+    fn files() -> LaserFiles {
+        let square = vec![pt(-0.5, -0.5, true), pt(0.5, -0.5, false), pt(0.5, 0.5, false), pt(-0.5, 0.5, false), pt(-0.5, -0.5, false)];
+        let second = vec![pt(-0.8, 0.0, true), pt(0.8, 0.0, false), pt(0.0, 0.6, true), pt(0.0, 0.6, false)];
+        LaserFiles::from([("test.ild".to_string(), Arc::new(vec![square, second]))])
+    }
+
+    /// Text: one stroke a path, fitted to the shape's size and centred; lines stack; nothing for empty words.
+    #[test]
+    fn text_draws_single_strokes() {
+        let s = LaserShape { kind: LaserShapeKind::Text, text: "HI".into(), size: 0.5, ..Default::default() };
+        let paths = shape_paths(&s, 0.0, &ModInputs::default(), &files());
+        assert!(paths.len() >= 4, "H is 3 strokes, I one: {}", paths.len());
+        let xs: Vec<f32> = paths.iter().flat_map(|p| p.points.iter().map(|q| q.0[0])).collect();
+        let (lo, hi) = (xs.iter().copied().fold(f32::MAX, f32::min), xs.iter().copied().fold(f32::MIN, f32::max));
+        assert!((hi - lo - 1.0).abs() < 0.05 && (hi + lo).abs() < 0.05, "1 wide (size 0.5) and centred: {lo}..{hi}");
+        let two = LaserShape { text: "HI\nHI".into(), ..s.clone() };
+        let ys: Vec<f32> = shape_paths(&two, 0.0, &ModInputs::default(), &files()).iter().flat_map(|p| p.points.iter().map(|q| q.0[1])).collect();
+        assert!(ys.iter().copied().fold(f32::MIN, f32::max) > 0.1 && ys.iter().copied().fold(f32::MAX, f32::min) < -0.1, "two lines, one above the other");
+        let busy = LaserShape { text: "PHOSPHOR".into(), ..s.clone() };
+        let frame = trace(&shape_paths(&busy, 0.0, &ModInputs::default(), &files()), 600);
+        assert!(frame.len() <= 600, "a word fits a 600-point frame: {}", frame.len());
+        let blank = LaserShape { text: "  ".into(), ..s };
+        assert!(shape_paths(&blank, 0.0, &ModInputs::default(), &files()).is_empty());
+        for font in LaserFont::ALL {
+            let f = LaserShape { kind: LaserShapeKind::Text, font, ..Default::default() };
+            assert!(!shape_paths(&f, 0.0, &ModInputs::default(), &files()).is_empty(), "{font:?} draws");
+        }
+    }
+
+    /// A laser file plays its frames in time (looping), lit runs as lines in the file's colours, a lone lit point
+    /// as a beam, dark moves left dark; a file not read yet draws nothing.
+    #[test]
+    fn laser_files_play_their_frames() {
+        let s = LaserShape { kind: LaserShapeKind::File, file: "test.ild".into(), size: 1.0, count: 10.0, ..Default::default() };
+        let first = shape_paths(&s, 0.0, &ModInputs::default(), &files());
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].points.len(), 5, "the square, from where the dark move ended");
+        assert_eq!(first[0].points[0].1, [1.0, 0.0, 0.0], "the file's colour");
+        let second = shape_paths(&s, 0.15, &ModInputs::default(), &files());
+        assert_eq!(second.len(), 2, "a line and a beam");
+        assert!(second.iter().any(|p| p.dots && p.points.len() == 1));
+        assert_eq!(shape_paths(&s, 0.2, &ModInputs::default(), &files()), first, "loops");
+        let missing = LaserShape { file: "not read.ild".into(), ..s };
+        assert!(shape_paths(&missing, 0.0, &ModInputs::default(), &files()).is_empty());
     }
 
     /// Every shape draws, a frame stays within its budget, starts and ends dark, and never jumps far with the beam on.
@@ -360,7 +560,7 @@ mod tests {
     fn frames_fit_the_budget_and_never_jump_lit() {
         let mods = ModInputs::default();
         for &kind in &LaserShapeKind::ALL {
-            let paths = look_paths(&look(&[kind, LaserShapeKind::Circle]), 0.5, &mods);
+            let paths = look_paths(&look(&[kind, LaserShapeKind::Circle]), 0.5, &mods, &files());
             assert!(!paths.is_empty(), "{kind:?} draws");
             let budget = 30_000 / 30;
             let frame = trace(&paths, budget);
@@ -378,7 +578,7 @@ mod tests {
     /// A small budget makes lines coarser instead of dropping them; a big one spaces points at the finest step.
     #[test]
     fn budget_sets_the_spacing() {
-        let paths = look_paths(&look(&[LaserShapeKind::Spiral]), 0.0, &ModInputs::default());
+        let paths = look_paths(&look(&[LaserShapeKind::Spiral]), 0.0, &ModInputs::default(), &files());
         let small = trace(&paths, 300);
         let big = trace(&paths, 3000);
         assert!(small.len() < big.len());
@@ -389,12 +589,12 @@ mod tests {
     #[test]
     fn draw_amount_cuts_the_shape() {
         let mut s = LaserShape { kind: LaserShapeKind::Circle, size: 0.5, ..Default::default() };
-        let full: usize = trace(&shape_paths(&s, 0.0, &ModInputs::default()), 4000).iter().filter(|p| p.lit()).count();
+        let full: usize = trace(&shape_paths(&s, 0.0, &ModInputs::default(), &files()), 4000).iter().filter(|p| p.lit()).count();
         s.draw = 0.5;
-        let half: usize = trace(&shape_paths(&s, 0.0, &ModInputs::default()), 4000).iter().filter(|p| p.lit()).count();
+        let half: usize = trace(&shape_paths(&s, 0.0, &ModInputs::default(), &files()), 4000).iter().filter(|p| p.lit()).count();
         assert!((half as f32 / full as f32 - 0.5).abs() < 0.15, "{half} of {full}");
         s.draw = 0.0;
-        assert!(shape_paths(&s, 0.0, &ModInputs::default()).is_empty());
+        assert!(shape_paths(&s, 0.0, &ModInputs::default(), &files()).is_empty());
     }
 
     /// Projection: placed, flipped, dimmed, colour-balanced; the floor and the scan area's edge blank the beam.

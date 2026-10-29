@@ -2,7 +2,7 @@
 //! and the Laser Designer (looks made of shapes, drawn on a canvas the way the laser draws them: the traced path,
 //! glowing). Output: `crate::lasers`; geometry: `phosphor_engine::laser`.
 
-use phosphor_engine::laser::{look_paths, trace};
+use phosphor_engine::laser::{LaserFiles, look_paths, trace};
 use phosphor_engine::{LaserLook, LaserProjector, LaserShape, LaserShapeKind, MASTER_ID};
 
 use super::*;
@@ -129,6 +129,10 @@ fn projectors(ui: &mut egui::Ui, st: &mut State) {
 }
 
 fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
+    #[cfg(not(target_arch = "wasm32"))]
+    let files = st.lasers.files(&st.comp.lasers);
+    #[cfg(target_arch = "wasm32")]
+    let files = LaserFiles::default();
     crate::ui::heading(ui, format!("{} Laser Designer", icon::PEN_NIB));
     let comp = &mut st.comp;
     if comp.lasers.looks.is_empty() {
@@ -174,7 +178,14 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
                         comp.next_id += 1;
                         let look = comp.lasers.look_mut(picked.look).expect("the look is there");
                         let color = phosphor_engine::laser::hue(look.shapes.len() as f32 * 0.17);
-                        look.shapes.push(LaserShape { id, kind, color, ..Default::default() });
+                        let shape = LaserShape { id, kind, color, ..Default::default() };
+                        // Words and files fill the scan area; files play at the speed laser software uses.
+                        let shape = match kind {
+                            LaserShapeKind::Text => LaserShape { size: 0.8, ..shape },
+                            LaserShapeKind::File => LaserShape { size: 1.0, count: 30.0, motion: 0.0, ..shape },
+                            _ => shape,
+                        };
+                        look.shapes.push(shape);
                         picked.shape = Some(id);
                         ui.close();
                     }
@@ -192,13 +203,14 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
         picked.shape = look.shapes.first().map(|s| s.id);
     }
     ui.columns(2, |cols| {
-        canvas(&mut cols[0], &look, t, &st.mod_inputs, picked, &mut comp.lasers);
-        shape_list(&mut cols[1], comp, picked);
+        let mods = st.mod_inputs;
+        canvas(&mut cols[0], &look, t, &mods, picked, &mut st.comp.lasers, &files);
+        shape_list(&mut cols[1], st, picked);
     });
 }
 
 /// The look drawn as the laser draws it (the traced path, lit parts glowing); click a shape to pick it, drag it to move it.
-fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::ModInputs, picked: &mut Picked, lasers: &mut phosphor_engine::Lasers) {
+fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::ModInputs, picked: &mut Picked, lasers: &mut phosphor_engine::Lasers, files: &LaserFiles) {
     let side = ui.available_width().min(560.0).max(160.0);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click_and_drag());
     let p = ui.painter_at(rect);
@@ -218,7 +230,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         p.rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(255, 40, 30, 24));
         p.line_segment([to_screen(-1.0, floor), to_screen(1.0, floor)], egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 60, 40)));
     }
-    let frame = trace(&look_paths(look, t, mods), budget as usize);
+    let frame = trace(&look_paths(look, t, mods, files), budget as usize);
     for w in frame.windows(2) {
         if !(w[0].lit() && w[1].lit()) {
             continue;
@@ -259,8 +271,13 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
 }
 
 /// The look's shapes (on/off, pick, delete) and the picked one's settings.
-fn shape_list(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition, picked: &mut Picked) {
-    let Some(look) = comp.lasers.look_mut(picked.look) else { return };
+fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
+    #[cfg(not(target_arch = "wasm32"))]
+    let file_error = |path: &str| st.lasers.file_error(path);
+    #[cfg(target_arch = "wasm32")]
+    let file_error = |_: &str| None::<String>;
+    let mut choose_file = None;
+    let Some(look) = st.comp.lasers.look_mut(picked.look) else { return };
     let mut remove = None;
     for (n, s) in look.shapes.iter_mut().enumerate() {
         crate::ui::toolbar(ui, |ui| {
@@ -293,6 +310,27 @@ fn shape_list(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition, picked
     let id = s.id;
     let field = |i: u8| ControlTarget::LaserShape { shape: id, field: i };
     let w = ui.available_width().min(260.0);
+    match s.kind {
+        LaserShapeKind::Text => {
+            ui.add(egui::TextEdit::multiline(&mut s.text).desired_rows(2).desired_width(w).hint_text("Words (a new line for each line)"));
+            choice_combo(ui, ("laser_font", s.id), &mut s.font, 120.0, false);
+            // (The fonts' licence asks for this to go with them.)
+            help(ui, "Letters: the Hershey fonts, made by Dr. A. V. Hershey at the U.S. National Bureau of Standards; their data format by James Hurt, Cognition, Inc.");
+        }
+        LaserShapeKind::File => {
+            crate::ui::toolbar(ui, |ui| {
+                if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Choose…")).on_hover_text("A laser show file (.ild, ILDA)").clicked() {
+                    choose_file = Some(s.id);
+                }
+                let name = std::path::Path::new(&s.file).file_name().map_or("(no file yet)".to_string(), |n| n.to_string_lossy().into_owned());
+                hint(ui, &name).on_hover_text(&s.file);
+            });
+            if let Some(e) = file_error(&s.file) {
+                ui.colored_label(egui::Color32::from_rgb(255, 120, 90), format!("Can't play it: {e}"));
+            }
+        }
+        _ => {}
+    }
     Level::range(&mut s.x, -1.0, 1.0, "X").default(0.0).width(w).modulation(&mut s.mods.x).target(field(0)).show(ui);
     Level::range(&mut s.y, -1.0, 1.0, "Y").default(0.0).width(w).modulation(&mut s.mods.y).target(field(1)).show(ui);
     Level::range(&mut s.size, 0.0, 1.0, "Size").default(0.5).width(w).modulation(&mut s.mods.size).target(field(2)).show(ui);
@@ -307,4 +345,10 @@ fn shape_list(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition, picked
     if let Some(name) = s.kind.shape_name() {
         Level::range(&mut s.shape, 0.0, 1.0, name).default(0.45).width(w).target(field(8)).show(ui);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(shape) = choose_file {
+        st.dialogs.pick_file(crate::dialogs::Purpose::LaserFile(shape), Some(("Laser file", &["ild", "ILD"])));
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = choose_file;
 }

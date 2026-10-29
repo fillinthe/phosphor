@@ -885,13 +885,19 @@ impl PhosphorApp {
             if name == "lasers" {
                 // The Laser Designer with the starter look on a projector that has no box (nothing is sent); a LASER line.
                 let comp = &mut self.state.comp;
-                let look = phosphor_engine::LaserLook::starter(|| comp.new_id());
+                let mut look = phosphor_engine::LaserLook::starter(|| comp.new_id());
+                // Words under it, and PHOSPHOR_LASER_FILE (an .ild) on top when given.
+                let words = phosphor_engine::LaserShape { id: comp.new_id(), kind: phosphor_engine::LaserShapeKind::Text, text: "PHOSPHOR".into(), y: -0.75, size: 0.45, color: [1.0, 0.2, 0.8], ..Default::default() };
+                look.shapes.push(words);
+                if let Ok(file) = std::env::var("PHOSPHOR_LASER_FILE") {
+                    look.shapes.push(phosphor_engine::LaserShape { id: comp.new_id(), kind: phosphor_engine::LaserShapeKind::File, file, size: 0.3, x: 0.6, y: 0.6, count: 30.0, ..Default::default() });
+                }
                 let id = comp.new_id();
                 comp.lasers.projectors.push(phosphor_engine::LaserProjector { id, look: look.id, ..Default::default() });
                 comp.lasers.looks.push(look);
                 comp.lasers.projectors[0].floor = -0.6;
                 let p = &comp.lasers.projectors[0];
-                let frame = crate::lasers::frame_for(&comp.lasers, p, 1.0, &self.state.mod_inputs, 1.0);
+                let frame = crate::lasers::frame_for(&comp.lasers, p, 1.0, &self.state.mod_inputs, 1.0, &Default::default());
                 println!("LASER points={} lit={} budget={}", frame.len(), frame.iter().filter(|q| q.lit()).count(), p.pps / crate::lasers::FPS);
                 continue;
             }

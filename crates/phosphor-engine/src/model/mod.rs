@@ -67,4 +67,4 @@ pub use source::*;
 pub use surface::*;
 pub use tracking::*;
 
-choice!(BlendMode, FitMode, CrossGroup, FaderCurve, ChunkBy, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, VoiceMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape, HeadLayout, HeadMotion, TimecodeSource, QrStyle, RenderRate, ChainMode, TestPattern, Ease, MarkerKind, TextMotion, LaserShapeKind);
+choice!(BlendMode, FitMode, CrossGroup, FaderCurve, ChunkBy, PlayDirection, TransitionKind, LaunchTiming, WidgetKind, TriggerMode, VoiceMode, Autopilot, DmxProtocol, PixelOrder, FixtureShape, HeadLayout, HeadMotion, TimecodeSource, QrStyle, RenderRate, ChainMode, TestPattern, Ease, MarkerKind, TextMotion, LaserShapeKind, LaserFont);

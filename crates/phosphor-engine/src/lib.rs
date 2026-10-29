@@ -10,6 +10,7 @@ mod gpu;
 pub use gpu::{deep_colour, deep_colour_features, deep_colour_usable, set_deep_colour};
 pub mod expr;
 pub mod graph;
+pub mod ilda;
 pub mod laser;
 pub mod mapping;
 pub mod patch;

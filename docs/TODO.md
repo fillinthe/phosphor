@@ -324,8 +324,10 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       projector's points a second), arming (never saved), Blackout, a floor per projector, colour balance, flips;
       ControlTarget::LaserShape / LaserBrightness (MIDI, OSC /phosphor/laser/…, cues, AI). ILDA files still play as
       video clips. *(engine tests for tracing / budget / safety; screenshots; bench --quick lasers prints LASER.
-      **Not tried on a real laser**: needs you with one.)* Next: ILDA files and text as laser looks, a picture traced
-      into lines, zones, a test pattern.
+      **Not tried on a real laser**: needs you with one.)* **ILDA files and text as laser looks done 2026-10-30**
+      (Text shape: Hershey single-stroke fonts, 6 styles, several lines; Laser file shape: .ild frames at their own
+      speed, read off the UI thread; busy frames wait less at jumps and corners to stay in budget). Next: a picture
+      traced into lines, zones, a test pattern.
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
       colours to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
       system, to see what it accepts.

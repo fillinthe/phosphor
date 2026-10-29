@@ -113,6 +113,11 @@ impl PhosphorApp {
                         st.launch_source(id, crate::media::spec_for_path(&p.to_string_lossy()), Vec::new(), name_of(p), now);
                     }
                 }
+                Purpose::LaserFile(shape) => {
+                    if let (Some(p), Some(s)) = (paths.first(), self.state.comp.lasers.shape_mut(shape)) {
+                        s.file = p.to_string_lossy().into_owned();
+                    }
+                }
                 Purpose::ImportFiles => {
                     // Importing while a collection is showing puts the files in it (else you'd not see them).
                     let into = match &st.media_view.filter {

@@ -18,10 +18,14 @@ pub enum LaserShapeKind {
     Spiral,
     /// Bright dots in a ring: beams in haze.
     Beams,
+    /// Words in single-stroke letters (`LaserShape::text`, `font`).
+    Text,
+    /// A laser show file (.ild) playing (`LaserShape::file`).
+    File,
 }
 
 impl LaserShapeKind {
-    pub const ALL: [LaserShapeKind; 8] = [
+    pub const ALL: [LaserShapeKind; 10] = [
         LaserShapeKind::Line,
         LaserShapeKind::Circle,
         LaserShapeKind::Polygon,
@@ -30,6 +34,8 @@ impl LaserShapeKind {
         LaserShapeKind::Lissajous,
         LaserShapeKind::Spiral,
         LaserShapeKind::Beams,
+        LaserShapeKind::Text,
+        LaserShapeKind::File,
     ];
 
     pub fn name(self) -> &'static str {
@@ -42,6 +48,8 @@ impl LaserShapeKind {
             LaserShapeKind::Lissajous => "Lissajous",
             LaserShapeKind::Spiral => "Spiral",
             LaserShapeKind::Beams => "Beams",
+            LaserShapeKind::Text => "Text",
+            LaserShapeKind::File => "Laser file",
         }
     }
 
@@ -54,7 +62,8 @@ impl LaserShapeKind {
             LaserShapeKind::Lissajous => Some(("Across", 1.0, 7.0)),
             LaserShapeKind::Spiral => Some(("Turns", 1.0, 8.0)),
             LaserShapeKind::Beams => Some(("Beams", 1.0, 24.0)),
-            LaserShapeKind::Line | LaserShapeKind::Circle => None,
+            LaserShapeKind::File => Some(("Frames a second", 1.0, 60.0)),
+            LaserShapeKind::Line | LaserShapeKind::Circle | LaserShapeKind::Text => None,
         }
     }
 
@@ -66,6 +75,33 @@ impl LaserShapeKind {
             LaserShapeKind::Lissajous => Some("Up and down"),
             LaserShapeKind::Beams => Some("Ring size"),
             _ => None,
+        }
+    }
+}
+
+/// Letters for Text shapes: Hershey's single-stroke fonts (a laser draws each stroke once, no outlines).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LaserFont {
+    #[default]
+    Simple,
+    Bold,
+    Serif,
+    Script,
+    Italic,
+    Gothic,
+}
+
+impl LaserFont {
+    pub const ALL: [LaserFont; 6] = [LaserFont::Simple, LaserFont::Bold, LaserFont::Serif, LaserFont::Script, LaserFont::Italic, LaserFont::Gothic];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            LaserFont::Simple => "Simple",
+            LaserFont::Bold => "Bold",
+            LaserFont::Serif => "Serif",
+            LaserFont::Script => "Script",
+            LaserFont::Italic => "Italic",
+            LaserFont::Gothic => "Gothic",
         }
     }
 }
@@ -97,6 +133,11 @@ pub struct LaserShape {
     /// How much of it is drawn, 0..1 (draw it on by moving this).
     pub draw: f32,
     pub mods: LaserMods,
+    /// Text shapes: the words (a new line = `\n`) and their letters.
+    pub text: String,
+    pub font: LaserFont,
+    /// Laser file shapes: the .ild file.
+    pub file: String,
 }
 
 /// Modulation (LFO, sound, beat…) of a shape's settings.
@@ -128,6 +169,9 @@ impl Default for LaserShape {
             motion: 0.25,
             draw: 1.0,
             mods: LaserMods::default(),
+            text: "PHOSPHOR".into(),
+            font: LaserFont::Simple,
+            file: String::new(),
         }
     }
 }
