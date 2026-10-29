@@ -59,6 +59,12 @@ for s in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Phosphor.icns"
 
+# A test build (made from a branch other than main) never updates by itself: a public release would replace work
+# that isn't released yet. Release builds come from main (or a tag in CI: "HEAD").
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+TEST_BUILD=""
+[[ "$BRANCH" != "main" && "$BRANCH" != "HEAD" ]] && TEST_BUILD="  <key>PhosphorTestBuild</key><string>${BRANCH}</string>"
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -75,6 +81,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleLocalizations</key><array><string>en</string><string>es</string><string>de</string><string>fr</string><string>it</string><string>pt-BR</string><string>ja</string><string>zh-Hans</string></array>
   <key>LSMinimumSystemVersion</key><string>${MIN_MACOS}</string>
+${TEST_BUILD}
   <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
