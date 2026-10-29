@@ -42,11 +42,7 @@ pub(crate) fn laser_lanes(ui: &mut egui::Ui, st: &mut State, lane_x: f32, lane_w
     let length = st.comp.timeline.length.max(0.1);
     let x_of = |t: f64| lane_x + (t / length) as f32 * lane_w;
     let looks: Vec<(u64, String)> = st.comp.lasers.looks.iter().map(|l| (l.id, l.name.clone())).collect();
-    let colour_of = |look: u64| {
-        let i = looks.iter().position(|(id, _)| *id == look).unwrap_or(0);
-        let [r, g, b] = phosphor_engine::laser::hue(i as f32 * 0.17 + 0.5).map(|c| (c * 255.0) as u8);
-        Color32::from_rgb(r, g, b)
-    };
+    let colour_of = |look: u64| super::lasers::look_colour(&looks, look);
     let projectors: Vec<(u64, String)> = st.comp.lasers.projectors.iter().filter(|p| st.comp.timeline.laser_looks.iter().any(|c| c.projector == p.id)).map(|p| (p.id, p.name.clone())).collect();
     let mut moved: Option<(usize, f64)> = None;
     let mut relook: Option<(usize, u64)> = None;

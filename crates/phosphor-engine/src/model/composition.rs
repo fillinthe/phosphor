@@ -480,6 +480,7 @@ impl Composition {
         for l in &mut self.layers {
             l.trigger_clip(col, now, secs);
         }
+        self.lasers.trigger_column(col);
     }
 
     /// Fade time for launches (0 = cut).

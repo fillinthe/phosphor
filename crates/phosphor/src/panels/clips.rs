@@ -236,6 +236,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             if n == 0 {
                 help(ui, "Add layers first; each layer gets a row of clip slots.");
             }
+            super::clip_lasers::laser_rows(ui, &grid, comp, ROW_HEADER_W);
             crate::ui::carry_scroll(ui);
         });
     }

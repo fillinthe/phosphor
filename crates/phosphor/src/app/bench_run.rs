@@ -926,6 +926,8 @@ impl PhosphorApp {
                         comp.cues.cues.push(cue);
                     }
                     comp.lasers.projectors[0].look = first;
+                    // Its clip row: the two looks in columns 1 and 3.
+                    comp.lasers.projectors[0].clips = vec![first, 0, other];
                 }
                 // PHOSPHOR_LASER_ZONES=1: two zones (the right one keystoned, showing the test pattern's look) and a
                 // dark area.

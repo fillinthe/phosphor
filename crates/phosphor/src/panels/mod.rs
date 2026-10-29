@@ -49,6 +49,7 @@ mod ai_shader;
 mod modulators;
 mod sequencer;
 mod leds;
+mod clip_lasers;
 mod laser_box;
 mod timeline_lasers;
 mod laser_zones;
