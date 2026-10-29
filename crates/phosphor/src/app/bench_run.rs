@@ -882,6 +882,20 @@ impl PhosphorApp {
                 continue;
             }
             #[cfg(not(target_arch = "wasm32"))]
+            if name == "lasers" {
+                // The Laser Designer with the starter look on a projector that has no box (nothing is sent); a LASER line.
+                let comp = &mut self.state.comp;
+                let look = phosphor_engine::LaserLook::starter(|| comp.new_id());
+                let id = comp.new_id();
+                comp.lasers.projectors.push(phosphor_engine::LaserProjector { id, look: look.id, ..Default::default() });
+                comp.lasers.looks.push(look);
+                comp.lasers.projectors[0].floor = -0.6;
+                let p = &comp.lasers.projectors[0];
+                let frame = crate::lasers::frame_for(&comp.lasers, p, 1.0, &self.state.mod_inputs, 1.0);
+                println!("LASER points={} lit={} budget={}", frame.len(), frame.iter().filter(|q| q.lit()).count(), p.pps / crate::lasers::FPS);
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
             if name == "livedata" {
                 // Live data: weather in Reykjavik, the ISS and earthquakes on (a LIVEDATA line at the end).
                 let d = &mut self.state.comp.live_data;

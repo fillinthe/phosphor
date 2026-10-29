@@ -4,6 +4,55 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Next (not released yet)
+
+Lasers with a Laser Designer, the Designer for building visuals as boxes wired together, AI assistants that can run
+the show with you, and old MadMapper, VDMX and Resolume shows opening in Phosphor.
+
+**Lasers**
+- Send looks to laser projectors through their controller boxes: Ether Dream, Helios, LaserCube (network and USB)
+  and any IDN (ILDA Digital Network) laser. Phosphor finds them by itself.
+- **Laser Designer** (Designer area › Lasers): make your own looks from circles, lines, polygons, stars, waves,
+  Lissajous figures, spirals and beams. Spin them, draw them on, run rainbows along them, move them with LFOs and
+  the music. The canvas draws the look the way the laser will, within the laser's points a second.
+- Each projector has its look, brightness, size, position, rotation, flips and colour balance.
+- Safety first: lasers light up only while armed, every project opens with them off, Blackout and closing Phosphor
+  turn them off, and each projector has a floor (nothing drawn below it, to keep beams off the audience).
+- Laser brightness and every shape's settings can be mapped to MIDI, OSC, cues and AI assistants.
+
+**AI assistants**
+- AI apps that speak MCP can control Phosphor: list its controls, set them, press buttons (clips, cues, Blackout)
+  and look at the output. MIDI / OSC panel › AI assistants › Copy MCP settings.
+
+**Designer** (a new area, ⌘4)
+- Build a comp as boxes wired together: pictures, effects, mixes and outputs, each showing its live picture.
+- Number boxes (LFO, sound, beat, random, steps, knob) drive any setting; numbers from the weather, the ISS,
+  earthquakes, a web address, a timer, the clock or a table file.
+- Boxes inside boxes, saved by name and used again; Undo; select several and wrap them in a box.
+- Points: shapes, pictures and 3D models as points in space, moved, turned into particles and drawn as dots,
+  lines or a mesh with a camera and lights.
+
+**Opening other apps' shows**
+- MadMapper projects (.mad): outputs, slices, groups, masks.
+- VDMX projects: layers and their effects.
+- Resolume compositions: layers, effects, generators and the Advanced Output (screens, slices and masks).
+
+**Show**
+- Blackout: every output fades to black and back (top bar, mappable, OSC).
+- IN / OUT activity lights in the status line; click one to open its panel.
+- Live from the internet: NASA and ISS views, rocket pads, a volcano cam, and any YouTube or Twitch live page.
+- NDI sound as the audio input. G-Drop music visualizers as layers. A 360 View effect for panoramas and 360 video.
+- Online: LottieFiles animations and the Cleveland Museum of Art's open collection.
+- Layer cards show the playhead and speed; a clip can keep its own speed and loop.
+- Text size and outline, fade settings and mixer settings can be mapped and keyed on the timeline.
+- Mapping clashes are pointed out (one knob moving several things, two inputs fighting over one control).
+
+**Interface**
+- The section you're in and the panel you last clicked show in their colour.
+- Surprise moved from the top bar to the Quick menu and the Layers panel.
+- The top bar, effect lists, slice groups and the mixer no longer run out of room, in any language.
+- Fixes to translations (status lines that were half English).
+
 ## 0.4.0 (2026-10-27)
 
 Phosphor speaks eight languages now, maps like MadMapper, and lets you build your own control panels.

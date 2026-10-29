@@ -49,6 +49,7 @@ mod ai_shader;
 mod modulators;
 mod sequencer;
 mod leds;
+mod lasers;
 mod mapping;
 mod mapping_points;
 mod collections;
@@ -169,10 +170,12 @@ pub enum Tab {
     Stack,
     /// A panel you made (View › New Panel): Control Surface page N, your own buttons and sliders.
     MyPanel(u8),
+    /// Laser projectors and the Laser Designer.
+    Lasers,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 31] = [
+    pub const ALL: [Tab; 32] = [
         Tab::Preview,
         Tab::Stack,
         Tab::Layers,
@@ -195,6 +198,7 @@ impl Tab {
         Tab::Surface,
         Tab::Account,
         Tab::Leds,
+        Tab::Lasers,
         Tab::Cues,
         Tab::LayerWindows,
         Tab::Studio,
@@ -213,7 +217,7 @@ impl Tab {
             Tab::Media | Tab::Online => Hue::Media,
             Tab::Library | Tab::ShaderEditor | Tab::Designer => Hue::Effect,
             Tab::Inputs | Tab::Audio => Hue::Live,
-            Tab::Output | Tab::Mapping | Tab::Studio | Tab::Stage | Tab::Stream | Tab::Network | Tab::Leds | Tab::LayerWindows => Hue::Output,
+            Tab::Output | Tab::Mapping | Tab::Studio | Tab::Stage | Tab::Stream | Tab::Network | Tab::Leds | Tab::Lasers | Tab::LayerWindows => Hue::Output,
             Tab::Control | Tab::Surface | Tab::MyPanel(_) | Tab::Modulators | Tab::Devices => Hue::Control,
             _ => return None,
         })
@@ -250,6 +254,7 @@ impl Tab {
             Tab::Surface => "Control Surface",
             Tab::Account => "Account",
             Tab::Leds => "LED / DMX",
+            Tab::Lasers => "Lasers",
             Tab::Scopes => "Scopes",
             Tab::Notes => "Notes",
             Tab::Timeline => "Timeline",
@@ -388,6 +393,7 @@ pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
         Tab::MyPanel(n) => surface::my_panel(ui, st, n as usize),
         Tab::Account => account(ui, st),
         Tab::Leds => leds(ui, st),
+        Tab::Lasers => scrolled(ui, "lasers_scroll", |ui| lasers::lasers(ui, st)),
         Tab::Scopes => scopes::scopes(ui, st),
         Tab::Cues => cues(ui, st),
         Tab::LayerWindows => layer_windows(ui, st),

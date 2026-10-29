@@ -317,8 +317,15 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 97. **Arduino** (Firmata): sensors in, LEDs / servos out (M). Hardware.
       MIDI / OSC panel › Arduino › its port (StandardFirmata): analog inputs and digital pins map like MIDI (Learn works); Send out › Arduino drives PWM pins. Checked: tests (Firmata in and out; a pretend board on a pseudo-terminal). Not tried with a real board.
 - [ ] 98. **Depth cameras** (Kinect v2, RealSense) (M). Hardware.
-- [~] 99. **Lasers** (ILDA files, Ether Dream, Helios) (M). Done: ILDA files play as clips. Left: sending to a real laser (Ether Dream, Helios): hardware, and laser safety. Owner 2026-10-30
-      asked again ("can we control lasers too?"): also DMX lasers already work today as fixtures in LED / DMX.
+- [x] 99. **Lasers** (2026-10-30, owner: "build what is needed for lasers … a laser designer section"). Lasers panel
+      (Designer area): projectors (controller box found by itself: Ether Dream, IDN, LaserCube network / USB, Helios,
+      via the laser-dac crate, MIT), the Laser Designer (looks of shapes: line, circle, polygon, star, wave, Lissajous,
+      spiral, beams; spin, draw-on, rainbow, motion, LFO / sound modulation; canvas draws the traced path within the
+      projector's points a second), arming (never saved), Blackout, a floor per projector, colour balance, flips;
+      ControlTarget::LaserShape / LaserBrightness (MIDI, OSC /phosphor/laser/…, cues, AI). ILDA files still play as
+      video clips. *(engine tests for tracing / budget / safety; screenshots; bench --quick lasers prints LASER.
+      **Not tried on a real laser**: needs you with one.)* Next: ILDA files and text as laser looks, a picture traced
+      into lines, zones, a test pattern.
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
       colours to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
       system, to see what it accepts.

@@ -32,6 +32,8 @@ mod net;
 #[cfg(not(target_arch = "wasm32"))]
 mod mcp;
 #[cfg(not(target_arch = "wasm32"))]
+mod lasers;
+#[cfg(not(target_arch = "wasm32"))]
 mod net_tls;
 #[cfg(not(target_arch = "wasm32"))]
 mod link;

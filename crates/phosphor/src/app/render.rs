@@ -70,6 +70,8 @@ impl PhosphorApp {
             #[cfg(not(target_arch = "wasm32"))]
             dmx,
             #[cfg(not(target_arch = "wasm32"))]
+            lasers,
+            #[cfg(not(target_arch = "wasm32"))]
             dmx_rec,
             #[cfg(not(target_arch = "wasm32"))]
             tracker,
@@ -293,6 +295,9 @@ impl PhosphorApp {
                 }
             }
         }
+        // Lasers: each armed projector gets its look (dark with Blackout).
+        #[cfg(not(target_arch = "wasm32"))]
+        lasers.run(&comp.lasers, show, mod_inputs, comp.blackout, now);
         // FFGL plugins draw what the last frame asked for, so this frame shows it.
         #[cfg(target_os = "macos")]
         {

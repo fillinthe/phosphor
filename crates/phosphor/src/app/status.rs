@@ -127,6 +127,11 @@ impl PhosphorApp {
                 if st.comp.dmx.enabled {
                     outs.push(("DMX", crate::panels::Tab::Leds, Flow::Count(st.dmx.packets), "DMX out to the lights (Art-Net / sACN / USB)".to_string()));
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                if st.comp.lasers.armed {
+                    let n = st.lasers.sending();
+                    outs.push(("Lasers", crate::panels::Tab::Lasers, Flow::On(n > 0), format!("Lasers armed: {n} sending")));
+                }
                 if !outs.is_empty() {
                     ui.separator();
                     heading(ui, "OUT", "What's going out (lit while something takes it)");

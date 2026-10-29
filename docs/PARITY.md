@@ -92,7 +92,7 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Test patterns, stage photo, per-side soft edges | MadMapper | ✅ |
 | Projector control (PJLink) | MadMapper | ✅ |
 | Spatial scanner (camera sees the stage) | MadMapper | ✅ (0.2.89): stage photo from projector patterns + camera |
-| Lasers | MadMapper | ➖ |
+| Lasers | MadMapper | ✅ (next): Laser Designer + Ether Dream / Helios / LaserCube / IDN output; not yet tried on a real laser |
 
 ## I/O
 | Feature | Who has it | Phosphor |

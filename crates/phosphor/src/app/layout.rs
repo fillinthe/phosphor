@@ -389,7 +389,7 @@ pub(crate) fn layout_control() -> DockState<Tab> {
 
 /// Designer: a comp as boxes wired together, with the preview beside it.
 pub(crate) fn layout_designer() -> DockState<Tab> {
-    let mut dock = DockState::new(vec![Tab::Designer]);
+    let mut dock = DockState::new(vec![Tab::Designer, Tab::Lasers]);
     dock.main_surface_mut().split_right(NodeIndex::root(), 0.7, vec![Tab::Preview]);
     dock
 }
