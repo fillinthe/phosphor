@@ -22,6 +22,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Video trace: any layer, the whole mix, or an image file, traced into laser outlines in the picture's colours.
   Bright shapes on dark work best: a silhouette, a logo, a camera with Remove background.
 - Drawing shapes: click on the Laser Designer's canvas to draw a line, drag its corners to adjust it.
+- A transform box round the picked laser shape: drag its corners to size it, the knob to turn it, the middle to move
+  it; Fill area sizes it to fill the laser's area.
+- Laser shape colours as sliders (red, green, blue and a hue sweep), so colour can be keyed on the timeline, cued or
+  mapped like any other setting.
 - Onion skin: a picture shown faintly behind the Laser Designer's canvas, to trace over by hand or line shapes up
   with (the laser never shows it).
 - Laser zones: split a projector's area into zones, each showing its own look with its own brightness, placed by

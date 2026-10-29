@@ -2,7 +2,7 @@
 //! and the Laser Designer (looks made of shapes, drawn on a canvas the way the laser draws them: the traced path,
 //! glowing). Output: `crate::lasers`; geometry: `phosphor_engine::laser`.
 
-use phosphor_engine::laser::{LaserInputs, left_out, look_paths, project, projector_paths, test_pattern, trace};
+use phosphor_engine::laser::{LaserInputs, left_out, look_paths, project, projector_paths, shape_paths, test_pattern, trace};
 use phosphor_engine::{LaserLook, LaserProjector, LaserShape, LaserShapeKind, MASTER_ID};
 
 use super::*;
@@ -330,6 +330,23 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
     if let Some(s) = picked_shape {
         p.circle_stroke(to_screen(s.x, s.y), 6.0, egui::Stroke::new(1.0, egui::Color32::WHITE));
     }
+    // The transform box: size from the corners, turn from the knob, move from inside.
+    let turn_now = |s: &LaserShape| s.rotate.to_radians() + (s.spin as f64 * t * std::f64::consts::TAU) as f32;
+    let mut fill = None;
+    if let Some(s) = picked_shape.filter(|s| s.enabled) {
+        let lines = shape_paths(s, t, mods, inputs);
+        if let Some(change) = super::laser_box::shape_box(ui, rect, s, &lines, turn_now(s), to_screen, from_screen)
+            && let Some(m) = lasers.shape_mut(s.id)
+        {
+            match change {
+                super::laser_box::BoxChange::Size(v) => m.size = v,
+                super::laser_box::BoxChange::Turn(v) => m.rotate = v,
+                super::laser_box::BoxChange::Move(x, y) => (m.x, m.y) = (x, y),
+            }
+        }
+        // Fill area: centred, sized so its farthest part reaches the area's edge.
+        fill = super::laser_box::local_bounds(s, &lines, turn_now(s)).map(|(lo, hi)| (s.id, s.size / lo.into_iter().chain(hi).map(f32::abs).fold(0.01, f32::max)));
+    }
     // A drawing: its corners as handles; a click adds one. (Corners are kept before the shape's place, size and
     // turn: a click is turned back into them.)
     if let Some(s) = picked_shape.filter(|s| s.kind == LaserShapeKind::Drawing) {
@@ -375,7 +392,15 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
             s.y = y.clamp(-1.0, 1.0);
         }
     }
-    hint(ui, &format!("{} of {budget} points a frame", frame.len()));
+    crate::ui::toolbar(ui, |ui| {
+        if crate::ui::command_if(ui, fill.is_some(), "Fill area").on_hover_text("The picked shape, centred and sized to fill the laser's area (then drag its corners to size it)").clicked()
+            && let Some((id, size)) = fill
+            && let Some(s) = lasers.shape_mut(id)
+        {
+            (s.x, s.y, s.size) = (0.0, 0.0, size.clamp(0.01, 1.0));
+        }
+        hint(ui, &format!("{} of {budget} points a frame", frame.len()));
+    });
     let out = left_out(&paths, budget as usize);
     if out > 0 {
         ui.colored_label(egui::Color32::from_rgb(255, 170, 80), format!("Too much for one frame: {out} short lines left out"))
@@ -426,6 +451,14 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     let id = s.id;
     let field = |i: u8| ControlTarget::LaserShape { shape: id, field: i };
     let w = ui.available_width().min(260.0);
+    // Colour as sliders too: each can be mapped, cued or keyed on the timeline (right-click).
+    for (i, name) in ["Red", "Green", "Blue"].iter().enumerate() {
+        Level::percent(&mut s.color[i], *name).default(1.0).width(w).target(field(9 + i as u8)).show(ui);
+    }
+    let mut h = phosphor_engine::hue_of(s.color);
+    if Level::range(&mut h, 0.0, 1.0, "Hue").default(0.0).width(w).target(field(12)).tip("Round the colour wheel, as bright as it is: key it on the timeline to sweep colours").show(ui).changed() {
+        s.set_field(12, h);
+    }
     match s.kind {
         LaserShapeKind::Text => {
             ui.add(egui::TextEdit::multiline(&mut s.text).desired_rows(2).desired_width(w).hint_text("Words (a new line for each line)"));
