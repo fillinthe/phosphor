@@ -91,10 +91,11 @@ impl Updater {
         Self { skipped, auto, ..Default::default() }
     }
 
-    /// Installs updates by itself here: the setting is on, Phosphor runs from an app bundle, and it isn't a bench.
+    /// Installs updates by itself here: the setting is on, Phosphor runs from an app bundle that isn't a test
+    /// build, and it isn't a bench.
     fn installs_by_itself(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
-        return self.auto && current_bundle().is_some() && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err();
+        return self.auto && current_bundle().is_some_and(|b| test_build(&b).is_none()) && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err();
         #[cfg(target_arch = "wasm32")]
         false
     }
@@ -312,6 +313,18 @@ fn current_bundle() -> Option<PathBuf> {
     (bundle.extension().is_some_and(|e| e == "app") && bundle.join("Contents/Info.plist").exists()).then(|| bundle.to_path_buf())
 }
 
+/// The branch a test build was made from (scripts/bundle-mac.sh marks builds that aren't from main): updates
+/// wait for a click there, so a public release doesn't replace work that isn't released yet.
+fn test_build(bundle: &std::path::Path) -> Option<String> {
+    test_build_in(&std::fs::read_to_string(bundle.join("Contents/Info.plist")).ok()?)
+}
+
+fn test_build_in(plist: &str) -> Option<String> {
+    let rest = &plist[plist.find("<key>PhosphorTestBuild</key>")? + "<key>PhosphorTestBuild</key>".len()..];
+    let value = rest.trim_start().strip_prefix("<string>")?;
+    Some(value[..value.find("</string>")?].to_string())
+}
+
 /// curl → unzip → swap the bundle. Returns (path, installed?).
 #[cfg(not(target_arch = "wasm32"))]
 fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<(PathBuf, bool), String> {
@@ -460,6 +473,10 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
     crate::ui::tool_window(ctx, &format!("{} Update Phosphor", icon::ARROW_CIRCLE_UP), &mut open, &mut detached, 440.0, |ui| {
         ui.label(format!("You have Phosphor {}.", env!("CARGO_PKG_VERSION")));
         crate::ui::toggle(ui, &mut up.auto, "Install updates by themselves").on_hover_text("Phosphor checks when it opens and every hour; a new version downloads and installs in the background, and opens when you relaunch");
+        #[cfg(not(target_arch = "wasm32"))]
+        if current_bundle().and_then(|b| test_build(&b)).is_some() {
+            crate::ui::hint(ui, "A test build: updates wait for you to install them.");
+        }
         match up.status.clone() {
             Status::Idle => {
                 if crate::ui::command(ui, "Check now").clicked() {
@@ -569,6 +586,13 @@ pub fn update_window(ctx: &egui::Context, up: &mut Updater) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Builds from a branch other than main say so in Info.plist; release builds don't.
+    #[test]
+    fn test_builds_are_marked() {
+        assert_eq!(test_build_in("<dict>\n  <key>PhosphorTestBuild</key><string>next</string>\n</dict>").as_deref(), Some("next"));
+        assert_eq!(test_build_in("<dict>\n  <key>CFBundleName</key><string>Phosphor</string>\n</dict>"), None);
+    }
 
     #[test]
     fn versions_compare() {

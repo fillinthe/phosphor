@@ -220,6 +220,7 @@
 "A sound that plays along with the timeline (music, a voice-over), with its waveform",
 "A step sequencer track on the beat (levels or on/off gates) that any control can follow",
 "A straight rectangle with the picture's own proportions (no stretching), as tall as the slice is now",
+"A test build: updates wait for you to install them.",
 "A test pattern inside every slice instead of its picture (checks each slice's own alignment)",
 "A town or city",
 "A web address answering JSON: a number out of it, asked again every so often",
