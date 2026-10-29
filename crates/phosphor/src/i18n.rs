@@ -327,8 +327,9 @@ impl Template {
             rest = &rest[i + middle.len()..];
         }
         gaps.push(rest);
-        // A gap is a number, a name or a word or two: never empty, never a whole sentence of something else.
-        if gaps.iter().any(|g| g.is_empty() || g.contains('\n')) {
+        // A gap is a number, a name or a word or two: never empty, never a whole sentence of something else (another
+        // line, or the next " · " piece, which translates by itself).
+        if gaps.iter().any(|g| g.is_empty() || g.contains('\n') || g.contains(" \u{b7} ")) {
             return None;
         }
         Some(gaps)
@@ -373,6 +374,7 @@ mod tests {
         assert_eq!(c.translate("Launch: Cut").as_deref(), Some("Lanzar: Corte"), "what fills a gap is translated too");
         assert_eq!(c.translate("Opacity\nFade style").as_deref(), Some("Opacidad\nEstilo de fundido"));
         assert_eq!(c.translate("Opacity \u{b7} 50%").as_deref(), Some("Opacidad \u{b7} 50%"));
+        assert_eq!(c.translate("Launch: Cut \u{b7} Opacity").as_deref(), Some("Lanzar: Corte \u{b7} Opacidad"), "a gap stops at the next piece");
         assert_eq!(c.translate("\u{E19A} Recently added").as_deref(), Some("\u{E19A} Añadido hace poco"), "icon, then words");
         assert_eq!(c.translate("my_clip.mov"), None);
         assert_eq!(c.translate("Same"), None);

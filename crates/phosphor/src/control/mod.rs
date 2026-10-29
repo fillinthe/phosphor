@@ -537,9 +537,15 @@ impl ControlHub {
             self.osc_status = match self.backend.open_osc(self.osc_port, &self.osc_extra_ports, self.tx.clone(), self.text_tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
                 Ok(failed) => {
                     let also: Vec<String> = self.osc_extra_ports.iter().filter(|p| **p != self.osc_port).map(|p| p.to_string()).collect();
-                    let also = if also.is_empty() { String::new() } else { format!(" (and {})", also.join(", ")) };
-                    let failed = if failed.is_empty() { String::new() } else { format!(" · couldn't open {}", failed.join("; ")) };
-                    format!("OSC listening on udp/{}{also} at {}{failed}", self.osc_port, self.local_ip.clone().unwrap_or_else(|| "this machine".into()))
+                    // Pieces joined by " · " (each one translates by itself).
+                    let mut status = vec![format!("OSC listening on udp/{} at {}", self.osc_port, self.local_ip.clone().unwrap_or_else(|| "this machine".into()))];
+                    if !also.is_empty() {
+                        status.push(format!("Also on {}", also.join(", ")));
+                    }
+                    if !failed.is_empty() {
+                        status.push(format!("Couldn't open {}", failed.join("; ")));
+                    }
+                    status.join(" · ")
                 }
                 Err(e) => format!("OSC failed: {e}"),
             };
@@ -548,7 +554,8 @@ impl ControlHub {
             native::start_gamepads(self.tx.clone());
             self.next_query = 0.0;
             if let Some(q) = &self.oscquery {
-                self.osc_status.push_str(&format!(" · OSC Query on http://{}:{}", self.local_ip.clone().unwrap_or_else(|| "localhost".into()), q.port));
+                self.osc_status.push_str(" · ");
+                self.osc_status.push_str(&format!("OSC Query on http://{}:{}", self.local_ip.clone().unwrap_or_else(|| "localhost".into()), q.port));
             }
         }
     }
