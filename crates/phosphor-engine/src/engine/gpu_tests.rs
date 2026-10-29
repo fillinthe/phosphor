@@ -485,6 +485,113 @@ fn points_shapes_travel_as_feeds_and_render() {
     assert!(engine.failed_modules.is_empty(), "shader failures: {:?}", engine.failed_modules.keys().collect::<Vec<_>>());
 }
 
+/// Effects after a points render work on the render's picture at the canvas size, not at the size of the points
+/// it read (a Model is a few texels: 40 x 3 here): an effect that changes nothing leaves the dots as they were.
+#[test]
+fn effects_after_a_points_render_run_at_the_canvas_size() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 160, height: 90, next_id: 100, ..Default::default() };
+    // A model layer: a ring of 120 points, a texel each, uploaded the way the app's models.rs does.
+    let (cols, rows) = (40u32, 3u32);
+    let mut bytes = Vec::new();
+    for i in 0..cols * rows {
+        let a = i as f32 / (cols * rows) as f32 * std::f32::consts::TAU;
+        for v in [a.cos() * 0.45, a.sin() * 0.45, 0.0, 1.0] {
+            bytes.extend_from_slice(&crate::f16(v).to_le_bytes());
+        }
+    }
+    let texture = engine.device().create_texture(&wgpu::TextureDescriptor {
+        label: Some("test model"),
+        size: wgpu::Extent3d { width: cols, height: rows, depth_or_array_layers: 1 },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: crate::gpu::DATA_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    engine.queue().write_texture(
+        wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+        &bytes,
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(cols * 8), rows_per_image: Some(rows) },
+        wgpu::Extent3d { width: cols, height: rows, depth_or_array_layers: 1 },
+    );
+    engine.set_layer_texture(1, texture);
+    let mut render = comp.new_effect("pts_dots").unwrap();
+    render.values[13] = 1.0;
+    let model = SourceSpec::Live { name: "Model".into(), format: crate::shaders::MODEL_POINTS.into(), url: String::new() };
+    comp.layers.push(LayerState { id: 1, source: model, effects: vec![render], ..Default::default() });
+    let shot = |engine: &mut Engine, comp: &Composition| {
+        for _ in 0..2 {
+            engine.render(comp, 0.0, &ModInputs::default());
+        }
+        engine.read_output().expect("output").2
+    };
+    let plain = shot(&mut engine, &comp);
+    let lit = plain.chunks(4).filter(|p| p[0].max(p[1]).max(p[2]) > 40).count();
+    assert!(lit > 50, "the ring is drawn: {lit} pixels");
+    let mut same = comp.new_effect("invert").unwrap();
+    same.values[0] = 0.0;
+    comp.layers[0].effects.push(same);
+    let after = shot(&mut engine, &comp);
+    let diff = plain.iter().zip(&after).map(|(a, b)| (*a as i32 - *b as i32).unsigned_abs() as u64).sum::<u64>() as f64 / plain.len() as f64;
+    assert!(diff < 1.0, "an effect that changes nothing changed the dots: {diff:.2} per channel on average");
+    assert!(engine.failed_modules.is_empty());
+}
+
+/// A Points: Light on a layer of its own lights the render that links to it: a red light turns a white sphere red,
+/// and the bright side is the side it comes from. With none, the default light (white) as before.
+#[test]
+fn a_points_light_box_lights_the_render() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 160, height: 90, next_id: 100, ..Default::default() };
+    let shape = crate::shaders::generator("pts_shape").expect("built in");
+    let mut mesh = comp.new_effect("pts_mesh").unwrap();
+    mesh.values[0] = 2000.0;
+    mesh.values[10] = 1.0;
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("pts_shape".into()), generator_values: shape.defaults(), effects: vec![mesh], ..Default::default() });
+    let mut light = comp.new_effect(crate::shaders::POINTS_LIGHT).unwrap();
+    light.values[2] = 0.0;
+    light.values[3] = 1.0;
+    comp.layers.push(LayerState { id: 2, source: SourceSpec::None, effects: vec![light], in_mix: false, ..Default::default() });
+    let look = |engine: &mut Engine, comp: &Composition| {
+        for _ in 0..2 {
+            engine.render(comp, 0.0, &ModInputs::default());
+        }
+        let (_, _, px) = engine.read_output().expect("output");
+        let lit: Vec<&[u8]> = px.chunks(4).filter(|p| p[0].max(p[1]).max(p[2]) > 30).collect();
+        let red = lit.iter().filter(|p| p[0] as u16 > p[1] as u16 + 40 && p[0] as u16 > p[2] as u16 + 40).count() as f32 / lit.len().max(1) as f32;
+        let left: u64 = px.chunks(4).enumerate().filter(|(i, _)| i % 160 < 80).map(|(_, p)| p[0] as u64 + p[1] as u64 + p[2] as u64).sum();
+        let right: u64 = px.chunks(4).enumerate().filter(|(i, _)| i % 160 >= 80).map(|(_, p)| p[0] as u64 + p[1] as u64 + p[2] as u64).sum();
+        (lit.len(), red, left as f64 / right.max(1) as f64)
+    };
+    let (n, red, _) = look(&mut engine, &comp);
+    assert!(n > 200 && red < 0.05, "the default light is white: {n} lit, {red} red");
+    comp.layers[0].effects[0].light = 2;
+    let (n, red, from_left) = look(&mut engine, &comp);
+    assert!(n > 200 && red > 0.5, "a red light: {n} lit, {red} red");
+    comp.layers[1].effects[0].values[0] = 1.0;
+    let (_, _, from_right) = look(&mut engine, &comp);
+    let rows = |engine: &mut Engine, comp: &Composition| {
+        for _ in 0..2 {
+            engine.render(comp, 0.0, &ModInputs::default());
+        }
+        let px = engine.read_output().expect("output").2;
+        let top: u64 = px.chunks(4).enumerate().filter(|(i, _)| i / 160 < 45).map(|(_, p)| p[0] as u64).sum();
+        let bottom: u64 = px.chunks(4).enumerate().filter(|(i, _)| i / 160 >= 45).map(|(_, p)| p[0] as u64).sum();
+        top as f64 / bottom.max(1) as f64
+    };
+    comp.layers[1].effects[0].values[0] = 0.0;
+    comp.layers[1].effects[0].values[1] = 1.0;
+    let above = rows(&mut engine, &comp);
+    comp.layers[1].effects[0].values[1] = -1.0;
+    let below = rows(&mut engine, &comp);
+    assert!(from_left > 1.1 && from_right < 0.9, "from the left (the default), then the right: left/right {from_left:.2} then {from_right:.2}");
+    assert!(above > 1.1 && below < 0.9, "from above, then below: top/bottom {above:.2} then {below:.2}");
+
+    assert!(engine.failed_modules.is_empty(), "{:?}", engine.failed_modules.keys().collect::<Vec<_>>());
+}
+
 /// A look fade: the old picture shows first and gives way to the new one over the fade.
 #[test]
 fn a_new_look_fades_in() {
@@ -575,7 +682,7 @@ fn view_360_looks_around_a_panorama() {
     let (w, h) = (64u32, 32u32);
     let pano: Vec<u8> = (0..w * h).flat_map(|i| if (16..48).contains(&(i % w)) { [0, 255, 0, 255] } else { [255, 0, 0, 255] }).collect();
     engine.upload_rgba(1, w, h, &pano);
-    comp.master_effects.push(EffectState { id: 9, effect: "view_360".into(), enabled: true, values: vec![0.0, 0.0, 60.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
+    comp.master_effects.push(EffectState { id: 9, effect: "view_360".into(), enabled: true, values: vec![0.0, 0.0, 60.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
     let centre = |engine: &mut Engine, comp: &Composition| {
         engine.render(comp, 0.0, &ModInputs::default());
         let (w, h, px) = engine.read_output().expect("output");
@@ -597,7 +704,7 @@ fn hide_face_covers_only_the_face() {
     comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
     // Face at the top left quarter (Y counts up), black style.
     let values = vec![0.25, 0.75, 0.3, 1.0, 2.0, 24.0];
-    comp.master_effects.push(EffectState { id: 9, effect: "hide_face".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
+    comp.master_effects.push(EffectState { id: 9, effect: "hide_face".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
     engine.render(&comp, 0.0, &ModInputs::default());
     let (w, _, px) = engine.read_output().expect("output");
     let at = |x: u32, y: u32| px[((y * w + x) * 4) as usize];
@@ -620,7 +727,7 @@ fn blur_background_keeps_the_person_sharp() {
     if let Some(v) = layer.generator_values.get_mut(1) {
         *v = 0.0;
     }
-    layer.effects.push(EffectState { id: 5, effect: "blur_bg".into(), enabled: true, values: vec![1.0, 0.5, 0.05, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
+    layer.effects.push(EffectState { id: 5, effect: "blur_bg".into(), enabled: true, values: vec![1.0, 0.5, 0.05, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
     comp.layers.push(layer);
     let mask: Vec<u8> = (0..32 * 16).map(|i| if i % 32 < 16 { 255 } else { 0 }).collect();
     engine.set_matte(1, 32, 16, &mask);
@@ -653,7 +760,7 @@ fn palette_snaps_to_the_nearest_colour() {
         let mut values = crate::shaders::effect("palette").unwrap().defaults();
         values[..6].copy_from_slice(&[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
         values[18] = 2.0;
-        l.effects.push(EffectState { id: 2, effect: "palette".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
+        l.effects.push(EffectState { id: 2, effect: "palette".into(), enabled: true, values, mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
         comp.layers.push(l);
         engine.render(&comp, 0.0, &ModInputs::default());
         engine.read_output().expect("output").2[0]
@@ -759,7 +866,7 @@ fn deep_colour_keeps_fine_detail() {
     comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 1.0, 1.0], ..Default::default() });
     comp.layers.push(LayerState { id: 2, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 0.0, 0.0], opacity: 0.998, ..Default::default() });
     for id in 10..13 {
-        comp.master_effects.push(crate::EffectState { id, effect: "color_match".into(), enabled: true, values: vec![4.0, 4.0, 4.0, 0.0, 0.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
+        comp.master_effects.push(crate::EffectState { id, effect: "color_match".into(), enabled: true, values: vec![4.0, 4.0, 4.0, 0.0, 0.0, 0.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
     }
     if !crate::gpu::deep_colour() {
         return;

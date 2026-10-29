@@ -19,6 +19,29 @@ pub const DEEP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Unorm;
 /// What point pictures are kept in (points.wgsl): 16-bit float, so places aren't rounded to colour steps.
 pub const DATA_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
+/// A 32-bit float as a 16-bit one (round to nearest; too big = infinity), for `DATA_FORMAT` texels: model points, tests.
+pub fn f16(x: f32) -> u16 {
+    let b = x.to_bits();
+    let sign = ((b >> 16) & 0x8000) as u16;
+    let exp = ((b >> 23) & 0xff) as i32;
+    let mant = b & 0x7f_ffff;
+    if exp == 0xff {
+        return sign | 0x7c00 | (((mant != 0) as u16) << 9);
+    }
+    let e = exp - 127 + 15;
+    if e >= 0x1f {
+        return sign | 0x7c00;
+    }
+    if e <= 0 {
+        if e < -10 {
+            return sign;
+        }
+        let m = (mant | 0x80_0000) >> (1 - e);
+        return sign | ((m + 0x1000) >> 13) as u16;
+    }
+    sign | (((e as u32) << 10) + ((mant + 0x1000) >> 13)) as u16
+}
+
 /// Can this adapter draw into `DEEP_FORMAT`? Then the device must also be made with `deep_colour_features`.
 pub fn deep_colour_usable(adapter: &wgpu::Adapter) -> bool {
     let needed = wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;

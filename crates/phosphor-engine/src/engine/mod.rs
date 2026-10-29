@@ -90,6 +90,9 @@ struct LayerResources {
     rutt: Option<Target>,
     /// What a points render (dots, mesh) draws into: the canvas size, whatever size the points came at.
     pts: Option<Target>,
+    /// The effect chain's views after a points render: the canvas size in the mix format (the chain before it
+    /// works on points at their own size and 16-bit float).
+    after_pts: [Option<Target>; 3],
     /// Previous outputs of history effects (trails), per effect id, ping-ponged by frame parity.
     history: HashMap<u64, [Option<Target>; 2]>,
     /// Multi-pass shader buffers, per effect id (or `GENERATOR_KEY` for the layer's source).
@@ -1113,7 +1116,7 @@ impl Engine {
                                 && let Some(d) = crate::shaders::effect(&t.effect)
                             {
                                 let p = t.progress(time);
-                                let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new(), blend: Default::default(), other: 0 };
+                                let fx = crate::model::EffectState { id: 1, effect: t.effect.clone(), enabled: true, values: d.defaults(), mix: 1.0 - (2.0 * p - 1.0).abs(), mods: Vec::new(), blend: Default::default(), other: 0, light: 0 };
                                 frame = self.apply_effects(layer.id ^ TRANSITION_IN, std::slice::from_ref(&fx), frame, time, mods, &comp.layers, passes);
                                 out = self.apply_effects(layer.id ^ TRANSITION_OUT, std::slice::from_ref(&fx), out, time, mods, &comp.layers, passes);
                             }

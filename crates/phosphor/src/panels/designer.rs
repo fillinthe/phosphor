@@ -13,11 +13,11 @@ use crate::ui::guarded;
 
 use super::*;
 use crate::presets::PresetStore;
-use crate::ui::nodes::{Graph, POINTS_COLOUR, node_canvas};
+use crate::ui::nodes::{Graph, LIGHT_COLOUR, POINTS_COLOUR, node_canvas};
 
 /// The Points submenu of the canvas: (name, what the box gets, true = a generator on a Picture box, false = an
 /// effect on an Effect box).
-const POINTS_BOXES: [(&str, &str, bool); 8] = [
+const POINTS_BOXES: [(&str, &str, bool); 9] = [
     ("Shape", "pts_shape", true),
     ("Model (an OBJ file)…", "model", true),
     ("Relief (a picture as points)", "pts_relief", false),
@@ -26,6 +26,7 @@ const POINTS_BOXES: [(&str, &str, bool); 8] = [
     ("Dots", "pts_dots", false),
     ("Lines", "pts_lines", false),
     ("Mesh", "pts_mesh", false),
+    ("Light (wire it into a render)", "pts_light", false),
 ];
 
 /// The Data submenu: (name, preset id). "data:N" = a Number box with `DataKind::ALL[N]`, "event" = a Number box
@@ -463,8 +464,10 @@ impl Graph for View<'_> {
         self.node(id).map_or_else(String::new, |n| n.kind.about().to_string())
     }
     fn colour(&self, id: u32) -> Color32 {
-        if self.node(id).is_some_and(|n| self.comp.node_output(n) == PortKind::Points) {
-            return POINTS_COLOUR;
+        match self.node(id).map(|n| self.comp.node_output(n)) {
+            Some(PortKind::Points) => return POINTS_COLOUR,
+            Some(PortKind::Light) => return LIGHT_COLOUR,
+            _ => {}
         }
         match self.node(id).map(|n| n.kind) {
             Some(NodeKind::Picture | NodeKind::Input) => crate::theme::Hue::Media.color(),
@@ -500,8 +503,11 @@ impl Graph for View<'_> {
             }
             NodeKind::Group => pic + ROW_H,
             NodeKind::Effect => {
-                let params = n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first()).and_then(|e| shaders::effect(&e.effect)).map_or(0, |d| d.params.len());
-                pic + ROW_H + (params as f32 + 1.0) * PARAM_H
+                let fx = n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first());
+                let params = fx.and_then(|e| shaders::effect(&e.effect)).map_or(0, |d| d.params.len());
+                // (A light has no Mix.)
+                let mix = if fx.is_some_and(|e| e.effect == shaders::POINTS_LIGHT) { 0.0 } else { 1.0 };
+                pic + ROW_H + (params as f32 + mix) * PARAM_H
             }
             NodeKind::Mix => pic + ROW_H + PARAM_H,
             NodeKind::Number => {
@@ -539,8 +545,11 @@ impl Graph for View<'_> {
                 }
             }
             NodeKind::Effect => {
-                self.preview(ui, n.parts.first().copied());
                 let Some(part) = n.parts.first().copied() else { return false };
+                match self.comp.layer(part).and_then(|l| l.effects.first()).filter(|e| e.effect == shaders::POINTS_LIGHT) {
+                    Some(fx) => light_ball(ui, &fx.values, self.preview_h()),
+                    None => self.preview(ui, Some(part)),
+                }
                 let now = self.comp.layer(part).and_then(|l| l.effects.first()).map(|e| e.effect.clone());
                 let shown = now.as_deref().and_then(shaders::effect).map_or("Pick an effect…".to_string(), |d| d.name.to_string());
                 let mut pick: Option<&'static str> = None;
@@ -567,7 +576,9 @@ impl Graph for View<'_> {
                     for (i, p) in d.params.iter().enumerate() {
                         crate::ui::param_slider(ui, &mut fx.values, &mut fx.mods, i, p, Some(ControlTarget::EffectParam { effect: fx.id, index: i }));
                     }
-                    Level::percent(&mut fx.mix, "Mix").default(1.0).width(width).target(ControlTarget::EffectMix(fx.id)).show(ui);
+                    if d.id != shaders::POINTS_LIGHT {
+                        Level::percent(&mut fx.mix, "Mix").default(1.0).width(width).target(ControlTarget::EffectMix(fx.id)).show(ui);
+                    }
                 }
             }
             NodeKind::Mix => {
@@ -742,5 +753,28 @@ impl Graph for View<'_> {
             p.push(id);
             self.go = Some(p);
         }
+    }
+}
+
+/// A Points: Light's look on its box: a ball lit from where the light comes (left / right, below / above), in its
+/// colour, with its ambient on the dark side. Drawn as rings stepping toward the bright spot (no texture).
+fn light_ball(ui: &mut egui::Ui, values: &[f32], h: f32) {
+    let v = |i: usize, d: f32| values.get(i).copied().unwrap_or(d);
+    let (across, up, hue, amount, strength, ambient) = (v(0, -0.5), v(1, 0.6), v(2, 0.1), v(3, 0.0), v(4, 1.0), v(5, 0.15));
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), h), Sense::hover());
+    let p = ui.painter();
+    p.rect_filled(rect, 3.0, Color32::BLACK);
+    let r = rect.height() * 0.42;
+    let centre = rect.center();
+    let tint = egui::Rgba::from(egui::ecolor::Hsva::new(hue, 1.0, 1.0, 1.0));
+    let light = |k: f32| {
+        let w = |c: f32| ((ambient + 0.95 * strength * k * (1.0 + amount * (c - 1.0))).clamp(0.0, 1.0) * 255.0) as u8;
+        Color32::from_rgb(w(tint.r()), w(tint.g()), w(tint.b()))
+    };
+    let toward = egui::vec2(across.clamp(-1.0, 1.0), -up.clamp(-1.0, 1.0)) * r * 0.55;
+    const RINGS: usize = 14;
+    for i in 0..RINGS {
+        let t = i as f32 / (RINGS - 1) as f32;
+        p.circle_filled(centre + toward * t, r * (1.0 - 0.85 * t), light(0.15 + 0.85 * t));
     }
 }

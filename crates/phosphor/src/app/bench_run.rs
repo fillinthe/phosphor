@@ -716,6 +716,20 @@ impl PhosphorApp {
                 wired &= comp.connect_boxes(cid, &[], render, out, 0);
                 // The LFO turns the shape (Move's Turn Y: input 1 + 4).
                 wired &= comp.connect_boxes(cid, &[], lfo, mv, 5);
+                // PHOSPHOR_POINTS_LIGHT=1: a warm Light box from the upper right wired into the render's Light input.
+                if std::env::var("PHOSPHOR_POINTS_LIGHT").is_ok() {
+                    let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+                    let light = net.add(NodeKind::Effect, [560.0, 520.0]);
+                    comp.comp_mut(cid).unwrap().network = Some(net);
+                    comp.sync_network(cid);
+                    let lp = comp.comp(cid).unwrap().network.as_ref().unwrap().node(light).unwrap().parts[0];
+                    let mut e = comp.new_effect(phosphor_engine::shaders::POINTS_LIGHT).unwrap();
+                    e.values[0] = 0.7;
+                    e.values[3] = 0.6;
+                    comp.layer_mut(lp).unwrap().effects = vec![e];
+                    let at = comp.node_inputs(comp.comp(cid).unwrap().network.as_ref().unwrap().node(render).unwrap()).len() - 1;
+                    wired &= comp.connect_boxes(cid, &[], light, render, at);
+                }
                 comp.sync_network(cid);
                 if let Some(m) = comp.modulators.iter_mut().find(|m| m.designer) {
                     m.signal.source = phosphor_engine::ModSource::LfoSaw;

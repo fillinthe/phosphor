@@ -349,23 +349,23 @@ impl Engine {
         let chain: Vec<_> = effects
             .into_iter()
             .filter(|e| e.enabled)
-            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix, e.blend, e.other)))
+            .filter_map(|e| shaders::effect(&e.effect).map(|d| (d, e.id, &e.values, &e.mods, e.mix, e.blend, e.other, e.light)))
             .collect();
         if chain.is_empty() {
             return frame;
         }
-        let (w, h) = frame.size();
+        let (mut w, mut h) = frame.size();
         // What comes out: the input's size, or the canvas once a points render has drawn.
         let mut out = (w, h);
         let canvas = self.canvas;
         let device = &self.gpu.device;
         let res = self.layers.entry(res_id).or_default();
         // Points stay 16-bit float through the chain.
-        let format = if chain.iter().any(|c| shaders::is_points(c.0.id)) { crate::gpu::DATA_FORMAT } else { self.mix_format };
+        let mut format = if chain.iter().any(|c| shaders::is_points(c.0.id)) { crate::gpu::DATA_FORMAT } else { self.mix_format };
         for slot in &mut res.fx {
             Target::ensure_format(slot, device, "fx", w, h, format);
         }
-        let views: Vec<_> = res.fx.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
+        let mut views: Vec<_> = res.fx.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
         let mut base = Uniforms::with_params(&[]);
         base.resolution = [w as f32, h as f32];
         base.time = time;
@@ -389,7 +389,7 @@ impl Engine {
             }
         };
         let parity = (self.frame_index % 2) as usize;
-        for (desc, fx_id, values, param_mods, mix, blend, other) in chain {
+        for (desc, fx_id, values, param_mods, mix, blend, other, light) in chain {
             let external = shaders::is_external(desc.entry);
             if !external && !self.ensure_module(desc.entry) {
                 continue;
@@ -448,6 +448,19 @@ impl Engine {
                         tex2 = (other != 0).then(|| self.layers.get(&other).and_then(|r| r.feed.as_ref()).map(|t| t.view.clone())).flatten();
                         if tex2.is_none() {
                             u.p[2][0] = 0.0;
+                        }
+                        // Its light: the Points: Light on layer `light` (live, modulated), or the default light. A wired
+                        // light is in charge: Shade all the way.
+                        if let Some(d) = shaders::effect(shaders::POINTS_LIGHT) {
+                            let fx = all_layers.iter().find(|l| light != 0 && l.id == light).and_then(|l| l.effects.iter().find(|e| e.effect == shaders::POINTS_LIGHT));
+                            let lp = fx.map_or_else(|| d.defaults(), |fx| resolve_params(d, &fx.values, &fx.mods, mods));
+                            for (k, v) in lp.iter().enumerate() {
+                                let i = shaders::LIGHT_SLOT + k;
+                                u.p[i / 4][i % 4] = *v;
+                            }
+                            if fx.is_some() {
+                                u.p[2][2] = 1.0;
+                            }
                         }
                         let res = self.layers.entry(res_id).or_default();
                         Target::ensure_format(&mut res.pts, &self.gpu.device, "points", canvas.0, canvas.1, self.mix_format);
@@ -511,14 +524,26 @@ impl Engine {
                         tex1 = tex1.or_else(|| Some(input.clone()));
                         tex2 = tex2.or_else(|| Some(input.clone()));
                     }
+                    let rendered = shaders::points_render(entry);
                     passes.push(Pass { entry, target: target.clone(), tex0: input, tex1, tex2, uniforms: u, mesh: None, bufs: Vec::new() });
                     input = target;
                     input_idx = next_idx;
+                    if rendered && ((w, h) != canvas || format != self.mix_format) {
+                        // From here on the chain works on a picture: the render's, at the canvas size.
+                        (w, h, format) = (canvas.0, canvas.1, self.mix_format);
+                        let res = self.layers.entry(res_id).or_default();
+                        for slot in &mut res.after_pts {
+                            Target::ensure_format(slot, &self.gpu.device, "fx after points", w, h, format);
+                        }
+                        views = res.after_pts.iter().map(|t| t.as_ref().unwrap().view.clone()).collect();
+                        base.resolution = [w as f32, h as f32];
+                    }
                 }
             }
             // Dry / wet, and the effect's blend mode (its result over what went in; masks don't apply here).
+            // (Not after a points render: what went in was points, not a picture.)
             let blend = if blend.is_mask() || blend.is_wipe() { crate::BlendMode::Normal } else { blend };
-            if mix < 0.999 || blend != crate::BlendMode::Normal {
+            if !shaders::points_render(desc.entry) && (mix < 0.999 || blend != crate::BlendMode::Normal) {
                 let i = (0..3).find(|i| Some(*i) != input_idx && Some(*i) != dry_idx).unwrap_or(0);
                 let u = Uniforms { opacity: mix, mode: blend.shader_index(), ..base };
                 passes.push(Pass { entry: "fs_mix", target: views[i].clone(), tex0: input, tex1: Some(dry), tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });

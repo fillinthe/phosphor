@@ -22,6 +22,9 @@ pub struct EffectState {
     /// Another layer whose picture the effect uses as well (a points render's colours), by id; 0 = none.
     #[serde(default)]
     pub other: u64,
+    /// The layer holding the Points: Light that lights this render (Designer: the Light wire); 0 = the default light.
+    #[serde(default)]
+    pub light: u64,
 }
 
 fn default_transition_effect() -> String {

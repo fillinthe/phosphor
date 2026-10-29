@@ -160,7 +160,7 @@ mod tests {
     use super::*;
 
     fn fx(c: &mut Composition, name: &str) -> EffectState {
-        EffectState { id: c.new_id(), effect: name.into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 }
+        EffectState { id: c.new_id(), effect: name.into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 }
     }
 
     fn movie(name: &str) -> SourceSpec {
