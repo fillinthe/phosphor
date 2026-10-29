@@ -99,6 +99,12 @@ pub enum ControlTarget {
     LayerCorner { layer: u64, point: u8 },
     /// A layer's scale X / Y, depth, tilts or crop: `part` indexes `LayerTransform::PARTS`.
     LayerTransform { layer: u64, part: u8 },
+    /// A text layer's size, outline or line spacing: `part` indexes `TextStyle::PARTS`.
+    TextPart { layer: u64, part: u8 },
+    /// A setting of a layer's shader fade (its transition shader's parameter `index`; not its progress).
+    TransitionParam { layer: u64, index: usize },
+    /// A setting of a layer's mixer plugin (FFGL mixer parameter `index`).
+    MixerParam { layer: u64, index: usize },
     /// A mapping slice's opacity and on/off (MadMapper-style surface control; ids are unique across outputs).
     SliceOpacity(u64),
     SliceEnabled(u64),

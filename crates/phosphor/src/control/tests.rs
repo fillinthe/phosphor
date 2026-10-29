@@ -502,6 +502,38 @@ fn transform_parts_are_controls() {
     assert_eq!(default_osc_address(&ControlTarget::LayerTransform { layer: id, part: 2 }), format!("/phosphor/layer/{id}/z_depth"));
 }
 
+/// Text size / outline / line spacing, a shader fade's settings and a mixer plugin's settings are controls too
+/// (mappable, keyable on the timeline), each with its own OSC address.
+#[test]
+fn text_fade_and_mixer_settings_are_controls() {
+    let mut comp = Composition::default();
+    let id = comp.add_layer().id;
+    comp.layer_mut(id).unwrap().source = phosphor_engine::SourceSpec::Text(crate::text::default_style());
+    let size = ControlTarget::TextPart { layer: id, part: 0 };
+    let spacing = ControlTarget::TextPart { layer: id, part: 2 };
+    assert!(all_targets(&comp).iter().any(|(x, _)| *x == size));
+    let mut deferred = Vec::new();
+    set_target(&mut comp, &size, 1.0, &mut deferred);
+    set_target(&mut comp, &spacing, 0.0, &mut deferred);
+    let phosphor_engine::SourceSpec::Text(style) = &comp.layer_mut(id).unwrap().source else { panic!("text") };
+    assert_eq!((style.size, style.line_spacing), (0.8, 0.6));
+    assert_eq!(get_target(&comp, &size), Some(1.0));
+    assert_eq!(default_osc_address(&spacing), format!("/phosphor/layer/{id}/text_line_spacing"));
+    // A shader fade's setting (not its progress), when the layer fades with a shader that has one.
+    if let Some(desc) = phosphor_engine::shaders::all_transitions().into_iter().find(|d| d.params.len() > 1) {
+        let index = (0..desc.params.len()).find(|i| Some(*i) != phosphor_engine::shaders::progress_index(desc)).unwrap();
+        let l = comp.layer_mut(id).unwrap();
+        l.transition_kind = phosphor_engine::TransitionKind::Shader;
+        l.transition_effect = desc.id.to_string();
+        let t = ControlTarget::TransitionParam { layer: id, index };
+        assert!(all_targets(&comp).iter().any(|(x, _)| *x == t));
+        set_target(&mut comp, &t, 1.0, &mut deferred);
+        assert_eq!(comp.layer_mut(id).unwrap().transition_values[index], desc.params[index].max);
+        assert_eq!(get_target(&comp, &t), Some(1.0));
+    }
+    assert_eq!(default_osc_address(&ControlTarget::MixerParam { layer: id, index: 1 }), format!("/phosphor/layer/{id}/mixer/2"));
+}
+
 /// Lights are controls: a moving head's pan / tilt / dimmer / motion size and any light's brightness.
 #[test]
 fn lights_are_controls() {

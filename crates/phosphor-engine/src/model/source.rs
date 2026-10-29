@@ -66,6 +66,41 @@ pub struct TextStyle {
     pub live_source: String,
 }
 
+impl TextStyle {
+    /// The settings that are controls of their own (`ControlTarget::TextPart { part }`): size, outline, line spacing.
+    pub const PARTS: [crate::mapping::TransformPart; 3] = {
+        use crate::mapping::TransformPart as P;
+        [
+            P { name: "Size", min: 0.02, max: 0.8, log: false, default: 0.18 },
+            P { name: "Outline", min: 0.0, max: 0.15, log: false, default: 0.0 },
+            P { name: "Line spacing", min: 0.6, max: 2.0, log: false, default: 1.0 },
+        ]
+    };
+
+    /// Setting `part` of `PARTS`.
+    pub fn part_mut(&mut self, part: usize) -> &mut f32 {
+        match part.min(2) {
+            0 => &mut self.size,
+            1 => &mut self.outline,
+            _ => &mut self.line_spacing,
+        }
+    }
+
+    /// Setting `part` as 0..1 across its range.
+    pub fn unit(&self, part: usize) -> f32 {
+        let v = match part.min(2) {
+            0 => self.size,
+            1 => self.outline,
+            _ => self.line_spacing,
+        };
+        Self::PARTS[part.min(2)].to_unit(v)
+    }
+
+    pub fn set_unit(&mut self, part: usize, u: f32) {
+        *self.part_mut(part) = Self::PARTS[part.min(2)].from_unit(u);
+    }
+}
+
 /// Text that keeps itself up to date.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum LiveText {
