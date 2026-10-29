@@ -746,6 +746,13 @@ impl PhosphorApp {
                 println!("QUICK explorer: {cat}");
                 continue;
             }
+            if name == "import_new" || name == "import_add" {
+                // After --import file.mad: bring it in (a new project, or added to the open one) as the buttons do.
+                self.state.finish_mad_import(name == "import_new");
+                let outs: Vec<String> = self.state.comp.outputs.iter().map(|o| format!("{}:{}", o.name, o.mapping.surfaces.len())).collect();
+                println!("QUICK {name}: layers={} outputs={outs:?} notice={:?}", self.state.comp.layers.len(), self.state.notice);
+                continue;
+            }
             if name == "panels" {
                 // A panel of your own (with a fader on it) and the panel browser.
                 let page = self.state.comp.surface.add_page();

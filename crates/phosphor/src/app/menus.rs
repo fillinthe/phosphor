@@ -55,7 +55,7 @@ impl PhosphorApp {
             A::Projects => self.state.projects.open = true,
             A::ImportResolume => {
                 #[cfg(not(target_arch = "wasm32"))]
-                st.dialogs.pick_file(crate::dialogs::Purpose::ImportResolume, Some(("Resolume composition or VDMX project", &["avc", "vdmx5"])));
+                st.dialogs.pick_file(crate::dialogs::Purpose::ImportResolume, Some(("Resolume, VDMX or MadMapper project", &["avc", "vdmx5", "mad"])));
             }
             A::FindMissing => {
                 #[cfg(not(target_arch = "wasm32"))]

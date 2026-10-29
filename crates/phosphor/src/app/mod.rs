@@ -232,6 +232,8 @@ pub struct State {
     /// A Resolume composition waiting for the deck choice.
     #[cfg(not(target_arch = "wasm32"))]
     pub avc_import: Option<import::AvcImport>,
+    /// A MadMapper project read and waiting for "new project" or "add to this one".
+    pub mad_import: Option<crate::import::madmapper::MadFile>,
     /// A missing-media search running in the background.
     #[cfg(not(target_arch = "wasm32"))]
     pub relink: Option<std::sync::mpsc::Receiver<import::Relinked>>,

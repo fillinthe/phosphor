@@ -213,7 +213,7 @@ mod tests {
         let table = Modulator { id: 3, data: Some(DataFeed { kind: DataKind::Table { path: path.to_string_lossy().to_string(), column: 1, seconds: 1.0 }, min: 0.0, max: 100.0 }), ..Default::default() };
         let event = Modulator { id: 4, event: Some(Trigger { threshold: 0.5, target: Some(phosphor_engine::ControlTarget::MasterFade), value: 0.25, ..Default::default() }), ..Default::default() };
         comp.modulators = vec![timer, clock, table, event];
-        let mut step = |data: &mut DataRun, comp: &mut Composition, shared: &[(u64, f32)], now: f64| run(data, comp, &feeds, shared, now);
+        let step = |data: &mut DataRun, comp: &mut Composition, shared: &[(u64, f32)], now: f64| run(data, comp, &feeds, shared, now);
         step(&mut data, &mut comp, &shared, 100.0);
         let m = |comp: &Composition, id: u64| comp.modulators.iter().find(|m| m.id == id).unwrap().clone();
         assert_eq!(m(&comp, 3).live.shown, "level", "the first row (the heading) first");
