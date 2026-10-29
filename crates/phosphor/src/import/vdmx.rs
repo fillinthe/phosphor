@@ -89,7 +89,8 @@ pub fn parse(text: &str, name: &str) -> Result<AvcFile, String> {
                 .unwrap_or_default()
                 .iter()
                 .filter_map(|c| {
-                    let path = c.get("mediaPath").and_then(Value::str).filter(|p| !p.is_empty())?;
+                    // (VDMX's bin can hold folders too, "(Footage)", "$RECYCLE.BIN": only files are clips.)
+                    let path = c.get("mediaPath").and_then(Value::str).filter(|p| !p.is_empty() && std::path::Path::new(p).extension().is_some() && !p.contains("$RECYCLE.BIN"))?;
                     let name = c.get("clipName").or_else(|| c.get("name")).and_then(Value::str).unwrap_or("").to_string();
                     Some((path.to_string(), name))
                 })
@@ -185,6 +186,7 @@ mod tests {
     </array></dict>
     <dict><key>name</key><string>GIFS</string><key>contents</key><array>
       <dict><key>name</key><string>cat</string><key>mediaPath</key><string>/v/cat.gif</string></dict>
+      <dict><key>name</key><string>(Footage)</string><key>mediaPath</key><string>/v/Footage</string></dict>
     </array></dict>
   </array></dict>
   <key>pvn</key><integer>1</integer>
