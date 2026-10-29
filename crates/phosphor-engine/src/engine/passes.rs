@@ -494,6 +494,9 @@ impl Engine {
                     if k == last_index && entry == "fx_glow_add" {
                         tex1 = Some(dry.clone());
                     }
+                    if entry == "fx_pts_particles" {
+                        u.p[14][0] = self.frame_step;
+                    }
                     if entry == "fx_cutout" || entry == "fx_cutout_blur" {
                         // Remove background: the matte from the app on tex2; p[14].w says one is there yet.
                         tex2 = self.cutout_matte(res_id, &input, (w, h), passes);

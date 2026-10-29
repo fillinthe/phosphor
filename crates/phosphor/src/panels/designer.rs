@@ -691,6 +691,13 @@ impl Graph for View<'_> {
         }
         false
     }
+    fn wrap_many(&mut self, ids: &[u32]) {
+        let kinds: HashMap<u32, Vec<PortKind>> = ids.iter().filter_map(|id| self.node(*id).map(|n| (*id, self.comp.node_inputs(n).iter().map(|(_, k)| *k).collect()))).collect();
+        if let Some(l) = self.level_mut() {
+            l.wrap_many(ids, &|id| kinds.get(&id).cloned().unwrap_or_default());
+        }
+        self.resync = true;
+    }
     fn extra_menu(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
         let Some(n) = self.node(id).cloned() else { return false };
         if !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput)

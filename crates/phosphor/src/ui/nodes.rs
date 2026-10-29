@@ -45,6 +45,8 @@ pub(crate) trait Graph {
     /// The right-click menu's entries for adding a box at `at`. True when one was added.
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool;
     /// A box's own right-click entries (before Duplicate / Delete). True when something changed.
+    /// Puts several boxes in one box of boxes (Shift-click selects; the menu offers it).
+    fn wrap_many(&mut self, _ids: &[u32]) {}
     fn extra_menu(&mut self, _ui: &mut egui::Ui, _id: u32) -> bool {
         false
     }
@@ -106,6 +108,13 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     if bg.dragged_by(egui::PointerButton::Middle) || bg.dragged_by(egui::PointerButton::Primary) {
         pan += bg.drag_delta();
     }
+    // Several boxes at once: Shift-click their titles (a click on the canvas lets them all go).
+    let mut selected: Vec<u32> = ui.ctx().data(|d| d.get_temp(id.with("sel"))).unwrap_or_default();
+    let shift = ui.input(|i| i.modifiers.shift);
+    if bg.clicked() {
+        selected.clear();
+    }
+    let mut wrap_all = false;
     if bg.hovered() {
         pan += ui.input(|i| i.smooth_scroll_delta);
     }
@@ -148,13 +157,25 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         let title = egui::Rect::from_min_size(r.min, egui::vec2(r.width(), TITLE_H));
         painter.rect_filled(r, 5.0, Color32::from_gray(30));
         painter.rect_filled(title, egui::CornerRadius { nw: 5, ne: 5, sw: 0, se: 0 }, graph.colour(n).gamma_multiply(0.55));
-        painter.rect_stroke(r, 5.0, Stroke::new(1.0, Color32::from_gray(60)), StrokeKind::Inside);
+        let picked = selected.contains(&n);
+        painter.rect_stroke(r, 5.0, Stroke::new(if picked { 2.0 } else { 1.0 }, if picked { accent() } else { Color32::from_gray(60) }), StrokeKind::Inside);
         painter.text(title.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, graph.title(n), egui::FontId::proportional(13.0), Color32::WHITE);
         let t = ui.interact(title, id.with(("title", n)), Sense::click_and_drag()).on_hover_text(graph.about(n));
+        if t.clicked() && shift {
+            if picked {
+                selected.retain(|s| *s != n);
+            } else {
+                selected.push(n);
+            }
+        }
         if t.dragged_by(egui::PointerButton::Primary) {
             let d = t.drag_delta();
-            let p = graph.pos(n);
-            graph.set_pos(n, [p[0] + d.x, p[1] + d.y]);
+            // A selected box drags the whole selection along.
+            let moving: Vec<u32> = if picked { selected.clone() } else { vec![n] };
+            for m in moving {
+                let p = graph.pos(m);
+                graph.set_pos(m, [p[0] + d.x, p[1] + d.y]);
+            }
         }
         // Saved once, when the box is let go.
         changed |= t.drag_stopped();
@@ -163,6 +184,10 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
         let removable = graph.removable(n);
         t.context_menu(|ui| {
+            if picked && selected.len() > 1 && command(ui, label(icon::PACKAGE, &format!("Wrap {} boxes in a box", selected.len()))).on_hover_text("Puts the selected boxes inside one new box of boxes, their wires kept").clicked() {
+                wrap_all = true;
+                ui.close();
+            }
             if graph.extra_menu(ui, n) {
                 changed = true;
             }
@@ -252,6 +277,11 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
     });
 
+    if wrap_all {
+        graph.wrap_many(&selected);
+        selected.clear();
+        changed = true;
+    }
     if let Some(d) = duplicate {
         graph.duplicate(d);
         changed = true;
@@ -263,6 +293,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     ui.ctx().data_mut(|d| {
         d.insert_temp(id.with("pan"), pan);
         d.insert_temp(id.with("wire"), drag);
+        d.insert_temp(id.with("sel"), selected);
     });
     changed
 }

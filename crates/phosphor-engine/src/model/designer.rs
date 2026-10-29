@@ -238,6 +238,69 @@ impl Network {
         v
     }
 
+    /// Puts boxes `ids` inside one new Group (where the first is): wires among them kept, wires in from outside
+    /// become Input / Number input boxes, the box feeding outside (or the Output) becomes the group's picture.
+    /// `inputs` = each box's input kinds. Returns the group's id.
+    pub fn wrap_many(&mut self, ids: &[u32], inputs: &dyn Fn(u32) -> Vec<PortKind>) -> Option<u32> {
+        let ids: Vec<u32> = ids.iter().copied().filter(|id| self.node(*id).is_some_and(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput))).collect();
+        let first = self.node(*ids.first()?)?.clone();
+        if ids.len() == 1 {
+            return self.wrap(ids[0], &inputs(ids[0]));
+        }
+        let inside = |id: u32| ids.contains(&id);
+        let among: Vec<Wire> = self.wires.iter().filter(|w| inside(w.from) && inside(w.to)).copied().collect();
+        let into: Vec<Wire> = self.wires.iter().filter(|w| !inside(w.from) && inside(w.to)).copied().collect();
+        let out_of: Vec<Wire> = self.wires.iter().filter(|w| inside(w.from) && !inside(w.to)).copied().collect();
+        self.wires.retain(|w| !inside(w.from) && !inside(w.to));
+        let mut moved: Vec<Node> = Vec::new();
+        self.nodes.retain(|n| {
+            if inside(n.id) {
+                moved.push(n.clone());
+                false
+            } else {
+                true
+            }
+        });
+        let group = self.add(NodeKind::Group, first.pos);
+        let mut inner = Network::default();
+        let (min_x, min_y) = moved.iter().fold((f32::MAX, f32::MAX), |(x, y), n| (x.min(n.pos[0]), y.min(n.pos[1])));
+        for n in &moved {
+            inner.nodes.push(Node { pos: [n.pos[0] - min_x + 240.0, n.pos[1] - min_y + 60.0], ..n.clone() });
+        }
+        inner.wires.extend(among);
+        // What leaves the set is the group's picture: the box wired to the Output first, else the first that feeds out.
+        let out_box = out_of.iter().find(|w| self.node(w.to).is_some_and(|n| n.kind == NodeKind::Output)).or(out_of.first()).map(|w| w.from).or_else(|| moved.iter().find(|n| n.kind.output() == PortKind::Picture).map(|n| n.id));
+        let (max_x, _) = moved.iter().fold((f32::MIN, 0.0), |(x, y), n| (x.max(n.pos[0]), y));
+        let out = inner.add(NodeKind::Output, [max_x - min_x + 480.0, 60.0]);
+        if let Some(b) = out_box {
+            inner.wires.push(Wire { from: b, to: out, input: 0 });
+        }
+        let mut pics = 0usize;
+        let mut nums = 0usize;
+        let mut pending: Vec<(Wire, bool)> = Vec::new();
+        for w in &into {
+            let number = inputs(w.to).get(w.input).is_some_and(|k| *k == PortKind::Number);
+            let kind = if number { NodeKind::NumberInput } else { NodeKind::Input };
+            let k = if number { nums } else { pics };
+            let b = inner.add(kind, [40.0, 60.0 + (pics + nums) as f32 * 120.0]);
+            inner.wires.push(Wire { from: b, to: w.to, input: w.input });
+            pending.push((Wire { from: w.from, to: group, input: k }, number));
+            if number {
+                nums += 1;
+            } else {
+                pics += 1;
+            }
+        }
+        for (w, number) in pending {
+            self.wires.push(Wire { input: if number { pics + w.input } else { w.input }, ..w });
+        }
+        for w in out_of.iter().filter(|w| Some(w.from) == out_box) {
+            self.wires.push(Wire { from: group, ..*w });
+        }
+        self.node_mut(group)?.inner = Some(inner);
+        Some(group)
+    }
+
     /// Puts box `id` inside a new Group where it was: its inputs become the group's (Input / Number input boxes
     /// inside, the wires from outside moved to the group), its output the group's. Returns the group's id.
     pub fn wrap(&mut self, id: u32, inputs: &[PortKind]) -> Option<u32> {
@@ -1028,6 +1091,18 @@ mod tests {
         let mods = &comp.layer(fx_layer).unwrap().effects[0].mods;
         assert_eq!((mods.len(), mods[0].m.link), (1, m1), "the number reaches the effect inside through the Number input box");
         assert!(comp.layer(fx_layer).unwrap().in_mix, "and the group shows");
+        // Several at once: the picture and the group go into one box; the inner wire between them is kept.
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let inputs = |id: u32| net.node(id).map(|n| comp.node_inputs(n).iter().map(|(_, k)| *k).collect::<Vec<_>>()).unwrap_or_default();
+        let mut net2 = net.clone();
+        let big = net2.wrap_many(&[pic, g], &inputs).unwrap();
+        let inner = net2.node(big).unwrap().inner.clone().unwrap();
+        assert!(inner.node(pic).is_some() && inner.node(g).is_some(), "both inside");
+        assert_eq!(inner.source_of(g, 0), Some(pic), "the wire between them kept");
+        assert_eq!(inner.source_of(inner.nodes.iter().find(|n| n.kind == NodeKind::Output).unwrap().id, 0), Some(g), "the group is the picture");
+        assert_eq!(inner.number_input_boxes().len(), 1, "the LFO comes in as a number input");
+        assert_eq!(net2.source_of(big, 0), Some(lfo));
+        assert_eq!(net2.source_of(out, 0), Some(big));
         // Duplicate the group: the copy has an invert inside on a fresh layer.
         let copy = comp.duplicate_box(cid, &[], g).unwrap();
         let net = comp.comp(cid).unwrap().network.clone().unwrap();

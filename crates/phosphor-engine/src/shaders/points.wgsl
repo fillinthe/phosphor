@@ -132,7 +132,8 @@ fn fx_pts_move(in: VOut) -> @location(0) vec4f {
 fn fx_pts_particles(in: VOut) -> @location(0) vec4f {
     let born = src(in.uv);
     let last = textureSampleLevel(tex1, samp, in.uv, 0.0);
-    let dt = 1.0 / 60.0;
+    // This frame's step (u.p[14].x from the engine; a frame at 60 when it has none).
+    let dt = select(1.0 / 60.0, u.p[14].x, u.p[14].x > 0.0);
     let life = max(P(4u), 0.05);
     let id = vec3f(in.uv * 977.0, 11.0);
     var p = last.xyz;

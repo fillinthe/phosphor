@@ -259,6 +259,9 @@ pub struct Engine {
     canvas: (u32, u32),
     /// Depth buffers for points meshes, by size (made when first needed).
     depth: HashMap<(u32, u32), wgpu::TextureView>,
+    /// The show time of the last render and this one's step (particles move by it).
+    last_time: f32,
+    pub(crate) frame_step: f32,
     /// Each comp's own stack (at its size) when comps are drawn apart; swapped into `accum` while it's mixed.
     comp_accum: HashMap<u64, [Option<Target>; 4]>,
     output: Option<Target>,
@@ -347,6 +350,8 @@ impl Engine {
             mix_format: crate::gpu::FORMAT,
             canvas: (1920, 1080),
             depth: HashMap::new(),
+            last_time: 0.0,
+            frame_step: 1.0 / 60.0,
             comp_accum: HashMap::new(),
             output: None,
             output_generation: 0,
@@ -651,6 +656,10 @@ impl Engine {
 
     pub fn render(&mut self, comp: &Composition, time: f32, mods: &ModInputs) -> FrameInfo {
         let (w, h) = (comp.width.max(16), comp.height.max(16));
+        // (A jump in time, a pause: a normal step rather than a leap.)
+        let step = time - self.last_time;
+        self.frame_step = if step > 0.0 && step < 0.25 { step } else { 1.0 / 60.0 };
+        self.last_time = time;
         let device = self.gpu.device.clone();
         self.collect_compiled();
         self.externals_new_frame();

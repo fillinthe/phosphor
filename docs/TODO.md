@@ -44,12 +44,12 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       drives one Text template only, no "every N rows" / loops for timers (a saw LFO does that), no OSC / MIDI *out*
       from an Event (an Event sets a control; mapping to OSC out is the Control Surface's job). All five phases of
       `docs/design/nodes.md` are built. Points left (after 2026-10-30: Mesh has a depth buffer, Lines have a real width, a render fed by a
-      Model reads in order by itself): particles step at 1/60 s whatever the rate, effects after a render on the
-      same layer as a Model run at the model's texel size, lights as boxes of their own. **Small items done 2026-10-30:** Number input boxes on a
+      Model reads in order by itself; particles step by the real frame time): effects after a render on the same layer
+      as a Model run at the model's texel size, lights as boxes of their own. **Small items done 2026-10-30:** Number input boxes on a
       box of boxes, Wrap in a box (one box at a time: no multi-select on the canvas yet), Undo (toolbar button and
       Cmd-Z over the canvas, 50 steps per comp, boxes and wires only: a slider change isn't undone), Duplicate copies
       a box's settings, a half-visible box shows the settings that fit, a Number box's Knob is mappable (right-click ›
-      Learn). Left: multi-select to wrap several boxes at once.
+      Learn). Multi-select done 2026-10-30: Shift-click titles, drag moves them together, right-click › Wrap N boxes.
 - [ ] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
       (then they're keyable and mappable like the rest).
 
