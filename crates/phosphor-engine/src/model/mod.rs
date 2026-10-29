@@ -31,7 +31,7 @@ mod color_match;
 pub use color_match::{color_stats, match_values, palette_of};
 mod merge;
 mod timeline;
-pub use timeline::{Ease, Event, Key, Marker, MarkerKind, SoundTrack, Step, Timeline, Track};
+pub use timeline::{Ease, Event, Key, LookChange, Marker, MarkerKind, SoundTrack, Step, Timeline, Track};
 mod multi_edit;
 mod templates;
 pub use templates::TEMPLATES;

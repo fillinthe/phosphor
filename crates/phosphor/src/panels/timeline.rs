@@ -11,7 +11,7 @@ use super::*;
 const ROW_H: f32 = 34.0;
 
 /// "1:05.2" for seconds.
-fn clock(t: f64) -> String {
+pub(crate) fn clock(t: f64) -> String {
     format!("{}:{:04.1}", (t / 60.0) as u32, t % 60.0)
 }
 
@@ -43,6 +43,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
             let n = tl.events.len() + 1;
             tl.events.push(Event { t: st.timeline_pos, name: format!("E{n}"), ..Default::default() });
         }
+        super::timeline_lasers::look_menu(ui, st);
         render_menu(ui, st, now);
     });
     if let Some((p, done, frames)) = st.offline.as_ref().map(|o| (o.progress(), o.done, o.frames)) {
@@ -55,7 +56,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
             st.offline_stop();
         }
     }
-    if st.comp.timeline.tracks.is_empty() {
+    if st.comp.timeline.tracks.is_empty() && st.comp.timeline.laser_looks.is_empty() {
         help(ui, "Right-click any slider or button › Key on the timeline: it gets a track here with a key at the playhead. Move the playhead, change the value, key it again.");
     }
     let names: HashMap<ControlTarget, String> = crate::control::all_targets(&st.comp).into_iter().collect();
@@ -119,6 +120,9 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
     }
     if !st.comp.timeline.events.is_empty() {
         events_lane(ui, st, &names, lane_x, lane_w, full);
+    }
+    if !st.comp.timeline.laser_looks.is_empty() {
+        super::timeline_lasers::laser_lanes(ui, st, lane_x, lane_w, full);
     }
 
     // One row per track.

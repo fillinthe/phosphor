@@ -149,6 +149,16 @@ impl Default for Event {
     }
 }
 
+/// A laser projector switching to a look as the playhead reaches `t` (the Timeline's laser lanes). Looks are kept by
+/// id, so adding or removing looks never moves what plays when.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LookChange {
+    pub t: f64,
+    pub projector: u64,
+    pub look: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SoundTrack {
@@ -184,11 +194,13 @@ pub struct Timeline {
     pub length: f64,
     /// Back to the start at the end.
     pub looping: bool,
+    /// Laser looks over time, per projector (kept in time order).
+    pub laser_looks: Vec<LookChange>,
 }
 
 impl Default for Timeline {
     fn default() -> Self {
-        Self { tracks: Vec::new(), markers: Vec::new(), events: Vec::new(), sound: None, length: 60.0, looping: false }
+        Self { tracks: Vec::new(), markers: Vec::new(), events: Vec::new(), sound: None, length: 60.0, looping: false, laser_looks: Vec::new() }
     }
 }
 
@@ -202,6 +214,23 @@ pub enum Step {
 }
 
 impl Timeline {
+    /// The look projector `projector` shows at `t`: the last change at or before it (None before its first).
+    pub fn look_at(&self, projector: u64, t: f64) -> Option<u64> {
+        self.laser_looks.iter().filter(|c| c.projector == projector && c.t <= t + 1e-9).max_by(|a, b| a.t.total_cmp(&b.t)).map(|c| c.look)
+    }
+
+    /// A look change at `t` (replacing one at the same moment), kept in time order; its index.
+    pub fn set_look(&mut self, projector: u64, t: f64, look: u64) -> usize {
+        self.laser_looks.retain(|c| !(c.projector == projector && (c.t - t).abs() < 1e-6));
+        self.laser_looks.push(LookChange { t, projector, look });
+        self.sort_looks();
+        self.laser_looks.iter().position(|c| c.projector == projector && (c.t - t).abs() < 1e-6).expect("just added")
+    }
+
+    pub fn sort_looks(&mut self) {
+        self.laser_looks.sort_by(|a, b| a.t.total_cmp(&b.t));
+    }
+
     /// The track for `target` (made if there isn't one).
     pub fn track_mut(&mut self, target: &ControlTarget) -> &mut Track {
         if let Some(i) = self.tracks.iter().position(|t| t.target == *target) {
@@ -276,6 +305,25 @@ impl Timeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Laser looks: each projector shows its last change at or before the playhead; nothing before the first; one
+    /// change per moment; old timelines have none.
+    #[test]
+    fn laser_looks_follow_the_playhead() {
+        let mut tl = Timeline::default();
+        tl.set_look(1, 10.0, 200);
+        tl.set_look(1, 0.0, 100);
+        tl.set_look(2, 5.0, 300);
+        assert_eq!(tl.look_at(1, 0.0), Some(100));
+        assert_eq!(tl.look_at(1, 9.9), Some(100));
+        assert_eq!(tl.look_at(1, 10.0), Some(200));
+        assert_eq!(tl.look_at(2, 4.0), None);
+        tl.set_look(1, 10.0, 400);
+        assert_eq!((tl.look_at(1, 30.0), tl.laser_looks.len()), (Some(400), 3), "replaced, not added");
+        assert!(tl.laser_looks.windows(2).all(|w| w[0].t <= w[1].t));
+        let old: Timeline = serde_json::from_str(r#"{"length": 30.0}"#).unwrap();
+        assert!(old.laser_looks.is_empty());
+    }
 
     #[test]
     fn events_fire_as_the_playhead_passes() {

@@ -910,6 +910,16 @@ impl PhosphorApp {
                 comp.lasers.projectors.push(phosphor_engine::LaserProjector { id, look: look.id, test_pattern, ..Default::default() });
                 comp.lasers.looks.push(look);
                 comp.lasers.projectors[0].floor = -0.6;
+                // PHOSPHOR_LASER_TIMELINE=1: a second look, and the timeline switching between them (0 s, 20 s, 40 s).
+                if std::env::var_os("PHOSPHOR_LASER_TIMELINE").is_some() {
+                    let mut second = phosphor_engine::LaserLook::starter(|| comp.new_id());
+                    second.name = "Finale".into();
+                    let (pid, first, other) = (comp.lasers.projectors[0].id, comp.lasers.looks[0].id, second.id);
+                    comp.lasers.looks.push(second);
+                    for (t, look) in [(0.0, first), (20.0, other), (40.0, first)] {
+                        comp.timeline.set_look(pid, t, look);
+                    }
+                }
                 // PHOSPHOR_LASER_ZONES=1: two zones (the right one keystoned, showing the test pattern's look) and a
                 // dark area.
                 if std::env::var_os("PHOSPHOR_LASER_ZONES").is_some() {
