@@ -240,9 +240,10 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             crate::ui::field(ui, "Render size", |ui| {
                 let sizes: Vec<(f32, String)> = [1.0, 0.75, 0.5, 0.25].iter().map(|s| (*s, format!("{:.0}%", s * 100.0))).collect();
                 let mut scale = sizes.iter().map(|(s, _)| *s).min_by(|a, b| (a - layer.render_scale).abs().total_cmp(&(b - layer.render_scale).abs())).unwrap_or(1.0);
-                if segmented(ui, &mut scale, &sizes, |_, r, _| {
-                    r.clone().on_hover_text("Draw this generator smaller and scale it up: much lighter on the GPU for heavy shaders (softer picture)");
-                }) {
+                let width = (ui.available_width() - 24.0).clamp(80.0, 200.0);
+                let (changed, r) = crate::ui::segmented_list(ui, ("render_scale", layer.id), &mut scale, &sizes, width);
+                r.on_hover_text("Draw this generator smaller and scale it up: much lighter on the GPU for heavy shaders (softer picture)");
+                if changed {
                     layer.render_scale = scale;
                 }
             });
@@ -298,10 +299,11 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         });
         transition_settings(ui, layer);
         crate::ui::field(ui, "Frame rate", |ui| {
-            let rates: Vec<(f32, String)> = [(0.0, "All".to_string()), (30.0, "30".into()), (15.0, "15".into()), (10.0, "10".into()), (5.0, "5".into())].into_iter().collect();
-            segmented(ui, &mut layer.render_fps, &rates, |_, r, _| {
-                r.clone().on_hover_text("Frames a second this layer is drawn (All = every frame). Fewer: its source and effects are drawn only that often and the picture is held between: saves the GPU, or a choppy look on purpose");
-            });
+            let rates: Vec<(f32, String)> = [(0.0, "Every frame".to_string()), (30.0, "30 a second".into()), (15.0, "15 a second".into()), (10.0, "10 a second".into()), (5.0, "5 a second".into())].into_iter().collect();
+            let width = (ui.available_width() - 24.0).clamp(80.0, 200.0);
+            crate::ui::segmented_list(ui, ("render_fps", layer.id), &mut layer.render_fps, &rates, width)
+                .1
+                .on_hover_text("Frames a second this layer is drawn. Fewer: its source and effects are drawn only that often and the picture is held between: saves the GPU, or a choppy look on purpose");
         });
         ui.separator();
         if matches!(layer.source, SourceSpec::Movie { .. }) {
@@ -554,7 +556,8 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
 pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
     let (glyph, kind, detail): (&str, &str, Option<String>) = match &layer.source {
         SourceSpec::None => (icon::PROHIBIT, "No source", None),
-        SourceSpec::Generator(id) => (icon::SPARKLE, "Generated", Some(shaders::generator(id).map_or(id.clone(), |d| d.name.to_string()))),
+        // (Its name is the heading of its settings just below.)
+        SourceSpec::Generator(_) => (icon::SPARKLE, "Generated", None),
         SourceSpec::Movie { name, path } if path.as_deref().is_some_and(|p| p.starts_with("http")) => (icon::LINK, "Movie from a link (not saved)", Some(name.clone())),
         SourceSpec::Movie { name, path } => (icon::FILM_STRIP, "Movie file", Some(path.clone().unwrap_or_else(|| name.clone()))),
         SourceSpec::Image { name, path } => (icon::IMAGE, "Picture file", Some(path.clone().unwrap_or_else(|| name.clone()))),

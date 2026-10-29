@@ -775,3 +775,22 @@ pub(crate) fn counts(ui: &mut egui::Ui, items: &[(usize, &str, &str)]) {
 pub(crate) fn plural(n: usize, one: &str, many: &str) -> String {
     if n == 1 { one } else { many }.replace("{0}", &n.to_string())
 }
+
+/// Pick one of `options` (value, label) from a list: the same choices as `segmented`, for where the buttons
+/// would wrap (a narrow Inspector column). Returns true when the pick changed.
+pub(crate) fn segmented_list<T: PartialEq + Clone>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, value: &mut T, options: &[(T, String)], width: f32) -> (bool, egui::Response) {
+    let current = options.iter().find(|(v, _)| v == value).map_or("", |(_, l)| l.as_str()).to_string();
+    let mut picked = None;
+    let r = dropdown(ui, id, width).selected_text(current).show_ui(ui, |ui| {
+        for (v, l) in options {
+            if pick_item(ui, v == value, l.as_str()).clicked() {
+                picked = Some(v.clone());
+            }
+        }
+    });
+    let changed = picked.as_ref().is_some_and(|p| p != value);
+    if let Some(p) = picked {
+        *value = p;
+    }
+    (changed, r.response)
+}
