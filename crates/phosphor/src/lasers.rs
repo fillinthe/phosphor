@@ -20,6 +20,8 @@ pub const FIRST_KEY: u8 = 240;
 pub const MAX_PICTURES: usize = 8;
 /// Video trace pictures: this wide (the height follows the canvas), read this many times a second.
 const PICTURE_WIDTH: u32 = 128;
+/// Traced image files: shrunk to fit this square (a little finer than video: they don't move).
+const IMAGE_SIZE: u32 = 160;
 const PICTURES_FPS: u32 = 25;
 
 /// A controller box found on the network or USB.
@@ -50,6 +52,8 @@ pub struct LaserOut {
     /// Laser files' frames (read off the UI thread when a look first uses them) and what went wrong reading any.
     files: Arc<Mutex<HashMap<String, Arc<Vec<Vec<phosphor_engine::ilda::Point>>>>>>,
     reading: Arc<Mutex<HashMap<String, Option<String>>>>,
+    /// Traced image files (read off the UI thread when a shape first uses them), by path.
+    images: Arc<Mutex<HashMap<String, Arc<Picture>>>>,
     /// Video trace pictures, by source, and the sources last asked for (in tag order).
     pictures: HashMap<u64, Arc<Picture>>,
     asked: Vec<u64>,
@@ -80,9 +84,26 @@ impl LaserOut {
         self.found.lock().unwrap().clone()
     }
 
-    /// What looks draw from: the laser files `lasers` use, as read so far (files not read yet start reading, each
-    /// once), and the latest Video trace pictures.
+    /// What looks draw from: the laser files and traced images `lasers` use, as read so far (files not read yet start
+    /// reading, each once), and the latest Video trace pictures.
     pub fn inputs(&mut self, lasers: &Lasers) -> LaserInputs {
+        for path in lasers.looks.iter().flat_map(|l| &l.shapes).filter(|s| s.kind == phosphor_engine::LaserShapeKind::Trace && !s.image.is_empty()).map(|s| &s.image) {
+            if self.reading.lock().unwrap().contains_key(path) {
+                continue;
+            }
+            self.reading.lock().unwrap().insert(path.clone(), None);
+            let (path, images, reading) = (path.clone(), self.images.clone(), self.reading.clone());
+            let _ = std::thread::Builder::new().name("phosphor-laser-image".into()).spawn(move || match crate::media::decode_still(&path) {
+                Ok(img) => {
+                    let rgba = img.thumbnail(IMAGE_SIZE, IMAGE_SIZE).to_rgba8();
+                    let pic = Picture { width: rgba.width() as usize, height: rgba.height() as usize, rgba: rgba.into_raw() };
+                    images.lock().unwrap().insert(path, Arc::new(pic));
+                }
+                Err(e) => {
+                    reading.lock().unwrap().insert(path, Some(e));
+                }
+            });
+        }
         for path in lasers.looks.iter().flat_map(|l| &l.shapes).filter(|s| s.kind == phosphor_engine::LaserShapeKind::File && !s.file.is_empty()).map(|s| &s.file) {
             if self.reading.lock().unwrap().contains_key(path) {
                 continue;
@@ -100,7 +121,7 @@ impl LaserOut {
                 }
             });
         }
-        LaserInputs { files: self.files.lock().unwrap().clone(), pictures: self.pictures.clone() }
+        LaserInputs { files: self.files.lock().unwrap().clone(), pictures: self.pictures.clone(), images: self.images.lock().unwrap().clone() }
     }
 
     /// The pictures Video trace shapes need now (looks on armed projectors, and every look while the panel shows),
@@ -113,7 +134,7 @@ impl LaserOut {
         };
         let in_use = |look: u64| previewing || lasers.armed && lasers.projectors.iter().any(|p| p.enabled && !p.test_pattern && shows(p, look));
         let mut sources: Vec<u64> = Vec::new();
-        for s in lasers.looks.iter().filter(|l| in_use(l.id)).flat_map(|l| &l.shapes).filter(|s| s.enabled && s.kind == phosphor_engine::LaserShapeKind::Trace) {
+        for s in lasers.looks.iter().filter(|l| in_use(l.id)).flat_map(|l| &l.shapes).filter(|s| s.enabled && s.kind == phosphor_engine::LaserShapeKind::Trace && s.image.is_empty()) {
             let src = trace_source(s);
             if !sources.contains(&src) && sources.len() < MAX_PICTURES {
                 sources.push(src);
@@ -133,7 +154,7 @@ impl LaserOut {
         }
     }
 
-    /// Why a laser file couldn't be read (None: fine, or still reading).
+    /// Why a laser file or traced image couldn't be read (None: fine, or still reading).
     pub fn file_error(&self, path: &str) -> Option<String> {
         self.reading.lock().unwrap().get(path).cloned().flatten()
     }

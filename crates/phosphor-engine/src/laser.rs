@@ -62,6 +62,8 @@ pub struct LaserInputs {
     pub files: HashMap<String, Arc<Vec<Vec<ilda::Point>>>>,
     /// Small pictures for Video trace shapes, by source (`LaserShape::source`; `MASTER_ID` = the mix).
     pub pictures: HashMap<u64, Arc<Picture>>,
+    /// Image files traced by Video trace shapes (`LaserShape::image`), small, by path.
+    pub images: HashMap<String, Arc<Picture>>,
 }
 
 /// The source a Video trace shape reads (its layer, group or comp; the mix when 0).
@@ -154,11 +156,12 @@ pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs, inputs: &LaserInput
     let units = match s.kind {
         LaserShapeKind::Text => text_strokes(&s.text, s.font),
         LaserShapeKind::File => inputs.files.get(&s.file).map(|frames| file_frame(frames, t, count)).unwrap_or_default(),
-        LaserShapeKind::Trace => inputs
-            .pictures
-            .get(&trace_source(s))
+        LaserShapeKind::Trace => (if s.image.is_empty() { inputs.pictures.get(&trace_source(s)) } else { inputs.images.get(&s.image) })
             .map(|pic| outline::outlines(pic, s.shape.clamp(0.02, 0.98), count.round().max(1.0) as usize, s.picture_colors))
             .unwrap_or_default(),
+        // One point alone: a beam.
+        LaserShapeKind::Drawing if s.points.is_empty() => Vec::new(),
+        LaserShapeKind::Drawing => vec![Unit { points: s.points.clone(), colors: None, closed: s.closed && s.points.len() > 2, dots: s.points.len() == 1 }],
         kind => {
             let (points, closed, dots) = unit_shape(kind, count, s.shape.clamp(0.0, 1.0), phase);
             vec![Unit { points, colors: None, closed, dots }]
@@ -336,7 +339,7 @@ fn unit_shape(kind: LaserShapeKind, count: f32, shape: f32, phase: f32) -> (Vec<
             (ring(n, r, TAU / 4.0 + phase).collect(), false, true)
         }
         // (Made from their words, file or picture: `text_strokes`, `file_frame`, `outline::outlines`.)
-        LaserShapeKind::Text | LaserShapeKind::File | LaserShapeKind::Trace => (Vec::new(), false, false),
+        LaserShapeKind::Text | LaserShapeKind::File | LaserShapeKind::Trace | LaserShapeKind::Drawing => (Vec::new(), false, false),
     }
 }
 
@@ -609,8 +612,8 @@ mod tests {
     use super::*;
 
     fn look(kinds: &[LaserShapeKind]) -> LaserLook {
-        let shapes = kinds.iter().enumerate().map(|(i, &kind)| LaserShape { id: i as u64 + 1, kind, x: i as f32 * 0.3 - 0.3, size: 0.3, file: "test.ild".into(), ..Default::default() }).collect();
-        LaserLook { id: 1, name: "Test".into(), shapes }
+        let shapes = kinds.iter().enumerate().map(|(i, &kind)| LaserShape { id: i as u64 + 1, kind, x: i as f32 * 0.3 - 0.3, size: 0.3, file: "test.ild".into(), points: vec![[-1.0, 0.0], [0.0, 1.0], [1.0, 0.0]], ..Default::default() }).collect();
+        LaserLook { id: 1, name: "Test".into(), shapes, ..Default::default() }
     }
 
     fn pt(x: f32, y: f32, blank: bool) -> ilda::Point {
@@ -624,7 +627,7 @@ mod tests {
         let second = vec![pt(-0.8, 0.0, true), pt(0.8, 0.0, false), pt(0.0, 0.6, true), pt(0.0, 0.6, false)];
         let files = HashMap::from([("test.ild".to_string(), Arc::new(vec![square, second]))]);
         let pictures = HashMap::from([(crate::MASTER_ID, Arc::new(outline::tests::disc(64, 36, [255, 120, 0])))]);
-        LaserInputs { files, pictures }
+        LaserInputs { files, pictures, ..Default::default() }
     }
 
     /// The test pattern fits a frame, keeps its corners' colours and reaches the scan area's corners.
@@ -636,6 +639,25 @@ mod tests {
             assert!(frame.iter().any(|p| p.rgb == c), "{c:?} corner");
         }
         assert!(frame.iter().any(|p| p.lit() && p.x == 1.0 && p.y == 1.0), "reaches the scan area's corner");
+    }
+
+    /// An image traced instead of a layer; a drawing goes where its corners are (placed, closed), one corner = a beam.
+    #[test]
+    fn images_trace_and_drawings_draw() {
+        let mut inputs = files();
+        inputs.images.insert("logo.png".into(), Arc::new(outline::tests::disc(40, 40, [0, 0, 255])));
+        let s = LaserShape { kind: LaserShapeKind::Trace, image: "logo.png".into(), size: 1.0, count: 5.0, shape: 0.5, ..Default::default() };
+        let paths = shape_paths(&s, 0.0, &ModInputs::default(), &inputs);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].points[0].1, [0.0, 0.0, 1.0], "the image's colour, not the mix's");
+        assert!(shape_paths(&LaserShape { image: "not read.png".into(), ..s }, 0.0, &ModInputs::default(), &inputs).is_empty());
+        let d = LaserShape { kind: LaserShapeKind::Drawing, points: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], closed: true, x: 0.5, size: 0.5, ..Default::default() };
+        let paths = shape_paths(&d, 0.0, &ModInputs::default(), &inputs);
+        assert!(paths[0].closed);
+        assert_eq!(paths[0].points.iter().map(|p| p.0).collect::<Vec<_>>(), vec![[0.5, 0.0], [1.0, 0.0], [1.0, 0.5]]);
+        let one = LaserShape { points: vec![[0.2, 0.2]], ..d.clone() };
+        assert!(shape_paths(&one, 0.0, &ModInputs::default(), &inputs)[0].dots);
+        assert!(shape_paths(&LaserShape { points: Vec::new(), ..d }, 0.0, &ModInputs::default(), &inputs).is_empty());
     }
 
     /// Text: one stroke a path, fitted to the shape's size and centred; lines stack; nothing for empty words.
@@ -739,7 +761,7 @@ mod tests {
     #[test]
     fn zones_place_their_looks() {
         let mut lasers = Lasers::default();
-        let line = |id, y| LaserLook { id, name: "L".into(), shapes: vec![LaserShape { id: id + 100, kind: LaserShapeKind::Line, y, size: 1.0, ..Default::default() }] };
+        let line = |id, y| LaserLook { id, name: "L".into(), shapes: vec![LaserShape { id: id + 100, kind: LaserShapeKind::Line, y, size: 1.0, ..Default::default() }], ..Default::default() };
         lasers.looks = vec![line(1, 0.0), line(2, 0.5)];
         let left = LaserZone { id: 10, look: 0, corners: [[-1.0, -1.0], [0.0, -1.0], [0.0, 1.0], [-1.0, 1.0]], ..Default::default() };
         // A keystoned zone: narrower at the top.

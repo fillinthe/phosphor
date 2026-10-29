@@ -1,4 +1,5 @@
-//! Video trace: a small picture → outlines a laser can draw. The picture is blurred a little (video noise makes
+//! Video trace: a small picture → outlines a laser can draw. Brightness is each pixel's strongest colour; the
+//! picture is blurred a little (video noise makes
 //! outlines crawl), then marching squares finds where its brightness crosses a level: the edges of bright shapes.
 //! The outlines are joined into lines, simplified (Douglas–Peucker) and the longest kept.
 
@@ -24,7 +25,8 @@ pub(super) fn outlines(pic: &Picture, level: f32, most: usize, own_colors: bool)
     if w < 2 || h < 2 || pic.rgba.len() < w * h * 4 {
         return Vec::new();
     }
-    let luma: Vec<f32> = pic.rgba.chunks_exact(4).take(w * h).map(|c| (0.2126 * c[0] as f32 + 0.7152 * c[1] as f32 + 0.0722 * c[2] as f32) / 255.0).collect();
+    // Brightness = the strongest colour (a pure blue logo on black is as bright as a white one, for a laser).
+    let luma: Vec<f32> = pic.rgba.chunks_exact(4).take(w * h).map(|c| c[0].max(c[1]).max(c[2]) as f32 / 255.0).collect();
     let lum = blur(&luma, w, h);
     let at = |x: usize, y: usize| lum[y * w + x];
     // Edge ids: across (x, y)→(x+1, y) = 2·(y·w + x); down (x, y)→(x, y+1) = 2·(y·w + x) + 1. Each edge joins at
@@ -151,13 +153,13 @@ fn blur(v: &[f32], w: usize, h: usize) -> Vec<f32> {
     out
 }
 
-/// The colour on the bright side of an outline point (the brightest pixel touching it), at full brightness so the
+/// The colour on the bright side of an outline point (the brightest pixel within a step of it), at full brightness so the
 /// laser shows it; white where the picture is grey or dark.
 fn bright_colour(pic: &Picture, luma: &[f32], p: [f32; 2]) -> [f32; 3] {
     let (w, h) = (pic.width, pic.height);
     let (x0, y0) = (p[0].floor().max(0.0) as usize, p[1].floor().max(0.0) as usize);
-    let best = [(x0, y0), (x0 + 1, y0), (x0, y0 + 1), (x0 + 1, y0 + 1)]
-        .into_iter()
+    let best = (y0.saturating_sub(1)..=y0 + 2)
+        .flat_map(|y| (x0.saturating_sub(1)..=x0 + 2).map(move |x| (x, y)))
         .filter(|&(x, y)| x < w && y < h)
         .map(|(x, y)| y * w + x)
         .max_by(|a, b| luma[*a].total_cmp(&luma[*b]))

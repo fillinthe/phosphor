@@ -19,8 +19,11 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Italic, Gothic), the kind of letters lasers draw cleanly.
 - Laser show files (.ild, ILDA) as part of a look: they play at their own speed, placed, sized, spun and drawn on
   like any shape, mixed with your own shapes and words.
-- Video trace: any layer, or the whole mix, traced live into laser outlines in the picture's colours. Bright shapes
-  on dark work best: a silhouette, a logo, a camera with Remove background.
+- Video trace: any layer, the whole mix, or an image file, traced into laser outlines in the picture's colours.
+  Bright shapes on dark work best: a silhouette, a logo, a camera with Remove background.
+- Drawing shapes: click on the Laser Designer's canvas to draw a line, drag its corners to adjust it.
+- Onion skin: a picture shown faintly behind the Laser Designer's canvas, to trace over by hand or line shapes up
+  with (the laser never shows it).
 - Laser zones: split a projector's area into zones, each showing its own look with its own brightness, placed by
   dragging its corners (straighten a wall or screen seen at an angle). Dark areas: parts of the area the beam never
   lights, whatever is drawn (a balcony, a doorway).

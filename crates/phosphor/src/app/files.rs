@@ -118,6 +118,16 @@ impl PhosphorApp {
                         s.file = p.to_string_lossy().into_owned();
                     }
                 }
+                Purpose::LaserImage(shape) => {
+                    if let (Some(p), Some(s)) = (paths.first(), self.state.comp.lasers.shape_mut(shape)) {
+                        s.image = p.to_string_lossy().into_owned();
+                    }
+                }
+                Purpose::LaserOnion(look) => {
+                    if let (Some(p), Some(l)) = (paths.first(), self.state.comp.lasers.looks.iter_mut().find(|l| l.id == look)) {
+                        l.onion = p.to_string_lossy().into_owned();
+                    }
+                }
                 Purpose::ImportFiles => {
                     // Importing while a collection is showing puts the files in it (else you'd not see them).
                     let into = match &st.media_view.filter {
