@@ -63,7 +63,7 @@ impl State {
         let missing = self.missing_media().len();
         let mut msg = format!("Imported {} from {}.", imp.file.name, if imp.vdmx { "VDMX" } else { "Resolume" });
         if let Some((outs, slices, masks)) = screens {
-            msg.push_str(&format!(" Advanced Output: {outs} outputs, {slices} slices, {masks} masks."));
+            msg.push_str(&format!(" Advanced Output: {}, {}, {}.", crate::ui::plural(outs, "{0} output", "{0} outputs"), crate::ui::plural(slices, "{0} slice", "{0} slices"), crate::ui::plural(masks, "{0} mask", "{0} masks")));
         }
         if skipped > 0 {
             msg.push_str(&format!(" {skipped} clips without a media file (generators, audio, Resolume sources) were left out."));
@@ -94,7 +94,13 @@ impl State {
         } else {
             add_to(&mut self.comp, &file, &file_aspect)
         };
-        let mut msg = format!("Imported {} from MadMapper: {} outputs, {} slices, {} layers.", file.name, done.outputs, done.slices, done.layers);
+        let mut msg = format!(
+            "Imported {} from MadMapper: {}, {}, {}.",
+            file.name,
+            crate::ui::plural(done.outputs, "{0} output", "{0} outputs"),
+            crate::ui::plural(done.slices, "{0} slice", "{0} slices"),
+            crate::ui::plural(done.layers, "{0} layer", "{0} layers")
+        );
         if !done.stand_ins.is_empty() {
             msg.push_str(&format!(" Drawn by a built-in generator instead: {}.", done.stand_ins.join(", ")));
         }
