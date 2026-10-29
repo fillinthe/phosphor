@@ -747,10 +747,17 @@ impl PhosphorApp {
                 continue;
             }
             if name == "import_new" || name == "import_add" {
-                // After --import file.mad: bring it in (a new project, or added to the open one) as the buttons do.
-                self.state.finish_mad_import(name == "import_new");
+                // After --import: bring it in as the buttons do (.mad: a new project, or added to the open one;
+                // .avc / .vdmx5: every deck / page with media, as a new project).
+                if self.state.mad_import.is_some() {
+                    self.state.finish_mad_import(name == "import_new");
+                } else {
+                    self.state.finish_avc_import();
+                }
                 let outs: Vec<String> = self.state.comp.outputs.iter().map(|o| format!("{}:{}", o.name, o.mapping.surfaces.len())).collect();
-                println!("QUICK {name}: layers={} outputs={outs:?} notice={:?}", self.state.comp.layers.len(), self.state.notice);
+                let layers: Vec<String> = self.state.comp.layers.iter().map(|l| format!("{}[{}]", l.name, l.effects.iter().map(|e| e.effect.as_str()).collect::<Vec<_>>().join(","))).collect();
+                let master: Vec<&str> = self.state.comp.master_effects.iter().map(|e| e.effect.as_str()).collect();
+                println!("QUICK {name}: layers={layers:?} master={master:?} outputs={outs:?} notice={:?}", self.state.notice);
                 continue;
             }
             if name == "panels" {
