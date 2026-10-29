@@ -1153,7 +1153,7 @@ impl PhosphorApp {
                         for store in [&mut st.presets, &mut st.layer_presets, &mut st.chain_presets, &mut st.box_presets, &mut st.venues, &mut st.surface_presets, &mut st.mapping_presets] {
                             store.refresh();
                         }
-                        st.notice = Some(format!("{added} saved look(s), venue(s), surface(s) or mapping set(s) came from your account"));
+                        st.notice = Some(crate::ui::plural(added, "1 saved look, venue, surface or mapping set came from your account", "{0} saved looks, venues, surfaces or mapping sets came from your account"));
                     }
                 }
             }

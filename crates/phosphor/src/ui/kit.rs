@@ -428,7 +428,7 @@ pub(crate) fn outputs_menu(ui: &mut egui::Ui, outs: &[(u64, String, bool)]) -> O
         }
     })
     .response
-    .on_hover_text(if n == 0 { "Send this to an output of its own".to_string() } else { format!("On {n} output(s) of its own") });
+    .on_hover_text(if n == 0 { "Send this to an output of its own".to_string() } else { plural(n, "On {0} output of its own", "On {0} outputs of its own") });
     out
 }
 
@@ -768,4 +768,10 @@ pub(crate) fn counts(ui: &mut egui::Ui, items: &[(usize, &str, &str)]) {
             super::hint(ui, if *n == 1 { one } else { many }.replace("{0}", &n.to_string()));
         }
     });
+}
+
+/// `one` or `many` by `n`, with `{0}` replaced by the number ("{0} file was" / "{0} files were"): plain plurals
+/// instead of "file(s)". Write both as whole sentences so each translates.
+pub(crate) fn plural(n: usize, one: &str, many: &str) -> String {
+    if n == 1 { one } else { many }.replace("{0}", &n.to_string())
 }

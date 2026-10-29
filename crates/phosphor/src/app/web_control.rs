@@ -125,7 +125,7 @@ pub(crate) fn web_badge(ui: &mut egui::Ui, st: &State, now: f64) -> bool {
         if n == 0 {
             return false;
         }
-        (small(format!("{} {n} can control", icon::DEVICE_MOBILE), Color32::GRAY), format!("{n} phone(s) or browser(s) can change the visuals. Click to take over."))
+        (small(format!("{} {n} can control", icon::DEVICE_MOBILE), Color32::GRAY), crate::ui::plural(n as usize, "{0} phone or browser can change the visuals. Click to take over.", "{0} phones or browsers can change the visuals. Click to take over."))
     };
     ui.add(egui::Label::new(text).sense(egui::Sense::click())).on_hover_text(tip).clicked()
 }

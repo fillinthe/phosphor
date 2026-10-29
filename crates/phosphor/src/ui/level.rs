@@ -290,8 +290,13 @@ impl<'a> Level<'a> {
                     p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], stroke);
                 }
                 None => {
+                    // Bright ticks at the edges and a faint line between: the name and value written across the
+                    // bar stay readable when the live position passes under them.
                     let x = rect.left() + lt * rect.width();
-                    p.line_segment([egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())], stroke);
+                    let tick = (rect.height() * 0.25).max(4.0);
+                    p.line_segment([egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())], Stroke::new(1.0, stroke.color.gamma_multiply(0.35)));
+                    p.line_segment([egui::pos2(x, rect.top()), egui::pos2(x, rect.top() + tick)], stroke);
+                    p.line_segment([egui::pos2(x, rect.bottom() - tick), egui::pos2(x, rect.bottom())], stroke);
                 }
             }
         }
