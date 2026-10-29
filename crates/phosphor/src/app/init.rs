@@ -292,6 +292,8 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 dmx: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
+                lasers: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 dmx_rec: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 tracker: Default::default(),

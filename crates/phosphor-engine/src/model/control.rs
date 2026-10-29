@@ -127,6 +127,10 @@ pub enum ControlTarget {
     MaskInvert(u64),
     /// A slice's soft edge.
     SliceFeather(u64),
+    /// A laser shape's setting: `field` indexes `LASER_FIELDS` (x, y, size, rotate, spin, draw…).
+    LaserShape { shape: u64, field: u8 },
+    /// A laser projector's brightness (`MASTER_ID`: every laser's).
+    LaserBrightness(u64),
     /// Switch an output to this layout (a press): it fades in, the output's other layouts fade out.
     Layout(u64),
     /// Stop what a layer is playing (a press; `MASTER_ID` = every layer).

@@ -57,11 +57,14 @@ scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
   second code, also as a layer on the output: guests line up and take timed turns at the controls you allow).
 - **Mapping:** drag corners on the projector, mesh warp, line slices, 3D models (OBJ), masks with soft edges, edge blending, per-output colour, many
   outputs each on its own screen, venue presets, Art-Net / sACN LED pixel mapping; render at 60 fps (default), 30, or the display's rate.
+- **Lasers:** a Laser Designer (shapes, waves, Lissajous figures, beams, animated and mappable) sent to Ether Dream,
+  Helios, LaserCube and IDN lasers, with arming, a safety floor per projector and Blackout.
+- **AI assistants:** `Phosphor --mcp` lets AI apps that speak MCP list, set and trigger every control and see the output.
 - **In and out:** hardware-decoded video (H.264/HEVC/ProRes/VP9/AV1, Hap on the GPU), cameras, capture cards, network
   streams, Syphon and NDI in and out; stream to YouTube/Twitch (RTMPS, two at once, with a recorded copy)/RTMP/SRT;
   record H.264/HEVC/ProRes/Hap; network viewers.
 - **Shows:** undo, crash recovery, Export Show (a standalone app with the media), Lock Controls (play-only mode with a
-  password), start at login for installations, import Resolume compositions (.avc) and VDMX projects, find missing media.
+  password), start at login for installations, import Resolume compositions (.avc), VDMX projects and MadMapper projects, find missing media.
 - **Free and open source** (GPL). Donate, Report a Bug and Check for Updates are in the app.
 
 ## Run from source (macOS)

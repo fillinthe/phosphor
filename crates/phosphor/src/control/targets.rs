@@ -53,6 +53,12 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::MaskEnabled(id) => on(comp.mask(*id)?.enabled),
         ControlTarget::MaskInvert(id) => on(comp.mask(*id)?.invert),
         ControlTarget::SliceFeather(id) => comp.slice(*id)?.feather / phosphor_engine::mapping::SLICE_FEATHER_MAX,
+        ControlTarget::LaserShape { shape, field } => {
+            let (_, min, max) = *phosphor_engine::LASER_FIELDS.get(*field as usize)?;
+            to_unit(comp.lasers.shape(*shape)?.field(*field as usize)?, min, max, false)
+        }
+        ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => comp.lasers.master,
+        ControlTarget::LaserBrightness(id) => comp.lasers.projectors.iter().find(|p| p.id == *id)?.brightness,
         ControlTarget::Color { owner, part } => comp.color(*owner)?.unit(*part as usize),
         ControlTarget::Fixture { fixture, param } => comp.dmx.fixtures.iter().find(|f| f.id == *fixture)?.param(*param)?,
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
@@ -273,6 +279,19 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::SliceTransform { slice, part } => {
             if let Some(s) = comp.slice_mut(*slice) {
                 s.transform.set_unit(*part as usize, v);
+            }
+        }
+        ControlTarget::LaserShape { shape, field } => {
+            if let (Some(&(_, min, max)), Some(s)) = (phosphor_engine::LASER_FIELDS.get(*field as usize), comp.lasers.shape_mut(*shape))
+                && let Some(f) = s.field_mut(*field as usize)
+            {
+                *f = unit_to(v.clamp(0.0, 1.0), min, max, false);
+            }
+        }
+        ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => comp.lasers.master = v.clamp(0.0, 1.0),
+        ControlTarget::LaserBrightness(id) => {
+            if let Some(p) = comp.lasers.projector_mut(*id) {
+                p.brightness = v.clamp(0.0, 1.0);
             }
         }
         ControlTarget::MaskFeather(id) => {
@@ -633,6 +652,20 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         effects(&format!("{} · clip", l.name), &l.clip_effects, &mut out);
         effects(&l.name, &l.effects, &mut out);
     }
+    // Lasers: brightness, and every shape's settings in the Laser Designer.
+    if !comp.lasers.projectors.is_empty() || !comp.lasers.looks.is_empty() {
+        out.push((ControlTarget::LaserBrightness(phosphor_engine::MASTER_ID), "Lasers · brightness".into()));
+    }
+    for p in &comp.lasers.projectors {
+        out.push((ControlTarget::LaserBrightness(p.id), format!("{} · brightness", p.name)));
+    }
+    for look in &comp.lasers.looks {
+        for (n, s) in look.shapes.iter().enumerate() {
+            for (i, (name, _, _)) in phosphor_engine::LASER_FIELDS.iter().enumerate() {
+                out.push((ControlTarget::LaserShape { shape: s.id, field: i as u8 }, format!("Laser · {} · {} {} · {name}", look.name, s.kind.name(), n + 1)));
+            }
+        }
+    }
     // Every menu item (File › Save, Quick › Surprise…).
     out.extend(crate::menu::mappable().into_iter().map(|(a, name)| (ControlTarget::Menu(crate::menu::action_key(a)), format!("Menu · {name}"))));
     out
@@ -659,6 +692,11 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::Layout(id) => format!("/phosphor/layout/{id}"),
         ControlTarget::StopLayer(id) if *id == phosphor_engine::MASTER_ID => "/phosphor/stop".into(),
         ControlTarget::StopLayer(id) => format!("/phosphor/layer/{id}/stop"),
+        ControlTarget::LaserShape { shape, field } => {
+            format!("/phosphor/laser/shape/{shape}/{}", phosphor_engine::LASER_FIELDS.get(*field as usize).map_or("part", |f| f.0))
+        }
+        ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => "/phosphor/laser/master".into(),
+        ControlTarget::LaserBrightness(id) => format!("/phosphor/laser/{id}/brightness"),
         ControlTarget::MaskFeather(id) => format!("/phosphor/mask/{id}/soft_edge"),
         ControlTarget::MaskEnabled(id) => format!("/phosphor/mask/{id}/on"),
         ControlTarget::MaskInvert(id) => format!("/phosphor/mask/{id}/invert"),
