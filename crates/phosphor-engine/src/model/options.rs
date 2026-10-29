@@ -220,10 +220,11 @@ impl FaderCurve {
 
     pub fn name(self) -> &'static str {
         match self {
-            FaderCurve::FullInMiddle => "Both full in the middle",
+            // (Short: they fit the Mixer's curve list; the doc comments above say more.)
+            FaderCurve::FullInMiddle => "Full in middle",
             FaderCurve::Smooth => "Smooth (no dip)",
-            FaderCurve::Straight => "Straight (dip in the middle)",
-            FaderCurve::Cut => "Cut at the middle",
+            FaderCurve::Straight => "Straight (dip)",
+            FaderCurve::Cut => "Hard cut",
         }
     }
 }

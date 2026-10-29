@@ -140,10 +140,11 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     let comp = &mut st.comp;
     let target = ControlTarget::App(phosphor_engine::AppControl::Crossfader);
     let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
-    ui.horizontal(|ui| {
+    // (A toolbar: in a narrow Mixer, Auto, its time, the curve and Speed wrap under the crossfader instead of being cut off.)
+    crate::ui::toolbar(ui, |ui| {
         crate::ui::heading(ui, "A");
         // (Double-click centres it: its default.)
-        let width = (ui.available_width() - 200.0).clamp(120.0, 520.0);
+        let width = (ui.available_width() - 360.0).clamp(120.0, 520.0);
         let r = Level::percent(&mut comp.crossfader, "Crossfader").default(0.5).target(target.clone()).width(width).show(ui);
         let r = r.on_hover_text(if used { "Crossfader: left = A layers, right = B layers, centre = both · double-click to centre" } else { "Crossfader: set layers to A or B below" });
         value_bubble(ui, &r, match comp.crossfader {
@@ -158,7 +159,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
         fade = auto.clicked();
         map_menu(ui, &auto, auto_target);
         guarded!(ui, comp.auto_fade_secs, egui::DragValue::new(&mut comp.auto_fade_secs).range(0.0..=60.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Auto-fade time");
-        choice_combo(ui, "fader_curve", &mut comp.fader_curve, 150.0, false).on_hover_text("How the crossfader shares out A and B");
+        choice_combo(ui, "fader_curve", &mut comp.fader_curve, 150.0, false).on_hover_text("How the crossfader shares out A and B. Full in middle: both full at the centre, each fades over its far half. Smooth: no dip in the middle. Straight: each fades the whole way (a dip in the middle). Hard cut: switches at the centre.");
         crate::ui::Level::range(&mut comp.master_speed, 0.25, 4.0, "Speed").log().default(1.0).width(130.0).target(ControlTarget::App(phosphor_engine::AppControl::MasterSpeed)).tip("Every movie plays this much faster or slower").show(ui);
     });
     if fade {

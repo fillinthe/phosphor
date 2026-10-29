@@ -69,7 +69,8 @@ const LIVELY_BLENDS: &[BlendMode] = &[BlendMode::Screen, BlendMode::Add, BlendMo
 /// Generators worth landing on at random: (built in, imported / yours). Imported ones that only draw
 /// sound (FFT, waveform) are left out: they sit dark without audio.
 pub fn lively_generators() -> (Vec<&'static ShaderDesc>, Vec<&'static ShaderDesc>) {
-    let builtin: Vec<_> = shaders::GENERATORS.iter().filter(|d| !PLAIN_GENERATORS.contains(&d.id)).collect();
+    // (Points generators make point data, not a picture: they need a Points render to show anything.)
+    let builtin: Vec<_> = shaders::GENERATORS.iter().filter(|d| !PLAIN_GENERATORS.contains(&d.id) && !shaders::points_out(d.id)).collect();
     let other = shaders::all_generators()
         .into_iter()
         .filter(|d| !shaders::GENERATORS.iter().any(|b| b.id == d.id))
@@ -337,6 +338,13 @@ mod tests {
             assert!(d.below(5) < 5);
         }
         assert_eq!(d.below(0), 0);
+    }
+
+    #[test]
+    fn surprise_never_lands_on_point_data() {
+        let (builtin, other) = lively_generators();
+        assert!(builtin.iter().chain(&other).all(|d| !shaders::points_out(d.id)));
+        assert!(!builtin.is_empty());
     }
 
     #[test]
