@@ -105,8 +105,8 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             crate::ui::toolbar(ui, |ui| {
-                for (k, what) in ["empty", "loaded", "playing"].iter().enumerate() {
-                    guarded!(ui, control.clip_lights[k], egui::DragValue::new(&mut control.clip_lights[k]).range(0..=127).prefix(format!("{what} ")));
+                for (k, what) in ["Empty", "Loaded", "Playing"].iter().enumerate() {
+                    guarded!(ui, control.clip_lights[k], egui::DragValue::new(&mut control.clip_lights[k]).range(0..=127).prefix(format!("{} ", crate::i18n::tr(what))));
                 }
             });
         });
@@ -114,7 +114,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             crate::ui::toggle(ui, &mut control.takeover_glide, "Glide")
                 .on_hover_text("Instead of waiting for the fader to reach the value, the value glides to the fader (a smooth catch-up, no jump)");
             let mut pct = control.pickup_near * 100.0;
-            if guarded!(ui, pct, egui::DragValue::new(&mut pct).range(0.5..=50.0).speed(0.1).max_decimals(1).prefix("within ").suffix("%"))
+            if guarded!(ui, pct, egui::DragValue::new(&mut pct).range(0.5..=50.0).speed(0.1).max_decimals(1).prefix(format!("{} ", crate::i18n::tr("Within"))).suffix("%"))
                 .on_hover_text("How close a fader has to come to the value on screen to take over")
                 .changed()
             {

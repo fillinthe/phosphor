@@ -44,7 +44,7 @@ pub(crate) fn stage(ui: &mut egui::Ui, st: &mut State) {
         match tex.filter(|_| o.enabled) {
             Some(t) => paint_texture(p, t, fit_rect(pic.shrink(2.0), ow as f32 / oh.max(1) as f32)),
             None => {
-                p.text(pic.center(), egui::Align2::CENTER_CENTER, "off", egui::FontId::proportional(14.0), Color32::GRAY);
+                p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(14.0), Color32::GRAY);
             }
         }
         let r = child.interact(pic, child.id().with(("stage_pick", id)), Sense::click());

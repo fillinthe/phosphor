@@ -587,7 +587,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                 match tex.filter(|_| o.enabled) {
                     Some(t) => paint_texture(p, t, fit_rect(pic.shrink(2.0), ow as f32 / oh.max(1) as f32)),
                     None => {
-                        p.text(pic.center(), egui::Align2::CENTER_CENTER, "off", egui::FontId::proportional(12.0), Color32::GRAY);
+                        p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(12.0), Color32::GRAY);
                     }
                 }
                 let border = if selected { accent() } else if r.hovered() { Color32::from_gray(140) } else { Color32::from_gray(50) };

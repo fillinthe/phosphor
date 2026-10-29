@@ -447,8 +447,9 @@ impl PhosphorApp {
                                 _ => true,
                             };
                             let text = match a {
-                                Action::Syphon => format!("{label}  ({})", if self.state.comp.share_out() { "on" } else { "off" }),
-                                Action::Ndi => format!("{label}  ({})", if self.state.comp.ndi.enabled { "on" } else { "off" }),
+                                // Translated in pieces: the whole line isn't in the language packs.
+                                Action::Syphon => format!("{}  ({})", crate::i18n::tr(label), crate::i18n::tr(if self.state.comp.share_out() { "On" } else { "Off" })),
+                                Action::Ndi => format!("{}  ({})", crate::i18n::tr(label), crate::i18n::tr(if self.state.comp.ndi.enabled { "On" } else { "Off" })),
                                 _ => label.to_string(),
                             };
                             if crate::ui::menu_item(ui, enabled, text, shortcut_text(*sc)).clicked() {
