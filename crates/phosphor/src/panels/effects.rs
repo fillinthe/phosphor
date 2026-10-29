@@ -83,7 +83,11 @@ fn effects_list_body(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mu
                 handle.dnd_set_drag_payload(FxDrag(fx.id));
                 handle.on_hover_text("Drag to reorder");
                 let locked = is_locked(ui, &ControlTarget::EffectEnabled(fx.id));
-                let on = crate::ui::toggle_locked(ui, &mut fx.enabled, desc.name, locked);
+                // (The name gets what's left after the four buttons on the right: a long name is cut short, whole
+                // on hover, instead of running under them.)
+                let reserve = 4.0 * (crate::ui::CONTROL_H + ui.spacing().item_spacing.x) + if fx.mix < 0.999 { 44.0 } else { 0.0 };
+                let room = (ui.available_width() - reserve).max(60.0);
+                let on = ui.allocate_ui_with_layout(egui::vec2(room, crate::ui::CONTROL_H), egui::Layout::left_to_right(egui::Align::Center), |ui| crate::ui::toggle_locked(ui, &mut fx.enabled, desc.name, locked)).inner;
                 mapped_badge(ui, &on, &ControlTarget::EffectEnabled(fx.id));
                 on.right_menu(|ui| {
                     learn_items(ui, &ControlTarget::EffectEnabled(fx.id));
