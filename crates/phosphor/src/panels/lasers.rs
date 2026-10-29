@@ -2,7 +2,7 @@
 //! and the Laser Designer (looks made of shapes, drawn on a canvas the way the laser draws them: the traced path,
 //! glowing). Output: `crate::lasers`; geometry: `phosphor_engine::laser`.
 
-use phosphor_engine::laser::{LaserInputs, left_out, look_paths, test_pattern, trace};
+use phosphor_engine::laser::{LaserInputs, left_out, look_paths, project, projector_paths, test_pattern, trace};
 use phosphor_engine::{LaserLook, LaserProjector, LaserShape, LaserShapeKind, MASTER_ID};
 
 use super::*;
@@ -64,7 +64,26 @@ fn projectors(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(target_arch = "wasm32")]
     let devices: Vec<Dev> = Vec::new();
     let looks: Vec<(u64, String)> = st.comp.lasers.looks.iter().map(|l| (l.id, l.name.clone())).collect();
+    // Projectors whose area editor is open: what each draws now (placed, at full brightness so dim lasers show).
+    let open_id = |id: u64| egui::Id::new(("laser_area_open", id));
+    #[cfg(not(target_arch = "wasm32"))]
+    let inputs = st.lasers.inputs(&st.comp.lasers);
+    #[cfg(target_arch = "wasm32")]
+    let inputs = LaserInputs::default();
+    let t = st.mod_inputs.time as f64;
+    let lasers = &st.comp.lasers;
+    let frames: std::collections::HashMap<u64, Vec<phosphor_engine::laser::LaserPoint>> = lasers
+        .projectors
+        .iter()
+        .filter(|p| ui.ctx().data(|d| d.get_temp::<bool>(open_id(p.id))).unwrap_or(!p.zones.is_empty() || !p.dark.is_empty()))
+        .map(|p| {
+            let paths = projector_paths(lasers, p, t, &st.mod_inputs, &inputs);
+            let bright = LaserProjector { brightness: 1.0, ..p.clone() };
+            (p.id, project(&trace(&paths, (p.pps / phosphor_engine::laser::FPS) as usize), &bright, 1.0))
+        })
+        .collect();
     let mut remove = None;
+    let next_id = &mut st.comp.next_id;
     for p in &mut st.comp.lasers.projectors {
         ui.push_id(p.id, |ui| {
             crate::ui::toolbar(ui, |ui| {
@@ -112,7 +131,15 @@ fn projectors(ui: &mut egui::Ui, st: &mut State) {
                 for (i, name) in ["Red", "Green", "Blue"].iter().enumerate() {
                     Level::percent(&mut p.color[i], *name).default(1.0).width(100.0).show(ui);
                 }
+                let mut open = ui.ctx().data(|d| d.get_temp::<bool>(open_id(p.id))).unwrap_or(!p.zones.is_empty() || !p.dark.is_empty());
+                let what = if p.zones.is_empty() && p.dark.is_empty() { "Zones".to_string() } else { format!("Zones ({})", p.zones.len() + p.dark.len()) };
+                if crate::ui::toggle(ui, &mut open, what).on_hover_text("Split this laser's area into zones with their own looks, and mark areas it never lights").changed() {
+                    ui.ctx().data_mut(|d| d.insert_temp(open_id(p.id), open));
+                }
             });
+            if let Some(frame) = frames.get(&p.id) {
+                super::laser_zones::zones_editor(ui, p, frame, &looks, next_id);
+            }
             ui.separator();
         });
     }

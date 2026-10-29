@@ -329,7 +329,9 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       speed, read off the UI thread; busy frames wait less at jumps and corners to stay in budget). **Test pattern and video
       trace done 2026-10-30** (projector Test pattern switch; Video trace shape: a layer / the mix read back small
       (128 wide, 25 a second, only while used), marching squares + Douglas–Peucker, longest outlines kept; crowded
-      frames drop the shortest lines and the Designer says so). Next: zones.
+      frames drop the shortest lines and the Designer says so). **Zones done 2026-10-30** (LaserProjector.zones: look,
+      brightness (mappable), place / size / turn, four corners through a homography; dark areas blank the beam; area
+      editor with handles).
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
       colours to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
       system, to see what it accepts.

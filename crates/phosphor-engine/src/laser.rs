@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use crate::control::modulate;
 use crate::ilda;
-use crate::model::{LaserFont, LaserLook, LaserProjector, LaserShape, LaserShapeKind};
+use crate::model::{LaserFont, LaserLook, LaserProjector, LaserShape, LaserShapeKind, LaserZone, Lasers};
 use crate::ModInputs;
 
 /// One point the laser draws: -1..1 across and up, colour 0..1 (all 0 = beam off).
@@ -72,6 +72,42 @@ pub fn trace_source(s: &LaserShape) -> u64 {
 /// Every enabled shape's lines at `t` seconds (`inputs`: laser files and pictures so far).
 pub fn look_paths(look: &LaserLook, t: f64, mods: &ModInputs, inputs: &LaserInputs) -> Vec<Path> {
     look.shapes.iter().filter(|s| s.enabled).flat_map(|s| shape_paths(s, t, mods, inputs)).collect()
+}
+
+/// Everything projector `p` draws at `t` seconds, before tracing: its look filling its area, or each enabled zone's
+/// look placed in that zone (with the test pattern on: the pattern, in each zone when it has zones).
+pub fn projector_paths(lasers: &Lasers, p: &LaserProjector, t: f64, mods: &ModInputs, inputs: &LaserInputs) -> Vec<Path> {
+    let look = |id: u64| if p.test_pattern { test_pattern() } else { lasers.look(id).map(|l| look_paths(l, t, mods, inputs)).unwrap_or_default() };
+    if p.zones.is_empty() {
+        return look(p.look);
+    }
+    p.zones.iter().filter(|z| z.enabled && z.brightness > 0.0).flat_map(|z| in_zone(look(if z.look == 0 { p.look } else { z.look }), z)).collect()
+}
+
+/// Paths placed in a zone: moved, sized and turned inside it, then onto its corners (a homography: straight lines
+/// stay straight, so a keystoned surface gets a true rectangle), dimmed by its brightness.
+pub fn in_zone(paths: Vec<Path>, z: &LaserZone) -> Vec<Path> {
+    let h = crate::mapping::square_to_quad(&z.corners);
+    let (sin, cos) = z.rotate.to_radians().sin_cos();
+    let gain = z.brightness.clamp(0.0, 1.0);
+    let place = |[x, y]: [f32; 2]| {
+        let (x, y) = (x * z.size, y * z.size);
+        let (lx, ly) = (x * cos - y * sin + z.x, x * sin + y * cos + z.y);
+        let (s, t) = ((lx + 1.0) * 0.5, (ly + 1.0) * 0.5);
+        let w = h[6] * s + h[7] * t + h[8];
+        let w = if w.abs() < 1e-6 { 1e-6 } else { w };
+        [(h[0] * s + h[1] * t + h[2]) / w, (h[3] * s + h[4] * t + h[5]) / w]
+    };
+    paths
+        .into_iter()
+        .map(|mut p| {
+            for (q, rgb) in &mut p.points {
+                *q = place(*q);
+                *rgb = rgb.map(|c| c * gain);
+            }
+            p
+        })
+        .collect()
 }
 
 /// Lining a laser up: the scan area's edge, a circle, a cross in the middle, an arrow pointing up, and a corner
@@ -523,7 +559,7 @@ fn sharp(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> bool {
 }
 
 /// The frame as projector `p` draws it: placed (size, position, turn, flips), colour-balanced and dimmed by its
-/// brightness × `master`, kept inside the scan area, and dark below its safety floor.
+/// brightness × `master`, kept inside the scan area, and dark below its safety floor and in its dark areas.
 pub fn project(points: &[LaserPoint], p: &LaserProjector, master: f32) -> Vec<LaserPoint> {
     let (sin, cos) = p.rotate.to_radians().sin_cos();
     let gain = (p.brightness * master).clamp(0.0, 1.0);
@@ -538,7 +574,7 @@ pub fn project(points: &[LaserPoint], p: &LaserProjector, master: f32) -> Vec<La
                 y = -y;
             }
             let (x, y) = (x * cos - y * sin + p.x, x * sin + y * cos + p.y);
-            let inside = (-1.0..=1.0).contains(&x) && (-1.0..=1.0).contains(&y) && y >= p.floor;
+            let inside = (-1.0..=1.0).contains(&x) && (-1.0..=1.0).contains(&y) && y >= p.floor && !p.dark.iter().any(|a| a.contains(x, y));
             let rgb = if inside { [0, 1, 2].map(|i| (q.rgb[i] * p.color[i] * gain).clamp(0.0, 1.0)) } else { [0.0; 3] };
             LaserPoint { x: x.clamp(-1.0, 1.0), y: y.clamp(-1.0, 1.0), rgb }
         })
@@ -696,6 +732,35 @@ mod tests {
         assert!((half as f32 / full as f32 - 0.5).abs() < 0.15, "{half} of {full}");
         s.draw = 0.0;
         assert!(shape_paths(&s, 0.0, &ModInputs::default(), &files()).is_empty());
+    }
+
+    /// Zones: each shows its look placed on its corners (a keystone keeps lines straight), dimmed by its brightness;
+    /// switched-off zones draw nothing; the test pattern shows in every zone; dark areas blank the beam.
+    #[test]
+    fn zones_place_their_looks() {
+        let mut lasers = Lasers::default();
+        let line = |id, y| LaserLook { id, name: "L".into(), shapes: vec![LaserShape { id: id + 100, kind: LaserShapeKind::Line, y, size: 1.0, ..Default::default() }] };
+        lasers.looks = vec![line(1, 0.0), line(2, 0.5)];
+        let left = LaserZone { id: 10, look: 0, corners: [[-1.0, -1.0], [0.0, -1.0], [0.0, 1.0], [-1.0, 1.0]], ..Default::default() };
+        // A keystoned zone: narrower at the top.
+        let right = LaserZone { id: 11, look: 2, brightness: 0.5, corners: [[0.0, -1.0], [1.0, -1.0], [0.8, 1.0], [0.2, 1.0]], ..Default::default() };
+        let mut p = LaserProjector { id: 5, look: 1, zones: vec![left, right], ..Default::default() };
+        let paths = projector_paths(&lasers, &p, 0.0, &ModInputs::default(), &LaserInputs::default());
+        assert_eq!(paths.len(), 2);
+        let a = &paths[0].points;
+        assert!((a[0].0[0] + 1.0).abs() < 1e-5 && a[1].0[0].abs() < 1e-5 && a[0].0[1].abs() < 1e-5, "the projector's look across the left half: {a:?}");
+        let b = &paths[1].points;
+        // The line's ends sit on the keystone's slanted sides (x = 0.1 (y + 1) on the left), level with each other.
+        let (l, r) = (b[0].0, b[1].0);
+        assert!((l[0] - 0.1 * (l[1] + 1.0)).abs() < 1e-4 && (r[0] - (1.0 - 0.1 * (r[1] + 1.0))).abs() < 1e-4 && (l[1] - r[1]).abs() < 1e-5 && l[1] > 0.3, "the zone's look on its keystone: {b:?}");
+        assert_eq!(b[0].1, [0.0, 0.5, 0.15], "half as bright");
+        p.zones[1].enabled = false;
+        assert_eq!(projector_paths(&lasers, &p, 0.0, &ModInputs::default(), &LaserInputs::default()).len(), 1);
+        p.test_pattern = true;
+        assert_eq!(projector_paths(&lasers, &p, 0.0, &ModInputs::default(), &LaserInputs::default()).len(), test_pattern().len(), "the pattern in the one zone on");
+        let dark = LaserProjector { dark: vec![crate::model::LaserArea { left: -0.1, bottom: -0.1, right: 0.1, top: 0.1 }], ..Default::default() };
+        let out = project(&[LaserPoint { x: 0.0, y: 0.0, rgb: [1.0; 3] }, LaserPoint { x: 0.5, y: 0.0, rgb: [1.0; 3] }], &dark, 1.0);
+        assert!(!out[0].lit() && out[1].lit(), "dark inside the dark area only");
     }
 
     /// Projection: placed, flipped, dimmed, colour-balanced; the floor and the scan area's edge blank the beam.

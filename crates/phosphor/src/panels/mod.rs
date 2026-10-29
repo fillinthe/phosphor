@@ -49,6 +49,7 @@ mod ai_shader;
 mod modulators;
 mod sequencer;
 mod leds;
+mod laser_zones;
 mod lasers;
 mod mapping;
 mod mapping_points;

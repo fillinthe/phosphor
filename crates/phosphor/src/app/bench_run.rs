@@ -902,6 +902,17 @@ impl PhosphorApp {
                 comp.lasers.projectors.push(phosphor_engine::LaserProjector { id, look: look.id, test_pattern, ..Default::default() });
                 comp.lasers.looks.push(look);
                 comp.lasers.projectors[0].floor = -0.6;
+                // PHOSPHOR_LASER_ZONES=1: two zones (the right one keystoned, showing the test pattern's look) and a
+                // dark area.
+                if std::env::var_os("PHOSPHOR_LASER_ZONES").is_some() {
+                    let (a, b) = (comp.new_id(), comp.new_id());
+                    let p = &mut comp.lasers.projectors[0];
+                    p.zones = vec![
+                        phosphor_engine::LaserZone { id: a, name: "Left".into(), corners: [[-1.0, -0.6], [-0.05, -0.6], [-0.05, 0.9], [-1.0, 0.9]], ..Default::default() },
+                        phosphor_engine::LaserZone { id: b, name: "Wall".into(), brightness: 0.6, corners: [[0.05, -0.6], [1.0, -0.5], [0.85, 0.8], [0.15, 0.95]], ..Default::default() },
+                    ];
+                    p.dark = vec![phosphor_engine::LaserArea { left: 0.3, bottom: 0.0, right: 0.6, top: 0.3 }];
+                }
                 let p = &comp.lasers.projectors[0];
                 let frame = crate::lasers::frame_for(&comp.lasers, p, 1.0, &self.state.mod_inputs, 1.0, &Default::default());
                 println!("LASER points={} lit={} budget={}", frame.len(), frame.iter().filter(|q| q.lit()).count(), p.pps / crate::lasers::FPS);
