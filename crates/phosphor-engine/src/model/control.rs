@@ -131,6 +131,8 @@ pub enum ControlTarget {
     LaserShape { shape: u64, field: u8 },
     /// A laser projector's brightness (`MASTER_ID`: every laser's).
     LaserBrightness(u64),
+    /// Switch a laser projector to a look (a press; lit while it shows it).
+    LaserLook { projector: u64, look: u64 },
     /// Switch an output to this layout (a press): it fades in, the output's other layouts fade out.
     Layout(u64),
     /// Stop what a layer is playing (a press; `MASTER_ID` = every layer).
