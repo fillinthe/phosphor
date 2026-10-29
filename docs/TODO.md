@@ -67,7 +67,13 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       in the old .vdmx5 files read. *(tests; real show imported by bench; not installed)* **Needs you:** layer order
       (read as bottom first, like Resolume). Left out: VDMX data sources, controller mappings, layer sources (VDMX
       layers play what's triggered from the media bin: the clips go on the first layer).
-- [ ] **Resolume deeper**: generators, effects, layer opacity / blend, Advanced Output (slices).
+- [x] **Resolume deeper**: layers' opacity, blend and effects, the composition's effects (master), generator clips
+      (nearest built-in; text generators as text clips with their words), empty cells no longer counted as left out,
+      and the Advanced Output Resolume used last (a toggle in the import window): each screen an output with its
+      slices (warped corners, input rectangle, the layer they take) and masks (outline, invert). *(tests; your
+      composition and screen setup rendered: 10 outputs, 27 slices, 8 masks; not installed)* Left out: Bezier
+      warps past the four corners, Resolume sources that aren't files or generators, effect settings (built-ins
+      start at their defaults; dry / wet kept).
 
 ## From show testing (2026-10-25)
 

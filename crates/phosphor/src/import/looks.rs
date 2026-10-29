@@ -28,24 +28,91 @@ pub struct LayerLook {
     pub effects: Vec<LookEffect>,
 }
 
+/// The built-in generator nearest to another app's (MadMapper's Madam / materials, Resolume's generators).
+pub fn generator_for(name: &str) -> &'static str {
+    let n = name.to_lowercase();
+    let has = |w: &str| n.contains(w);
+    if has("solid") {
+        "solid"
+    } else if has("test") || has("color pattern") || has("colorpattern") || has("bars") {
+        "color_bars"
+    } else if has("grid") || has("checker") || has("square") || has("brick") {
+        "checker"
+    } else if has("gradient") {
+        "gradient"
+    } else if has("particle") {
+        "particles"
+    } else if has("spectrum") {
+        "spectrum"
+    } else if has("waveform") || has("wave synth") || has("sine") || has("oscillo") {
+        "waveform"
+    } else if has("cellular") || has("voronoi") || has("caustic") {
+        "voronoi"
+    } else if has("noise") || has("cloud") || has("dune") || has("simplex") || has("field") {
+        "noise"
+    } else if has("tunnel") {
+        "tunnel"
+    } else if has("line") || has("diagonal") || has("bar code") || has("barcode") || has("stripe") {
+        "lines"
+    } else if has("circle") || has("ring") || has("arc") || has("siren") {
+        "rings"
+    } else if has("star") {
+        "starfield"
+    } else if has("spiral") {
+        "spiral"
+    } else {
+        "plasma"
+    }
+}
+
+/// Another app's blend mode by name (VDMX "OpenGL- Add" / "OpenGL- Over", Resolume "Add" / "Alpha"…); Normal
+/// for anything else, None for no name.
+pub fn blend_named(mode: &str) -> Option<BlendMode> {
+    let mode = mode.to_lowercase();
+    let has = |w: &str| mode.contains(w);
+    Some(if mode.is_empty() {
+        return None;
+    } else if has("add") || has("plus") {
+        BlendMode::Add
+    } else if has("multiply") {
+        BlendMode::Multiply
+    } else if has("screen") {
+        BlendMode::Screen
+    } else if has("overlay") {
+        BlendMode::Overlay
+    } else if has("difference") {
+        BlendMode::Difference
+    } else if has("subtract") {
+        BlendMode::Subtract
+    } else if has("lighten") || has("lighter") {
+        BlendMode::Lighten
+    } else if has("darken") || has("darker") {
+        BlendMode::Darken
+    } else if has("exclusion") {
+        BlendMode::Exclusion
+    } else {
+        BlendMode::Normal
+    })
+}
+
 /// The built-in effect nearest to one of another app's, by its name (None: nothing close, or it only crops).
 pub fn builtin_for(name: &str) -> Option<&'static str> {
     let n = name.to_lowercase().replace(".qtz", "").replace(".fs", "").replace("v002 ", "");
     let n = n.strip_prefix("ci").filter(|_| name.starts_with("CI")).unwrap_or(&n).to_string();
     let has = |w: &str| n.contains(w);
-    Some(if has("crop") || has("straighten") || has("clamp") || has("transform") {
+    Some(if has("crop") || has("straighten") || has("clamp") || has("transform") || has("keystone") {
         return None;
-    } else if has("kaleid") {
+    } else if has("kaleid") || has("scope") || has("cloner") {
         "kaleidoscope"
-    } else if has("mirror") || has("reflect") {
+    } else if has("mirror") || has("reflect") || n == "flip" {
         "mirror"
-    } else if has("dot screen") || has("dotscreen") || has("halftone") {
+    } else if has("dot screen") || has("dotscreen") || has("halftone") || has("polkadot") || has("point grid") || has("pointgrid") {
         "halftone"
     } else if has("rutt") {
         "rutt_etra"
-    } else if has("pixel") || has("boxinator") {
+    } else if has("pixel") || has("boxinator") || has("lorez") || has("lo-rez") || has("triangulate") {
         "pixelate"
-    } else if has("color controls") || has("colorcontrols") || has("hue") || has("saturation") || has("brightness") || has("monochrome") {
+    } else if has("color controls") || has("colorcontrols") || has("hue") || has("saturation") || has("brightness") || has("monochrome") || has("levels") {
         "color_adjust"
     } else if has("false color") || has("falsecolor") || has("palette") || has("tint") {
         "palette"
@@ -61,11 +128,11 @@ pub fn builtin_for(name: &str) -> Option<&'static str> {
         "glow"
     } else if has("chroma zoom") || has("rgb") || has("chromatic") || has("convergence") {
         "rgb_shift"
-    } else if has("bad tv") || has("glitch") {
+    } else if has("bad tv") || has("glitch") || has("twitch") || has("fragment") {
         "glitch"
     } else if has("crt") || has("scanline") {
         "crt"
-    } else if has("tile") || has("multiframe") || has("compound eye") {
+    } else if has("tile") || has("multiframe") || has("compound eye") || has("video wall") || has("videowall") {
         "tile"
     } else if has("invert") {
         "invert"
@@ -77,7 +144,7 @@ pub fn builtin_for(name: &str) -> Option<&'static str> {
         "sharpen"
     } else if has("vignette") {
         "vignette"
-    } else if has("wave") || has("ripple") || has("warp") {
+    } else if has("wave") || has("ripple") || has("warp") || has("twist") {
         "wave"
     } else if has("trail") || has("ghost") || has("feedback") || has("time glitch") {
         "trails"

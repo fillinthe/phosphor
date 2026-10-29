@@ -195,42 +195,6 @@ pub struct Imported {
     pub faded: usize,
 }
 
-/// A MadMapper generator's nearest built-in generator.
-fn generator_for(name: &str) -> &'static str {
-    let n = name.to_lowercase();
-    let has = |w: &str| n.contains(w);
-    if has("solid") {
-        "solid"
-    } else if has("test") || has("color pattern") || has("colorpattern") || has("bars") {
-        "color_bars"
-    } else if has("grid") || has("checker") || has("square") || has("brick") {
-        "checker"
-    } else if has("gradient") {
-        "gradient"
-    } else if has("particle") {
-        "particles"
-    } else if has("spectrum") {
-        "spectrum"
-    } else if has("waveform") || has("wave synth") {
-        "waveform"
-    } else if has("cellular") || has("voronoi") || has("caustic") {
-        "voronoi"
-    } else if has("noise") || has("cloud") || has("dune") || has("simplex") {
-        "noise"
-    } else if has("line") || has("diagonal") || has("bar code") || has("barcode") || has("stripe") {
-        "lines"
-    } else if has("circle") || has("ring") || has("arc") || has("siren") {
-        "rings"
-    } else if has("tunnel") {
-        "tunnel"
-    } else if has("star") {
-        "starfield"
-    } else if has("spiral") {
-        "spiral"
-    } else {
-        "plasma"
-    }
-}
 
 /// The layer source for a picture a surface shows, and whether it stands in for something MadMapper drew itself.
 fn source_for(v: &MadVisual) -> (SourceSpec, bool) {
@@ -252,7 +216,7 @@ fn source_for(v: &MadVisual) -> (SourceSpec, bool) {
         _ => {
             // Madam generators and materials: "/madam/Solid Color/", "/materials/Clouds/0 Clouds".
             let name = url.trim_start_matches("/madam/").trim_start_matches("/materials/").split('/').next().filter(|s| !s.is_empty()).unwrap_or(&v.name);
-            let id = generator_for(name);
+            let id = super::looks::generator_for(name);
             let generator = phosphor_engine::shaders::generator(id).map_or_else(|| SourceSpec::Generator("plasma".into()), |_| SourceSpec::Generator(id.into()));
             (generator, true)
         }

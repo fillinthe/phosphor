@@ -1,10 +1,14 @@
-//! Resolume Arena / Avenue compositions (.avc, XML): layers, decks and clips (video and image files) become a
-//! Phosphor project — layers, clip columns, media bin, tempo and canvas size. Generators, effects and routing
-//! that Resolume renders itself aren't carried over (they're counted so the import can say so).
+//! Resolume Arena / Avenue compositions (.avc, XML): layers, decks and clips become a Phosphor project — layers
+//! (name, opacity, blend, effects), clip columns (video and image files; generator clips as the nearest built-in
+//! generator, text generators as text clips with their words), media bin, tempo, canvas size and the composition's
+//! effects as the master effects. Effects come as the nearest built-in one (`looks`); Resolume's sources that
+//! aren't files or generators are counted so the import can say so.
 
 use phosphor_engine::{Clip, Composition};
 #[cfg(test)]
 use phosphor_engine::SourceSpec;
+
+use super::looks::{LayerLook, LookEffect};
 
 /// One clip slot in a deck.
 #[derive(Clone, Debug)]
@@ -14,6 +18,8 @@ pub struct AvcClip {
     pub name: String,
     /// The media file, for video / image clips.
     pub path: Option<String>,
+    /// A generator clip: Resolume's generator name, and its words for a text generator.
+    pub generator: Option<(String, Option<String>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -68,16 +74,25 @@ pub fn parse(text: &str) -> Result<AvcFile, String> {
     let info = root.children().find(|c| c.has_tag_name("CompositionInfo"));
     let num = |n: Option<roxmltree::Node>, a: &str| n.and_then(|n| n.attribute(a)).and_then(|v| v.parse::<u32>().ok());
     let deck_names: Vec<String> = info.map(|i| i.children().filter(|c| c.has_tag_name("DeckInfo")).filter_map(|d| d.attribute("name").map(str::to_string)).collect()).unwrap_or_default();
-    let mut layers: Vec<(usize, String)> = root
+    let mut layers: Vec<(usize, LayerLook)> = root
         .children()
         .filter(|c| c.has_tag_name("Layer"))
         .enumerate()
         .map(|(i, l)| {
             let index = l.attribute("layerIndex").and_then(|v| v.parse().ok()).unwrap_or(i);
-            (index, param(l, "Name").filter(|n| !n.is_empty()).map_or_else(|| format!("Layer {}", index + 1), str::to_string))
+            let name = param(l, "Name").filter(|n| !n.is_empty()).map_or_else(|| format!("Layer {}", index + 1), str::to_string);
+            let video = l.children().find(|c| c.has_tag_name("VideoTrack"));
+            let opacity = video.and_then(|v| param(v, "Opacity")).and_then(|v| v.parse::<f32>().ok());
+            let blend = video
+                .and_then(|v| v.children().find(|m| m.has_tag_name("ChoosableMixer") && m.attribute("name") == Some("Blend")))
+                .and_then(|m| m.children().find(|r| r.has_tag_name("RenderPass")))
+                .and_then(|r| r.attribute("name"))
+                .and_then(super::looks::blend_named);
+            (index, LayerLook { name, opacity, blend, fit: None, effects: video.map(chain).unwrap_or_default() })
         })
         .collect();
     layers.sort_by_key(|(i, _)| *i);
+    let master = root.children().find(|c| c.has_tag_name("VideoTrack")).map(chain).unwrap_or_default();
     let bpm = root
         .children()
         .find(|c| c.has_tag_name("TempoController"))
@@ -102,7 +117,15 @@ pub fn parse(text: &str) -> Result<AvcFile, String> {
                         .or_else(|| c.descendants().find(|n| n.has_tag_name("VideoFormatReaderSource")).and_then(|v| v.attribute("fileName")))
                         .map(str::to_string);
                     let name = param(c, "Name").map(str::to_string).unwrap_or_default();
-                    Some(AvcClip { layer, column, name, path })
+                    let generator = c.descendants().find(|n| n.has_tag_name("RenderPass") && n.attribute("baseType") == Some("Generator")).map(|g| {
+                        let text = g.descendants().find(|p| p.has_tag_name("ParamText") && p.attribute("name") == Some("Text")).and_then(|p| p.attribute("value")).map(str::to_string);
+                        (g.attribute("name").unwrap_or("").to_string(), text)
+                    });
+                    // (An empty cell has neither a file nor a video or audio track: not a clip at all.)
+                    if path.is_none() && generator.is_none() && !c.descendants().any(|n| n.has_tag_name("VideoTrack") || n.has_tag_name("AudioFile")) {
+                        return None;
+                    }
+                    Some(AvcClip { layer, column, name, path, generator })
                 })
                 .collect();
             let columns = clips.iter().map(|c| c.column + 1).max().unwrap_or(0);
@@ -115,11 +138,30 @@ pub fn parse(text: &str) -> Result<AvcFile, String> {
         width: num(info, "width").unwrap_or(1920),
         height: num(info, "height").unwrap_or(1080),
         bpm,
-        layers: layers.into_iter().map(|(_, n)| n).collect(),
+        layers: layers.iter().map(|(_, l)| l.name.clone()).collect(),
         decks,
-        looks: Vec::new(),
-        master: Vec::new(),
+        looks: layers.into_iter().map(|(_, l)| l).collect(),
+        master,
     })
+}
+
+/// A video track's effects (its render pass chain, without Resolume's own transform passes): each effect's name,
+/// dry / wet (its outer Opacity) and settings.
+fn chain(video: roxmltree::Node) -> Vec<LookEffect> {
+    let Some(chain) = video.children().find(|c| c.has_tag_name("RenderPass") && c.attribute("type") == Some("RenderPassChain")) else { return Vec::new() };
+    chain
+        .children()
+        .filter(|e| e.has_tag_name("RenderPass") && !matches!(e.attribute("name"), Some("Transform" | "ScreenLayerTransform") | None))
+        .map(|e| {
+            let mix = param(e, "Opacity").and_then(|v| v.parse::<f32>().ok()).unwrap_or(1.0);
+            let inner = e.children().find(|c| c.has_tag_name("RenderPass"));
+            let values = inner
+                .and_then(|i| i.children().find(|c| c.has_tag_name("Params")))
+                .map(|ps| ps.children().filter(|p| p.has_tag_name("ParamRange")).filter_map(|p| Some((p.attribute("name")?.to_string(), p.attribute("value")?.parse::<f32>().ok()?))).collect())
+                .unwrap_or_default();
+            LookEffect { name: e.attribute("name").unwrap_or("").to_string(), path: None, enabled: true, mix, values }
+        })
+        .collect()
 }
 
 /// A name to show for a clip: Resolume's name, unless it's just the file's number, then the file name.
@@ -151,7 +193,25 @@ pub fn to_composition(file: &AvcFile, decks: &[usize]) -> (Composition, usize) {
     for deck in decks.iter().filter_map(|d| file.decks.get(*d)) {
         for c in &deck.clips {
             let Some(path) = &c.path else {
-                skipped += 1;
+                // A generator clip: the nearest built-in generator (text generators: a text clip with its words).
+                match &c.generator {
+                    Some((generator, text)) => {
+                        let id = comp.new_id();
+                        let source = match text {
+                            Some(words) if generator.to_lowercase().contains("text") => phosphor_engine::SourceSpec::Text(phosphor_engine::TextStyle { text: words.clone(), ..crate::text::default_style() }),
+                            _ => phosphor_engine::SourceSpec::Generator(super::looks::generator_for(generator).into()),
+                        };
+                        let generator_values = match &source {
+                            phosphor_engine::SourceSpec::Generator(g) => phosphor_engine::shaders::generator(g).map(|d| d.defaults()).unwrap_or_default(),
+                            _ => Vec::new(),
+                        };
+                        let name = if c.name.is_empty() { generator.clone() } else { c.name.clone() };
+                        if let Some(layer) = ids.get(c.layer).and_then(|lid| comp.layer_mut(*lid)) {
+                            *layer.clip_slot_mut(offset + c.column) = Clip { id, name, source, generator_values, ..Default::default() };
+                        }
+                    }
+                    None => skipped += 1,
+                }
                 continue;
             };
             let name = clip_name(c);
@@ -192,12 +252,26 @@ mod tests {
 <Composition name="Composition" numDecks="2" numLayers="2">
   <CompositionInfo name="Gig" width="1280" height="720"><DeckInfo name="Warmup"/><DeckInfo name="Peak"/></CompositionInfo>
   <Layer uniqueId="1" layerIndex="0"><Params name="Params"><Param name="Name" value="Backgrounds"/></Params></Layer>
-  <Layer uniqueId="2" layerIndex="1"><Params name="Params"><Param name="Name" value="Logos"/></Params></Layer>
+  <Layer uniqueId="2" layerIndex="1"><Params name="Params"><Param name="Name" value="Logos"/></Params>
+    <VideoTrack name="VideoTrack"><Params name="Params"><ParamRange name="Opacity" value="0.5"/></Params>
+      <RenderPass name="RenderPassChain" type="RenderPassChain">
+        <RenderPass name="Transform" type="TransformEffect" baseType="Effect"/>
+        <RenderPass name="MirrorQuad" type="DryWetEffect" baseType="DryWetEffect"><Params name="Params"><ParamRange name="Opacity" value="0.25"/></Params><RenderPass name="MirrorQuad"/></RenderPass>
+      </RenderPass>
+      <ChoosableMixer name="Blend"><RenderPass name="Add" type="Add" baseType="Mixer"/></ChoosableMixer>
+    </VideoTrack>
+  </Layer>
+  <VideoTrack name="VideoTrack"><RenderPass name="RenderPassChain" type="RenderPassChain">
+    <RenderPass name="ShiftRGB" type="DryWetEffect" baseType="DryWetEffect"><Params name="Params"><ParamRange name="Opacity" value="0"/></Params><RenderPass name="ShiftRGB"><Params name="Params"><ParamRange name="Distance" value="0.8"/></Params></RenderPass></RenderPass>
+  </RenderPass></VideoTrack>
   <TempoController name="TempoController"><Params name="Params"><ParamRange name="Tempo" value="128"/></Params></TempoController>
   <Deck name="Deck">
     <Clip layerIndex="0" columnIndex="0"><PreloadData><VideoFile value="/footage/a.mov"/></PreloadData><Params name="Params"><Param name="Name" value="Clouds"/></Params></Clip>
     <Clip layerIndex="1" columnIndex="2"><PreloadData><VideoFile value="/footage/logo.png"/></PreloadData><Params name="Params"><Param name="Name" value=""/></Params></Clip>
-    <Clip layerIndex="0" columnIndex="1"><Params name="Params"><Param name="Name" value="Generator"/></Params></Clip>
+    <Clip layerIndex="0" columnIndex="1"><VideoTrack/><Params name="Params"><Param name="Name" value="Generator"/></Params></Clip>
+    <Clip layerIndex="0" columnIndex="4"><Params name="Params"><Param name="Name" value="Empty"/></Params></Clip>
+    <Clip layerIndex="1" columnIndex="0"><VideoTrack><RenderPass name="Tunnelines" type="Tunnelines" baseType="Generator"/></VideoTrack><Params name="Params"><Param name="Name" value=""/></Params></Clip>
+    <Clip layerIndex="1" columnIndex="1"><VideoTrack><RenderPass name="BlockTextGenerator" baseType="Generator"><Params name="Params"><ParamText name="Text" value="RAND"/></Params></RenderPass></VideoTrack></Clip>
   </Deck>
   <Deck name="Deck">
     <Clip layerIndex="0" columnIndex="0"><PreloadData><VideoFile value="/footage/b.mov"/></PreloadData></Clip>
@@ -211,8 +285,18 @@ mod tests {
         assert_eq!(f.layers, vec!["Backgrounds", "Logos"]);
         assert_eq!(f.decks.len(), 2);
         assert_eq!((f.decks[0].name.as_str(), f.decks[0].columns, f.decks[0].files()), ("Warmup", 3, 2));
+        assert_eq!(f.looks[1].effects[0].name, "MirrorQuad");
         let (comp, skipped) = to_composition(&f, &[0, 1]);
-        assert_eq!(skipped, 1, "the generator clip");
+        assert_eq!(skipped, 1, "the clip with no file and no generator");
+        // Generator clips: the nearest built-in; a text generator: its words.
+        assert_eq!((comp.layers[1].clips[0].source.clone(), comp.layers[1].clips[0].name.as_str()), (SourceSpec::Generator("tunnel".into()), "Tunnelines"));
+        assert!(matches!(&comp.layers[1].clips[1].source, SourceSpec::Text(t) if t.text == "RAND"));
+        // The layer's look and the composition's effects (dry / wet kept: Shift RGB is off at 0).
+        let logos = &comp.layers[1];
+        assert_eq!((logos.opacity, logos.blend), (0.5, phosphor_engine::BlendMode::Add));
+        assert_eq!(logos.effects.iter().map(|e| (e.effect.as_str(), e.mix)).collect::<Vec<_>>(), vec![("mirror", 0.25)], "Transform isn't an effect");
+        assert_eq!(comp.master_effects.iter().map(|e| (e.effect.as_str(), e.mix)).collect::<Vec<_>>(), vec![("rgb_shift", 0.0)]);
+        assert_eq!(comp.layers[0].blend, phosphor_engine::BlendMode::Normal, "no look: as before");
         assert_eq!(comp.layers[0].name, "Backgrounds");
         assert_eq!(comp.layers[0].clips[0].name, "Clouds");
         assert!(matches!(comp.layers[1].clips[2].source, SourceSpec::Image { .. }), "logo.png is an image");
@@ -245,7 +329,13 @@ fn convert_sample() {
     let (Some(input), Some(out)) = (std::env::var_os("PHOSPHOR_AVC_IN"), std::env::var_os("PHOSPHOR_AVC_OUT")) else { return };
     let f = read(&input.to_string_lossy()).unwrap();
     let all: Vec<usize> = (0..f.decks.len()).collect();
-    let (comp, skipped) = to_composition(&f, &all);
+    let (mut comp, skipped) = to_composition(&f, &all);
+    // $PHOSPHOR_AVC_SCREENS: an Advanced Output preset to add.
+    if let Some(screens) = std::env::var_os("PHOSPHOR_AVC_SCREENS") {
+        let setup = super::resolume_output::read(std::path::Path::new(&screens)).unwrap();
+        let ids: Vec<u64> = comp.layers.iter().map(|l| l.id).collect();
+        println!("screens {:?}", super::resolume_output::add_to(&mut comp, &setup, &ids));
+    }
     println!("layers {} columns {} bin {} skipped {skipped}", comp.layers.len(), comp.clip_columns, comp.media_bin.len());
     std::fs::write(out, comp.to_json()).unwrap();
 }
