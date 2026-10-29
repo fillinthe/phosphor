@@ -210,8 +210,12 @@ fn pt_colour(d: vec4f, v: vec3f, n: vec3f, uv: vec2f) -> vec4f {
     }
     let pic = textureSampleLevel(tex2, samp, uv, 0.0);
     c = mix(c, pic.rgb, P(8u));
-    let light = normalize(vec3f(-0.5, 0.6, 0.65));
-    let shade = mix(1.0, 0.15 + 0.95 * abs(dot(n, light)), P(10u));
+    // The light (P(14..19), from a Points: Light or its defaults): where from, colour, strength, ambient.
+    // (Toward the light, in the picture's directions: the view flips x and y.)
+    let light = normalize(vec3f(-P(14u), -P(15u), 0.65));
+    let tint = mix(vec3f(1.0), hsv2rgb(vec3f(P(16u), 1.0, 1.0)), P(17u));
+    let lit = vec3f(P(19u)) + 0.95 * P(18u) * abs(dot(n, light)) * tint;
+    let shade = mix(vec3f(1.0), lit, P(10u));
     let depth = P(3u) - v.z;
     let fog = 1.0 - P(11u) * clamp((depth - P(3u) + 0.5) * 0.8, 0.0, 1.0);
     return vec4f(c * P(2u) * shade * fog * max(d.a, 0.0), 1.0);
@@ -396,4 +400,10 @@ fn vs_pts_mesh(@builtin(vertex_index) vi: u32) -> PtOut {
 @fragment
 fn fs_pts_mesh(in: PtOut) -> @location(0) vec4f {
     return in.color;
+}
+
+// Points: Light on a layer of its own changes nothing (its settings light the renders it's wired into).
+@fragment
+fn fx_pts_light(in: VOut) -> @location(0) vec4f {
+    return src(in.uv);
 }

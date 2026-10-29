@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use phosphor_engine::{Composition, Engine, SourceSpec};
+use phosphor_engine::{Composition, Engine, SourceSpec, f16};
 
 /// The live-source format that marks a model layer (the engine keeps such a layer's pictures float).
 pub const FORMAT: &str = phosphor_engine::shaders::MODEL_POINTS;
@@ -85,29 +85,6 @@ pub fn texels(mesh: &phosphor_engine::mapping::ObjMesh) -> (u32, u32, Vec<u8>) {
     }
     bytes.resize((cols * rows * 8) as usize, 0);
     (cols, rows, bytes)
-}
-
-/// A 32-bit float as a 16-bit one (round to nearest; too big = infinity).
-pub fn f16(x: f32) -> u16 {
-    let b = x.to_bits();
-    let sign = ((b >> 16) & 0x8000) as u16;
-    let exp = ((b >> 23) & 0xff) as i32;
-    let mant = b & 0x7f_ffff;
-    if exp == 0xff {
-        return sign | 0x7c00 | (((mant != 0) as u16) << 9);
-    }
-    let e = exp - 127 + 15;
-    if e >= 0x1f {
-        return sign | 0x7c00;
-    }
-    if e <= 0 {
-        if e < -10 {
-            return sign;
-        }
-        let m = (mant | 0x80_0000) >> (1 - e);
-        return sign | ((m + 0x1000) >> 13) as u16;
-    }
-    sign | (((e as u32) << 10) + ((mant + 0x1000) >> 13)) as u16
 }
 
 #[cfg(test)]

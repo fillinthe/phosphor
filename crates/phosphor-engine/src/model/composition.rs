@@ -419,7 +419,7 @@ impl Composition {
 
     pub fn new_effect(&mut self, effect_id: &str) -> Option<EffectState> {
         let desc = shaders::effect(effect_id)?;
-        Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 })
+        Some(EffectState { id: self.new_id(), effect: effect_id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 })
     }
 
     /// Makes sure there is at least one output (older projects kept a single mapping instead).
@@ -809,7 +809,7 @@ mod media_memory_tests {
         c.add_media("a.mp4", "/x/a.mp4");
         let id = c.add_layer().id;
         c.set_layer_source(id, movie.clone(), Vec::new(), String::new(), 0.0);
-        c.layers[0].effects.push(crate::EffectState { id: 9, effect: "kaleido".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 });
+        c.layers[0].effects.push(crate::EffectState { id: 9, effect: "kaleido".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
         c.remember_media_settings();
         // (An older save that did remember them.)
         c.media_bin[0].settings.as_mut().unwrap().effects = c.layers[0].effects.clone();

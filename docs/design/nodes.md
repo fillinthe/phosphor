@@ -102,7 +102,7 @@ Saved projects: a network is a new, optional part of a comp (empty by default), 
 | 1. Picture network | Designer area; source / effect / mix / feedback / output boxes; live preview on each box; drives one comp | large (about a week of work) |
 | 2. Number network | Modulators, audio, MIDI / OSC in, math, smooth, logic, trigger boxes; wire a number into any setting | medium |
 | 3. Reusable groups | Box-of-boxes, saved by name, shared between projects; settings shown on the outside of the box | medium |
-| 4. Points and 3D | Particles / point clouds / lines on the GPU, model loading, camera and lights (overlaps the 3D model slices). *Built: shapes, relief, model, move, particles, dots / lines / mesh with camera and light.* | large |
+| 4. Points and 3D | Particles / point clouds / lines on the GPU, model loading, camera and lights (overlaps the 3D model slices). *Built: shapes, relief, model, move, particles, dots / lines / mesh with camera, and Light boxes (a hidden layer holding a Points: Light effect; a render's `EffectState::light` names it and the engine reads its live settings into P(14..19)).* | large |
 | 5. Data | Tables, text, web / JSON in (the live data feeds as boxes), timers and events. *Built: all of these as Number / Text / Event boxes.* | medium |
 
 Phase 1 is the decision point: once a network can stand in for a layer stack, the rest is adding boxes.

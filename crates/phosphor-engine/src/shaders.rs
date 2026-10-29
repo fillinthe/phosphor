@@ -314,6 +314,20 @@ pub const EFFECTS: &[ShaderDesc] = &[
             Param { name: "Read", min: 0.0, max: 1.0, default: 0.0, labels: &["As a grid", "In order (a model)"] },
         ],
     },
+    // A light for the renders (wired into their Light input in the Designer); on a layer of its own it changes nothing.
+    ShaderDesc {
+        id: "pts_light",
+        name: "Points: Light",
+        entry: "fx_pts_light",
+        params: &[
+            p("From the left / right", -1.0, 1.0, -0.5),
+            p("From below / above", -1.0, 1.0, 0.6),
+            p("Colour", 0.0, 1.0, 0.1),
+            p("Colour amount", 0.0, 1.0, 0.0),
+            p("Strength", 0.0, 3.0, 1.0),
+            p("Ambient", 0.0, 1.0, 0.15),
+        ],
+    },
     ShaderDesc { id: "blur", name: "Gaussian Blur", entry: "fx_blur", params: &[p("Radius (px)", 0.0, 64.0, 8.0)] },
     ShaderDesc {
         id: "zoom_blur",
@@ -695,6 +709,12 @@ pub fn points_render(entry: &str) -> bool {
     entry.starts_with("fs_pts_")
 }
 
+/// A light for the renders (`EffectState::light` = the layer holding one).
+pub const POINTS_LIGHT: &str = "pts_light";
+
+/// Where a render's light settings go: params `LIGHT_SLOT..LIGHT_SLOT + 6` (after its own 14), P(14..19) in points.wgsl.
+pub const LIGHT_SLOT: usize = 14;
+
 /// The most points one render draws (dots are six vertices each).
 pub const POINTS_BUDGET: u32 = 250_000;
 
@@ -851,6 +871,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "pts_dots" => ("Points", "Draws points as soft dots through a camera"),
         "pts_lines" => ("Points", "Draws points as lines between neighbours through a camera"),
         "pts_mesh" => ("Points", "Draws points as a lit surface through a camera"),
+        "pts_light" => ("Points", "A light for Points: Dots / Lines / Mesh: where it comes from, its colour and strength (wire it into a render's Light input)"),
         "chroma_key" => ("Key", "Make a colour transparent"),
         "remove_bg" => ("Key", "Keep the people, lose the background (Mac)"),
         "blur_bg" => ("Key", "People sharp, the background blurred (or the other way round) (Mac)"),

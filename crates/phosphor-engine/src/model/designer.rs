@@ -44,6 +44,8 @@ pub enum PortKind {
     Picture,
     Number,
     Points,
+    /// A Points: Light box's light, into a render's Light input.
+    Light,
 }
 
 impl NodeKind {
@@ -399,6 +401,7 @@ impl Composition {
             NodeKind::Picture if matches!(layer.map(|l| &l.source), Some(SourceSpec::Generator(id)) if crate::shaders::points_out(id)) => PortKind::Points,
             NodeKind::Picture if matches!(layer.map(|l| &l.source), Some(SourceSpec::Live { format, .. }) if format == crate::shaders::MODEL_POINTS) => PortKind::Points,
             NodeKind::Effect if layer.and_then(|l| l.effects.first()).is_some_and(|e| crate::shaders::points_out(&e.effect)) => PortKind::Points,
+            NodeKind::Effect if layer.and_then(|l| l.effects.first()).is_some_and(|e| e.effect == crate::shaders::POINTS_LIGHT) => PortKind::Light,
             _ => PortKind::Picture,
         }
     }
@@ -418,13 +421,22 @@ impl Composition {
         match node.kind {
             NodeKind::Effect => {
                 if let Some(d) = layer.and_then(|l| l.effects.first()).and_then(|e| crate::shaders::effect(&e.effect)) {
+                    // A light takes no picture: only its settings.
+                    if d.id == crate::shaders::POINTS_LIGHT {
+                        v.clear();
+                    }
+                    let render = crate::shaders::points_render(d.entry);
                     if crate::shaders::points_in(d.id) {
                         v[0] = ("Points".to_string(), PortKind::Points);
-                        if crate::shaders::points_render(d.entry) {
+                        if render {
                             v.push(("Colour".to_string(), PortKind::Picture));
                         }
                     }
                     v.extend(d.params.iter().map(|p| (p.name.to_string(), PortKind::Number)));
+                    // (Last, so wires into the settings keep their places.)
+                    if render {
+                        v.push(("Light".to_string(), PortKind::Light));
+                    }
                 }
             }
             NodeKind::Picture => {
@@ -597,9 +609,12 @@ impl Composition {
                     parts[0]
                 }
                 NodeKind::Effect => {
-                    let s = feed_from(&pictures, net, id, 0);
-                    // A render's second input: the picture its points take their colour from.
+                    let inputs = self.node_inputs(&net.nodes[i]);
+                    // A light has no picture in.
+                    let s = if inputs.first().is_some_and(|(_, k)| *k == PortKind::Number) { SourceSpec::None } else { feed_from(&pictures, net, id, 0) };
+                    // A render's second input: the picture its points take their colour from; its last: the light.
                     let colour = net.source_of(id, 1).and_then(|from| pictures.get(&from).copied()).unwrap_or(0);
+                    let light = inputs.iter().position(|(_, k)| *k == PortKind::Light).and_then(|k| net.source_of(id, k)).and_then(|from| pictures.get(&from).copied()).unwrap_or(0);
                     // A render fed (through Move / Particles) by a Model reads its points in order, three a triangle.
                     let from_model = self.points_from_model(net, id);
                     if let Some(l) = self.layer_mut(parts[0]) {
@@ -608,11 +623,13 @@ impl Composition {
                             && crate::shaders::effect(&fx.effect).is_some_and(|d| crate::shaders::points_render(d.entry))
                         {
                             fx.other = colour;
+                            fx.light = light;
                             if let Some(v) = fx.values.get_mut(13) {
                                 *v = if from_model { 1.0 } else { 0.0 };
                             }
                         } else if let Some(fx) = l.effects.first_mut() {
                             fx.other = 0;
+                            fx.light = 0;
                         }
                     }
                     found.layers.push(parts[0]);
@@ -667,11 +684,11 @@ impl Composition {
         let existing: Vec<u64> = self.modulators.iter().map(|m| m.id).collect();
         let drop_link = move |id: u64| designer_mods.contains(&id) || !existing.contains(&id);
         for n in &net.nodes {
-            let pic_n = self.node_picture_inputs(n);
-            let total = count.get(&n.id).copied().unwrap_or(0);
-            for k in pic_n..total {
-                let from = net.source_of(n.id, k).and_then(|f| net.node(f)).and_then(|f| f.modulator());
-                self.follow_box(n, k - pic_n, from, &drop_link);
+            // The k-th number input is setting k, wherever it sits among the inputs.
+            let numbers: Vec<usize> = self.node_inputs(n).iter().enumerate().filter(|(_, (_, kind))| *kind == PortKind::Number).map(|(at, _)| at).collect();
+            for (k, at) in numbers.into_iter().enumerate() {
+                let from = net.source_of(n.id, at).and_then(|f| net.node(f)).and_then(|f| f.modulator());
+                self.follow_box(n, k, from, &drop_link);
             }
             if n.kind == NodeKind::Number
                 && let Some(mid) = n.modulator()
@@ -1023,7 +1040,8 @@ mod tests {
         assert_eq!(comp.node_output(&n(&comp, render)), PortKind::Picture);
         let ins = comp.node_inputs(&n(&comp, render));
         assert_eq!((ins[0].1, ins[1].1, ins[2].1), (PortKind::Points, PortKind::Picture, PortKind::Number));
-        assert_eq!(comp.node_picture_inputs(&n(&comp, render)), 2);
+        assert_eq!(ins.last().unwrap(), &("Light".to_string(), PortKind::Light), "the light last: wires into the settings keep their places");
+        assert_eq!(comp.node_picture_inputs(&n(&comp, render)), 3);
         assert!(!comp.connect_boxes(cid, &[], pic, mv, 0), "a picture into a points input");
         assert!(!comp.connect_boxes(cid, &[], shape, out, 0), "points into Output");
         assert!(comp.connect_boxes(cid, &[], shape, mv, 0));
@@ -1048,6 +1066,38 @@ mod tests {
         comp.comp_mut(cid).unwrap().network = Some(net);
         comp.sync_network(cid);
         assert_eq!(comp.layer(part(render)).unwrap().effects[0].other, 0);
+        // A Light box: no picture in, only its settings; wired into the render's Light input it lights it, and a
+        // Number wired into one of its settings still moves that setting (numbers follow by kind, not place).
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let light = net.add(NodeKind::Effect, [400.0, 500.0]);
+        let num = net.add(NodeKind::Number, [200.0, 500.0]);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let lpart = net.node(light).unwrap().parts[0];
+        let e = comp.new_effect(crate::shaders::POINTS_LIGHT).unwrap();
+        comp.layer_mut(lpart).unwrap().effects = vec![e];
+        assert_eq!(comp.node_output(&n(&comp, light)), PortKind::Light);
+        let lins = comp.node_inputs(&n(&comp, light));
+        assert!(lins.len() == 6 && lins.iter().all(|(_, k)| *k == PortKind::Number), "{lins:?}");
+        let at = comp.node_inputs(&n(&comp, render)).len() - 1;
+        assert!(!comp.connect_boxes(cid, &[], light, out, 0), "a light isn't a picture");
+        assert!(!comp.connect_boxes(cid, &[], pic, render, at), "a picture isn't a light");
+        assert!(comp.connect_boxes(cid, &[], light, render, at));
+        assert!(comp.connect_boxes(cid, &[], num, light, 4), "a number into its Strength");
+        assert!(comp.connect_boxes(cid, &[], num, render, 3), "a number into the render's Size");
+        comp.sync_network(cid);
+        let fx = comp.layer(part(render)).unwrap().effects[0].clone();
+        assert_eq!(fx.light, lpart);
+        assert_eq!(comp.layer(lpart).unwrap().source, SourceSpec::None, "a light shows nothing");
+        let nm = n(&comp, num).modulator().unwrap();
+        assert!(comp.layer(lpart).unwrap().effects[0].mods.iter().any(|m| m.index == 4 && m.m.link == nm));
+        assert!(fx.mods.iter().any(|m| m.index == 1 && m.m.link == nm), "the render's Size: {:?}", fx.mods);
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        net.disconnect(render, at);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        assert_eq!(comp.layer(part(render)).unwrap().effects[0].light, 0, "unwired: the default light");
     }
 
     /// Wrapping a box puts it in a Group with its wires kept; a Number wired into the group reaches a Number input

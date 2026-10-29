@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn a_clip_can_leave_the_effects_alone() {
-        let kaleido = || crate::EffectState { id: 9, effect: "kaleido".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0 };
+        let kaleido = || crate::EffectState { id: 9, effect: "kaleido".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 };
         let mut l = layer_with(2);
         l.effects = vec![kaleido()];
         l.clips[0].own = Some(l.clip_settings_with(true));

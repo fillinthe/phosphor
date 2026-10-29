@@ -43,9 +43,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       paths; the Text input). Data left: a web box isn't checked against a real site (the parser is), a Number box
       drives one Text template only, no "every N rows" / loops for timers (a saw LFO does that), no OSC / MIDI *out*
       from an Event (an Event sets a control; mapping to OSC out is the Control Surface's job). All five phases of
-      `docs/design/nodes.md` are built. Points left (after 2026-10-30: Mesh has a depth buffer, Lines have a real width, a render fed by a
-      Model reads in order by itself; particles step by the real frame time): effects after a render on the same layer
-      as a Model run at the model's texel size, lights as boxes of their own. **Small items done 2026-10-30:** Number input boxes on a
+      `docs/design/nodes.md` are built. Points: done (2026-10-30: Mesh has a depth buffer, Lines have a real width, a render fed by a
+      Model reads in order by itself; particles step by the real frame time; effects after a render run at the canvas
+      size, also on a Model layer; **Light boxes**: Points › Light, its settings = where from (left / right, below /
+      above), colour, colour amount, strength, ambient, wired into a render's Light input (a yellow wire; the render's
+      Shade goes all the way while one is wired); one light a render, no shadows). **Small items done 2026-10-30:** Number input boxes on a
       box of boxes, Wrap in a box (one box at a time: no multi-select on the canvas yet), Undo (toolbar button and
       Cmd-Z over the canvas, 50 steps per comp, boxes and wires only: a slider change isn't undone), Duplicate copies
       a box's settings, a half-visible box shows the settings that fit, a Number box's Knob is mappable (right-click ›
