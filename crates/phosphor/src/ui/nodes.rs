@@ -1,6 +1,8 @@
 //! The node canvas: boxes wired together, for any graph (Patches in the Shader Editor, Designer networks). Right-click
 //! the canvas to add a box, drag from a box's output dot (right) to another's input dot (left) to wire them, drag a
-//! wire's end away to unplug it, drag a box by its title, middle-drag or two-finger scroll to move around.
+//! wire's end away to unplug it, drag a box by its title, middle-drag or two-finger scroll to move around, pinch or
+//! Cmd-scroll to zoom (`zoom_controls`: −, the zoom, +, Fit, for the canvas's toolbar). The boxes are drawn on a
+//! layer egui scales (`set_transform_layer`), so everything in them, settings included, zooms together.
 //! The graph says what its boxes are (`Graph`); the canvas draws and edits them.
 
 use eframe::egui::{self, Color32, Sense, Stroke, StrokeKind};
@@ -88,15 +90,33 @@ fn wire_shape(a: egui::Pos2, b: egui::Pos2, colour: Color32) -> egui::Shape {
 pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -> bool {
     let id = egui::Id::new(("node_canvas", key));
     let mut pan: egui::Vec2 = ui.ctx().data(|d| d.get_temp(id.with("pan"))).unwrap_or_default();
+    let mut zoom: f32 = ui.ctx().data(|d| d.get_temp(id.with("zoom"))).unwrap_or(1.0);
     let mut drag: Option<WireDrag> = ui.ctx().data(|d| d.get_temp(id.with("wire"))).flatten();
     let mut changed = false;
 
     let area = ui.available_rect_before_wrap();
     let bg = ui.interact(area, id.with("bg"), Sense::click_and_drag());
+    // Zoom: pinch or Cmd-scroll over the canvas, round the pointer; the toolbar's −, + round the middle.
+    let mut zoom_by = ui.input(|i| i.zoom_delta());
+    let mut zoom_at = ui.input(|i| i.pointer.latest_pos()).filter(|p| area.contains(*p));
+    if zoom_at.is_none() {
+        zoom_by = 1.0;
+    }
+    if let Some(k) = ui.ctx().data_mut(|d| d.remove_temp::<f32>(id.with("zoom_by"))) {
+        (zoom_by, zoom_at) = (k, Some(area.center()));
+    }
+    if zoom_by != 1.0
+        && let Some(p) = zoom_at
+    {
+        let to = (zoom * zoom_by).clamp(ZOOM_MIN, ZOOM_MAX);
+        let local = p - area.min;
+        pan = local - (local - pan) * (to / zoom);
+        zoom = to;
+    }
     let painter = ui.painter_at(area);
     painter.rect_filled(area, 4.0, Color32::from_gray(16));
-    // Dots every 24 points, moving with the view.
-    let step = 24.0;
+    // Dots every 24 points (at this zoom), moving with the view.
+    let step = 24.0 * zoom;
     let start = area.min + egui::vec2(pan.x.rem_euclid(step), pan.y.rem_euclid(step));
     let mut y = start.y;
     while y < area.max.y {
@@ -122,8 +142,19 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     if bg.hovered() {
         pan += ui.input(|i| i.smooth_scroll_delta);
     }
-    let origin = area.min + pan;
-    let at = |p: [f32; 2]| origin + egui::vec2(p[0], p[1]);
+    // The boxes: on their own layer over the canvas, scaled by the zoom. From here on, positions are the graph's own
+    // (a box at its `pos`), and `area` is the part of them in view.
+    let to_screen = egui::emath::TSTransform::new(area.min.to_vec2() + pan, zoom);
+    let layer = egui::LayerId::new(ui.layer_id().order, id.with("boxes"));
+    ui.ctx().set_sublayer(ui.layer_id(), layer);
+    ui.ctx().set_transform_layer(layer, to_screen);
+    let screen_area = area;
+    let area = to_screen.inverse() * screen_area;
+    let mut boxes = ui.new_child(egui::UiBuilder::new().layer_id(layer).max_rect(area));
+    boxes.set_clip_rect(area);
+    let ui = &mut boxes;
+    let painter = ui.painter_at(area);
+    let at = |p: [f32; 2]| egui::pos2(p[0], p[1]);
 
     // Where each box and its ports are this frame. Settings are as tall as they were last drawn (the guess before).
     let measured_id = id.with("body_h");
@@ -154,7 +185,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
 
     let mut remove: Option<u32> = None;
     let mut duplicate: Option<u32> = None;
-    let pointer = ui.input(|i| i.pointer.interact_pos());
+    let pointer = ui.input(|i| i.pointer.interact_pos()).map(|p| to_screen.inverse() * p);
     for (n, r, ins) in &rects {
         let (n, r, ins) = (*n, *r, *ins);
         if !r.intersects(area) {
@@ -275,8 +306,18 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
 
     // Right-click the empty canvas: add a box where you clicked.
     if bg.secondary_clicked() {
-        let p = pointer.unwrap_or(area.center()) - origin;
+        let p = pointer.unwrap_or(area.center());
         ui.ctx().data_mut(|d| d.insert_temp(id.with("add_at"), [p.x, p.y]));
+    }
+    // Fit (the toolbar asked, or a bench with PHOSPHOR_CANVAS_FIT): every box in view, no bigger than full size.
+    let bench_fit = std::env::var_os("PHOSPHOR_CANVAS_FIT").is_some() && ui.ctx().cumulative_pass_nr() < 120;
+    if (ui.ctx().data_mut(|d| d.remove_temp::<bool>(id.with("fit"))).is_some() || bench_fit)
+        && let Some(all) = rects.iter().map(|(_, r, _)| *r).reduce(|a, b| a.union(b))
+    {
+        let room = screen_area.shrink(16.0);
+        zoom = (room.width() / all.width()).min(room.height() / all.height()).clamp(ZOOM_MIN, 1.0);
+        pan = room.center() - screen_area.min - all.center().to_vec2() * zoom;
+        ui.ctx().request_repaint();
     }
     bg.context_menu(|ui| {
         super::heading(ui, "Add a box");
@@ -302,12 +343,35 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     }
     ui.ctx().data_mut(|d| {
         d.insert_temp(id.with("pan"), pan);
+        d.insert_temp(id.with("zoom"), zoom);
         d.insert_temp(id.with("wire"), drag);
         d.insert_temp(id.with("sel"), selected);
         measured.retain(|n, _| ids.contains(n));
         d.insert_temp(measured_id, measured);
     });
     changed
+}
+
+const ZOOM_MIN: f32 = 0.25;
+const ZOOM_MAX: f32 = 2.0;
+
+/// The zoom for canvas `key`, for its toolbar: −, how big (click: full size), +, Fit (every box in view).
+pub(crate) fn zoom_controls(ui: &mut egui::Ui, key: &str) {
+    let id = egui::Id::new(("node_canvas", key));
+    let zoom: f32 = ui.ctx().data(|d| d.get_temp(id.with("zoom"))).unwrap_or(1.0);
+    let ask = |ui: &egui::Ui, by: f32| ui.ctx().data_mut(|d| d.insert_temp(id.with("zoom_by"), by));
+    if super::small_command(ui, icon::MINUS).on_hover_text("Zoom out (or pinch, or Cmd-scroll over the canvas)").clicked() {
+        ask(ui, 0.8);
+    }
+    if super::small_command(ui, format!("{:.0}%", zoom * 100.0)).on_hover_text("Full size").clicked() {
+        ask(ui, 1.0 / zoom);
+    }
+    if super::small_command(ui, icon::PLUS).on_hover_text("Zoom in").clicked() {
+        ask(ui, 1.25);
+    }
+    if super::small_command(ui, label(icon::CORNERS_OUT, "Fit")).on_hover_text("Every box in view").clicked() {
+        ui.ctx().data_mut(|d| d.insert_temp(id.with("fit"), true));
+    }
 }
 
 /// A box's settings height: as tall as they were last drawn, else the graph's guess.
