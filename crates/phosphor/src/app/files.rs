@@ -123,7 +123,7 @@ impl PhosphorApp {
                         st.comp.add_media_to(&name_of(p), &p.to_string_lossy(), into.as_deref());
                     }
                     if let Some(c) = into {
-                        st.notice = Some(format!("{} file(s) added to \"{c}\"", paths.len()));
+                        st.notice = Some(crate::ui::plural(paths.len(), "{0} file added to \"{1}\"", "{0} files added to \"{1}\"").replace("{1}", &c));
                     }
                 }
                 Purpose::WatchFolder => {
@@ -422,7 +422,7 @@ impl PhosphorApp {
                 Purpose::LayersFromFolder => {
                     if let Some(p) = paths.first() {
                         let n = crate::panels::layers_from_folder(st, p);
-                        st.notice = Some(if n == 0 { "No clips found in that folder".into() } else { format!("{n} layer(s) from {}", name_of(p)) });
+                        st.notice = Some(if n == 0 { "No clips found in that folder".into() } else { crate::ui::plural(n, "{0} layer from {1}", "{0} layers from {1}").replace("{1}", &name_of(p)) });
                     }
                 }
                 #[cfg(not(target_arch = "wasm32"))]
@@ -437,7 +437,7 @@ impl PhosphorApp {
                     if let Some(p) = paths.first() {
                         let read = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| st.comp.cues.apply_csv(&t));
                         st.notice = Some(match read {
-                            Ok(n) => format!("Names and timings read into {n} cue(s) (the looks stay as recorded)"),
+                            Ok(n) => crate::ui::plural(n, "Names and timings read into {0} cue (the look stays as recorded)", "Names and timings read into {0} cues (the looks stay as recorded)"),
                             Err(e) => format!("Couldn't read that cue list: {e}"),
                         });
                     }

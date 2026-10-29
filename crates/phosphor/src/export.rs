@@ -254,7 +254,7 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
     g.media_files = copied.len();
     g.bytes = bytes;
     if !failed.is_empty() {
-        g.error = Some(format!("{} media file(s) were missing and aren't in the show (listed in missing-media.txt)", failed.len()));
+        g.error = Some(crate::ui::plural(failed.len(), "{0} media file was missing and isn't in the show (listed in missing-media.txt)", "{0} media files were missing and aren't in the show (listed in missing-media.txt)"));
     }
     Ok(())
 }

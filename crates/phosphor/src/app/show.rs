@@ -100,9 +100,10 @@ impl PhosphorApp {
                             ui.add_enabled(st.export.lock, egui::TextEdit::singleline(&mut st.export.lock_password).password(true).hint_text("unlock password (optional)").desired_width(170.0));
                         });
                         let (files, bytes, missing) = *st.export.summary.get_or_insert_with(|| crate::export::summary(&st.comp));
-                        crate::ui::hint(ui, format!("{files} media file(s), {:.1} MB · {} output(s) · {} mapping(s)", bytes as f64 / 1e6, st.comp.outputs.len(), st.comp.control_maps.len()));
+                        crate::ui::counts(ui, &[(files as usize, "{0} media file", "{0} media files"), (st.comp.outputs.len(), "{0} output", "{0} outputs"), (st.comp.control_maps.len(), "{0} mapping", "{0} mappings")]);
+                        crate::ui::hint(ui, format!("{:.1} MB", bytes as f64 / 1e6));
                         if missing > 0 {
-                            ui.colored_label(egui::Color32::from_rgb(255, 196, 70), format!("{missing} file(s) can't be found and will be left out"));
+                            ui.colored_label(egui::Color32::from_rgb(255, 196, 70), crate::ui::plural(missing as usize, "{0} file can't be found and will be left out", "{0} files can't be found and will be left out"));
                         }
                         ui.add_space(4.0);
                         if crate::ui::command_if(ui, !st.export.name.trim().is_empty(), label_text(icon::PACKAGE, "Choose folder and export…")).clicked() {

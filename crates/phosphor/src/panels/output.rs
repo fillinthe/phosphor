@@ -359,7 +359,7 @@ pub fn syphon_row(ui: &mut egui::Ui, st: &mut State) {
         let hover = "Publish the composition as \"Phosphor\" — pick it in MadMapper, Resolume, OBS (Syphon Client), VDMX…";
         output_toggle(ui, &mut st.comp.syphon, icon::SHARE_NETWORK, "Syphon", hover, phosphor_engine::AppControl::Syphon);
         let (servers, clients) = (st.syphon.server_count(), st.syphon.clients());
-        let waiting = format!("{servers} source(s) published, no app receiving yet");
+        let waiting = crate::ui::plural(servers as usize, "{0} source published, no app receiving yet", "{0} sources published, no app receiving yet");
         output_status(ui, match (servers, clients) {
             (0, _) => OutputStatus::Off,
             (_, 0) => OutputStatus::Waiting(&waiting),
