@@ -40,7 +40,9 @@ mod source;
 mod surface;
 mod tracking;
 mod live_data;
+mod data;
 pub use live_data::*;
+pub use data::*;
 
 pub use choice::*;
 pub use clip_play::*;

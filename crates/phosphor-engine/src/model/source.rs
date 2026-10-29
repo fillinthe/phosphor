@@ -85,6 +85,9 @@ pub enum LiveText {
     ClockAt(i32),
     /// A news feed's headlines (`TextStyle::live_source`), each shown for this many seconds.
     Headlines(u32),
+    /// A number (a shared modulator by id, a Designer Number box): `TextStyle::live_source` is the template, with
+    /// `{value}`, `{percent}` and `{raw}` filled in (`data::fill_template`).
+    Number(u64),
 }
 
 impl LiveText {
@@ -97,7 +100,7 @@ impl LiveText {
             LiveText::Countdown(at) => Some(hms(if at > tod { (at - tod) as u64 } else { 0 })),
             LiveText::Stopwatch => Some(hms(running.max(0.0) as u64)),
             // These come from the project (`run_live_text`).
-            LiveText::Code | LiveText::Read | LiveText::Headlines(_) => None,
+            LiveText::Code | LiveText::Read | LiveText::Headlines(_) | LiveText::Number(_) => None,
             // (Given the time in UTC: `clock_at`.)
             LiveText::ClockAt(_) => None,
         }

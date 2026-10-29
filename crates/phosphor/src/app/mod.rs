@@ -212,6 +212,8 @@ pub struct State {
     pub gdrop: crate::gdrop::GDrops,
     /// 3D models shown as points (Designer).
     pub models: crate::models::Models,
+    /// Data boxes (readings, web, timers, tables) and events.
+    pub data: crate::data::DataRun,
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,

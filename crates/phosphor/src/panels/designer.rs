@@ -8,7 +8,8 @@
 use std::collections::HashMap;
 
 use phosphor_engine::control::MAX_SHARED;
-use phosphor_engine::{ChainMode, Composition, DesignerNode, ModSource, Network, NodeKind, PortKind, SavedBox};
+use phosphor_engine::{ChainMode, Composition, DataFeed, DataKind, DesignerNode, ISS_READINGS, LiveText, ModSource, Network, NodeKind, PortKind, QUAKE_READINGS, SavedBox, SourceSpec, Trigger, WEATHER_READINGS};
+use crate::ui::guarded;
 
 use super::*;
 use crate::presets::PresetStore;
@@ -25,6 +26,18 @@ const POINTS_BOXES: [(&str, &str, bool); 8] = [
     ("Dots", "pts_dots", false),
     ("Lines", "pts_lines", false),
     ("Mesh", "pts_mesh", false),
+];
+
+/// The Data submenu: (name, preset id). "data:N" = a Number box with `DataKind::ALL[N]`, "event" = a Number box
+/// with an event, "text" = a Picture box showing words (with a Value input).
+const DATA_BOXES: [(&str, &str); 7] = [
+    ("Live reading (weather, ISS, earthquakes)", "data:0"),
+    ("Web (JSON)", "data:1"),
+    ("Timer", "data:2"),
+    ("Clock", "data:3"),
+    ("Table file (CSV)…", "data:4"),
+    ("Text (words, with a number in them)", "text"),
+    ("Event (a number crossing a line sets a control)", "event"),
 ];
 
 const BOX_W: f32 = 230.0;
@@ -56,6 +69,8 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     let mut path: Vec<u32> = ui.ctx().data(|d| d.get_temp(path_id)).unwrap_or_default();
     let shared = st.mod_inputs.shared;
     let now = ui.ctx().input(|i| i.time);
+    // Event boxes pick a target: the list once per frame, only while one exists.
+    let targets = if st.comp.modulators.iter().any(|m| m.designer && m.event.is_some()) { crate::control::all_targets(&st.comp) } else { Vec::new() };
     let State { comp, layer_textures, box_presets, notice, .. } = st;
     let net = comp.comp(cid).and_then(|c| c.network.clone()).unwrap_or_default();
     if net.at(&path).is_none() {
@@ -83,9 +98,16 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     });
     let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id)).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
-    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, action: None };
+    let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, action: None, targets, restart: None, pick_table: None };
     let changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
-    let View { net, resync, go, error, preset, action, .. } = view;
+    let View { net, resync, go, error, preset, action, restart, pick_table, .. } = view;
+    if let Some(mid) = restart {
+        st.data.restart(mid);
+    }
+    if let Some(mid) = pick_table {
+        st.dialogs.pick_file(crate::dialogs::Purpose::TableFile(mid), Some(("Table", &["csv", "tsv", "txt"])));
+    }
+    let State { comp, .. } = st;
     if let Some(e) = error {
         *notice = Some(e);
     }
@@ -103,16 +125,31 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     }
     // A box added from the Points menu: its shader, now that it has its layer (a Model box asks for its file).
     let mut action = action;
+    let mut pick_table_now: Option<u64> = None;
     if let Some((id, shader, generator)) = preset {
         let part = comp.comp(cid).and_then(|c| c.network.as_ref()).and_then(|n| n.at(&path)).and_then(|l| l.node(id)).and_then(|n| n.parts.first().copied());
         let fx = (!generator).then(|| comp.new_effect(shader)).flatten();
         if let Some(l) = part.and_then(|p| comp.layer_mut(p)) {
             if shader == crate::models::FORMAT {
                 action = Some((l.id, super::layers::LayerAction::OpenModel));
+            } else if shader == "text" {
+                l.source = SourceSpec::Text(phosphor_engine::TextStyle { text: "Hello".into(), live_source: "{raw}".into(), ..crate::text::default_style() });
             } else if generator {
                 l.set_generator(shader);
             } else if let Some(fx) = fx {
                 l.effects = vec![fx];
+            }
+        }
+        // A Data or Event box: the modulator behind the new Number box.
+        if let Some(m) = part.and_then(|p| comp.modulators.iter_mut().find(|m| m.id == p)) {
+            if let Some(n) = shader.strip_prefix("data:").and_then(|n| n.parse::<usize>().ok()) {
+                m.data = DataKind::ALL.get(n).map(|k| DataFeed { kind: k.clone(), ..Default::default() });
+                m.signal.source = ModSource::Hand;
+                if matches!(m.data.as_ref().map(|d| &d.kind), Some(DataKind::Table { .. })) {
+                    pick_table_now = Some(m.id);
+                }
+            } else if shader == "event" {
+                m.event = Some(Trigger::default());
             }
         }
         comp.sync_network(cid);
@@ -120,6 +157,25 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     // A box's source picker asked for a file or the browser.
     if let Some((layer, a)) = action {
         super::layers::apply_layer_action(st, layer, a, now);
+    }
+    if let Some(mid) = pick_table_now {
+        st.dialogs.pick_file(crate::dialogs::Purpose::TableFile(mid), Some(("Table", &["csv", "tsv", "txt"])));
+    }
+}
+
+/// Every live reading's name.
+fn reading_names() -> impl Iterator<Item = &'static str> {
+    WEATHER_READINGS.into_iter().chain(ISS_READINGS).chain(QUAKE_READINGS)
+}
+
+/// How many setting rows a Data box's kind shows.
+fn data_rows(kind: &DataKind) -> f32 {
+    match kind {
+        DataKind::Reading(_) => 2.0,
+        DataKind::Json { .. } => 5.0,
+        DataKind::Timer { .. } => 2.0,
+        DataKind::Clock => 1.0,
+        DataKind::Table { .. } => 4.0,
     }
 }
 
@@ -144,6 +200,12 @@ struct View<'a> {
     preset: Option<(u32, &'static str, bool)>,
     /// What a box's source picker asked for (a file, the browser), for its layer.
     action: Option<(u64, super::layers::LayerAction)>,
+    /// Every control an Event box may set (empty while no box has an event).
+    targets: Vec<(ControlTarget, String)>,
+    /// A Timer / Table box's Restart was pressed (its modulator).
+    restart: Option<u64>,
+    /// A Table box wants its file picked (its modulator).
+    pick_table: Option<u64>,
 }
 
 impl View<'_> {
@@ -219,9 +281,85 @@ impl View<'_> {
         } else {
             Level::range(&mut m.signal.rate, 0.05, 20.0, "Cycles a second").log().default(0.5).width(width).show(ui);
         }
+        // Data: where a Knob's value comes from.
+        if m.signal.source == ModSource::Hand {
+            let shown = m.data.as_ref().map_or("No data", |d| d.kind.name()).to_string();
+            crate::ui::dropdown(ui, ("designer_data", id), width - 20.0).selected_text(shown).show_ui(ui, |ui| {
+                if crate::ui::pick_item(ui, m.data.is_none(), "No data (the knob)").clicked() {
+                    m.data = None;
+                    changed = true;
+                }
+                for k in DataKind::ALL {
+                    let on = m.data.as_ref().is_some_and(|d| d.kind.same(&k));
+                    if crate::ui::pick_item(ui, on, k.name()).on_hover_text(k.about()).clicked() && !on {
+                        if matches!(k, DataKind::Table { .. }) {
+                            self.pick_table = Some(mid);
+                        }
+                        m.data = Some(DataFeed { kind: k, ..Default::default() });
+                        changed = true;
+                    }
+                }
+            });
+        }
+        if let Some(d) = m.data.as_mut().filter(|_| m.signal.source == ModSource::Hand) {
+            match &mut d.kind {
+                DataKind::Reading(name) => {
+                    let shown = if name.is_empty() { "Pick a reading…".to_string() } else { name.clone() };
+                    crate::ui::dropdown(ui, ("designer_reading", id), width - 20.0).selected_text(shown).show_ui(ui, |ui| {
+                        for r in reading_names() {
+                            if crate::ui::pick_item(ui, name == r, r).clicked() {
+                                *name = r.to_string();
+                            }
+                        }
+                    });
+                }
+                DataKind::Json { url, path, every } => {
+                    crate::ui::text_field(ui, url, "https://… (answers JSON)", Some(width));
+                    crate::ui::text_field(ui, path, "Path to the number: main.temp", Some(width));
+                    Level::range(every, 2.0, 600.0, "Ask every (s)").log().default(60.0).width(width).show(ui);
+                    crate::ui::toolbar(ui, |ui| {
+                        guarded!(ui, d.min, egui::DragValue::new(&mut d.min).speed(0.1).prefix("0 at ")).on_hover_text("The number that means 0");
+                        guarded!(ui, d.max, egui::DragValue::new(&mut d.max).speed(0.1).prefix("1 at ")).on_hover_text("The number that means 1");
+                    });
+                }
+                DataKind::Timer { seconds } => {
+                    Level::range(seconds, 0.1, 600.0, "Seconds").log().default(10.0).width(width).show(ui);
+                    if crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
+                        self.restart = Some(mid);
+                    }
+                }
+                DataKind::Clock => {}
+                DataKind::Table { path, column, seconds } => {
+                    let file = std::path::Path::new(path.as_str()).file_name().map_or_else(|| "Pick a file…".to_string(), |f| f.to_string_lossy().to_string());
+                    if crate::ui::command(ui, label(icon::FOLDER_OPEN, &file)).on_hover_text(path.as_str()).clicked() {
+                        self.pick_table = Some(mid);
+                    }
+                    crate::ui::toolbar(ui, |ui| {
+                        guarded!(ui, *column, egui::DragValue::new(column).range(0..=99).prefix("column ")).on_hover_text("Which column (the first is 0)");
+                        guarded!(ui, d.min, egui::DragValue::new(&mut d.min).speed(0.1).prefix("0 at "));
+                        guarded!(ui, d.max, egui::DragValue::new(&mut d.max).speed(0.1).prefix("1 at "));
+                    });
+                    Level::range(seconds, 0.05, 60.0, "Seconds a row").log().default(1.0).width(width).show(ui);
+                    if crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Restart")).clicked() {
+                        self.restart = Some(mid);
+                    }
+                }
+            }
+            let status = match &m.live.problem {
+                Some(p) => p.clone(),
+                None if !m.live.shown.is_empty() => format!("Now: {}", m.live.shown),
+                None => "Waiting for data…".to_string(),
+            };
+            hint(ui, status);
+        }
         crate::ui::toolbar(ui, |ui| {
             if !m.signal.source.is_audio() && m.signal.source != ModSource::Hand {
                 crate::ui::toggle(ui, &mut m.signal.sync, "Beat").on_hover_text("Its cycle follows the tempo");
+            }
+            let mut event = m.event.is_some();
+            if crate::ui::toggle(ui, &mut event, "Event").on_hover_text("When the value crosses a line, set a control").changed() {
+                m.event = event.then(Trigger::default);
+                changed = true;
             }
             if let Some(c) = m.chain.as_mut() {
                 let mut mode = c.mode;
@@ -235,6 +373,14 @@ impl View<'_> {
                 c.mode = mode;
             }
         });
+        if let Some(e) = m.event.as_mut() {
+            Level::percent(&mut e.threshold, "Line").default(0.5).width(width).show(ui);
+            if let Some(t) = crate::ui::target_picker(ui, ("designer_event", id), &self.targets, e.target.as_ref(), width - 20.0) {
+                e.target = Some(t);
+            }
+            Level::percent(&mut e.value, "Set it to").default(1.0).width(width).show(ui);
+            crate::ui::toggle(ui, &mut e.both_ways, "Both ways").on_hover_text("Fire on the way back down too");
+        }
         changed
     }
 
@@ -269,7 +415,14 @@ impl Graph for View<'_> {
         match n.kind {
             NodeKind::Picture => n.parts.first().and_then(|p| self.comp.layer(*p)).map_or_else(|| "Picture".to_string(), |l| l.source.label()),
             NodeKind::Effect => n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first()).and_then(|e| shaders::effect(&e.effect)).map_or_else(|| "Effect".to_string(), |d| d.name.to_string()),
-            NodeKind::Number => n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m)).map_or_else(|| "Number".to_string(), |m| m.signal.source.name().to_string()),
+            NodeKind::Number => n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m)).map_or_else(
+                || "Number".to_string(),
+                |m| match (&m.data, &m.event) {
+                    (Some(d), _) if m.signal.source == ModSource::Hand => d.kind.name().to_string(),
+                    (None, Some(_)) => "Event".to_string(),
+                    _ => m.signal.source.name().to_string(),
+                },
+            ),
             NodeKind::Group => format!("Box {id}"),
             NodeKind::Input => format!("In {}", self.level().map_or(0, |l| l.input_boxes().iter().position(|x| *x == id).unwrap_or(0)) + 1),
             other => other.name().to_string(),
@@ -310,13 +463,22 @@ impl Graph for View<'_> {
         let Some(n) = self.node(id) else { return 0.0 };
         let pic = self.preview_h() + 3.0;
         match n.kind {
-            NodeKind::Picture | NodeKind::Group => pic + ROW_H,
+            NodeKind::Picture => {
+                let text = n.parts.first().and_then(|p| self.comp.layer(*p)).is_some_and(|l| matches!(l.source, SourceSpec::Text(_)));
+                pic + ROW_H + if text { PARAM_H } else { 0.0 }
+            }
+            NodeKind::Group => pic + ROW_H,
             NodeKind::Effect => {
                 let params = n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first()).and_then(|e| shaders::effect(&e.effect)).map_or(0, |d| d.params.len());
                 pic + ROW_H + (params as f32 + 1.0) * PARAM_H
             }
             NodeKind::Mix => pic + ROW_H + PARAM_H,
-            NodeKind::Number => METER_H + ROW_H + PARAM_H * 2.0 + 6.0,
+            NodeKind::Number => {
+                let m = n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m));
+                let data = m.and_then(|m| m.data.as_ref().filter(|_| m.signal.source == ModSource::Hand)).map_or(0.0, |d| 1.0 + data_rows(&d.kind));
+                let event = if m.is_some_and(|m| m.event.is_some()) { 4.0 } else { 0.0 };
+                METER_H + ROW_H + PARAM_H * (2.0 + data + event) + 6.0
+            }
             NodeKind::Output | NodeKind::Input => pic,
         }
     }
@@ -331,6 +493,14 @@ impl Graph for View<'_> {
                     let id = l.id;
                     if let Some(a) = super::layers::source_picker(ui, l, &self.feeds) {
                         self.action = Some((id, a));
+                    }
+                    // Words: the text itself, or (with a Value wired in) a template the number fills.
+                    if let SourceSpec::Text(style) = &mut l.source {
+                        if matches!(style.live, LiveText::Number(_)) {
+                            crate::ui::text_field(ui, &mut style.live_source, "Words with {value}, {percent} or {raw}", Some(width)).on_hover_text("{value} = 0 to 1, {percent} = 0 to 100, {raw} = the reading itself (21 °C, a table cell)");
+                        } else {
+                            crate::ui::text_field(ui, &mut style.text, "Words", Some(width));
+                        }
                     }
                     // A new generator has other settings: its number inputs change.
                     return before.as_ref() != Some(&l.source);
@@ -451,6 +621,21 @@ impl Graph for View<'_> {
                     if let Some(l) = self.level_mut() {
                         let id = l.add(kind, at);
                         self.preset = Some((id, shader, generator));
+                    }
+                    self.resync = true;
+                    added = true;
+                    ui.close();
+                }
+            }
+        });
+        ui.menu_button("Data", |ui| {
+            hint(ui, "Numbers from the world: a live reading, a web address, a timer, the clock or a table; words that show a number; an event when a number crosses a line");
+            for (name, preset) in DATA_BOXES {
+                if crate::ui::command(ui, name).clicked() {
+                    let kind = if preset == "text" { NodeKind::Picture } else { NodeKind::Number };
+                    if let Some(l) = self.level_mut() {
+                        let id = l.add(kind, at);
+                        self.preset = Some((id, preset, kind == NodeKind::Picture));
                     }
                     self.resync = true;
                     added = true;

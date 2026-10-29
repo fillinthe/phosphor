@@ -267,7 +267,7 @@ fn colour_widget_sends_red_green_blue() {
 #[test]
 fn a_knob_sets_a_hand_modulator_and_osc_has_an_address() {
     let mut comp = Composition::default();
-    comp.modulators.push(phosphor_engine::Modulator { id: 7, name: "Knob".into(), signal: phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false });
+    comp.modulators.push(phosphor_engine::Modulator { id: 7, name: "Knob".into(), signal: phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() });
     let mut out = Vec::new();
     set_target(&mut comp, &ControlTarget::Modulator(7), 0.8, &mut out);
     assert_eq!(get_target(&comp, &ControlTarget::Modulator(7)), Some(0.8));
