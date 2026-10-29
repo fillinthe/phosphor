@@ -55,6 +55,15 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       (then they're keyable and mappable like the rest). *(2026-10-30, test; not installed)* OSC: /phosphor/layer/N/text_size,
       …/fade/K, …/mixer/K. A text layer redraws one picture at a time while its size moves (no pile-up of threads).
 
+## Importers (owner, 2026-10-30: "do all file importers", from the old shows on this Mac)
+
+- [x] **MadMapper (.mad)**: outputs, slices (quads, circles, triangles, lines), groups, masks, flips, opacity, and a
+      layer per picture shown (files, Syphon from VDMX / Resolume, cameras, generators as the nearest built-in one).
+      Open as a new project or add to the open one. All 24 old .mad files read. *(tests; renders checked by snapshot;
+      not installed)* Left out: cues, MIDI / OSC mappings, LED fixtures, MadMapper's effects, a slice's own masks.
+- [ ] **VDMX deeper**: layers, their sources and effects (inside archived Cocoa objects in the .vdmx5).
+- [ ] **Resolume deeper**: generators, effects, layer opacity / blend, Advanced Output (slices).
+
 ## From show testing (2026-10-25)
 
 ### Breaks a show or loses work: first

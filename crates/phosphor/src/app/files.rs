@@ -206,7 +206,7 @@ impl PhosphorApp {
                 }
                 Purpose::ImportResolume => {
                     if let Some(p) = paths.first() {
-                        st.begin_resolume_import(&p.to_string_lossy());
+                        st.begin_import(&p.to_string_lossy());
                     }
                 }
                 Purpose::SliceFile(sid) => {

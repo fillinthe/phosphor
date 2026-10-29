@@ -286,6 +286,7 @@ impl PhosphorApp {
                 link: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 avc_import: None,
+                mad_import: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 relink: None,
                 #[cfg(not(target_arch = "wasm32"))]
@@ -448,7 +449,7 @@ impl PhosphorApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(p) = app.bench.as_ref().and_then(|b| b.cfg.import.clone()) {
-            app.state.begin_resolume_import(&p);
+            app.state.begin_import(&p);
         }
         if app.bench.as_ref().is_some_and(|b| b.cfg.show_clock) {
             app.state.cue_run.clock.toggle(now);

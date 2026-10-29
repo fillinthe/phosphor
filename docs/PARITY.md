@@ -108,5 +108,5 @@ What each app does that a VJ / mapper reaches for, and where Phosphor stands. �
 | Feature | Who has it | Phosphor |
 |---|---|---|
 | Save/open, undo, crash recovery, export a standalone show | — | ✅ |
-| Import Resolume compositions (.avc) and VDMX projects (.vdmx5 media bin) | — | ✅ |
+| Import Resolume compositions (.avc), VDMX projects (.vdmx5 media bin) and MadMapper projects (.mad: outputs, slices, groups, masks, lines, their pictures) | — | ✅ |
 | Find missing media (relink by file name) | all | ✅ |

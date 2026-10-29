@@ -18,8 +18,16 @@ pub struct AvcImport {
 pub type Relinked = (Vec<(String, String)>, usize);
 
 impl State {
-    /// Reads a Resolume composition (.avc) or VDMX project (.vdmx5) and opens the deck / page chooser.
-    pub fn begin_resolume_import(&mut self, path: &str) {
+    /// Reads a Resolume composition (.avc) or VDMX project (.vdmx5) and opens the deck / page chooser, or a
+    /// MadMapper project (.mad) and opens its summary.
+    pub fn begin_import(&mut self, path: &str) {
+        if path.to_lowercase().ends_with(".mad") {
+            match crate::import::madmapper::read(path) {
+                Ok(file) => self.mad_import = Some(file),
+                Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
+            }
+            return;
+        }
         let vdmx = path.to_lowercase().ends_with(".vdmx5");
         let result = if vdmx { crate::import::vdmx::read(path) } else { read(path) };
         match result {
@@ -29,6 +37,33 @@ impl State {
             }
             Err(e) => self.notice = Some(format!("Couldn't import {path}: {e}")),
         }
+    }
+
+    /// Brings the MadMapper project waiting in `mad_import` in: as a new project, or added to this one. Says what
+    /// came across in the notice.
+    pub fn finish_mad_import(&mut self, new: bool) {
+        use crate::import::madmapper::{add_to, file_aspect, to_composition};
+        let Some(file) = self.mad_import.take() else { return };
+        let done = if new {
+            let (comp, done) = to_composition(&file, &file_aspect);
+            self.load_composition(comp);
+            self.project_path = None;
+            done
+        } else {
+            add_to(&mut self.comp, &file, &file_aspect)
+        };
+        let mut msg = format!("Imported {} from MadMapper: {} outputs, {} slices, {} layers.", file.name, done.outputs, done.slices, done.layers);
+        if !done.stand_ins.is_empty() {
+            msg.push_str(&format!(" Drawn by a built-in generator instead: {}.", done.stand_ins.join(", ")));
+        }
+        if done.faded > 0 {
+            msg.push_str(&format!(" {} slices were faded out when it was saved (MadMapper's cues bring them up): raise their opacity in Mapping.", done.faded));
+        }
+        let missing = self.missing_media().len();
+        if missing > 0 {
+            msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
+        }
+        self.notice = Some(msg);
     }
 
     /// Media files the project uses that aren't where it says.
@@ -88,8 +123,9 @@ impl State {
 }
 
 impl PhosphorApp {
-    /// The "Import from Resolume" deck chooser.
+    /// The "Import from Resolume / VDMX" deck chooser, and the MadMapper summary.
     pub(crate) fn import_windows(&mut self, ctx: &egui::Context) {
+        self.mad_window(ctx);
         let Some(imp) = &mut self.state.avc_import else { return };
         let mut open = true;
         let mut go = false;
@@ -142,6 +178,58 @@ impl PhosphorApp {
             self.state.notice = Some(msg);
         } else if !open {
             self.state.avc_import = None;
+        }
+    }
+
+    /// A MadMapper project read: what comes across, then a new project or added to this one.
+    fn mad_window(&mut self, ctx: &egui::Context) {
+        let Some(file) = &self.state.mad_import else { return };
+        let mut open = true;
+        let (mut new, mut add) = (false, false);
+        egui::Window::new(format!("{} Import from MadMapper", icon::DOWNLOAD_SIMPLE)).open(&mut open).collapsible(false).resizable(true).default_width(460.0).show(ctx, |ui| {
+            ui.label(egui::RichText::new(&file.name).strong());
+            let [slices, groups, masks, lines, fixtures, _] = file.counts();
+            crate::ui::hint(ui, format!("{} outputs · {slices} slices · {groups} groups · {masks} masks · {lines} line shapes", file.outputs.len()));
+            ui.add_space(4.0);
+            ui.label("Pictures the slices show (each becomes a layer):");
+            crate::ui::column_scroll(ui).max_height(200.0).show(ui, |ui| {
+                for v in file.used_visuals() {
+                    let missing = matches!(v.kind.as_str(), "Movie" | "Image") && !std::path::Path::new(v.url.trim()).exists();
+                    let kind = match v.kind.as_str() {
+                        "Movie" => "Movie",
+                        "Image" => "Picture",
+                        "Syphon" => "Syphon",
+                        "Live" => "Camera",
+                        _ => "Generator",
+                    };
+                    let text = format!("{kind} · {}{}", v.name, if missing { " (not on this Mac)" } else { "" });
+                    crate::ui::hint(ui, text);
+                }
+            });
+            let mut left = Vec::new();
+            if file.cues > 0 {
+                left.push(format!("{} cues", file.cues));
+            }
+            if file.mappings > 0 {
+                left.push(format!("{} MIDI / OSC mappings", file.mappings));
+            }
+            if fixtures > 0 {
+                left.push(format!("{fixtures} LED fixtures"));
+            }
+            crate::ui::help(ui, "Slices keep their corners, shapes, groups and the part of the picture they show. MadMapper's own generators are drawn by the nearest built-in one; its effects don't come across.");
+            if !left.is_empty() {
+                crate::ui::hint(ui, format!("Not brought in: {}.", left.join(", ")));
+            }
+            ui.add_space(6.0);
+            crate::ui::toolbar(ui, |ui| {
+                new = crate::ui::command(ui, crate::ui::label(icon::CHECK, "Open as a new project")).on_hover_text("A new project: the outputs, their slices and a layer for each picture").clicked();
+                add = crate::ui::command(ui, crate::ui::label(icon::PLUS, "Add to this project")).on_hover_text("Adds the outputs (with their slices) and the layers to the project that's open").clicked();
+            });
+        });
+        if new || add {
+            self.state.finish_mad_import(new);
+        } else if !open {
+            self.state.mad_import = None;
         }
     }
 }
