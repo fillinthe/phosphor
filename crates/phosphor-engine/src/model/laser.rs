@@ -202,7 +202,7 @@ impl Default for LaserShape {
 }
 
 /// The settings a controller, OSC, a cue or an AI can move (`ControlTarget::LaserShape`): (name, min, max).
-pub const LASER_FIELDS: [(&str, f32, f32); 9] = [
+pub const LASER_FIELDS: [(&str, f32, f32); 13] = [
     ("x", -1.0, 1.0),
     ("y", -1.0, 1.0),
     ("size", 0.0, 1.0),
@@ -212,6 +212,11 @@ pub const LASER_FIELDS: [(&str, f32, f32); 9] = [
     ("rainbow", 0.0, 1.0),
     ("motion", -2.0, 2.0),
     ("shape", 0.0, 1.0),
+    ("red", 0.0, 1.0),
+    ("green", 0.0, 1.0),
+    ("blue", 0.0, 1.0),
+    // Round the colour wheel (0..1), keeping the colour's brightness.
+    ("hue", 0.0, 1.0),
 ];
 
 impl LaserShape {
@@ -226,8 +231,24 @@ impl LaserShape {
             6 => self.rainbow,
             7 => self.motion,
             8 => self.shape,
+            9..=11 => self.color[i - 9],
+            12 => hue_of(self.color),
             _ => return None,
         })
+    }
+
+    /// Sets setting `i` (`LASER_FIELDS`); false if there's no such setting.
+    pub fn set_field(&mut self, i: usize, v: f32) -> bool {
+        if i == 12 {
+            let bright = self.color.iter().copied().fold(0.0, f32::max);
+            self.color = crate::laser::hue(v).map(|c| c * if bright > 0.0 { bright } else { 1.0 });
+            return true;
+        }
+        if let Some(f) = self.field_mut(i) {
+            *f = v;
+            return true;
+        }
+        false
     }
 
     pub fn field_mut(&mut self, i: usize) -> Option<&mut f32> {
@@ -241,9 +262,27 @@ impl LaserShape {
             6 => &mut self.rainbow,
             7 => &mut self.motion,
             8 => &mut self.shape,
+            9..=11 => &mut self.color[i - 9],
             _ => return None,
         })
     }
+}
+
+/// Where a colour is on the colour wheel (0..1; grey = 0).
+pub fn hue_of([r, g, b]: [f32; 3]) -> f32 {
+    let (hi, lo) = (r.max(g).max(b), r.min(g).min(b));
+    let d = hi - lo;
+    if d <= 1e-6 {
+        return 0.0;
+    }
+    let h = if hi == r {
+        ((g - b) / d).rem_euclid(6.0)
+    } else if hi == g {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    h / 6.0
 }
 
 /// A laser look: shapes drawn together.
@@ -453,6 +492,20 @@ impl Lasers {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Colour as settings: red / green / blue, and hue round the wheel keeping the brightness.
+    #[test]
+    fn colour_is_a_setting() {
+        let mut s = LaserShape { color: [0.5, 0.0, 0.0], ..Default::default() };
+        assert_eq!(s.field(9), Some(0.5));
+        assert!(s.set_field(10, 0.25));
+        assert_eq!(s.color, [0.5, 0.25, 0.0]);
+        s.color = [0.8, 0.0, 0.0];
+        assert!(s.set_field(12, 1.0 / 3.0));
+        assert!((s.color[1] - 0.8).abs() < 1e-4 && s.color[0] < 1e-4, "green, as bright: {:?}", s.color);
+        assert!((s.field(12).unwrap() - 1.0 / 3.0).abs() < 1e-4);
+        assert!(!s.set_field(13, 0.0));
+    }
 
     /// A saved project keeps its lasers and looks but always opens with them disarmed; old projects get none.
     #[test]

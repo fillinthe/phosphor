@@ -282,10 +282,8 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             }
         }
         ControlTarget::LaserShape { shape, field } => {
-            if let (Some(&(_, min, max)), Some(s)) = (phosphor_engine::LASER_FIELDS.get(*field as usize), comp.lasers.shape_mut(*shape))
-                && let Some(f) = s.field_mut(*field as usize)
-            {
-                *f = unit_to(v.clamp(0.0, 1.0), min, max, false);
+            if let (Some(&(_, min, max)), Some(s)) = (phosphor_engine::LASER_FIELDS.get(*field as usize), comp.lasers.shape_mut(*shape)) {
+                s.set_field(*field as usize, unit_to(v.clamp(0.0, 1.0), min, max, false));
             }
         }
         ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => comp.lasers.master = v.clamp(0.0, 1.0),
