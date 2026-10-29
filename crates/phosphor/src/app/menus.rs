@@ -285,7 +285,7 @@ impl PhosphorApp {
                         "Designer" => theme::Hue::Effect.color(),
                         _ => theme::accent(),
                     };
-                    if crate::ui::pick_item(ui, self.workspace == Some(i), egui::RichText::new(format!("{glyph} {text}")).color(color)).on_hover_text(tip).clicked() {
+                    if crate::ui::section_tab(ui, self.workspace == Some(i), &format!("{glyph} {text}"), color).on_hover_text(tip).clicked() {
                         self.switch_workspace(i);
                     }
                 }
@@ -621,7 +621,7 @@ impl PhosphorApp {
         let st = &mut self.state;
         if st.account_window {
             let mut open = true;
-            egui::Window::new(format!("{} Account", icon::USER_CIRCLE)).open(&mut open).collapsible(false).resizable(true).default_width(440.0).default_height(420.0).show(ctx, |ui| {
+            crate::ui::dialog(ctx, format!("{} Account", icon::USER_CIRCLE)).open(&mut open).collapsible(false).resizable(true).default_width(440.0).default_height(420.0).show(ctx, |ui| {
                 crate::panels::account(ui, st);
             });
             st.account_window = open;

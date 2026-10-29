@@ -45,7 +45,7 @@ impl PhosphorApp {
         let Some(draft) = self.layout_draft.as_mut() else { return };
         let mut open = true;
         let mut save = false;
-        egui::Window::new(format!("{} Save Layout", icon::LAYOUT)).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+        crate::ui::dialog(ctx, format!("{} Save Layout", icon::LAYOUT)).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
             ui.label("Saves where every panel is, including floating windows.");
             crate::ui::toolbar(ui, |ui| {
                 ui.label("Name");

@@ -70,7 +70,7 @@ impl PhosphorApp {
         let locked = self.lock.active;
         let title = if locked { format!("{} Unlock", icon::LOCK_OPEN) } else { format!("{} Lock the controls", icon::LOCK) };
         let mut action: Option<bool> = None; // Some(true) = lock, Some(false) = unlock
-        egui::Window::new(title).open(&mut open).collapsible(false).resizable(false).default_width(360.0).show(ctx, |ui| {
+        crate::ui::dialog(ctx, title).open(&mut open).collapsible(false).resizable(false).default_width(360.0).show(ctx, |ui| {
             if locked {
                 if self.lock.password.is_empty() {
                     ui.label("The controls are locked. Unlock to edit the show again.");

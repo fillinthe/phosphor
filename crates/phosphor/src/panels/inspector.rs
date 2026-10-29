@@ -257,7 +257,8 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             let mut motion = layer.text_motion();
             crate::ui::field(ui, "Moves", |ui| {
                 let was = motion;
-                choice_buttons(ui, &mut motion, |_, _| {});
+                let width = (ui.available_width() - 24.0).clamp(80.0, 200.0);
+                crate::ui::choice_combo(ui, ("text_motion", layer.id), &mut motion, width, false);
                 if motion != was {
                     layer.set_text_motion(motion);
                 }
@@ -297,9 +298,9 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         });
         transition_settings(ui, layer);
         crate::ui::field(ui, "Frame rate", |ui| {
-            let rates: Vec<(f32, String)> = [(0.0, "every frame".to_string()), (30.0, "30".into()), (15.0, "15".into()), (10.0, "10".into()), (5.0, "5".into())].into_iter().collect();
+            let rates: Vec<(f32, String)> = [(0.0, "All".to_string()), (30.0, "30".into()), (15.0, "15".into()), (10.0, "10".into()), (5.0, "5".into())].into_iter().collect();
             segmented(ui, &mut layer.render_fps, &rates, |_, r, _| {
-                r.clone().on_hover_text("Draw this layer (its source and effects) only this often and hold the picture between: saves the GPU, or a choppy look on purpose");
+                r.clone().on_hover_text("Frames a second this layer is drawn (All = every frame). Fewer: its source and effects are drawn only that often and the picture is held between: saves the GPU, or a choppy look on purpose");
             });
         });
         ui.separator();
@@ -811,11 +812,21 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             (LiveText::Code, "QR code seen"),
             (LiveText::Read, "Text seen"),
         ];
-        for (k, name) in kinds {
-            if crate::ui::pick_item(ui, std::mem::discriminant(&style.live) == std::mem::discriminant(&k), name).clicked() {
-                style.live = k;
-                style.live_start = ui.input(|i| i.time);
+        // (A list: eight buttons wrapped into a tall column in a narrow Inspector.)
+        let same = |k: &LiveText| std::mem::discriminant(&style.live) == std::mem::discriminant(k);
+        let from_designer = "A number (Designer)";
+        let current = kinds.iter().find(|(k, _)| same(k)).map_or(from_designer, |(_, n)| *n);
+        let mut picked = None;
+        crate::ui::dropdown(ui, ("text_live", id), (ui.available_width() - 24.0).clamp(80.0, 200.0)).selected_text(current).show_ui(ui, |ui| {
+            for (k, name) in &kinds {
+                if crate::ui::pick_item(ui, same(k), *name).clicked() {
+                    picked = Some(*k);
+                }
             }
+        });
+        if let Some(k) = picked {
+            style.live = k;
+            style.live_start = ui.input(|i| i.time);
         }
         match &mut style.live {
             LiveText::Countdown(at) => {

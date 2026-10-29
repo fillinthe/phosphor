@@ -39,7 +39,7 @@ impl PhosphorApp {
             return;
         }
         let mut open = true;
-        egui::Window::new(format!("{} Export Show", icon::PACKAGE)).open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
+        crate::ui::dialog(ctx, format!("{} Export Show", icon::PACKAGE)).open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
             #[cfg(target_arch = "wasm32")]
             ui.label("Export Show is available in the desktop app.");
             #[cfg(not(target_arch = "wasm32"))]

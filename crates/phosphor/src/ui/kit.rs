@@ -111,6 +111,30 @@ pub(crate) fn pick_item(ui: &mut egui::Ui, picked: bool, text: impl Into<egui::W
     ui.add(egui::Button::selectable(picked, text).min_size(egui::vec2(w + ui.spacing().button_padding.x * 2.0 + 2.0, 0.0)))
 }
 
+/// A section of the app (Show, Outputs, Control, Designer) in its colour: the one you're in is filled with the
+/// colour and its words are black; hovering another tints it. One size whatever its state.
+pub(crate) fn section_tab(ui: &mut egui::Ui, active: bool, text: &str, colour: Color32) -> egui::Response {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let galley = ui.painter().layout_no_wrap(text.to_string(), font, colour);
+    let pad = ui.spacing().button_padding.x;
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(galley.size().x + pad * 2.0 + 2.0, CONTROL_H), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter();
+        let radius = ui.visuals().widgets.inactive.corner_radius;
+        let (fill, words) = if active {
+            (colour, Color32::BLACK)
+        } else if resp.hovered() {
+            (colour.gamma_multiply(0.22), colour)
+        } else {
+            (Color32::TRANSPARENT, colour)
+        };
+        p.rect_filled(rect, radius, fill);
+        let galley = ui.painter().layout_no_wrap(text.to_string(), egui::TextStyle::Button.resolve(ui.style()), words);
+        p.galley(egui::pos2(rect.left() + pad + 1.0, rect.center().y - galley.size().y / 2.0), galley, words);
+    }
+    resp
+}
+
 /// `pick_item` that sets `current` to `value` when clicked (marks the response changed).
 pub(crate) fn pick_value<V: PartialEq>(ui: &mut egui::Ui, current: &mut V, value: V, text: impl Into<egui::WidgetText>) -> egui::Response {
     let mut r = pick_item(ui, *current == value, text);
@@ -728,4 +752,20 @@ mod steady_tests {
         }
         assert!(!open.get(), "and closes when the click is outside it");
     }
+}
+/// A dialog window: it opens in the middle of the app and can't fold up (egui puts a new window at the top left,
+/// over the menu bar). Chain `.open()`, `.default_width()`… and `.show()` as with any window.
+pub(crate) fn dialog<'a>(ctx: &egui::Context, title: impl Into<egui::WidgetText>) -> egui::Window<'a> {
+    egui::Window::new(title).collapsible(false).pivot(egui::Align2::CENTER_CENTER).default_pos(ctx.content_rect().center())
+}
+
+/// Counts as small grey words side by side ("1 output", "75 slices"): `(n, one, many)` with `{0}` where the number
+/// goes; counts of 0 are left out. Each is its own label, so each translates.
+pub(crate) fn counts(ui: &mut egui::Ui, items: &[(usize, &str, &str)]) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        for (n, one, many) in items.iter().filter(|(n, _, _)| *n > 0) {
+            super::hint(ui, if *n == 1 { one } else { many }.replace("{0}", &n.to_string()));
+        }
+    });
 }

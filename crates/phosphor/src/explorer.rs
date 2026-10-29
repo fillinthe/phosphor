@@ -404,7 +404,7 @@ fn shadertoy_window(ctx: &egui::Context, st: &mut State) {
     let Some(imp) = st.editor.shadertoy.as_mut() else { return };
     let mut open = true;
     let mut done: Option<String> = None;
-    egui::Window::new(label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy")).open(&mut open).default_width(560.0).show(ctx, |ui| {
+    crate::ui::dialog(ctx, label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy")).open(&mut open).default_width(560.0).show(ctx, |ui| {
         crate::ui::help(ui, "Open a shader on shadertoy.com, copy all the code in its Image tab and paste it here. Shaders that read iChannel0 become effects on a layer's picture; the rest are sources. Check its licence before you share a show with it.");
         ui.horizontal(|ui| {
             ui.label("Name");

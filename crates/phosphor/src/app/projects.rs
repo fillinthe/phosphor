@@ -232,7 +232,7 @@ impl PhosphorApp {
         }
         let ui_state = &mut st.projects;
         let thumbs = &mut st.thumbs;
-        egui::Window::new("Projects")
+        crate::ui::dialog(ctx, "Projects")
             .collapsible(false)
             .resizable(true)
             .default_size([880.0, 560.0])

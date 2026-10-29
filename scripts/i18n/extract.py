@@ -64,7 +64,8 @@ def main():
                 raw = unescape(m.group(1))
                 fmt = "format!(" in before[-40:] or "{" in raw
                 s = template(raw) if fmt else raw
-                if shown(re.sub(r"\{\d+\}", "", s)):
+                # (A number and plain words, "{0} outputs", is shown text even though "outputs" alone looks like an id.)
+                if shown(re.sub(r"\{\d+\}", "", s)) or re.fullmatch(r"\{0\} [a-z][a-z /]*", s):
                     keys.add(s)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(sorted(keys), open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=0)

@@ -69,7 +69,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
     }
     let key = a.key.get_or_insert_with(crate::ai_shader::load_key).clone();
     let mut open = true;
-    egui::Window::new(label(icon::MAGIC_WAND, "Describe a shader")).open(&mut open).default_width(480.0).show(ctx, |ui| {
+    crate::ui::dialog(ctx, label(icon::MAGIC_WAND, "Describe a shader")).open(&mut open).default_width(480.0).show(ctx, |ui| {
         help(ui, "Say what it should look like and the AI writes it: a new effect or source, or a change to the shader you have open. It opens in the Shader Editor, every slider ready to map.");
         let mut options = vec![(Make::Effect, "New effect".to_string()), (Make::Generator, "New source".to_string())];
         if open_shader.is_some() {
