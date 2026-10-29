@@ -187,6 +187,12 @@ impl State {
                         let fit = (aspect / (style.size.max(0.01) * 0.55) * 0.9) as usize;
                         titles.get(i % titles.len().max(1)).map(|t| wrap_words(t, fit))
                     }
+                    // A number's words from its template (a Designer Text box fed by a Number).
+                    LiveText::Number(mid) => {
+                        let value = self.mod_inputs.shared.iter().find(|(id, _)| *id == mid).map_or(0.0, |x| x.1);
+                        let live = self.comp.modulators.iter().find(|m| m.id == mid).map(|m| m.live.clone()).unwrap_or_default();
+                        Some(phosphor_engine::fill_template(&style.live_source, value, &live))
+                    }
                     live => live.words(tod, now - style.live_start),
                 };
                 if let Some(words) = words

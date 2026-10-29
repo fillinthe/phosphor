@@ -311,6 +311,10 @@ impl Composition {
                 {
                     v.extend(d.params.iter().map(|p| (p.name.to_string(), PortKind::Number)));
                 }
+                // A Text box shows a number in its words ({value}, {percent}, {raw}).
+                if let Some(SourceSpec::Text(_)) = layer.map(|l| &l.source) {
+                    v.push(("Value".to_string(), PortKind::Number));
+                }
             }
             NodeKind::Mix => v.push(("Opacity".to_string(), PortKind::Number)),
             NodeKind::Group => {
@@ -553,6 +557,14 @@ impl Composition {
                 None => return,
             },
             NodeKind::Picture => match self.layer_mut(n.parts[0]) {
+                Some(LayerState { source: SourceSpec::Text(style), .. }) => {
+                    style.live = match (from, style.live) {
+                        (Some(f), _) => LiveText::Number(f),
+                        (None, LiveText::Number(id)) if drop_link(id) => LiveText::Off,
+                        (None, live) => live,
+                    };
+                    return;
+                }
                 Some(l) => &mut l.generator_mods,
                 None => return,
             },

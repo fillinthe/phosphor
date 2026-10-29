@@ -35,7 +35,15 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       random), Relief (a picture as points), Model (an OBJ file's vertices), Move, Particles, and Dots / Lines / Mesh
       renders with a camera (distance, lens, turn) and a light (shade, fog), coloured from a second picture input;
       a green Points wire kind; `--quick points` (+ `PHOSPHOR_POINTS_MODEL=file.obj`). Checked on screenshots + a
-      GPU test. Left: phase 5 data. Points left: no depth buffer (a mesh's far faces can draw over near ones; backs are
+      GPU test. **Phase 5 done 2026-10-29** (not installed): data. Number boxes take their value from a live
+      reading (weather / ISS / earthquakes), a web address answering JSON (a dotted path to the number, 0-at / 1-at),
+      a Timer, the Clock or a table file (CSV, a column, a row every so many seconds); a Text box's words take the
+      number ({value}, {percent}, {raw}); an Event (a number crossing a line sets any control, optionally both
+      ways); canvas menu › Data; `--quick data`. Checked on a screenshot + tests (timer, clock, table, event; JSON
+      paths; the Text input). Data left: a web box isn't checked against a real site (the parser is), a Number box
+      drives one Text template only, no "every N rows" / loops for timers (a saw LFO does that), no OSC / MIDI *out*
+      from an Event (an Event sets a control; mapping to OSC out is the Control Surface's job). All five phases of
+      `docs/design/nodes.md` are built. Points left: no depth buffer (a mesh's far faces can draw over near ones; backs are
       hidden instead), lines are 1 px (their Size scales the picture down like Rutt-Etra), particles step at 1/60 s
       whatever the rate, a Model box's render must be set to Read: In order by hand, effects after a render on the
       same layer as a Model run at the model's texel size. Small: number inputs on a box of boxes, wrapping existing

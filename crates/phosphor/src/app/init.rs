@@ -313,6 +313,7 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 gdrop: Default::default(),
                 models: Default::default(),
+                data: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 link_import: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]

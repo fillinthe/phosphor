@@ -11,6 +11,12 @@ feeds). So every points box is an ordinary shader (`points.wgsl`: `pts_shape` ge
 light inside, coloured from `EffectState::other`), a Model box is a layer whose source is `Live { format: "model" }`
 (`models::Models` uploads the OBJ's vertices once), and the Designer only adds a Points port kind. No depth buffer yet.
 
+Phase 5 as built: data is a Number box's job. `Modulator.data: Option<DataFeed>` (`DataKind::{Reading, Json, Timer,
+Clock, Table}` + 0-at / 1-at) is filled each frame by the app (`phosphor::data::run`: live readings from
+`live_data::Feeds`, JSON fetched on a thread when due, timers and tables from a start time, `Modulator.live` = the raw
+number and its words); `Modulator.event: Option<Trigger>` fires `State::set_control` on a crossing. A Text box is a
+Picture box with a Text source whose `LiveText::Number(id)` fills `live_source` as a template (`data::fill_template`).
+
 ## What TouchDesigner is, in short
 
 You wire small boxes ("operators") together on a canvas. Each box does one job and passes its result down the wire.
@@ -97,7 +103,7 @@ Saved projects: a network is a new, optional part of a comp (empty by default), 
 | 2. Number network | Modulators, audio, MIDI / OSC in, math, smooth, logic, trigger boxes; wire a number into any setting | medium |
 | 3. Reusable groups | Box-of-boxes, saved by name, shared between projects; settings shown on the outside of the box | medium |
 | 4. Points and 3D | Particles / point clouds / lines on the GPU, model loading, camera and lights (overlaps the 3D model slices). *Built: shapes, relief, model, move, particles, dots / lines / mesh with camera and light.* | large |
-| 5. Data | Tables, text, web / JSON in (the live data feeds as boxes), timers and events | medium |
+| 5. Data | Tables, text, web / JSON in (the live data feeds as boxes), timers and events. *Built: all of these as Number / Text / Event boxes.* | medium |
 
 Phase 1 is the decision point: once a network can stand in for a layer stack, the rest is adding boxes.
 

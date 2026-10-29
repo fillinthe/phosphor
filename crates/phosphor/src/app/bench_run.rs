@@ -502,8 +502,8 @@ impl PhosphorApp {
                 // Two shared modulators, the second gated by the first, and the first layer's generator speed following it.
                 use phosphor_engine::{ChainMode, ModChain, ModSource, Modulation, Modulator};
                 let (a, b) = (self.state.comp.new_id(), self.state.comp.new_id());
-                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false });
-                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false });
+                self.state.comp.modulators.push(Modulator { id: a, name: "Gate".into(), signal: Modulation { source: ModSource::LfoSquare, sync: true, rate: 2.0, ..Default::default() }, chain: None, value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() });
+                self.state.comp.modulators.push(Modulator { id: b, name: "Swell".into(), signal: Modulation { source: ModSource::LfoSine, sync: true, rate: 1.0, ..Default::default() }, chain: Some(ModChain { from: a, mode: ChainMode::Multiply, amount: 1.0 }), value: 0.0, looper: Default::default(), sequence: None, band: None, designer: false, data: None, event: None, live: Default::default() });
                 if let Some(l) = self.state.comp.layers.first_mut() {
                     l.generator_mods.retain(|m| m.index != 0);
                     l.generator_mods.push(phosphor_engine::ParamMod { index: 0, m: Modulation { link: b, range: true, min: 0.0, max: 1.0, ..Default::default() } });
@@ -623,6 +623,49 @@ impl PhosphorApp {
                 comp.sync_network(cid);
                 let net = comp.comp(cid).unwrap().network.clone().unwrap();
                 println!("QUICK designer: {} boxes, shown={:?}, number wired={wired}", net.nodes.len(), net.shown());
+                self.switch_workspace(3);
+                continue;
+            }
+            if name == "data" {
+                // Designer phase 5: a Clock → a Text box ("It's {raw}") → Output; a Timer into an effect; an Event.
+                use phosphor_engine::NodeKind;
+                let comp = &mut self.state.comp;
+                let cid = comp.add_comp("Data");
+                comp.start_network(cid);
+                let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let (pic, out) = (net.nodes[0].id, net.nodes[1].id);
+                net.nodes.iter_mut().find(|n| n.id == out).unwrap().pos = [820.0, 60.0];
+                net.nodes.iter_mut().find(|n| n.id == pic).unwrap().pos = [300.0, 60.0];
+                let clock = net.add(NodeKind::Number, [40.0, 60.0]);
+                let timer = net.add(NodeKind::Number, [40.0, 420.0]);
+                let fx = net.add(NodeKind::Effect, [560.0, 60.0]);
+                let event = net.add(NodeKind::Number, [300.0, 520.0]);
+                net.disconnect(out, 0);
+                comp.comp_mut(cid).unwrap().network = Some(net);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                let part = |id: u32| net.node(id).unwrap().parts[0];
+                comp.layer_mut(part(pic)).unwrap().source = phosphor_engine::SourceSpec::Text(phosphor_engine::TextStyle { text: "Hello".into(), live_source: "It's {raw}".into(), ..crate::text::default_style() });
+                let e = comp.new_effect("zoom_rotate").or_else(|| comp.new_effect("invert")).unwrap();
+                comp.layer_mut(part(fx)).unwrap().effects = vec![e];
+                for (id, data, ev) in [(clock, Some(phosphor_engine::DataKind::Clock), false), (timer, Some(phosphor_engine::DataKind::Timer { seconds: 8.0 }), false), (event, None, true)] {
+                    if let Some(m) = comp.modulators.iter_mut().find(|m| m.id == part(id)) {
+                        m.signal.source = phosphor_engine::ModSource::Hand;
+                        m.data = data.map(|kind| phosphor_engine::DataFeed { kind, ..Default::default() });
+                        if ev {
+                            m.signal.source = phosphor_engine::ModSource::LfoSine;
+                            m.signal.rate = 0.5;
+                            m.event = Some(phosphor_engine::Trigger { threshold: 0.5, target: Some(phosphor_engine::ControlTarget::MasterFade), value: 1.0, both_ways: false });
+                        }
+                    }
+                }
+                let mut wired = comp.connect_boxes(cid, &[], pic, fx, 0);
+                wired &= comp.connect_boxes(cid, &[], fx, out, 0);
+                wired &= comp.connect_boxes(cid, &[], clock, pic, 0);
+                wired &= comp.connect_boxes(cid, &[], timer, fx, 1);
+                comp.sync_network(cid);
+                let net = comp.comp(cid).unwrap().network.clone().unwrap();
+                println!("QUICK data: {} boxes, shown={:?}, wired={wired}", net.nodes.len(), net.shown());
                 self.switch_workspace(3);
                 continue;
             }

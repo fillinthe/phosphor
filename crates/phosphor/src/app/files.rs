@@ -221,6 +221,16 @@ impl PhosphorApp {
                         o.stage_photo = p.to_string_lossy().to_string();
                     }
                 }
+                Purpose::TableFile(id) => {
+                    if let Some(p) = paths.first() {
+                        let path = p.to_string_lossy().to_string();
+                        st.data.forget_table(&path);
+                        st.data.restart(id);
+                        if let Some(phosphor_engine::DataKind::Table { path: at, .. }) = st.comp.modulators.iter_mut().find(|m| m.id == id).and_then(|m| m.data.as_mut()).map(|d| &mut d.kind) {
+                            *at = path;
+                        }
+                    }
+                }
                 Purpose::ModelPoints(id) => {
                     if let Some(p) = paths.first() {
                         let path = p.to_string_lossy().to_string();
