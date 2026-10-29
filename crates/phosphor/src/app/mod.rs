@@ -16,7 +16,7 @@ pub(crate) fn preview_lookup(keys: &[String], textures: &[Option<(egui::TextureI
     let i = keys.iter().position(|k| k == key)?;
     textures.get(i).copied().flatten().filter(|(_, _, ready)| *ready).map(|(t, ..)| t)
 }
-pub use quick::{Quick, quick_menu, quick_row};
+pub use quick::{Quick, quick_row};
 use crate::audio::AudioInput;
 use crate::bench::BenchConfig;
 use crate::clock::Clock;
@@ -55,7 +55,7 @@ mod menus;
 mod outputs;
 pub(crate) mod play;
 mod quick;
-pub(crate) use quick::dice;
+pub(crate) use quick::{dice, layers_quick_menu};
 mod recording;
 pub(crate) mod recorders;
 mod computed;

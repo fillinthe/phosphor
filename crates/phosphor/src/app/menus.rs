@@ -293,66 +293,14 @@ impl PhosphorApp {
                 // Short on room (narrow window, in-window menus): the next buttons become icons, names on hover.
                 // (Also when, last frame, these ran into the buttons on the right: longer words in another language,
                 // a narrow window. It goes back once there's plenty of room.)
-                // Two steps: Output, Blackout and Search go to icons first; then Surprise too.
+                // Output, Blackout and Search go to icons.
                 let squeezed_key = egui::Id::new("top_bar_squeezed");
                 let squeezed: u8 = ui.ctx().data(|d| d.get_temp(squeezed_key)).unwrap_or(0);
                 let narrow = ui.available_width() < 560.0;
-                let (compact, compact_dice) = (narrow || squeezed >= 1, narrow || squeezed >= 2);
+                let compact = narrow || squeezed >= 1;
                 let named = |glyph: &str, name: &str| if compact { glyph.to_string() } else { format!("{glyph} {name}") };
-                let named_dice = |glyph: &str, name: &str| if compact_dice { glyph.to_string() } else { format!("{glyph} {name}") };
-                // One-click visuals: the dice = Surprise me; the arrow = every Quick action.
-                // The dice says where it will land: the selected layer, else every layer.
-                let target = self.state.selected.filter(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
-                let where_ = target.map_or("all layers".to_string(), |id| crate::ui::layer_name(&self.state.comp.layers, id));
-                // One width whatever's selected (a long layer name is cut short; the whole name is in the tooltip).
-                let short: String = if where_.chars().count() > 10 { format!("{}…", where_.chars().take(9).collect::<String>()) } else { where_.clone() };
-                let (text, widest) = (named_dice(icon::DICE_FIVE, &format!("Surprise · {short}")), named_dice(icon::DICE_FIVE, "Surprise · all layers"));
-                let dice = crate::ui::steady_action_button(ui, crate::ui::Act::Go, text.clone(), &[&text, &widest]).on_hover_text(format!(
-                    "{} (⌘R: all layers). Click: a new look on {where_}. The arrow: pick several layers. Right-click to map a pad or key.",
-                    super::Quick::Surprise.about()
-                ));
-                crate::ui::map_menu(ui, &dice, phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Surprise));
-                if dice.clicked() {
-                    match target {
-                        Some(id) => self.state.quick_on(super::Quick::SurpriseLayer, Some(id), now),
-                        None => self.state.quick(super::Quick::Surprise, now),
-                    }
-                }
-                let mut picked = None;
-                let mut surprise: Vec<u64> = Vec::new();
-                let key = egui::Id::new("surprise_picks");
-                ui.menu_button(icon::CARET_DOWN, |ui| {
-                    ui.label(egui::RichText::new("Surprise which layers").strong());
-                    let mut picks: Vec<u64> = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
-                    for l in self.state.comp.layers.iter().rev() {
-                        let mut on = picks.contains(&l.id);
-                        if crate::ui::toggle(ui, &mut on, &l.name).changed() {
-                            if on { picks.push(l.id) } else { picks.retain(|x| *x != l.id) }
-                        }
-                    }
-                    picks.retain(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
-                    crate::ui::toolbar(ui, |ui| {
-                        if crate::ui::command_if(ui, !picks.is_empty(), format!("{} Surprise these", icon::DICE_FIVE)).clicked() {
-                            surprise = picks.clone();
-                            ui.close();
-                        }
-                        if crate::ui::command(ui, "All layers").clicked() {
-                            surprise = self.state.comp.layers.iter().map(|l| l.id).collect();
-                            ui.close();
-                        }
-                    });
-                    ui.ctx().data_mut(|d| d.insert_temp(key, picks));
-                    ui.separator();
-                    picked = super::quick_menu(ui);
-                })
-                .response
-                .on_hover_text("Surprise several layers at once, or any Quick action: shuffle, react to the music, fill clips, instant set");
-                for id in surprise {
-                    self.state.quick_on(super::Quick::SurpriseLayer, Some(id), now);
-                }
-                if let Some(q) = picked {
-                    self.state.quick(q, now);
-                }
+                // (Surprise and the other Quick actions: the Quick menu, ⌘R, the Layers panel's Quick menu and each
+                // layer's own buttons. Not a big button here: most shows never press it.)
                 let (stop, play) = (named(icon::STOP, "Output"), named(icon::PLAY, "Output"));
                 let output_label = if self.state.output_open() { stop.clone() } else { play.clone() };
                 let r = crate::ui::steady_button(ui, output_label, &[&stop, &play]).on_hover_text("Output windows on / off (they go back to the screens they filled last time) · right-click: pick a screen");
@@ -457,12 +405,11 @@ impl PhosphorApp {
                     // Frame rate and CPU live in the status line (bottom right), where there's room.
                     ui.min_rect().left()
                 });
-                // Squeezed: the left part reached the right part (one more step). Room again: well clear of it by what
-                // the last step saved (about 190 points for Surprise's words, 260 for the other three).
+                // Squeezed: the left part reached the right part. Room again: well clear of it by what the icons saved
+                // (about 260 points).
                 let gap = right.inner - left_end;
                 let now_squeezed = match squeezed {
-                    _ if gap < 8.0 => (squeezed + 1).min(2),
-                    2 if gap > 200.0 => 1,
+                    _ if gap < 8.0 => 1,
                     1 if gap > 270.0 => 0,
                     s => s,
                 };

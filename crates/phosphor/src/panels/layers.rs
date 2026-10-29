@@ -39,6 +39,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
             let id = st.comp.add_comp(&format!("Comp {n}"));
             st.selected = Some(id);
         }
+        ui.menu_button(label(icon::DICE_FIVE, "Quick"), |ui| crate::app::layers_quick_menu(ui, st)).response.on_hover_text("Surprise, shuffle, react to the music, fill clips, an instant set (also in the Quick menu; ⌘R = Surprise)");
         help(ui, "Top of the list is the top of the stack · drag a thumbnail to reorder · right-click for more");
     });
     ui.add_space(2.0);

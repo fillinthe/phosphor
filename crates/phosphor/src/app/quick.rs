@@ -172,3 +172,49 @@ pub fn quick_row(ui: &mut egui::Ui) -> Option<Quick> {
     });
     out
 }
+
+/// The Quick menu for layers (Layers panel): Surprise where it lands (the selected layer, else every layer),
+/// Surprise several layers picked by hand, and every other Quick action.
+pub(crate) fn layers_quick_menu(ui: &mut egui::Ui, st: &mut State) {
+    use egui_phosphor::regular as icon;
+    let now = ui.ctx().input(|i| i.time);
+    let target = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
+    let where_ = target.map_or("all layers".to_string(), |id| crate::ui::layer_name(&st.comp.layers, id));
+    if crate::ui::command(ui, format!("{} Surprise · {where_}", icon::DICE_FIVE)).on_hover_text(format!("{} (⌘R: all layers)", Quick::Surprise.about())).clicked() {
+        match target {
+            Some(id) => st.quick_on(Quick::SurpriseLayer, Some(id), now),
+            None => st.quick(Quick::Surprise, now),
+        }
+        ui.close();
+    }
+    ui.menu_button(format!("{} Surprise which layers", icon::DICE_FIVE), |ui| {
+        let key = egui::Id::new("surprise_picks");
+        let mut picks: Vec<u64> = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+        for l in st.comp.layers.iter().rev() {
+            let mut on = picks.contains(&l.id);
+            if crate::ui::toggle(ui, &mut on, &l.name).changed() {
+                if on { picks.push(l.id) } else { picks.retain(|x| *x != l.id) }
+            }
+        }
+        picks.retain(|id| st.comp.layers.iter().any(|l| l.id == *id));
+        let mut surprise: Vec<u64> = Vec::new();
+        crate::ui::toolbar(ui, |ui| {
+            if crate::ui::command_if(ui, !picks.is_empty(), format!("{} Surprise these", icon::DICE_FIVE)).clicked() {
+                surprise = picks.clone();
+                ui.close();
+            }
+            if crate::ui::command(ui, "All layers").clicked() {
+                surprise = st.comp.layers.iter().map(|l| l.id).collect();
+                ui.close();
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(key, picks));
+        for id in surprise {
+            st.quick_on(Quick::SurpriseLayer, Some(id), now);
+        }
+    });
+    ui.separator();
+    if let Some(q) = quick_menu(ui) {
+        st.quick(q, now);
+    }
+}
