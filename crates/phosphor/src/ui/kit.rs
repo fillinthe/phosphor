@@ -794,3 +794,23 @@ pub(crate) fn segmented_list<T: PartialEq + Clone>(ui: &mut egui::Ui, id: impl s
     }
     (changed, r.response)
 }
+
+/// `pick_item` cut short to `max_width` (whole on hover): for a list row that must keep one line (a long group or
+/// slice name beside its controls).
+pub(crate) fn pick_item_cut(ui: &mut egui::Ui, picked: bool, text: &str, max_width: f32) -> egui::Response {
+    // (Cut here: a button lays its words out again with its own wrapping, so a truncating layout is lost.)
+    let room = (max_width - ui.spacing().button_padding.x * 2.0 - 2.0).max(20.0);
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let width = |t: &str| ui.painter().layout_no_wrap(t.to_string(), font.clone(), Color32::WHITE).size().x;
+    let mut shown = text.to_string();
+    let cut = width(&shown) > room;
+    if cut {
+        let mut chars: Vec<char> = text.chars().collect();
+        while !chars.is_empty() && width(&format!("{}…", chars.iter().collect::<String>())) > room {
+            chars.pop();
+        }
+        shown = format!("{}…", chars.iter().collect::<String>().trim_end());
+    }
+    let r = pick_item(ui, picked, shown);
+    if cut { r.on_hover_text(text) } else { r }
+}

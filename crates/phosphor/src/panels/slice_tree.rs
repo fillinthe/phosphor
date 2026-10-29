@@ -124,7 +124,8 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
         let movable: Vec<(u64, String, usize)> = mapping.groups.iter().filter(|x| x.id != gid && !mapping.inside(x.id, gid)).map(|x| (x.id, x.name.clone(), mapping.group_depth(x.id))).collect();
         let Some(g) = mapping.groups.iter_mut().find(|g| g.id == gid) else { continue };
         let (collapsed, group_parent, name, is_layout) = (g.collapsed, g.parent, g.name.clone(), g.layout);
-        crate::ui::toolbar(ui, |ui| {
+        // (One line: the fade sits at the right and a long name is cut short, instead of the fade wrapping under it.)
+        ui.horizontal(|ui| {
             ui.add_space(indent);
             let caret = if collapsed { icon::CARET_RIGHT } else { icon::CARET_DOWN };
             if crate::ui::small_command(ui, caret).on_hover_text(if collapsed { "Open the group" } else { "Fold the group" }).clicked() {
@@ -133,15 +134,23 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             let target = ControlTarget::SliceEnabled(gid);
             let all_picked = !members.is_empty() && members.iter().all(|m| picked.contains(m));
             let glyph = if is_layout { icon::STACK } else { icon::FOLDER };
-            let text = RichText::new(format!("{glyph} {name}  ({})", members.len())).strong();
-            let r = crate::ui::pick_item(ui, all_picked, text).on_hover_text("Click to select everything in it");
+            let text = format!("{glyph} {name}  ({})", members.len());
+            // The name gets the row less a fixed switch and fade (cut short past that, whole on hover); the fade is
+            // pushed to the right edge, so every group's switch and fade line up.
+            const FADE_W: f32 = 52.0;
+            let gap = ui.spacing().item_spacing.x;
+            let tail = crate::ui::CONTROL_H + FADE_W + 2.0 * gap;
+            let edge = ui.clip_rect().right().min(ui.max_rect().right()) - 6.0;
+            let r = crate::ui::pick_item_cut(ui, all_picked, &text, edge - ui.cursor().left() - tail).on_hover_text("Click to select everything in it");
+            let fade_w = FADE_W;
+            ui.add_space((edge - ui.cursor().left() - tail + gap).max(0.0));
             crate::ui::mapped_badge(ui, &r, &target);
             if r.clicked() {
                 super::mapping_points::select_slices(ui.ctx(), selected, members.clone());
             }
             // Its own fade, on top of each slice's and mask's (mappable; layouts crossfade with it).
             // On / off without moving the fader (mappable).
-            Level::percent(&mut g.opacity, "").default(1.0).width(90.0).target(ControlTarget::SliceOpacity(gid)).switch(&mut g.enabled, Some(target.clone())).show(ui);
+            Level::percent(&mut g.opacity, "").default(1.0).width(fade_w).target(ControlTarget::SliceOpacity(gid)).switch(&mut g.enabled, Some(target.clone())).show(ui);
             r.right_menu(|ui| {
                 crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
                     if let Some(name) = rename_menu(ui, ("slice_group", gid), &name) {
