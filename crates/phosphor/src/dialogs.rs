@@ -8,6 +8,8 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 #[derive(Clone, Debug)]
 pub enum Purpose {
     LayerSource(u64),
+    /// A laser file (.ild) for a Laser Designer shape.
+    LaserFile(u64),
     ImportFiles,
     WatchFolder,
     OpenProject,

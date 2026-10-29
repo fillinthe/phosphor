@@ -3777,6 +3777,8 @@ dependencies = [
  "pollster 0.4.0",
  "serde",
  "serde_json",
+ "vector-text-core",
+ "vector-text-hershey",
  "wgpu",
 ]
 
@@ -5567,6 +5569,21 @@ name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
+
+[[package]]
+name = "vector-text-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31b49d3281c414d88b753748b268e171d3413d3a517641098f48bdb3d20260d8"
+
+[[package]]
+name = "vector-text-hershey"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f1bb6fb8ef91541754ad065421dab1fa3542604528d5fbeec72cc4371f2bc5f"
+dependencies = [
+ "vector-text-core",
+]
 
 [[package]]
 name = "velato"

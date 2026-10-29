@@ -9,7 +9,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 
 use laser_dac::{Frame, FrameSession, FrameSessionConfig};
-use phosphor_engine::laser::{LaserPoint, look_paths, project, trace};
+use phosphor_engine::laser::{LaserFiles, LaserPoint, look_paths, project, trace};
 use phosphor_engine::{Lasers, ModInputs};
 
 pub use phosphor_engine::laser::FPS;
@@ -41,6 +41,9 @@ pub struct LaserOut {
     failed_at: HashMap<u64, f64>,
     /// What each projector is doing, for the panel ("sending", "can't open: …").
     pub status: HashMap<u64, String>,
+    /// Laser files' frames (read off the UI thread when a look first uses them) and what went wrong reading any.
+    files: Arc<Mutex<LaserFiles>>,
+    reading: Arc<Mutex<HashMap<String, Option<String>>>>,
     pacer: crate::pacing::FramePacer,
 }
 
@@ -62,6 +65,33 @@ impl LaserOut {
 
     pub fn devices(&self) -> Vec<Device> {
         self.found.lock().unwrap().clone()
+    }
+
+    /// The laser files `lasers` use, as read so far; files not read yet start reading (each once).
+    pub fn files(&mut self, lasers: &Lasers) -> LaserFiles {
+        for path in lasers.looks.iter().flat_map(|l| &l.shapes).filter(|s| s.kind == phosphor_engine::LaserShapeKind::File && !s.file.is_empty()).map(|s| &s.file) {
+            if self.reading.lock().unwrap().contains_key(path) {
+                continue;
+            }
+            self.reading.lock().unwrap().insert(path.clone(), None);
+            let (path, files, reading) = (path.clone(), self.files.clone(), self.reading.clone());
+            let _ = std::thread::Builder::new().name("phosphor-laser-file".into()).spawn(move || {
+                match std::fs::read(&path).map_err(|e| e.to_string()).and_then(|b| phosphor_engine::ilda::parse(&b)) {
+                    Ok(frames) => {
+                        files.lock().unwrap().insert(path, Arc::new(frames));
+                    }
+                    Err(e) => {
+                        reading.lock().unwrap().insert(path, Some(e));
+                    }
+                }
+            });
+        }
+        self.files.lock().unwrap().clone()
+    }
+
+    /// Why a laser file couldn't be read (None: fine, or still reading).
+    pub fn file_error(&self, path: &str) -> Option<String> {
+        self.reading.lock().unwrap().get(path).cloned().flatten()
     }
 
     pub fn sending(&self) -> usize {
@@ -134,17 +164,18 @@ impl LaserOut {
             return;
         }
         let master = lasers.master * (1.0 - blackout.clamp(0.0, 1.0));
+        let files = self.files(lasers);
         for p in &lasers.projectors {
             let Some(live) = self.live.get(&p.id) else { continue };
-            let points = frame_for(lasers, p, t, mods, master);
+            let points = frame_for(lasers, p, t, mods, master, &files);
             live.session.send_frame(Frame::new(points.iter().map(to_dac).collect()));
         }
     }
 }
 
 /// What projector `p` draws at `t` seconds: its look traced to fit its points a second, then placed and dimmed.
-pub fn frame_for(lasers: &Lasers, p: &phosphor_engine::LaserProjector, t: f64, mods: &ModInputs, master: f32) -> Vec<LaserPoint> {
-    let paths = lasers.look(p.look).map(|l| look_paths(l, t, mods)).unwrap_or_default();
+pub fn frame_for(lasers: &Lasers, p: &phosphor_engine::LaserProjector, t: f64, mods: &ModInputs, master: f32, files: &LaserFiles) -> Vec<LaserPoint> {
+    let paths = lasers.look(p.look).map(|l| look_paths(l, t, mods, files)).unwrap_or_default();
     project(&trace(&paths, (p.pps / FPS) as usize), p, master)
 }
 

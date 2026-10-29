@@ -57,7 +57,7 @@ scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
   second code, also as a layer on the output: guests line up and take timed turns at the controls you allow).
 - **Mapping:** drag corners on the projector, mesh warp, line slices, 3D models (OBJ), masks with soft edges, edge blending, per-output colour, many
   outputs each on its own screen, venue presets, Art-Net / sACN LED pixel mapping; render at 60 fps (default), 30, or the display's rate.
-- **Lasers:** a Laser Designer (shapes, waves, Lissajous figures, beams, animated and mappable) sent to Ether Dream,
+- **Lasers:** a Laser Designer (shapes, waves, Lissajous figures, beams, words, ILDA files, animated and mappable) sent to Ether Dream,
   Helios, LaserCube and IDN lasers, with arming, a safety floor per projector and Blackout.
 - **AI assistants:** `Phosphor --mcp` lets AI apps that speak MCP list, set and trigger every control and see the output.
 - **In and out:** hardware-decoded video (H.264/HEVC/ProRes/VP9/AV1, Hap on the GPU), cameras, capture cards, network
@@ -109,3 +109,7 @@ cargo test   # includes WGSL validation of every shader, no GPU needed
 GPL-3.0-or-later (see `LICENSE`). Phosphor links GPL libraries (FFmpeg's GPL build, Ableton Link), so the app is GPL too:
 use it, change it, share it, and share your changes under the same terms. `vendor/eframe` keeps its MIT/Apache-2.0
 licence; Syphon's licence is in `vendor/Syphon-LICENSE.txt`.
+
+Laser text uses the Hershey fonts (via the `vector-text-hershey` crate). The Hershey Fonts were originally created by
+Dr. A. V. Hershey while working at the U. S. National Bureau of Standards. The format of the font data in that
+distribution was originally created by James Hurt, Cognition, Inc., 900 Technology Park Drive, Billerica, MA 01821.
