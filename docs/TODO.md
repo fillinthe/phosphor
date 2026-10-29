@@ -43,10 +43,9 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       paths; the Text input). Data left: a web box isn't checked against a real site (the parser is), a Number box
       drives one Text template only, no "every N rows" / loops for timers (a saw LFO does that), no OSC / MIDI *out*
       from an Event (an Event sets a control; mapping to OSC out is the Control Surface's job). All five phases of
-      `docs/design/nodes.md` are built. Points left: no depth buffer (a mesh's far faces can draw over near ones; backs are
-      hidden instead), lines are 1 px (their Size scales the picture down like Rutt-Etra), particles step at 1/60 s
-      whatever the rate, a Model box's render must be set to Read: In order by hand, effects after a render on the
-      same layer as a Model run at the model's texel size. **Small items done 2026-10-30:** Number input boxes on a
+      `docs/design/nodes.md` are built. Points left (after 2026-10-30: Mesh has a depth buffer, Lines have a real width, a render fed by a
+      Model reads in order by itself): particles step at 1/60 s whatever the rate, effects after a render on the
+      same layer as a Model run at the model's texel size, lights as boxes of their own. **Small items done 2026-10-30:** Number input boxes on a
       box of boxes, Wrap in a box (one box at a time: no multi-select on the canvas yet), Undo (toolbar button and
       Cmd-Z over the canvas, 50 steps per comp, boxes and wires only: a slider change isn't undone), Duplicate copies
       a box's settings, a half-visible box shows the settings that fit, a Number box's Knob is mappable (right-click ›

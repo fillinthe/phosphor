@@ -196,7 +196,9 @@ fn pt_view(p: vec3f) -> vec3f {
 fn pt_clip(v: vec3f) -> vec4f {
     let f = 1.0 / tan(radians(max(P(4u), 1.0)) * 0.5);
     let depth = max(P(3u) - v.z, 0.05);
-    return vec4f(v.x * f / aspect(), v.y * f, 0.0, depth);
+    // Depth 0..1 out to a little past the camera's distance (the mesh's depth buffer).
+    let z = clamp(depth / (P(3u) + 1.5), 0.0, 0.999);
+    return vec4f(v.x * f / aspect(), v.y * f, z * depth, depth);
 }
 
 // A point's colour: its brightness, the tint or the picture, lit by the surface it's on, fading into the fog.
@@ -277,12 +279,10 @@ fn fs_pts_dots(in: PtOut) -> @location(0) vec4f {
     return vec4f(in.color.rgb * a, a);
 }
 
-// Lines: segments between neighbours across the grid, down it, or both (P(12)); listed: pairs in order.
-@vertex
-fn vs_pts_lines(@builtin(vertex_index) vi: u32) -> PtOut {
+// Segment `seg`'s end `e` (0 or 1): between neighbours across the grid, down it, or both (P(12)); listed: pairs
+// in order.
+fn pt_segment_end(seg: u32, e: u32) -> PtOut {
     let g = pt_grid();
-    let seg = vi / 2u;
-    let e = vi & 1u;
     if (P(13u) > 0.5) {
         let i = seg * 2u + e;
         return pt_vertex(i % g.x, i / g.x);
@@ -300,6 +300,38 @@ fn vs_pts_lines(@builtin(vertex_index) vi: u32) -> PtOut {
         r = s % (g.y - 1u) + e;
     }
     return pt_vertex(c, r);
+}
+
+// Lines: each segment a thin quad (six vertices) P(1) pixels wide, added up.
+@vertex
+fn vs_pts_lines(@builtin(vertex_index) vi: u32) -> PtOut {
+    let seg = vi / 6u;
+    let k = vi % 6u;
+    let a = pt_segment_end(seg, 0u);
+    let b = pt_segment_end(seg, 1u);
+    // On screen (perspective divided), then pushed sideways by half the width.
+    let pa = a.pos.xy / a.pos.w;
+    let pb = b.pos.xy / b.pos.w;
+    let px = vec2f(2.0) / u.resolution;
+    var dir = (pb - pa) / px;
+    if (length(dir) < 1e-4) {
+        dir = vec2f(1.0, 0.0);
+    }
+    let n = normalize(vec2f(-dir.y, dir.x)) * px * max(P(1u), 0.5) * 0.5;
+    let at_b = (k == 1u || k == 2u || k == 4u);
+    let side = select(-1.0, 1.0, k == 2u || k == 4u || k == 5u);
+    var o = a;
+    var p = pa;
+    if (at_b) {
+        o = b;
+        p = pb;
+    }
+    p = p + n * side;
+    o.pos = vec4f(p, 0.0, 1.0);
+    if (a.pos.x > 3.0 || b.pos.x > 3.0) {
+        o.pos = vec4f(4.0, 4.0, 0.0, 1.0);
+    }
+    return o;
 }
 
 @fragment

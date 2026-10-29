@@ -697,10 +697,17 @@ impl PhosphorApp {
                 }
                 let e = comp.new_effect("pts_move").unwrap();
                 comp.layer_mut(part(mv)).unwrap().effects = vec![e];
-                let mut e = comp.new_effect("pts_dots").unwrap();
+                let render_id = match std::env::var("PHOSPHOR_POINTS_MODE").as_deref() {
+                    Ok("lines") => "pts_lines",
+                    Ok("mesh") => "pts_mesh",
+                    _ => "pts_dots",
+                };
+                let mut e = comp.new_effect(render_id).unwrap();
                 if model.is_some() {
-                    e.values[13] = 1.0;
                     e.values[1] = 6.0;
+                }
+                if render_id == "pts_mesh" {
+                    e.values[10] = 0.8;
                 }
                 comp.layer_mut(part(render)).unwrap().effects = vec![e];
                 let mut wired = comp.connect_boxes(cid, &[], shape, mv, 0);
