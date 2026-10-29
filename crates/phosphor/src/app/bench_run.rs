@@ -919,6 +919,13 @@ impl PhosphorApp {
                     for (t, look) in [(0.0, first), (20.0, other), (40.0, first)] {
                         comp.timeline.set_look(pid, t, look);
                     }
+                    // Two cues: one per look.
+                    for (name, look) in [("Verse", first), ("Finale", other)] {
+                        comp.lasers.projectors[0].look = look;
+                        let cue = comp.record_cue(name.into());
+                        comp.cues.cues.push(cue);
+                    }
+                    comp.lasers.projectors[0].look = first;
                 }
                 // PHOSPHOR_LASER_ZONES=1: two zones (the right one keystoned, showing the test pattern's look) and a
                 // dark area.

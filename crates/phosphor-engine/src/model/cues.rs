@@ -49,6 +49,16 @@ pub struct CueSlice {
     pub mesh: Vec<[f32; 2]>,
 }
 
+/// A laser projector as a cue remembers it: its look and brightness. (Arming isn't kept: a cue never turns lasers
+/// on.)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CueLaser {
+    pub id: u64,
+    pub look: u64,
+    pub brightness: f32,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Cue {
@@ -57,6 +67,9 @@ pub struct Cue {
     pub layers: Vec<CueLayer>,
     /// Mapping slices on every output (old cues have none: the mapping stays as it is).
     pub slices: Vec<CueSlice>,
+    /// Laser projectors (old cues have none: the lasers stay as they are) and the lasers' master brightness.
+    pub lasers: Vec<CueLaser>,
+    pub laser_master: f32,
     pub master_fade: f32,
     /// Seconds to glide into this cue.
     pub fade: f32,
@@ -75,13 +88,15 @@ pub struct Cue {
     pub sets_sources: bool,
     pub sets_master: bool,
     pub sets_slices: bool,
+    /// Laser looks and brightness.
+    pub sets_lasers: bool,
     /// A cue group (a song, a scene): cues with the same group name in a row are one group (empty = none).
     pub group: String,
 }
 
 impl Default for Cue {
     fn default() -> Self {
-        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), master_fade: 1.0, fade: 2.0, follow: 0.0, at: None, daily: None, days: 0, sets_sources: true, sets_master: true, sets_slices: true, group: String::new() }
+        Self { id: 0, name: "Cue".into(), layers: Vec::new(), slices: Vec::new(), lasers: Vec::new(), laser_master: 1.0, sets_lasers: true, master_fade: 1.0, fade: 2.0, follow: 0.0, at: None, daily: None, days: 0, sets_sources: true, sets_master: true, sets_slices: true, group: String::new() }
     }
 }
 
@@ -166,6 +181,9 @@ pub struct CueFade {
     /// (slice id, opacity, corners, mesh points) at the start, and slices switched off when the fade ends.
     slices: Vec<(u64, f32, [[f32; 2]; 4], Vec<[f32; 2]>)>,
     slices_off: Vec<u64>,
+    /// (laser projector id, brightness at the start), and the lasers' master at the start.
+    lasers: Vec<(u64, f32)>,
+    laser_master_from: f32,
 }
 
 impl CueFade {
@@ -184,7 +202,8 @@ impl Composition {
             .flat_map(|o| o.mapping.surfaces.iter())
             .map(|s| CueSlice { id: s.id, enabled: s.enabled, opacity: s.opacity, corners: s.corners, mesh: s.mesh.as_ref().map_or(Vec::new(), |m| m.points.clone()) })
             .collect();
-        Cue { id: self.new_id(), name, layers, slices, master_fade: self.master_fade, ..Default::default() }
+        let lasers = self.lasers.projectors.iter().map(|p| CueLaser { id: p.id, look: p.look, brightness: p.brightness }).collect();
+        Cue { id: self.new_id(), name, layers, slices, lasers, laser_master: self.lasers.master, master_fade: self.master_fade, ..Default::default() }
     }
 
     /// Starts going to cue `index`: sources change now (through each layer's transition), numbers glide
@@ -192,7 +211,24 @@ impl Composition {
     pub fn go_to_cue(&mut self, index: usize, now: f32) -> Option<CueFade> {
         let cue = self.cues.cues.get(index)?.clone();
         let secs = cue.fade.max(0.0);
-        let mut fade = CueFade { cue: index, start: now, secs, master_from: self.master_fade, layers: Vec::new(), turn_off: Vec::new(), slices: Vec::new(), slices_off: Vec::new() };
+        let mut fade = CueFade {
+            cue: index,
+            start: now,
+            secs,
+            master_from: self.master_fade,
+            layers: Vec::new(),
+            turn_off: Vec::new(),
+            slices: Vec::new(),
+            slices_off: Vec::new(),
+            lasers: Vec::new(),
+            laser_master_from: self.lasers.master,
+        };
+        // Lasers: the look switches now, the brightness glides.
+        for c in cue.lasers.iter().filter(|_| cue.sets_lasers) {
+            let Some(p) = self.lasers.projector_mut(c.id) else { continue };
+            p.look = c.look;
+            fade.lasers.push((p.id, p.brightness));
+        }
         for c in &cue.layers {
             let Some(l) = self.layers.iter_mut().find(|l| l.id == c.id) else { continue };
             let switching = cue.sets_sources && l.source != c.source;
@@ -272,6 +308,14 @@ impl Composition {
             if t >= 1.0 && off {
                 l.enabled = false;
                 l.opacity = c.opacity;
+            }
+        }
+        if cue.sets_lasers && !cue.lasers.is_empty() {
+            self.lasers.master = lerp(fade.laser_master_from, cue.laser_master);
+            for (id, from) in &fade.lasers {
+                if let (Some(c), Some(p)) = (cue.lasers.iter().find(|c| c.id == *id), self.lasers.projector_mut(*id)) {
+                    p.brightness = lerp(*from, c.brightness);
+                }
             }
         }
         let lerp2 = |a: [f32; 2], b: [f32; 2]| [lerp(a[0], b[0]), lerp(a[1], b[1])];
@@ -409,6 +453,33 @@ fn csv_row(line: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A cue keeps each laser's look and brightness and the lasers' master: going to it switches the look at once,
+    /// glides the brightness, never arms the lasers; old cues (no lasers) leave them alone.
+    #[test]
+    fn cues_keep_laser_looks() {
+        let mut comp = Composition::default();
+        comp.lasers.projectors.push(crate::LaserProjector { id: 7, look: 1, brightness: 0.2, ..Default::default() });
+        comp.lasers.master = 0.5;
+        let cue = comp.record_cue("Song".into());
+        comp.cues.cues.push(Cue { fade: 2.0, ..cue });
+        comp.lasers.projectors[0].look = 2;
+        comp.lasers.projectors[0].brightness = 1.0;
+        comp.lasers.master = 1.0;
+        let fade = comp.go_to_cue(0, 10.0).unwrap();
+        assert_eq!(comp.lasers.projectors[0].look, 1, "the look switches at once");
+        comp.step_cue(&fade, 11.0);
+        assert!((comp.lasers.projectors[0].brightness - 0.6).abs() < 1e-4, "half way: {}", comp.lasers.projectors[0].brightness);
+        comp.step_cue(&fade, 12.0);
+        assert!((comp.lasers.projectors[0].brightness - 0.2).abs() < 1e-5 && (comp.lasers.master - 0.5).abs() < 1e-5);
+        assert!(!comp.lasers.armed);
+        let old: Cue = serde_json::from_str(r#"{"name": "Old"}"#).unwrap();
+        comp.cues.cues.push(old);
+        comp.lasers.projectors[0].look = 3;
+        let fade = comp.go_to_cue(1, 20.0).unwrap();
+        comp.step_cue(&fade, 30.0);
+        assert!(comp.lasers.projectors[0].look == 3 && (comp.lasers.master - 0.5).abs() < 1e-5, "an old cue leaves the lasers be");
+    }
 
     #[test]
     fn cue_groups_follow_the_list() {

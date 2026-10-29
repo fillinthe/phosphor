@@ -147,7 +147,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             }
         }
     });
-    help(ui, "Cues remember every layer and every mapping slice (on/off, opacity, corners). GO fades to the next one; sources change through each layer's transition, slices glide into place.");
+    help(ui, "Cues remember every layer, every mapping slice (on/off, opacity, corners) and every laser's look and brightness. GO fades to the next one; sources change through each layer's transition, slices glide into place, lasers switch looks.");
     ui.add_space(4.0);
     let mut fire = None;
     let mut update = None;
@@ -156,6 +156,9 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
     // For "Changes": every layer (name, and how it is now, for adding it to a cue).
     let layer_now: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
     let mut add_layer: Option<(usize, u64)> = None;
+    // For each cue's laser menu: projector and look names.
+    let projector_names: Vec<(u64, String)> = st.comp.lasers.projectors.iter().map(|p| (p.id, p.name.clone())).collect();
+    let look_names: Vec<(u64, String)> = st.comp.lasers.looks.iter().map(|l| (l.id, l.name.clone())).collect();
     let progress = st.cue_run.fade.as_ref().map(|f| (f.cue, if f.secs > 0.0 { ((now as f32 - f.start) / f.secs).clamp(0.0, 1.0) } else { 1.0 }));
     // Group names in use, for each cue's Group menu.
     let mut group_names: Vec<String> = st.comp.cues.cues.iter().map(|c| c.group.clone()).filter(|g| !g.is_empty()).collect();
@@ -201,6 +204,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         }
                     }
                     daily_editor(ui, cue);
+                    laser_menu(ui, cue, &projector_names, &look_names);
                     let group_title = if cue.group.is_empty() { "Group".to_string() } else { cue.group.clone() };
                     ui.menu_button(label(icon::FOLDER, &group_title), |ui| {
                         help(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
@@ -218,6 +222,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         toggle(ui, &mut cue.sets_sources, "Sources (clips, generators)");
                         toggle(ui, &mut cue.sets_master, "Master fade");
                         toggle(ui, &mut cue.sets_slices, "Mapping slices");
+                        toggle(ui, &mut cue.sets_lasers, "Laser looks").on_hover_text("Each laser's look and brightness (never arms them)");
                         ui.separator();
                         ui.label(RichText::new("Layers").small());
                         for (id, name) in &layer_now {
@@ -271,12 +276,42 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             let keep: Vec<u64> = c.layers.iter().map(|l| l.id).collect();
             c.layers = fresh.layers.into_iter().filter(|l| keep.contains(&l.id)).collect();
             c.master_fade = fresh.master_fade;
+            (c.lasers, c.laser_master) = (fresh.lasers, fresh.laser_master);
         }
     }
     if let Some(i) = remove {
         st.comp.cues.cues.remove(i);
         st.cue_run.current = st.cue_run.current.and_then(|c| if c == i { None } else if c > i { Some(c - 1) } else { Some(c) });
     }
+}
+
+/// The lasers a cue sets: its look (one laser) or how many, opening each laser's look and brightness to change.
+fn laser_menu(ui: &mut egui::Ui, cue: &mut phosphor_engine::Cue, projectors: &[(u64, String)], looks: &[(u64, String)]) {
+    if !cue.sets_lasers || cue.lasers.is_empty() {
+        return;
+    }
+    let look_name = |id: u64| looks.iter().find(|(l, _)| *l == id).map_or("(removed look)".to_string(), |l| l.1.clone());
+    let title = match cue.lasers.as_slice() {
+        [one] => look_name(one.look),
+        many => format!("{} lasers", many.len()),
+    };
+    ui.menu_button(label(icon::PROJECTOR_SCREEN, &title), |ui| {
+        ui.set_min_width(240.0);
+        for c in &mut cue.lasers {
+            let name = projectors.iter().find(|(p, _)| *p == c.id).map_or("(removed laser)", |p| p.1.as_str());
+            crate::ui::heading(ui, name);
+            crate::ui::dropdown(ui, ("cue_laser_look", c.id), 200.0).selected_text(look_name(c.look)).show_ui(ui, |ui| {
+                for (id, n) in looks {
+                    crate::ui::pick_value(ui, &mut c.look, *id, n);
+                }
+            });
+            Level::percent(&mut c.brightness, "Brightness").default(0.5).width(200.0).show(ui);
+        }
+        Level::percent(&mut cue.laser_master, "All lasers").default(1.0).width(200.0).show(ui);
+        help(ui, "Going to this cue switches each laser to its look and glides the brightness. It never arms the lasers.");
+    })
+    .response
+    .on_hover_text("The laser looks this cue sets");
 }
 
 /// "1:02:03.5", "2:03" or plain seconds → seconds.
