@@ -338,6 +338,8 @@ pub struct LaserProjector {
     pub zones: Vec<LaserZone>,
     /// Areas the beam never lights (a balcony, a doorway), in its scan area.
     pub dark: Vec<LaserArea>,
+    /// Its row in the clip grid: a look per column (0 = an empty cell). Launching a column switches to that look.
+    pub clips: Vec<u64>,
 }
 
 /// A part of a projector's area showing its own look, placed and straightened (its corners pinned onto a surface
@@ -412,6 +414,7 @@ impl Default for LaserProjector {
             test_pattern: false,
             zones: Vec::new(),
             dark: Vec::new(),
+            clips: Vec::new(),
         }
     }
 }
@@ -471,6 +474,15 @@ impl Lasers {
         self.projectors.iter_mut().find(|p| p.id == id)
     }
 
+    /// Column `col` launched: each projector with a look in that column switches to it.
+    pub fn trigger_column(&mut self, col: usize) {
+        for p in &mut self.projectors {
+            if let Some(&look) = p.clips.get(col).filter(|l| **l != 0) {
+                p.look = look;
+            }
+        }
+    }
+
     /// A projector's or a zone's brightness (`ControlTarget::LaserBrightness` takes either id).
     pub fn brightness(&self, id: u64) -> Option<f32> {
         self.projectors.iter().find_map(|p| if p.id == id { Some(p.brightness) } else { p.zones.iter().find(|z| z.id == id).map(|z| z.brightness) })
@@ -492,6 +504,18 @@ impl Lasers {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A projector's clip row: launching a column switches to the look in it; an empty cell leaves the look be.
+    #[test]
+    fn columns_switch_laser_looks() {
+        let mut lasers = Lasers { projectors: vec![LaserProjector { id: 1, look: 5, clips: vec![0, 7, 8], ..Default::default() }], ..Default::default() };
+        lasers.trigger_column(0);
+        assert_eq!(lasers.projectors[0].look, 5, "empty cell");
+        lasers.trigger_column(2);
+        assert_eq!(lasers.projectors[0].look, 8);
+        lasers.trigger_column(9);
+        assert_eq!(lasers.projectors[0].look, 8, "past the row's end");
+    }
 
     /// Colour as settings: red / green / blue, and hue round the wheel keeping the brightness.
     #[test]

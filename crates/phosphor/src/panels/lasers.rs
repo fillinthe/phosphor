@@ -14,6 +14,13 @@ struct Dev {
     kind: String,
 }
 
+/// A look's colour wherever looks are listed over time or in a grid (the Timeline's laser lanes, the clip grid).
+pub(crate) fn look_colour(looks: &[(u64, String)], look: u64) -> Color32 {
+    let i = looks.iter().position(|(id, _)| *id == look).unwrap_or(0);
+    let [r, g, b] = phosphor_engine::laser::hue(i as f32 * 0.17 + 0.5).map(|c| (c * 255.0) as u8);
+    Color32::from_rgb(r, g, b)
+}
+
 /// Which look and shape the Designer shows (kept for the session).
 #[derive(Clone, Copy, Default)]
 struct Picked {
