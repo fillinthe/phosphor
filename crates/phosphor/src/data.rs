@@ -54,15 +54,20 @@ impl DataRun {
 impl State {
     /// Fills the data modulators and fires events. Once per frame, after the live feeds.
     pub(crate) fn run_data(&mut self, now: f64) {
-        for (t, v) in run(&mut self.data, &mut self.comp, &self.feeds, &self.mod_inputs.shared, now) {
-            self.set_control(&t, v, now);
+        for (t, to, v) in run(&mut self.data, &mut self.comp, &self.feeds, &self.mod_inputs.shared, now) {
+            if let Some(t) = t {
+                self.set_control(&t, v, now);
+            }
+            if let Some(to) = to {
+                self.control.send_to(&self.comp, &to, v);
+            }
         }
     }
 }
 
 /// One frame of the data boxes: the modulators' values and words, fetches started, and the events to fire
-/// (target, value).
-pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data::Feeds, shared: &[(u64, f32)], now: f64) -> Vec<(phosphor_engine::ControlTarget, f32)> {
+/// (control to set, message to send, value).
+pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data::Feeds, shared: &[(u64, f32)], now: f64) -> Vec<(Option<phosphor_engine::ControlTarget>, Option<phosphor_engine::SendTo>, f32)> {
     {
         if !comp.modulators.iter().any(|m| m.data.is_some() || m.event.is_some()) {
             return Vec::new();
@@ -178,17 +183,18 @@ pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data:
             });
         }
         // Events: a value crossing its threshold.
-        let mut fire: Vec<(phosphor_engine::ControlTarget, f32)> = Vec::new();
+        let mut fire: Vec<(Option<phosphor_engine::ControlTarget>, Option<phosphor_engine::SendTo>, f32)> = Vec::new();
         for m in &comp.modulators {
             let Some(e) = &m.event else { continue };
             let value = shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
             let above = value >= e.threshold;
             let was = data.above.insert(m.id, above);
-            if let (Some(was), Some(t)) = (was, &e.target)
+            if let Some(was) = was
                 && was != above
                 && (above || e.both_ways)
+                && (e.target.is_some() || e.send.is_some())
             {
-                fire.push((t.clone(), e.value));
+                fire.push((e.target.clone(), e.send.clone(), e.value));
             }
         }
         fire
@@ -229,8 +235,15 @@ mod tests {
         // The event: below, then above (fires once), then still above (quiet).
         assert!(step(&mut data, &mut comp, &shared, 108.0).is_empty());
         shared[0] = (4, 0.9);
-        assert_eq!(step(&mut data, &mut comp, &shared, 109.0), vec![(phosphor_engine::ControlTarget::MasterFade, 0.25)], "fired");
+        assert_eq!(step(&mut data, &mut comp, &shared, 109.0), vec![(Some(phosphor_engine::ControlTarget::MasterFade), None, 0.25)], "fired");
         assert!(step(&mut data, &mut comp, &shared, 110.0).is_empty(), "not again while above");
+        // Sending only (no control): fires too, with the message.
+        let osc = phosphor_engine::SendTo::Osc { address: "/show/hit".into() };
+        comp.modulators[3].event = Some(Trigger { threshold: 0.5, target: None, value: 1.0, send: Some(osc.clone()), ..Default::default() });
+        shared[0] = (4, 0.1);
+        step(&mut data, &mut comp, &shared, 111.0);
+        shared[0] = (4, 0.8);
+        assert_eq!(step(&mut data, &mut comp, &shared, 112.0), vec![(None, Some(osc), 1.0)]);
         let _ = std::fs::remove_file(path);
     }
 }

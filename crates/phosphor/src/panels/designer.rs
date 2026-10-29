@@ -410,7 +410,16 @@ impl View<'_> {
                 e.target = Some(t);
             }
             Level::percent(&mut e.value, "Set it to").default(1.0).width(width).show(ui);
-            crate::ui::toggle(ui, &mut e.both_ways, "Both ways").on_hover_text("Fire on the way back down too");
+            crate::ui::toolbar(ui, |ui| {
+                crate::ui::toggle(ui, &mut e.both_ways, "Both ways").on_hover_text("Fire on the way back down too");
+                let mut sends = e.send.is_some();
+                if crate::ui::toggle(ui, &mut sends, "Sends").on_hover_text("Also sends the value out (OSC to the Control Surface's OSC out, MIDI, an Arduino pin)").changed() {
+                    e.send = sends.then(|| phosphor_engine::SendTo::Osc { address: "/phosphor/event".into() });
+                }
+            });
+            if let Some(to) = &mut e.send {
+                crate::ui::toolbar(ui, |ui| crate::ui::send_to_editor(ui, to));
+            }
         }
         changed
     }

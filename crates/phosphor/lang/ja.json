@@ -324,6 +324,7 @@
 "Also record a copy": "コピーも録画",
 "Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.": "このウィジェットの値を、誰が動かしても動くたびに他のアプリ(TouchDesigner、照明、Resolumeなど)にも送ります。送信先はパネル上部のOSC出力で設定します。",
 "Also send to": "送信先を追加",
+"Also sends the value out (OSC to the Control Surface's OSC out, MIDI, an Arduino pin)": "値も送ります（コントロールサーフェスの OSC 出力へ OSC、MIDI、Arduino のピン）",
 "Also sends the value out (OSC to the Control Surface's OSC out, or MIDI)": "値も送信します(コントロールサーフェスのOSC出力へOSC、またはMIDI)",
 "Also:": "ほか:",
 "Also: Audio beat (kick) under any slider's wave button.": "ほか: オーディオビート(キック)は、任意のスライダーの波ボタンの下にあります。",

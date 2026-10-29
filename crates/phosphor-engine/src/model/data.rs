@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::ControlTarget;
+use super::{ControlTarget, SendTo};
 
 /// Where a Data modulator's value comes from.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -92,7 +92,8 @@ pub struct DataLive {
     pub problem: Option<String>,
 }
 
-/// An event: when the modulator's value crosses `threshold` upward, `target` is set to `value`.
+/// An event: when the modulator's value crosses `threshold` upward, `target` is set to `value` and / or `value` is
+/// sent out (`send`: OSC, MIDI, an Arduino pin).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Trigger {
@@ -101,11 +102,12 @@ pub struct Trigger {
     pub value: f32,
     /// Fire on the way down too (back below the threshold), with `value` again.
     pub both_ways: bool,
+    pub send: Option<SendTo>,
 }
 
 impl Default for Trigger {
     fn default() -> Self {
-        Trigger { threshold: 0.5, target: None, value: 1.0, both_ways: false }
+        Trigger { threshold: 0.5, target: None, value: 1.0, both_ways: false, send: None }
     }
 }
 

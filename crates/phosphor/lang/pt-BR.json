@@ -324,6 +324,7 @@
 "Also record a copy": "Gravar também uma cópia",
 "Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.": "Envia também o valor deste widget a outro app (TouchDesigner, luzes, Resolume…) sempre que mudar, não importa quem o mova. Defina o destino em OSC out, no topo do painel.",
 "Also send to": "Enviar também para",
+"Also sends the value out (OSC to the Control Surface's OSC out, MIDI, an Arduino pin)": "Também envia o valor (OSC para a saída OSC da superfície de controle, MIDI, um pino de Arduino)",
 "Also sends the value out (OSC to the Control Surface's OSC out, or MIDI)": "Também envia o valor para fora (OSC para o OSC out da Superfície de Controle, ou MIDI)",
 "Also:": "Também:",
 "Also: Audio beat (kick) under any slider's wave button.": "Também: batida de áudio (bumbo) sob o botão de onda de qualquer slider.",
