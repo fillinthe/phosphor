@@ -53,15 +53,18 @@ fn effects_list_body(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mu
         if add.clicked() {
             action = Some(FxAction::Browse(Some(add.rect.left_bottom())));
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            // Icons only: the row has to fit narrow columns (names on hover).
-            if crate::ui::command_if(ui, clipboard_len > 0, icon::CLIPBOARD_TEXT).on_hover_text("Paste: append the copied chain").clicked() {
-                action = Some(FxAction::PasteChain);
-            }
+        // (Right after Add effect, not pinned to the right edge: in a narrow column or a longer language a
+        // right-aligned pair landed on the button.)
+        ui.add_space(6.0);
+        {
+            // Icons only: the row has to fit narrow columns (names on hover); each wraps on its own.
             if crate::ui::command_if(ui, !effects.is_empty(), icon::COPY).on_hover_text("Copy this whole chain").clicked() {
                 action = Some(FxAction::CopyChain);
             }
-        });
+            if crate::ui::command_if(ui, clipboard_len > 0, icon::CLIPBOARD_TEXT).on_hover_text("Paste: append the copied chain").clicked() {
+                action = Some(FxAction::PasteChain);
+            }
+        }
     });
     if effects.is_empty() {
         help(ui, empty);
