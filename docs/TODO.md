@@ -61,7 +61,12 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       layer per picture shown (files, Syphon from VDMX / Resolume, cameras, generators as the nearest built-in one).
       Open as a new project or add to the open one. All 24 old .mad files read. *(tests; renders checked by snapshot;
       not installed)* Left out: cues, MIDI / OSC mappings, LED fixtures, MadMapper's effects, a slice's own masks.
-- [ ] **VDMX deeper**: layers, their sources and effects (inside archived Cocoa objects in the .vdmx5).
+- [x] **VDMX deeper**: the first preset's layers (names, opacity, blend, fit) and effect chains, the main output's
+      effects as MASTER effects, the canvas size. ISF effects come as the same shader with their settings; Quartz
+      Composer and Core Image ones as the nearest built-in (the message names them; crops are left out). All 40 layers
+      in the old .vdmx5 files read. *(tests; real show imported by bench; not installed)* **Needs you:** layer order
+      (read as bottom first, like Resolume). Left out: VDMX data sources, controller mappings, layer sources (VDMX
+      layers play what's triggered from the media bin: the clips go on the first layer).
 - [ ] **Resolume deeper**: generators, effects, layer opacity / blend, Advanced Output (slices).
 
 ## From show testing (2026-10-25)

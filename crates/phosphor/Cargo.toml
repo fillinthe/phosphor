@@ -44,6 +44,8 @@ velato = { version = "0.12", default-features = false }
 kurbo = "0.13"
 peniko = "0.6"
 base64 = "0.22"
+# Binary property lists (the archived Cocoa objects inside VDMX projects: layers, effects).
+plist = { version = "1.7", default-features = false }
 # Elgato Stream Deck keys / dials as controller input, key pictures as feedback (HID).
 elgato-streamdeck = "0.14"
 # MilkDrop presets (.milk) as layers: a MilkDrop engine on wgpu, rendering on Phosphor's own GPU device.

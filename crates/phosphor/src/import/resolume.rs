@@ -40,6 +40,10 @@ pub struct AvcFile {
     /// Layer names, bottom first (Resolume's layer 1 first).
     pub layers: Vec<String>,
     pub decks: Vec<AvcDeck>,
+    /// How each layer looks (same order as `layers`; empty = names only): opacity, blend, fit, effects.
+    pub looks: Vec<super::looks::LayerLook>,
+    /// Effects on the whole picture (the main output's).
+    pub master: Vec<super::looks::LookEffect>,
 }
 
 fn param<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {
@@ -113,6 +117,8 @@ pub fn parse(text: &str) -> Result<AvcFile, String> {
         bpm,
         layers: layers.into_iter().map(|(_, n)| n).collect(),
         decks,
+        looks: Vec::new(),
+        master: Vec::new(),
     })
 }
 
@@ -165,6 +171,11 @@ pub fn to_composition(file: &AvcFile, decks: &[usize]) -> (Composition, usize) {
         offset += deck.columns;
     }
     comp.clip_columns = offset.max(1);
+    // Each layer's look (opacity, blend, fit, effects) and the master effects, when the file says.
+    for (look, id) in file.looks.iter().zip(&ids) {
+        super::looks::apply(&mut comp, *id, look);
+    }
+    super::looks::apply_master(&mut comp, &file.master);
     for d in decks.iter().filter_map(|d| file.decks.get(*d)) {
         if !d.name.is_empty() && !comp.media_collections.contains(&d.name) {
             comp.media_collections.push(d.name.clone());

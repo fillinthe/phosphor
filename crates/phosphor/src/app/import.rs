@@ -39,6 +39,33 @@ impl State {
         }
     }
 
+    /// Opens the Resolume / VDMX project waiting in `avc_import` (its chosen decks / pages) as a new project. Says
+    /// what came across in the notice.
+    pub fn finish_avc_import(&mut self) {
+        let Some(imp) = self.avc_import.take() else { return };
+        let decks: Vec<usize> = imp.chosen.iter().enumerate().filter(|(_, c)| **c).map(|(i, _)| i).collect();
+        let (comp, skipped) = to_composition(&imp.file, &decks);
+        self.load_composition(comp);
+        self.project_path = None;
+        self.clip_page = 0;
+        let missing = self.missing_media().len();
+        let mut msg = format!("Imported {} from {}.", imp.file.name, if imp.vdmx { "VDMX" } else { "Resolume" });
+        if skipped > 0 {
+            msg.push_str(&format!(" {skipped} clips without a media file (generators, audio, Resolume sources) were left out."));
+        }
+        let (stand_ins, left) = crate::import::looks::report(&imp.file.looks, &imp.file.master);
+        if !stand_ins.is_empty() {
+            msg.push_str(&format!(" Effects drawn by the nearest built-in one: {}.", stand_ins.join(", ")));
+        }
+        if !left.is_empty() {
+            msg.push_str(&format!(" Effects left out: {}.", left.join(", ")));
+        }
+        if missing > 0 {
+            msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
+        }
+        self.notice = Some(msg);
+    }
+
     /// Brings the MadMapper project waiting in `mad_import` in: as a new project, or added to this one. Says what
     /// came across in the notice.
     pub fn finish_mad_import(&mut self, new: bool) {
@@ -152,7 +179,7 @@ impl PhosphorApp {
             crate::ui::hint(
                 ui,
                 if imp.vdmx {
-                    "The media bin's pages and clips come across onto a Clips layer. VDMX layer setups, effects and data sources don't."
+                    "The media bin's pages and clips come across, and the layers of the first preset: names, opacity, blend, fit and effects (ISF effects as the same shader; others as the nearest built-in one). VDMX's data sources and controller mappings don't."
                 } else {
                     "Layers, clips (video and image files), clip names, tempo and canvas size come across. Resolume's generators, effects and mapping don't."
                 },
@@ -161,21 +188,7 @@ impl PhosphorApp {
             go = crate::ui::command_if(ui, imp.chosen.iter().any(|c| *c), crate::ui::label(icon::CHECK, "Open as a new project")).clicked();
         });
         if go {
-            let imp = self.state.avc_import.take().unwrap();
-            let decks: Vec<usize> = imp.chosen.iter().enumerate().filter(|(_, c)| **c).map(|(i, _)| i).collect();
-            let (comp, skipped) = to_composition(&imp.file, &decks);
-            self.state.load_composition(comp);
-            self.state.project_path = None;
-            self.state.clip_page = 0;
-            let missing = self.state.missing_media().len();
-            let mut msg = format!("Imported {} from {}.", imp.file.name, if imp.vdmx { "VDMX" } else { "Resolume" });
-            if skipped > 0 {
-                msg.push_str(&format!(" {skipped} clips without a media file (generators, audio, Resolume sources) were left out."));
-            }
-            if missing > 0 {
-                msg.push_str(&format!(" {missing} media files aren't on this Mac — plug in the drive, or Media › Find missing media…"));
-            }
-            self.state.notice = Some(msg);
+            self.state.finish_avc_import();
         } else if !open {
             self.state.avc_import = None;
         }
