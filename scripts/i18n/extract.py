@@ -51,7 +51,7 @@ def main():
     keys = set()
     for dirpath, _, files in (w for src in SRCS for w in os.walk(src)):
         for f in files:
-            if not f.endswith(".rs") or f in ("tests.rs", "gpu_tests.rs") or "shaders" in dirpath and f.endswith(".wgsl"):
+            if not f.endswith(".rs") or f in ("tests.rs", "gpu_tests.rs", "mcp.rs") or "shaders" in dirpath and f.endswith(".wgsl"):
                 continue
             text = open(os.path.join(dirpath, f), encoding="utf-8").read()
             for m in LIT.finditer(text):

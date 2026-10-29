@@ -41,6 +41,8 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             st.dialogs.pick_file(crate::dialogs::Purpose::ImportTouchOsc, Some(("TouchOSC layout", &["tosc", "xml"])));
         }
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    ai_assistants(ui);
     let control = &mut st.control;
     crate::ui::toolbar(ui, |ui| {
         crate::ui::toggle(ui, &mut control.soft_takeover, "Soft takeover")
@@ -520,6 +522,20 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
     let _ = id;
 }
 
+/// AI assistants (any app that speaks MCP) drive Phosphor through `Phosphor --mcp` (mcp.rs): copy its setup.
+#[cfg(not(target_arch = "wasm32"))]
+fn ai_assistants(ui: &mut egui::Ui) {
+    let exe = std::env::current_exe().map_or_else(|_| "/Applications/Phosphor.app/Contents/MacOS/Phosphor".into(), |p| p.display().to_string());
+    crate::ui::toolbar(ui, |ui| {
+        ui.label(label(icon::SPARKLE, "AI assistants"));
+        if crate::ui::command(ui, "Copy MCP settings").on_hover_text("Phosphor's MCP server settings (JSON): add them to your AI app's MCP servers").clicked() {
+            let config = serde_json::json!({ "mcpServers": { "phosphor": { "command": exe, "args": ["--mcp"] } } });
+            ui.ctx().copy_text(serde_json::to_string_pretty(&config).unwrap_or_default());
+        }
+    });
+    help(ui, "An AI assistant can list Phosphor's controls, set them and look at the output (while the Session is on). It talks to Phosphor over OSC on this Mac, like TouchOSC.");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,3 +553,4 @@ mod tests {
         assert_eq!(where_is(&comp, &ControlTarget::EffectMix(999_999)), None, "gone");
     }
 }
+

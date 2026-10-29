@@ -554,6 +554,10 @@ impl ControlHub {
             native::start_gamepads(self.tx.clone());
             self.next_query = 0.0;
             if let Some(q) = &self.oscquery {
+                // Where AI assistants (`Phosphor --mcp`) find this Phosphor.
+                if !cfg!(test) {
+                    crate::mcp::write_link(&crate::mcp::Link { osc_port: self.osc_port, query_port: q.port });
+                }
                 self.osc_status.push_str(" · ");
                 self.osc_status.push_str(&format!("OSC Query on http://{}:{}", self.local_ip.clone().unwrap_or_else(|| "localhost".into()), q.port));
             }
