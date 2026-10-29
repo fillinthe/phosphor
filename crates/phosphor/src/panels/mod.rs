@@ -289,7 +289,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     /// The open tab of each group in its panel's colour (what kind of panel it is) with an outline of it; the
-    /// others dimmed, so which one is open shows at a glance.
+    /// panel last clicked filled with it; the others dimmed, so which one is open (and which one you're in) shows.
     fn tab_style_override(&self, tab: &Tab, global: &egui_dock::TabStyle) -> Option<egui_dock::TabStyle> {
         let hue = match tab {
             Tab::MyPanel(_) => Some(crate::theme::Hue::Control),
@@ -298,9 +298,16 @@ impl egui_dock::TabViewer for Viewer<'_> {
         let full = hue.map_or(Color32::from_gray(230), |h| h.color());
         let dim = hue.map_or(Color32::from_gray(140), |h| h.color().gamma_multiply(0.6));
         let mut style = global.clone();
-        for s in [&mut style.active, &mut style.focused, &mut style.active_with_kb_focus, &mut style.focused_with_kb_focus] {
+        for s in [&mut style.active, &mut style.active_with_kb_focus] {
             s.text_color = full;
             s.outline_color = full.gamma_multiply(0.7);
+        }
+        // The panel last clicked (where keys and clicks go): its tab filled with its colour, words in black, like the
+        // area you're in at the top.
+        for s in [&mut style.focused, &mut style.focused_with_kb_focus] {
+            s.bg_fill = full;
+            s.text_color = Color32::BLACK;
+            s.outline_color = full;
         }
         for s in [&mut style.inactive, &mut style.inactive_with_kb_focus] {
             s.text_color = dim;
