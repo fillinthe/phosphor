@@ -19,7 +19,7 @@ pub struct PaletteDrag {
 }
 
 const CATEGORY_ORDER: &[&str] =
-    &["Color", "Film", "Blur", "Light", "Distort", "Stylize", "Retro", "Time", "3D", "Key", "Patterns", "Motion", "Utility", "Yours", "ISF", "FFGL", "Other"];
+    &["Color", "Film", "Blur", "Light", "Distort", "Stylize", "Retro", "Time", "3D", "Key", "Tracking", "Patterns", "Motion", "Points", "Utility", "Yours", "ISF", "FFGL", "Other"];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PreviewMode {

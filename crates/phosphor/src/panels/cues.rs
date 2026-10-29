@@ -121,11 +121,11 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     };
-    crate::ui::field(ui, "When the project opens", |ui| {
+    crate::ui::field(ui, "On open", |ui| {
         cue_pick(ui, "open_cue", &mut st.comp.cues.open_cue);
         ui.separator();
         let mut idle = st.comp.cues.idle_minutes > 0.0;
-        if toggle(ui, &mut idle, "When nobody's touched anything for").on_hover_text("Installations: no mouse, keys or controller for a while, go to this cue (once, until someone's back)").changed() {
+        if toggle(ui, &mut idle, "Idle for").on_hover_text("Installations: when nobody has touched the mouse, keys or a controller for this long, go to this cue (once, until someone's back)").changed() {
             st.comp.cues.idle_minutes = if idle { 10.0 } else { 0.0 };
         }
         if idle {
