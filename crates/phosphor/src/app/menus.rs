@@ -291,15 +291,22 @@ impl PhosphorApp {
                 }
                 ui.separator();
                 // Short on room (narrow window, in-window menus): the next buttons become icons, names on hover.
-                let compact = ui.available_width() < 560.0;
+                // (Also when, last frame, these ran into the buttons on the right: longer words in another language,
+                // a narrow window. It goes back once there's plenty of room.)
+                // Two steps: Output, Blackout and Search go to icons first; then Surprise too.
+                let squeezed_key = egui::Id::new("top_bar_squeezed");
+                let squeezed: u8 = ui.ctx().data(|d| d.get_temp(squeezed_key)).unwrap_or(0);
+                let narrow = ui.available_width() < 560.0;
+                let (compact, compact_dice) = (narrow || squeezed >= 1, narrow || squeezed >= 2);
                 let named = |glyph: &str, name: &str| if compact { glyph.to_string() } else { format!("{glyph} {name}") };
+                let named_dice = |glyph: &str, name: &str| if compact_dice { glyph.to_string() } else { format!("{glyph} {name}") };
                 // One-click visuals: the dice = Surprise me; the arrow = every Quick action.
                 // The dice says where it will land: the selected layer, else every layer.
                 let target = self.state.selected.filter(|id| self.state.comp.layers.iter().any(|l| l.id == *id));
                 let where_ = target.map_or("all layers".to_string(), |id| crate::ui::layer_name(&self.state.comp.layers, id));
                 // One width whatever's selected (a long layer name is cut short; the whole name is in the tooltip).
                 let short: String = if where_.chars().count() > 10 { format!("{}…", where_.chars().take(9).collect::<String>()) } else { where_.clone() };
-                let (text, widest) = (named(icon::DICE_FIVE, &format!("Surprise · {short}")), named(icon::DICE_FIVE, "Surprise · all layers"));
+                let (text, widest) = (named_dice(icon::DICE_FIVE, &format!("Surprise · {short}")), named_dice(icon::DICE_FIVE, "Surprise · all layers"));
                 let dice = crate::ui::steady_action_button(ui, crate::ui::Act::Go, text.clone(), &[&text, &widest]).on_hover_text(format!(
                     "{} (⌘R: all layers). Click: a new look on {where_}. The arrow: pick several layers. Right-click to map a pad or key.",
                     super::Quick::Surprise.about()
@@ -378,7 +385,8 @@ impl PhosphorApp {
                     self.state.map_mode = !self.state.map_mode;
                     self.state.control.learning = None;
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let left_end = ui.cursor().left();
+                let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     account_button(ui, &mut self.state);
                     crate::support::donate_button(ui);
                     // Only while a new version is waiting: right next to Donate, filled so it stands out.
@@ -447,7 +455,21 @@ impl PhosphorApp {
                         self.state.bug.open = true;
                     }
                     // Frame rate and CPU live in the status line (bottom right), where there's room.
+                    ui.min_rect().left()
                 });
+                // Squeezed: the left part reached the right part (one more step). Room again: well clear of it by what
+                // the last step saved (about 190 points for Surprise's words, 260 for the other three).
+                let gap = right.inner - left_end;
+                let now_squeezed = match squeezed {
+                    _ if gap < 8.0 => (squeezed + 1).min(2),
+                    2 if gap > 200.0 => 1,
+                    1 if gap > 270.0 => 0,
+                    s => s,
+                };
+                if now_squeezed != squeezed {
+                    ui.ctx().data_mut(|d| d.insert_temp(squeezed_key, now_squeezed));
+                    ui.ctx().request_repaint();
+                }
             });
         });
     }
