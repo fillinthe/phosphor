@@ -537,10 +537,19 @@ impl Composition {
                     let s = feed_from(&pictures, net, id, 0);
                     // A render's second input: the picture its points take their colour from.
                     let colour = net.source_of(id, 1).and_then(|from| pictures.get(&from).copied()).unwrap_or(0);
+                    // A render fed (through Move / Particles) by a Model reads its points in order, three a triangle.
+                    let from_model = self.points_from_model(net, id);
                     if let Some(l) = self.layer_mut(parts[0]) {
                         l.source = s;
-                        if let Some(fx) = l.effects.first_mut() {
-                            fx.other = if crate::shaders::effect(&fx.effect).is_some_and(|d| crate::shaders::points_render(d.entry)) { colour } else { 0 };
+                        if let Some(fx) = l.effects.first_mut()
+                            && crate::shaders::effect(&fx.effect).is_some_and(|d| crate::shaders::points_render(d.entry))
+                        {
+                            fx.other = colour;
+                            if let Some(v) = fx.values.get_mut(13) {
+                                *v = if from_model { 1.0 } else { 0.0 };
+                            }
+                        } else if let Some(fx) = l.effects.first_mut() {
+                            fx.other = 0;
                         }
                     }
                     found.layers.push(parts[0]);
@@ -615,6 +624,21 @@ impl Composition {
                 }
             }
         }
+    }
+
+    /// Whether the points reaching box `id`'s first input come from a Model box (through points effects).
+    fn points_from_model(&self, net: &Network, id: u32) -> bool {
+        let mut cur = id;
+        for _ in 0..64 {
+            let Some(from) = net.source_of(cur, 0).and_then(|f| net.node(f)) else { return false };
+            let layer = from.parts.first().and_then(|p| self.layer(*p));
+            match from.kind {
+                NodeKind::Picture => return matches!(layer.map(|l| &l.source), Some(SourceSpec::Live { format, .. }) if format == crate::shaders::MODEL_POINTS),
+                NodeKind::Effect if layer.and_then(|l| l.effects.first()).is_some_and(|e| crate::shaders::points_out(&e.effect)) => cur = from.id,
+                _ => return false,
+            }
+        }
+        false
     }
 
     /// Number input `k` of box `n` follows modulator `from` (a linked modulation that sweeps the setting's whole
@@ -948,6 +972,13 @@ mod tests {
         assert_eq!(comp.layer(part(render)).unwrap().effects[0].other, part(pic), "colours from the plasma");
         assert!(comp.layer(part(render)).unwrap().in_mix);
         assert!(comp.layer(part(mv)).unwrap().is_data());
+        // A Model instead of the shape: the render reads in order on its own (through Move); a shape again: as a grid.
+        comp.layer_mut(part(shape)).unwrap().source = SourceSpec::Live { name: "m".into(), format: crate::shaders::MODEL_POINTS.into(), url: "x.obj".into() };
+        comp.sync_network(cid);
+        assert_eq!(comp.layer(part(render)).unwrap().effects[0].values[13], 1.0, "in order");
+        comp.layer_mut(part(shape)).unwrap().set_generator("pts_shape");
+        comp.sync_network(cid);
+        assert_eq!(comp.layer(part(render)).unwrap().effects[0].values[13], 0.0, "as a grid");
         // Unwire the colour: the render forgets it.
         let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
         net.disconnect(render, 1);

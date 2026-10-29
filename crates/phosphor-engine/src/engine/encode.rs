@@ -122,6 +122,27 @@ impl Engine {
             };
             let instances = crate::shaders::instances(pass.entry);
             let pipeline = self.gpu.pipeline_for(pass.entry, pass.target.texture().format()).clone();
+            // A points mesh draws with a depth buffer of its target's size (cleared each pass, never kept).
+            let depth = (pass.entry == "fs_pts_mesh").then(|| {
+                let size = pass.target.texture().size();
+                let key = (size.width, size.height);
+                self.depth
+                    .entry(key)
+                    .or_insert_with(|| {
+                        let t = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
+                            label: Some("points depth"),
+                            size: wgpu::Extent3d { width: key.0.max(1), height: key.1.max(1), depth_or_array_layers: 1 },
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: wgpu::TextureFormat::Depth32Float,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                            view_formats: &[],
+                        });
+                        t.create_view(&Default::default())
+                    })
+                    .clone()
+            });
             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(pass.entry),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -140,7 +161,11 @@ impl Engine {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: depth.as_ref().map(|view| wgpu::RenderPassDepthStencilAttachment {
+                    view,
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Discard }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: self.gpu_timer.as_ref().and_then(|t| t.writes(i, passes.len())),
                 occlusion_query_set: None,
                 multiview_mask: None,
@@ -252,12 +277,12 @@ pub(crate) fn points_vertices(entry: &str, p: &[[f32; 4]; 16]) -> u32 {
     let listed = p[3][1] > 0.5;
     match entry {
         "fs_pts_dots" => n * 6,
-        "fs_pts_lines" if listed => n & !1,
+        "fs_pts_lines" if listed => (n / 2) * 6,
         "fs_pts_lines" => {
             let mode = (p[3][0] + 0.5) as u32;
             let across = if mode == 1 { 0 } else { rows * (cols.saturating_sub(1)) };
             let down = if mode == 0 { 0 } else { cols * (rows.saturating_sub(1)) };
-            (across + down) * 2
+            (across + down) * 6
         }
         _ if listed => n - n % 3,
         _ => cols.saturating_sub(1) * rows.saturating_sub(1) * 6,

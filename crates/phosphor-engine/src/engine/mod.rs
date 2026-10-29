@@ -257,6 +257,8 @@ pub struct Engine {
     mix_format: wgpu::TextureFormat,
     /// The size of the comp being mixed (what a points render draws at).
     canvas: (u32, u32),
+    /// Depth buffers for points meshes, by size (made when first needed).
+    depth: HashMap<(u32, u32), wgpu::TextureView>,
     /// Each comp's own stack (at its size) when comps are drawn apart; swapped into `accum` while it's mixed.
     comp_accum: HashMap<u64, [Option<Target>; 4]>,
     output: Option<Target>,
@@ -344,6 +346,7 @@ impl Engine {
             accum: [None, None, None, None],
             mix_format: crate::gpu::FORMAT,
             canvas: (1920, 1080),
+            depth: HashMap::new(),
             comp_accum: HashMap::new(),
             output: None,
             output_generation: 0,

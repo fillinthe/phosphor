@@ -450,18 +450,10 @@ impl Engine {
                             u.p[2][0] = 0.0;
                         }
                         let res = self.layers.entry(res_id).or_default();
-                        let (tw, th) = if entry == "fs_pts_lines" {
-                            let scale = params.get(1).copied().unwrap_or(1.0).max(1.0);
-                            let size = ((canvas.0 as f32 / scale) as u32, (canvas.1 as f32 / scale) as u32);
-                            Target::ensure(&mut res.rutt, &self.gpu.device, "rutt", size.0, size.1);
-                            size
-                        } else {
-                            Target::ensure_format(&mut res.pts, &self.gpu.device, "points", canvas.0, canvas.1, self.mix_format);
-                            canvas
-                        };
-                        u.resolution = [tw.max(1) as f32, th.max(1) as f32];
+                        Target::ensure_format(&mut res.pts, &self.gpu.device, "points", canvas.0, canvas.1, self.mix_format);
+                        u.resolution = [canvas.0.max(1) as f32, canvas.1.max(1) as f32];
                         out = canvas;
-                        if entry == "fs_pts_lines" { res.rutt.as_ref().unwrap().view.clone() } else { res.pts.as_ref().unwrap().view.clone() }
+                        res.pts.as_ref().unwrap().view.clone()
                     } else if entry == "fs_rutt" || entry == "fs_rutt_points" {
                         let scale = params.get(6).copied().unwrap_or(2.0).max(1.0);
                         let (rw, rh) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);

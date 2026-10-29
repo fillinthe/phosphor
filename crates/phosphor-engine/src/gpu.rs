@@ -277,14 +277,21 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
         primitive: wgpu::PrimitiveState {
             topology: if points {
                 wgpu::PrimitiveTopology::PointList
-            } else if rutt || entry == "fs_pts_lines" {
+            } else if rutt {
                 wgpu::PrimitiveTopology::LineList
             } else {
                 wgpu::PrimitiveTopology::TriangleList
             },
             ..Default::default()
         },
-        depth_stencil: None,
+        // A points mesh keeps the nearest face (a depth buffer the encoder attaches); nothing else tests depth.
+        depth_stencil: (entry == "fs_pts_mesh").then_some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
             module,
