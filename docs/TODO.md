@@ -336,7 +336,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       LASER_FIELDS red / green / blue / hue, `LaserShape::set_field`, `hue_of`; all keyable on the timeline). **Laser looks on the Timeline done 2026-10-30** (`Timeline.laser_looks`
       `LookChange` by look id, `look_at` / `set_look`; lanes in `panels::timeline_lasers`; applied in `run_timeline`). **Laser cues done 2026-10-30** (`Cue.{lasers, laser_master, sets_lasers}`, `CueLaser`;
       look switches at GO, brightness glides; never arms; cue row laser menu). **Laser looks in the clip grid done 2026-10-30** (`LaserProjector.clips`,
-      `Lasers::trigger_column` from `Composition::trigger_column`; `panels::clip_lasers`).
+      `Lasers::trigger_column` from `Composition::trigger_column`; `panels::clip_lasers`). **Laser looks on the Control Surface done 2026-10-30** (`ControlTarget::LaserLook`;
+      surface Add › Laser look buttons).
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
       colours to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
       system, to see what it accepts.

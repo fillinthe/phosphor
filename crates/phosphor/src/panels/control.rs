@@ -272,7 +272,7 @@ fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Opti
         T::Surface(_) | T::SurfaceY(_) | T::SurfaceBar { .. } => Some((Tab::Surface, None, None)),
         T::Modulator(_) => Some((Tab::Modulators, None, None)),
         T::Fixture { .. } => Some((Tab::Leds, None, None)),
-        T::LaserShape { .. } | T::LaserBrightness(_) => Some((Tab::Lasers, None, None)),
+        T::LaserShape { .. } | T::LaserBrightness(_) | T::LaserLook { .. } => Some((Tab::Lasers, None, None)),
         T::App(_) => None,
     }
 }

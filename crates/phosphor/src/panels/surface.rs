@@ -54,6 +54,13 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                         ui.close();
                     }
                 }
+                if !st.comp.lasers.projectors.is_empty() && !st.comp.lasers.looks.is_empty() {
+                    ui.separator();
+                    if crate::ui::command(ui, label(icon::PROJECTOR_SCREEN, "Laser look buttons")).on_hover_text("A button per laser look (per laser), lit while it shows").clicked() {
+                        add_laser_buttons(&mut st.comp);
+                        ui.close();
+                    }
+                }
             });
             ui.label(RichText::new("OSC out").small().color(Color32::GRAY));
             ui.add(egui::TextEdit::singleline(&mut st.comp.surface.osc_host).hint_text("IP, e.g. 192.168.1.20").desired_width(110.0))
@@ -691,4 +698,21 @@ fn color_square(rect: egui::Rect) -> egui::Rect {
 fn color_strip(rect: egui::Rect) -> egui::Rect {
     let r = rect.shrink(3.0);
     egui::Rect::from_min_max(egui::pos2(r.left(), r.bottom() - (rect.height() * 0.16).clamp(10.0, 22.0)), r.max)
+}
+
+/// A button per laser look for every laser projector, wired to switch to it (`ControlTarget::LaserLook`), in the
+/// look's colour (as in the clip grid and the Timeline).
+pub(crate) fn add_laser_buttons(comp: &mut phosphor_engine::Composition) {
+    let looks: Vec<(u64, String)> = comp.lasers.looks.iter().map(|l| (l.id, l.name.clone())).collect();
+    let many = comp.lasers.projectors.len() > 1;
+    for p in &comp.lasers.projectors {
+        for (look, name) in &looks {
+            let id = comp.surface.add(WidgetKind::Button);
+            if let Some(w) = comp.surface.widget_mut(id) {
+                w.label = if many { format!("{} · {name}", p.name) } else { name.clone() };
+                w.color = super::lasers::look_colour(&looks, *look).to_array()[..3].try_into().unwrap_or([0, 200, 190]);
+                w.bindings = vec![phosphor_engine::Binding { target: ControlTarget::LaserLook { projector: p.id, look: *look }, range: Default::default() }];
+            }
+        }
+    }
 }

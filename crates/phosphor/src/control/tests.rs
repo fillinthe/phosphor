@@ -1070,3 +1070,23 @@ fn groups_and_layouts_are_controls() {
     assert_eq!(default_osc_address(&ControlTarget::Layout(b)), format!("/phosphor/layout/{b}"));
     assert!(all_targets(&comp).iter().any(|(t, name)| *t == ControlTarget::Layout(b) && name.contains("switch")));
 }
+
+/// A laser look button: a press switches the projector to the look, it's lit while showing it, a release does
+/// nothing, an unknown look is ignored; it's listed and has an OSC address.
+#[test]
+fn laser_look_buttons_switch_looks() {
+    let mut comp = Composition::default();
+    comp.lasers.looks = vec![phosphor_engine::LaserLook { id: 11, ..Default::default() }, phosphor_engine::LaserLook { id: 12, ..Default::default() }];
+    comp.lasers.projectors.push(phosphor_engine::LaserProjector { id: 5, look: 11, ..Default::default() });
+    let to = |look| ControlTarget::LaserLook { projector: 5, look };
+    let mut deferred = Vec::new();
+    assert_eq!((get_target(&comp, &to(11)), get_target(&comp, &to(12))), (Some(1.0), Some(0.0)));
+    set_target(&mut comp, &to(12), 1.0, &mut deferred);
+    assert_eq!(comp.lasers.projectors[0].look, 12);
+    set_target(&mut comp, &to(11), 0.0, &mut deferred);
+    assert_eq!(comp.lasers.projectors[0].look, 12, "a release does nothing");
+    set_target(&mut comp, &to(99), 1.0, &mut deferred);
+    assert_eq!(comp.lasers.projectors[0].look, 12, "no such look");
+    assert_eq!(default_osc_address(&to(12)), "/phosphor/laser/5/look/12");
+    assert!(all_targets(&comp).iter().any(|(t, name)| *t == to(12) && name.contains("look")));
+}

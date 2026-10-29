@@ -59,6 +59,10 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         }
         ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => comp.lasers.master,
         ControlTarget::LaserBrightness(id) => comp.lasers.brightness(*id)?,
+        ControlTarget::LaserLook { projector, look } => {
+            let p = comp.lasers.projectors.iter().find(|p| p.id == *projector)?;
+            on(comp.lasers.look(p.look).is_some_and(|l| l.id == *look))
+        }
         ControlTarget::Color { owner, part } => comp.color(*owner)?.unit(*part as usize),
         ControlTarget::Fixture { fixture, param } => comp.dmx.fixtures.iter().find(|f| f.id == *fixture)?.param(*param)?,
         ControlTarget::LayerFxBypass(id) => on(comp.mix_controls(*id)?.2),
@@ -290,6 +294,14 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::LaserBrightness(id) => {
             if let Some(b) = comp.lasers.brightness_mut(*id) {
                 *b = v.clamp(0.0, 1.0);
+            }
+        }
+        ControlTarget::LaserLook { projector, look } => {
+            if v > 0.5
+                && comp.lasers.looks.iter().any(|l| l.id == *look)
+                && let Some(p) = comp.lasers.projector_mut(*projector)
+            {
+                p.look = *look;
             }
         }
         ControlTarget::MaskFeather(id) => {
@@ -659,6 +671,9 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         for z in &p.zones {
             out.push((ControlTarget::LaserBrightness(z.id), format!("{} · {} · brightness", p.name, z.name)));
         }
+        for l in &comp.lasers.looks {
+            out.push((ControlTarget::LaserLook { projector: p.id, look: l.id }, format!("{} · look: {}", p.name, l.name)));
+        }
     }
     for look in &comp.lasers.looks {
         for (n, s) in look.shapes.iter().enumerate() {
@@ -698,6 +713,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         }
         ControlTarget::LaserBrightness(id) if *id == phosphor_engine::MASTER_ID => "/phosphor/laser/master".into(),
         ControlTarget::LaserBrightness(id) => format!("/phosphor/laser/{id}/brightness"),
+        ControlTarget::LaserLook { projector, look } => format!("/phosphor/laser/{projector}/look/{look}"),
         ControlTarget::MaskFeather(id) => format!("/phosphor/mask/{id}/soft_edge"),
         ControlTarget::MaskEnabled(id) => format!("/phosphor/mask/{id}/on"),
         ControlTarget::MaskInvert(id) => format!("/phosphor/mask/{id}/invert"),

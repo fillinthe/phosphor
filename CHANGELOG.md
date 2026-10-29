@@ -28,6 +28,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   playhead); drag a look to move when it starts, right-click for another look.
 - Laser looks in the clip grid: a row per laser under the layers, a look in each cell (right-click to place one);
   click a cell to switch the laser to it, and launching a column switches the lasers along with the video.
+- Laser looks on the Control Surface: Add › Laser look buttons makes a button per look (lit while it shows), and
+  switching a laser's look is a control like any other (MIDI, OSC /phosphor/laser/<laser>/look/<look>, events).
 - Laser cues: a cue remembers each laser's look and brightness and the lasers' master; going to it switches the
   looks and glides the brightness (it never arms the lasers). Each cue shows its look, and you can change it there.
 - Laser shape colours as sliders (red, green, blue and a hue sweep), so colour can be keyed on the timeline, cued or
