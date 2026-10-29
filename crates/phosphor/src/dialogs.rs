@@ -10,6 +10,10 @@ pub enum Purpose {
     LayerSource(u64),
     /// A laser file (.ild) for a Laser Designer shape.
     LaserFile(u64),
+    /// An image a Video trace shape traces.
+    LaserImage(u64),
+    /// A laser look's onion skin (a picture behind the Designer's canvas).
+    LaserOnion(u64),
     ImportFiles,
     WatchFolder,
     OpenProject,

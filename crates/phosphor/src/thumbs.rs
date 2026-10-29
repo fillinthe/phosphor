@@ -73,6 +73,11 @@ impl Thumbs {
         (size[1] > 0).then(|| size[0] as f32 / size[1] as f32)
     }
 
+    /// `aspect` of a `get_sized` picture.
+    pub fn aspect_sized(&self, path: &str, max: u32) -> Option<f32> {
+        if max == THUMB_W { self.aspect(path) } else { self.aspect(&format!("{path}{SIZE_SEP}{max}")) }
+    }
+
     pub fn is_pending(&self, path: &str) -> bool {
         self.pending.contains(path)
     }

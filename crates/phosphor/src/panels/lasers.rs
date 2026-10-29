@@ -192,7 +192,7 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
         if crate::ui::command(ui, label(icon::PLUS, "Look")).clicked() {
             let (look, shape) = (comp.new_id(), comp.new_id());
             let n = comp.lasers.looks.len() + 1;
-            comp.lasers.looks.push(LaserLook { id: look, name: format!("Look {n}"), shapes: vec![LaserShape { id: shape, ..Default::default() }] });
+            comp.lasers.looks.push(LaserLook { id: look, name: format!("Look {n}"), shapes: vec![LaserShape { id: shape, ..Default::default() }], ..Default::default() });
             for p in comp.lasers.projectors.iter_mut().filter(|p| p.look == 0) {
                 p.look = look;
             }
@@ -213,6 +213,7 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
                             LaserShapeKind::Text => LaserShape { size: 0.8, ..shape },
                             LaserShapeKind::File => LaserShape { size: 1.0, count: 30.0, motion: 0.0, ..shape },
                             LaserShapeKind::Trace => LaserShape { size: 1.0, count: 12.0, shape: 0.5, motion: 0.0, color: [1.0; 3], ..shape },
+                            LaserShapeKind::Drawing => LaserShape { size: 1.0, motion: 0.0, ..shape },
                             _ => shape,
                         };
                         look.shapes.push(shape);
@@ -232,21 +233,64 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     if !picked.shape.is_some_and(|id| look.shapes.iter().any(|s| s.id == id)) {
         picked.shape = look.shapes.first().map(|s| s.id);
     }
+    // The onion skin's picture (loaded off the UI thread) and its width / height.
+    let onion = (!look.onion.is_empty()).then(|| st.thumbs.get_sized(&look.onion, ONION_SIZE).map(|id| (id, st.thumbs.aspect_sized(&look.onion, ONION_SIZE).unwrap_or(1.0)))).flatten();
+    let mut choose_onion = false;
     ui.columns(2, |cols| {
         let mods = st.mod_inputs;
-        canvas(&mut cols[0], &look, t, &mods, picked, &mut st.comp.lasers, &inputs);
+        canvas(&mut cols[0], &look, t, &mods, picked, &mut st.comp.lasers, &inputs, onion);
+        if let Some(look) = st.comp.lasers.look_mut(picked.look) {
+            choose_onion = onion_row(&mut cols[0], look);
+        }
         shape_list(&mut cols[1], st, picked);
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    if choose_onion {
+        st.dialogs.pick_file(crate::dialogs::Purpose::LaserOnion(look.id), Some(("Picture", IMAGE_FILES)));
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = choose_onion;
+}
+
+/// Onion skins are loaded this big (long side, pixels).
+const ONION_SIZE: u32 = 1024;
+const IMAGE_FILES: &[&str] = &["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "heic", "psd", "svg", "gif"];
+
+/// The look's onion skin: choose a picture, how strongly it shows, remove it. True: open the picture chooser.
+fn onion_row(ui: &mut egui::Ui, look: &mut LaserLook) -> bool {
+    let mut choose = false;
+    crate::ui::toolbar(ui, |ui| {
+        if crate::ui::command(ui, label(icon::IMAGE, "Onion skin…")).on_hover_text("A picture shown faintly behind the canvas to draw over (the laser never shows it)").clicked() {
+            choose = true;
+        }
+        if !look.onion.is_empty() {
+            Level::percent(&mut look.onion_opacity, "Shows").default(0.35).width(110.0).show(ui);
+            let name = std::path::Path::new(&look.onion).file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned());
+            hint(ui, &name).on_hover_text(&look.onion);
+            if crate::ui::danger_button(ui, label(icon::X, "")).on_hover_text("No onion skin").clicked() {
+                look.onion.clear();
+            }
+        }
+    });
+    choose
 }
 
 /// The look drawn as the laser draws it (the traced path, lit parts glowing); click a shape to pick it, drag it to move it.
-fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::ModInputs, picked: &mut Picked, lasers: &mut phosphor_engine::Lasers, inputs: &LaserInputs) {
+/// A Drawing shape picked: clicks add corners and its corners can be dragged. `onion`: the onion skin's picture and
+/// width / height, drawn faintly behind (fitted as a traced picture is: its longer side across).
+#[allow(clippy::too_many_arguments)]
+fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::ModInputs, picked: &mut Picked, lasers: &mut phosphor_engine::Lasers, inputs: &LaserInputs, onion: Option<(egui::TextureId, f32)>) {
     let side = ui.available_width().min(560.0).max(160.0);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click_and_drag());
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 0.0, egui::Color32::from_rgb(4, 4, 8));
     let to_screen = |x: f32, y: f32| rect.center() + egui::vec2(x, -y) * (side * 0.5);
     let from_screen = |q: egui::Pos2| ((q.x - rect.center().x) / (side * 0.5), -(q.y - rect.center().y) / (side * 0.5));
+    if let Some((tex, aspect)) = onion {
+        let half = if aspect >= 1.0 { egui::vec2(1.0, 1.0 / aspect) } else { egui::vec2(aspect, 1.0) } * (side * 0.5);
+        let tint = egui::Color32::WHITE.gamma_multiply(look.onion_opacity.clamp(0.0, 1.0));
+        p.image(tex, egui::Rect::from_center_size(rect.center(), half * 2.0), egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), tint);
+    }
     // Grid: centre lines and the scan area's edge.
     let grid = egui::Stroke::new(1.0, egui::Color32::from_gray(28));
     p.line_segment([to_screen(-1.0, 0.0), to_screen(1.0, 0.0)], grid);
@@ -282,10 +326,43 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         }
     }
     // The picked shape: a ring where it is.
-    if let Some(s) = picked.shape.and_then(|id| look.shapes.iter().find(|s| s.id == id)) {
+    let picked_shape = picked.shape.and_then(|id| look.shapes.iter().find(|s| s.id == id));
+    if let Some(s) = picked_shape {
         p.circle_stroke(to_screen(s.x, s.y), 6.0, egui::Stroke::new(1.0, egui::Color32::WHITE));
     }
-    if let Some(pos) = resp.interact_pointer_pos() {
+    // A drawing: its corners as handles; a click adds one. (Corners are kept before the shape's place, size and
+    // turn: a click is turned back into them.)
+    if let Some(s) = picked_shape.filter(|s| s.kind == LaserShapeKind::Drawing) {
+        let turn = s.rotate.to_radians() + (s.spin as f64 * t * std::f64::consts::TAU) as f32;
+        let (sin, cos) = turn.sin_cos();
+        let size = s.size.max(0.01);
+        let place = |u: [f32; 2]| [s.x + (u[0] * cos - u[1] * sin) * size, s.y + (u[0] * sin + u[1] * cos) * size];
+        let unplace = |q: [f32; 2]| {
+            let (dx, dy) = ((q[0] - s.x) / size, (q[1] - s.y) / size);
+            [dx * cos + dy * sin, -dx * sin + dy * cos]
+        };
+        let mut corners = s.points.clone();
+        let mut changed = false;
+        for (i, u) in corners.iter_mut().enumerate() {
+            let q = place(*u);
+            let mut d = [0.0; 2];
+            crate::panels::mapping::point_handle(ui, egui::Id::new(("laser_drawing", s.id, i)), to_screen(q[0], q[1]), rect, egui::Color32::from_rgb(90, 220, 255), false, &mut d);
+            if d != [0.0; 2] {
+                *u = unplace([(q[0] + d[0] * 2.0).clamp(-1.0, 1.0), (q[1] - d[1] * 2.0).clamp(-1.0, 1.0)]);
+                changed = true;
+            }
+        }
+        if resp.clicked()
+            && let Some(pos) = resp.interact_pointer_pos()
+        {
+            let (x, y) = from_screen(pos);
+            corners.push(unplace([x, y]));
+            changed = true;
+        }
+        if changed && let Some(s) = lasers.shape_mut(s.id) {
+            s.points = corners;
+        }
+    } else if let Some(pos) = resp.interact_pointer_pos() {
         let (x, y) = from_screen(pos);
         if resp.drag_started() || resp.clicked() {
             // The nearest shape centre within reach.
@@ -314,6 +391,7 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     #[cfg(target_arch = "wasm32")]
     let file_error = |_: &str| None::<String>;
     let mut choose_file = None;
+    let mut choose_image = None;
     let (layers, lasers) = (&st.comp.layers, &mut st.comp.lasers);
     let Some(look) = lasers.look_mut(picked.look) else { return };
     let mut remove = None;
@@ -369,14 +447,45 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
         }
         LaserShapeKind::Trace => {
             crate::ui::toolbar(ui, |ui| {
-                let shown = if s.source == 0 { "The mix".to_string() } else { crate::ui::layer_name(layers, s.source) };
+                let shown = if !s.image.is_empty() {
+                    std::path::Path::new(&s.image).file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned())
+                } else if s.source == 0 {
+                    "The mix".to_string()
+                } else {
+                    crate::ui::layer_name(layers, s.source)
+                };
                 crate::ui::dropdown(ui, ("laser_trace", s.id), 160.0).selected_text(shown).show_ui(ui, |ui| {
-                    crate::ui::pick_value(ui, &mut s.source, 0, "The mix");
-                    crate::ui::layer_items(ui, layers, &mut s.source, |id| id);
+                    // (Picking the mix or a layer stops tracing an image.)
+                    let mut source = if s.image.is_empty() { Some(s.source) } else { None };
+                    crate::ui::pick_value(ui, &mut source, Some(0), "The mix");
+                    crate::ui::layer_items(ui, layers, &mut source, Some);
+                    if let Some(src) = source.filter(|_| !s.image.is_empty() || source != Some(s.source)) {
+                        s.source = src;
+                        s.image.clear();
+                    }
+                    if crate::ui::pick_item(ui, !s.image.is_empty(), "An image…").clicked() {
+                        choose_image = Some(s.id);
+                        ui.close();
+                    }
                 });
                 crate::ui::toggle(ui, &mut s.picture_colors, "Its colours").on_hover_text("Lines take the picture's colours (off: this shape's colour)");
             });
-            help(ui, "Outlines where the picture's brightness crosses the Level: bright shapes on dark work best (a silhouette, a logo, a camera with Remove background).");
+            if let Some(e) = file_error(&s.image) {
+                ui.colored_label(egui::Color32::from_rgb(255, 120, 90), format!("Can't read it: {e}"));
+            }
+            help(ui, "Outlines where the picture's brightness crosses the Level: bright shapes on dark work best (a silhouette, a logo, a camera with Remove background). An image traced here lines up with the same image as an onion skin.");
+        }
+        LaserShapeKind::Drawing => {
+            crate::ui::toolbar(ui, |ui| {
+                crate::ui::toggle(ui, &mut s.closed, "Closed").on_hover_text("The line comes back to where it started");
+                if crate::ui::command_if(ui, !s.points.is_empty(), "Undo corner").clicked() {
+                    s.points.pop();
+                }
+                if crate::ui::command_if(ui, !s.points.is_empty(), "Clear").clicked() {
+                    s.points.clear();
+                }
+            });
+            help(ui, "Click on the picture to add corners, drag them to move them. Pick an onion skin under the picture to trace over it by hand.");
         }
         _ => {}
     }
@@ -398,6 +507,10 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     if let Some(shape) = choose_file {
         st.dialogs.pick_file(crate::dialogs::Purpose::LaserFile(shape), Some(("Laser file", &["ild", "ILD"])));
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(shape) = choose_image {
+        st.dialogs.pick_file(crate::dialogs::Purpose::LaserImage(shape), Some(("Picture", IMAGE_FILES)));
+    }
     #[cfg(target_arch = "wasm32")]
-    let _ = choose_file;
+    let _ = (choose_file, choose_image);
 }

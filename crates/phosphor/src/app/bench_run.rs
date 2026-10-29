@@ -896,6 +896,14 @@ impl PhosphorApp {
                 if std::env::var_os("PHOSPHOR_LASER_TRACE").is_some() {
                     look.shapes.push(phosphor_engine::LaserShape { id: comp.new_id(), kind: phosphor_engine::LaserShapeKind::Trace, size: 1.0, count: 12.0, shape: 0.5, ..Default::default() });
                 }
+                // PHOSPHOR_LASER_ONION=picture: it as the look's onion skin, traced, and a drawing (picked) over it.
+                if let Ok(onion) = std::env::var("PHOSPHOR_LASER_ONION") {
+                    look.shapes.retain(|s| s.kind == phosphor_engine::LaserShapeKind::Text);
+                    look.shapes.push(phosphor_engine::LaserShape { id: comp.new_id(), kind: phosphor_engine::LaserShapeKind::Drawing, size: 1.0, color: [1.0, 0.9, 0.0], points: vec![[-0.8, 0.6], [0.0, 0.85], [0.8, 0.6]], ..Default::default() });
+                    look.shapes.push(phosphor_engine::LaserShape { id: comp.new_id(), kind: phosphor_engine::LaserShapeKind::Trace, image: onion.clone(), size: 1.0, count: 12.0, shape: 0.5, ..Default::default() });
+                    look.shapes.rotate_right(2);
+                    look.onion = onion;
+                }
                 // PHOSPHOR_LASER_TEST=1: the projector shows the test pattern.
                 let test_pattern = std::env::var_os("PHOSPHOR_LASER_TEST").is_some();
                 let id = comp.new_id();

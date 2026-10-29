@@ -22,12 +22,14 @@ pub enum LaserShapeKind {
     Text,
     /// A laser show file (.ild) playing (`LaserShape::file`).
     File,
-    /// A layer's or the mix's picture traced into outlines (`LaserShape::source`).
+    /// A layer's or the mix's picture, or an image file, traced into outlines (`LaserShape::source`, `image`).
     Trace,
+    /// A line drawn by hand on the Designer's canvas (`LaserShape::points`), e.g. over an onion skin.
+    Drawing,
 }
 
 impl LaserShapeKind {
-    pub const ALL: [LaserShapeKind; 11] = [
+    pub const ALL: [LaserShapeKind; 12] = [
         LaserShapeKind::Line,
         LaserShapeKind::Circle,
         LaserShapeKind::Polygon,
@@ -39,6 +41,7 @@ impl LaserShapeKind {
         LaserShapeKind::Text,
         LaserShapeKind::File,
         LaserShapeKind::Trace,
+        LaserShapeKind::Drawing,
     ];
 
     pub fn name(self) -> &'static str {
@@ -54,6 +57,7 @@ impl LaserShapeKind {
             LaserShapeKind::Text => "Text",
             LaserShapeKind::File => "Laser file",
             LaserShapeKind::Trace => "Video trace",
+            LaserShapeKind::Drawing => "Drawing",
         }
     }
 
@@ -68,7 +72,7 @@ impl LaserShapeKind {
             LaserShapeKind::Beams => Some(("Beams", 1.0, 24.0)),
             LaserShapeKind::File => Some(("Frames a second", 1.0, 60.0)),
             LaserShapeKind::Trace => Some(("Outlines", 1.0, 40.0)),
-            LaserShapeKind::Line | LaserShapeKind::Circle | LaserShapeKind::Text => None,
+            LaserShapeKind::Line | LaserShapeKind::Circle | LaserShapeKind::Text | LaserShapeKind::Drawing => None,
         }
     }
 
@@ -148,6 +152,12 @@ pub struct LaserShape {
     /// picture's colours (off: the shape's colour).
     pub source: u64,
     pub picture_colors: bool,
+    /// Video trace shapes: an image file traced instead of `source` (empty = trace `source`).
+    pub image: String,
+    /// Drawing shapes: the corners drawn (-1..1 before the shape's place, size and turn), and whether the line
+    /// comes back to its start.
+    pub points: Vec<[f32; 2]>,
+    pub closed: bool,
 }
 
 /// Modulation (LFO, sound, beat…) of a shape's settings.
@@ -184,6 +194,9 @@ impl Default for LaserShape {
             file: String::new(),
             source: 0,
             picture_colors: true,
+            image: String::new(),
+            points: Vec::new(),
+            closed: false,
         }
     }
 }
@@ -240,11 +253,15 @@ pub struct LaserLook {
     pub id: u64,
     pub name: String,
     pub shapes: Vec<LaserShape>,
+    /// Onion skin: a picture shown faintly behind the Designer's canvas to draw over (never sent to a laser), fitted
+    /// like a traced picture (its longer side across -1..1), and how strongly it shows.
+    pub onion: String,
+    pub onion_opacity: f32,
 }
 
 impl Default for LaserLook {
     fn default() -> Self {
-        Self { id: 0, name: "Look".into(), shapes: Vec::new() }
+        Self { id: 0, name: "Look".into(), shapes: Vec::new(), onion: String::new(), onion_opacity: 0.35 }
     }
 }
 
@@ -389,7 +406,7 @@ impl LaserLook {
             LaserShape { spin: -0.15, count: 5.0, ..shape(new_id(), LaserShapeKind::Star, 0.0, 0.0, 0.45, [0.0, 0.4, 1.0]) },
             LaserShape { count: 3.0, shape: 0.2, motion: 0.1, ..shape(new_id(), LaserShapeKind::Lissajous, 0.0, 0.0, 0.25, [0.0, 1.0, 0.3]) },
         ];
-        LaserLook { id: new_id(), name: "Starter".into(), shapes }
+        LaserLook { id: new_id(), name: "Starter".into(), shapes, ..Default::default() }
     }
 }
 
