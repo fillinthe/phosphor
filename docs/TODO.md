@@ -55,6 +55,14 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       (then they're keyable and mappable like the rest). *(2026-10-30, test; not installed)* OSC: /phosphor/layer/N/text_size,
       …/fade/K, …/mixer/K. A text layer redraws one picture at a time while its size moves (no pile-up of threads).
 
+- [x] **AI control** (owner, 2026-10-30: "a way for ai to control the app"): `Phosphor --mcp` is an MCP server
+      (any AI app that speaks MCP). Tools: list_controls (search), set_controls (several at once,
+      names and * wildcards), trigger (buttons), look (a picture of the output while the Session is on). It drives
+      the open Phosphor over OSC / OSC Query on this Mac (ports in ai-link.json in the settings folder), so locks
+      and everything else work as for TouchOSC. MIDI / OSC panel › AI assistants copies the settings. *(test + checked
+      against a running Phosphor: list, set, wildcards, picture; not yet tried from an AI app itself)*
+      Next: load a project, launch clips by name, add layers / effects (needs commands beyond controls).
+
 ## Importers (owner, 2026-10-30: "do all file importers", from the old shows on this Mac)
 
 - [x] **MadMapper (.mad)**: outputs, slices (quads, circles, triangles, lines), groups, masks, flips, opacity, and a

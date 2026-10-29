@@ -30,6 +30,8 @@ mod isf_lib;
 mod media;
 mod net;
 #[cfg(not(target_arch = "wasm32"))]
+mod mcp;
+#[cfg(not(target_arch = "wasm32"))]
 mod net_tls;
 #[cfg(not(target_arch = "wasm32"))]
 mod link;
@@ -167,6 +169,11 @@ fn main() -> eframe::Result {
         if let Some(pid) = args.get(2).and_then(|p| p.parse().ok()) {
             recovery::run_watchdog(pid);
         }
+        return Ok(());
+    }
+    // An AI assistant's connection (MCP over stdin / stdout): see mcp.rs. Prints nothing else.
+    if args.get(1).map(String::as_str) == Some("--mcp") {
+        mcp::run();
         return Ok(());
     }
     // Opens one FFGL plugin and prints what it says (run by the plugin scan, so a bad plugin only takes this down).
