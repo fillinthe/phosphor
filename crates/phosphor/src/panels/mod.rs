@@ -277,18 +277,36 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     fn title(&mut self, tab: &mut Tab) -> egui::WidgetText {
+        // (No colour here: `tab_style_override` colours it, full for the open tab, dimmed for the others.)
         match tab {
             Tab::Monitor(n) => format!("{} {}", icon::MONITOR, monitor_source_name(self.st, *n)).into(),
             Tab::MyPanel(n) => {
                 let name = self.st.comp.surface.pages.get(*n as usize).cloned().unwrap_or_else(|| tab.title());
-                RichText::new(format!("{} {name}", icon::SLIDERS_HORIZONTAL)).color(crate::theme::Hue::Control.color()).into()
+                format!("{} {name}", icon::SLIDERS_HORIZONTAL).into()
             }
-            // Coloured by what kind of panel it is.
-            _ => match tab.hue() {
-                Some(h) => RichText::new(tab.title()).color(h.color()).into(),
-                None => tab.title().into(),
-            },
+            _ => tab.title().into(),
         }
+    }
+
+    /// The open tab of each group in its panel's colour (what kind of panel it is) with an outline of it; the
+    /// others dimmed, so which one is open shows at a glance.
+    fn tab_style_override(&self, tab: &Tab, global: &egui_dock::TabStyle) -> Option<egui_dock::TabStyle> {
+        let hue = match tab {
+            Tab::MyPanel(_) => Some(crate::theme::Hue::Control),
+            _ => tab.hue(),
+        };
+        let full = hue.map_or(Color32::from_gray(230), |h| h.color());
+        let dim = hue.map_or(Color32::from_gray(140), |h| h.color().gamma_multiply(0.6));
+        let mut style = global.clone();
+        for s in [&mut style.active, &mut style.focused, &mut style.active_with_kb_focus, &mut style.focused_with_kb_focus] {
+            s.text_color = full;
+            s.outline_color = full.gamma_multiply(0.7);
+        }
+        for s in [&mut style.inactive, &mut style.inactive_with_kb_focus] {
+            s.text_color = dim;
+        }
+        style.hovered.text_color = full;
+        Some(style)
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Tab) {

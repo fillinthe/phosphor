@@ -719,7 +719,7 @@ impl PhosphorApp {
                 // PHOSPHOR_POINTS_LIGHT=1: a warm Light box from the upper right wired into the render's Light input.
                 if std::env::var("PHOSPHOR_POINTS_LIGHT").is_ok() {
                     let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
-                    let light = net.add(NodeKind::Effect, [560.0, 520.0]);
+                    let light = net.add(NodeKind::Effect, [1080.0, 220.0]);
                     comp.comp_mut(cid).unwrap().network = Some(net);
                     comp.sync_network(cid);
                     let lp = comp.comp(cid).unwrap().network.as_ref().unwrap().node(light).unwrap().parts[0];

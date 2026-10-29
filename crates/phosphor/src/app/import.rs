@@ -172,7 +172,7 @@ impl PhosphorApp {
         let mut open = true;
         let mut go = false;
         let app = if imp.vdmx { "VDMX" } else { "Resolume" };
-        egui::Window::new(format!("{} Import from {app}", icon::DOWNLOAD_SIMPLE)).open(&mut open).collapsible(false).resizable(true).default_width(460.0).show(ctx, |ui| {
+        crate::ui::dialog(ctx, format!("{} Import from {app}", icon::DOWNLOAD_SIMPLE)).open(&mut open).resizable(true).default_width(460.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(&imp.file.name).strong());
             crate::ui::hint(ui, format!("{} × {} · {} layers{}", imp.file.width, imp.file.height, imp.file.layers.len(), imp.file.bpm.map_or(String::new(), |b| format!(" · {b:.1} BPM"))));
             ui.add_space(4.0);
@@ -219,10 +219,19 @@ impl PhosphorApp {
         let Some(file) = &self.state.mad_import else { return };
         let mut open = true;
         let (mut new, mut add) = (false, false);
-        egui::Window::new(format!("{} Import from MadMapper", icon::DOWNLOAD_SIMPLE)).open(&mut open).collapsible(false).resizable(true).default_width(460.0).show(ctx, |ui| {
+        crate::ui::dialog(ctx, format!("{} Import from MadMapper", icon::DOWNLOAD_SIMPLE)).open(&mut open).resizable(true).default_width(460.0).show(ctx, |ui| {
             ui.label(egui::RichText::new(&file.name).strong());
             let [slices, groups, masks, lines, fixtures, _] = file.counts();
-            crate::ui::hint(ui, format!("{} outputs · {slices} slices · {groups} groups · {masks} masks · {lines} line shapes", file.outputs.len()));
+            crate::ui::counts(
+                ui,
+                &[
+                    (file.outputs.len(), "{0} output", "{0} outputs"),
+                    (slices, "{0} slice", "{0} slices"),
+                    (groups, "{0} group", "{0} groups"),
+                    (masks, "{0} mask", "{0} masks"),
+                    (lines, "{0} line shape", "{0} line shapes"),
+                ],
+            );
             ui.add_space(4.0);
             ui.label("Pictures the slices show (each becomes a layer):");
             crate::ui::column_scroll(ui).max_height(200.0).show(ui, |ui| {
@@ -241,13 +250,13 @@ impl PhosphorApp {
             });
             let mut left = Vec::new();
             if file.cues > 0 {
-                left.push(format!("{} cues", file.cues));
+                left.push(if file.cues == 1 { "1 cue".to_string() } else { format!("{} cues", file.cues) });
             }
             if file.mappings > 0 {
-                left.push(format!("{} MIDI / OSC mappings", file.mappings));
+                left.push(if file.mappings == 1 { "1 MIDI / OSC mapping".to_string() } else { format!("{} MIDI / OSC mappings", file.mappings) });
             }
             if fixtures > 0 {
-                left.push(format!("{fixtures} LED fixtures"));
+                left.push(if fixtures == 1 { "1 LED fixture".to_string() } else { format!("{fixtures} LED fixtures") });
             }
             crate::ui::help(ui, "Slices keep their corners, shapes, groups and the part of the picture they show. MadMapper's own generators are drawn by the nearest built-in one; its effects don't come across.");
             if !left.is_empty() {

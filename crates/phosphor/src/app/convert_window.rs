@@ -43,7 +43,7 @@ impl PhosphorApp {
         }
         let mut open = true;
         let mut done_output: Option<String> = None;
-        egui::Window::new(format!("{} Convert", icon::FILM_STRIP)).open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
+        crate::ui::dialog(ctx, format!("{} Convert", icon::FILM_STRIP)).open(&mut open).collapsible(false).resizable(false).default_width(440.0).show(ctx, |ui| {
             crate::ui::heading(ui, &c.name);
             let probe = match &c.probe {
                 Some(Ok(p)) => p.clone(),

@@ -45,7 +45,7 @@ pub(crate) fn tool_window(ctx: &egui::Context, title: &str, open: &mut bool, det
         return;
     }
     let mut still_open = true;
-    egui::Window::new(title).open(&mut still_open).collapsible(false).resizable(true).default_width(width).show(ctx, |ui| {
+    crate::ui::dialog(ctx, title).open(&mut still_open).collapsible(false).resizable(true).default_width(width).show(ctx, |ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             if crate::ui::small_command(ui, icon::ARROW_SQUARE_OUT).on_hover_text("Open in its own window (drag it to another screen)").clicked() {
                 *detached = true;

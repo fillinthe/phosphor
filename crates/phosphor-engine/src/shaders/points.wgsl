@@ -51,14 +51,18 @@ fn pt_turn(p: vec3f, t: vec3f) -> vec3f {
 @fragment
 fn gen_pts_shape(in: VOut) -> @location(0) vec4f {
     let uv = in.uv;
+    // The texel grid stretched to reach both ends (first texel = 0, last = 1): a closed shape's last column meets
+    // its first and a sphere's rows reach its poles (texel middles left a seam and a hole at each pole).
+    let cells = max(u.resolution, vec2f(2.0));
+    let edge = clamp((uv * cells - 0.5) / (cells - 1.0), vec2f(0.0), vec2f(1.0));
     let shape = u32(P(0u) + 0.5);
     let size = P(1u);
     let seed = vec3f(P(3u), P(3u) * 0.37, P(3u) * 0.71);
     var p = vec3f(0.0);
     if (shape == 1u) {
         // Sphere, evenly covered.
-        let lon = uv.x * TAU;
-        let lat = acos(1.0 - 2.0 * uv.y);
+        let lon = edge.x * TAU;
+        let lat = acos(1.0 - 2.0 * edge.y);
         p = 0.5 * vec3f(sin(lat) * cos(lon), cos(lat), sin(lat) * sin(lon));
     } else if (shape == 2u) {
         // Cube: six faces, a strip each.
@@ -75,8 +79,8 @@ fn gen_pts_shape(in: VOut) -> @location(0) vec4f {
         }
     } else if (shape == 3u) {
         // Ring (a torus).
-        let big = uv.x * TAU;
-        let small = uv.y * TAU;
+        let big = edge.x * TAU;
+        let small = edge.y * TAU;
         let r = 0.36 + 0.14 * cos(small);
         p = vec3f(r * cos(big), 0.14 * sin(small), r * sin(big));
     } else if (shape == 4u) {
@@ -175,18 +179,21 @@ fn pt_texel(c: u32, r: u32) -> vec2i {
     if (P(13u) > 0.5) {
         return vec2i(i32(min(c, size.x - 1u)), i32(min(r, size.y - 1u)));
     }
-    let g = pt_grid();
-    return vec2i(i32(((c * 2u + 1u) * size.x) / (g.x * 2u)), i32(((r * 2u + 1u) * size.y) / (g.y * 2u)));
+    // Edge to edge: the first and last points read the first and last texels (a closed shape's seam meets, a
+    // sphere's poles are reached).
+    let g = max(pt_grid(), vec2u(2u)) - 1u;
+    let last = size - 1u;
+    return vec2i(i32((min(c, g.x) * last.x + g.x / 2u) / g.x), i32((min(r, g.y) * last.y + g.y / 2u) / g.y));
 }
 
 fn pt_load(c: u32, r: u32) -> vec4f {
     return textureLoad(tex0, pt_texel(c, r), 0);
 }
 
-// Where (c, r) sits in the grid, 0..1 (for the picture's colour).
+// Where (c, r) sits in the grid, 0..1 edge to edge like `pt_texel` (for the picture's colour).
 fn pt_uv(c: u32, r: u32) -> vec2f {
-    let g = vec2f(pt_grid());
-    return vec2f((f32(c) + 0.5) / g.x, (f32(r) + 0.5) / g.y);
+    let g = max(vec2f(pt_grid()) - 1.0, vec2f(1.0));
+    return vec2f(f32(c) / g.x, f32(r) / g.y);
 }
 
 fn pt_view(p: vec3f) -> vec3f {

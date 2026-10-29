@@ -24,7 +24,7 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
     let mut only: Option<u64> = ctx.data(|d| d.get_temp(only_key)).flatten().filter(|id| st.comp.dmx.fixtures.iter().any(|f| f.id == *id));
     let busy = st.led_scan.busy();
     let mut open = true;
-    egui::Window::new(label(icon::SCAN, "Find LEDs with a camera")).open(&mut open).default_width(420.0).show(ctx, |ui| {
+    crate::ui::dialog(ctx, label(icon::SCAN, "Find LEDs with a camera")).open(&mut open).default_width(420.0).show(ctx, |ui| {
         help(ui, "The lights blink in coded patterns while a camera watches them; each light is placed where the camera saw it. Then the picture lands on the lights the way the camera sees them, however they're hung. Aim the camera at all the lights, keep it still and darken the room.");
         ui.add_enabled_ui(!busy, |ui| {
             if cameras.is_empty() {

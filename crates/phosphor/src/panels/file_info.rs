@@ -126,7 +126,7 @@ pub(crate) fn file_info_window(ctx: &egui::Context, st: &mut State) {
     let text = describe(&item, probe.as_ref(), uses(&st.comp, &item.path));
     let mut open = true;
     let mut copy: Option<Vec<EffectState>> = None;
-    egui::Window::new(format!("{} File info", icon::INFO)).id(egui::Id::new("file_info")).open(&mut open).default_width(420.0).resizable(true).collapsible(false).show(ctx, |ui| {
+    crate::ui::dialog(ctx, format!("{} File info", icon::INFO)).id(egui::Id::new("file_info")).open(&mut open).default_width(420.0).resizable(true).collapsible(false).show(ctx, |ui| {
         crate::ui::heading(ui, &item.name);
         crate::ui::toolbar(ui, |ui| {
             if crate::ui::command(ui, crate::ui::label(icon::COPY, "Copy all text")).clicked() {
