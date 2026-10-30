@@ -215,7 +215,8 @@ pub struct State {
     pub gdrop: crate::gdrop::GDrops,
     /// 3D models shown as points (Designer).
     pub models: crate::models::Models,
-    /// Data boxes (readings, web, timers, tables) and events.
+    /// Data boxes (readings, web, timers, tables) and events (the desktop app: they read files, threads and the web).
+    #[cfg(not(target_arch = "wasm32"))]
     pub data: crate::data::DataRun,
     /// Designer undo: each comp's network as it was before each change (newest last).
     pub designer_undo: HashMap<u64, Vec<phosphor_engine::Network>>,
@@ -236,6 +237,7 @@ pub struct State {
     #[cfg(not(target_arch = "wasm32"))]
     pub avc_import: Option<import::AvcImport>,
     /// A MadMapper project read and waiting for "new project" or "add to this one".
+    #[cfg(not(target_arch = "wasm32"))]
     pub mad_import: Option<crate::import::madmapper::MadFile>,
     /// A missing-media search running in the background.
     #[cfg(not(target_arch = "wasm32"))]

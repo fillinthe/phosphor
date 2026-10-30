@@ -114,6 +114,7 @@ mod milkdrop;
 #[cfg(not(target_arch = "wasm32"))]
 mod gdrop;
 mod models;
+#[cfg(not(target_arch = "wasm32"))]
 mod data;
 #[cfg(not(target_arch = "wasm32"))]
 mod online;

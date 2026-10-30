@@ -286,6 +286,7 @@ impl PhosphorApp {
                 link: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 avc_import: None,
+                #[cfg(not(target_arch = "wasm32"))]
                 mad_import: None,
                 #[cfg(not(target_arch = "wasm32"))]
                 relink: None,
@@ -316,6 +317,7 @@ impl PhosphorApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 gdrop: Default::default(),
                 models: Default::default(),
+                #[cfg(not(target_arch = "wasm32"))]
                 data: Default::default(),
                 designer_undo: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
