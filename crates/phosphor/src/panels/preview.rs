@@ -135,9 +135,10 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     }
     let font = egui::FontId::monospace(11.0);
     let galley = ui.painter().layout_no_wrap(info, font.clone(), Color32::from_white_alpha(170));
+    // On the picture's corner, not the panel's (a tall panel letterboxes the picture far below its top).
     let pill = egui::Rect::from_min_max(
-        rect.right_top() + egui::vec2(-galley.size().x - 18.0, 6.0),
-        rect.right_top() + egui::vec2(-4.0, galley.size().y + 14.0),
+        frame.right_top() + egui::vec2(-galley.size().x - 18.0, 6.0),
+        frame.right_top() + egui::vec2(-4.0, galley.size().y + 14.0),
     );
     ui.painter().rect_filled(pill, 4.0, Color32::from_black_alpha(150));
     ui.painter().galley(pill.min + egui::vec2(7.0, 4.0), galley, Color32::WHITE);
@@ -146,7 +147,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     if let Some(who) = st.web_active(now).map(str::to_string) {
         let text = format!("{} {who} is controlling from the web · Take over", icon::DEVICE_MOBILE);
-        let at = egui::Rect::from_min_size(rect.left_top() + egui::vec2(6.0, 6.0), egui::vec2(rect.width().min(380.0), 22.0));
+        let at = egui::Rect::from_min_size(frame.left_top() + egui::vec2(6.0, 6.0), egui::vec2(frame.width().min(380.0), 22.0));
         let take = ui.put(at, crate::ui::callout(text, crate::support::DONATE_ORANGE)).on_hover_text("Ignore phones and browsers until you hand control back (status line, or Output › Web Control)");
         if take.clicked() {
             st.set_web_control(false);

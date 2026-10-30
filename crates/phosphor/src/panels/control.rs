@@ -6,7 +6,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     let control = &mut st.control;
     crate::ui::heading(ui, "MIDI");
     if control.midi_ports.is_empty() {
-        help(ui, "No MIDI inputs found. Plug in a controller and press Reconnect.");
+        crate::ui::empty_note(ui, "No MIDI inputs found. Plug in a controller and press Reconnect.");
     } else {
         hint(ui, format!("Listening on: {}", control.midi_ports.join(", ")));
     }
@@ -202,7 +202,7 @@ fn monitor(ui: &mut egui::Ui, st: &mut State) {
             hint(ui, format!("{} messages", control.recent.len()));
         });
         if control.recent.is_empty() {
-            help(ui, "Nothing yet: move a knob, press a pad, or send OSC to this Mac.");
+            crate::ui::empty_note(ui, "Nothing yet: move a knob, press a pad, or send OSC to this Mac.");
             return;
         }
         let now = web_time::Instant::now();
@@ -361,7 +361,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
     let mut remove = None;
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         if comp.control_maps.is_empty() && map_draft.is_none() {
-            help(ui, &format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
+            crate::ui::empty_note(ui, &format!("None yet. Press Listen and move a control, or right-click any slider or button {} Listen, or use MAP in the top bar.", icon::ARROW_RIGHT));
         }
         let places: Vec<_> = comp.control_maps.iter().map(|m| where_is(comp, &m.target)).collect();
         let clashes = comp.mapping_clashes();

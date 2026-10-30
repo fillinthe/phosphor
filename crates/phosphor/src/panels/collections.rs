@@ -59,7 +59,7 @@ pub(crate) fn collection_header(ui: &mut egui::Ui, st: &mut State, name: &str, a
             });
         }
         if count == 0 {
-            help(ui, "Empty: right-click files › Collections, or Add folder…");
+            crate::ui::empty_note(ui, "Empty: right-click files › Collections, or Add folder…");
         }
     });
 }

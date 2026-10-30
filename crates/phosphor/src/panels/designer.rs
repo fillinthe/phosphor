@@ -61,7 +61,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
                 st.comp.start_network(c);
             }
         });
-        help(ui, "Boxes wired together instead of a stack of layers: a Picture into an Effect into the Output. Each box shows its picture; drag from a box's right dot to another's left dot to wire them. The comp's layers stay as they are.");
+        crate::ui::empty_note(ui, "Boxes wired together instead of a stack of layers: a Picture into an Effect into the Output. Each box shows its picture; drag from a box's right dot to another's left dot to wire them. The comp's layers stay as they are.");
         return;
     }
     let cid = cid.unwrap();
