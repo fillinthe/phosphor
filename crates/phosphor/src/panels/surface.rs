@@ -70,7 +70,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
             help(ui, "Drag to move · corner to resize · right-click to map");
         } else if st.comp.surface.on_page().next().is_none() {
-            help(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
+            crate::ui::empty_note(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
         if only.is_some() {
             return;

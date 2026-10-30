@@ -399,7 +399,45 @@ impl<Tab> DockArea<'_, Tab> {
             tabs.len()
         };
 
+        // PHOSPHOR PATCH: fill the bar fairly. Upstream gives every tab the same share and lets a long title grow past
+        // it, so one long title pushes the last tab off the edge (and a scroll bar appears) even when all the titles
+        // fit. Long titles get what they need; the others split what's left.
+        let fair_widths: Option<Vec<f32>> = preferred_width.map(|share| {
+            let style = fade.unwrap_or_else(|| self.style.as_ref().unwrap()).clone();
+            let leaf = self.dock_state[path].get_leaf_mut().expect("This node must be a leaf");
+            let mut spacing = 0.0;
+            let mins: Vec<f32> = leaf
+                .tabs
+                .iter_mut()
+                .enumerate()
+                .map(|(i, tab)| {
+                    let tab_style = tab_viewer.tab_style_override(tab, &style.tab).unwrap_or(style.tab.clone());
+                    if i != 0 {
+                        spacing += tab_style.spacing;
+                    }
+                    let galley = tab_viewer.title(tab).into_galley(tabs_ui, None, f32::INFINITY, TextStyle::Button);
+                    let close = if self.show_close_buttons && tab_viewer.is_closeable(tab) { Style::TAB_CLOSE_BUTTON_SIZE.min(style.tab_bar.height) } else { 0.0 };
+                    tab_style.minimum_width.unwrap_or(0.0).at_least(galley.size().x + 16.0 + close)
+                })
+                .collect();
+            let mut room = share * mins.len() as f32 - spacing;
+            let mut sorted = mins.clone();
+            sorted.sort_by(|a, b| b.total_cmp(a));
+            let mut left = sorted.len() as f32;
+            for m in &sorted {
+                if *m > room / left {
+                    room -= m;
+                    left -= 1.0;
+                } else {
+                    break;
+                }
+            }
+            let fair = if left > 0.0 { (room / left).max(0.0) } else { 0.0 };
+            mins.iter().map(|m| m.max(fair)).collect()
+        });
+
         for tab_index in 0..tabs_len {
+            let preferred_width = fair_widths.as_ref().map(|w| w[tab_index]);
             let id = self
                 .id
                 .with((path.surface, "surface"))

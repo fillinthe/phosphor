@@ -328,7 +328,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         // Saved sets: pick one to select those slices and show only them.
         ui.menu_button(label(icon::STACK, "Sets"), |ui| {
             if o.mapping.solo_sets.is_empty() {
-                help(ui, "Select some slices, then save them as a set to show on their own in one click.");
+                crate::ui::empty_note(ui, "Select some slices, then save them as a set to show on their own in one click.");
             }
             let mut remove = None;
             for (k, (name, ids)) in o.mapping.solo_sets.iter().enumerate() {

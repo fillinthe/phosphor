@@ -110,7 +110,7 @@ pub(crate) fn colour_targets(ui: &mut egui::Ui, id: impl std::hash::Hash + std::
         paint.remove(i);
     }
     if reds.is_empty() {
-        help(ui, "Nothing with a colour yet: add a Solid colour layer, or an effect with a colour (Tint, Colorize…).");
+        crate::ui::empty_note(ui, "Nothing with a colour yet: add a Solid colour layer, or an effect with a colour (Tint, Colorize…).");
     } else if let Some(t) = target_picker(ui, (id, "add"), reds, None, 220.0) {
         paint.push(t);
     }

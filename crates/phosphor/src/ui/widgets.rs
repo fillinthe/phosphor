@@ -345,6 +345,12 @@ pub(crate) fn help(ui: &mut egui::Ui, text: &str) -> egui::Response {
     r.on_hover_text(text)
 }
 
+/// What an empty panel or list says (nothing selected, nothing added yet): always words, even with help as (i)
+/// icons, since there's nothing else on screen to explain it.
+pub(crate) fn empty_note(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    ui.add(egui::Label::new(egui::RichText::new(text).weak()).wrap())
+}
+
 pub(crate) fn hint(ui: &mut egui::Ui, text: impl Into<egui::RichText>) -> egui::Response {
     let label = egui::Label::new(text.into().weak());
     if ui.layout().main_dir().is_horizontal() {

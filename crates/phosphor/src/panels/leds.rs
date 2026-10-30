@@ -353,7 +353,7 @@ fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         let unis: Vec<u16> = st.dmx.sent.keys().copied().collect();
         if unis.is_empty() {
-            help(ui, "Nothing going out (LED / DMX off, or no fixtures on).");
+            crate::ui::empty_note(ui, "Nothing going out (LED / DMX off, or no fixtures on).");
             return;
         }
         let id = ui.id().with("dmx_monitor_uni");

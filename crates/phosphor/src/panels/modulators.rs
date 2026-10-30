@@ -150,7 +150,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         }
     }
     if st.comp.modulators.is_empty() {
-        help(ui, "No modulators yet. Add one, set its signal (an LFO on the beat, the bass, a step sequence…), then pick it from any slider's Modulate menu.");
+        crate::ui::empty_note(ui, "No modulators yet. Add one, set its signal (an LFO on the beat, the bass, a step sequence…), then pick it from any slider's Modulate menu.");
     }
 }
 

@@ -22,7 +22,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
     }
     let aspect = st.aspect();
     let Some(sel) = st.selected.filter(|id| *id == MASTER_ID || st.comp.layers.iter().any(|l| l.id == *id) || st.comp.group(*id).is_some() || st.comp.comp(*id).is_some()) else {
-        help(ui, "Select a layer (or MASTER) to edit its source and effects.");
+        crate::ui::empty_note(ui, "Select a layer (or MASTER) to edit its source and effects.");
         return;
     };
     let clipboard_len = st.fx_clipboard.len();
@@ -986,7 +986,7 @@ pub(crate) fn transition_effect_combo(ui: &mut egui::Ui, id: impl std::hash::Has
     let mut changed = false;
     egui::ComboBox::from_id_salt(id).selected_text(current.unwrap_or(empty)).width(150.0).height(360.0).show_ui(ui, |ui| {
         if list.is_empty() {
-            help(ui, "No shader transitions found (they come with the ISF collection).");
+            crate::ui::empty_note(ui, "No shader transitions found (they come with the ISF collection).");
         }
         for d in list {
             if crate::ui::pick_item(ui, d.id == effect.as_str(), d.name).clicked() {

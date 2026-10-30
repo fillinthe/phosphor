@@ -216,6 +216,8 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                             }
                         }
                     });
+                    // What it holds, on the button (a count squeezed in at the row's end was cut to "…").
+                    let holds = if cue.slices.is_empty() { format!("Sets {} layers", cue.layers.len()) } else { format!("Sets {} layers · {} slices", cue.layers.len(), cue.slices.len()) };
                     ui.menu_button(label(icon::FUNNEL, "Changes"), |ui| {
                         ui.set_min_width(240.0);
                         help(ui, "What going to this cue changes. Leave sources off to keep the media playing and only glide the numbers.");
@@ -235,7 +237,9 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                                 }
                             }
                         }
-                    });
+                    })
+                    .response
+                    .on_hover_text(holds);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete cue").clicked() {
                             remove = Some(i);
@@ -243,7 +247,6 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                         if crate::ui::small_command(ui, icon::ARROWS_CLOCKWISE).on_hover_text("Re-record: save how everything looks now into this cue").clicked() {
                             update = Some(i);
                         }
-                        hint(ui, if cue.slices.is_empty() { format!("{} layers", cue.layers.len()) } else { format!("{} layers · {} slices", cue.layers.len(), cue.slices.len()) });
                     });
                 });
                 if let Some((c, p)) = progress

@@ -163,7 +163,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             if comp.layers.is_empty() {
-                help(ui, "No layers yet: + Layer above (or drop files onto the window).");
+                crate::ui::empty_note(ui, "No layers yet: + Layer above (or drop files onto the window).");
             }
             ui.add_space(6.0);
             master_strip(ui, comp, *selected == Some(MASTER_ID), &mut acts, selected);

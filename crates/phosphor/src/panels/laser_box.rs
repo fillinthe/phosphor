@@ -22,7 +22,11 @@ pub(crate) fn shape_box(ui: &mut egui::Ui, frame: egui::Rect, s: &LaserShape, pa
     let world = |l: [f32; 2]| to_screen(s.x + l[0] * cos - l[1] * sin, s.y + l[0] * sin + l[1] * cos);
     let corners = [[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]].map(world);
     let colour = egui::Color32::from_rgb(90, 220, 255).gamma_multiply(0.7);
-    let painter = ui.painter_at(frame.expand(30.0));
+    // Kept to the canvas: a big or turned shape's box would draw (and take clicks) over the shape list beside it.
+    let mut clipped = ui.new_child(egui::UiBuilder::new().max_rect(frame));
+    clipped.set_clip_rect(frame.intersect(ui.clip_rect()));
+    let ui = &mut clipped;
+    let painter = ui.painter_at(frame);
     painter.add(egui::Shape::closed_line(corners.to_vec(), egui::Stroke::new(1.0, colour)));
     let centre = to_screen(s.x, s.y);
     let id = egui::Id::new(("laser_box", s.id));

@@ -85,6 +85,12 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Surprise moved from the top bar to the Quick menu and the Layers panel.
 - The top bar, effect lists, slice groups and the mixer no longer run out of room, in any language.
 - Fixes to translations (status lines that were half English).
+- Empty panels always say what to do next (Inspector with nothing selected, the Designer, an empty clip grid, Control
+  Surface, mappings…), even with help shown as (i) icons.
+- Panel tabs share the tab bar fairly: a long name no longer pushes the last tab off the edge.
+- The preview's size and frame rate sit on the picture's corner, not the panel's.
+- A cue's layer count moved into its Changes button (it was cut to "…" at the end of the row).
+- The Laser Designer's transform box stays inside its canvas (a turned shape's handles drew over the shape list).
 
 ## 0.4.0 (2026-10-27)
 
