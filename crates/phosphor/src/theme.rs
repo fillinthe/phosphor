@@ -148,9 +148,9 @@ fn tone(g: u8) -> Color32 {
 
 const LOGO_FAMILY: &str = "phosphor-logo";
 
-/// The PHOSPHOR wordmark at `size`, in the logo's font and the accent colour (top bar, locked top bar).
+/// The PHOSPHOR VJ wordmark at `size`, in the logo's font and the accent colour (top bar, locked top bar).
 pub fn logo(size: f32) -> egui::RichText {
-    egui::RichText::new("PHOSPHOR").font(egui::FontId::new(size, egui::FontFamily::Name(LOGO_FAMILY.into()))).color(accent())
+    egui::RichText::new("PHOSPHOR VJ").font(egui::FontId::new(size, egui::FontFamily::Name(LOGO_FAMILY.into()))).color(accent())
 }
 
 /// The solid icons (a filled star for a favourite): draw an `icon::` glyph with `filled_icons(size)`.

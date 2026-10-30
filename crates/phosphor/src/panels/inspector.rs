@@ -312,13 +312,8 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             // whenever it's triggered, on any layer (the same switch as the clip's right-click menu).
             if let Some(slot) = layer.active_slot() {
                 let current = layer.clip_settings();
-                let mut own = layer.clips[slot].own.is_some();
-                if crate::ui::toggle(ui, &mut own, "Keep these with the clip")
-                    .on_hover_text("Speed, direction (ping-pong, reverse), loop section and BPM sync stay with the clip that's playing and come back each time it's triggered. Off = they belong to the layer")
-                    .changed()
-                {
-                    layer.clips[slot].own = own.then_some(current);
-                }
+                let clip = &mut layer.clips[slot];
+                super::clip_keep::keep_with_clip(ui, &mut clip.own, current, &clip.name);
             }
             // What the movie is, on one line (all of it on hover; File info in the Media panel can copy it).
             if let Some(info) = &info {

@@ -238,9 +238,9 @@ impl PhosphorApp {
         #[cfg(target_arch = "wasm32")]
         let show: Option<String> = None;
         let title = match (show, project) {
-            (Some(s), _) => format!("{s} — Phosphor show"),
-            (None, Some(p)) => format!("{p} — Phosphor"),
-            (None, None) => "Phosphor".into(),
+            (Some(s), _) => format!("{s} — Phosphor VJ show"),
+            (None, Some(p)) => format!("{p} — Phosphor VJ"),
+            (None, None) => "Phosphor VJ".into(),
         };
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));

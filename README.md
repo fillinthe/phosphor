@@ -1,4 +1,4 @@
-# Phosphor
+# Phosphor VJ
 
 Website: https://phosphorfx.com
 

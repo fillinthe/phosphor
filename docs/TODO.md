@@ -4,8 +4,8 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 ## Open from 2026-10-30 (see NOTES "Everything still open")
 
-- [ ] **Name**: another creative tool called Phosphor was published before ours. Owner leaning towards **Phosphor VJ**
-      as the shown name (internal names, settings, saves and permissions unchanged). **Needs you**: go / no go.
+- [x] **Name**: shown as **Phosphor VJ** (2026-10-30); internal names, settings, saves, permissions and the names
+      other apps connect by are unchanged.
 - [ ] **Web app faster start** (web hub note): fetch sign-in / projects / layouts during the download; smaller
       browser build. Loading screen itself done 2026-10-30 (not live until a web deploy).
 - [ ] **Clip grid column buttons** greyed out while there are no layers? (owner to say)
@@ -27,7 +27,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       Speed and Volume share one row on the Clips card, so their names are cut short ("Spe…", "V…"): say if that bothers you.
 - [x] **Loop points, ping-pong / reverse should stay with the clip, not the layer.** This existed but was hidden
       (clip right-click › Keeps its own settings). Now also Inspector › Playback › **Keep these with the clip**.
-      *(not installed)* Open: should this be ON by default for new clips?
+      *(not installed)* Off by default (owner, 2026-10-30); says what's kept and what changed when switched.
 - [x] **Setting points on the Timeline from a right-click in the Inspector.** Scale X / Y, depth, tilts and crop had
       no control of their own, so "Key on the timeline" did nothing there. They're real controls now (mappable,
       keyable, OSC). "Key on the timeline" is no longer offered where it can't work. *(test; not installed)*

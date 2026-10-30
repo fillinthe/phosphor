@@ -214,7 +214,7 @@ fn main() -> eframe::Result {
     }
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("Phosphor")
+            .with_title("Phosphor VJ")
             .with_inner_size(bench.as_ref().and_then(|b| b.window).map_or([1440.0, 900.0], |(w, h)| [w, h]))
             .with_min_inner_size([960.0, 600.0])
             .with_icon(app_icon()),
