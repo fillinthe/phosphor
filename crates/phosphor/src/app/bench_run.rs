@@ -749,6 +749,7 @@ impl PhosphorApp {
             if name == "import_new" || name == "import_add" {
                 // After --import: bring it in as the buttons do (.mad: a new project, or added to the open one;
                 // .avc / .vdmx5: every deck / page with media, as a new project).
+                #[cfg(not(target_arch = "wasm32"))]
                 if self.state.mad_import.is_some() {
                     self.state.finish_mad_import(name == "import_new");
                 } else {

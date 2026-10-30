@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use phosphor_engine::{Composition, Engine, SourceSpec, f16};
+use phosphor_engine::{Composition, Engine, SourceSpec, f16, wgpu};
 
 /// The live-source format that marks a model layer (the engine keeps such a layer's pictures float).
 pub const FORMAT: &str = phosphor_engine::shaders::MODEL_POINTS;

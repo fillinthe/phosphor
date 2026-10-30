@@ -109,7 +109,7 @@ impl PhosphorApp {
                     }
                 }
                 // Out: only what's switched on.
-                let mut outs = Vec::new();
+                let mut outs: Vec<(&str, crate::panels::Tab, Flow, String)> = Vec::new();
                 #[cfg(any(target_os = "macos", windows))]
                 if st.comp.ndi.enabled {
                     outs.push(("NDI", crate::panels::Tab::Output, Flow::On(st.ndi.connections() > 0), format!("NDI out: {} watching", st.ndi.connections())));

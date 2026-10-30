@@ -130,9 +130,13 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
             stack.remove(0);
         }
     }
+    #[cfg(target_arch = "wasm32")]
+    let _ = (restart, pick_table);
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(mid) = restart {
         st.data.restart(mid);
     }
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(mid) = pick_table {
         st.dialogs.pick_file(crate::dialogs::Purpose::TableFile(mid), Some(("Table", &["csv", "tsv", "txt"])));
     }
@@ -187,6 +191,9 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     if let Some((layer, a)) = action {
         super::layers::apply_layer_action(st, layer, a, now);
     }
+    #[cfg(target_arch = "wasm32")]
+    let _ = pick_table_now;
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(mid) = pick_table_now {
         st.dialogs.pick_file(crate::dialogs::Purpose::TableFile(mid), Some(("Table", &["csv", "tsv", "txt"])));
     }
