@@ -85,6 +85,7 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Surprise moved from the top bar to the Quick menu and the Layers panel.
 - The top bar, effect lists, slice groups and the mixer no longer run out of room, in any language.
 - Fixes to translations (status lines that were half English).
+- The browser version shows a loading screen with a progress bar while it opens, instead of a black window.
 - Empty panels always say what to do next (Inspector with nothing selected, the Designer, an empty clip grid, Control
   Surface, mappings…), even with help shown as (i) icons.
 - Panel tabs share the tab bar fairly: a long name no longer pushes the last tab off the edge.
