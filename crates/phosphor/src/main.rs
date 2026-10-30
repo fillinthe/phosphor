@@ -238,10 +238,22 @@ fn main() {
             .and_then(|d| d.get_element_by_id("phosphor_canvas"))
             .and_then(|c| c.dyn_into::<web_sys::HtmlCanvasElement>().ok())
             .expect("index.html must contain <canvas id=\"phosphor_canvas\">");
-        eframe::WebRunner::new()
-            .start(canvas, eframe::WebOptions::default(), Box::new(|cc| Ok(Box::new(app::PhosphorApp::new(cc, None)))))
-            .await
-            .expect("failed to start Phosphor");
+        let started = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(|cc| Ok(Box::new(app::PhosphorApp::new(cc, None))))).await;
+        // index.html's loading screen: fade it out now the app draws (its first frame comes with the fade), or say why not.
+        let document = web_sys::window().and_then(|w| w.document());
+        match &started {
+            Ok(()) => {
+                if let Some(screen) = document.as_ref().and_then(|d| d.get_element_by_id("loading")) {
+                    screen.set_class_name("done");
+                }
+            }
+            Err(_) => {
+                if let Some(status) = document.as_ref().and_then(|d| d.get_element_by_id("loading-status")) {
+                    status.set_text_content(Some("Phosphor couldn't start in this browser. Reload the page to try again."));
+                }
+            }
+        }
+        started.expect("failed to start Phosphor");
     });
 }
 

@@ -4,16 +4,43 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Phosphor</title>
-  <link data-trunk rel="rust" data-wasm-opt="2" data-bin="phosphor" />
+  <link data-trunk rel="rust" data-wasm-opt="2" data-bin="phosphor" data-initializer="loader.mjs" />
+  <link data-trunk rel="copy-file" href="../../assets/fonts/logo.ttf" />
   <style>
     html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0c0d0f; }
     canvas { display: block; width: 100%; height: 100%; outline: none; }
     #nogpu { color: #ddd; font: 15px system-ui; padding: 2rem; display: none; }
+    /* The loading screen: on screen from the first paint until the app's first frame. Nothing in it changes size
+       (the bar scales, the status line keeps its height), so nothing jumps. */
+    @font-face { font-family: "Phosphor Logo"; src: url("logo.ttf") format("truetype"); font-display: block; }
+    #loading {
+      position: fixed; inset: 0; z-index: 10; background: #0b1a12;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+      transition: opacity 0.35s ease;
+    }
+    #loading.done { opacity: 0; pointer-events: none; }
+    #loading-mark { font: 40px "Phosphor Logo", system-ui, sans-serif; letter-spacing: 0.06em; color: #5be89a; height: 48px; line-height: 48px; }
+    #loading-track { width: 240px; height: 3px; border-radius: 2px; background: rgba(91, 232, 154, 0.15); overflow: hidden; }
+    #loading-fill { width: 100%; height: 100%; background: #5be89a; transform: scaleX(0); transform-origin: left; transition: transform 0.25s linear; }
+    /* Starting (compiling + the app's first set-up): the full bar breathes so it never looks stuck. */
+    #loading.starting #loading-fill { animation: breathe 1.4s ease-in-out infinite; }
+    @keyframes breathe { 50% { opacity: 0.4; } }
+    #loading-status { font: 13px system-ui, sans-serif; color: rgba(255, 255, 255, 0.55); height: 18px; line-height: 18px; }
   </style>
 </head>
 <body>
   <canvas id="phosphor_canvas"></canvas>
+  <div id="loading" aria-live="polite">
+    <div id="loading-mark">PHOSPHOR</div>
+    <div id="loading-track"><div id="loading-fill"></div></div>
+    <div id="loading-status">Loading</div>
+  </div>
   <div id="nogpu">Phosphor needs WebGPU. Use a current Chrome, Edge, or Safari 26+.</div>
-  <script>if (!navigator.gpu) { document.getElementById('nogpu').style.display = 'block'; }</script>
+  <script>
+    if (!navigator.gpu) {
+      document.getElementById('loading').remove();
+      document.getElementById('nogpu').style.display = 'block';
+    }
+  </script>
 </body>
 </html>
