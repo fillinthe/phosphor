@@ -2,6 +2,16 @@
 
 Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` done (with what was checked).
 
+## Open from 2026-10-30 (see NOTES "Everything still open")
+
+- [ ] **Name**: another creative tool called Phosphor was published before ours. Owner leaning towards **Phosphor VJ**
+      as the shown name (internal names, settings, saves and permissions unchanged). **Needs you**: go / no go.
+- [ ] **Web app faster start** (web hub note): fetch sign-in / projects / layouts during the download; smaller
+      browser build. Loading screen itself done 2026-10-30 (not live until a web deploy).
+- [ ] **Clip grid column buttons** greyed out while there are no layers? (owner to say)
+- [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
+- [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.
+
 ## From the owner, 2026-10-28
 
 - [x] **IN / OUT activity lights** in the status bar (media, live, NDI, Syphon, sound, MIDI, OSC, DMX in; NDI,

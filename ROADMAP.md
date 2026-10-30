@@ -370,4 +370,4 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Benchmark suite vs VDMX (CPU, memory, frame time, same clips)
 - [x] In-app bug report (GitHub issue / clipboard), in-app update from GitHub releases (`scripts/release-github.sh` publishes); Donate in the top bar
 - [~] Crash reporting: after a crash, "Report it" fills in the bug report (one click) ✔ 2026-10-19. Sending on its own needs a private endpoint on the account server: owner decision
-- [ ] Code signing + notarization: scripts ready (`SIGN_ID=… scripts/bundle-mac.sh`, `scripts/notarize-mac.sh`); needs the owner's Developer ID certificate + notary login
+- [x] Code signing + notarization: releases are signed with the owner's Developer ID and notarized (`scripts/notarize-mac.sh`)
