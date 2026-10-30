@@ -102,13 +102,7 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
         if is_movie {
             crate::ui::toggle(ui, &mut k.muted, "Mute sound").on_hover_text("This clip plays without sound, wherever it's triggered");
         }
-        let mut own = k.own.is_some();
-        if crate::ui::toggle(ui, &mut own, "Keeps its own settings")
-            .on_hover_text("Speed, direction, loop and BPM sync are saved with this clip and come back when it's triggered (starts from the layer's current settings). Its effects always are: Clip effects in the Inspector")
-            .changed()
-        {
-            k.own = own.then_some(current);
-        }
+        super::clip_keep::keep_with_clip(ui, &mut k.own, current, &k.name);
         // Projects from before clips had their own effects: such a clip swaps the layer's whole chain.
         if let Some(o) = k.own.as_mut().filter(|o| o.with_effects) {
             let mut with = true;

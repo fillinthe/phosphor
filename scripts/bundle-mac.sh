@@ -70,8 +70,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Phosphor</string>
-  <key>CFBundleDisplayName</key><string>Phosphor</string>
+  <key>CFBundleName</key><string>Phosphor VJ</string>
+  <key>CFBundleDisplayName</key><string>Phosphor VJ</string>
   <key>CFBundleIdentifier</key><string>co.fillintheblank.phosphor</string>
   <key>CFBundleExecutable</key><string>Phosphor</string>
   <key>CFBundleIconFile</key><string>Phosphor</string>

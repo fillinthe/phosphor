@@ -13,13 +13,13 @@
 
 [Setup]
 AppId={{6A0C2E4B-5D1F-4E8A-9C3B-7F2D1E0A9B54}
-AppName=Phosphor
+AppName=Phosphor VJ
 AppVersion={#AppVersion}
 AppPublisher=Phosphor
 AppPublisherURL=https://phosphorfx.com
 AppSupportURL=https://github.com/fillinthe/phosphor/issues
 DefaultDirName={localappdata}\Programs\Phosphor
-DefaultGroupName=Phosphor
+DefaultGroupName=Phosphor VJ
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -38,10 +38,15 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Shortcuts from before the name became Phosphor VJ (an update over an older install).
+[InstallDelete]
+Type: files; Name: "{userdesktop}\Phosphor.lnk"
+Type: filesandordirs; Name: "{userprograms}\Phosphor"
+
 [Icons]
-Name: "{group}\Phosphor"; Filename: "{app}\Phosphor.exe"
-Name: "{group}\Uninstall Phosphor"; Filename: "{uninstallexe}"
-Name: "{userdesktop}\Phosphor"; Filename: "{app}\Phosphor.exe"; Tasks: desktopicon
+Name: "{group}\Phosphor VJ"; Filename: "{app}\Phosphor.exe"
+Name: "{group}\Uninstall Phosphor VJ"; Filename: "{uninstallexe}"
+Name: "{userdesktop}\Phosphor VJ"; Filename: "{app}\Phosphor.exe"; Tasks: desktopicon
 
 [Registry]
 ; .phosphor projects open in Phosphor (per user).

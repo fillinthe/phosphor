@@ -79,5 +79,5 @@ if [ -n "$INTEL_RUN" ] && gh run download "$INTEL_RUN" -R fillinthe/phosphor -n 
   ASSETS="$ASSETS dist/intel/Phosphor-mac-intel.zip"
   echo "Adding the Intel Mac build from run $INTEL_RUN"
 fi
-gh release create "$TAG" $ASSETS -R fillinthe/phosphor --title "Phosphor $VER" --notes-file "$NOTES"
+gh release create "$TAG" $ASSETS -R fillinthe/phosphor --title "Phosphor VJ $VER" --notes-file "$NOTES"
 echo "Published $TAG. Running apps install it within the hour, and when they next open."

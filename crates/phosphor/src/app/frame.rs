@@ -274,6 +274,9 @@ impl PhosphorApp {
             self.state.run_offline();
             ctx.request_repaint();
         }
+        if let Some(told) = crate::ui::notice::take_told(ui.ctx()) {
+            self.state.notice = Some(told);
+        }
         if self.state.notice != self.logged_notice {
             if let Some(n) = &self.state.notice {
                 log::info!("notice: {n}");

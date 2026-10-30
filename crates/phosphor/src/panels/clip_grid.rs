@@ -285,7 +285,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
                     TriggerMode::Flash => Some("F"),
                     TriggerMode::Piano => Some("P"),
                 };
-                // S = keeps its own settings; wand = has its own effects.
+                // S = keeps its own speed, loop and direction; wand = has its own effects.
                 let own = if k.own.is_some() { "S" } else { "" };
                 let fx = if !k.effects.is_empty() || k.own.as_ref().is_some_and(|o| o.with_effects) { format!(" {}", icon::MAGIC_WAND) } else { String::new() };
                 let badge = format!("{}{own}{fx}", badge.unwrap_or("")).trim_start().to_string();

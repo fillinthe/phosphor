@@ -23,6 +23,15 @@ fn is_failure(text: &str) -> bool {
     ["couldn't", "cannot", "failed", "error", "unexpected", "took too long", "unsupported"].iter().any(|w| t.contains(w))
 }
 
+/// Says something in the status line from a widget with no `State` at hand (taken in by the frame, `take_told`).
+pub(crate) fn tell(ctx: &egui::Context, text: String) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("told_notice"), text));
+}
+
+pub(crate) fn take_told(ctx: &egui::Context) -> Option<String> {
+    ctx.data_mut(|d| d.remove_temp::<String>(egui::Id::new("told_notice")))
+}
+
 pub(crate) fn notice_bar(ctx: &egui::Context, st: &mut State, now: f64) {
     let Some(text) = st.notice.clone() else { return };
     let problem = is_problem(&text);

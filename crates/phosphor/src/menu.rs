@@ -139,7 +139,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Snapshot, "Save Snapshot (PNG)…", None),
             I(A::ExportShow, "Export Show…", Some((true, Key::E))),
             S,
-            I(A::Quit, "Quit Phosphor", Some((false, Key::Q))),
+            I(A::Quit, "Quit Phosphor VJ", Some((false, Key::Q))),
         ],
     ),
     (
@@ -315,9 +315,9 @@ pub mod native {
         };
 
         let app = Submenu::new("Phosphor", true);
-        let about = muda::AboutMetadata { name: Some("Phosphor".into()), version: Some(env!("CARGO_PKG_VERSION").into()), website: Some("https://phosphorfx.com".into()), ..Default::default() };
+        let about = muda::AboutMetadata { name: Some("Phosphor VJ".into()), version: Some(env!("CARGO_PKG_VERSION").into()), website: Some("https://phosphorfx.com".into()), ..Default::default() };
         app.append_items(&[
-            &PredefinedMenuItem::about(Some(&crate::i18n::tr("About Phosphor")), Some(about)),
+            &PredefinedMenuItem::about(Some(&crate::i18n::tr("About Phosphor VJ")), Some(about)),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::services(None),
             &PredefinedMenuItem::separator(),
@@ -327,7 +327,7 @@ pub mod native {
             &PredefinedMenuItem::separator(),
             // Our own Quit (not the stock one) so the project is saved and the crash watchdog
             // knows it was on purpose.
-            &item(Action::Quit, "Quit Phosphor", Some((false, egui::Key::Q)), &mut actions),
+            &item(Action::Quit, "Quit Phosphor VJ", Some((false, egui::Key::Q)), &mut actions),
         ])
         .ok()?;
         menu.append(&app).ok()?;

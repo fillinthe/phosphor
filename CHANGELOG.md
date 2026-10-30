@@ -76,6 +76,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Mapping clashes are pointed out (one knob moving several things, two inputs fighting over one control).
 
 **Interface**
+- Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and
+  permissions carry on as before, and other apps still find its Syphon, Spout and NDI picture as "Phosphor".
 - Zoom on the Designer and Patches canvases: pinch or Cmd-scroll, the −/+ buttons, the zoom (click: full size),
   and Fit (every box in view).
 - Designer boxes are as tall as their settings (a Timer's or Event's last switch no longer hangs below the box).
