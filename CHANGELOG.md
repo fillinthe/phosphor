@@ -93,6 +93,11 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Panel tabs share the tab bar fairly: a long name no longer pushes the last tab off the edge.
 - The preview's size and frame rate sit on the picture's corner, not the panel's.
 - A cue's layer count moved into its Changes button (it was cut to "…" at the end of the row).
+- Opening a project leaves nothing of the previous one behind: Undo no longer brings the old project back, and the
+  old project's selection, waiting clip triggers, current cue and Designer undo steps are cleared.
+- Text boxes that edit a list (OSC "also on ports", a Choices widget's names) follow the value when it changes
+  elsewhere (another project opens) instead of showing the old text.
+- Settings no longer keep entries from renamed or retired settings.
 - The Laser Designer's transform box stays inside its canvas (a turned shape's handles drew over the shape list).
 
 ## 0.4.0 (2026-10-27)

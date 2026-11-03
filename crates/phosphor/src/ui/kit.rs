@@ -408,6 +408,44 @@ pub(crate) fn text_field(ui: &mut egui::Ui, text: &mut String, hint: &str, width
     ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width.unwrap_or_else(|| ui.available_width())))
 }
 
+/// A list edited as one line of text ("8000, 9001"; "Normal, Add, Screen"). What you type stays as typed while you
+/// type it (so "8000," doesn't snap back), but when the list changes elsewhere (a project opens, undo, another
+/// control) the field follows it instead of showing stale text. `show` = the list as text; `read` = text to list.
+pub(crate) fn list_field<T: PartialEq>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, list: &mut Vec<T>, hint: &str, width: Option<f32>, show: impl Fn(&[T]) -> String, read: impl Fn(&str) -> Vec<T>) -> egui::Response {
+    let key = ui.id().with(("list_field", id));
+    let now = show(list);
+    let cached: Option<(String, String)> = ui.data_mut(|d| d.get_temp(key));
+    let (mut text, _) = list_text(cached, &now);
+    let r = text_field(ui, &mut text, hint, width);
+    let mut synced = now;
+    if r.changed() {
+        *list = read(&text);
+        synced = show(list);
+    }
+    ui.data_mut(|d| d.insert_temp(key, (text, synced)));
+    r
+}
+
+/// The text to show: the typed text while the list is still what it was when typed (`synced`), else the list as it is now.
+fn list_text(cached: Option<(String, String)>, now: &str) -> (String, bool) {
+    match cached {
+        Some((text, synced)) if synced == now => (text, true),
+        _ => (now.to_string(), false),
+    }
+}
+
+#[cfg(test)]
+mod list_field_tests {
+    #[test]
+    fn typed_text_stays_until_the_list_changes_elsewhere() {
+        // Typing "8000," reads as [8000] and shows as "8000": the comma stays on screen.
+        assert_eq!(super::list_text(Some(("8000,".into(), "8000".into())), "8000"), ("8000,".to_string(), true));
+        // Another project opened: the list is "9000" now, so the old text goes.
+        assert_eq!(super::list_text(Some(("8000,".into(), "8000".into())), "9000"), ("9000".to_string(), false));
+        assert_eq!(super::list_text(None, "1, 2"), ("1, 2".to_string(), false));
+    }
+}
+
 /// "Shows on": which outputs show this layer / group on their own (a slice each). `outs` = (output id, name,
 /// showing now). Returns (output, on) when one is switched.
 pub(crate) fn outputs_menu(ui: &mut egui::Ui, outs: &[(u64, String, bool)]) -> Option<(u64, bool)> {

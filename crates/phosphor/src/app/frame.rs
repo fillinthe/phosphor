@@ -275,6 +275,10 @@ impl PhosphorApp {
             self.state.run_offline();
             ctx.request_repaint();
         }
+        if std::mem::take(&mut self.state.project_opened) {
+            crate::panels::mapping_points::select_slices(ui.ctx(), &mut self.state.selected_surface, Vec::new());
+            crate::panels::mapping_points::select_point(ui.ctx(), None);
+        }
         if let Some(told) = crate::ui::notice::take_told(ui.ctx()) {
             self.state.notice = Some(told);
         }

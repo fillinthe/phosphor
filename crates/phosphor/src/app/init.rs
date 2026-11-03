@@ -278,6 +278,7 @@ impl PhosphorApp {
                 spout: Default::default(),
                 clock: Clock::new(comp_bpm),
                 pending_triggers: Vec::new(),
+                project_opened: false,
                 autopilot: HashMap::new(),
                 step_fired: HashMap::new(),
                 step_painted: HashMap::new(),

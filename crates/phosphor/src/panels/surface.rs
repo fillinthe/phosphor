@@ -587,15 +587,10 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         }
         if w.kind == WidgetKind::Choices {
             ui.add_space(4.0);
-            let key = ui.id().with(("choice_items", id));
-            let mut text = ui.data_mut(|d| d.get_temp::<String>(key)).unwrap_or_else(|| w.items.join(", "));
-            if crate::ui::text_field(ui, &mut text, "Names, with commas: Normal, Add, Screen", None)
-                .on_hover_text("One button each. For a pick-one control (blend mode, direction…) give it the same number of choices it has.")
-                .changed()
-            {
-                w.items = text.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-            }
-            ui.data_mut(|d| d.insert_temp(key, text));
+            crate::ui::list_field(ui, ("choice_items", id), &mut w.items, "Names, with commas: Normal, Add, Screen", None, |items| items.join(", "), |text| {
+                text.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+            })
+            .on_hover_text("One button each. For a pick-one control (blend mode, direction…) give it the same number of choices it has.");
         }
         ui.add_space(4.0);
         hint(ui, format!("OSC in: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));

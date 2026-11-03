@@ -216,6 +216,8 @@ pub struct LayerState {
     pub sync_beats: f32,
     /// Clip slots, by column.
     pub clips: Vec<Clip>,
+    /// Not used: the fade time is `LaunchSettings.fade_secs` for every layer. Still written so Phosphor 0.4.0 and
+    /// older (which require it) keep opening files saved by newer versions.
     pub transition_secs: f32,
     pub transition_kind: TransitionKind,
     /// Effect for the "Through an effect" fade style (effect id).

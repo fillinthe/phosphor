@@ -66,6 +66,14 @@ impl History {
         self.changed_at = None;
     }
 
+    /// A different project opened: nothing to undo or redo in it yet (Undo never brings the previous project back).
+    pub fn start_over(&mut self, comp: &Composition) {
+        self.undo.clear();
+        self.redo.clear();
+        self.committed = Some(comp.clone());
+        self.changed_at = None;
+    }
+
     /// Steps back; returns the project to load.
     pub fn undo(&mut self, current: &Composition) -> Option<Composition> {
         // An edit that hasn't settled yet is undone first.
@@ -97,6 +105,27 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opening_a_project_leaves_nothing_to_undo() {
+        let mut h = History::default();
+        let mut comp = Composition::default();
+        h.track(&comp, 0.0, false);
+        comp.master_fade = 0.5;
+        h.track(&comp, 1.0, false);
+        h.track(&comp, 2.0, false);
+        assert!(h.can_undo(&comp));
+        let opened = Composition { master_fade: 0.2, ..Composition::default() };
+        h.start_over(&opened);
+        assert!(!h.can_undo(&opened) && !h.can_redo());
+        assert!(h.undo(&opened).is_none(), "Undo must not bring the previous project back");
+        // Edits in the new project are steps again.
+        let mut edited = opened.clone();
+        edited.master_fade = 0.9;
+        h.track(&edited, 3.0, false);
+        h.track(&edited, 4.0, false);
+        assert_eq!(h.undo(&edited).unwrap().master_fade, 0.2);
+    }
 
     #[test]
     fn edits_settle_into_steps() {

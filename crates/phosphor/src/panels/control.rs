@@ -14,12 +14,16 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::heading(ui, "OSC");
         guarded!(ui, control.osc_port, egui::DragValue::new(&mut control.osc_port).range(1024..=65535).prefix("port "));
         // More ports, typed as a list ("8000, 9001"); applied by Reconnect.
-        let id = ui.id().with("osc_extra");
-        let mut text = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| control.osc_extra_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
-        if crate::ui::text_field(ui, &mut text, "also on ports…", Some(110.0)).on_hover_text("More ports to listen on, for apps that only send to their own port (e.g. 8000, 9001); press Reconnect").changed() {
-            control.osc_extra_ports = text.split([',', ' ']).filter_map(|p| p.trim().parse::<u16>().ok()).filter(|p| *p >= 1024).collect();
-        }
-        ui.data_mut(|d| d.insert_temp(id, text));
+        crate::ui::list_field(
+            ui,
+            "osc_extra",
+            &mut control.osc_extra_ports,
+            "also on ports…",
+            Some(110.0),
+            |ports| ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "),
+            |text| text.split([',', ' ']).filter_map(|p| p.trim().parse::<u16>().ok()).filter(|p| *p >= 1024).collect(),
+        )
+        .on_hover_text("More ports to listen on, for apps that only send to their own port (e.g. 8000, 9001); press Reconnect");
         if crate::ui::command(ui, label(icon::ARROWS_CLOCKWISE, "Reconnect")).clicked() {
             control.reconnect();
         }

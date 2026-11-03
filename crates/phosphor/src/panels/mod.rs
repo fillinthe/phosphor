@@ -56,7 +56,7 @@ mod timeline_lasers;
 mod laser_zones;
 mod lasers;
 mod mapping;
-mod mapping_points;
+pub(crate) mod mapping_points;
 mod collections;
 mod comps;
 mod media;

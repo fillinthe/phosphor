@@ -36,6 +36,13 @@ impl ShowClock {
     }
 }
 
+impl CueRun {
+    /// Another project's cues now: no current cue, fade or calendar from the old one (the idle clock carries on).
+    pub fn project_opened(&mut self) {
+        *self = CueRun { last_input: self.last_input, ..Default::default() };
+    }
+}
+
 /// The cue list while the show runs.
 #[derive(Default)]
 pub struct CueRun {
@@ -332,6 +339,18 @@ pub(crate) fn wrap_words(text: &str, width: usize) -> String {
         }
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod run_tests {
+    #[test]
+    fn a_new_project_starts_with_no_current_cue() {
+        let mut run = super::CueRun { current: Some(3), last_input: 12.5, ..Default::default() };
+        run.project_opened();
+        assert_eq!(run.current, None);
+        assert!(run.fade.is_none());
+        assert_eq!(run.last_input, 12.5, "the idle clock carries on, or the idle cue would fire at once");
+    }
 }
 
 #[cfg(test)]
