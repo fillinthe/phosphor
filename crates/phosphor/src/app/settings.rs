@@ -4,6 +4,10 @@ use super::*;
 
 impl PhosphorApp {
     pub(crate) fn save_settings(&mut self, storage: &mut dyn eframe::Storage) {
+        // Keys from settings that were renamed or retired: dropped so the file holds only what the app reads.
+        for key in ["help_icons", "areas_v1", "use_areas"] {
+            storage.remove_string(key);
+        }
         if self.bench_session {
             return;
         }

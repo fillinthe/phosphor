@@ -588,7 +588,7 @@ mod tests {
     use super::*;
 
     fn music(t: f32) -> (Vec<f32>, Vec<f32>) {
-        let wave: Vec<f32> = (0..512).map(|i| ((i as f32 * 0.07 + t * 10.0).sin() * 0.6)).collect();
+        let wave: Vec<f32> = (0..512).map(|i| (i as f32 * 0.07 + t * 10.0).sin() * 0.6).collect();
         let mut spec = vec![0.01; 256];
         // A kick every half second.
         if (t * 2.0).fract() < 0.1 {

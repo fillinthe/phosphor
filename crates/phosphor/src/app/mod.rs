@@ -464,6 +464,8 @@ pub struct State {
     pub spout: crate::spout::Spout,
     pub clock: Clock,
     pub pending_triggers: Vec<Trigger>,
+    /// A project was just loaded: the frame clears what the panels remember of the old one (canvas selections).
+    pub project_opened: bool,
     /// Which bank of clip columns the grid and the number keys address.
     pub clip_page: usize,
     /// This frame's audio/LFO signals, also shown in the Audio panel.
@@ -588,7 +590,20 @@ impl State {
         self.comp = comp;
         self.comp.ensure_outputs();
         self.notice = None;
-        self.cue_run.opened = false;
+        // Nothing of the old project lingers: ids start over per project, so a stale selection, undo step or
+        // waiting trigger would land on the new project's layers.
+        self.also_selected.clear();
+        self.also_clips.clear();
+        self.selected_clip = None;
+        self.pending_triggers.clear();
+        self.designer_undo.clear();
+        self.history.start_over(&self.comp);
+        self.cue_run.project_opened();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.data = Default::default();
+        }
+        self.project_opened = true;
         self.outputs_on_open();
     }
 
