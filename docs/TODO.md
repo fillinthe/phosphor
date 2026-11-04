@@ -14,9 +14,10 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **Phone test** (2026-11-04): MIDI / OSC › Phone or tablet › Get it on the phone: scan the QR code with the iPad,
       open the downloaded Phosphor.tosc in TouchOSC, point TouchOSC at the Mac (Browse list), move a control: step 3
       should say "Hearing from…". Owner to try with the real device.
-- [ ] **Control Surface designer, more** (owner, 2026-11-04 "needs more work"): done today: snap on/off, right-click
-      add/edit/duplicate/copy/paste/front/back/delete, keys. Still possible: multi-select and group moves, align /
-      distribute, a widget's exact x/y/w/h fields in the Inspector, undo per designer step (project Undo covers it now).
+- [x] **Control Surface designer, more** (owner, 2026-11-04 "needs more work"): snap on/off, right-click
+      add/edit/duplicate/copy/paste/front/back/delete, keys (698); multi-select (Shift/Cmd-click, band, Cmd+A), group
+      moves, Arrange (align / spread / same size), exact X/Y/W/H fields (699). Left: undo per designer step (project
+      Undo covers it now); lock a widget in place.
 
 ## From the owner, 2026-10-28
 

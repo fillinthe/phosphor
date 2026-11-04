@@ -10,38 +10,24 @@ use super::*;
 const KEY: &str = "phosphor_mapping_point";
 const MULTI: &str = "phosphor_mapping_multi";
 
+/// The slices selected on the mapping canvas (`ui::Selection` under one key).
+fn slices() -> crate::ui::Selection {
+    crate::ui::Selection::new(MULTI)
+}
+
 /// Every selected slice: the set, or just `primary` when nothing else is selected.
 pub(crate) fn selected_slices(ctx: &egui::Context, primary: Option<u64>) -> Vec<u64> {
-    let set: Vec<u64> = ctx.data(|d| d.get_temp(egui::Id::new(MULTI))).unwrap_or_default();
-    match primary {
-        Some(p) if set.contains(&p) => set,
-        Some(p) => vec![p],
-        None => Vec::new(),
-    }
+    slices().all(ctx, primary)
 }
 
 /// A click on slice `id`: with Shift it joins (or leaves) the selection, else it's the only one selected.
 pub(crate) fn click_slice(ctx: &egui::Context, primary: &mut Option<u64>, id: u64, shift: bool) {
-    let mut set = selected_slices(ctx, *primary);
-    if shift {
-        if let Some(i) = set.iter().position(|s| *s == id) {
-            set.remove(i);
-            *primary = set.last().copied();
-        } else {
-            set.push(id);
-            *primary = Some(id);
-        }
-    } else {
-        set = vec![id];
-        *primary = Some(id);
-    }
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(MULTI), set));
+    slices().click(ctx, primary, id, shift);
 }
 
 /// Selects exactly `ids` (a slice group): the last one becomes the primary.
 pub(crate) fn select_slices(ctx: &egui::Context, primary: &mut Option<u64>, ids: Vec<u64>) {
-    *primary = ids.last().copied();
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(MULTI), ids));
+    slices().set(ctx, primary, ids);
 }
 
 /// Moves every selected slice (but locked ones) by `d`.
