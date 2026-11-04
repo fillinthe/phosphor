@@ -16,6 +16,39 @@ enum Grab {
     Resize { id: u64, start: egui::Pos2, w: f32, h: f32 },
 }
 
+/// What the designer was asked to do to a widget (right-click menu, keys), done once the canvas is drawn.
+#[derive(Clone, Copy)]
+enum Act {
+    Duplicate(u64),
+    Copy(u64),
+    ToFront(u64),
+    ToBack(u64),
+    Delete(u64),
+    /// Nudge by (dx, dy) cells.
+    Move(u64, f32, f32),
+    /// Add a widget at a spot (cells).
+    Add(WidgetKind, f32, f32),
+    /// Paste the copied widget at a spot.
+    Paste(f32, f32),
+}
+
+/// Temp-data key: the copied widget (Copy / Paste in the designer, across projects too).
+const CLIPBOARD: &str = "surface_clipboard";
+/// Temp-data key: the pass the designer last owned the keyboard in (pointer over its canvas in Edit).
+const KEYS_PASS: &str = "surface_keys_pass";
+
+/// True while the Control Surface designer uses the keys itself (Delete, arrows, Cmd+D/C/V): the app's layer
+/// shortcuts stand back. Set a frame earlier (the designer draws after the shortcuts run).
+pub(crate) fn designer_owns_keys(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<u64>(egui::Id::new(KEYS_PASS))).is_some_and(|pass| ctx.cumulative_pass_nr() <= pass + 1)
+}
+
+/// Where a drag or a click lands: a whole cell with Snap on, a quarter cell without.
+fn snapped(cells: f32, snap: bool) -> f32 {
+    let step = if snap { 1.0 } else { 0.25 };
+    (cells / step).round() * step
+}
+
 pub(crate) fn surface(ui: &mut egui::Ui, st: &mut State) {
     surface_page(ui, st, None);
 }
@@ -40,7 +73,9 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     let edit_id = egui::Id::new(("surface_edit", key));
     let sel_id = egui::Id::new(("surface_selected", key));
     let grab_id = egui::Id::new(("surface_grab", key));
+    let snap_id = egui::Id::new("surface_snap");
     let mut edit: bool = ui.ctx().data(|d| d.get_temp(edit_id)).unwrap_or(st.comp.surface.widgets.is_empty());
+    let mut snap: bool = ui.ctx().data(|d| d.get_temp(snap_id)).unwrap_or(true);
     let mut selected: Option<u64> = ui.ctx().data(|d| d.get_temp(sel_id)).flatten();
 
     // Toolbar.
@@ -62,13 +97,14 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     }
                 }
             });
+            toggle(ui, &mut snap, label(icon::MAGNET, "Snap")).on_hover_text("On: widgets land on whole grid cells. Off: anywhere, to a quarter of a cell (arrow keys nudge by the same amount; Shift = a whole cell).");
             ui.label(RichText::new("OSC out").small().color(Color32::GRAY));
             ui.add(egui::TextEdit::singleline(&mut st.comp.surface.osc_host).hint_text("IP, e.g. 192.168.1.20").desired_width(110.0))
                 .on_hover_text("Widgets with a Send OSC address send their values here (another app on this Mac: 127.0.0.1). Empty = off.");
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
             ui.label(RichText::new("Columns").small().color(Color32::GRAY));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
-            help(ui, "Drag to move · corner to resize · right-click to map");
+            help(ui, "Drag to move · corner to resize · right-click a widget or an empty spot for more · Delete, arrows, Cmd+D / C / V work on the selected one");
         } else if st.comp.surface.on_page().next().is_none() {
             crate::ui::empty_note(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
@@ -98,6 +134,8 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     let mut open_editor: Option<u64> = None;
     // A colour widget's brightness strip was dragged: (widget, brightness).
     let mut brightness: Option<(u64, f32)> = None;
+    let mut act: Option<Act> = None;
+    let copied: Option<SurfaceWidget> = ui.ctx().data(|d| d.get_temp(egui::Id::new(CLIPBOARD)));
 
     ui.horizontal_top(|ui| {
         let canvas_w = (ui.available_width() - if inspector { 330.0 } else { 0.0 }).max(200.0);
@@ -109,8 +147,53 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         let cell = (canvas_w / cols).min(avail_h / rows.max(4.0)).max(24.0);
         let height = (rows * cell).max(avail_h);
         crate::ui::column_scroll(ui).id_salt(("surface_scroll", key)).max_width(canvas_w).auto_shrink([false, false]).show(ui, |ui| {
-            let (canvas, _) = ui.allocate_exact_size(egui::vec2(canvas_w, height), Sense::hover());
+            let (canvas, bg) = ui.allocate_exact_size(egui::vec2(canvas_w, height), if edit { Sense::click() } else { Sense::hover() });
             let painter = ui.painter_at(canvas);
+            // Cells under a point on the canvas (where a right-click or a paste lands).
+            let cell_at = |p: egui::Pos2| (snapped((p.x - canvas.min.x) / cell, snap), snapped((p.y - canvas.min.y) / cell, snap));
+            let pointer = ui.ctx().input(|i| i.pointer.interact_pos());
+            if edit {
+                if bg.clicked() {
+                    selected = None;
+                }
+                // Right-click an empty spot: add something right there.
+                let spot_id = egui::Id::new(("surface_spot", key));
+                if bg.secondary_clicked() && let Some(p) = pointer {
+                    ui.ctx().data_mut(|d| d.insert_temp(spot_id, cell_at(p)));
+                }
+                bg.right_menu(|ui| {
+                    let (x, y) = ui.ctx().data(|d| d.get_temp::<(f32, f32)>(spot_id)).unwrap_or((0.0, 0.0));
+                    ui.label(RichText::new("Add here").small().color(Color32::GRAY));
+                    for &kind in <WidgetKind as phosphor_engine::Choice>::OPTIONS {
+                        if crate::ui::command(ui, phosphor_engine::Choice::label(kind)).clicked() {
+                            act = Some(Act::Add(kind, x, y));
+                            ui.close();
+                        }
+                    }
+                    if !st.comp.lasers.projectors.is_empty() && !st.comp.lasers.looks.is_empty() {
+                        ui.separator();
+                        if crate::ui::command(ui, label(icon::PROJECTOR_SCREEN, "Laser look buttons")).on_hover_text("A button per laser look (per laser), lit while it shows").clicked() {
+                            add_laser_buttons(&mut st.comp);
+                            ui.close();
+                        }
+                    }
+                    if let Some(c) = &copied {
+                        ui.separator();
+                        if crate::ui::command(ui, label(icon::CLIPBOARD_TEXT, &format!("Paste {}", c.label))).clicked() {
+                            act = Some(Act::Paste(x, y));
+                            ui.close();
+                        }
+                    }
+                });
+                // The keys are the designer's while the pointer is over it (the app's layer shortcuts stand back).
+                if ui.rect_contains_pointer(canvas) {
+                    let pass = ui.ctx().cumulative_pass_nr();
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(KEYS_PASS), pass));
+                    if !ui.ctx().egui_wants_keyboard_input() {
+                        act = act.or(designer_keys(ui, selected, copied.is_some(), snap, pointer.map(cell_at)));
+                    }
+                }
+            }
             if edit {
                 for gx in 0..=cols as i32 {
                     for gy in 0..=(height / cell) as i32 {
@@ -118,8 +201,10 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     }
                 }
             }
+            if edit && st.comp.surface.on_page().next().is_none() {
+                painter.text(canvas.min + egui::vec2(cell * 0.5, cell * 0.5), egui::Align2::LEFT_TOP, "Right-click anywhere here to add a button, fader or pad (or use Add).", egui::FontId::proportional(13.0), Color32::from_gray(130));
+            }
             let mut text_sets: Vec<(u64, String)> = Vec::new();
-            let pointer = ui.ctx().input(|i| i.pointer.interact_pos());
             for w in st.comp.surface.on_page() {
                 let rect = egui::Rect::from_min_size(canvas.min + egui::vec2(w.x * cell, w.y * cell), egui::vec2(w.w * cell, w.h * cell)).shrink(3.0);
                 let id = egui::Id::new(("surface_widget", w.id));
@@ -128,9 +213,38 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     let body = ui.interact(rect, id, Sense::click_and_drag());
                     let handle = egui::Rect::from_min_size(rect.max - egui::vec2(14.0, 14.0), egui::vec2(14.0, 14.0));
                     let corner = ui.interact(handle, id.with("resize"), Sense::drag());
-                    if body.clicked() || body.drag_started() {
+                    if body.clicked() || body.drag_started() || body.secondary_clicked() {
                         selected = Some(w.id);
                     }
+                    let wid = w.id;
+                    body.right_menu(|ui| {
+                        if crate::ui::command(ui, label(icon::PENCIL_SIMPLE, "Edit widget…")).clicked() {
+                            open_editor = Some(wid);
+                            ui.close();
+                        }
+                        if crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
+                            act = Some(Act::Duplicate(wid));
+                            ui.close();
+                        }
+                        if crate::ui::command(ui, label(icon::CLIPBOARD_TEXT, "Copy")).on_hover_text("Paste it on another page or in another project (right-click an empty spot)").clicked() {
+                            act = Some(Act::Copy(wid));
+                            ui.close();
+                        }
+                        ui.separator();
+                        if crate::ui::command(ui, label(icon::ARROW_LINE_UP, "Bring to front")).clicked() {
+                            act = Some(Act::ToFront(wid));
+                            ui.close();
+                        }
+                        if crate::ui::command(ui, label(icon::ARROW_LINE_DOWN, "Send to back")).clicked() {
+                            act = Some(Act::ToBack(wid));
+                            ui.close();
+                        }
+                        ui.separator();
+                        if crate::ui::danger_button(ui, label(icon::TRASH, "Delete")).clicked() {
+                            act = Some(Act::Delete(wid));
+                            ui.close();
+                        }
+                    });
                     if let Some(p) = pointer {
                         if body.drag_started() {
                             grab = Some(Grab::Move { id: w.id, start: p, x: w.x, y: w.y });
@@ -263,14 +377,14 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     match g {
                         Grab::Move { id, start, x, y } => {
                             if let Some(w) = surface.widget_mut(id) {
-                                w.x = (x + ((p.x - start.x) / cell).round()).clamp(0.0, (cols - w.w).max(0.0));
-                                w.y = (y + ((p.y - start.y) / cell).round()).max(0.0);
+                                w.x = (x + snapped((p.x - start.x) / cell, snap)).clamp(0.0, (cols - w.w).max(0.0));
+                                w.y = (y + snapped((p.y - start.y) / cell, snap)).max(0.0);
                             }
                         }
                         Grab::Resize { id, start, w: w0, h: h0 } => {
                             if let Some(w) = surface.widget_mut(id) {
-                                w.w = (w0 + ((p.x - start.x) / cell).round()).clamp(1.0, (cols - w.x).max(1.0));
-                                w.h = (h0 + ((p.y - start.y) / cell).round()).max(1.0);
+                                w.w = (w0 + snapped((p.x - start.x) / cell, snap)).clamp(1.0, (cols - w.x).max(1.0));
+                                w.h = (h0 + snapped((p.y - start.y) / cell, snap)).max(1.0);
                             }
                         }
                     }
@@ -294,6 +408,31 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         edit = true;
         selected = Some(id);
     }
+    match act {
+        Some(Act::Duplicate(id)) => selected = st.comp.surface.duplicate(id).or(selected),
+        Some(Act::Copy(id)) => {
+            if let Some(w) = st.comp.surface.widget(id).cloned() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CLIPBOARD), w));
+                st.notice = Some("Copied: right-click an empty spot to paste it".into());
+            }
+        }
+        Some(Act::ToFront(id)) => st.comp.surface.to_front(id),
+        Some(Act::ToBack(id)) => st.comp.surface.to_back(id),
+        Some(Act::Delete(id)) => {
+            st.comp.remove_widget(id);
+            if selected == Some(id) {
+                selected = None;
+            }
+        }
+        Some(Act::Move(id, dx, dy)) => st.comp.surface.move_by(id, dx, dy),
+        Some(Act::Add(kind, x, y)) => selected = Some(st.comp.surface.add_at(kind, Some((x, y)))),
+        Some(Act::Paste(x, y)) => {
+            if let Some(w) = copied {
+                selected = Some(st.comp.surface.place(w, Some((x, y))));
+            }
+        }
+        None => {}
+    }
     if let Some((id, b)) = brightness
         && let Some(w) = st.comp.surface.widget_mut(id)
     {
@@ -308,7 +447,35 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         d.insert_temp(edit_id, edit);
         d.insert_temp(sel_id, selected);
         d.insert_temp(grab_id, grab);
+        d.insert_temp(snap_id, snap);
     });
+}
+
+/// Keys in Edit while the pointer is over the canvas: Delete / Backspace removes the selected widget, arrows nudge it
+/// (a cell with Snap on, a quarter without; Shift = a whole cell), Cmd+D duplicates, Cmd+C copies, Cmd+V pastes the
+/// copied widget under the pointer. The keys are taken so nothing else reads them.
+fn designer_keys(ui: &egui::Ui, selected: Option<u64>, copied: bool, snap: bool, under_pointer: Option<(f32, f32)>) -> Option<Act> {
+    use egui::{Key, Modifiers};
+    ui.ctx().input_mut(|i| {
+        if copied && i.consume_key(Modifiers::COMMAND, Key::V) && let Some((x, y)) = under_pointer {
+            return Some(Act::Paste(x, y));
+        }
+        let id = selected?;
+        if i.consume_key(Modifiers::NONE, Key::Delete) || i.consume_key(Modifiers::NONE, Key::Backspace) {
+            return Some(Act::Delete(id));
+        }
+        if i.consume_key(Modifiers::COMMAND, Key::D) {
+            return Some(Act::Duplicate(id));
+        }
+        if i.consume_key(Modifiers::COMMAND, Key::C) {
+            return Some(Act::Copy(id));
+        }
+        let step = if i.modifiers.shift || snap { 1.0 } else { 0.25 };
+        let mut k = |key| (i.consume_key(Modifiers::NONE, key) || i.consume_key(Modifiers::SHIFT, key)) as i32 as f32;
+        let dx = (k(Key::ArrowRight) - k(Key::ArrowLeft)) * step;
+        let dy = (k(Key::ArrowDown) - k(Key::ArrowUp)) * step;
+        ((dx, dy) != (0.0, 0.0)).then_some(Act::Move(id, dx, dy))
+    })
 }
 
 /// "Drives: Layer 1 · opacity, Master fade" for the hover text.
@@ -619,9 +786,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         st.comp.surface.duplicate(id);
     }
     if delete {
-        st.comp.surface.widgets.retain(|w| w.id != id);
-        // Mappings that pointed at it go too.
-        st.comp.control_maps.retain(|m| !matches!(m.target, ControlTarget::Surface(i) | ControlTarget::SurfaceY(i) | ControlTarget::SurfaceBar { widget: i, .. } if i == id));
+        st.comp.remove_widget(id);
         return false;
     }
     true
@@ -645,7 +810,7 @@ fn page_tabs(ui: &mut egui::Ui, sf: &mut phosphor_engine::ControlSurface, edit: 
                 sf.page = i;
             }
             if edit {
-                r.right_menu(|ui| {
+                r.right_field_menu(|ui| {
                     ui.label(RichText::new("Page name").small());
                     ui.text_edit_singleline(&mut sf.pages[i]);
                     if crate::ui::command(ui, label(icon::ARROW_SQUARE_OUT, "Open as its own panel")).on_hover_text("This page as a panel you can dock anywhere or float").clicked() {

@@ -154,7 +154,7 @@ impl PhosphorApp {
 
     /// Keyboard shortcuts that act on the selected layer (ignored while typing in a field).
     pub(crate) fn shortcuts(&mut self, ctx: &egui::Context) {
-        if ctx.memory(|m| m.focused().is_some()) {
+        if ctx.memory(|m| m.focused().is_some()) || panels::designer_owns_keys(ctx) {
             return;
         }
         let Some(sel) = self.state.selected else { return };

@@ -424,7 +424,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
         });
         go |= o.want != before && o.search.is_some();
         go |= toggle(ui, &mut o.commercial, "Paid work OK").on_hover_text("Only results whose licence allows use in paid work (no \"NC\" licences)").changed() && o.search.is_some();
-        ui.menu_button(label(icon::BOOKS, "Libraries"), |ui| {
+        crate::ui::field_menu(ui, label(icon::BOOKS, "Libraries"), |ui| {
             for s in Source::ALL {
                 let mut on = !o.off.contains(&s);
                 if toggle(ui, &mut on, s.name()).on_hover_text(s.about()).changed() {

@@ -101,7 +101,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         if r.dragged() {
             m.t = (m.t + (r.drag_delta().x / lane_w) as f64 * length).clamp(0.0, length);
         }
-        r.context_menu(|ui| {
+        r.right_field_menu(|ui| {
             crate::ui::text_field(ui, &mut m.name, "name", Some(120.0));
             choice_buttons(ui, &mut m.kind, |_, _| {});
             if danger_button(ui, label(icon::TRASH, "Remove")).clicked() {
@@ -157,7 +157,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
                     key.v = (key.v - d.y / lane.height()).clamp(0.0, 1.0);
                     moved = Some((ki, (key.t + (d.x / lane_w) as f64 * length).clamp(0.0, length)));
                 }
-                r.on_hover_text(format!("{} · {:.0}%", clock(key.t), key.v * 100.0)).context_menu(|ui| {
+                r.on_hover_text(format!("{} · {:.0}%", clock(key.t), key.v * 100.0)).right_field_menu(|ui| {
                     ui.label("To the next key");
                     choice_buttons(ui, &mut key.ease, |_, _| {});
                     if danger_button(ui, label(icon::TRASH, "Remove key")).clicked() {
@@ -186,7 +186,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
             {
                 seek = Some(t_of(pos.x));
             }
-            resp.context_menu(|ui| {
+            resp.right_field_menu(|ui| {
                 crate::ui::toggle(ui, &mut tr.enabled, "Plays");
                 if danger_button(ui, label(icon::TRASH, "Remove track")).clicked() {
                     remove_track = Some(ti);
@@ -212,7 +212,7 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
     if st.offline.is_some() {
         return;
     }
-    ui.menu_button(label(icon::FILM_STRIP, "Render…"), |ui| {
+    crate::ui::field_menu(ui, label(icon::FILM_STRIP, "Render…"), |ui| {
         let length = st.comp.timeline.length;
         let o = &mut st.offline_setup;
         ui.horizontal(|ui| {
@@ -272,7 +272,7 @@ fn events_lane(ui: &mut egui::Ui, st: &mut State, names: &HashMap<ControlTarget,
             e.t = (e.t + (r.drag_delta().x / lane_w) as f64 * length).clamp(0.0, length);
         }
         let what = [e.target.as_ref().map(|t| format!("sets {}", names.get(t).map_or("(gone)", |n| n.as_str()))), e.send.as_ref().map(|s| format!("sends {}", s.label()))].into_iter().flatten().collect::<Vec<_>>().join(", ");
-        r.on_hover_text(format!("{} · {}", clock(e.t), if what.is_empty() { "does nothing yet (right-click)".to_string() } else { what })).context_menu(|ui| {
+        r.on_hover_text(format!("{} · {}", clock(e.t), if what.is_empty() { "does nothing yet (right-click)".to_string() } else { what })).right_field_menu(|ui| {
             ui.set_min_width(300.0);
             crate::ui::text_field(ui, &mut e.name, "name", Some(140.0));
             crate::ui::heading(ui, "Sets");
@@ -345,7 +345,7 @@ fn sound_lane(ui: &mut egui::Ui, st: &mut State, lane_x: f32, lane_w: f32, full:
     }
     let mut remove = false;
     let mut choose = false;
-    resp.on_hover_text(format!("{name} · starts at {} · drag to move it", clock(sound.start))).context_menu(|ui| {
+    resp.on_hover_text(format!("{name} · starts at {} · drag to move it", clock(sound.start))).right_field_menu(|ui| {
         Level::range(&mut sound.volume, 0.0, 2.0, "Volume").default(1.0).width(200.0).show(ui);
         if crate::ui::command(ui, "Another sound…").clicked() {
             choose = true;

@@ -243,6 +243,8 @@ pub fn shortcut_text(s: Shortcut) -> String {
 /// Shortcuts typed into the window (the macOS menu bar handles its own and swallows the keys).
 pub fn pressed(ctx: &egui::Context) -> Vec<Action> {
     let typing = ctx.memory(|m| m.focused().is_some());
+    // The Control Surface designer has its own Cmd+D (duplicate the selected widget).
+    let designer = crate::panels::designer_owns_keys(ctx);
     let mut out = Vec::new();
     // Shift variants first, so ⇧⌘S isn't also read as ⌘S.
     for shift in [true, false] {
@@ -250,7 +252,7 @@ pub fn pressed(ctx: &egui::Context) -> Vec<Action> {
             for e in entries.iter() {
                 let I(action, _, Some((s, key))) = e else { continue };
                 // Zoom keys are egui's own; text fields keep their own undo.
-                if *s != shift || matches!(action, A::ZoomIn | A::ZoomOut | A::ZoomReset) || (typing && matches!(action, A::Undo | A::Redo)) {
+                if *s != shift || matches!(action, A::ZoomIn | A::ZoomOut | A::ZoomReset) || (typing && matches!(action, A::Undo | A::Redo)) || (designer && matches!(action, A::DuplicateLayer)) {
                     continue;
                 }
                 let mods = if shift { egui::Modifiers::COMMAND | egui::Modifiers::SHIFT } else { egui::Modifiers::COMMAND };

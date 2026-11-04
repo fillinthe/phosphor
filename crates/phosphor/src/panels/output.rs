@@ -494,7 +494,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
     use phosphor_engine::Choice;
     let name = if g.pattern == phosphor_engine::TestPattern::Grid { "GRID".to_string() } else { g.pattern.label().to_uppercase() };
     let r = toggle(ui, &mut g.on, label(icon::GRID_FOUR, &name)).on_hover_text("Alignment grid or test pattern on this output to line up the projector · right-click to pick the pattern and its settings · off for the show");
-    r.right_menu(|ui| {
+    r.right_field_menu(|ui| {
         crate::ui::heading(ui, "Test pattern");
         for &p in phosphor_engine::TestPattern::ALL.iter() {
             if ui.radio_value(&mut g.pattern, p, p.label()).clicked() {

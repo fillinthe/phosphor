@@ -228,7 +228,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
             }
         }
         // Sorting, grouping and tile size in one menu, so this row fits any column.
-        ui.menu_button(label(icon::SLIDERS_HORIZONTAL, "View"), |ui| {
+        crate::ui::field_menu(ui, label(icon::SLIDERS_HORIZONTAL, "View"), |ui| {
             ui.set_min_width(200.0);
             crate::ui::heading(ui, "Sort by");
             crate::ui::toolbar(ui, |ui| {
@@ -678,7 +678,7 @@ pub(crate) fn media_tile(
         n => format!("\nUsed by {n} layers and clips"),
     };
     let credit = item.credit.as_ref().map_or(String::new(), |c| format!("\nCredit: {}", c.line()));
-    resp.on_hover_text(format!("{}{credit}{comes_with}{showing}{used}\n{click}", item.path)).right_menu(|ui| {
+    resp.on_hover_text(format!("{}{credit}{comes_with}{showing}{used}\n{click}", item.path)).right_field_menu(|ui| {
         ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
             for (id, name) in targets.layers {
                 if crate::ui::command(ui, name).clicked() {

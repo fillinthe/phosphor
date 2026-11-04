@@ -149,6 +149,8 @@ pub type RemoteHub = (RemoteState, RemoteCmds, Arc<AtomicUsize>, RemotePassword)
 type Shared = Arc<(Mutex<Option<Frame>>, Condvar)>;
 /// Layer thumbnails for the remote page: layer id → (version, JPEG).
 pub type Thumbs = Arc<Mutex<std::collections::HashMap<u64, (u64, Frame)>>>;
+/// Files the session hands out by path (the TouchOSC layout for a phone): path → (content type, file name, bytes).
+pub type Files = Arc<Mutex<std::collections::HashMap<String, (&'static str, String, Vec<u8>)>>>;
 
 pub struct NetSession {
     pub port: u16,
@@ -171,6 +173,7 @@ pub struct NetSession {
     pacer: crate::pacing::FramePacer,
     /// Layer thumbnails shown on remotes, and the round-robin that refreshes them.
     thumbs: Thumbs,
+    files: Files,
     thumb_encoder: Option<SyncSender<(u64, u32, u32, Vec<u8>)>>,
     thumb_pacer: crate::pacing::FramePacer,
     thumb_next: usize,
@@ -206,6 +209,7 @@ impl NetSession {
             encoder: None,
             pacer: Default::default(),
             thumbs: Default::default(),
+            files: Default::default(),
             thumb_encoder: None,
             thumb_pacer: Default::default(),
             thumb_next: 0,
@@ -221,6 +225,12 @@ impl NetSession {
 
     pub fn running(&self) -> bool {
         self.running.load(Ordering::Relaxed)
+    }
+
+    /// Hands a file out at `path` (e.g. "/Phosphor.tosc") while the session runs: phones download it from
+    /// `url()` + path. Offering the same path again replaces it.
+    pub fn offer(&self, path: &str, content_type: &'static str, file_name: &str, bytes: Vec<u8>) {
+        self.files.lock().unwrap().insert(path.to_string(), (content_type, file_name.to_string(), bytes));
     }
 
     /// Publishes the project state for remotes (only when it changed).
@@ -322,6 +332,7 @@ impl NetSession {
         let remote = (self.remote_state.clone(), self.remote_cmds.clone(), self.remotes.clone(), self.password.clone());
         let registry = self.registry.clone();
         let thumbs = self.thumbs.clone();
+        let files = self.files.clone();
         let follow = (self.follow.clone(), self.followers.clone(), self.webrtc.clone());
         self.webrtc.set_fps(self.fps);
         std::thread::Builder::new()
@@ -330,9 +341,9 @@ impl NetSession {
                 while running.load(Ordering::Relaxed) {
                     let mut idle = true;
                     let take = |stream: std::net::TcpStream, cfg: Option<Arc<rustls::ServerConfig>>| {
-                        let (running, latest, viewers, peers, ring, remote, registry, thumbs, follow) =
-                            (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone(), follow.clone());
-                        std::thread::spawn(move || native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, follow));
+                        let (running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow) =
+                            (running.clone(), latest.clone(), viewers.clone(), peers.clone(), ring.clone(), remote.clone(), registry.clone(), thumbs.clone(), files.clone(), follow.clone());
+                        std::thread::spawn(move || native::serve(stream, cfg, running, latest, viewers, peers, ring, remote, registry, thumbs, files, follow));
                     };
                     match listener.accept() {
                         Ok((stream, _)) => {
@@ -511,6 +522,7 @@ mod native {
         remote: super::RemoteHub,
         registry: super::Reg,
         thumbs: Thumbs,
+        files: super::Files,
         follow: (crate::follow::SharedFeed, Arc<AtomicUsize>, crate::webrtc::Hub),
     ) {
         // Sockets accepted from a non-blocking listener inherit that flag on macOS/BSD.
@@ -641,6 +653,14 @@ mod native {
                         let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                     }
                 }
+            }
+            // A file the app offered (the TouchOSC layout): downloaded, not shown.
+            p if files.lock().unwrap().contains_key(p) => {
+                let (kind, name, bytes) = files.lock().unwrap().get(p).cloned().unwrap_or(("application/octet-stream", String::new(), Vec::new()));
+                let _ = stream.write_all(
+                    format!("HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Disposition: attachment; filename=\"{name}\"\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", bytes.len()).as_bytes(),
+                );
+                let _ = stream.write_all(&bytes);
             }
             // The remote page doubles as the audience page (it reads its own path).
             p if p.starts_with("/remote") || p.starts_with("/play") => {

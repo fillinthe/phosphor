@@ -174,7 +174,7 @@ fn tools(ui: &mut egui::Ui, st: &mut State) {
                 _ => "Videos and pictures",
             });
         });
-        ui.menu_button(label(icon::SLIDERS_HORIZONTAL, "View"), |ui| {
+        crate::ui::field_menu(ui, label(icon::SLIDERS_HORIZONTAL, "View"), |ui| {
             ui.set_min_width(200.0);
             crate::ui::heading(ui, "Sort by");
             crate::ui::toolbar(ui, |ui| {

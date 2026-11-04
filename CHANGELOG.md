@@ -75,6 +75,21 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Text size and outline, fade settings and mixer settings can be mapped and keyed on the timeline.
 - Mapping clashes are pointed out (one knob moving several things, two inputs fighting over one control).
 
+**Control Surface designer and phones**
+- Right-click an empty spot on the Control Surface to add a button, fader, pad or any other widget right there;
+  right-click a widget for Edit, Duplicate, Copy, Bring to front, Send to back and Delete. Paste a copied widget on
+  another page or in another project (right-click an empty spot › Paste).
+- Snap on or off (the magnet next to Add): on, widgets land on whole grid cells; off, anywhere, to a quarter of a
+  cell. Delete removes the selected widget, the arrow keys nudge it (Shift = a whole cell), Cmd+D duplicates,
+  Cmd+C / Cmd+V copy and paste.
+- MIDI / OSC panel › **Phone or tablet**: the three steps to run Phosphor from TouchOSC (or any OSC app): this
+  Mac's address and ports to type into the app, the layout sent to the phone by scanning a QR code (Get it on the
+  phone; the phone downloads it from the session), or saved as a file, and a line that says which devices are
+  sending right now.
+- Menus with a field, a slider or a switch in them (Saved, View, Changes, Render, Brightness, the Rename fields on
+  tabs, outputs and pages, and twenty more) stay open while you use them. Clicking the name field in a Saved menu
+  used to close the menu.
+
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and
   permissions carry on as before, and other apps still find its Syphon, Spout and NDI picture as "Phosphor".
