@@ -15,6 +15,7 @@ use crate::theme::{accent, WARN};
 pub(crate) use crate::ui::*;
 
 mod account;
+mod phone_osc;
 mod audio;
 mod clips;
 mod clip_keep;
@@ -96,6 +97,7 @@ pub(crate) use comps::*;
 pub(crate) use control::*;
 pub(crate) use cues::*;
 pub(crate) use devices::*;
+pub(crate) use phone_osc::*;
 pub(crate) use effects::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use file_info::{FileInfo, file_info_window};
@@ -346,8 +348,11 @@ impl egui_dock::TabViewer for Viewer<'_> {
         if let Tab::MyPanel(n) = *tab
             && let Some(name) = self.st.comp.surface.pages.get_mut(n as usize)
         {
-            ui.label(RichText::new("Panel name").small());
-            ui.text_edit_singleline(name);
+            crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename…"), |ui| {
+                if let Some(n) = crate::ui::rename_menu(ui, ("panel_name", n), name) {
+                    *name = n;
+                }
+            });
             if self.st.comp.surface.pages.len() > 1 && crate::ui::danger_button(ui, label(icon::TRASH, "Delete this panel and its controls")).clicked() {
                 surface::remove_page(ui.ctx(), &mut self.st.comp.surface, n as usize);
                 ui.close();

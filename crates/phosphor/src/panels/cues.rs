@@ -206,7 +206,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     daily_editor(ui, cue);
                     laser_menu(ui, cue, &projector_names, &look_names);
                     let group_title = if cue.group.is_empty() { "Group".to_string() } else { cue.group.clone() };
-                    ui.menu_button(label(icon::FOLDER, &group_title), |ui| {
+                    crate::ui::field_menu(ui, label(icon::FOLDER, &group_title), |ui| {
                         help(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
                         crate::ui::text_field(ui, &mut cue.group, "group name (empty = none)", Some(180.0));
                         for g in &group_names {
@@ -218,7 +218,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     });
                     // What it holds, on the button (a count squeezed in at the row's end was cut to "…").
                     let holds = if cue.slices.is_empty() { format!("Sets {} layers", cue.layers.len()) } else { format!("Sets {} layers · {} slices", cue.layers.len(), cue.slices.len()) };
-                    ui.menu_button(label(icon::FUNNEL, "Changes"), |ui| {
+                    crate::ui::field_menu(ui, label(icon::FUNNEL, "Changes"), |ui| {
                         ui.set_min_width(240.0);
                         help(ui, "What going to this cue changes. Leave sources off to keep the media playing and only glide the numbers.");
                         toggle(ui, &mut cue.sets_sources, "Sources (clips, generators)");
@@ -298,7 +298,7 @@ fn laser_menu(ui: &mut egui::Ui, cue: &mut phosphor_engine::Cue, projectors: &[(
         [one] => look_name(one.look),
         many => format!("{} lasers", many.len()),
     };
-    ui.menu_button(label(icon::PROJECTOR_SCREEN, &title), |ui| {
+    crate::ui::field_menu(ui, label(icon::PROJECTOR_SCREEN, &title), |ui| {
         ui.set_min_width(240.0);
         for c in &mut cue.lasers {
             let name = projectors.iter().find(|(p, _)| *p == c.id).map_or("(removed laser)", |p| p.1.as_str());

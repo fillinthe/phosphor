@@ -517,7 +517,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
 /// "Stage photo": pick a photo of the stage taken from the projector, how strongly it shows, or remove it.
 fn stage_photo_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig) {
     let text = if o.stage_photo.is_empty() { label(icon::IMAGE, "Stage photo…") } else { label(icon::IMAGE, "Stage photo") };
-    ui.menu_button(text, |ui| {
+    crate::ui::field_menu(ui, text, |ui| {
         ui.set_min_width(260.0);
         help(ui, "A photo of the stage taken from where the projector stands: line the slices up with it. Only shows here, never on the output.");
         if crate::ui::command(ui, label(icon::FOLDER_OPEN, if o.stage_photo.is_empty() { "Choose a photo…" } else { "Another photo…" })).clicked() {

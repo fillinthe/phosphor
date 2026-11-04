@@ -244,29 +244,75 @@ impl ControlSurface {
 
     /// Adds a widget to the page showing, at the first free spot there.
     pub fn add(&mut self, kind: WidgetKind) -> u64 {
-        let id = self.next_id;
-        self.next_id += 1;
+        self.add_at(kind, None)
+    }
+
+    /// Adds a widget to the page showing at a spot (in cells; kept inside the columns), or at the first free spot.
+    pub fn add_at(&mut self, kind: WidgetKind, at: Option<(f32, f32)>) -> u64 {
         let (w, h) = kind.default_size();
-        let (x, y) = self.free_spot(w, h);
-        let label = format!("{} {id}", kind.name());
-        let page = self.current_page();
-        let mut widget = SurfaceWidget { id, kind, x, y, w, h, label, page, ..Default::default() };
+        let mut widget = SurfaceWidget { kind, w, h, ..Default::default() };
         if kind == WidgetKind::Multi {
             widget.set_bar_count(DEFAULT_BARS);
         }
-        self.widgets.push(widget);
+        let id = self.place(widget, at);
+        if let Some(w) = self.widget_mut(id) {
+            w.label = format!("{} {id}", kind.name());
+        }
         id
     }
 
     /// A copy of a widget at the next free spot on the page showing.
     pub fn duplicate(&mut self, id: u64) -> Option<u64> {
-        let mut copy = self.widget(id)?.clone();
-        (copy.x, copy.y) = self.free_spot(copy.w, copy.h);
-        copy.id = self.next_id;
-        copy.page = self.current_page();
+        let copy = self.widget(id)?.clone();
+        Some(self.place(copy, None))
+    }
+
+    /// Puts a widget (new, a copy, or one pasted from another project) on the page showing with a fresh id, at a spot
+    /// (in cells; kept inside the columns) or at the first free spot. Returns its id.
+    pub fn place(&mut self, mut widget: SurfaceWidget, at: Option<(f32, f32)>) -> u64 {
+        widget.id = self.next_id;
         self.next_id += 1;
-        self.widgets.push(copy);
-        Some(self.next_id - 1)
+        widget.page = self.current_page();
+        (widget.x, widget.y) = match at {
+            Some((x, y)) => self.inside(x, y, widget.w),
+            None => self.free_spot(widget.w, widget.h),
+        };
+        self.widgets.push(widget);
+        self.next_id - 1
+    }
+
+    /// Removes a widget. Mappings that pointed at it are the app's to drop (`Composition::remove_widget`).
+    pub fn remove(&mut self, id: u64) -> Option<SurfaceWidget> {
+        let i = self.widgets.iter().position(|w| w.id == id)?;
+        Some(self.widgets.remove(i))
+    }
+
+    /// Moves a widget by (dx, dy) cells, kept inside the columns and above the top.
+    pub fn move_by(&mut self, id: u64, dx: f32, dy: f32) {
+        let cols = self.columns.max(1) as f32;
+        if let Some(w) = self.widget_mut(id) {
+            w.x = (w.x + dx).clamp(0.0, (cols - w.w).max(0.0));
+            w.y = (w.y + dy).max(0.0);
+        }
+    }
+
+    /// Draws a widget over the others (last drawn = on top) or under them.
+    pub fn to_front(&mut self, id: u64) {
+        if let Some(w) = self.remove(id) {
+            self.widgets.push(w);
+        }
+    }
+
+    pub fn to_back(&mut self, id: u64) {
+        if let Some(w) = self.remove(id) {
+            self.widgets.insert(0, w);
+        }
+    }
+
+    /// A spot kept inside the columns (and above the top) for a widget this wide.
+    fn inside(&self, x: f32, y: f32, w: f32) -> (f32, f32) {
+        let cols = self.columns.max(1) as f32;
+        (x.clamp(0.0, (cols - w).max(0.0)), y.max(0.0))
     }
 
     /// The page showing (always a valid index).
@@ -345,6 +391,27 @@ mod page_tests {
         sf.remove_page(0);
         assert_eq!(sf.pages.len(), 1, "the last page stays");
     }
+
+    #[test]
+    fn widgets_are_placed_moved_ordered_and_removed() {
+        let mut sf = ControlSurface { columns: 8, ..Default::default() };
+        let a = sf.add_at(WidgetKind::XyPad, Some((6.0, 2.5)));
+        assert_eq!(sf.widget(a).map(|w| (w.x, w.y)), Some((4.0, 2.5)), "kept inside the columns (4 wide on 8)");
+        let b = sf.add_at(WidgetKind::Button, Some((-1.0, -1.0)));
+        assert_eq!(sf.widget(b).map(|w| (w.x, w.y)), Some((0.0, 0.0)));
+        sf.move_by(b, 0.25, 0.25);
+        sf.move_by(b, 100.0, 0.0);
+        assert_eq!(sf.widget(b).map(|w| (w.x, w.y)), Some((6.0, 0.25)), "nudged, then stopped at the right edge");
+        sf.to_front(a);
+        assert_eq!(sf.widgets.last().map(|w| w.id), Some(a));
+        sf.to_back(a);
+        assert_eq!(sf.widgets.first().map(|w| w.id), Some(a));
+        let c = sf.place(sf.widget(a).unwrap().clone(), Some((1.0, 1.0)));
+        assert_ne!(c, a);
+        assert_eq!(sf.widget(c).map(|w| (w.kind, w.x, w.y)), Some((WidgetKind::XyPad, 1.0, 1.0)));
+        assert!(sf.remove(a).is_some() && sf.remove(a).is_none());
+        assert_eq!(sf.widgets.len(), 2);
+    }
 }
 
 #[cfg(test)]
@@ -365,6 +432,13 @@ mod osc_out_tests {
 }
 
 impl crate::Composition {
+    /// Removes a surface widget and every controller mapping that pointed at it.
+    pub fn remove_widget(&mut self, id: u64) {
+        use super::ControlTarget;
+        self.surface.remove(id);
+        self.control_maps.retain(|m| !matches!(m.target, ControlTarget::Surface(i) | ControlTarget::SurfaceY(i) | ControlTarget::SurfaceBar { widget: i, .. } if i == id));
+    }
+
     /// A Text field widget's words: kept on the widget and put on its text layer (live text off, so they stay).
     pub fn set_surface_text(&mut self, widget: u64, text: &str) {
         let Some(w) = self.surface.widget_mut(widget) else { return };

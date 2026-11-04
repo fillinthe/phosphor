@@ -305,7 +305,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
 fn video_wall_menu(ui: &mut egui::Ui, st: &mut State) {
     let key = ui.id().with("video_wall");
     let mut v: [u32; 4] = ui.data_mut(|d| d.get_temp(key)).unwrap_or([4, 3, 32, 32]);
-    ui.menu_button(label(icon::SQUARES_FOUR, "Video wall…"), |ui| {
+    crate::ui::field_menu(ui, label(icon::SQUARES_FOUR, "Video wall…"), |ui| {
         crate::ui::toolbar(ui, |ui| {
             ui.label("Tiles");
             guarded!(ui, v[0], egui::DragValue::new(&mut v[0]).range(1..=32).suffix(" across"));

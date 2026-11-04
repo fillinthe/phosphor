@@ -16,7 +16,7 @@ pub(crate) enum SaveAction {
 
 /// A menu button holding `named_saves` (Venues, Control Surfaces, Mappings…): returns what was picked.
 pub(crate) fn saves_menu(ui: &mut egui::Ui, title: &str, about: &str, store: &mut PresetStore, name: &mut String, what: &str, current: impl FnOnce() -> String) -> Option<SaveAction> {
-    ui.menu_button(title, |ui| {
+    crate::ui::field_menu(ui, title, |ui| {
         ui.set_min_width(300.0);
         hint(ui, about);
         named_saves(ui, store, name, what, current)

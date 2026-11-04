@@ -340,7 +340,7 @@ impl PhosphorApp {
                     // Only while a new version is waiting: right next to Donate, filled so it stands out.
                     self.state.updater.top_bar_button(ui);
                     let before = self.ui_brightness;
-                    ui.menu_button(icon::SUN, |ui| {
+                    crate::ui::field_menu(ui, icon::SUN, |ui| {
                         ui.label(egui::RichText::new("Interface brightness").strong());
                         crate::ui::Level::percent(&mut self.ui_brightness, "Brightness").default(theme::DEFAULT_BRIGHTNESS).width(220.0).show(ui);
                         crate::ui::toolbar(ui, |ui| {

@@ -452,7 +452,7 @@ pub(crate) fn outputs_menu(ui: &mut egui::Ui, outs: &[(u64, String, bool)]) -> O
     let n = outs.iter().filter(|o| o.2).count();
     let text = if n == 0 { icon::MONITOR.to_string() } else { format!("{} {n}", icon::MONITOR) };
     let mut out = None;
-    ui.menu_button(text, |ui| {
+    field_menu(ui, text, |ui| {
         ui.label(RichText::new("Shows on").strong());
         help(ui, "An output of its own, besides the mix (a slice there: shape it in the Outputs area)");
         for (id, name, on) in outs {

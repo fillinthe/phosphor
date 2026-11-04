@@ -29,22 +29,9 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     hint(ui, &control.osc_status);
-    ui.horizontal_wrapped(|ui| {
-        help(ui, "TouchOSC: add a UDP connection to this address and port; Phosphor also appears in its Zeroconf list.");
-        #[cfg(not(target_arch = "wasm32"))]
-        if ui
-            .button(label(icon::EXPORT, "Export TouchOSC layout…"))
-            .on_hover_text("A ready-made TouchOSC layout from your Control Surface (or master, layers and columns if you haven't built one), already sending Phosphor's addresses")
-            .clicked()
-        {
-            #[cfg(not(target_arch = "wasm32"))]
-            st.dialogs.save_file(crate::dialogs::Purpose::TouchOsc, ("TouchOSC layout", &["tosc"]), "Phosphor.tosc");
-        }
-        if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Import TouchOSC layout…")).on_hover_text("Bring a TouchOSC layout in as Control Surface pages: same controls in the same places, each control's OSC address already mapped").clicked() {
-            #[cfg(not(target_arch = "wasm32"))]
-            st.dialogs.pick_file(crate::dialogs::Purpose::ImportTouchOsc, Some(("TouchOSC layout", &["tosc", "xml"])));
-        }
-    });
+    ui.add_space(4.0);
+    super::phone_section(ui, st);
+    ui.add_space(4.0);
     #[cfg(not(target_arch = "wasm32"))]
     ai_assistants(ui);
     let control = &mut st.control;
@@ -102,7 +89,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(Color32::from_rgb(230, 160, 60)));
             }
         }
-        ui.menu_button(label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
+        crate::ui::field_menu(ui, label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
             ui.set_min_width(260.0);
             help(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
             for (name, lights) in crate::control::CLIP_LIGHTS {
@@ -438,7 +425,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
 fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, fx: &mut Vec<phosphor_engine::ValueFx>) {
     use phosphor_engine::ValueFx;
     let text = if fx.is_empty() { RichText::new(icon::WAVE_SINE) } else { RichText::new(format!("{} {}", icon::WAVE_SINE, fx.len())).color(accent()) };
-    ui.menu_button(text, |ui| {
+    crate::ui::field_menu(ui, text, |ui| {
         ui.set_min_width(260.0);
         crate::ui::heading(ui, "On the way in");
         help(ui, "The controller's value goes through these, top to bottom, before its range.");

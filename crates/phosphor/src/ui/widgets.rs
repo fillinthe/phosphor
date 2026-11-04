@@ -6,22 +6,35 @@ use super::*;
 /// Right-click menus that also open on sliders and other draggable controls. egui treats a
 /// right-press on those as a drag, so its own context menu never opens; this opens on release.
 pub trait RightMenu {
+    /// Closes on any click inside it (commands).
     fn right_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>>;
+    /// A right-click menu with fields, sliders, toggles or drop-downs in it: stays open until you click outside it
+    /// (egui's default closes a menu on ANY click inside, which closed these the moment a field was clicked).
+    /// Commands in it that should close it call `ui.close()`.
+    fn right_field_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>>;
 }
 
 impl RightMenu for egui::Response {
     fn right_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>> {
-        use egui::SetOpenCommand;
-        let released = self.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && self.contains_pointer();
-        let cmd = if self.secondary_clicked() || released {
-            Some(SetOpenCommand::Bool(true))
-        } else if self.clicked() {
-            Some(SetOpenCommand::Bool(false))
-        } else {
-            None
-        };
-        egui::Popup::menu(self).open_memory(cmd).at_pointer_fixed().show(add)
+        right_popup(self).show(add)
     }
+
+    fn right_field_menu<R>(&self, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<egui::InnerResponse<R>> {
+        right_popup(self).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(add)
+    }
+}
+
+fn right_popup(r: &egui::Response) -> egui::Popup<'_> {
+    use egui::SetOpenCommand;
+    let released = r.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && r.contains_pointer();
+    let cmd = if r.secondary_clicked() || released {
+        Some(SetOpenCommand::Bool(true))
+    } else if r.clicked() {
+        Some(SetOpenCommand::Bool(false))
+    } else {
+        None
+    };
+    egui::Popup::menu(r).open_memory(cmd).at_pointer_fixed()
 }
 
 /// Adds a slider or drag value, but undoes any change made with the right or middle mouse button,

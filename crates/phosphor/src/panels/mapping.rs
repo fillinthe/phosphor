@@ -624,7 +624,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                 if r.double_clicked() {
                     todo.push(Do::Window(id));
                 }
-                r.on_hover_text(format!("{} · {ow}×{oh}\nClick to edit its mapping · double-click to open / close its window · right-click for more", o.name)).right_menu(|ui| {
+                r.on_hover_text(format!("{} · {ow}×{oh}\nClick to edit its mapping · double-click to open / close its window · right-click for more", o.name)).right_field_menu(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut o.name).desired_width(160.0));
                     if crate::ui::command(ui, label(if open { icon::STOP } else { icon::PLAY }, if open { "Close window" } else { "Open window" })).clicked() {
                         todo.push(Do::Window(id));

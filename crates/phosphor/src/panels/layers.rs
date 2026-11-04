@@ -665,7 +665,7 @@ pub(crate) fn input_icon(kind: crate::media::live::InputKind) -> &'static str {
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
     let mut picked = None;
-    let r = ui.menu_button(icon::VIDEO_CAMERA, |ui| {
+    let r = crate::ui::field_menu(ui, icon::VIDEO_CAMERA, |ui| {
         ui.set_min_width(260.0);
         let refresh = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("live_rescan"))).unwrap_or(false);
         let cams = crate::media::live::cameras_cached(ui.ctx(), refresh);
