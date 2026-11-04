@@ -99,6 +99,8 @@ pub struct SurfaceWidget {
     pub osc_out: String,
     /// Audience play: guests can use it (off = it's hidden from them).
     pub guests: bool,
+    /// Locked in place: the designer won't move, resize or arrange it (a stray drag can't shift it).
+    pub locked: bool,
     /// Audience play: the part of its range guests can reach (low, high; 0..1), e.g. a strobe up to 30%.
     pub guest_range: [f32; 2],
     /// Choices: the buttons' names, in order.
@@ -132,7 +134,7 @@ pub const DEFAULT_BARS: usize = 8;
 
 impl Default for SurfaceWidget {
     fn default() -> Self {
-        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None, bars: Vec::new(), formula: String::new(), inputs: Vec::new(), motion: None, live: 0.0 }
+        Self { id: 0, kind: WidgetKind::Button, x: 0.0, y: 0.0, w: 2.0, h: 2.0, label: String::new(), color: [0, 200, 190], bindings: Vec::new(), bindings_y: Vec::new(), bindings_z: Vec::new(), value: 0.0, value_y: 0.0, value_z: 1.0, page: 0, osc_out: String::new(), guests: true, locked: false, guest_range: [0.0, 1.0], items: Vec::new(), text: String::new(), text_layer: None, bars: Vec::new(), formula: String::new(), inputs: Vec::new(), motion: None, live: 0.0 }
     }
 }
 
@@ -317,7 +319,7 @@ impl ControlSurface {
     /// Moves a widget by (dx, dy) cells, kept inside the columns and above the top.
     pub fn move_by(&mut self, id: u64, dx: f32, dy: f32) {
         let cols = self.columns.max(1) as f32;
-        if let Some(w) = self.widget_mut(id) {
+        if let Some(w) = self.widget_mut(id).filter(|w| !w.locked) {
             w.x = (w.x + dx).clamp(0.0, (cols - w.w).max(0.0));
             w.y = (w.y + dy).max(0.0);
         }
@@ -337,9 +339,10 @@ impl ControlSurface {
     }
 
     /// Moves several widgets together by (dx, dy) cells: the group keeps its shape and stops at the edges as one.
+    /// Locked ones stay where they are.
     pub fn move_many(&mut self, ids: &[u64], dx: f32, dy: f32) {
         let cols = self.columns.max(1) as f32;
-        let picked = || self.widgets.iter().filter(|w| ids.contains(&w.id));
+        let picked = || self.widgets.iter().filter(|w| ids.contains(&w.id) && !w.locked);
         let (mut left, mut right, mut top) = (f32::MAX, f32::MIN, f32::MAX);
         for w in picked() {
             left = left.min(w.x);
@@ -351,7 +354,7 @@ impl ControlSurface {
         }
         let dx = dx.clamp(-left, (cols - right).max(-left));
         let dy = dy.max(-top);
-        for w in self.widgets.iter_mut().filter(|w| ids.contains(&w.id)) {
+        for w in self.widgets.iter_mut().filter(|w| ids.contains(&w.id) && !w.locked) {
             w.x += dx;
             w.y += dy;
         }
@@ -385,9 +388,10 @@ impl ControlSurface {
         }
     }
 
-    /// Lines up, spreads out or matches the size of several widgets (two or more; one does nothing).
+    /// Lines up, spreads out or matches the size of several widgets (two or more; one does nothing). Locked ones
+    /// are left out.
     pub fn arrange(&mut self, ids: &[u64], how: Arrange) {
-        let mut picked: Vec<usize> = self.widgets.iter().enumerate().filter(|(_, w)| ids.contains(&w.id)).map(|(i, _)| i).collect();
+        let mut picked: Vec<usize> = self.widgets.iter().enumerate().filter(|(_, w)| ids.contains(&w.id) && !w.locked).map(|(i, _)| i).collect();
         if picked.len() < 2 {
             return;
         }
@@ -567,6 +571,14 @@ mod page_tests {
         }
         sf.keep_inside(c);
         assert_eq!((sf.widget(c).unwrap().x, sf.widget(c).unwrap().w), (3.0, 5.0));
+        // Locked: stays put through nudges, group moves and arranging.
+        sf.widget_mut(a).unwrap().locked = true;
+        let before = (sf.widget(a).unwrap().x, sf.widget(a).unwrap().y);
+        sf.move_by(a, -1.0, 1.0);
+        sf.move_many(&[a, b], -1.0, 1.0);
+        sf.arrange(&[a, b, c], Arrange::Bottom);
+        assert_eq!((sf.widget(a).unwrap().x, sf.widget(a).unwrap().y), before, "a locked widget doesn't move");
+        assert_ne!(sf.widget(b).unwrap().x, 6.0, "the others still did");
     }
 }
 

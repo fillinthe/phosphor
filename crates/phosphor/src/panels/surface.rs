@@ -30,6 +30,8 @@ enum Act {
     Move(Vec<u64>, f32, f32),
     /// Line up, spread out or match sizes.
     Arrange(Vec<u64>, Arrange),
+    /// Lock in place (true) or free (false).
+    Lock(Vec<u64>, bool),
     /// Add a widget at a spot (cells).
     Add(WidgetKind, f32, f32),
     /// Paste the copied widgets with their top-left corner at a spot.
@@ -133,7 +135,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
             ui.label(RichText::new("Columns").small().color(Color32::GRAY));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
-            help(ui, "Drag to move · corner to resize · Shift-click or drag a band on empty space to select several (they move together) · right-click for more · Delete, arrows, Cmd+A / D / C / V");
+            help(ui, "Drag to move · corner to resize · Shift-click or drag a band on empty space to select several (they move together) · right-click for more · Delete, arrows, Cmd+A / D / C / V / L (lock)");
         } else if st.comp.surface.on_page().next().is_none() {
             crate::ui::empty_note(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
@@ -227,7 +229,8 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     let pass = ctx.cumulative_pass_nr();
                     ctx.data_mut(|d| d.insert_temp(egui::Id::new(KEYS_PASS), pass));
                     if !ctx.egui_wants_keyboard_input() {
-                        act = act.take().or(designer_keys(ui, &picked, !copied.is_empty(), snap, pointer.map(cell_at)));
+                        let all_locked = st.comp.surface.widgets.iter().filter(|w| picked.contains(&w.id)).all(|w| w.locked);
+                        act = act.take().or(designer_keys(ui, &picked, all_locked, !copied.is_empty(), snap, pointer.map(cell_at)));
                     }
                 }
             }
@@ -249,7 +252,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 if edit {
                     let body = ui.interact(rect, id, Sense::click_and_drag());
                     let handle = egui::Rect::from_min_size(rect.max - egui::vec2(14.0, 14.0), egui::vec2(14.0, 14.0));
-                    let corner = ui.interact(handle, id.with("resize"), Sense::drag());
+                    let corner = ui.interact(handle, id.with("resize"), if w.locked { Sense::hover() } else { Sense::drag() });
                     if body.clicked() {
                         multi.click(&ctx, &mut selected, w.id, extend);
                         picked = multi.all(&ctx, selected);
@@ -261,6 +264,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     }
                     let wid = w.id;
                     let ids: Vec<u64> = if picked.contains(&wid) { picked.clone() } else { vec![wid] };
+                    let all_locked = st.comp.surface.widgets.iter().filter(|o| ids.contains(&o.id)).all(|o| o.locked);
                     body.right_menu(|ui| {
                         if ids.len() == 1 {
                             if crate::ui::command(ui, label(icon::PENCIL_SIMPLE, "Edit widget…")).clicked() {
@@ -273,11 +277,11 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                                 act = act.take().or(arrange_items(ui, &ids, true));
                             });
                         }
-                        act = act.take().or(group_items(ui, &ids, true));
+                        act = act.take().or(group_items(ui, &ids, all_locked, true));
                     });
                     if let Some(p) = pointer {
-                        if body.drag_started() {
-                            let ids = st.comp.surface.on_page().filter(|o| picked.contains(&o.id)).map(|o| (o.id, o.x, o.y)).collect();
+                        if body.drag_started() && !w.locked {
+                            let ids = st.comp.surface.on_page().filter(|o| picked.contains(&o.id) && !o.locked).map(|o| (o.id, o.x, o.y)).collect();
                             grab = Some(Grab::Move { ids, start: p });
                         }
                         if corner.drag_started() {
@@ -293,7 +297,10 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                         Stroke::new(1.0, Color32::from_gray(90))
                     };
                     painter.rect_stroke(rect, 6.0, outline, StrokeKind::Outside);
-                    painter.text(handle.center(), egui::Align2::CENTER_CENTER, icon::ARROWS_OUT_SIMPLE, egui::FontId::proportional(11.0), Color32::from_gray(160));
+                    painter.text(handle.center(), egui::Align2::CENTER_CENTER, if w.locked { icon::LOCK } else { icon::ARROWS_OUT_SIMPLE }, egui::FontId::proportional(11.0), Color32::from_gray(160));
+                    if w.locked {
+                        body.clone().on_hover_text("Locked in place (right-click › Unlock, or Cmd+L)");
+                    }
                     let wired = !w.bindings.is_empty() || !w.bindings_y.is_empty() || w.bars.iter().any(|b| !b.bindings.is_empty());
                     if !wired && w.kind != WidgetKind::Label {
                         painter.text(rect.left_bottom() + egui::vec2(4.0, -3.0), egui::Align2::LEFT_BOTTOM, "not wired", egui::FontId::proportional(10.0), WARN);
@@ -493,6 +500,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         }
         Some(Act::Move(ids, dx, dy)) => st.comp.surface.move_many(&ids, dx, dy),
         Some(Act::Arrange(ids, how)) => st.comp.surface.arrange(&ids, how),
+        Some(Act::Lock(ids, on)) => st.comp.surface.widgets.iter_mut().filter(|w| ids.contains(&w.id)).for_each(|w| w.locked = on),
         Some(Act::Add(kind, x, y)) => {
             let id = st.comp.surface.add_at(kind, Some((x, y)));
             multi.set(&ctx, &mut selected, vec![id]);
@@ -567,8 +575,9 @@ fn arrange_items(ui: &mut egui::Ui, ids: &[u64], menu: bool) -> Option<Act> {
     picked
 }
 
-/// Duplicate / Copy / front / back / Delete for one widget or the whole selection.
-fn group_items(ui: &mut egui::Ui, ids: &[u64], menu: bool) -> Option<Act> {
+/// Duplicate / Copy / front / back / Lock / Delete for one widget or the whole selection (`all_locked`: they're all
+/// locked, so the item offers Unlock).
+fn group_items(ui: &mut egui::Ui, ids: &[u64], all_locked: bool, menu: bool) -> Option<Act> {
     let mut picked = None;
     let n = ids.len();
     let many = |one: &str| if n > 1 { format!("{one} {n}") } else { one.to_string() };
@@ -586,6 +595,12 @@ fn group_items(ui: &mut egui::Ui, ids: &[u64], menu: bool) -> Option<Act> {
     ui.separator();
     item(ui, icon::ARROW_LINE_UP, "Bring to front", "", Act::ToFront);
     item(ui, icon::ARROW_LINE_DOWN, "Send to back", "", Act::ToBack);
+    ui.separator();
+    if all_locked {
+        item(ui, icon::LOCK_OPEN, "Unlock", "Let it move and resize again", |ids| Act::Lock(ids, false));
+    } else {
+        item(ui, icon::LOCK, "Lock", "Keep it where it is: no moving, resizing or arranging until unlocked (Cmd+L)", |ids| Act::Lock(ids, true));
+    }
     ui.separator();
     if crate::ui::danger_button(ui, label(icon::TRASH, &many("Delete"))).clicked() {
         picked = Some(Act::Delete(ids.to_vec()));
@@ -606,15 +621,16 @@ fn group_editor(ui: &mut egui::Ui, ids: &[u64], sf: &phosphor_engine::ControlSur
     crate::ui::heading(ui, "Arrange");
     let mut act = arrange_items(ui, ids, false);
     ui.add_space(4.0);
-    act = act.or(group_items(ui, ids, false));
+    let all_locked = ids.iter().filter_map(|id| sf.widget(*id)).all(|w| w.locked);
+    act = act.or(group_items(ui, ids, all_locked, false));
     act
 }
 
 /// Keys in Edit while the pointer is over the canvas: Delete / Backspace removes the selected widgets, arrows nudge
 /// them (a cell with Snap on, a quarter without; Shift = a whole cell), Cmd+D duplicates, Cmd+C copies, Cmd+V pastes
-/// the copied widgets under the pointer, Cmd+A selects the page, Escape selects nothing. The keys are taken so
+/// the copied widgets under the pointer, Cmd+L locks or unlocks, Cmd+A selects the page, Escape selects nothing. The keys are taken so
 /// nothing else reads them.
-fn designer_keys(ui: &egui::Ui, picked: &[u64], copied: bool, snap: bool, under_pointer: Option<(f32, f32)>) -> Option<Act> {
+fn designer_keys(ui: &egui::Ui, picked: &[u64], all_locked: bool, copied: bool, snap: bool, under_pointer: Option<(f32, f32)>) -> Option<Act> {
     use egui::{Key, Modifiers};
     ui.ctx().input_mut(|i| {
         if copied && i.consume_key(Modifiers::COMMAND, Key::V) && let Some((x, y)) = under_pointer {
@@ -637,6 +653,9 @@ fn designer_keys(ui: &egui::Ui, picked: &[u64], copied: bool, snap: bool, under_
         }
         if i.consume_key(Modifiers::COMMAND, Key::C) {
             return Some(Act::Copy(picked.to_vec()));
+        }
+        if i.consume_key(Modifiers::COMMAND, Key::L) {
+            return Some(Act::Lock(picked.to_vec(), !all_locked));
         }
         let step = if i.modifiers.shift || snap { 1.0 } else { 0.25 };
         let mut k = |key| (i.consume_key(Modifiers::NONE, key) || i.consume_key(Modifiers::SHIFT, key)) as i32 as f32;
@@ -840,6 +859,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         if typed {
             w.keep_inside(cols);
         }
+        toggle(ui, &mut w.locked, label(icon::LOCK, "Lock")).on_hover_text("Keep it where it is: no moving, resizing or arranging until unlocked (Cmd+L on the canvas)");
     });
     if w.kind == WidgetKind::Text {
         ui.add_space(4.0);

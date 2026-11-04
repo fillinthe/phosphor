@@ -311,15 +311,16 @@ impl egui_dock::TabViewer for Viewer<'_> {
         let full = hue.map_or(Color32::from_gray(230), |h| h.color());
         let dim = hue.map_or(Color32::from_gray(140), |h| h.color().gamma_multiply(0.6));
         let mut style = global.clone();
+        // No outline on the open tab (owner, 2026-11-04): the colour of the words says which one is open.
         for s in [&mut style.active, &mut style.active_with_kb_focus] {
             s.text_color = full;
-            s.outline_color = full.gamma_multiply(0.7);
+            s.outline_color = Color32::TRANSPARENT;
         }
         // The panel last clicked (where keys and clicks go): a faint wash of its colour under the words.
         for s in [&mut style.focused, &mut style.focused_with_kb_focus] {
             s.bg_fill = full.gamma_multiply(0.18);
             s.text_color = full;
-            s.outline_color = full.gamma_multiply(0.9);
+            s.outline_color = Color32::TRANSPARENT;
         }
         for s in [&mut style.inactive, &mut style.inactive_with_kb_focus] {
             s.text_color = dim;
