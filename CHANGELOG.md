@@ -89,6 +89,12 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Menus with a field, a slider or a switch in them (Saved, View, Changes, Render, Brightness, the Rename fields on
   tabs, outputs and pages, and twenty more) stay open while you use them. Clicking the name field in a Saved menu
   used to close the menu.
+- Several widgets at once: Shift-click (or Cmd-click) adds one to the selection, dragging a band on empty space
+  selects everything it touches, Cmd+A selects the page, Escape selects nothing. Selected widgets drag, nudge,
+  duplicate, copy, delete and go to the front or back together. **Arrange** (toolbar, right-click, and the side
+  panel) lines them up by any edge or centre, spreads them out evenly, or gives them the same width, height or
+  size. A widget's exact X, Y, width and height can be typed in its editor.
+- The tab of the panel you're in has a soft wash of its colour under the words instead of a solid fill.
 
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and

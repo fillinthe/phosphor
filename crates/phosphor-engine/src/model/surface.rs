@@ -138,6 +138,15 @@ impl Default for SurfaceWidget {
 
 impl SurfaceWidget {
     /// A value a guest sent, kept inside their range (-1 = a toggle's flip, left alone).
+    /// Back inside `cols` columns and above the top, at least a cell big (after x / y / w / h were typed).
+    pub fn keep_inside(&mut self, cols: f32) {
+        let cols = cols.max(1.0);
+        self.w = self.w.clamp(1.0, cols);
+        self.h = self.h.max(1.0);
+        self.x = self.x.clamp(0.0, cols - self.w);
+        self.y = self.y.max(0.0);
+    }
+
     pub fn guest_value(&self, v: f32) -> f32 {
         if v < 0.0 {
             return v;
@@ -197,6 +206,24 @@ impl SurfaceWidget {
         };
         [f(5.0), f(3.0), f(1.0)]
     }
+}
+
+/// How several selected widgets get lined up (`ControlSurface::arrange`). Sizes copy the first one picked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Arrange {
+    Left,
+    Centre,
+    Right,
+    Top,
+    Middle,
+    Bottom,
+    /// Even gaps between them, left to right (the outer two stay).
+    SpreadAcross,
+    /// Even gaps, top to bottom.
+    SpreadDown,
+    SameWidth,
+    SameHeight,
+    SameSize,
 }
 
 /// Your own page of controls (VDMX-style), saved with the project.
@@ -309,6 +336,103 @@ impl ControlSurface {
         }
     }
 
+    /// Moves several widgets together by (dx, dy) cells: the group keeps its shape and stops at the edges as one.
+    pub fn move_many(&mut self, ids: &[u64], dx: f32, dy: f32) {
+        let cols = self.columns.max(1) as f32;
+        let picked = || self.widgets.iter().filter(|w| ids.contains(&w.id));
+        let (mut left, mut right, mut top) = (f32::MAX, f32::MIN, f32::MAX);
+        for w in picked() {
+            left = left.min(w.x);
+            right = right.max(w.x + w.w);
+            top = top.min(w.y);
+        }
+        if left == f32::MAX {
+            return;
+        }
+        let dx = dx.clamp(-left, (cols - right).max(-left));
+        let dy = dy.max(-top);
+        for w in self.widgets.iter_mut().filter(|w| ids.contains(&w.id)) {
+            w.x += dx;
+            w.y += dy;
+        }
+    }
+
+    /// Several widgets pasted together (a copy of a selection): they keep their shape, with the group's top-left
+    /// corner at `at` (or at the first free spot for the whole group). Returns the new ids.
+    pub fn place_many(&mut self, widgets: Vec<SurfaceWidget>, at: Option<(f32, f32)>) -> Vec<u64> {
+        let left = widgets.iter().map(|w| w.x).fold(f32::MAX, f32::min);
+        let top = widgets.iter().map(|w| w.y).fold(f32::MAX, f32::min);
+        let right = widgets.iter().map(|w| w.x + w.w).fold(f32::MIN, f32::max);
+        let bottom = widgets.iter().map(|w| w.y + w.h).fold(f32::MIN, f32::max);
+        if widgets.is_empty() {
+            return Vec::new();
+        }
+        let (x0, y0) = match at {
+            Some((x, y)) => self.inside(x, y, right - left),
+            None => self.free_spot(right - left, bottom - top),
+        };
+        widgets.into_iter().map(|w| {
+            let spot = (x0 + w.x - left, y0 + w.y - top);
+            self.place(w, Some(spot))
+        }).collect()
+    }
+
+    /// Puts a widget back inside the columns and above the top (after its x / y / w / h were typed).
+    pub fn keep_inside(&mut self, id: u64) {
+        let cols = self.columns.max(1) as f32;
+        if let Some(w) = self.widget_mut(id) {
+            w.keep_inside(cols);
+        }
+    }
+
+    /// Lines up, spreads out or matches the size of several widgets (two or more; one does nothing).
+    pub fn arrange(&mut self, ids: &[u64], how: Arrange) {
+        let mut picked: Vec<usize> = self.widgets.iter().enumerate().filter(|(_, w)| ids.contains(&w.id)).map(|(i, _)| i).collect();
+        if picked.len() < 2 {
+            return;
+        }
+        let ws = &mut self.widgets;
+        let left = picked.iter().map(|&i| ws[i].x).fold(f32::MAX, f32::min);
+        let right = picked.iter().map(|&i| ws[i].x + ws[i].w).fold(f32::MIN, f32::max);
+        let top = picked.iter().map(|&i| ws[i].y).fold(f32::MAX, f32::min);
+        let bottom = picked.iter().map(|&i| ws[i].y + ws[i].h).fold(f32::MIN, f32::max);
+        let first = ids.first().and_then(|id| ws.iter().find(|w| w.id == *id)).unwrap_or(&ws[picked[0]]).clone();
+        match how {
+            Arrange::Left => picked.iter().for_each(|&i| ws[i].x = left),
+            Arrange::Right => picked.iter().for_each(|&i| ws[i].x = right - ws[i].w),
+            Arrange::Centre => picked.iter().for_each(|&i| ws[i].x = (left + right - ws[i].w) / 2.0),
+            Arrange::Top => picked.iter().for_each(|&i| ws[i].y = top),
+            Arrange::Bottom => picked.iter().for_each(|&i| ws[i].y = bottom - ws[i].h),
+            Arrange::Middle => picked.iter().for_each(|&i| ws[i].y = (top + bottom - ws[i].h) / 2.0),
+            Arrange::SpreadAcross | Arrange::SpreadDown => {
+                let across = how == Arrange::SpreadAcross;
+                picked.sort_by(|&a, &b| {
+                    let (ka, kb) = if across { (ws[a].x, ws[b].x) } else { (ws[a].y, ws[b].y) };
+                    ka.total_cmp(&kb)
+                });
+                let total: f32 = picked.iter().map(|&i| if across { ws[i].w } else { ws[i].h }).sum();
+                let span = if across { right - left } else { bottom - top };
+                let gap = ((span - total) / (picked.len() - 1) as f32).max(0.0);
+                let mut at = if across { left } else { top };
+                for &i in &picked {
+                    if across {
+                        ws[i].x = at;
+                        at += ws[i].w + gap;
+                    } else {
+                        ws[i].y = at;
+                        at += ws[i].h + gap;
+                    }
+                }
+            }
+            Arrange::SameWidth => picked.iter().for_each(|&i| ws[i].w = first.w),
+            Arrange::SameHeight => picked.iter().for_each(|&i| ws[i].h = first.h),
+            Arrange::SameSize => picked.iter().for_each(|&i| (ws[i].w, ws[i].h) = (first.w, first.h)),
+        }
+        for &id in ids {
+            self.keep_inside(id);
+        }
+    }
+
     /// A spot kept inside the columns (and above the top) for a widget this wide.
     fn inside(&self, x: f32, y: f32, w: f32) -> (f32, f32) {
         let cols = self.columns.max(1) as f32;
@@ -411,6 +535,38 @@ mod page_tests {
         assert_eq!(sf.widget(c).map(|w| (w.kind, w.x, w.y)), Some((WidgetKind::XyPad, 1.0, 1.0)));
         assert!(sf.remove(a).is_some() && sf.remove(a).is_none());
         assert_eq!(sf.widgets.len(), 2);
+    }
+
+    #[test]
+    fn groups_move_paste_and_line_up_together() {
+        let mut sf = ControlSurface { columns: 8, ..Default::default() };
+        // Buttons are 2 x 2.
+        let a = sf.add_at(WidgetKind::Button, Some((0.0, 0.0)));
+        let b = sf.add_at(WidgetKind::Button, Some((3.0, 2.0)));
+        sf.move_many(&[a, b], 10.0, -5.0);
+        assert_eq!((sf.widget(a).unwrap().x, sf.widget(b).unwrap().x), (3.0, 6.0), "the group stops at the right edge as one");
+        assert_eq!((sf.widget(a).unwrap().y, sf.widget(b).unwrap().y), (0.0, 2.0), "and at the top");
+        let copies = sf.place_many(vec![sf.widget(a).unwrap().clone(), sf.widget(b).unwrap().clone()], Some((7.0, 4.0)));
+        assert_eq!(copies.len(), 2);
+        let (ca, cb) = (sf.widget(copies[0]).unwrap(), sf.widget(copies[1]).unwrap());
+        assert_eq!((ca.x, ca.y, cb.x, cb.y), (3.0, 4.0, 6.0, 6.0), "pasted with its shape, kept inside");
+        sf.arrange(&[a, b], Arrange::Left);
+        assert_eq!(sf.widget(b).unwrap().x, 3.0);
+        sf.arrange(&[a, b], Arrange::Top);
+        assert_eq!(sf.widget(b).unwrap().y, 0.0);
+        if let Some(w) = sf.widget_mut(b) {
+            w.x = 6.0;
+        }
+        let c = sf.add_at(WidgetKind::Fader, Some((4.0, 0.0))); // 1 x 4
+        sf.arrange(&[a, b, c], Arrange::SpreadAcross);
+        assert_eq!((sf.widget(a).unwrap().x, sf.widget(c).unwrap().x, sf.widget(b).unwrap().x), (3.0, 5.0, 6.0), "even gaps between the outer two (none fit here)");
+        sf.arrange(&[c, a], Arrange::SameSize);
+        assert_eq!((sf.widget(a).unwrap().w, sf.widget(a).unwrap().h), (1.0, 4.0), "sizes copy the first one picked");
+        if let Some(w) = sf.widget_mut(c) {
+            (w.x, w.w) = (6.0, 5.0);
+        }
+        sf.keep_inside(c);
+        assert_eq!((sf.widget(c).unwrap().x, sf.widget(c).unwrap().w), (3.0, 5.0));
     }
 }
 

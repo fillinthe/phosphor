@@ -2,7 +2,7 @@
 //! widget drives any number of targets, and can itself be mapped to MIDI / OSC / keys.
 
 use super::*;
-use phosphor_engine::{SurfaceWidget, WidgetKind};
+use phosphor_engine::{Arrange, SurfaceWidget, WidgetKind};
 
 const PALETTE: [[u8; 3]; 8] = [[0, 200, 190], [255, 196, 70], [255, 105, 97], [160, 120, 255], [90, 170, 255], [120, 220, 110], [255, 140, 200], [200, 200, 200]];
 
@@ -10,34 +10,40 @@ fn rgb(c: [u8; 3]) -> Color32 {
     Color32::from_rgb(c[0], c[1], c[2])
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Grab {
-    Move { id: u64, start: egui::Pos2, x: f32, y: f32 },
+    /// Moving every selected widget together: each one's id and where it started (cells).
+    Move { ids: Vec<(u64, f32, f32)>, start: egui::Pos2 },
     Resize { id: u64, start: egui::Pos2, w: f32, h: f32 },
 }
 
-/// What the designer was asked to do to a widget (right-click menu, keys), done once the canvas is drawn.
-#[derive(Clone, Copy)]
+/// What the designer was asked to do (right-click menu, keys, Inspector), done once the canvas is drawn. Most act
+/// on every selected widget.
+#[derive(Clone)]
 enum Act {
-    Duplicate(u64),
-    Copy(u64),
-    ToFront(u64),
-    ToBack(u64),
-    Delete(u64),
-    /// Nudge by (dx, dy) cells.
-    Move(u64, f32, f32),
+    Duplicate(Vec<u64>),
+    Copy(Vec<u64>),
+    ToFront(Vec<u64>),
+    ToBack(Vec<u64>),
+    Delete(Vec<u64>),
+    /// Nudge by (dx, dy) cells, as a group.
+    Move(Vec<u64>, f32, f32),
+    /// Line up, spread out or match sizes.
+    Arrange(Vec<u64>, Arrange),
     /// Add a widget at a spot (cells).
     Add(WidgetKind, f32, f32),
-    /// Paste the copied widget at a spot.
+    /// Paste the copied widgets with their top-left corner at a spot.
     Paste(f32, f32),
+    SelectAll,
+    SelectNone,
 }
 
-/// Temp-data key: the copied widget (Copy / Paste in the designer, across projects too).
+/// Temp-data key: the copied widgets (Copy / Paste in the designer, across projects too).
 const CLIPBOARD: &str = "surface_clipboard";
 /// Temp-data key: the pass the designer last owned the keyboard in (pointer over its canvas in Edit).
 const KEYS_PASS: &str = "surface_keys_pass";
 
-/// True while the Control Surface designer uses the keys itself (Delete, arrows, Cmd+D/C/V): the app's layer
+/// True while the Control Surface designer uses the keys itself (Delete, arrows, Cmd+A/D/C/V): the app's layer
 /// shortcuts stand back. Set a frame earlier (the designer draws after the shortcuts run).
 pub(crate) fn designer_owns_keys(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<u64>(egui::Id::new(KEYS_PASS))).is_some_and(|pass| ctx.cumulative_pass_nr() <= pass + 1)
@@ -74,9 +80,24 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     let sel_id = egui::Id::new(("surface_selected", key));
     let grab_id = egui::Id::new(("surface_grab", key));
     let snap_id = egui::Id::new("surface_snap");
-    let mut edit: bool = ui.ctx().data(|d| d.get_temp(edit_id)).unwrap_or(st.comp.surface.widgets.is_empty());
-    let mut snap: bool = ui.ctx().data(|d| d.get_temp(snap_id)).unwrap_or(true);
-    let mut selected: Option<u64> = ui.ctx().data(|d| d.get_temp(sel_id)).flatten();
+    let multi = crate::ui::Selection::new(("surface_multi", key));
+    let ctx = ui.ctx().clone();
+    let mut selected: Option<u64> = ctx.data(|d| d.get_temp(sel_id)).flatten();
+    let mut edit: bool = ctx.data(|d| d.get_temp(edit_id)).unwrap_or_else(|| {
+        // First frame. Bench pictures: PHOSPHOR_SURFACE_EDIT=1,2,3 opens Edit with those widgets selected.
+        match std::env::var("PHOSPHOR_SURFACE_EDIT") {
+            Ok(ids) if only.is_none() => {
+                multi.set(&ctx, &mut selected, ids.split(',').filter_map(|i| i.trim().parse().ok()).collect());
+                true
+            }
+            _ => st.comp.surface.widgets.is_empty(),
+        }
+    });
+    let mut snap: bool = ctx.data(|d| d.get_temp(snap_id)).unwrap_or(true);
+    // Everything selected (on this page only; the primary is the one whose editor shows when it's alone).
+    let mut picked: Vec<u64> = multi.all(&ctx, selected).into_iter().filter(|id| st.comp.surface.widget(*id).is_some_and(|w| w.page == st.comp.surface.current_page())).collect();
+    let mut act: Option<Act> = None;
+    let copied: Vec<SurfaceWidget> = ctx.data(|d| d.get_temp(egui::Id::new(CLIPBOARD))).unwrap_or_default();
 
     // Toolbar.
     ui.horizontal(|ui| {
@@ -85,7 +106,8 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             ui.menu_button(label(icon::PLUS, "Add"), |ui| {
                 for &kind in <WidgetKind as phosphor_engine::Choice>::OPTIONS {
                     if crate::ui::command(ui, phosphor_engine::Choice::label(kind)).clicked() {
-                        selected = Some(st.comp.surface.add(kind));
+                        let id = st.comp.surface.add(kind);
+                        multi.set(&ctx, &mut selected, vec![id]);
                         ui.close();
                     }
                 }
@@ -98,13 +120,20 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 }
             });
             toggle(ui, &mut snap, label(icon::MAGNET, "Snap")).on_hover_text("On: widgets land on whole grid cells. Off: anywhere, to a quarter of a cell (arrow keys nudge by the same amount; Shift = a whole cell).");
+            if picked.len() >= 2 {
+                ui.menu_button(label(icon::ALIGN_LEFT, "Arrange"), |ui| {
+                    act = act.take().or(arrange_items(ui, &picked, true));
+                })
+                .response
+                .on_hover_text("Line up, spread out or match the size of the selected widgets");
+            }
             ui.label(RichText::new("OSC out").small().color(Color32::GRAY));
             ui.add(egui::TextEdit::singleline(&mut st.comp.surface.osc_host).hint_text("IP, e.g. 192.168.1.20").desired_width(110.0))
                 .on_hover_text("Widgets with a Send OSC address send their values here (another app on this Mac: 127.0.0.1). Empty = off.");
             guarded!(ui, st.comp.surface.osc_port, egui::DragValue::new(&mut st.comp.surface.osc_port).range(1..=65535)).on_hover_text("Port the other app listens on");
             ui.label(RichText::new("Columns").small().color(Color32::GRAY));
             guarded!(ui, st.comp.surface.columns, egui::DragValue::new(&mut st.comp.surface.columns).range(4..=32));
-            help(ui, "Drag to move · corner to resize · right-click a widget or an empty spot for more · Delete, arrows, Cmd+D / C / V work on the selected one");
+            help(ui, "Drag to move · corner to resize · Shift-click or drag a band on empty space to select several (they move together) · right-click for more · Delete, arrows, Cmd+A / D / C / V");
         } else if st.comp.surface.on_page().next().is_none() {
             crate::ui::empty_note(ui, "Empty. Turn on Edit and add buttons, faders and pads.");
         }
@@ -128,14 +157,12 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     }
 
     let targets = crate::control::all_targets(&st.comp);
-    let inspector = edit && selected.is_some_and(|id| st.comp.surface.widget(id).is_some());
+    let inspector = edit && (picked.len() >= 2 || selected.is_some_and(|id| st.comp.surface.widget(id).is_some()));
     let mut sets: Vec<(ControlTarget, f32)> = Vec::new();
-    let mut grab: Option<Grab> = ui.ctx().data(|d| d.get_temp(grab_id)).flatten();
+    let mut grab: Option<Grab> = ctx.data(|d| d.get_temp(grab_id)).flatten();
     let mut open_editor: Option<u64> = None;
     // A colour widget's brightness strip was dragged: (widget, brightness).
     let mut brightness: Option<(u64, f32)> = None;
-    let mut act: Option<Act> = None;
-    let copied: Option<SurfaceWidget> = ui.ctx().data(|d| d.get_temp(egui::Id::new(CLIPBOARD)));
 
     ui.horizontal_top(|ui| {
         let canvas_w = (ui.available_width() - if inspector { 330.0 } else { 0.0 }).max(200.0);
@@ -147,19 +174,22 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         let cell = (canvas_w / cols).min(avail_h / rows.max(4.0)).max(24.0);
         let height = (rows * cell).max(avail_h);
         crate::ui::column_scroll(ui).id_salt(("surface_scroll", key)).max_width(canvas_w).auto_shrink([false, false]).show(ui, |ui| {
-            let (canvas, bg) = ui.allocate_exact_size(egui::vec2(canvas_w, height), if edit { Sense::click() } else { Sense::hover() });
+            let (canvas, bg) = ui.allocate_exact_size(egui::vec2(canvas_w, height), if edit { Sense::click_and_drag() } else { Sense::hover() });
             let painter = ui.painter_at(canvas);
+            let widget_rect = |w: &SurfaceWidget| egui::Rect::from_min_size(canvas.min + egui::vec2(w.x * cell, w.y * cell), egui::vec2(w.w * cell, w.h * cell)).shrink(3.0);
             // Cells under a point on the canvas (where a right-click or a paste lands).
             let cell_at = |p: egui::Pos2| (snapped((p.x - canvas.min.x) / cell, snap), snapped((p.y - canvas.min.y) / cell, snap));
-            let pointer = ui.ctx().input(|i| i.pointer.interact_pos());
+            let pointer = ctx.input(|i| i.pointer.interact_pos());
+            let extend = crate::ui::extending(ui);
             if edit {
-                if bg.clicked() {
-                    selected = None;
+                if bg.clicked() && !extend {
+                    multi.clear(&ctx, &mut selected);
+                    picked.clear();
                 }
                 // Right-click an empty spot: add something right there.
                 let spot_id = egui::Id::new(("surface_spot", key));
                 if bg.secondary_clicked() && let Some(p) = pointer {
-                    ui.ctx().data_mut(|d| d.insert_temp(spot_id, cell_at(p)));
+                    ctx.data_mut(|d| d.insert_temp(spot_id, cell_at(p)));
                 }
                 bg.right_menu(|ui| {
                     let (x, y) = ui.ctx().data(|d| d.get_temp::<(f32, f32)>(spot_id)).unwrap_or((0.0, 0.0));
@@ -177,20 +207,27 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                             ui.close();
                         }
                     }
-                    if let Some(c) = &copied {
+                    if !copied.is_empty() {
                         ui.separator();
-                        if crate::ui::command(ui, label(icon::CLIPBOARD_TEXT, &format!("Paste {}", c.label))).clicked() {
+                        if crate::ui::command(ui, label(icon::CLIPBOARD_TEXT, &paste_label(&copied))).clicked() {
                             act = Some(Act::Paste(x, y));
+                            ui.close();
+                        }
+                    }
+                    if st.comp.surface.on_page().next().is_some() {
+                        ui.separator();
+                        if crate::ui::command(ui, label(icon::SELECTION_ALL, "Select all")).clicked() {
+                            act = Some(Act::SelectAll);
                             ui.close();
                         }
                     }
                 });
                 // The keys are the designer's while the pointer is over it (the app's layer shortcuts stand back).
                 if ui.rect_contains_pointer(canvas) {
-                    let pass = ui.ctx().cumulative_pass_nr();
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(KEYS_PASS), pass));
-                    if !ui.ctx().egui_wants_keyboard_input() {
-                        act = act.or(designer_keys(ui, selected, copied.is_some(), snap, pointer.map(cell_at)));
+                    let pass = ctx.cumulative_pass_nr();
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new(KEYS_PASS), pass));
+                    if !ctx.egui_wants_keyboard_input() {
+                        act = act.take().or(designer_keys(ui, &picked, !copied.is_empty(), snap, pointer.map(cell_at)));
                     }
                 }
             }
@@ -206,56 +243,55 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             }
             let mut text_sets: Vec<(u64, String)> = Vec::new();
             for w in st.comp.surface.on_page() {
-                let rect = egui::Rect::from_min_size(canvas.min + egui::vec2(w.x * cell, w.y * cell), egui::vec2(w.w * cell, w.h * cell)).shrink(3.0);
+                let rect = widget_rect(w);
                 let id = egui::Id::new(("surface_widget", w.id));
                 let target = ControlTarget::Surface(w.id);
                 if edit {
                     let body = ui.interact(rect, id, Sense::click_and_drag());
                     let handle = egui::Rect::from_min_size(rect.max - egui::vec2(14.0, 14.0), egui::vec2(14.0, 14.0));
                     let corner = ui.interact(handle, id.with("resize"), Sense::drag());
-                    if body.clicked() || body.drag_started() || body.secondary_clicked() {
-                        selected = Some(w.id);
+                    if body.clicked() {
+                        multi.click(&ctx, &mut selected, w.id, extend);
+                        picked = multi.all(&ctx, selected);
+                    }
+                    // A drag or a right-click on one outside the selection: that one alone.
+                    if (body.drag_started() || body.secondary_clicked() || corner.drag_started()) && !picked.contains(&w.id) {
+                        multi.click(&ctx, &mut selected, w.id, extend && body.drag_started());
+                        picked = multi.all(&ctx, selected);
                     }
                     let wid = w.id;
+                    let ids: Vec<u64> = if picked.contains(&wid) { picked.clone() } else { vec![wid] };
                     body.right_menu(|ui| {
-                        if crate::ui::command(ui, label(icon::PENCIL_SIMPLE, "Edit widget…")).clicked() {
-                            open_editor = Some(wid);
-                            ui.close();
+                        if ids.len() == 1 {
+                            if crate::ui::command(ui, label(icon::PENCIL_SIMPLE, "Edit widget…")).clicked() {
+                                open_editor = Some(wid);
+                                ui.close();
+                            }
+                        } else {
+                            ui.label(RichText::new(format!("{} selected", ids.len())).small().color(Color32::GRAY));
+                            ui.menu_button(label(icon::ALIGN_LEFT, "Arrange"), |ui| {
+                                act = act.take().or(arrange_items(ui, &ids, true));
+                            });
                         }
-                        if crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
-                            act = Some(Act::Duplicate(wid));
-                            ui.close();
-                        }
-                        if crate::ui::command(ui, label(icon::CLIPBOARD_TEXT, "Copy")).on_hover_text("Paste it on another page or in another project (right-click an empty spot)").clicked() {
-                            act = Some(Act::Copy(wid));
-                            ui.close();
-                        }
-                        ui.separator();
-                        if crate::ui::command(ui, label(icon::ARROW_LINE_UP, "Bring to front")).clicked() {
-                            act = Some(Act::ToFront(wid));
-                            ui.close();
-                        }
-                        if crate::ui::command(ui, label(icon::ARROW_LINE_DOWN, "Send to back")).clicked() {
-                            act = Some(Act::ToBack(wid));
-                            ui.close();
-                        }
-                        ui.separator();
-                        if crate::ui::danger_button(ui, label(icon::TRASH, "Delete")).clicked() {
-                            act = Some(Act::Delete(wid));
-                            ui.close();
-                        }
+                        act = act.take().or(group_items(ui, &ids, true));
                     });
                     if let Some(p) = pointer {
                         if body.drag_started() {
-                            grab = Some(Grab::Move { id: w.id, start: p, x: w.x, y: w.y });
+                            let ids = st.comp.surface.on_page().filter(|o| picked.contains(&o.id)).map(|o| (o.id, o.x, o.y)).collect();
+                            grab = Some(Grab::Move { ids, start: p });
                         }
                         if corner.drag_started() {
                             grab = Some(Grab::Resize { id: w.id, start: p, w: w.w, h: w.h });
-                            selected = Some(w.id);
                         }
                     }
                     draw_widget(&painter, w, rect, true);
-                    let outline = if selected == Some(w.id) { Stroke::new(2.0, accent()) } else { Stroke::new(1.0, Color32::from_gray(90)) };
+                    let outline = if selected == Some(w.id) {
+                        Stroke::new(2.0, accent())
+                    } else if picked.contains(&w.id) {
+                        Stroke::new(1.5, accent().gamma_multiply(0.7))
+                    } else {
+                        Stroke::new(1.0, Color32::from_gray(90))
+                    };
                     painter.rect_stroke(rect, 6.0, outline, StrokeKind::Outside);
                     painter.text(handle.center(), egui::Align2::CENTER_CENTER, icon::ARROWS_OUT_SIMPLE, egui::FontId::proportional(11.0), Color32::from_gray(160));
                     let wired = !w.bindings.is_empty() || !w.bindings_y.is_empty() || w.bars.iter().any(|b| !b.bindings.is_empty());
@@ -370,16 +406,32 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             for (wid, text) in text_sets {
                 st.comp.set_surface_text(wid, &text);
             }
+            // A band dragged out on empty space selects what it touches (with Shift / Cmd: adds them).
+            if edit && grab.is_none()
+                && let Some(band) = crate::ui::rubber_band(ui, &bg, ("surface_band", key))
+            {
+                let mut ids: Vec<u64> = if extend { picked.clone() } else { Vec::new() };
+                for w in st.comp.surface.on_page().filter(|w| band.intersects(widget_rect(w))) {
+                    if !ids.contains(&w.id) {
+                        ids.push(w.id);
+                    }
+                }
+                multi.set(&ctx, &mut selected, ids);
+                picked = multi.all(&ctx, selected);
+            }
             // Dragging in edit mode: snap to the grid.
-            if let (Some(g), Some(p)) = (grab, pointer) {
+            if let (Some(g), Some(p)) = (grab.clone(), pointer) {
                 if ui.input(|i| i.pointer.primary_down()) {
                     let surface = &mut st.comp.surface;
                     match g {
-                        Grab::Move { id, start, x, y } => {
-                            if let Some(w) = surface.widget_mut(id) {
-                                w.x = (x + snapped((p.x - start.x) / cell, snap)).clamp(0.0, (cols - w.w).max(0.0));
-                                w.y = (y + snapped((p.y - start.y) / cell, snap)).max(0.0);
+                        Grab::Move { ids, start } => {
+                            let (dx, dy) = (snapped((p.x - start.x) / cell, snap), snapped((p.y - start.y) / cell, snap));
+                            for (id, x, y) in &ids {
+                                if let Some(w) = surface.widget_mut(*id) {
+                                    (w.x, w.y) = (*x, *y);
+                                }
                             }
+                            surface.move_many(&ids.iter().map(|t| t.0).collect::<Vec<_>>(), dx, dy);
                         }
                         Grab::Resize { id, start, w: w0, h: h0 } => {
                             if let Some(w) = surface.widget_mut(id) {
@@ -393,12 +445,16 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 }
             }
         });
-        if inspector && let Some(id) = selected {
+        if inspector {
             ui.separator();
             ui.vertical(|ui| {
                 ui.set_width(310.0);
-                if !widget_editor(ui, st, id, &targets) {
-                    selected = None;
+                if picked.len() >= 2 {
+                    act = act.take().or(group_editor(ui, &picked, &st.comp.surface));
+                } else if let Some(id) = selected
+                    && !widget_editor(ui, st, id, &targets)
+                {
+                    multi.clear(&ctx, &mut selected);
                 }
             });
         }
@@ -406,31 +462,52 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
 
     if let Some(id) = open_editor {
         edit = true;
-        selected = Some(id);
+        multi.set(&ctx, &mut selected, vec![id]);
     }
     match act {
-        Some(Act::Duplicate(id)) => selected = st.comp.surface.duplicate(id).or(selected),
-        Some(Act::Copy(id)) => {
-            if let Some(w) = st.comp.surface.widget(id).cloned() {
-                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CLIPBOARD), w));
-                st.notice = Some("Copied: right-click an empty spot to paste it".into());
+        Some(Act::Duplicate(ids)) => {
+            let copies: Vec<SurfaceWidget> = st.comp.surface.widgets.iter().filter(|w| ids.contains(&w.id)).cloned().collect();
+            let new = st.comp.surface.place_many(copies, None);
+            if !new.is_empty() {
+                multi.set(&ctx, &mut selected, new);
             }
         }
-        Some(Act::ToFront(id)) => st.comp.surface.to_front(id),
-        Some(Act::ToBack(id)) => st.comp.surface.to_back(id),
-        Some(Act::Delete(id)) => {
-            st.comp.remove_widget(id);
-            if selected == Some(id) {
-                selected = None;
+        Some(Act::Copy(ids)) => {
+            let ws: Vec<SurfaceWidget> = st.comp.surface.widgets.iter().filter(|w| ids.contains(&w.id)).cloned().collect();
+            if !ws.is_empty() {
+                st.notice = Some(format!("Copied {}: right-click an empty spot to paste", crate::ui::plural(ws.len(), "{0} widget", "{0} widgets")));
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(CLIPBOARD), ws));
             }
         }
-        Some(Act::Move(id, dx, dy)) => st.comp.surface.move_by(id, dx, dy),
-        Some(Act::Add(kind, x, y)) => selected = Some(st.comp.surface.add_at(kind, Some((x, y)))),
+        Some(Act::ToFront(ids)) => {
+            let order: Vec<u64> = st.comp.surface.widgets.iter().map(|w| w.id).filter(|id| ids.contains(id)).collect();
+            order.into_iter().for_each(|id| st.comp.surface.to_front(id));
+        }
+        Some(Act::ToBack(ids)) => {
+            let order: Vec<u64> = st.comp.surface.widgets.iter().map(|w| w.id).filter(|id| ids.contains(id)).collect();
+            order.into_iter().rev().for_each(|id| st.comp.surface.to_back(id));
+        }
+        Some(Act::Delete(ids)) => {
+            ids.iter().for_each(|id| st.comp.remove_widget(*id));
+            multi.clear(&ctx, &mut selected);
+        }
+        Some(Act::Move(ids, dx, dy)) => st.comp.surface.move_many(&ids, dx, dy),
+        Some(Act::Arrange(ids, how)) => st.comp.surface.arrange(&ids, how),
+        Some(Act::Add(kind, x, y)) => {
+            let id = st.comp.surface.add_at(kind, Some((x, y)));
+            multi.set(&ctx, &mut selected, vec![id]);
+        }
         Some(Act::Paste(x, y)) => {
-            if let Some(w) = copied {
-                selected = Some(st.comp.surface.place(w, Some((x, y))));
+            let new = st.comp.surface.place_many(copied, Some((x, y)));
+            if !new.is_empty() {
+                multi.set(&ctx, &mut selected, new);
             }
         }
+        Some(Act::SelectAll) => {
+            let all: Vec<u64> = st.comp.surface.on_page().map(|w| w.id).collect();
+            multi.set(&ctx, &mut selected, all);
+        }
+        Some(Act::SelectNone) => multi.clear(&ctx, &mut selected),
         None => {}
     }
     if let Some((id, b)) = brightness
@@ -443,7 +520,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     for (t, v) in sets {
         st.set_control(&t, v, now);
     }
-    ui.ctx().data_mut(|d| {
+    ctx.data_mut(|d| {
         d.insert_temp(edit_id, edit);
         d.insert_temp(sel_id, selected);
         d.insert_temp(grab_id, grab);
@@ -451,34 +528,124 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     });
 }
 
-/// Keys in Edit while the pointer is over the canvas: Delete / Backspace removes the selected widget, arrows nudge it
-/// (a cell with Snap on, a quarter without; Shift = a whole cell), Cmd+D duplicates, Cmd+C copies, Cmd+V pastes the
-/// copied widget under the pointer. The keys are taken so nothing else reads them.
-fn designer_keys(ui: &egui::Ui, selected: Option<u64>, copied: bool, snap: bool, under_pointer: Option<(f32, f32)>) -> Option<Act> {
+/// "Paste Fader 3" or "Paste 4 widgets".
+fn paste_label(copied: &[SurfaceWidget]) -> String {
+    match copied {
+        [one] => format!("Paste {}", one.label),
+        many => format!("Paste {} widgets", many.len()),
+    }
+}
+
+/// Line up / spread out / same size for several widgets (a menu or the group editor). `menu`: close after a pick.
+fn arrange_items(ui: &mut egui::Ui, ids: &[u64], menu: bool) -> Option<Act> {
+    let mut picked = None;
+    let items: [(&str, &str, Arrange); 11] = [
+        (icon::ALIGN_LEFT, "Left edges", Arrange::Left),
+        (icon::ALIGN_CENTER_HORIZONTAL, "Centres across", Arrange::Centre),
+        (icon::ALIGN_RIGHT, "Right edges", Arrange::Right),
+        (icon::ALIGN_TOP, "Top edges", Arrange::Top),
+        (icon::ALIGN_CENTER_VERTICAL, "Middles down", Arrange::Middle),
+        (icon::ALIGN_BOTTOM, "Bottom edges", Arrange::Bottom),
+        (icon::ARROWS_OUT_LINE_HORIZONTAL, "Spread across", Arrange::SpreadAcross),
+        (icon::ARROWS_OUT_LINE_VERTICAL, "Spread down", Arrange::SpreadDown),
+        (icon::ARROWS_HORIZONTAL, "Same width", Arrange::SameWidth),
+        (icon::ARROWS_VERTICAL, "Same height", Arrange::SameHeight),
+        (icon::FRAME_CORNERS, "Same size", Arrange::SameSize),
+    ];
+    for (i, (ic, text, how)) in items.into_iter().enumerate() {
+        if i == 3 || i == 6 || i == 8 {
+            ui.separator();
+        }
+        if crate::ui::command(ui, label(ic, text)).clicked() {
+            picked = Some(Act::Arrange(ids.to_vec(), how));
+            if menu {
+                ui.close();
+            }
+        }
+    }
+    help(ui, "Spread keeps the outer two where they are. Sizes copy the one you picked first.");
+    picked
+}
+
+/// Duplicate / Copy / front / back / Delete for one widget or the whole selection.
+fn group_items(ui: &mut egui::Ui, ids: &[u64], menu: bool) -> Option<Act> {
+    let mut picked = None;
+    let n = ids.len();
+    let many = |one: &str| if n > 1 { format!("{one} {n}") } else { one.to_string() };
+    let mut item = |ui: &mut egui::Ui, ic: &str, text: &str, hover: &str, make: fn(Vec<u64>) -> Act| {
+        let r = crate::ui::command(ui, label(ic, &many(text)));
+        if (if hover.is_empty() { r } else { r.on_hover_text(hover) }).clicked() {
+            picked = Some(make(ids.to_vec()));
+            if menu {
+                ui.close();
+            }
+        }
+    };
+    item(ui, icon::COPY, "Duplicate", "", Act::Duplicate);
+    item(ui, icon::CLIPBOARD_TEXT, "Copy", "Paste on another page or in another project (right-click an empty spot)", Act::Copy);
+    ui.separator();
+    item(ui, icon::ARROW_LINE_UP, "Bring to front", "", Act::ToFront);
+    item(ui, icon::ARROW_LINE_DOWN, "Send to back", "", Act::ToBack);
+    ui.separator();
+    if crate::ui::danger_button(ui, label(icon::TRASH, &many("Delete"))).clicked() {
+        picked = Some(Act::Delete(ids.to_vec()));
+        if menu {
+            ui.close();
+        }
+    }
+    picked
+}
+
+/// The side panel while several widgets are selected: what they are, and everything that works on them together.
+fn group_editor(ui: &mut egui::Ui, ids: &[u64], sf: &phosphor_engine::ControlSurface) -> Option<Act> {
+    ui.label(RichText::new(format!("{} selected", crate::ui::plural(ids.len(), "{0} widget", "{0} widgets"))).strong().color(accent()));
+    let names: Vec<String> = ids.iter().filter_map(|id| sf.widget(*id)).map(|w| w.label.clone()).collect();
+    hint(ui, names.join(", "));
+    help(ui, "Drag any of them to move them all. Click one to edit it alone; Shift-click takes one out.");
+    ui.add_space(4.0);
+    crate::ui::heading(ui, "Arrange");
+    let mut act = arrange_items(ui, ids, false);
+    ui.add_space(4.0);
+    act = act.or(group_items(ui, ids, false));
+    act
+}
+
+/// Keys in Edit while the pointer is over the canvas: Delete / Backspace removes the selected widgets, arrows nudge
+/// them (a cell with Snap on, a quarter without; Shift = a whole cell), Cmd+D duplicates, Cmd+C copies, Cmd+V pastes
+/// the copied widgets under the pointer, Cmd+A selects the page, Escape selects nothing. The keys are taken so
+/// nothing else reads them.
+fn designer_keys(ui: &egui::Ui, picked: &[u64], copied: bool, snap: bool, under_pointer: Option<(f32, f32)>) -> Option<Act> {
     use egui::{Key, Modifiers};
     ui.ctx().input_mut(|i| {
         if copied && i.consume_key(Modifiers::COMMAND, Key::V) && let Some((x, y)) = under_pointer {
             return Some(Act::Paste(x, y));
         }
-        let id = selected?;
+        if i.consume_key(Modifiers::COMMAND, Key::A) {
+            return Some(Act::SelectAll);
+        }
+        if picked.is_empty() {
+            return None;
+        }
+        if i.consume_key(Modifiers::NONE, Key::Escape) {
+            return Some(Act::SelectNone);
+        }
         if i.consume_key(Modifiers::NONE, Key::Delete) || i.consume_key(Modifiers::NONE, Key::Backspace) {
-            return Some(Act::Delete(id));
+            return Some(Act::Delete(picked.to_vec()));
         }
         if i.consume_key(Modifiers::COMMAND, Key::D) {
-            return Some(Act::Duplicate(id));
+            return Some(Act::Duplicate(picked.to_vec()));
         }
         if i.consume_key(Modifiers::COMMAND, Key::C) {
-            return Some(Act::Copy(id));
+            return Some(Act::Copy(picked.to_vec()));
         }
         let step = if i.modifiers.shift || snap { 1.0 } else { 0.25 };
         let mut k = |key| (i.consume_key(Modifiers::NONE, key) || i.consume_key(Modifiers::SHIFT, key)) as i32 as f32;
         let dx = (k(Key::ArrowRight) - k(Key::ArrowLeft)) * step;
         let dy = (k(Key::ArrowDown) - k(Key::ArrowUp)) * step;
-        ((dx, dy) != (0.0, 0.0)).then_some(Act::Move(id, dx, dy))
+        ((dx, dy) != (0.0, 0.0)).then_some(Act::Move(picked.to_vec(), dx, dy))
     })
 }
 
-/// "Drives: Layer 1 · opacity, Master fade" for the hover text.
 fn binding_summary(w: &SurfaceWidget, targets: &[(ControlTarget, String)]) -> String {
     let names = |b: &[phosphor_engine::Binding]| b.iter().map(|b| targets.iter().find(|(t, _)| *t == b.target).map_or("(removed)".to_string(), |(_, n)| n.clone())).collect::<Vec<_>>().join(", ");
     let mut s = if w.bindings.is_empty() { format!("Not wired to anything yet (Edit {} select it)", icon::ARROW_RIGHT) } else { format!("Drives: {}", names(&w.bindings)) };
@@ -633,7 +800,7 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
 
 /// The widget the Control Surface has selected (edit mode), if any.
 pub(crate) fn selected_widget(ctx: &egui::Context) -> Option<u64> {
-    ctx.data(|d| d.get_temp::<Option<u64>>(egui::Id::new("surface_selected"))).flatten()
+    ctx.data(|d| d.get_temp::<Option<u64>>(egui::Id::new(("surface_selected", u64::MAX)))).flatten()
 }
 
 /// Edit mode side panel for the selected widget (also the Inspector). Returns false once it's deleted.
@@ -641,6 +808,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
     let mut delete = false;
     let mut duplicate = false;
     let text_layers: Vec<(u64, String)> = st.comp.layers.iter().filter(|l| matches!(l.source, phosphor_engine::SourceSpec::Text(_))).map(|l| (l.id, l.name.clone())).collect();
+    let cols = st.comp.surface.columns.max(1) as f32;
     let Some(w) = st.comp.surface.widget_mut(id) else { return false };
     ui.horizontal(|ui| {
         ui.label(RichText::new(w.kind.name()).strong().color(accent()));
@@ -660,6 +828,17 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             if resp.clicked() {
                 w.color = c;
             }
+        }
+    });
+    // Exactly where it is and how big (cells; a quarter at a time).
+    crate::ui::toolbar(ui, |ui| {
+        let mut typed = false;
+        for (name, v, hover) in [("X", &mut w.x, "Cells from the left"), ("Y", &mut w.y, "Cells from the top"), ("W", &mut w.w, "Cells wide"), ("H", &mut w.h, "Cells high")] {
+            ui.label(RichText::new(name).small().color(Color32::GRAY));
+            typed |= guarded!(ui, *v, egui::DragValue::new(v).speed(0.25).max_decimals(2)).on_hover_text(hover).changed();
+        }
+        if typed {
+            w.keep_inside(cols);
         }
     });
     if w.kind == WidgetKind::Text {
