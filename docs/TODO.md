@@ -11,6 +11,12 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **Clip grid column buttons** greyed out while there are no layers? (owner to say)
 - [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
 - [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.
+- [ ] **Phone test** (2026-11-04): MIDI / OSC › Phone or tablet › Get it on the phone: scan the QR code with the iPad,
+      open the downloaded Phosphor.tosc in TouchOSC, point TouchOSC at the Mac (Browse list), move a control: step 3
+      should say "Hearing from…". Owner to try with the real device.
+- [ ] **Control Surface designer, more** (owner, 2026-11-04 "needs more work"): done today: snap on/off, right-click
+      add/edit/duplicate/copy/paste/front/back/delete, keys. Still possible: multi-select and group moves, align /
+      distribute, a widget's exact x/y/w/h fields in the Inspector, undo per designer step (project Undo covers it now).
 
 ## From the owner, 2026-10-28
 
