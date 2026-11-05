@@ -164,9 +164,22 @@ impl PhosphorApp {
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
         let keys: Vec<String> = wants.iter().map(|(k, _, _)| k.clone()).collect();
         if !wants.is_empty() {
-            // Each tile renders a still; hovered / live tiles keep updating, and stills are taken again a few times
-            // after the tiles or their source change (`stills`), then kept.
-            let again = preview_stills.plan(now, keys != *preview_keys, source, keys.len());
+            // Each tile renders a still; hovered / live tiles keep updating, and stills are taken again only when the
+            // picture they're made from changes (`stills`): the source layer, what it plays, whether it has a picture.
+            let source_key = {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                source.hash(&mut h);
+                let layers: Vec<&phosphor_engine::LayerState> = if source == phosphor_engine::MASTER_ID { comp.layers.iter().collect() } else { comp.layers.iter().filter(|l| l.id == source).collect() };
+                for l in layers {
+                    l.active_clip.hash(&mut h);
+                    l.enabled.hash(&mut h);
+                    format!("{:?}", l.source).hash(&mut h);
+                    layer_textures.contains_key(&l.id).hash(&mut h);
+                }
+                h.finish()
+            };
+            let again = preview_stills.plan(now, keys != *preview_keys, source_key, keys.len());
             let items = wants
                 .into_iter()
                 .enumerate()

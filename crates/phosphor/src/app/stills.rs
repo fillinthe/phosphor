@@ -1,18 +1,18 @@
-//! When preview stills (effect / generator tiles, clip pictures) are taken again. A still is taken once per tile;
-//! the picture it's made from may still have been black then (the app starting, a movie opening), so all of them are
-//! taken again a few times after the tiles (or the picture they're made from) change. After that a still stays as
-//! it is: one picture per tile, nothing drawn until the mouse is over it (the owner's choice: no flicker, no GPU work).
+//! When preview stills (effect / generator tiles, clip pictures) are taken again. A still is taken once per tile
+//! and kept: nothing is drawn again unless the mouse is over the tile or it's the picked one (the owner's choice:
+//! tiles that redraw on their own look like they're changing). The one exception: when the picture the stills are
+//! made from changes (another layer selected, a clip launched on it, its picture arriving), every still is taken
+//! again once, a moment later so a movie that was still opening has a frame.
 
-/// Seconds after the tiles change that every still is taken again.
-const AGAIN_AFTER: [f64; 3] = [0.5, 1.5, 4.0];
+/// Seconds after the source picture changes that every still is taken again.
+const AFTER_SOURCE_CHANGE: f64 = 1.0;
 
 #[derive(Default)]
 pub(crate) struct Stills {
-    since: f64,
-    round: usize,
-    next: f64,
-    /// The layer (or MASTER) the stills were made from.
-    pub(crate) source: u64,
+    /// What the stills were made from (`source` of `plan`).
+    source: u64,
+    /// When every still is taken again, if a change is pending.
+    next: Option<f64>,
 }
 
 /// Which stills to take again this frame.
@@ -23,18 +23,23 @@ pub(crate) enum Again {
 }
 
 impl Stills {
-    /// `changed` = the tiles asked for aren't the ones of last frame; `source` = the layer they're made from;
-    /// `n` = how many there are.
+    /// `changed` = the tiles asked for aren't the ones of last frame (new ones draw fresh anyway); `source` = a key
+    /// for the picture they're made from (the layer, what it plays, whether it has a picture); `n` = how many there are.
     pub(crate) fn plan(&mut self, now: f64, changed: bool, source: u64, n: usize) -> Again {
-        if changed || source != self.source {
-            (self.since, self.round, self.next, self.source) = (now, 0, now + AGAIN_AFTER[0], source);
+        if source != self.source {
+            self.source = source;
+            self.next = Some(now + AFTER_SOURCE_CHANGE);
         }
-        if n == 0 || self.round >= AGAIN_AFTER.len() || now < self.next {
-            return Again::None;
+        if changed {
+            self.next = None;
         }
-        self.round += 1;
-        self.next = AGAIN_AFTER.get(self.round).map_or(f64::INFINITY, |t| self.since + t);
-        Again::All
+        match self.next {
+            Some(t) if n > 0 && now >= t => {
+                self.next = None;
+                Again::All
+            }
+            _ => Again::None,
+        }
     }
 }
 
@@ -43,20 +48,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stills_are_taken_again_a_few_times_then_kept() {
+    fn stills_are_kept_and_only_taken_again_when_the_source_picture_changes() {
         let mut s = Stills::default();
-        assert_eq!(s.plan(10.0, true, 0, 4), Again::None, "just taken");
-        assert_eq!(s.plan(10.6, false, 0, 4), Again::All);
-        assert_eq!(s.plan(10.7, false, 0, 4), Again::None);
-        assert_eq!(s.plan(11.6, false, 0, 4), Again::All);
-        assert_eq!(s.plan(14.1, false, 0, 4), Again::All);
-        // Then the stills stay: nothing is drawn again however long the list is open.
-        assert!((0..50).all(|i| s.plan(14.2 + i as f64, false, 0, 4) == Again::None));
-        // Scrolled: new tiles start over.
-        assert_eq!(s.plan(70.0, true, 0, 4), Again::None);
-        assert_eq!(s.plan(70.5, false, 0, 4), Again::All);
-        // Another layer selected: the stills are made from its picture, so they're taken again.
-        assert_eq!(s.plan(80.0, false, 7, 4), Again::None);
-        assert_eq!(s.plan(80.5, false, 7, 4), Again::All);
+        // The tiles appear: drawn once (as new tiles), never again on their own.
+        assert_eq!(s.plan(10.0, true, 1, 4), Again::None);
+        assert!((0..100).all(|i| s.plan(10.1 + i as f64, false, 1, 4) == Again::None));
+        // Another layer selected (or its clip changed): every still again, a moment later.
+        assert_eq!(s.plan(120.0, false, 2, 4), Again::None);
+        assert_eq!(s.plan(120.5, false, 2, 4), Again::None);
+        assert_eq!(s.plan(121.1, false, 2, 4), Again::All);
+        assert_eq!(s.plan(121.2, false, 2, 4), Again::None);
+        assert!((0..100).all(|i| s.plan(122.0 + i as f64, false, 2, 4) == Again::None));
+        // A source change followed by new tiles: the new tiles draw fresh, so no second round.
+        assert_eq!(s.plan(300.0, false, 3, 4), Again::None);
+        assert_eq!(s.plan(300.2, true, 3, 4), Again::None);
+        assert_eq!(s.plan(301.5, false, 3, 4), Again::None);
     }
 }

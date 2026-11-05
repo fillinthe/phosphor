@@ -123,10 +123,14 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   elsewhere (another project opens) instead of showing the old text.
 - Settings no longer keep entries from renamed or retired settings.
 - The Laser Designer's transform box stays inside its canvas (a turned shape's handles drew over the shape list).
-- Effects Explorer: each tile keeps one still (no more pictures redrawn every second); the tile under the mouse
-  animates, and the stills are taken again when you select another layer. Click a tile to set it up first: its
-  controls and Mix appear above the tiles, the tile shows what you set, and Add, double-click or a drag onto a layer
-  / MASTER puts it on with those settings (sources too). Reset puts the defaults back.
+- Effects Explorer: each tile keeps one still and never redraws on its own; only the tile under the mouse and the
+  one you picked animate. (The stills are taken again once when the picture they're made from changes: another
+  layer selected, a clip launched on it.) Click a tile to set it up first: its controls and Mix appear above the
+  tiles, the tile shows what you set, and the buttons say where it goes: **Add to layer: <name>** (the selected
+  layer), **Add to clip: <name>** (the clip picked in the grid: the effect belongs to that clip and comes back
+  whenever it plays) or **Add to MASTER**; the Inspector opens on it so you can bring its Mix in gradually (add it at
+  Mix 0% to start switched off). Double-click or a drag onto a layer / MASTER also carries the settings (sources
+  too). Reset puts the defaults back.
 
 ## 0.4.0 (2026-10-27)
 
