@@ -252,7 +252,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 if edit {
                     let body = ui.interact(rect, id, Sense::click_and_drag());
                     let handle = egui::Rect::from_min_size(rect.max - egui::vec2(14.0, 14.0), egui::vec2(14.0, 14.0));
-                    let corner = ui.interact(handle, id.with("resize"), if w.locked { Sense::hover() } else { Sense::drag() });
+                    let corner = ui.interact(handle, id.with("resize"), if w.locked { Sense::click() } else { Sense::drag() });
                     if body.clicked() {
                         multi.click(&ctx, &mut selected, w.id, extend);
                         picked = multi.all(&ctx, selected);
@@ -298,8 +298,18 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     };
                     painter.rect_stroke(rect, 6.0, outline, StrokeKind::Outside);
                     painter.text(handle.center(), egui::Align2::CENTER_CENTER, if w.locked { icon::LOCK } else { icon::ARROWS_OUT_SIMPLE }, egui::FontId::proportional(11.0), Color32::from_gray(160));
+                    // The padlock: click it (or right-click it) to unlock.
                     if w.locked {
-                        body.clone().on_hover_text("Locked in place (right-click › Unlock, or Cmd+L)");
+                        if corner.clicked() {
+                            act = Some(Act::Lock(vec![wid], false));
+                        }
+                        corner.right_menu(|ui| {
+                            if crate::ui::command(ui, label(icon::LOCK_OPEN, "Unlock")).clicked() {
+                                act = Some(Act::Lock(vec![wid], false));
+                                ui.close();
+                            }
+                        });
+                        corner.on_hover_text("Locked in place: click the padlock to unlock (or Cmd+L)");
                     }
                     let wired = !w.bindings.is_empty() || !w.bindings_y.is_empty() || w.bars.iter().any(|b| !b.bindings.is_empty());
                     if !wired && w.kind != WidgetKind::Label {

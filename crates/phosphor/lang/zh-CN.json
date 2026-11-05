@@ -1790,7 +1790,7 @@
 "Lock Panels On / Off": "锁定面板 开 / 关",
 "Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick": "把 Phosphor 的速度和节拍锁定到音乐,使“在拍上”/“在小节上”的触发落在底鼓上",
 "Locked (right-click to unlock)": "已锁定(右键解锁)",
-"Locked in place (right-click › Unlock, or Cmd+L)": "已锁定在原位（右键 › 解锁，或 Cmd+L）",
+"Locked in place: click the padlock to unlock (or Cmd+L)": "已锁定在原位：点击挂锁解锁（或 Cmd+L）",
 "Locked, Phosphor only plays: the preview, the clip grid, keys and controllers, the outputs. Menus, panels and editing come back when you unlock.": "已锁定,Phosphor 只能播放:预览、片段网格、按键和控制器、输出。解锁后菜单、面板和编辑才会恢复。",
 "Locked: its points can't be dragged or nudged": "已锁定:其点无法拖动或微调",
 "Locked: unlock it to change the value": "已锁定:请先解锁再更改数值",

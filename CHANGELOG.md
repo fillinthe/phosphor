@@ -95,9 +95,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   panel) lines them up by any edge or centre, spreads them out evenly, or gives them the same width, height or
   size. A widget's exact X, Y, width and height can be typed in its editor.
 - **Lock** a widget (right-click › Lock, the Lock switch in its editor, or Cmd+L): it stays where it is through
-  drags, nudges and Arrange until you unlock it. A small padlock shows in its corner.
+  drags, nudges and Arrange until you unlock it. A small padlock shows in its corner: click it to unlock.
 - The tab of the panel you're in has a soft wash of its colour under the words instead of a solid fill, and open
-  tabs no longer have an outline.
+  tabs no longer have an outline. Rolling over a closed tab lights it with a wash of its colour.
 
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and

@@ -1790,7 +1790,7 @@
 "Lock Panels On / Off": "パネルのロック オン/オフ",
 "Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick": "Phosphorのテンポとビートを音楽にロックし、ビート / 小節でのローンチがキックに合うようにします",
 "Locked (right-click to unlock)": "ロック中(右クリックで解除)",
-"Locked in place (right-click › Unlock, or Cmd+L)": "固定されています（右クリック › ロック解除、または Cmd+L）",
+"Locked in place: click the padlock to unlock (or Cmd+L)": "固定されています：南京錠をクリックで解除（または Cmd+L）",
 "Locked, Phosphor only plays: the preview, the clip grid, keys and controllers, the outputs. Menus, panels and editing come back when you unlock.": "ロック中はPhosphorは再生のみ: プレビュー、クリップグリッド、キー、コントローラー、出力。メニュー、パネル、編集はロック解除で戻ります。",
 "Locked: its points can't be dragged or nudged": "ロック中: 点のドラッグも微動もできません",
 "Locked: unlock it to change the value": "ロック中: 値を変えるには解除してください",
