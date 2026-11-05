@@ -220,7 +220,19 @@ pub fn append_effects(st: &mut State, target: u64, effects: Vec<phosphor_engine:
 }
 
 pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
+    let Some(fx) = st.comp.new_effect(effect) else { return };
+    let (values, mods, mix) = (fx.values.clone(), Vec::new(), fx.mix);
+    add_effect_as(st, target, effect, values, mods, mix);
+}
+
+/// Adds an effect set up in advance (the explorer's picked tile): its control values, modulation and mix.
+pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) {
     let Some(mut fx) = st.comp.new_effect(effect) else { return };
+    if values.len() == fx.values.len() {
+        fx.values = values;
+        fx.mods = mods;
+    }
+    fx.mix = mix;
     // With Launch → Fade, a new effect blends in instead of popping on.
     if st.comp.launch.fade {
         st.fx_fades.push((fx.id, st.mod_inputs.time, st.comp.launch.fade_secs.max(0.05), fx.mix));
