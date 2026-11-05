@@ -136,7 +136,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
             }
             ui.separator();
             let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true };
-            let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len);
+            let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len, clip_slot);
             #[cfg(not(target_arch = "wasm32"))]
             if media.text_file.get() {
                 text_file = true;
@@ -224,8 +224,9 @@ pub(crate) struct LayerMedia<'a> {
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
 /// and effect chain (Inspector, and each column of the Layer Windows panel). Returns an effect-chain action and a
 /// seek the caller carries out.
-/// The effects action comes with the chain it's for (the layer's, or its clip's: `clip_chain`).
-pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &LayerMedia, clipboard_len: usize) -> (Option<(u64, FxAction)>, Option<f64>) {
+/// The effects action comes with the chain it's for (the layer's, its playing clip's `clip_chain`, or the picked
+/// clip's own `clip_own_chain`). `clip` = the clip picked in the grid, when it's on this layer.
+pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &LayerMedia, clipboard_len: usize, clip: Option<usize>) -> (Option<(u64, FxAction)>, Option<f64>) {
     let (info, position, has_sound) = (media.info, media.position, media.has_sound);
     let mut seek_to: Option<f64> = None;
     source_line(ui, layer);
@@ -527,8 +528,18 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             }
         });
     }
-    // The playing clip's (or file's) own effects: they come and go with it, before the layer's.
+    // The playing clip's (or file's) own effects: they come and go with it, before the layer's. A clip picked in
+    // the grid that isn't the playing one shows its own instead: what it brings when it plays.
     let mut action = None;
+    let picked = clip.filter(|c| layer.clips.get(*c).is_some_and(|k| !k.is_empty() && layer.clip_effects_from != phosphor_engine::EffectsOwner::Clip(k.id)));
+    if let Some(c) = picked {
+        let heading = format!("Clip effects: {} (when it plays)", layer.clips[c].name);
+        let own = phosphor_engine::clip_own_chain(layer.clips[c].id);
+        if let Some(a) = super::effects::effects_list(ui, &heading, "Effects added here belong to this clip: they come in whenever it plays, on any layer, before the layer's effects below.", &mut layer.clips[c].effects, clipboard_len) {
+            action = Some((own, a));
+        }
+        ui.separator();
+    }
     let clip_chain = match &layer.clip_effects_from {
         phosphor_engine::EffectsOwner::Clip(_) => Some(("Clip effects", "Effects added here belong to the clip: they come back whenever it plays, on any layer. The layer's effects below stay on the layer.")),
         phosphor_engine::EffectsOwner::File(_) => Some(("File effects", "Effects added here belong to this file: they come back whenever it plays, on any layer or clip made from it. The layer's effects below stay on the layer.")),

@@ -69,14 +69,17 @@ impl Composition {
         self.comp_mut(id).map(|c| MixControls { opacity: &mut c.opacity, enabled: &mut c.enabled, fx_bypass: &mut c.fx_bypass })
     }
 
-    /// The effect chain of MASTER (`MASTER_ID`), a layer, a layer's clip (`clip_chain`), a group, a comp or a
-    /// mapping slice.
+    /// The effect chain of MASTER (`MASTER_ID`), a layer, a layer's clip chain (`clip_chain`), one clip's own
+    /// (`clip_own_chain`), a group, a comp or a mapping slice.
     pub fn effects(&self, target: u64) -> Option<&Vec<EffectState>> {
         if target == crate::MASTER_ID {
             return Some(&self.master_effects);
         }
         if let Some(layer) = crate::chain_layer(target) {
             return self.layer(layer).map(|l| &l.clip_effects);
+        }
+        if let Some(clip) = crate::chain_clip(target) {
+            return self.clip_chain_of(clip);
         }
         self.layers.iter().find(|l| l.id == target).map(|l| &l.effects).or_else(|| self.group(target).map(|g| &g.effects)).or_else(|| self.comp(target).map(|c| &c.effects)).or_else(|| self.slice(target).map(|s| &s.effects))
     }
@@ -87,6 +90,9 @@ impl Composition {
         }
         if let Some(layer) = crate::chain_layer(target) {
             return self.layer_mut(layer).map(|l| &mut l.clip_effects);
+        }
+        if let Some(clip) = crate::chain_clip(target) {
+            return self.clip_chain_of_mut(clip);
         }
         if self.layers.iter().any(|l| l.id == target) {
             return self.layers.iter_mut().find(|l| l.id == target).map(|l| &mut l.effects);

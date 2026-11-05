@@ -35,6 +35,20 @@ pub fn chain_layer(id: u64) -> Option<u64> {
     (id != crate::MASTER_ID && id & CLIP_CHAIN != 0).then_some(id & !CLIP_CHAIN)
 }
 
+/// This bit marks one clip's own chain (`clip_own_chain(clip)`): the effects saved in the clip, which are live on
+/// its layer's clip chain while it plays (the Inspector shows the clip you picked whether it plays or not).
+const CLIP_OWN: u64 = 1 << 61;
+
+/// The id that names a clip's own chain (`Composition::effects`, the effect browser, paste).
+pub fn clip_own_chain(clip: u64) -> u64 {
+    clip | CLIP_OWN
+}
+
+/// The clip whose own chain `id` names, if it names one.
+pub fn chain_clip(id: u64) -> Option<u64> {
+    (id != crate::MASTER_ID && id & CLIP_OWN != 0 && id & CLIP_CHAIN == 0).then_some(id & !CLIP_OWN)
+}
+
 /// The media file a source plays, if it's one.
 pub fn file_of(source: &SourceSpec) -> Option<&str> {
     match source {
@@ -92,6 +106,22 @@ impl LayerState {
 }
 
 impl Composition {
+    /// One clip's chain: the layer's clip chain while the clip plays there (changes go back into the clip each
+    /// frame), else the effects saved in the clip.
+    pub fn clip_chain_of(&self, clip: u64) -> Option<&Vec<EffectState>> {
+        if let Some(l) = self.layers.iter().find(|l| l.clip_effects_from == EffectsOwner::Clip(clip)) {
+            return Some(&l.clip_effects);
+        }
+        self.layers.iter().flat_map(|l| &l.clips).find(|k| k.id == clip).map(|k| &k.effects)
+    }
+
+    pub fn clip_chain_of_mut(&mut self, clip: u64) -> Option<&mut Vec<EffectState>> {
+        if let Some(i) = self.layers.iter().position(|l| l.clip_effects_from == EffectsOwner::Clip(clip)) {
+            return Some(&mut self.layers[i].clip_effects);
+        }
+        self.layers.iter_mut().flat_map(|l| &mut l.clips).find(|k| k.id == clip).map(|k| &mut k.effects)
+    }
+
     /// Puts the right clip / file effects on each layer when what it plays changes, and keeps changes made to
     /// them in the clip they belong to (call every frame; files are kept by `store_file_effects`).
     pub fn sync_clip_effects(&mut self) {
@@ -256,6 +286,33 @@ mod tests {
         assert_eq!(chain_layer(clip_chain(id)), Some(id));
         assert_eq!(chain_layer(id), None);
         assert_eq!(chain_layer(crate::MASTER_ID), None);
+    }
+
+    #[test]
+    fn a_clips_own_chain_is_the_clip_until_it_plays_then_its_layer() {
+        let mut c = Composition::default();
+        let id = c.add_layer().id;
+        c.place_clips(id, 0, vec![("a".into(), movie("a.mp4")), ("b".into(), movie("b.mp4"))]);
+        let kid = c.layer(id).unwrap().clips[1].id;
+        let blur = fx(&mut c, "blur");
+        // Not playing: the effect waits in the clip.
+        c.effects_mut(clip_own_chain(kid)).unwrap().push(blur.clone());
+        assert_eq!(c.layer(id).unwrap().clips[1].effects, vec![blur.clone()]);
+        assert!(c.layer(id).unwrap().clip_effects.is_empty());
+        assert_eq!(c.effects(clip_own_chain(kid)).unwrap(), &vec![blur.clone()]);
+        // Playing: the same address is the layer's clip chain, and what's added there goes back into the clip.
+        c.press_clip(id, 1, 0.0);
+        c.sync_clip_effects();
+        assert_eq!(c.layer(id).unwrap().clip_effects, vec![blur.clone()]);
+        let wave = fx(&mut c, "wave");
+        c.effects_mut(clip_own_chain(kid)).unwrap().push(wave.clone());
+        assert_eq!(c.layer(id).unwrap().clip_effects, vec![blur.clone(), wave.clone()]);
+        c.sync_clip_effects();
+        assert_eq!(c.layer(id).unwrap().clips[1].effects, vec![blur, wave]);
+        assert_eq!(chain_clip(clip_own_chain(kid)), Some(kid));
+        assert_eq!(chain_clip(clip_chain(id)), None);
+        assert_eq!(chain_layer(clip_own_chain(kid)), None);
+        assert_eq!(chain_clip(crate::MASTER_ID), None);
     }
 
     #[test]
