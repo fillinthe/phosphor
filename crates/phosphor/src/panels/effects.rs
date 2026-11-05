@@ -225,9 +225,10 @@ pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
     add_effect_as(st, target, effect, values, mods, mix);
 }
 
-/// Adds an effect set up in advance (the explorer's picked tile): its control values, modulation and mix.
-pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) {
-    let Some(mut fx) = st.comp.new_effect(effect) else { return };
+/// A new effect set up in advance (the explorer's picked tile): its control values, modulation and mix. Also
+/// Launch › Fade (it blends in) and the Recent list.
+fn prepare_effect(st: &mut State, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) -> Option<EffectState> {
+    let mut fx = st.comp.new_effect(effect)?;
     if values.len() == fx.values.len() {
         fx.values = values;
         fx.mods = mods;
@@ -241,9 +242,33 @@ pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>
     st.explorer.recent.retain(|r| r != effect);
     st.explorer.recent.insert(0, effect.to_string());
     st.explorer.recent.truncate(12);
+    Some(fx)
+}
+
+/// Adds an effect set up in advance (the explorer's picked tile) to a chain (MASTER, a layer, group, comp or a
+/// layer's clip chain).
+pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) {
+    let Some(fx) = prepare_effect(st, effect, values, mods, mix) else { return };
     let on = if target == phosphor_engine::MASTER_ID { "MASTER".to_string() } else if let Some(l) = phosphor_engine::chain_layer(target).and_then(|l| st.comp.layer(l)) { format!("the clip on layer \"{}\"", l.name) } else { st.comp.layer(target).map(|l| format!("layer \"{}\"", l.name)).or_else(|| st.comp.group(target).map(|g| format!("group \"{}\"", g.name))).or_else(|| st.comp.comp(target).map(|c| format!("comp \"{}\"", c.name))).unwrap_or_else(|| "?".into()) };
     log::info!(target: "phosphor::action", "effect added: {effect} on {on}");
     if let Some(chain) = st.comp.effects_mut(target) {
         chain.push(fx);
     }
+}
+
+/// Adds an effect to one clip (slot `slot` on `layer`): it belongs to the clip and comes back whenever it plays.
+/// A clip playing now gets it on its layer's clip chain right away (the Inspector's Clip effects); otherwise it
+/// waits in the clip. Returns whether it went on live.
+pub fn add_effect_to_clip(st: &mut State, layer: u64, slot: usize, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) -> Option<bool> {
+    let clip_id = st.comp.layer(layer)?.clips.get(slot).filter(|k| !k.is_empty())?.id;
+    let fx = prepare_effect(st, effect, values, mods, mix)?;
+    let l = st.comp.layer_mut(layer)?;
+    let playing = l.active_clip == Some(clip_id) || l.clip_effects_from == phosphor_engine::EffectsOwner::Clip(clip_id);
+    log::info!(target: "phosphor::action", "effect added: {effect} on clip \"{}\" (layer \"{}\", {})", l.clips[slot].name, l.name, if playing { "playing" } else { "not playing" });
+    if playing {
+        l.clip_effects.push(fx);
+    } else {
+        l.clips[slot].effects.push(fx);
+    }
+    Some(playing)
 }

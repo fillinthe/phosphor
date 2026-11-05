@@ -77,7 +77,7 @@ fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::Shade
     if desc.params.is_empty() && ex.sources {
         return;
     }
-    crate::ui::help(ui, "Set it up here: the tile shows it, and it's added or dragged with these settings");
+    crate::ui::help(ui, "Set it up here: the tile shows it, and it's added or dragged with these settings. Mix 0% adds it switched off, to bring in later from the Inspector");
     crate::ui::column_scroll(ui).id_salt("picked_setup").max_height(200.0).show(ui, |ui| {
         for (i, p) in desc.params.iter().enumerate() {
             crate::ui::param_slider(ui, &mut ex.picked_values, &mut ex.picked_mods, i, p, None);
@@ -120,6 +120,15 @@ fn tile_item(ex: &ExplorerState, desc: &'static shaders::ShaderDesc, index: usiz
     }
 }
 
+/// Where the picked tile's Add buttons put it.
+#[derive(Clone, Copy)]
+enum AddTo {
+    /// A layer (or MASTER); None = a new layer (sources).
+    Layer(Option<u64>),
+    /// A clip in the grid: layer and slot.
+    Clip(u64, usize),
+}
+
 enum TileAction {
     Apply(&'static str),
     Favorite(String),
@@ -130,11 +139,6 @@ enum TileAction {
 
 pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     let aspect = st.aspect();
-    let target_name = match st.selected {
-        Some(MASTER_ID) => "MASTER (all layers)".to_string(),
-        Some(id) => st.comp.layers.iter().find(|l| l.id == id).map_or("a new layer".into(), |l| l.name.clone()),
-        None => "a new layer".into(),
-    };
     // Search on its own row (nothing can cover it), then the rest wraps in narrow columns.
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::MAGNIFYING_GLASS).color(Color32::GRAY));
@@ -176,23 +180,40 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     {
         st.explorer.pick(d);
     }
-    // The picked tile and what to do with it; nothing changes on screen until you choose.
+    // The picked tile and what to do with it; nothing changes on screen until you choose. Each button says where
+    // it goes: the selected layer, the clip picked in the grid, or MASTER.
     let picked = st.explorer.picked.and_then(|id| list.iter().find(|d| d.id == id).copied());
-    let mut add_to: Option<Option<u64>> = None;
+    let layer_target = st.selected.and_then(|id| st.comp.layer(id)).map(|l| (l.id, l.name.clone()));
+    let clip_target = st.selected_clip.and_then(|(l, c)| st.comp.layer(l).and_then(|l| l.clips.get(c)).filter(|k| !k.is_empty()).map(|k| (l, c, k.name.clone())));
+    let mut add_to: Option<AddTo> = None;
     ui.horizontal_wrapped(|ui| {
         match picked {
             Some(d) => {
                 ui.label(RichText::new(d.name).strong().color(accent()));
                 if st.explorer.sources {
-                    if crate::ui::command(ui, label(icon::SPARKLE, &format!("Use on {target_name}"))).clicked() {
-                        add_to = Some(None);
+                    let text = match &layer_target {
+                        Some((_, name)) => format!("Use on layer: {name}"),
+                        None => "Use on a new layer".to_string(),
+                    };
+                    if crate::ui::command(ui, label(icon::SPARKLE, &text)).clicked() {
+                        add_to = Some(AddTo::Layer(layer_target.as_ref().map(|(id, _)| *id)));
                     }
                 } else {
-                    if crate::ui::command(ui, label(icon::PLUS, &format!("Add to {target_name}"))).clicked() {
-                        add_to = Some(None);
+                    if let Some((id, name)) = &layer_target
+                        && crate::ui::command(ui, label(icon::PLUS, &format!("Add to layer: {name}"))).on_hover_text("The selected layer: on its own effects, under the clip's").clicked()
+                    {
+                        add_to = Some(AddTo::Layer(Some(*id)));
                     }
-                    if st.selected != Some(MASTER_ID) && crate::ui::command(ui, label(icon::PLUS, "Add to MASTER")).clicked() {
-                        add_to = Some(Some(MASTER_ID));
+                    if let Some((l, c, name)) = &clip_target
+                        && crate::ui::command(ui, label(icon::PLUS, &format!("Add to clip: {name}"))).on_hover_text("The clip picked in the grid: the effect belongs to the clip and comes back whenever it plays").clicked()
+                    {
+                        add_to = Some(AddTo::Clip(*l, *c));
+                    }
+                    if crate::ui::command(ui, label(icon::PLUS, "Add to MASTER")).on_hover_text("Over the whole mix").clicked() {
+                        add_to = Some(AddTo::Layer(Some(MASTER_ID)));
+                    }
+                    if layer_target.is_none() && clip_target.is_none() {
+                        crate::ui::hint(ui, "Select a layer or click a clip to add it there");
                     }
                 }
                 if crate::ui::small_command(ui, icon::X).on_hover_text("Unselect").clicked() {
@@ -327,8 +348,27 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         });
     });
 
-    if let (Some(d), Some(target)) = (picked, add_to) {
-        apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(d.id), generator: st.explorer.sources.then_some(d.id) }, target);
+    // Added from the buttons: the target is selected and the Inspector opened on it, so its Mix is right there.
+    if let (Some(d), Some(to)) = (picked, add_to) {
+        let setup = st.explorer.setup_for(d.id);
+        match to {
+            AddTo::Layer(target) => {
+                apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(d.id), generator: st.explorer.sources.then_some(d.id) }, target);
+                if let Some(t) = target {
+                    st.selected = Some(t);
+                }
+            }
+            AddTo::Clip(layer, slot) => {
+                let (values, mods, mix) = setup.unwrap_or_else(|| (d.defaults(), Vec::new(), 1.0));
+                match panels::add_effect_to_clip(st, layer, slot, d.id, values, mods, mix) {
+                    Some(true) => st.notice = Some(format!("{} added to the clip: it's in the Inspector under Clip effects", d.name)),
+                    Some(false) => st.notice = Some(format!("{} added to the clip: it comes in when the clip plays", d.name)),
+                    None => {}
+                }
+                st.selected = Some(layer);
+            }
+        }
+        st.open_tab = Some(Tab::Inspector);
     }
     match action {
         Some(TileAction::Apply(id)) => apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(id), generator: st.explorer.sources.then_some(id) }, None),
