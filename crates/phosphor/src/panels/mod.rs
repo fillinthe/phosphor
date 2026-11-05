@@ -325,7 +325,10 @@ impl egui_dock::TabViewer for Viewer<'_> {
         for s in [&mut style.inactive, &mut style.inactive_with_kb_focus] {
             s.text_color = dim;
         }
+        // Rolling over a closed tab: a wash of its colour, no outline.
         style.hovered.text_color = full;
+        style.hovered.bg_fill = full.gamma_multiply(0.12);
+        style.hovered.outline_color = Color32::TRANSPARENT;
         Some(style)
     }
 
