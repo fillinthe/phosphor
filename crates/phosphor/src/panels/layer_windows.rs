@@ -78,7 +78,7 @@ pub(crate) fn layer_windows(ui: &mut egui::Ui, st: &mut State) {
                             ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(70.0);
                             let (info, position, has_sound) = media.get(&id).cloned().unwrap_or((None, None, false));
                             let m = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending: false, beat: None, bpm, chapters: Vec::new(), reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited: comp_inherited.get(&id).cloned().unwrap_or_default(), speed_above: false };
-                            let (fx, seek) = layer_editor(ui, layer, &m, clipboard_len);
+                            let (fx, seek) = layer_editor(ui, layer, &m, clipboard_len, None);
                             if m.match_beat.get() {
                                 beat_requests.push(id);
                             }

@@ -249,7 +249,7 @@ fn prepare_effect(st: &mut State, effect: &str, values: Vec<f32>, mods: Vec<phos
 /// layer's clip chain).
 pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) {
     let Some(fx) = prepare_effect(st, effect, values, mods, mix) else { return };
-    let on = if target == phosphor_engine::MASTER_ID { "MASTER".to_string() } else if let Some(l) = phosphor_engine::chain_layer(target).and_then(|l| st.comp.layer(l)) { format!("the clip on layer \"{}\"", l.name) } else { st.comp.layer(target).map(|l| format!("layer \"{}\"", l.name)).or_else(|| st.comp.group(target).map(|g| format!("group \"{}\"", g.name))).or_else(|| st.comp.comp(target).map(|c| format!("comp \"{}\"", c.name))).unwrap_or_else(|| "?".into()) };
+    let on = if target == phosphor_engine::MASTER_ID { "MASTER".to_string() } else if let Some(l) = phosphor_engine::chain_layer(target).and_then(|l| st.comp.layer(l)) { format!("the clip on layer \"{}\"", l.name) } else if let Some(k) = phosphor_engine::chain_clip(target) { format!("clip {k}") } else { st.comp.layer(target).map(|l| format!("layer \"{}\"", l.name)).or_else(|| st.comp.group(target).map(|g| format!("group \"{}\"", g.name))).or_else(|| st.comp.comp(target).map(|c| format!("comp \"{}\"", c.name))).unwrap_or_else(|| "?".into()) };
     log::info!(target: "phosphor::action", "effect added: {effect} on {on}");
     if let Some(chain) = st.comp.effects_mut(target) {
         chain.push(fx);
@@ -257,18 +257,12 @@ pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>
 }
 
 /// Adds an effect to one clip (slot `slot` on `layer`): it belongs to the clip and comes back whenever it plays.
-/// A clip playing now gets it on its layer's clip chain right away (the Inspector's Clip effects); otherwise it
-/// waits in the clip. Returns whether it went on live.
+/// A clip playing now gets it on its layer's clip chain right away; otherwise it waits in the clip
+/// (`clip_own_chain` is both). Returns whether it went on live.
 pub fn add_effect_to_clip(st: &mut State, layer: u64, slot: usize, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) -> Option<bool> {
-    let clip_id = st.comp.layer(layer)?.clips.get(slot).filter(|k| !k.is_empty())?.id;
-    let fx = prepare_effect(st, effect, values, mods, mix)?;
-    let l = st.comp.layer_mut(layer)?;
-    let playing = l.active_clip == Some(clip_id) || l.clip_effects_from == phosphor_engine::EffectsOwner::Clip(clip_id);
-    log::info!(target: "phosphor::action", "effect added: {effect} on clip \"{}\" (layer \"{}\", {})", l.clips[slot].name, l.name, if playing { "playing" } else { "not playing" });
-    if playing {
-        l.clip_effects.push(fx);
-    } else {
-        l.clips[slot].effects.push(fx);
-    }
+    let l = st.comp.layer(layer)?;
+    let clip_id = l.clips.get(slot).filter(|k| !k.is_empty())?.id;
+    let playing = l.clip_effects_from == phosphor_engine::EffectsOwner::Clip(clip_id);
+    add_effect_as(st, phosphor_engine::clip_own_chain(clip_id), effect, values, mods, mix);
     Some(playing)
 }
