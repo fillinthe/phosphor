@@ -164,16 +164,16 @@ impl PhosphorApp {
         let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
         let keys: Vec<String> = wants.iter().map(|(k, _, _)| k.clone()).collect();
         if !wants.is_empty() {
-            // Each tile renders a still; hovered / live tiles keep updating, and stills are taken again now and then
-            // (`stills`).
-            let again = preview_stills.plan(now, keys != *preview_keys, keys.len());
+            // Each tile renders a still; hovered / live tiles keep updating, and stills are taken again a few times
+            // after the tiles or their source change (`stills`), then kept.
+            let again = preview_stills.plan(now, keys != *preview_keys, source, keys.len());
             let items = wants
                 .into_iter()
                 .enumerate()
                 .map(|(i, (key, item, live))| {
                     let refresh = if preview_keys.get(i) != Some(&key) {
                         phosphor_engine::PreviewRefresh::Moved
-                    } else if live || again == super::stills::Again::All || again == super::stills::Again::One(i) {
+                    } else if live || again == super::stills::Again::All {
                         phosphor_engine::PreviewRefresh::Live
                     } else {
                         phosphor_engine::PreviewRefresh::No

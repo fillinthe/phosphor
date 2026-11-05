@@ -1,19 +1,18 @@
 //! When preview stills (effect / generator tiles, clip pictures) are taken again. A still is taken once per tile;
 //! the picture it's made from may still have been black then (the app starting, a movie opening), so all of them are
-//! taken again a few times after the tiles change, and after that one tile a second, so they follow the picture
-//! without costing much.
+//! taken again a few times after the tiles (or the picture they're made from) change. After that a still stays as
+//! it is: one picture per tile, nothing drawn until the mouse is over it (the owner's choice: no flicker, no GPU work).
 
 /// Seconds after the tiles change that every still is taken again.
 const AGAIN_AFTER: [f64; 3] = [0.5, 1.5, 4.0];
-/// Then one tile this often.
-const ONE_EVERY: f64 = 1.0;
 
 #[derive(Default)]
 pub(crate) struct Stills {
     since: f64,
     round: usize,
     next: f64,
-    turn: usize,
+    /// The layer (or MASTER) the stills were made from.
+    pub(crate) source: u64,
 }
 
 /// Which stills to take again this frame.
@@ -21,26 +20,21 @@ pub(crate) struct Stills {
 pub(crate) enum Again {
     None,
     All,
-    One(usize),
 }
 
 impl Stills {
-    /// `changed` = the tiles asked for aren't the ones of last frame; `n` = how many there are.
-    pub(crate) fn plan(&mut self, now: f64, changed: bool, n: usize) -> Again {
-        if changed {
-            (self.since, self.round, self.next) = (now, 0, now + AGAIN_AFTER[0]);
+    /// `changed` = the tiles asked for aren't the ones of last frame; `source` = the layer they're made from;
+    /// `n` = how many there are.
+    pub(crate) fn plan(&mut self, now: f64, changed: bool, source: u64, n: usize) -> Again {
+        if changed || source != self.source {
+            (self.since, self.round, self.next, self.source) = (now, 0, now + AGAIN_AFTER[0], source);
         }
-        if n == 0 || now < self.next {
+        if n == 0 || self.round >= AGAIN_AFTER.len() || now < self.next {
             return Again::None;
         }
-        if self.round < AGAIN_AFTER.len() {
-            self.round += 1;
-            self.next = AGAIN_AFTER.get(self.round).map_or(now + ONE_EVERY, |t| self.since + t);
-            return Again::All;
-        }
-        self.next = now + ONE_EVERY;
-        self.turn = self.turn.wrapping_add(1);
-        Again::One(self.turn % n)
+        self.round += 1;
+        self.next = AGAIN_AFTER.get(self.round).map_or(f64::INFINITY, |t| self.since + t);
+        Again::All
     }
 }
 
@@ -49,18 +43,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stills_are_taken_again_a_few_times_then_one_at_a_time() {
+    fn stills_are_taken_again_a_few_times_then_kept() {
         let mut s = Stills::default();
-        assert_eq!(s.plan(10.0, true, 4), Again::None, "just taken");
-        assert_eq!(s.plan(10.6, false, 4), Again::All);
-        assert_eq!(s.plan(10.7, false, 4), Again::None);
-        assert_eq!(s.plan(11.6, false, 4), Again::All);
-        assert_eq!(s.plan(14.1, false, 4), Again::All);
-        assert_eq!(s.plan(14.2, false, 4), Again::None);
-        let ones: Vec<Again> = (0..5).map(|i| s.plan(15.2 + i as f64, false, 4)).collect();
-        assert_eq!(ones, [Again::One(1), Again::One(2), Again::One(3), Again::One(0), Again::One(1)]);
+        assert_eq!(s.plan(10.0, true, 0, 4), Again::None, "just taken");
+        assert_eq!(s.plan(10.6, false, 0, 4), Again::All);
+        assert_eq!(s.plan(10.7, false, 0, 4), Again::None);
+        assert_eq!(s.plan(11.6, false, 0, 4), Again::All);
+        assert_eq!(s.plan(14.1, false, 0, 4), Again::All);
+        // Then the stills stay: nothing is drawn again however long the list is open.
+        assert!((0..50).all(|i| s.plan(14.2 + i as f64, false, 0, 4) == Again::None));
         // Scrolled: new tiles start over.
-        assert_eq!(s.plan(30.0, true, 4), Again::None);
-        assert_eq!(s.plan(30.5, false, 4), Again::All);
+        assert_eq!(s.plan(70.0, true, 0, 4), Again::None);
+        assert_eq!(s.plan(70.5, false, 0, 4), Again::All);
+        // Another layer selected: the stills are made from its picture, so they're taken again.
+        assert_eq!(s.plan(80.0, false, 7, 4), Again::None);
+        assert_eq!(s.plan(80.5, false, 7, 4), Again::All);
     }
 }

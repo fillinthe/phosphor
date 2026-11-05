@@ -5,7 +5,7 @@ use crate::panels::RightMenu;
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use egui_phosphor::regular as icon;
 use phosphor_engine::patch::Patch;
-use phosphor_engine::{CompileError, EffectState, MASTER_ID, PreviewItem, custom, shaders};
+use phosphor_engine::{CompileError, EffectState, MASTER_ID, ParamMod, PreviewItem, custom, shaders};
 
 use crate::app::State;
 use crate::panels::{self, Tab, label};
@@ -25,7 +25,7 @@ const CATEGORY_ORDER: &[&str] =
 pub enum PreviewMode {
     /// Every visible tile animates.
     Live,
-    /// The tile under the mouse animates; the rest are stills refreshed every few seconds.
+    /// The tile under the mouse animates; the rest keep one still each.
     #[default]
     Hover,
     /// No previews.
@@ -47,6 +47,52 @@ pub struct ExplorerState {
     pub hidden: Vec<String>,
     /// The tile clicked last: chosen, not yet added to anything.
     pub picked: Option<&'static str>,
+    /// How the picked one is set up (its tile shows it; added or dragged with these settings).
+    pub picked_values: Vec<f32>,
+    pub picked_mods: Vec<ParamMod>,
+    pub picked_mix: f32,
+}
+
+impl ExplorerState {
+    /// Picks a tile; a different one starts from its defaults.
+    pub fn pick(&mut self, desc: &'static shaders::ShaderDesc) {
+        if self.picked != Some(desc.id) {
+            self.picked = Some(desc.id);
+            self.picked_values = desc.defaults();
+            self.picked_mods.clear();
+            self.picked_mix = 1.0;
+        }
+    }
+
+    /// The picked effect / source as it's set up, if `id` is the picked one.
+    pub fn setup_for(&self, id: &str) -> Option<(Vec<f32>, Vec<ParamMod>, f32)> {
+        (self.picked == Some(id)).then(|| (self.picked_values.clone(), self.picked_mods.clone(), self.picked_mix))
+    }
+}
+
+/// The picked tile's settings: every control of the effect / source and (for an effect) its mix, before it goes on
+/// anything.
+fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::ShaderDesc) {
+    let ex = &mut st.explorer;
+    if desc.params.is_empty() && ex.sources {
+        return;
+    }
+    crate::ui::help(ui, "Set it up here: the tile shows it, and it's added or dragged with these settings");
+    crate::ui::column_scroll(ui).id_salt("picked_setup").max_height(200.0).show(ui, |ui| {
+        for (i, p) in desc.params.iter().enumerate() {
+            crate::ui::param_slider(ui, &mut ex.picked_values, &mut ex.picked_mods, i, p, None);
+        }
+        if !ex.sources {
+            crate::ui::Level::percent(&mut ex.picked_mix, "Mix").tip("How much of the effect: 0% = bypassed").show(ui);
+        }
+        let changed = ex.picked_values != desc.defaults() || ex.picked_mix != 1.0 || !ex.picked_mods.is_empty();
+        if crate::ui::command_if(ui, changed, label(icon::ARROW_COUNTER_CLOCKWISE, "Reset")).clicked() {
+            ex.picked_values = desc.defaults();
+            ex.picked_mods.clear();
+            ex.picked_mix = 1.0;
+        }
+    });
+    ui.add_space(2.0);
 }
 
 fn matches(desc: &shaders::ShaderDesc, query: &str) -> bool {
@@ -61,6 +107,17 @@ fn matches(desc: &shaders::ShaderDesc, query: &str) -> bool {
 /// Stable fake effect ids for previews, so feedback effects keep their history between frames.
 fn preview_fx(desc: &shaders::ShaderDesc, index: usize) -> EffectState {
     EffectState { id: 9_000_000 + index as u64, effect: desc.id.to_string(), enabled: true, values: desc.defaults(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 }
+}
+
+/// What a tile shows: the picked one as it's set up, the rest with their defaults.
+fn tile_item(ex: &ExplorerState, desc: &'static shaders::ShaderDesc, index: usize) -> PreviewItem {
+    match ex.setup_for(desc.id) {
+        // A source's preview takes its values the way a clip's does.
+        Some((values, _, _)) if ex.sources => PreviewItem::Clip(desc.id.to_string(), values),
+        Some((values, mods, mix)) => PreviewItem::Effect(EffectState { values, mods, mix, ..preview_fx(desc, index) }),
+        None if ex.sources => PreviewItem::Generator(desc.id.to_string()),
+        None => PreviewItem::Effect(preview_fx(desc, index)),
+    }
 }
 
 enum TileAction {
@@ -93,7 +150,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::pick_value(ui, &mut st.explorer.sources, true, label(icon::SPARKLE, "Sources"));
         ui.separator();
         ui.label(RichText::new("Previews").small().color(Color32::GRAY));
-        crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse; others refresh every 2 s (lightest)");
+        crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse and the picked one; the others keep one still (lightest)");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Off, "Off");
     });
@@ -112,6 +169,13 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             }
         }
     });
+    // Bench pictures: PHOSPHOR_EXPLORER_PICK=<effect id> picks that tile on the first frame.
+    if st.explorer.picked.is_none()
+        && let Ok(id) = std::env::var("PHOSPHOR_EXPLORER_PICK")
+        && let Some(d) = list.iter().find(|d| d.id == id)
+    {
+        st.explorer.pick(d);
+    }
     // The picked tile and what to do with it; nothing changes on screen until you choose.
     let picked = st.explorer.picked.and_then(|id| list.iter().find(|d| d.id == id).copied());
     let mut add_to: Option<Option<u64>> = None;
@@ -137,10 +201,13 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             }
             None => {
                 let verb = if st.explorer.sources { "use it" } else { "add it" };
-                crate::ui::help(ui, &format!("Click to pick · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
+                crate::ui::help(ui, &format!("Click to pick and set it up · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
             }
         }
     });
+    if let Some(d) = picked {
+        picked_setup(ui, st, d);
+    }
     #[cfg(not(target_arch = "wasm32"))]
     crate::ui::toolbar(ui, |ui| {
         let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
@@ -183,10 +250,11 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 if !ui.is_rect_visible(rect) {
                     continue;
                 }
-                // Only tiles on screen get a preview; how often it refreshes depends on the mode.
+                // Only tiles on screen get a preview; how often it refreshes depends on the mode. The picked one
+                // animates so its settings show as they're changed.
                 if st.explorer.preview_mode != PreviewMode::Off {
-                    let item = if st.explorer.sources { PreviewItem::Generator(desc.id.to_string()) } else { PreviewItem::Effect(preview_fx(desc, *i)) };
-                    let live = (st.explorer.preview_mode == PreviewMode::Live && (frame + shown).is_multiple_of(groups)) || resp.hovered();
+                    let item = tile_item(&st.explorer, desc, *i);
+                    let live = (st.explorer.preview_mode == PreviewMode::Live && (frame + shown).is_multiple_of(groups)) || resp.hovered() || st.explorer.picked == Some(desc.id);
                     shown += 1;
                     st.preview_wants.push((key.clone(), item, live));
                 }
@@ -225,7 +293,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 if resp.double_clicked() {
                     action = Some(TileAction::Apply(desc.id));
                 } else if resp.clicked() {
-                    st.explorer.picked = Some(desc.id);
+                    st.explorer.pick(desc);
                 }
                 let params: Vec<&str> = desc.params.iter().map(|p| p.name).collect();
                 let resp = resp.on_hover_text(format!("{about}\n\nControls: {}", if params.is_empty() { "none".into() } else { params.join(", ") }));
@@ -334,7 +402,10 @@ pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
     if let Some(fx) = drag.effect {
         // Nothing to put it on: say so (a new layer of its own would have no source, so nothing to see).
         match chain_target {
-            Some(t) => panels::add_effect_to(st, t, fx),
+            Some(t) => match st.explorer.setup_for(fx) {
+                Some((values, mods, mix)) => panels::add_effect_as(st, t, fx, values, mods, mix),
+                None => panels::add_effect_to(st, t, fx),
+            },
             None => st.notice = Some("Select a layer, group, comp or MASTER first to put the effect on it (or drag the effect onto one)".into()),
         }
     }
@@ -345,7 +416,8 @@ pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
         };
         if let Some(desc) = shaders::generator(g) {
             let now = st.mod_inputs.time as f64;
-            st.launch_source(t, phosphor_engine::SourceSpec::Generator(g.to_string()), desc.defaults(), desc.name.to_string(), now);
+            let values = st.explorer.setup_for(g).map_or_else(|| desc.defaults(), |(v, _, _)| v);
+            st.launch_source(t, phosphor_engine::SourceSpec::Generator(g.to_string()), values, desc.name.to_string(), now);
         }
     }
 }
