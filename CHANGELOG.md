@@ -136,6 +136,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Effects Explorer: three near-empty rows are gone. The picked effect's help (i) and its Reset (shown only once
+  something is changed) sit in the name row, and the "ISF: N imported · FFGL: no plugins" line only appears while
+  ISF is still importing or a plugin can't be used (the counts are in the category menu's tooltip, and "Open the
+  FFGL folder" is at the bottom of that menu on the Mac).
 - Effects Explorer: the rows of category pills are gone: one "All categories" menu beside Effects / Sources holds
   Favourites, Hidden and the categories, so the tiles start higher. A long layer or clip name on the Add buttons is
   cut short with an ellipsis instead of running the button off the panel.
