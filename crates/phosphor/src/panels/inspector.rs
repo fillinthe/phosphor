@@ -657,8 +657,7 @@ fn mixer_editor(ui: &mut egui::Ui, layer: &mut LayerState) {
         Some(d) => label(icon::INTERSECT, &format!("Blend shader: {}", d.name)),
         None => label(icon::INTERSECT, "Blend shader"),
     };
-    crate::ui::section(ui, ("mixer", layer.id), title, false, |ui| {
-        help(ui, "Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies.");
+    crate::ui::section_help(ui, ("mixer", layer.id), title, Some("Your own blend shader (Shader Editor, kind blend) or an FFGL mixer puts this layer on the layers below instead of its blend mode; the layer's opacity still applies."), false, |ui| {
         let mut pick = layer.mixer.clone();
         crate::ui::dropdown(ui, ("mixer_pick", layer.id), 200.0).selected_text(current.map_or("None (blend mode)", |d| d.name)).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut pick, None, "None (blend mode)");
