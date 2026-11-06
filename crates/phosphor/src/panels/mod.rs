@@ -99,6 +99,7 @@ pub(crate) use cues::*;
 pub(crate) use devices::*;
 pub(crate) use phone_osc::*;
 pub(crate) use effects::*;
+pub(crate) use inspector::reveal_clip_effects;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use file_info::{FileInfo, file_info_window};
 pub(crate) use groups::*;

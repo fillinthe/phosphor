@@ -4,7 +4,8 @@
 use eframe::egui;
 use phosphor_engine::{ClipSettings, PlayDirection};
 
-pub(crate) const KEEP_LABEL: &str = "Keep speed, loop and direction with this clip";
+// (Short enough for the Inspector's column; the tooltip says the rest.)
+pub(crate) const KEEP_LABEL: &str = "Keep speed, loop and direction";
 
 /// The switch (`own` = the clip's saved settings, `current` = the layer's now, `name` = the clip's name) and, while
 /// it's on, a line naming what's saved.

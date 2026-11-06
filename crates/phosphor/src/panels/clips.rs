@@ -234,7 +234,7 @@ pub(crate) fn clips(ui: &mut egui::Ui, st: &mut State) {
             crate::ui::carry_scroll(ui);
         });
     }
-    apply_row_out(st, out, now);
+    apply_row_out(ui, st, out, now);
 }
 
 /// Width of the layer strip at the start of each clip row.

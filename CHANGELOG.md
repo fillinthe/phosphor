@@ -131,6 +131,14 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   whenever it plays) or **Add to MASTER**; the Inspector opens on it so you can bring its Mix in gradually (add it at
   Mix 0% to start switched off). Double-click or a drag onto a layer / MASTER also carries the settings (sources
   too). Reset puts the defaults back.
+- Effects Explorer: drag a tile onto a clip in the grid. An effect joins that clip's own effects (the cell lights up
+  as you hold it over one with something in it); a source becomes the clip, with the settings you picked. The
+  Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
+  right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
+  with Launch › Fade on, the fade never reaching it).
+- Clips: the column buttons (▷ 1–6) are only lit for columns that have a clip in them; a narrow slider (Speed and
+  Volume on a layer's card) shows its value alone instead of a cut-off name (the name is in its tooltip); the clip
+  switch reads "Keep speed, loop and direction" so it fits the Inspector.
 - Inspector: the clip picked in the grid shows its own effects even while another clip is playing ("Clip effects:
   <name> (when it plays)"), so what you add to a clip is always there to see and edit; they come in when it plays.
 
