@@ -127,6 +127,12 @@ fn tile_item(ex: &ExplorerState, desc: &'static shaders::ShaderDesc, index: usiz
     }
 }
 
+/// How the tiles work, for the help when nothing is picked.
+fn tiles_help(sources: bool) -> String {
+    let verb = if sources { "use it" } else { "add it" };
+    format!("Click to pick and set it up · double-click or drag onto a layer, MASTER or a clip to {verb} · right-click for more")
+}
+
 /// Where the picked tile's Add buttons put it.
 #[derive(Clone, Copy)]
 enum AddTo {
@@ -216,6 +222,10 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse and the picked one; the others keep one still (lightest)");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Off, "Off");
+        // With nothing picked, how the tiles work (an icon here; a sentence gets its own row below).
+        if st.explorer.picked.is_none() && crate::ui::help_icons() {
+            crate::ui::help(ui, &tiles_help(st.explorer.sources));
+        }
     });
     // Bench pictures: PHOSPHOR_EXPLORER_PICK=<effect or source id> picks that tile on the first frame (a source id
     // switches to the Sources tiles first).
@@ -223,7 +233,13 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         && let Ok(id) = std::env::var("PHOSPHOR_EXPLORER_PICK")
     {
         match list.iter().find(|d| d.id == id) {
-            Some(d) => st.explorer.pick(d),
+            Some(d) => {
+                st.explorer.pick(d);
+                // PHOSPHOR_EXPLORER_MIX=0.4: a mix that isn't the default, so a picture can show the setup carried.
+                if let Some(m) = std::env::var("PHOSPHOR_EXPLORER_MIX").ok().and_then(|m| m.parse::<f32>().ok()) {
+                    st.explorer.picked_mix = m;
+                }
+            }
             None if !st.explorer.sources && shaders::generator(&id).is_some() => st.explorer.sources = true,
             None => {}
         }
@@ -270,8 +286,9 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 }
             }
             None => {
-                let verb = if st.explorer.sources { "use it" } else { "add it" };
-                crate::ui::help(ui, &format!("Click to pick and set it up · double-click or drag onto a layer, MASTER or a clip to {verb} · right-click for more"));
+                if !crate::ui::help_icons() {
+                    crate::ui::help(ui, &tiles_help(st.explorer.sources));
+                }
             }
         }
     });
