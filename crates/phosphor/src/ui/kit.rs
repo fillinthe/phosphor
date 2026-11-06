@@ -273,6 +273,31 @@ pub(crate) fn section<R>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt:
     egui::CollapsingHeader::new(RichText::new(title.into()).strong()).id_salt(id).default_open(open).show(ui, add)
 }
 
+/// A section whose help rides in its header: a small (i) after the title (hover for the sentence) when the user
+/// picked "Help icons", else the sentence as the body's first line. (A `help` call as a section's first line made a
+/// row with nothing but an (i) on it.) `help` None = a plain `section`.
+pub(crate) fn section_help<R>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, title: impl Into<String>, help: Option<&str>, open: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+    let title = title.into();
+    let Some(help) = help.filter(|_| super::widgets::help_icons()) else {
+        return section(ui, id, title, open, |ui| {
+            if let Some(h) = help {
+                super::widgets::help(ui, h);
+            }
+            add(ui)
+        })
+        .body_returned;
+    };
+    let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), ui.id().with(id), open);
+    state
+        .show_header(ui, |ui| {
+            ui.label(RichText::new(title).strong());
+            ui.label(RichText::new(icon::INFO).weak()).on_hover_text(help);
+        })
+        .body(add)
+        .2
+        .map(|r| r.inner)
+}
+
 /// A smaller fold-away group inside a section (a transition's settings, corners by number).
 pub(crate) fn subsection<R>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, title: impl Into<String>, open: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> egui::CollapsingResponse<R> {
     egui::CollapsingHeader::new(RichText::new(title.into()).small()).id_salt(id).default_open(open).show(ui, add)

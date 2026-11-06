@@ -55,9 +55,10 @@ pub(crate) fn plays_on_picker(ui: &mut egui::Ui, st: &mut State) {
     };
     let layers: Vec<(u64, String)> = st.comp.layers.iter().rev().map(|l| (l.id, l.name.clone())).collect();
     let mut pick = st.media_view.plays_on;
+    // One widget ("Plays on: …"): a label and a drop-down side by side wrapped onto two lines in a narrow panel.
     crate::ui::toolbar(ui, |ui| {
-        ui.label(RichText::new(format!("{} Plays on", icon::PLAY)).small());
-        crate::ui::dropdown(ui, "media_plays_on", 170.0).selected_text(current).show_ui(ui, |ui| {
+        let w = (ui.available_width() - 40.0).clamp(120.0, 260.0);
+        crate::ui::dropdown(ui, "media_plays_on", w).selected_text(format!("{} Plays on: {current}", icon::PLAY)).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut pick, PlaysOn::Selected, "The selected layer");
             crate::ui::pick_value(ui, &mut pick, PlaysOn::NewLayer, "A new layer each time");
             ui.separator();

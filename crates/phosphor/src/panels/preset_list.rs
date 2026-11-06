@@ -13,8 +13,7 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
     let (mut look, mut layer_pick, mut chain_pick) = (None, None, None);
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
         let State { presets, preset_name, layer_presets, layer_preset_name, chain_presets, chain_preset_name, comp, .. } = &mut *st;
-        crate::ui::section(ui, "presets_Looks", "Looks", true, |ui| {
-            help(ui, "The whole project: layers, effects, mapping.");
+        crate::ui::section_help(ui, "presets_Looks", "Looks", Some("The whole project: layers, effects, mapping."), true, |ui| {
             crate::ui::toolbar(ui, |ui| {
                 ui.label("Fade in");
                 guarded!(ui, comp.launch.look_fade, egui::DragValue::new(&mut comp.launch.look_fade).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(1))
@@ -22,16 +21,15 @@ pub(crate) fn presets(ui: &mut egui::Ui, st: &mut State) {
             });
             look = named_saves(ui, presets, preset_name, "look", || comp.to_json());
         });
-        crate::ui::section(ui, "presets_Layers", "Layers", true, |ui| {
-            match &layer {
-                Some(l) => help(ui, &format!("Saves the selected layer ({}). Load adds it above the selected one.", l.name)),
-                None => crate::ui::empty_note(ui, "Select a layer to save it. Load adds a saved one to this project."),
-            };
+        let layer_help = layer.as_ref().map(|l| format!("Saves the selected layer ({}). Load adds it above the selected one.", l.name));
+        crate::ui::section_help(ui, "presets_Layers", "Layers", layer_help.as_deref(), true, |ui| {
+            if layer.is_none() {
+                crate::ui::empty_note(ui, "Select a layer to save it. Load adds a saved one to this project.");
+            }
             let json = layer.as_ref().and_then(|l| serde_json::to_string(l).ok()).unwrap_or_default();
             layer_pick = named_saves(ui, layer_presets, layer_preset_name, "layer", || json);
         });
-        crate::ui::section(ui, "presets_Effect chains", "Effect chains", true, |ui| {
-            help(ui, "Saves the selected layer's (or MASTER's) effects. Load adds them to the selected one.");
+        crate::ui::section_help(ui, "presets_Effect chains", "Effect chains", Some("Saves the selected layer's (or MASTER's) effects. Load adds them to the selected one."), true, |ui| {
             let json = serde_json::to_string(&chain).unwrap_or_default();
             chain_pick = named_saves(ui, chain_presets, chain_preset_name, "chain", || json);
         });
