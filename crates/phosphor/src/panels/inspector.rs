@@ -535,9 +535,11 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
     if let Some(c) = picked {
         let heading = format!("Clip effects: {} (when it plays)", layer.clips[c].name);
         let own = phosphor_engine::clip_own_chain(layer.clips[c].id);
+        let top = ui.cursor().min;
         if let Some(a) = super::effects::effects_list(ui, &heading, "Effects added here belong to this clip: they come in whenever it plays, on any layer, before the layer's effects below.", &mut layer.clips[c].effects, clipboard_len) {
             action = Some((own, a));
         }
+        reveal_if_asked(ui, top);
         ui.separator();
     }
     let clip_chain = match &layer.clip_effects_from {
@@ -546,15 +548,36 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
         phosphor_engine::EffectsOwner::None => None,
     };
     if let Some((heading, empty)) = clip_chain {
+        let top = ui.cursor().min;
         if let Some(a) = super::effects::effects_list(ui, heading, empty, &mut layer.clip_effects, clipboard_len) {
             action = Some((phosphor_engine::clip_chain(layer.id), a));
         }
+        reveal_if_asked(ui, top);
         ui.separator();
     }
     if let Some(a) = effects_editor(ui, &mut layer.effects, clipboard_len) {
         action = Some((layer.id, a));
     }
     (action, seek_to)
+}
+
+const REVEAL_FX: &str = "inspector_reveal_clip_fx";
+
+/// Asks the Inspector to scroll to the clip's effects the next time it draws them (Add to clip, a tile dropped on
+/// a clip): the Inspector is long, and the effect that was just added would be below the fold.
+pub(crate) fn reveal_clip_effects(ctx: &egui::Context) {
+    let now = ctx.input(|i| i.time);
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(REVEAL_FX), now));
+}
+
+/// Scrolls to the list drawn since `top` if `reveal_clip_effects` asked in the last couple of seconds (once).
+fn reveal_if_asked(ui: &mut egui::Ui, top: egui::Pos2) {
+    let Some(asked) = ui.ctx().data(|d| d.get_temp::<f64>(egui::Id::new(REVEAL_FX))) else { return };
+    let now = ui.input(|i| i.time);
+    ui.ctx().data_mut(|d| d.remove::<f64>(egui::Id::new(REVEAL_FX)));
+    if now - asked < 2.0 {
+        ui.scroll_to_rect(egui::Rect::from_min_max(top, ui.cursor().min), Some(egui::Align::Min));
+    }
 }
 
 /// What the layer is showing and where it comes from: generated, a file on disk (its path, Show in Finder, and a

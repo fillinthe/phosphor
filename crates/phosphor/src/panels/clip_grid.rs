@@ -18,6 +18,8 @@ pub(crate) struct Grid {
     pub selected_clip: Option<(u64, usize)>,
     pub held_id: egui::Id,
     pub pressed: bool,
+    /// Which columns have a clip in them on some layer (the others' headers have nothing to trigger).
+    pub filled: Vec<bool>,
 }
 
 impl Grid {
@@ -47,6 +49,7 @@ impl Grid {
             selected_clip: st.selected_clip,
             held_id,
             pressed,
+            filled: (0..cols).map(|c| st.comp.layers.iter().any(|l| l.clips.get(c).is_some_and(|k| !k.is_empty()))).collect(),
         };
         (grid, out)
     }
@@ -82,6 +85,8 @@ pub(crate) struct RowOut {
     pub set_cell: Option<(usize, usize, usize)>,
     /// (layer idx, slot, a live input…)
     pub set_source: Option<(usize, usize, super::SourceDrag)>,
+    /// (layer id, slot): an explorer tile dropped on a cell (an effect for the clip, or a source as the clip).
+    pub palette: Option<(u64, usize, crate::explorer::PaletteDrag)>,
     pub use_current: Option<(usize, usize)>,
     /// A clip clicked: it plays and is selected (its layer too), so the Inspector shows its settings.
     pub picked: Option<(u64, usize)>,
@@ -208,8 +213,9 @@ pub(crate) fn column_headers(ui: &mut egui::Ui, grid: &Grid, head_w: f32, out: &
         for c in 0..grid.cols {
             let keyed = c / CLIP_PAGE_SIZE == grid.bank;
             let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
-            // Triggers are actions: solid buttons (the columns on the number keys in full colour).
-            let head = if keyed {
+            // Triggers are actions: solid buttons (the columns on the number keys in full colour); a column with no
+            // clip in it has nothing to trigger, so its header stays plain.
+            let head = if keyed && grid.filled.get(c).copied().unwrap_or(false) {
                 action_button_sized(ui, Act::Go, format!("{} {}", icon::PLAY, c + 1), egui::vec2(grid.cell.x, CONTROL_H))
             } else {
                 command_sized(ui, format!("{} {}", icon::PLAY, c + 1), egui::vec2(grid.cell.x, CONTROL_H))
@@ -233,6 +239,8 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
             cx.clip_cells.push((rect, layer.id, c));
         }
         let active = clip.is_some_and(|k| !k.is_empty() && layer.active_clip == Some(k.id));
+        // An effect tile needs a clip to go on; a source tile can fill an empty cell.
+        let takes = |d: &crate::explorer::PaletteDrag| d.generator.is_some() || clip.is_some_and(|k| !k.is_empty());
         let chosen = cx.also_clips.contains(&(layer.id, c)) || (!cx.also_clips.is_empty() && grid.selected_clip == Some((layer.id, c)));
         let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(grid.cell.x, grid.cell.x / grid.aspect));
         let p = ui.painter();
@@ -302,7 +310,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
             Stroke::new(2.5, Color32::from_rgb(255, 196, 70))
         } else if active {
             Stroke::new(2.0, accent())
-        } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() || resp.dnd_hover_payload::<super::SourceDrag>().is_some() {
+        } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() || resp.dnd_hover_payload::<super::SourceDrag>().is_some() || resp.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some_and(|d| takes(&d)) {
             Stroke::new(1.0, accent().gamma_multiply(0.7))
         } else {
             ui.visuals().widgets.noninteractive.bg_stroke
@@ -323,6 +331,9 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
         }
         if let Some(d) = crate::ui::drop_payload::<super::SourceDrag>(&resp) {
             out.set_source = Some((idx, c, (*d).clone()));
+        }
+        if let Some(d) = crate::ui::drop_payload::<crate::explorer::PaletteDrag>(&resp).filter(|d| takes(d)) {
+            out.palette = Some((layer.id, c, *d));
         }
         // Flash / piano clips play from the moment the button goes down until it comes up.
         let momentary = clip.is_some_and(|k| !k.is_empty() && matches!(k.trigger, TriggerMode::Flash | TriggerMode::Piano));
@@ -370,7 +381,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
 }
 
 /// Does what the cells asked: drops, plays, selection, row menus, releases.
-pub(crate) fn apply_row_out(st: &mut State, out: RowOut, now: f64) {
+pub(crate) fn apply_row_out(ui: &egui::Ui, st: &mut State, out: RowOut, now: f64) {
     if let Some(id) = out.stop {
         st.stop_clips(id, now);
     }
@@ -400,6 +411,9 @@ pub(crate) fn apply_row_out(st: &mut State, out: RowOut, now: f64) {
     if let Some((layer, c)) = out.picked {
         st.selected = Some(layer);
         st.selected_clip = Some((layer, c));
+    }
+    if let Some((layer, c, drag)) = out.palette {
+        crate::explorer::drop_on_clip(ui.ctx(), st, drag, layer, c);
     }
     if let Some((idx, c)) = out.use_current
         && let Some(id) = st.comp.layers.get(idx).map(|l| l.id)

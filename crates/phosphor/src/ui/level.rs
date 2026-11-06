@@ -324,11 +324,13 @@ impl<'a> Level<'a> {
                 let shown = if locked { format!("{} {shown}", icon::LOCK) } else { shown };
                 let value_g = p.layout_no_wrap(shown.clone(), font.clone(), color);
                 let room = (rect.width() - value_g.size().x - pad * 3.0).max(0.0);
+                // The name only when it fits whole: a narrow bar (cards) shows its value alone and the name in its
+                // tooltip, rather than "Spe…".
                 if !text.is_empty() && room > 16.0 {
-                    let mut job = egui::text::LayoutJob::simple_singleline(text.clone(), font.clone(), color);
-                    job.wrap = egui::text::TextWrapping::truncate_at_width(room);
-                    let g = p.layout_job(job);
-                    p.galley(egui::pos2(rect.left() + pad, rect.center().y - g.size().y / 2.0), g, color);
+                    let g = p.layout_no_wrap(text.clone(), font.clone(), color);
+                    if g.size().x <= room {
+                        p.galley(egui::pos2(rect.left() + pad, rect.center().y - g.size().y / 2.0), g, color);
+                    }
                 }
                 p.galley(egui::pos2(rect.right() - pad - value_g.size().x, rect.center().y - value_g.size().y / 2.0), value_g, color);
             }

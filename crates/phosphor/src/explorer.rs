@@ -11,7 +11,7 @@ use crate::app::State;
 use crate::panels::{self, Tab, label};
 use crate::theme::{accent, WARN};
 
-/// Drag payload from the explorer: drop on a layer card (or MASTER) to apply.
+/// Drag payload from the explorer: drop on a layer card, MASTER or a clip cell to apply.
 #[derive(Clone, Copy, Debug)]
 pub struct PaletteDrag {
     pub effect: Option<&'static str>,
@@ -213,7 +213,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                         add_to = Some(AddTo::Layer(Some(MASTER_ID)));
                     }
                     if layer_target.is_none() && clip_target.is_none() {
-                        crate::ui::hint(ui, "Select a layer or click a clip to add it there");
+                        crate::ui::hint(ui, "Select a layer or click a clip to add it there, or drag the tile onto one");
                     }
                 }
                 if crate::ui::small_command(ui, icon::X).on_hover_text("Unselect").clicked() {
@@ -222,7 +222,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             }
             None => {
                 let verb = if st.explorer.sources { "use it" } else { "add it" };
-                crate::ui::help(ui, &format!("Click to pick and set it up · double-click or drag onto a layer / MASTER to {verb} · right-click for more"));
+                crate::ui::help(ui, &format!("Click to pick and set it up · double-click or drag onto a layer, MASTER or a clip to {verb} · right-click for more"));
             }
         }
     });
@@ -350,7 +350,6 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
 
     // Added from the buttons: the target is selected and the Inspector opened on it, so its Mix is right there.
     if let (Some(d), Some(to)) = (picked, add_to) {
-        let setup = st.explorer.setup_for(d.id);
         match to {
             AddTo::Layer(target) => {
                 apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(d.id), generator: st.explorer.sources.then_some(d.id) }, target);
@@ -358,15 +357,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                     st.selected = Some(t);
                 }
             }
-            AddTo::Clip(layer, slot) => {
-                let (values, mods, mix) = setup.unwrap_or_else(|| (d.defaults(), Vec::new(), 1.0));
-                match panels::add_effect_to_clip(st, layer, slot, d.id, values, mods, mix) {
-                    Some(true) => st.notice = Some(format!("{} added to the clip: it's in the Inspector under Clip effects", d.name)),
-                    Some(false) => st.notice = Some(format!("{} added to the clip: it comes in when the clip plays", d.name)),
-                    None => {}
-                }
-                st.selected = Some(layer);
-            }
+            AddTo::Clip(layer, slot) => drop_on_clip(ui.ctx(), st, PaletteDrag { effect: Some(d.id), generator: None }, layer, slot),
         }
         st.open_tab = Some(Tab::Inspector);
     }
@@ -459,6 +450,43 @@ pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
             let values = st.explorer.setup_for(g).map_or_else(|| desc.defaults(), |(v, _, _)| v);
             st.launch_source(t, phosphor_engine::SourceSpec::Generator(g.to_string()), values, desc.name.to_string(), now);
         }
+    }
+}
+
+/// A tile dropped on a clip cell (or Add to clip): an effect joins that clip's own chain, a source becomes the clip,
+/// both with the picked tile's settings. The clip is selected and the Inspector opens on it, so its Mix is right there.
+pub fn drop_on_clip(ctx: &egui::Context, st: &mut State, drag: PaletteDrag, layer: u64, slot: usize) {
+    if let Some(fx) = drag.effect
+        && let Some(desc) = shaders::effect(fx)
+    {
+        let (values, mods, mix) = st.explorer.setup_for(fx).unwrap_or_else(|| (desc.defaults(), Vec::new(), 1.0));
+        match panels::add_effect_to_clip(st, layer, slot, fx, values, mods, mix) {
+            Some(true) => st.notice = Some(format!("{} added to the clip: it's in the Inspector under Clip effects", desc.name)),
+            Some(false) => st.notice = Some(format!("{} added to the clip: it comes in when the clip plays", desc.name)),
+            None => {
+                st.notice = Some("Drop an effect on a clip that has something in it".into());
+                return;
+            }
+        }
+    }
+    if let Some(g) = drag.generator
+        && let Some(desc) = shaders::generator(g)
+    {
+        st.comp.place_clips(layer, slot, vec![(desc.name.to_string(), phosphor_engine::SourceSpec::Generator(g.to_string()))]);
+        if let Some((values, mods, _)) = st.explorer.setup_for(g)
+            && let Some(l) = st.comp.layer_mut(layer)
+        {
+            let k = l.clip_slot_mut(slot);
+            k.generator_values = values;
+            k.mods = mods;
+        }
+        st.notice = Some(format!("{} is in the clip: click it to play", desc.name));
+    }
+    st.selected = Some(layer);
+    st.selected_clip = Some((layer, slot));
+    st.open_tab = Some(Tab::Inspector);
+    if drag.effect.is_some() {
+        panels::reveal_clip_effects(ctx);
     }
 }
 

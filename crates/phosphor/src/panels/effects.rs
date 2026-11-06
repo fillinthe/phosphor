@@ -227,15 +227,16 @@ pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
 
 /// A new effect set up in advance (the explorer's picked tile): its control values, modulation and mix. Also
 /// Launch › Fade (it blends in) and the Recent list.
-fn prepare_effect(st: &mut State, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) -> Option<EffectState> {
+fn prepare_effect(st: &mut State, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32, live: bool) -> Option<EffectState> {
     let mut fx = st.comp.new_effect(effect)?;
     if values.len() == fx.values.len() {
         fx.values = values;
         fx.mods = mods;
     }
     fx.mix = mix;
-    // With Launch → Fade, a new effect blends in instead of popping on.
-    if st.comp.launch.fade {
+    // With Launch → Fade, a new effect blends in instead of popping on (only on a chain that's showing: one saved
+    // in a clip that isn't playing would be left at 0%, the fade never finding it).
+    if st.comp.launch.fade && live {
         st.fx_fades.push((fx.id, st.mod_inputs.time, st.comp.launch.fade_secs.max(0.05), fx.mix));
         fx.mix = 0.0;
     }
@@ -248,7 +249,8 @@ fn prepare_effect(st: &mut State, effect: &str, values: Vec<f32>, mods: Vec<phos
 /// Adds an effect set up in advance (the explorer's picked tile) to a chain (MASTER, a layer, group, comp or a
 /// layer's clip chain).
 pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>, mods: Vec<phosphor_engine::ParamMod>, mix: f32) {
-    let Some(fx) = prepare_effect(st, effect, values, mods, mix) else { return };
+    let live = phosphor_engine::chain_clip(target).is_none_or(|k| st.comp.layers.iter().any(|l| l.clip_effects_from == phosphor_engine::EffectsOwner::Clip(k)));
+    let Some(fx) = prepare_effect(st, effect, values, mods, mix, live) else { return };
     let on = if target == phosphor_engine::MASTER_ID { "MASTER".to_string() } else if let Some(l) = phosphor_engine::chain_layer(target).and_then(|l| st.comp.layer(l)) { format!("the clip on layer \"{}\"", l.name) } else if let Some(k) = phosphor_engine::chain_clip(target) { format!("clip {k}") } else { st.comp.layer(target).map(|l| format!("layer \"{}\"", l.name)).or_else(|| st.comp.group(target).map(|g| format!("group \"{}\"", g.name))).or_else(|| st.comp.comp(target).map(|c| format!("comp \"{}\"", c.name))).unwrap_or_else(|| "?".into()) };
     log::info!(target: "phosphor::action", "effect added: {effect} on {on}");
     if let Some(chain) = st.comp.effects_mut(target) {

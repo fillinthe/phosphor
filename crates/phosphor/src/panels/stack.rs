@@ -170,7 +170,7 @@ pub(crate) fn stack(ui: &mut egui::Ui, st: &mut State) {
             crate::ui::carry_scroll(ui);
         });
     }
-    apply_row_out(st, out, now);
+    apply_row_out(ui, st, out, now);
     apply_stack_acts(st, acts, now);
 }
 
