@@ -65,8 +65,12 @@ fn effects_list_body(ui: &mut egui::Ui, heading: &str, empty: &str, effects: &mu
                 action = Some(FxAction::PasteChain);
             }
         }
+        // The empty list's help in the heading row (as an icon it was a row of its own).
+        if effects.is_empty() && crate::ui::help_icons() {
+            help(ui, empty);
+        }
     });
-    if effects.is_empty() {
+    if effects.is_empty() && !crate::ui::help_icons() {
         help(ui, empty);
     }
     let mut remove = None;
