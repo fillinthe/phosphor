@@ -77,7 +77,6 @@ fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::Shade
     if desc.params.is_empty() && ex.sources {
         return;
     }
-    crate::ui::help(ui, "Set it up here: the tile shows it, and it's added or dragged with these settings. Mix 0% adds it switched off, to bring in later from the Inspector");
     crate::ui::column_scroll(ui).id_salt("picked_setup").max_height(200.0).show(ui, |ui| {
         for (i, p) in desc.params.iter().enumerate() {
             crate::ui::param_slider(ui, &mut ex.picked_values, &mut ex.picked_mods, i, p, None);
@@ -85,14 +84,22 @@ fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::Shade
         if !ex.sources {
             crate::ui::Level::percent(&mut ex.picked_mix, "Mix").tip("How much of the effect: 0% = bypassed").show(ui);
         }
-        let changed = ex.picked_values != desc.defaults() || ex.picked_mix != 1.0 || !ex.picked_mods.is_empty();
-        if crate::ui::command_if(ui, changed, label(icon::ARROW_COUNTER_CLOCKWISE, "Reset")).clicked() {
-            ex.picked_values = desc.defaults();
-            ex.picked_mods.clear();
-            ex.picked_mix = 1.0;
-        }
     });
     ui.add_space(2.0);
+}
+
+/// Help and Reset for the picked tile's settings, in the header row (a row each was mostly empty space).
+fn picked_setup_header(ui: &mut egui::Ui, ex: &mut ExplorerState, desc: &'static shaders::ShaderDesc) {
+    if desc.params.is_empty() && ex.sources {
+        return;
+    }
+    let changed = ex.picked_values != desc.defaults() || ex.picked_mix != 1.0 || !ex.picked_mods.is_empty();
+    if changed && crate::ui::small_command(ui, icon::ARROW_COUNTER_CLOCKWISE).on_hover_text("Reset the settings to the effect's defaults").clicked() {
+        ex.picked_values = desc.defaults();
+        ex.picked_mods.clear();
+        ex.picked_mix = 1.0;
+    }
+    crate::ui::help(ui, "Set it up here: the tile shows it, and it's added or dragged with these settings. Mix 0% adds it switched off, to bring in later from the Inspector");
 }
 
 fn matches(desc: &shaders::ShaderDesc, query: &str) -> bool {
@@ -165,7 +172,18 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             "hidden" => format!("{} Hidden ({hidden})", icon::EYE_SLASH),
             c => c.to_string(),
         };
-        crate::ui::dropdown(ui, "explorer_category", 130.0).selected_text(shown).show_ui(ui, |ui| {
+        #[cfg(not(target_arch = "wasm32"))]
+        let packs = {
+            let isf = format!("ISF: {} imported, {} skipped (from /Library/Graphics/ISF and ~/Library/Graphics/ISF; skipped ones need multi-pass or feedback support)", st.isf.loaded, st.isf.skipped);
+            #[cfg(target_os = "macos")]
+            let ffgl = format!("\n{}", ffgl_summary(&st.ffgl));
+            #[cfg(not(target_os = "macos"))]
+            let ffgl = String::new();
+            format!("{isf}{ffgl}")
+        };
+        #[cfg(target_arch = "wasm32")]
+        let packs = String::new();
+        let menu = crate::ui::dropdown(ui, "explorer_category", 130.0).selected_text(shown).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut st.explorer.category, String::new(), "All categories");
             crate::ui::pick_value(ui, &mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
             if hidden > 0 {
@@ -178,7 +196,21 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                     crate::ui::pick_value(ui, &mut st.explorer.category, cat.to_string(), *cat);
                 }
             }
+            #[cfg(target_os = "macos")]
+            {
+                ui.separator();
+                if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Open the FFGL folder")).on_hover_text("Put FFGL plugins (.bundle) here").clicked()
+                    && let Some(d) = crate::show::storage_dir().map(|d| d.join("ffgl"))
+                {
+                    let _ = std::fs::create_dir_all(&d);
+                    crate::os::open(&d);
+                    ui.close();
+                }
+            }
         });
+        if !packs.is_empty() {
+            menu.response.on_hover_text(packs);
+        }
         ui.separator();
         ui.label(RichText::new("Previews").small().color(Color32::GRAY));
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse and the picked one; the others keep one still (lightest)");
@@ -232,6 +264,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                         crate::ui::hint(ui, "Select a layer or click a clip to add it there, or drag the tile onto one");
                     }
                 }
+                picked_setup_header(ui, &mut st.explorer, d);
                 if crate::ui::small_command(ui, icon::X).on_hover_text("Unselect").clicked() {
                     st.explorer.picked = None;
                 }
@@ -245,14 +278,25 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
     if let Some(d) = picked {
         picked_setup(ui, st, d);
     }
+    // Shader packs: a row only while ISF is still importing or an FFGL plugin can't be used (otherwise the counts
+    // are in the category menu's tooltip, so a panel in use isn't wearing a status line).
     #[cfg(not(target_arch = "wasm32"))]
-    crate::ui::toolbar(ui, |ui| {
-        let status = if st.isf.scanning() { format!("ISF: importing… {}", st.isf.loaded) } else { format!("ISF: {} imported, {} skipped", st.isf.loaded, st.isf.skipped) };
-        crate::ui::hint(ui, status).on_hover_text("ISF shaders from /Library/Graphics/ISF and ~/Library/Graphics/ISF. Skipped ones need multi-pass or feedback support.");
+    {
         #[cfg(target_os = "macos")]
-        ffgl_status(ui, &st.ffgl);
-    });
-    ui.add_space(2.0);
+        let ffgl_bad = st.ffgl.entries.iter().any(|e| e.error.is_some());
+        #[cfg(not(target_os = "macos"))]
+        let ffgl_bad = false;
+        if st.isf.scanning() || ffgl_bad {
+            crate::ui::toolbar(ui, |ui| {
+                if st.isf.scanning() {
+                    crate::ui::hint(ui, format!("ISF: importing… {}", st.isf.loaded));
+                }
+                #[cfg(target_os = "macos")]
+                ffgl_status(ui, &st.ffgl);
+            });
+            ui.add_space(2.0);
+        }
+    }
 
     // Live previews refresh ~30 times a second, spread over frames (a few tiles per frame) so the GPU work is even
     // instead of every tile landing on the same frame.
@@ -410,14 +454,19 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
 /// Applies an explorer item to `target` (a layer id or MASTER), or to the selection.
 /// "FFGL: N plugins": how many were found, which can't be used and why, and where they're looked for.
 #[cfg(target_os = "macos")]
-fn ffgl_status(ui: &mut egui::Ui, ffgl: &crate::ffgl::Ffgl) {
-    let bad: Vec<&crate::ffgl::Entry> = ffgl.entries.iter().filter(|e| e.error.is_some()).collect();
-    let text = match (ffgl.entries.len(), bad.len()) {
+fn ffgl_summary(ffgl: &crate::ffgl::Ffgl) -> String {
+    let bad = ffgl.entries.iter().filter(|e| e.error.is_some()).count();
+    match (ffgl.entries.len(), bad) {
         (0, _) => "FFGL: no plugins".to_string(),
         (n, 0) => format!("FFGL: {n} plugins"),
         (n, b) => format!("FFGL: {} plugins, {b} can't be used", n - b),
-    };
-    let r = crate::ui::hint(ui, text).on_hover_ui(|ui| {
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn ffgl_status(ui: &mut egui::Ui, ffgl: &crate::ffgl::Ffgl) {
+    let bad: Vec<&crate::ffgl::Entry> = ffgl.entries.iter().filter(|e| e.error.is_some()).collect();
+    let r = crate::ui::hint(ui, ffgl_summary(ffgl)).on_hover_ui(|ui| {
         ui.label("FFGL effect and source plugins (.bundle), from:");
         for d in crate::ffgl::folders() {
             ui.monospace(d.to_string_lossy());
