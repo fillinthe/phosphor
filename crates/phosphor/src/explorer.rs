@@ -149,29 +149,41 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             st.explorer.search.clear();
         }
     });
+    let list: Vec<&'static shaders::ShaderDesc> = if st.explorer.sources { shaders::all_generators() } else { shaders::all_effects() };
+    let hidden = list.iter().filter(|d| st.explorer.hidden.iter().any(|h| h == d.id)).count();
+    if hidden == 0 && st.explorer.category == "hidden" {
+        st.explorer.category.clear();
+    }
+    // Effects / Sources, then ONE category menu (the owner didn't want rows of category pills), then the preview mode.
     ui.horizontal_wrapped(|ui| {
         crate::ui::pick_value(ui, &mut st.explorer.sources, false, label(icon::MAGIC_WAND, "Effects"));
         crate::ui::pick_value(ui, &mut st.explorer.sources, true, label(icon::SPARKLE, "Sources"));
+        ui.separator();
+        let shown = match st.explorer.category.as_str() {
+            "" => "All categories".to_string(),
+            "★" => format!("{} Favourites", icon::STAR),
+            "hidden" => format!("{} Hidden ({hidden})", icon::EYE_SLASH),
+            c => c.to_string(),
+        };
+        crate::ui::dropdown(ui, "explorer_category", 130.0).selected_text(shown).show_ui(ui, |ui| {
+            crate::ui::pick_value(ui, &mut st.explorer.category, String::new(), "All categories");
+            crate::ui::pick_value(ui, &mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+            if hidden > 0 {
+                crate::ui::pick_value(ui, &mut st.explorer.category, "hidden".to_string(), label(icon::EYE_SLASH, &format!("Hidden ({hidden})")));
+            }
+            ui.separator();
+            // Only categories that exist in the current list.
+            for cat in CATEGORY_ORDER {
+                if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
+                    crate::ui::pick_value(ui, &mut st.explorer.category, cat.to_string(), *cat);
+                }
+            }
+        });
         ui.separator();
         ui.label(RichText::new("Previews").small().color(Color32::GRAY));
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse and the picked one; the others keep one still (lightest)");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Off, "Off");
-    });
-    let list: Vec<&'static shaders::ShaderDesc> = if st.explorer.sources { shaders::all_generators() } else { shaders::all_effects() };
-    // Category chips, only for categories that exist in the current list.
-    ui.horizontal_wrapped(|ui| {
-        crate::ui::pick_value(ui, &mut st.explorer.category, String::new(), "All");
-        crate::ui::pick_value(ui, &mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
-        let hidden = list.iter().filter(|d| st.explorer.hidden.iter().any(|h| h == d.id)).count();
-        if hidden > 0 {
-            crate::ui::pick_value(ui, &mut st.explorer.category, "hidden".to_string(), label(icon::EYE_SLASH, &format!("Hidden ({hidden})")));
-        }
-        for cat in CATEGORY_ORDER {
-            if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
-                crate::ui::pick_value(ui, &mut st.explorer.category, cat.to_string(), *cat);
-            }
-        }
     });
     // Bench pictures: PHOSPHOR_EXPLORER_PICK=<effect or source id> picks that tile on the first frame (a source id
     // switches to the Sources tiles first).
@@ -196,7 +208,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 ui.label(RichText::new(d.name).strong().color(accent()));
                 if st.explorer.sources {
                     let text = match &layer_target {
-                        Some((_, name)) => format!("Use on layer: {name}"),
+                        Some((_, name)) => format!("Use on layer: {}", crate::ui::short_name(name, 24)),
                         None => "Use on a new layer".to_string(),
                     };
                     if crate::ui::command(ui, label(icon::SPARKLE, &text)).clicked() {
@@ -204,12 +216,12 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                     }
                 } else {
                     if let Some((id, name)) = &layer_target
-                        && crate::ui::command(ui, label(icon::PLUS, &format!("Add to layer: {name}"))).on_hover_text("The selected layer: on its own effects, under the clip's").clicked()
+                        && crate::ui::command(ui, label(icon::PLUS, &format!("Add to layer: {}", crate::ui::short_name(name, 24)))).on_hover_text("The selected layer: on its own effects, under the clip's").clicked()
                     {
                         add_to = Some(AddTo::Layer(Some(*id)));
                     }
                     if let Some((l, c, name)) = &clip_target
-                        && crate::ui::command(ui, label(icon::PLUS, &format!("Add to clip: {name}"))).on_hover_text("The clip picked in the grid: the effect belongs to the clip and comes back whenever it plays").clicked()
+                        && crate::ui::command(ui, label(icon::PLUS, &format!("Add to clip: {}", crate::ui::short_name(name, 24)))).on_hover_text("The clip picked in the grid: the effect belongs to the clip and comes back whenever it plays").clicked()
                     {
                         add_to = Some(AddTo::Clip(*l, *c));
                     }

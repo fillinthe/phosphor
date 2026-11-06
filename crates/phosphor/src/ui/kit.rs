@@ -833,6 +833,15 @@ pub(crate) fn segmented_list<T: PartialEq + Clone>(ui: &mut egui::Ui, id: impl s
     (changed, r.response)
 }
 
+/// `text` cut to at most `max_chars` characters with an ellipsis (a layer named after a movie file on a button, a
+/// media bin label). For a width in points use `pick_item_cut`.
+pub(crate) fn short_name(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    format!("{}…", text.chars().take(max_chars.saturating_sub(1)).collect::<String>().trim_end())
+}
+
 /// `pick_item` cut short to `max_width` (whole on hover): for a list row that must keep one line (a long group or
 /// slice name beside its controls).
 pub(crate) fn pick_item_cut(ui: &mut egui::Ui, picked: bool, text: &str, max_width: f32) -> egui::Response {

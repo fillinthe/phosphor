@@ -476,10 +476,7 @@ pub(crate) fn folder_tile(
     };
     p.rect_stroke(pic, 4.0, stroke, StrokeKind::Inside);
     let max_chars = ((w / 6.5) as usize).max(8);
-    let mut text = format!("{name} · {count}");
-    if text.chars().count() > max_chars {
-        text = format!("{}…", text.chars().take(max_chars - 1).collect::<String>());
-    }
+    let text = crate::ui::short_name(&format!("{name} · {count}"), max_chars);
     p.text(
         egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0),
         egui::Align2::LEFT_BOTTOM,
