@@ -251,7 +251,6 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             ui.separator();
         }
         if let SourceSpec::Text(style) = &mut layer.source {
-            crate::ui::heading(ui, "Text");
             if text_editor(ui, style, layer.id) {
                 media.text_file.set(true);
             }
@@ -830,6 +829,55 @@ pub(crate) fn zone_requests(ctx: &egui::Context, st: &mut State) {
 /// Returns true when "From a file…" was pressed (the caller opens the file dialog).
 pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
     let mut from_file = false;
+    use phosphor_engine::TextAlign;
+    ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
+    // (Font, colour and alignment wrap in a narrow Inspector.)
+    crate::ui::toolbar(ui, |ui| {
+        let search_id = egui::Id::new(("font_search", id));
+        let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
+        crate::ui::dropdown(ui, ("font", id), 170.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
+            ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search fonts").desired_width(180.0)).request_focus();
+            let q = search.to_lowercase();
+            for f in crate::text::fonts().iter().filter(|f| q.is_empty() || f.name.to_lowercase().contains(&q)).take(400) {
+                crate::ui::pick_value(ui, &mut style.font, f.id.clone(), &f.name);
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
+        let mut rgb = [style.color[0], style.color[1], style.color[2]].map(|v| v as f32 / 255.0);
+        if crate::ui::colour_button(ui, &mut rgb) {
+            for k in 0..3 {
+                style.color[k] = (rgb[k] * 255.0).round() as u8;
+            }
+        }
+        let aligns = [(TextAlign::Left, icon::TEXT_ALIGN_LEFT.to_string()), (TextAlign::Center, icon::TEXT_ALIGN_CENTER.to_string()), (TextAlign::Right, icon::TEXT_ALIGN_RIGHT.to_string())];
+        segmented(ui, &mut style.align, &aligns, |_, r, a| {
+            r.clone().on_hover_text(match a {
+                TextAlign::Left => "Left",
+                TextAlign::Center => "Centre",
+                TextAlign::Right => "Right",
+            });
+        });
+        help(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
+    });
+    // Size, outline, line spacing: controls of their own (mappable, keyable on the timeline, OSC).
+    for (i, part) in phosphor_engine::TextStyle::PARTS.iter().enumerate() {
+        ui.horizontal(|ui| {
+            let level = Level::range(style.part_mut(i), part.min, part.max, part.name).default(part.default).target(ControlTarget::TextPart { layer: id, part: i as u8 });
+            if i == 0 { level.tip("Text height, as a share of the picture's height") } else { level }.show(ui);
+        });
+    }
+    // Live words and parts: folded away until they're in use (most text layers are just words).
+    let live = !matches!(style.live, phosphor_engine::LiveText::Off) || !style.parts.is_empty();
+    crate::ui::subsection(ui, ("text_live_parts", id), "Live text and parts", live, |ui| {
+        from_file = live_and_parts(ui, style, id);
+    });
+    from_file
+}
+
+/// Live: the words follow the clock, a feed or the camera. Parts: one line / sentence / word at a time.
+/// Returns true when "From a file…" was pressed.
+fn live_and_parts(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
+    let mut from_file = false;
     // Live: the words follow the clock.
     crate::ui::field(ui, "Live", |ui| {
         use phosphor_engine::LiveText;
@@ -935,43 +983,6 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
             }
         }
     });
-    use phosphor_engine::TextAlign;
-    ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
-    // (Font, colour and alignment wrap in a narrow Inspector.)
-    crate::ui::toolbar(ui, |ui| {
-        let search_id = egui::Id::new(("font_search", id));
-        let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
-        crate::ui::dropdown(ui, ("font", id), 170.0).selected_text(crate::text::font_name(&style.font)).height(320.0).show_ui(ui, |ui| {
-            ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search fonts").desired_width(180.0)).request_focus();
-            let q = search.to_lowercase();
-            for f in crate::text::fonts().iter().filter(|f| q.is_empty() || f.name.to_lowercase().contains(&q)).take(400) {
-                crate::ui::pick_value(ui, &mut style.font, f.id.clone(), &f.name);
-            }
-        });
-        ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
-        let mut rgb = [style.color[0], style.color[1], style.color[2]].map(|v| v as f32 / 255.0);
-        if crate::ui::colour_button(ui, &mut rgb) {
-            for k in 0..3 {
-                style.color[k] = (rgb[k] * 255.0).round() as u8;
-            }
-        }
-        let aligns = [(TextAlign::Left, icon::TEXT_ALIGN_LEFT.to_string()), (TextAlign::Center, icon::TEXT_ALIGN_CENTER.to_string()), (TextAlign::Right, icon::TEXT_ALIGN_RIGHT.to_string())];
-        segmented(ui, &mut style.align, &aligns, |_, r, a| {
-            r.clone().on_hover_text(match a {
-                TextAlign::Left => "Left",
-                TextAlign::Center => "Centre",
-                TextAlign::Right => "Right",
-            });
-        });
-    });
-    // Size, outline, line spacing: controls of their own (mappable, keyable on the timeline, OSC).
-    for (i, part) in phosphor_engine::TextStyle::PARTS.iter().enumerate() {
-        ui.horizontal(|ui| {
-            let level = Level::range(style.part_mut(i), part.min, part.max, part.name).default(part.default).target(ControlTarget::TextPart { layer: id, part: i as u8 });
-            if i == 0 { level.tip("Text height, as a share of the picture's height") } else { level }.show(ui);
-        });
-    }
-    help(ui, "Move, scale or animate it with effects (Zoom/Rotate, Tile, Wave…) and the layer's blend mode.");
     from_file
 }
 
