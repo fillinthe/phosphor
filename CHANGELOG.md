@@ -136,6 +136,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Inspector: Surprise · Shuffle · React · Fill fit on one row (the last one read "Fill clips" and wrapped onto a row
+  of its own); Fade style is a label row like Moves and Frame rate, with its menu sized to the column so its help
+  stays beside it.
 - Inspector, text layers: the words come first, then font / colour / alignment and the size bars; Live text (clock,
   countdown, headlines…) and Parts are folded under one line, open only while in use. A plain text layer's whole
   Inspector now fits on screen. The duplicate "Text" title is gone.

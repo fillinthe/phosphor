@@ -289,9 +289,10 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
             help(ui, "New files in the collection's folders join as they arrive. Put any clip or file on this layer yourself and it stops following the collection.");
             ui.separator();
         }
-        crate::ui::toolbar(ui, |ui| {
-            crate::ui::heading(ui, "Fade style");
-            choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, 120.0, false);
+        // (A label row like Moves and Frame rate, so the three line up.)
+        crate::ui::field(ui, "Fade style", |ui| {
+            let width = (ui.available_width() - 60.0).clamp(80.0, 120.0);
+            choice_combo(ui, ("trans", layer.id), &mut layer.transition_kind, width, false);
             if transition_effect_combo(ui, ("trans_fx", layer.id), layer.transition_kind, &mut layer.transition_effect) {
                 layer.transition_values.clear();
             }

@@ -164,7 +164,7 @@ pub fn quick_menu(ui: &mut egui::Ui) -> Option<Quick> {
 pub fn quick_row(ui: &mut egui::Ui) -> Option<Quick> {
     let mut out = None;
     ui.horizontal_wrapped(|ui| {
-        for (q, text) in [(Quick::SurpriseLayer, "Surprise"), (Quick::Shuffle, "Shuffle"), (Quick::React, "React"), (Quick::Fill, "Fill clips")] {
+        for (q, text) in [(Quick::SurpriseLayer, "Surprise"), (Quick::Shuffle, "Shuffle"), (Quick::React, "React"), (Quick::Fill, "Fill")] {
             if crate::ui::small_command(ui, format!("{} {text}", q.icon())).on_hover_text(q.about()).clicked() {
                 out = Some(q);
             }
