@@ -136,6 +136,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Inspector, text layers: the words come first, then font / colour / alignment and the size bars; Live text (clock,
+  countdown, headlines…) and Parts are folded under one line, open only while in use. A plain text layer's whole
+  Inspector now fits on screen. The duplicate "Text" title is gone.
 - Two more rows that held nothing but a help icon are gone: the Effects Explorer's "how the tiles work" (i) sits at
   the end of the Previews row when nothing is picked, and an empty effects list's (i) sits in its Effects row.
 - Presets, Live data and the Inspector's Mixer section: the help (i) sits in the section's title instead of on a
