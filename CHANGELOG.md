@@ -136,6 +136,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Phone remote and Audience play as a home-screen app: on the phone, Share › Add to Home Screen (iPhone / iPad) or
+  the browser menu's Add to Home screen (Android) now keeps the page as an app with Phosphor's icon that opens full
+  screen, with no browser bar. (The Network panel's help says so.)
 - Effects Explorer: three near-empty rows are gone. The picked effect's help (i) and its Reset (shown only once
   something is changed) sit in the name row, and the "ISF: N imported · FFGL: no plugins" line only appears while
   ISF is still importing or a plugin can't be used (the counts are in the category menu's tooltip, and "Open the

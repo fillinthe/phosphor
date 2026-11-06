@@ -57,7 +57,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         let State { net, remote_password, require_password, .. } = &mut *st;
         ui.separator();
         crate::ui::heading(ui, format!("{} Phone / tablet remote", icon::DEVICE_MOBILE));
-        help(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways.");
+        help(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways. On the phone, Share › Add to Home Screen keeps it as an app with Phosphor's icon, full screen.");
         ui.horizontal(|ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");

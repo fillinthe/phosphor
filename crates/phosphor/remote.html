@@ -7,6 +7,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#141618">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link id="manifest" rel="manifest" href="/manifest.webmanifest">
+<script>if (location.pathname.startsWith('/play')) document.getElementById('manifest').href = '/manifest.webmanifest?play';</script>
 <title>Phosphor Remote</title>
 <style>
   :root { --bg:#141618; --card:#1d2023; --line:#2c3034; --ink:#e6e6e6; --dim:#8a9096; --acc:#78ffaa; --warn:#ff8c5a; }
