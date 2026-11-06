@@ -627,7 +627,9 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
             }
             #[cfg(target_arch = "wasm32")]
             let _ = is_file;
-            let path = ui.add(egui::Label::new(RichText::new(&d).small().color(Color32::GRAY)).truncate().sense(Sense::click())).on_hover_text(format!("{d}\nRight-click: copy the name or the path"));
+            // The file's name (the whole path on hover): readable in a narrow column, and on the folder button's row.
+            let shown = if is_file { std::path::Path::new(&d).file_name().map_or_else(|| d.clone(), |n| n.to_string_lossy().into_owned()) } else { d.clone() };
+            let path = ui.add(egui::Label::new(RichText::new(shown).small().color(Color32::GRAY)).truncate().sense(Sense::click())).on_hover_text(format!("{d}\nRight-click: copy the name or the path"));
             // For reports: what this layer is playing and where it is.
             path.right_menu(|ui| {
                 let file_name = std::path::Path::new(&d).file_name().map_or_else(|| d.clone(), |n| n.to_string_lossy().into_owned());

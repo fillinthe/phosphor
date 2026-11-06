@@ -249,7 +249,7 @@ impl PlayDirection {
             PlayDirection::Forward => "Forward",
             PlayDirection::Reverse => "Reverse",
             PlayDirection::PingPong => "Ping-pong",
-            PlayDirection::Random => "Random frames",
+            PlayDirection::Random => "Random",
         }
     }
 }
