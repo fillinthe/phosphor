@@ -496,6 +496,37 @@ mod native {
 
     pub const PLAYER_HTML: &str = include_str!("../player.html");
     pub const REMOTE_HTML: &str = include_str!("../remote.html");
+    /// The app icon for a phone's home screen (the remote / audience page saved as a web app).
+    const ICON_192: &[u8] = include_bytes!("../../../assets/icon-192.png");
+    const ICON_512: &[u8] = include_bytes!("../../../assets/icon-512.png");
+
+    /// The web app manifest for the remote (or, `play`, the audience) page: "Add to Home Screen" then opens it
+    /// full-screen with Phosphor's icon, like an app.
+    /// One whole HTTP 200 answer: `kind` = content type, `cache` = the Cache-Control value (None = the browser's choice).
+    fn respond_ok(stream: &mut impl Write, kind: &str, cache: Option<&str>, body: &[u8]) {
+        let cache = cache.map(|c| format!("Cache-Control: {c}\r\n")).unwrap_or_default();
+        let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\n{cache}Content-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
+        let _ = stream.write_all(body);
+    }
+
+    fn manifest(play: bool) -> String {
+        let (name, short, start) = if play { ("Phosphor Play", "Play", "/play") } else { ("Phosphor Remote", "Phosphor", "/remote") };
+        serde_json::json!({
+            "name": name,
+            "short_name": short,
+            "start_url": start,
+            "scope": "/",
+            "display": "standalone",
+            "orientation": "any",
+            "background_color": "#141618",
+            "theme_color": "#141618",
+            "icons": [
+                { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+                { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+            ]
+        })
+        .to_string()
+    }
 
     pub fn encode(w: u32, h: u32, rgba: Vec<u8>) -> Option<Vec<u8>> {
         let img = image::RgbaImage::from_raw(w, h, rgba)?;
@@ -632,8 +663,7 @@ mod native {
                 let frame = latest.0.lock().unwrap().clone();
                 match frame {
                     Some(f) => {
-                        let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", f.len()).as_bytes());
-                        let _ = stream.write_all(&f);
+                        respond_ok(&mut stream, "image/jpeg", None, &f);
                     }
                     None => {
                         let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
@@ -646,8 +676,7 @@ mod native {
                 let jpeg = id.and_then(|id| thumbs.lock().unwrap().get(&id).map(|(_, f)| f.clone()));
                 match jpeg {
                     Some(f) => {
-                        let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", f.len()).as_bytes());
-                        let _ = stream.write_all(&f);
+                        respond_ok(&mut stream, "image/jpeg", Some("no-cache"), &f);
                     }
                     None => {
                         let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
@@ -662,16 +691,19 @@ mod native {
                 );
                 let _ = stream.write_all(&bytes);
             }
+            // The remote page as a home-screen web app: its manifest and icon.
+            p if p.starts_with("/manifest.webmanifest") => {
+                respond_ok(&mut stream, "application/manifest+json", Some("no-cache"), manifest(p.contains("play")).as_bytes());
+            }
+            "/icon-192.png" | "/icon-512.png" | "/apple-touch-icon.png" => {
+                respond_ok(&mut stream, "image/png", Some("max-age=86400"), if path == "/icon-512.png" { ICON_512 } else { ICON_192 });
+            }
             // The remote page doubles as the audience page (it reads its own path).
             p if p.starts_with("/remote") || p.starts_with("/play") => {
-                let body = REMOTE_HTML.as_bytes();
-                let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
-                let _ = stream.write_all(body);
+                respond_ok(&mut stream, "text/html; charset=utf-8", Some("no-cache"), REMOTE_HTML.as_bytes());
             }
             _ => {
-                let body = PLAYER_HTML.as_bytes();
-                let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
-                let _ = stream.write_all(body);
+                respond_ok(&mut stream, "text/html; charset=utf-8", None, PLAYER_HTML.as_bytes());
             }
         }
     }
