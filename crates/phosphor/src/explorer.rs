@@ -173,12 +173,16 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             }
         }
     });
-    // Bench pictures: PHOSPHOR_EXPLORER_PICK=<effect id> picks that tile on the first frame.
+    // Bench pictures: PHOSPHOR_EXPLORER_PICK=<effect or source id> picks that tile on the first frame (a source id
+    // switches to the Sources tiles first).
     if st.explorer.picked.is_none()
         && let Ok(id) = std::env::var("PHOSPHOR_EXPLORER_PICK")
-        && let Some(d) = list.iter().find(|d| d.id == id)
     {
-        st.explorer.pick(d);
+        match list.iter().find(|d| d.id == id) {
+            Some(d) => st.explorer.pick(d),
+            None if !st.explorer.sources && shaders::generator(&id).is_some() => st.explorer.sources = true,
+            None => {}
+        }
     }
     // The picked tile and what to do with it; nothing changes on screen until you choose. Each button says where
     // it goes: the selected layer, the clip picked in the grid, or MASTER.
@@ -433,10 +437,7 @@ pub fn apply_palette(st: &mut State, drag: PaletteDrag, target: Option<u64>) {
     if let Some(fx) = drag.effect {
         // Nothing to put it on: say so (a new layer of its own would have no source, so nothing to see).
         match chain_target {
-            Some(t) => match st.explorer.setup_for(fx) {
-                Some((values, mods, mix)) => panels::add_effect_as(st, t, fx, values, mods, mix),
-                None => panels::add_effect_to(st, t, fx),
-            },
+            Some(t) => panels::add_effect_to(st, t, fx),
             None => st.notice = Some("Select a layer, group, comp or MASTER first to put the effect on it (or drag the effect onto one)".into()),
         }
     }

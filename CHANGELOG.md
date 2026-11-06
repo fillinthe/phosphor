@@ -136,6 +136,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Effects Explorer: the settings you make on a picked tile now come along every way the effect is added: a tile
+  dropped on the Inspector's effects list and the + list in the Inspector used to add it with its defaults.
 - Clips: the column buttons (▷ 1–6) are only lit for columns that have a clip in them; a narrow slider (Speed and
   Volume on a layer's card) shows its value alone instead of a cut-off name (the name is in its tooltip); the clip
   switch reads "Keep speed, loop and direction" so it fits the Inspector.

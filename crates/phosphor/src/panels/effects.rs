@@ -219,9 +219,16 @@ pub fn append_effects(st: &mut State, target: u64, effects: Vec<phosphor_engine:
     }
 }
 
+/// Adds an effect to a chain: with the settings made on the Effects panel's picked tile when it's this effect
+/// (so the + list, a tile dropped on the Inspector's list and the browser all bring what was set up), else its defaults.
 pub fn add_effect_to(st: &mut State, target: u64, effect: &str) {
-    let Some(fx) = st.comp.new_effect(effect) else { return };
-    let (values, mods, mix) = (fx.values.clone(), Vec::new(), fx.mix);
+    let (values, mods, mix) = match st.explorer.setup_for(effect) {
+        Some(setup) => setup,
+        None => {
+            let Some(fx) = st.comp.new_effect(effect) else { return };
+            (fx.values, Vec::new(), fx.mix)
+        }
+    };
     add_effect_as(st, target, effect, values, mods, mix);
 }
 
