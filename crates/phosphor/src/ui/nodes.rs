@@ -473,8 +473,12 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
     }
 
-    // Right-click the empty canvas: add a box where you clicked (or, on a wire, put a box on that wire).
-    if bg.secondary_clicked() {
+    // Right-click the empty canvas (or press Space over it): add a box there (or, on a wire, put a box on that wire).
+    let space = bg.hovered() && !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::Space));
+    if space {
+        egui::Popup::open_id(ui.ctx(), bg.id.with("popup"));
+    }
+    if bg.secondary_clicked() || space {
         let p = pointer.unwrap_or(area.center());
         ui.ctx().data_mut(|d| {
             d.insert_temp(id.with("add_at"), [p.x, p.y]);
