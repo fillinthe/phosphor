@@ -61,8 +61,8 @@ fn safety_bar(ui: &mut egui::Ui, st: &mut State) {
             l.armed = true;
         }
         Level::percent(&mut l.master, "Lasers").default(1.0).width(150.0).target(ControlTarget::LaserBrightness(MASTER_ID)).tip("Every laser's brightness").show(ui);
+        help(ui, "Lasers can hurt eyes. Keep beams above the audience (each projector's Floor), start dim, and know where your emergency stop is.");
     });
-    help(ui, "Lasers can hurt eyes. Keep beams above the audience (each projector's Floor), start dim, and know where your emergency stop is.");
 }
 
 fn projectors(ui: &mut egui::Ui, st: &mut State) {
@@ -153,15 +153,17 @@ fn projectors(ui: &mut egui::Ui, st: &mut State) {
     if let Some(id) = remove {
         st.comp.lasers.projectors.retain(|p| p.id != id);
     }
-    if crate::ui::command(ui, label(icon::PLUS, "Projector")).on_hover_text("A laser projector: then choose its controller box").clicked() {
-        let id = st.comp.new_id();
-        let n = st.comp.lasers.projectors.len() + 1;
-        let look = st.comp.lasers.looks.first().map_or(0, |l| l.id);
-        st.comp.lasers.projectors.push(LaserProjector { id, name: format!("Laser {n}"), look, ..Default::default() });
-    }
-    if devices.is_empty() {
-        help(ui, "Phosphor looks for laser controllers on the network (Ether Dream, IDN, LaserCube) and USB (Helios, LaserCube) while this panel is open.");
-    }
+    crate::ui::toolbar(ui, |ui| {
+        if crate::ui::command(ui, label(icon::PLUS, "Projector")).on_hover_text("A laser projector: then choose its controller box").clicked() {
+            let id = st.comp.new_id();
+            let n = st.comp.lasers.projectors.len() + 1;
+            let look = st.comp.lasers.looks.first().map_or(0, |l| l.id);
+            st.comp.lasers.projectors.push(LaserProjector { id, name: format!("Laser {n}"), look, ..Default::default() });
+        }
+        if devices.is_empty() {
+            help(ui, "Phosphor looks for laser controllers on the network (Ether Dream, IDN, LaserCube) and USB (Helios, LaserCube) while this panel is open.");
+        }
+    });
 }
 
 fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
@@ -169,10 +171,13 @@ fn designer(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     let inputs = st.lasers.inputs(&st.comp.lasers);
     #[cfg(target_arch = "wasm32")]
     let inputs = LaserInputs::default();
-    crate::ui::heading(ui, format!("{} Laser Designer", icon::PEN_NIB));
     let comp = &mut st.comp;
     if comp.lasers.looks.is_empty() {
-        help(ui, "A look is shapes the laser draws together: circles, stars, waves, Lissajous figures, beams. Make one, then pick it for a projector.");
+        crate::ui::heading_help(ui, format!("{} Laser Designer", icon::PEN_NIB), "A look is shapes the laser draws together: circles, stars, waves, Lissajous figures, beams. Make one, then pick it for a projector.");
+    } else {
+        crate::ui::heading(ui, format!("{} Laser Designer", icon::PEN_NIB));
+    }
+    if comp.lasers.looks.is_empty() {
         if crate::ui::command(ui, label(icon::SPARKLE, "Starter look")).on_hover_text("A spinning rainbow circle, a star and a Lissajous figure to start from").clicked() {
             let look = LaserLook::starter(|| comp.new_id());
             for p in comp.lasers.projectors.iter_mut().filter(|p| p.look == 0) {
