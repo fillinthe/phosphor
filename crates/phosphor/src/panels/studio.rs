@@ -370,8 +370,8 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::toggle(ui, &mut edit_on_output, "Edit on output (E)").changed() {
             output.lock().unwrap().entry(oid).or_default().edit_mapping = edit_on_output;
         }
+        help(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points");
     });
-    help(ui, "Pinch or ⌘-scroll to zoom, two-finger scroll or middle-drag to pan · click a point or press Tab, then arrows nudge it (Shift = 10 px) · Snap: points land on the grid or on other slices' points");
     let area = ui.available_rect_before_wrap();
     let (out_area, in_area) = match vs.view {
         View::Split => {
