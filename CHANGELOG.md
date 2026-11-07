@@ -108,6 +108,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Select several blocks by dragging a band over the empty canvas (Shift keeps what was selected); Delete or
   Backspace removes them, Cmd+D duplicates them, Cmd+A selects every block. Middle-drag or scroll moves around.
 - Tidy (in the zoom bar) lays the blocks out left to right, sources first, nothing overlapping, and fits them in view.
+- Fourteen new blocks: Plasma and Dots (pictures); Levels, Vignette, Scanlines, Colour split, Colour cycle and
+  Strobe (colour); Polar, Shake and Glitch slices (warp); Zoom blur; Wipe and Chroma key (mix two).
+- Four more ready-made patches in Shader Editor › + Patch: Neon Edges, Glitch TV, Tunnel Trails and Pulse Dots
+  (the last two are generators). Open one and change any block.
 
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and

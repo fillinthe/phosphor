@@ -592,6 +592,206 @@ pub const BLOCKS: &[Block] = &[
         code: "let a = $a(uv);
     return mix($b(uv), a, smoothstep($0 - $1, $0 + $1 + 0.0001, luma(a.rgb)));",
     },
+    // More pictures
+    Block {
+        id: "plasma",
+        name: "Plasma",
+        group: Group::Source,
+        about: "Soft moving colour waves",
+        inputs: &[],
+        settings: &[set("Scale", 1.0, 20.0, 6.0), set("Speed", 0.0, 4.0, 1.0), set("Hue", 0.0, 1.0, 0.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let p = centered(uv) * $0;
+    let t = u.time * $1;
+    let v = sin(p.x + t) + sin(p.y * 1.3 - t) + sin(length(p) - t);
+    return vec4f(palette(v * 0.2 + $2), 1.0);",
+    },
+    Block {
+        id: "dots",
+        name: "Dots",
+        group: Group::Source,
+        about: "A grid of dots, each pulsing in its own time",
+        inputs: &[],
+        settings: &[set("Count", 2.0, 60.0, 12.0), set("Size", 0.0, 1.0, 0.5), set("Speed", 0.0, 8.0, 2.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let g = uv * vec2f(aspect(), 1.0) * $0;
+    let d = length(fract(g) - 0.5);
+    let pulse = 0.5 + 0.5 * sin(u.time * $2 + hash21(floor(g)) * TAU);
+    let r = $1 * 0.5 * pulse;
+    let k = 1.0 - smoothstep(r - 0.02, r, d);
+    return vec4f(vec3f(k), 1.0);",
+    },
+    // More colour
+    Block {
+        id: "levels",
+        name: "Levels",
+        group: Group::Colour,
+        about: "Black point, white point and gamma",
+        inputs: PIC,
+        settings: &[set("Black", 0.0, 1.0, 0.0), set("White", 0.0, 1.0, 1.0), set("Gamma", 0.2, 3.0, 1.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let c = $a(uv);
+    let x = clamp((c.rgb - $0) / max($1 - $0, 0.001), vec3f(0.0), vec3f(1.0));
+    return vec4f(pow(x, vec3f(1.0 / $2)), c.a);",
+    },
+    Block {
+        id: "vignette",
+        name: "Vignette",
+        group: Group::Colour,
+        about: "Darkens towards the edges",
+        inputs: PIC,
+        settings: &[set("Size", 0.0, 1.0, 0.6), set("Softness", 0.0, 1.0, 0.5)],
+        pass_input: false,
+        stages: &[],
+        code: "let c = $a(uv);
+    let v = 1.0 - smoothstep($0, $0 + $1 + 0.001, length(centered(uv)));
+    return vec4f(c.rgb * v, c.a);",
+    },
+    Block {
+        id: "scanlines",
+        name: "Scanlines",
+        group: Group::Colour,
+        about: "Dark lines across the picture, like an old screen; they can roll",
+        inputs: PIC,
+        settings: &[set("Lines", 20.0, 600.0, 200.0), set("Strength", 0.0, 1.0, 0.5), set("Roll", -2.0, 2.0, 0.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let c = $a(uv);
+    let k = 0.5 + 0.5 * sin((uv.y + u.time * $2 * 0.1) * $0 * TAU);
+    return vec4f(c.rgb * (1.0 - $1 * k), c.a);",
+    },
+    Block {
+        id: "aberration",
+        name: "Colour split",
+        group: Group::Colour,
+        about: "Red and blue pulled apart (chromatic aberration)",
+        inputs: PIC,
+        settings: &[set("Amount", 0.0, 0.05, 0.01), set("Angle", 0.0, 1.0, 0.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let a = $1 * TAU;
+    let o = vec2f(cos(a), sin(a)) * $0;
+    let c = $a(uv);
+    return vec4f($a(uv + o).r, c.g, $a(uv - o).b, c.a);",
+    },
+    Block {
+        id: "cycle",
+        name: "Colour cycle",
+        group: Group::Colour,
+        about: "The hues turn round the wheel with time",
+        inputs: PIC,
+        settings: &[set("Speed", -2.0, 2.0, 0.2), set("Amount", 0.0, 1.0, 1.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let c = $a(uv);
+    var hsv = rgb2hsv(c.rgb);
+    hsv.x = fract(hsv.x + u.time * $0);
+    return vec4f(mix(c.rgb, hsv2rgb(hsv), $1), c.a);",
+    },
+    Block {
+        id: "strobe",
+        name: "Strobe",
+        group: Group::Colour,
+        about: "Flashes on and off at a rate (map Rate to the beat for a strobe on the music)",
+        inputs: PIC,
+        settings: &[set("Rate", 0.5, 16.0, 4.0), set("On share", 0.05, 1.0, 0.5), set("Depth", 0.0, 1.0, 1.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let c = $a(uv);
+    let on = step(fract(u.time * $0), $1);
+    return vec4f(c.rgb * mix(1.0, on, $2), c.a);",
+    },
+    // More warp
+    Block {
+        id: "polar",
+        name: "Polar",
+        group: Group::Warp,
+        about: "Wraps the picture round the centre (its width becomes the angle, its height the distance)",
+        inputs: PIC,
+        settings: &[set("Turns", 0.25, 4.0, 1.0), set("Zoom", 0.2, 3.0, 1.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let p = centered(uv);
+    let r = clamp(length(p) * $1, 0.0, 1.0);
+    let a = atan2(p.y, p.x) / TAU + 0.5;
+    return $a(vec2f(fract(a * $0), r));",
+    },
+    Block {
+        id: "shake",
+        name: "Shake",
+        group: Group::Warp,
+        about: "The picture jumps about at random, so many times a second",
+        inputs: PIC,
+        settings: &[set("Amount", 0.0, 0.1, 0.02), set("Speed", 1.0, 30.0, 10.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let t = floor(u.time * $1);
+    let o = (vec2f(hash21(vec2f(t, 1.0)), hash21(vec2f(t, 7.0))) - 0.5) * $0;
+    return $a(uv + o);",
+    },
+    Block {
+        id: "slices",
+        name: "Glitch slices",
+        group: Group::Warp,
+        about: "Horizontal strips shoved sideways at random, like a broken video",
+        inputs: PIC,
+        settings: &[set("Strips", 2.0, 40.0, 12.0), set("Shift", 0.0, 0.2, 0.05), set("Speed", 0.0, 20.0, 6.0)],
+        pass_input: false,
+        stages: &[],
+        code: "let t = floor(u.time * $2);
+    let row = floor(uv.y * $0);
+    let o = (hash21(vec2f(row, t)) - 0.5) * $1 * step(0.6, hash21(vec2f(t, row + 3.0)));
+    return $a(vec2f(fract(uv.x + o), uv.y));",
+    },
+    // More blur
+    Block {
+        id: "zoomblur",
+        name: "Zoom blur",
+        group: Group::Blur,
+        about: "Streaks out from the centre",
+        inputs: PIC,
+        settings: &[set("Amount", 0.0, 0.3, 0.08)],
+        pass_input: true,
+        stages: &[],
+        code: "var sum = vec4f(0.0);
+    let c = vec2f(0.5);
+    for (var i = 0; i < 12; i++) {
+        sum += $A(c + (uv - c) * (1.0 - $0 * f32(i) / 12.0));
+    }
+    return sum / 12.0;",
+    },
+    // More mix
+    Block {
+        id: "wipe",
+        name: "Wipe",
+        group: Group::Mix,
+        about: "A on one side of a line, B on the other; move Position to wipe between them",
+        inputs: TWO,
+        settings: &[set("Position", 0.0, 1.0, 0.5), set("Angle", 0.0, 1.0, 0.0), set("Softness", 0.0, 0.5, 0.05)],
+        pass_input: false,
+        stages: &[],
+        code: "let a = $1 * TAU;
+    let t = dot(uv - 0.5, vec2f(cos(a), sin(a))) + 0.5;
+    return mix($a(uv), $b(uv), smoothstep($0 - $2, $0 + $2 + 0.0001, t));",
+    },
+    Block {
+        id: "chroma",
+        name: "Chroma key",
+        group: Group::Mix,
+        about: "A over B, with one colour of A (green, say) made see-through",
+        inputs: TWO,
+        settings: &[set("Hue", 0.0, 1.0, 0.33), set("Range", 0.0, 0.5, 0.08), set("Softness", 0.0, 0.5, 0.05)],
+        pass_input: false,
+        stages: &[],
+        code: "let a = $a(uv);
+    let h = rgb2hsv(a.rgb);
+    let d = min(abs(h.x - $0), 1.0 - abs(h.x - $0));
+    let keep = max(smoothstep($1, $1 + $2 + 0.0001, d), step(h.y, 0.25));
+    return mix($b(uv), a, keep);",
+    },
     // Output
     Block {
         id: "output",
@@ -661,6 +861,79 @@ impl Patch {
         p.connect(g, mix, 0);
         p.connect(last, mix, 1);
         p.connect(mix, out, 0);
+        p
+    }
+
+    /// Ready-made patches to start from (name, what it does, the patch): the Shader Editor's + Patch menu.
+    pub fn examples() -> Vec<(&'static str, Patch)> {
+        vec![
+            ("The picture through a kaleidoscope and a glow, mixed with its own last frame (trails)", Patch::kaleido_glow_trails()),
+            ("Edges of the picture, glowing, their colours turning, over the picture", Patch::neon_edges()),
+            ("Strips shoved sideways, red and blue apart, scanlines and dark corners: a broken TV", Patch::glitch_tv()),
+            ("A generator: plasma wrapped into a tunnel, echoing its last frame", Patch::tunnel_trails()),
+            ("A generator: pulsing dots streaked from the centre, colours cycling", Patch::pulse_dots()),
+        ]
+    }
+
+    fn neon_edges() -> Patch {
+        let mut p = Patch::new("Neon Edges", false);
+        let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+        p.nodes[1].pos = [1060.0, 60.0];
+        let e = p.add("edges", [280.0, 20.0]);
+        let g = p.add("glow", [540.0, 20.0]);
+        let c = p.add("cycle", [800.0, 20.0]);
+        let over = p.add("lighter", [800.0, 200.0]);
+        p.connect(input, e, 0);
+        p.connect(e, g, 0);
+        p.connect(g, c, 0);
+        p.connect(c, over, 0);
+        p.connect(input, over, 1);
+        p.connect(over, out, 0);
+        p
+    }
+
+    fn glitch_tv() -> Patch {
+        let mut p = Patch::new("Glitch TV", false);
+        let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+        p.nodes[1].pos = [1060.0, 40.0];
+        let chain = ["slices", "aberration", "scanlines", "vignette"];
+        let mut prev = input;
+        for (i, b) in chain.iter().enumerate() {
+            let n = p.add(b, [280.0 + i as f32 * 195.0, 40.0]);
+            p.connect(prev, n, 0);
+            prev = n;
+        }
+        p.connect(prev, out, 0);
+        p
+    }
+
+    fn tunnel_trails() -> Patch {
+        let mut p = Patch::new("Tunnel Trails", true);
+        let (plasma, out) = (p.nodes[0].id, p.nodes[1].id);
+        p.nodes[0].block = "plasma".into();
+        p.nodes[0].values = block("plasma").unwrap().settings.iter().map(|s| s.default).collect();
+        p.nodes[1].pos = [800.0, 60.0];
+        let polar = p.add("polar", [280.0, 20.0]);
+        let last = p.add("last", [280.0, 200.0]);
+        let mix = p.add("lighter", [540.0, 80.0]);
+        p.connect(plasma, polar, 0);
+        p.connect(polar, mix, 0);
+        p.connect(last, mix, 1);
+        p.connect(mix, out, 0);
+        p
+    }
+
+    fn pulse_dots() -> Patch {
+        let mut p = Patch::new("Pulse Dots", true);
+        let (dots, out) = (p.nodes[0].id, p.nodes[1].id);
+        p.nodes[0].block = "dots".into();
+        p.nodes[0].values = block("dots").unwrap().settings.iter().map(|s| s.default).collect();
+        p.nodes[1].pos = [800.0, 40.0];
+        let z = p.add("zoomblur", [280.0, 40.0]);
+        let c = p.add("cycle", [540.0, 40.0]);
+        p.connect(dots, z, 0);
+        p.connect(z, c, 0);
+        p.connect(c, out, 0);
         p
     }
 
@@ -925,6 +1198,15 @@ mod tests {
             let src = check(&p);
             assert_eq!(crate::custom::parse_header(&src).unwrap().params.len(), b.settings.len(), "{}", b.name);
         }
+    }
+
+    #[test]
+    fn every_example_compiles() {
+        for (about, p) in Patch::examples() {
+            assert!(!about.is_empty());
+            check(&p);
+        }
+        assert_eq!(Patch::examples().len(), 5);
     }
 
     #[test]
