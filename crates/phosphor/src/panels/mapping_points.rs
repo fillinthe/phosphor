@@ -207,8 +207,7 @@ mod tests {
 /// one's values are shown).
 pub(crate) fn group_settings(ui: &mut egui::Ui, mapping: &mut Mapping, ids: &[u64]) {
     let Some(first) = mapping.surfaces.iter().find(|s| ids.contains(&s.id)).cloned() else { return };
-    crate::ui::heading(ui, format!("{} {} slices selected", icon::SELECTION_ALL, ids.len()));
-    help(ui, "Changes here apply to all of them · drag one to move them all · arrows nudge them · Shift-click to add or remove one");
+    crate::ui::heading_help(ui, format!("{} {} slices selected", icon::SELECTION_ALL, ids.len()), "Changes here apply to all of them · drag one to move them all · arrows nudge them · Shift-click to add or remove one");
     let all = |mapping: &mut Mapping, f: &dyn Fn(&mut Surface)| mapping.surfaces.iter_mut().filter(|s| ids.contains(&s.id)).for_each(f);
     let mut on = first.enabled;
     if toggle(ui, &mut on, "ON").changed() {

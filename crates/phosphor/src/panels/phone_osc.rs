@@ -8,8 +8,7 @@ const LAYOUT_PATH: &str = "/Phosphor.tosc";
 
 pub(crate) fn phone_section(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
-        crate::ui::heading(ui, format!("{} Phone or tablet", icon::DEVICE_MOBILE));
-        help(ui, "TouchOSC (or any OSC app) on the same Wi-Fi sends to this Mac and gets the values back. Three steps: point the app here, put the layout on it, move a control.");
+        crate::ui::heading_help(ui, format!("{} Phone or tablet", icon::DEVICE_MOBILE), "TouchOSC (or any OSC app) on the same Wi-Fi sends to this Mac and gets the values back. Three steps: point the app here, put the layout on it, move a control.");
     });
     let ip = st.control.local_ip.clone().unwrap_or_else(|| "this Mac's address".to_string());
     // 1. Where to point the app.

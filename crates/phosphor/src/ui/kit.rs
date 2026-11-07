@@ -303,6 +303,22 @@ pub(crate) fn subsection<R>(ui: &mut egui::Ui, id: impl std::hash::Hash + std::f
     egui::CollapsingHeader::new(RichText::new(title.into()).small()).id_salt(id).default_open(open).show(ui, add)
 }
 
+/// A heading with its help: the (i) rides at the end of the title row when help icons are on (the sentence goes
+/// under the title when they're off), never a row with nothing but the icon.
+pub(crate) fn heading_help(ui: &mut egui::Ui, text: impl ToString, help_text: &str) -> egui::Response {
+    if !help_icons() {
+        let r = heading(ui, text);
+        help(ui, help_text);
+        return r;
+    }
+    ui.horizontal(|ui| {
+        let r = heading(ui, text);
+        help(ui, help_text);
+        r
+    })
+    .inner
+}
+
 /// The title of a group of controls that doesn't fold (Screens, Outputs, MIDI).
 pub(crate) fn heading(ui: &mut egui::Ui, text: impl ToString) -> egui::Response {
     ui.label(RichText::new(text.to_string()).strong())

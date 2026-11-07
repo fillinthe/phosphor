@@ -6,8 +6,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     follow_section(ui, st);
     let State { net, notice, .. } = &mut *st;
-    crate::ui::heading(ui, "Session");
-    help(ui, "Anyone on your network opens the link and sees the output live; they can send their music back.");
+    crate::ui::heading_help(ui, "Session", "Anyone on your network opens the link and sees the output live; they can send their music back.");
     crate::ui::toolbar(ui, |ui| {
         ui.add_enabled_ui(!net.running(), |ui| {
             guarded!(ui, net.port, egui::DragValue::new(&mut net.port).range(1024..=65535).prefix("port "));
@@ -56,8 +55,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
         audience_play(ui, st);
         let State { net, remote_password, require_password, .. } = &mut *st;
         ui.separator();
-        crate::ui::heading(ui, format!("{} Phone / tablet remote", icon::DEVICE_MOBILE));
-        help(ui, "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways. On the phone, Share › Add to Home Screen keeps it as an app with Phosphor's icon, full screen.");
+        crate::ui::heading_help(ui, format!("{} Phone / tablet remote", icon::DEVICE_MOBILE), "Scan with your phone or iPad camera: faders, clips, tap tempo and the selected layer's controls, synced both ways. On the phone, Share › Add to Home Screen keeps it as an app with Phosphor's icon, full screen.");
         ui.horizontal(|ui| {
             crate::ui::toggle(ui, require_password, label(icon::LOCK, "Password to control"))
                 .on_hover_text("Without it, people who open the link can only watch the output");
@@ -106,8 +104,7 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
 /// Audience play: a QR code for the room; people scan it and take turns at the chosen controls.
 fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.input(|i| i.time);
-    crate::ui::heading(ui, format!("{} Audience play", icon::GAME_CONTROLLER));
-    help(ui, "People scan the code, line up, and each gets the controls for a while: your Control Surface, clip columns, Surprise.");
+    crate::ui::heading_help(ui, format!("{} Audience play", icon::GAME_CONTROLLER), "People scan the code, line up, and each gets the controls for a while: your Control Surface, clip columns, Surprise.");
     let play = &mut st.comp.play;
     crate::ui::toggle(ui, &mut play.enabled, "Let the audience play");
     if !play.enabled {
