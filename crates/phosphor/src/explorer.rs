@@ -1017,7 +1017,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
         };
     });
     ui.ctx().data_mut(|d| d.insert_temp(code_id, show_code));
-    crate::ui::help(ui, "Right-click the canvas to add a block · drag from a block's right dot to another's left dot to wire it · drag a wire's end away to unplug it · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
+    crate::ui::help(ui, "Right-click the canvas (or drop a wire on it) to add a block: type to find one · drag from a block's right dot to another's left dot to wire it, or onto the dot beside a setting to drive it with a Numbers block · right-click a wire to put a block on it · drag a band to select several; Delete, Cmd+D, Cmd+C / V, arrows, Cmd+Z · right-click a block: Switch off, Look at this box, Reset settings · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
     if show_code {
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             ui.add(egui::TextEdit::multiline(&mut sh.source.as_str()).code_editor().font(egui::FontId::monospace(12.0)).desired_width(f32::INFINITY));
