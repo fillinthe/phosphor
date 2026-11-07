@@ -427,8 +427,7 @@ fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, 
     let text = if fx.is_empty() { RichText::new(icon::WAVE_SINE) } else { RichText::new(format!("{} {}", icon::WAVE_SINE, fx.len())).color(accent()) };
     crate::ui::field_menu(ui, text, |ui| {
         ui.set_min_width(260.0);
-        crate::ui::heading(ui, "On the way in");
-        help(ui, "The controller's value goes through these, top to bottom, before its range.");
+        crate::ui::heading_help(ui, "On the way in", "The controller's value goes through these, top to bottom, before its range.");
         let mut remove = None;
         for (k, f) in fx.iter_mut().enumerate() {
             ui.horizontal(|ui| {

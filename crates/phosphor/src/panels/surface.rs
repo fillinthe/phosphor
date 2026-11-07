@@ -943,8 +943,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
                 });
                 help(ui, "An LFO, the sound or the beat moves it around where you set it, and its targets follow (the white line shows where it is).");
             }
-            crate::ui::heading(ui, axis);
-            help(ui, "Each target gets this widget's value, rescaled to its from–to range.");
+            crate::ui::heading_help(ui, axis, "Each target gets this widget's value, rescaled to its from–to range.");
             binding_list(ui, ("bindings", id), targets, &mut w.bindings);
         }
         if w.kind == WidgetKind::Color {

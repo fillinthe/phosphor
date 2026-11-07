@@ -493,8 +493,7 @@ pub(crate) fn follow_box(ui: &mut egui::Ui, view: &mut MediaView) -> Option<crat
     use crate::online::following::{Account, Feed, Site, handle};
     let mut out = None;
     egui::Frame::group(ui.style()).show(ui, |ui| {
-        crate::ui::heading(ui, label(icon::PLUS, "Follow an account"));
-        help(ui, "Its newest clips come into Media and stay on this Mac (X: animated GIFs; Instagram: videos). Refresh brings in new posts.");
+        crate::ui::heading_help(ui, label(icon::PLUS, "Follow an account"), "Its newest clips come into Media and stay on this Mac (X: animated GIFs; Instagram: videos). Refresh brings in new posts.");
         let r = crate::ui::text_field(ui, &mut view.follow_text, "@name or a link to the account", Some(ui.available_width().min(320.0)));
         let typed = handle(&view.follow_text);
         if let Some((Some(site), _)) = &typed {

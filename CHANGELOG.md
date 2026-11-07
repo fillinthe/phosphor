@@ -136,6 +136,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Headings keep their help beside them: a section's help (i) now sits at the end of its title row instead of on
+  a row of its own, in the clip row menu (MIDI notes, Plays on, Autopilot), the Network panel (Session, Phone /
+  tablet remote, Audience play), the MIDI / OSC panel's Phone or tablet, Online's Start a show, Media's Follow an
+  account, a controller's On the way in, the Mapping panel's slices selected, and a Control Surface widget's axis.
 - Inspector, layer groups and comps: the help (i) sits at the end of the name row instead of on a row of its own;
   Blend and a comp's In the master are label rows like the other settings.
 - Inspector, movie layers: the Playback rows Section, Jump and Scratch (and a layer's Sound device and Plays on) are

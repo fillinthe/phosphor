@@ -448,8 +448,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     let selected = st.selected.filter(|id| st.comp.layers.iter().any(|l| l.id == *id));
     let o = &mut st.online;
     let Some(search) = o.search.as_mut() else {
-        crate::ui::heading(ui, label(icon::SPARKLE, "Start a show"));
-        help(ui, "One click fills three layers of clips from these libraries for a mood (replaces the layers; outputs and mapping stay).");
+        crate::ui::heading_help(ui, label(icon::SPARKLE, "Start a show"), "One click fills three layers of clips from these libraries for a mood (replaces the layers; outputs and mapping stay).");
         ui.horizontal_wrapped(|ui| {
             for s in &crate::online::starter::STARTERS {
                 if crate::ui::command_if(ui, st.online.starter.is_none(), s.name).on_hover_text(s.about).clicked() {
