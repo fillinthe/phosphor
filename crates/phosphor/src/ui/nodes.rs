@@ -79,6 +79,13 @@ pub(crate) trait Graph {
         false
     }
     fn look_at(&mut self, _id: Option<u32>) {}
+    /// Boxes `ids` as text for the clipboard (Cmd+C), and back (Cmd+V, their top-left at `at`): the new ids.
+    fn clip(&self, _ids: &[u32]) -> Option<String> {
+        None
+    }
+    fn paste(&mut self, _text: &str, _at: [f32; 2]) -> Vec<u32> {
+        Vec::new()
+    }
     /// How many of the last `inputs` sit beside the settings rows (one a row, top to bottom) instead of in input
     /// rows of their own: a patch's settings, each a number input.
     fn body_ports(&self, _id: u32) -> usize {
@@ -280,6 +287,19 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             selected.clear();
+        }
+        // Cmd+C copies the selection (within the app; it works between patches), Cmd+V pastes it at the pointer.
+        let (copy, paste) = ui.input(|i| (i.modifiers.command && i.key_pressed(egui::Key::C), i.modifiers.command && i.key_pressed(egui::Key::V)));
+        if copy && let Some(text) = graph.clip(&selected) {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("node_clipboard"), text));
+        }
+        if paste && let Some(text) = ui.ctx().data(|d| d.get_temp::<String>(egui::Id::new("node_clipboard"))) {
+            let at = pointer.unwrap_or(area.center());
+            let new = graph.paste(&text, [at.x, at.y]);
+            if !new.is_empty() {
+                selected = new;
+                changed = true;
+            }
         }
     }
     for (n, r, ins) in &rects {

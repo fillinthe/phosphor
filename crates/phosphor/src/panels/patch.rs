@@ -142,6 +142,12 @@ impl Graph for Patch {
         }
         added
     }
+    fn clip(&self, ids: &[u32]) -> Option<String> {
+        Patch::clip(self, ids)
+    }
+    fn paste(&mut self, text: &str, at: [f32; 2]) -> Vec<u32> {
+        Patch::paste(self, text, at)
+    }
     fn lookable(&self, id: u32) -> bool {
         self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.id != "output" && !b.number)
     }
