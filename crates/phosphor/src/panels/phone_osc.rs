@@ -27,6 +27,7 @@ pub(crate) fn phone_section(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::toolbar(ui, |ui| {
         ui.label(RichText::new("2").strong().color(accent()));
         ui.label("The layout (your Control Surface as TouchOSC pages):");
+        help(ui, "Nothing built yet? The layout starts with the master, each layer's opacity and the first clip columns. Any other OSC app works too: right-click a control › Listen shows its address.");
         #[cfg(not(target_arch = "wasm32"))]
         {
             layout_menu(ui, st);
@@ -37,7 +38,6 @@ pub(crate) fn phone_section(ui: &mut egui::Ui, st: &mut State) {
                 st.dialogs.pick_file(crate::dialogs::Purpose::ImportTouchOsc, Some(("TouchOSC layout", &["tosc", "xml"])));
             }
         }
-        help(ui, "Nothing built yet? The layout starts with the master, each layer's opacity and the first clip columns. Any other OSC app works too: right-click a control › Listen shows its address.");
     });
     // 3. Who's sending.
     crate::ui::toolbar(ui, |ui| {
