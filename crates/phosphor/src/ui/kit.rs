@@ -473,6 +473,28 @@ mod list_field_tests {
 
 /// "Shows on": which outputs show this layer / group on their own (a slice each). `outs` = (output id, name,
 /// showing now). Returns (output, on) when one is switched.
+/// The name row of a group / comp Inspector: `before` (on/off, kind icon, outputs…), the name field, and the row's
+/// help (i) at its end when help icons are on (the sentence goes under the row when they're off), never a row with
+/// nothing but the icon.
+pub(crate) fn name_row<R>(ui: &mut egui::Ui, name: &mut String, help_text: &str, before: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let icons = help_icons();
+    let out = ui
+        .horizontal(|ui| {
+            let r = before(ui);
+            let room = if icons { 28.0 } else { 0.0 };
+            ui.add(egui::TextEdit::singleline(name).desired_width(ui.available_width() - room));
+            if icons {
+                help(ui, help_text);
+            }
+            r
+        })
+        .inner;
+    if !icons {
+        help(ui, help_text);
+    }
+    out
+}
+
 pub(crate) fn outputs_menu(ui: &mut egui::Ui, outs: &[(u64, String, bool)]) -> Option<(u64, bool)> {
     let n = outs.iter().filter(|o| o.2).count();
     let text = if n == 0 { icon::MONITOR.to_string() } else { format!("{} {n}", icon::MONITOR) };

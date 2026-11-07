@@ -39,15 +39,14 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
         let (cw, ch) = c.size(master);
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w * ch as f32 / cw.max(1) as f32), c.enabled);
-        ui.horizontal(|ui| {
+        let what = "A comp is a canvas of its own: its layers mix at its size, then its effects run, then it mixes into the master like a layer. The screen button sends it to outputs of its own.";
+        crate::ui::name_row(ui, &mut c.name, what, |ui| {
             let on = toggle(ui, &mut c.enabled, "ON");
             mapped_badge(ui, &on, &ControlTarget::LayerEnabled(c.id));
             on.right_menu(|ui| learn_items(ui, &ControlTarget::LayerEnabled(c.id)));
             ui.label(icon::FRAME_CORNERS);
             send = outputs_menu(ui, outs).or(send);
-            ui.add(egui::TextEdit::singleline(&mut c.name).desired_width(f32::INFINITY));
         });
-        help(ui, "A comp is a canvas of its own: its layers mix at its size, then its effects run, then it mixes into the master like a layer. The screen button sends it to outputs of its own.");
         crate::ui::toolbar(ui, |ui| {
             let mut same = c.width == 0;
             if toggle(ui, &mut same, "Master size").on_hover_text(format!("{}×{}", master.0, master.1)).changed() {
@@ -60,16 +59,14 @@ pub(crate) fn comp_inspector(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui
             }
         });
         if c.width != 0 {
-            crate::ui::toolbar(ui, |ui| {
-                ui.label("In the master");
+            crate::ui::field(ui, "In the master", |ui| {
                 choice_buttons(ui, &mut c.fit, |_, _| {});
             });
         }
         ui.horizontal(|ui| {
             Level::percent(&mut c.opacity, "Opacity").modulation(&mut c.opacity_mod).target(ControlTarget::LayerOpacity(c.id)).show(ui);
         });
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Blend");
+        crate::ui::field(ui, "Blend", |ui| {
             choice_combo(ui, ("comp_blend", c.id), &mut c.blend, 120.0, false);
             if let Some(r) = fx_badge(ui, &c.effects, &mut c.fx_bypass) {
                 map_menu(ui, &r, ControlTarget::LayerFxBypass(c.id));
