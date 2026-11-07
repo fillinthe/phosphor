@@ -141,6 +141,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Stream key, RTMP / SRT / WHIP URL, Token, File, Address, Password, Universe, Colour, Attached to, Picture, Fade,
   Surface page, Send OSC, Plays on, Shift notes…) put the label in the same column as every other setting in
   their panel.
+- The last help icons that sat alone under a row now ride in it: Stream & Record (beside Movie sound; the
+  stream key field leaves room for the Secure toggle), Output's All output windows, Session's Follow another
+  Phosphor and viewers' audio, and the Audio panel's two notes are one.
 - Pick-one rows are the same buttons everywhere: the clip row menu's Autopilot (and its When the clip ends /
   After choice) and an output's Test pattern menu use the segmented buttons the rest of the app uses instead of
   round radio buttons; the Test pattern help sits in its title row.

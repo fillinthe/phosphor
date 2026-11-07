@@ -54,7 +54,9 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         match s.destination {
             Destination::YouTube | Destination::Twitch => {
                 crate::ui::field(ui, "Stream key", |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
+                    // (Leaves room for the Secure toggle beside it.)
+                    let w = (ui.available_width() - 136.0).clamp(120.0, 260.0);
+                    ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(w));
                     crate::ui::toggle(ui, &mut s.secure, "Secure (RTMPS)").on_hover_text("Encrypted ingest (rtmps://, port 443): what YouTube and Twitch recommend; turn off only if a network blocks it");
                 });
             }
@@ -132,8 +134,11 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 *stream_audio_devices = crate::stream::list_audio_devices();
             }
         });
-        #[cfg(not(target_arch = "wasm32"))]
-        toggle(ui, &mut s.program_sound, label(icon::FILM_STRIP, "Movie sound")).on_hover_text("Phosphor's own sound (the movies playing) in the stream or recording, mixed with the audio device above when one is chosen");
+        crate::ui::toolbar(ui, |ui| {
+            #[cfg(not(target_arch = "wasm32"))]
+            toggle(ui, &mut s.program_sound, label(icon::FILM_STRIP, "Movie sound")).on_hover_text("Phosphor's own sound (the movies playing) in the stream or recording, mixed with the audio device above when one is chosen");
+            help(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio. Movie sound adds the sound of the movies playing in Phosphor (both mix together).");
+        });
     });
     ui.add_space(4.0);
     crate::ui::toolbar(ui, |ui| {
@@ -175,7 +180,6 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         ui.colored_label(WARN, msg.as_str());
     }
     ui.add_space(6.0);
-    help(ui, "Hardware H.264 via VideoToolbox. For the DJ's music in the stream, pick a loopback device (BlackHole) or your interface as Audio. Movie sound adds the sound of the movies playing in Phosphor (both mix together).");
     #[cfg(not(target_arch = "wasm32"))]
     if choose_file {
         st.dialogs.save_file(crate::dialogs::Purpose::StreamFile, ("Video", &["mp4", "mov"]), "Phosphor recording.mp4");
