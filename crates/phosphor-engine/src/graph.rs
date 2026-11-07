@@ -68,6 +68,33 @@ pub fn order(ids: &[u32], wires: &[Wire]) -> Vec<u32> {
     out
 }
 
+/// Where each box goes when laid out left to right by how far it is from the sources (a column per wire step,
+/// `col_w` apart), each column top to bottom in wiring order, `gap` between boxes; the boxes `last` says so (the
+/// Output) go in the final column. `height` = how tall a box draws. Boxes in a cycle keep their place (left out).
+pub fn tidy(ids: &[u32], wires: &[Wire], col_w: f32, gap: f32, last: impl Fn(u32) -> bool, height: impl Fn(u32) -> f32) -> Vec<(u32, [f32; 2])> {
+    let ordered = order(ids, wires);
+    let mut depth: Vec<(u32, usize)> = Vec::new();
+    for id in &ordered {
+        let d = wires.iter().filter(|w| w.to == *id).filter_map(|w| depth.iter().find(|(n, _)| *n == w.from).map(|(_, d)| d + 1)).max().unwrap_or(0);
+        depth.push((*id, d));
+    }
+    let deepest = depth.iter().map(|(_, d)| *d).max().unwrap_or(0);
+    for (id, d) in depth.iter_mut() {
+        if last(*id) {
+            *d = deepest.max(1);
+        }
+    }
+    let mut next_y: Vec<f32> = vec![20.0; deepest + 2];
+    depth
+        .into_iter()
+        .map(|(id, d)| {
+            let pos = [20.0 + d as f32 * col_w, next_y[d]];
+            next_y[d] += height(id) + gap;
+            (id, pos)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

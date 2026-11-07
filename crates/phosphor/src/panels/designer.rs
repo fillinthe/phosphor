@@ -13,7 +13,7 @@ use crate::ui::guarded;
 
 use super::*;
 use crate::presets::PresetStore;
-use crate::ui::nodes::{Graph, LIGHT_COLOUR, POINTS_COLOUR, node_canvas};
+use crate::ui::nodes::{Graph, INPUT_H, LIGHT_COLOUR, POINTS_COLOUR, TITLE_H, node_canvas};
 
 /// The Points submenu of the canvas: (name, what the box gets, true = a generator on a Picture box, false = an
 /// effect on an Effect box).
@@ -648,6 +648,15 @@ impl Graph for View<'_> {
             l.remove(id);
         }
         self.resync = true;
+    }
+    fn tidy(&mut self) -> bool {
+        let ids = self.ids();
+        let heights: Vec<(u32, f32)> = ids.iter().map(|id| (*id, TITLE_H + self.inputs(*id).len() as f32 * INPUT_H + self.body_height(*id) + 6.0)).collect();
+        let widest = ids.iter().map(|id| self.width(*id)).fold(0.0, f32::max);
+        self.store();
+        let Some(level) = self.level_mut() else { return false };
+        level.tidy(widest + 70.0, |id| heights.iter().find(|(n, _)| *n == id).map_or(60.0, |(_, h)| *h));
+        true
     }
     fn duplicate(&mut self, id: u32) {
         // (The comp copies the box with its settings; a box of boxes with everything inside.)
