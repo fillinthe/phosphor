@@ -260,6 +260,7 @@
 "Add": "Añadir",
 "Add Layer": "Añadir capa",
 "Add a box": "Añadir una caja",
+"Add a box wired from {0}": "Añadir una caja conectada desde {0}",
 "Add a column beside it": "Añadir una columna al lado",
 "Add a layer first": "Añade una capa primero",
 "Add a layer showing your camera first (Live input), aimed at the lights. It can stay hidden.": "Añade primero una capa con tu cámara (entrada en vivo), apuntando a las luces. Puede quedar oculta.",

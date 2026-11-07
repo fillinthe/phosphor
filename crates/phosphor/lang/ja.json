@@ -260,6 +260,7 @@
 "Add": "追加",
 "Add Layer": "レイヤーを追加",
 "Add a box": "ボックスを追加",
+"Add a box wired from {0}": "{0} から配線したボックスを追加",
 "Add a column beside it": "隣にカラムを追加",
 "Add a layer first": "先にレイヤーを追加してください",
 "Add a layer showing your camera first (Live input), aimed at the lights. It can stay hidden.": "先にカメラを映すレイヤー(ライブ入力)を追加し、ライトに向けてください。非表示でも構いません。",

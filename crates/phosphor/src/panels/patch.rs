@@ -121,43 +121,32 @@ impl Graph for Patch {
     }
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool {
         let generator = self.generator;
+        let (picked, searching) = pick_block(ui, generator, |_| true);
         let mut added = false;
-        // Type to find a block by name or what it does; Enter adds the first match.
-        let key = egui::Id::new("patch_block_search");
-        let mut query: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
-        let field = crate::ui::text_field(ui, &mut query, "Find a block…", Some(200.0));
-        if ui.memory(|m| m.focused().is_none()) {
-            field.request_focus();
-        }
-        let q = query.trim().to_lowercase();
-        if !q.is_empty() {
-            let found: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.id != "output" && b.id != "note" && (b.id != "input" || !generator) && (b.name.to_lowercase().contains(&q) || b.about.to_lowercase().contains(&q))).take(12).collect();
-            let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            for (i, b) in found.iter().enumerate() {
-                if crate::ui::command(ui, format!("{} · {}", b.name, b.group.name())).on_hover_text(b.about).clicked() || (enter && i == 0) {
-                    self.add(b.id, at);
-                    added = true;
-                    query.clear();
-                    ui.close();
-                }
-            }
-            if found.is_empty() {
-                hint(ui, "No block matches");
-            }
-        } else if let Some(b) = block_menu(ui, generator, false) {
+        if let Some(b) = picked {
             self.add(b, at);
             added = true;
         }
-        ui.ctx().data_mut(|d| d.insert_temp(key, query));
         if !self.nodes.iter().any(|n| n.block == "output") && crate::ui::command(ui, "Output").clicked() {
             self.add("output", [400.0, 40.0]);
             added = true;
         }
-        if q.is_empty() && crate::ui::command(ui, label(icon::NOTE_PENCIL, "Note")).on_hover_text("Words on the canvas, wired to nothing").clicked() {
+        if !searching && crate::ui::command(ui, label(icon::NOTE_PENCIL, "Note")).on_hover_text("Words on the canvas, wired to nothing").clicked() {
             self.add("note", at);
             added = true;
         }
         added
+    }
+    fn add_from_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2], from: u32, kind: phosphor_engine::PortKind) -> bool {
+        let generator = self.generator;
+        // A picture: blocks with a picture input. A number: blocks with a setting (it goes into the first one).
+        let number = kind == phosphor_engine::PortKind::Number;
+        let (picked, _) = pick_block(ui, generator, |b| if number { !b.settings.is_empty() } else { !b.inputs.is_empty() });
+        let Some(b) = picked else { return false };
+        let id = self.add(b, at);
+        let input = if number { patch::block(b).map_or(0, |b| b.inputs.len()) } else { 0 };
+        self.connect(from, id, input);
+        true
     }
     fn extra_menu(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
         let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) else { return false };
@@ -199,7 +188,7 @@ impl Graph for Patch {
     }
     fn insert_menu(&mut self, ui: &mut egui::Ui, to: u32, input: usize) -> bool {
         let generator = self.generator;
-        match block_menu(ui, generator, true) {
+        match block_menu(ui, generator, &|b| !b.inputs.is_empty() && !b.number) {
             Some(b) => self.insert(b, to, input).is_some(),
             None => false,
         }
@@ -213,12 +202,44 @@ impl Graph for Patch {
     }
 }
 
-/// The block list by group (the add menu and a wire's menu): the block picked, if one was. `on_wire` leaves out
-/// blocks with no input (a source can't sit on a wire).
-fn block_menu(ui: &mut egui::Ui, generator: bool, on_wire: bool) -> Option<&'static str> {
+/// A search box, then the blocks that match (Enter adds the first), or the groups when it's empty: the block
+/// picked, if one was, and whether a search is on (the menu's other entries hide then). `keep` narrows the list.
+fn pick_block(ui: &mut egui::Ui, generator: bool, keep: impl Fn(&patch::Block) -> bool) -> (Option<&'static str>, bool) {
+    let key = egui::Id::new("patch_block_search");
+    let mut query: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+    let field = crate::ui::text_field(ui, &mut query, "Find a block…", Some(200.0));
+    if ui.memory(|m| m.focused().is_none()) {
+        field.request_focus();
+    }
+    let q = query.trim().to_lowercase();
+    let mut picked = None;
+    if !q.is_empty() {
+        let found: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.id != "output" && b.id != "note" && (b.id != "input" || !generator) && keep(b) && (b.name.to_lowercase().contains(&q) || b.about.to_lowercase().contains(&q))).take(12).collect();
+        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        for (i, b) in found.iter().enumerate() {
+            if crate::ui::command(ui, format!("{} · {}", b.name, b.group.name())).on_hover_text(b.about).clicked() || (enter && i == 0) {
+                picked = Some(b.id);
+                query.clear();
+                ui.close();
+            }
+        }
+        if found.is_empty() {
+            hint(ui, "No block matches");
+        }
+    } else {
+        picked = block_menu(ui, generator, &keep);
+    }
+    let searching = !q.is_empty();
+    ui.ctx().data_mut(|d| d.insert_temp(key, query));
+    (picked, searching)
+}
+
+/// The block list by group (the add menu and a wire's menu): the block picked, if one was. `keep` narrows the
+/// list (on a wire: blocks with an input, no sources).
+fn block_menu(ui: &mut egui::Ui, generator: bool, keep: &dyn Fn(&patch::Block) -> bool) -> Option<&'static str> {
     let mut picked = None;
     for g in Group::ALL.into_iter().filter(|g| *g != Group::Output && *g != Group::Note) {
-        let blocks: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator) && (!on_wire || (!b.inputs.is_empty() && !b.number))).collect();
+        let blocks: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator) && keep(b)).collect();
         if blocks.is_empty() {
             continue;
         }

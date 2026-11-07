@@ -79,6 +79,11 @@ pub(crate) trait Graph {
         false
     }
     fn look_at(&mut self, _id: Option<u32>) {}
+    /// The menu that opens when a wire from `from`'s output is let go on empty canvas: entries that add a box at
+    /// `at` wired from it. True when one was added.
+    fn add_from_menu(&mut self, _ui: &mut egui::Ui, _at: [f32; 2], _from: u32, _kind: PortKind) -> bool {
+        false
+    }
     /// Boxes `ids` as text for the clipboard (Cmd+C), and back (Cmd+V, their top-left at `at`): the new ids.
     fn clip(&self, _ids: &[u32]) -> Option<String> {
         None
@@ -447,10 +452,22 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             painter.add(wire_shape(a, hover_input.map_or(p, |(_, _, q, _)| q), port_colour(d.kind, true)));
         }
         if released || !down {
-            if let Some((to, i, ..)) = hover_input
-                && graph.connect(d.from, to, i)
+            if let Some((to, i, ..)) = hover_input {
+                if graph.connect(d.from, to, i) {
+                    changed = true;
+                }
+            } else if let Some(p) = pointer
+                && rects.iter().all(|(_, r, _)| !r.contains(p))
+                && released
             {
-                changed = true;
+                // Let go on empty canvas: the add menu opens there, and the box picked comes wired from this one.
+                let (from, kind) = (d.from, d.kind);
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(id.with("add_at"), [p.x, p.y]);
+                    data.insert_temp(id.with("wire_at"), None::<(u32, usize)>);
+                    data.insert_temp(id.with("wire_from"), Some((from, kind)));
+                });
+                egui::Popup::open_id(ui.ctx(), bg.id.with("popup"));
             }
             drag = None;
         }
@@ -462,6 +479,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         ui.ctx().data_mut(|d| {
             d.insert_temp(id.with("add_at"), [p.x, p.y]);
             d.insert_temp(id.with("wire_at"), wire_hit);
+            d.insert_temp(id.with("wire_from"), None::<(u32, PortKind)>);
         });
     }
     if ui.ctx().data_mut(|d| d.remove_temp::<bool>(id.with("tidy"))).is_some() && graph.tidy() {
@@ -480,7 +498,15 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     }
     bg.right_field_menu(|ui| {
         let on_wire: Option<(u32, usize)> = ui.ctx().data(|d| d.get_temp(id.with("wire_at"))).flatten();
-        if let Some((to, input)) = on_wire {
+        let from_wire: Option<(u32, PortKind)> = ui.ctx().data(|d| d.get_temp(id.with("wire_from"))).flatten();
+        if let Some((from, kind)) = from_wire {
+            super::heading(ui, format!("Add a box wired from {}", graph.title(from)));
+            let at: [f32; 2] = ui.ctx().data(|d| d.get_temp(id.with("add_at"))).unwrap_or([40.0, 40.0]);
+            if graph.add_from_menu(ui, at, from, kind) {
+                changed = true;
+                ui.close();
+            }
+        } else if let Some((to, input)) = on_wire {
             super::heading(ui, "Put a box on this wire");
             if graph.insert_menu(ui, to, input) {
                 changed = true;

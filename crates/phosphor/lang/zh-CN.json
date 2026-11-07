@@ -260,6 +260,7 @@
 "Add": "添加",
 "Add Layer": "添加图层",
 "Add a box": "添加方块",
+"Add a box wired from {0}": "添加一个从 {0} 连线的方块",
 "Add a column beside it": "在旁边添加一列",
 "Add a layer first": "请先添加图层",
 "Add a layer showing your camera first (Live input), aimed at the lights. It can stay hidden.": "请先添加显示摄像头的图层(实时输入),对准灯具。可保持隐藏。",
