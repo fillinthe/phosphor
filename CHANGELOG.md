@@ -136,6 +136,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Inspector, movie layers: the Playback rows Section, Jump and Scratch (and a layer's Sound device and Plays on) are
+  label rows like Fade style and Frame rate, so their labels line up down the panel; the loop beats menu reads
+  Beats and the In / Out / Beats row fits beside its label.
 - Inspector, movie and picture layers: the file row shows the file's name beside the Show in Finder button (the
   whole path on hover; right-click copies either) instead of a path cut short on a row of its own. The play
   direction buttons read Forward · Reverse · Ping-pong · Random and fit one row.

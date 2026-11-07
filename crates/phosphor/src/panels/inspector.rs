@@ -326,21 +326,20 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     seek_to = super::clip_bar::loop_bar(ui, layer, pos, dur, 18.0);
                 }
                 let at = (pos / dur.max(1e-6)) as f32;
-                crate::ui::toolbar(ui, |ui| {
-                    ui.label(RichText::new("Section").small().color(Color32::GRAY));
-                    let r = crate::ui::command(ui, "In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
+                crate::ui::field(ui, "Section", |ui| {
+                    let r = crate::ui::small_command(ui, "In").on_hover_text("Loop starts here (drag the yellow marks on the bar, or right-click to map)");
                     map_menu(ui, &r, ControlTarget::LayerLoopIn(layer.id));
                     if r.clicked() {
                         layer.loop_in = at.min(layer.loop_out - 0.01).max(0.0);
                     }
-                    let r = crate::ui::command(ui, "Out").on_hover_text("Loop ends here");
+                    let r = crate::ui::small_command(ui, "Out").on_hover_text("Loop ends here");
                     map_menu(ui, &r, ControlTarget::LayerLoopOut(layer.id));
                     if r.clicked() {
                         layer.loop_out = at.max(layer.loop_in + 0.01).min(1.0);
                         layer.loop_beats = 0.0;
                     }
-                    let beats = if layer.loop_beats > 0.0 { format!("{} beats", layer.loop_beats) } else { "Beats: off".into() };
-                    crate::ui::dropdown(ui, ("loop_beats", layer.id), 84.0).selected_text(beats).show_ui(ui, |ui| {
+                    let beats = if layer.loop_beats > 0.0 { format!("{} beats", layer.loop_beats) } else { "Beats".into() };
+                    crate::ui::dropdown(ui, ("loop_beats", layer.id), 44.0).selected_text(beats).show_ui(ui, |ui| {
                         crate::ui::pick_value(ui, &mut layer.loop_beats, 0.0, "Off (use Out)");
                         for b in [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0] {
                             crate::ui::pick_value(ui, &mut layer.loop_beats, b, format!("{b} beats"));
@@ -373,11 +372,10 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 choice_mapped(ui, &mut layer.direction, ControlTarget::LayerDirection(layer.id));
             });
             if let Some((pos, dur)) = position {
-                crate::ui::toolbar(ui, |ui| {
-                    ui.label("Jump");
+                crate::ui::field(ui, "Jump", |ui| {
                     let step = layer.jump_secs(Some(dur), media.bpm);
                     for (forward, glyph, tip) in [(false, icon::REWIND, "Jump back one step"), (true, icon::FAST_FORWARD, "Jump forward one step")] {
-                        let r = crate::ui::command(ui, glyph).on_hover_text(tip);
+                        let r = crate::ui::small_command(ui, glyph).on_hover_text(tip);
                         if r.clicked() {
                             seek_to = Some(if forward { pos + step } else { pos - step }.clamp(0.0, dur));
                         }
@@ -404,8 +402,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                 // Scratch: drag along the strip to move through the movie (a screen-width drag = 4 seconds), endlessly.
                 // The movie holds still while you scratch (measured from where the drag began, so seeks that
                 // haven't landed yet don't hold it back) and plays on when you let go.
-                ui.horizontal(|ui| {
-                    ui.label("Scratch");
+                crate::ui::field(ui, "Scratch", |ui| {
                     let (rect, r) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(260.0), 18.0), Sense::drag());
                     let grooves_id = egui::Id::new(("scratch_grooves", layer.id));
                     let drag_id = egui::Id::new(("scratch_drag", layer.id));
@@ -777,10 +774,10 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
     // Another sound device (headphones for cueing, a second interface…): the device list is asked for only when the
     // menu opens.
     #[cfg(not(target_arch = "wasm32"))]
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Sound device");
+    crate::ui::field(ui, "Sound device", |ui| {
         let current = layer.sound_device.clone().unwrap_or_else(|| "Main output".into());
-        crate::ui::dropdown(ui, ("sound_device", layer.id), 180.0).selected_text(current).show_ui(ui, |ui| {
+        let width = (ui.available_width() - 24.0).clamp(80.0, 180.0);
+        crate::ui::dropdown(ui, ("sound_device", layer.id), width).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut layer.sound_device, None, "Main output");
             for d in crate::media::video::sound::output_devices() {
                 crate::ui::pick_value(ui, &mut layer.sound_device, Some(d.clone()), d);
@@ -795,8 +792,7 @@ fn sound_row(ui: &mut egui::Ui, layer: &mut LayerState) {
         let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
         if pairs > 1 || layer.sound_pair > 0 {
             let name = |p: u8| format!("Outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
-            crate::ui::toolbar(ui, |ui| {
-                ui.label("Plays on");
+            crate::ui::field(ui, "Plays on", |ui| {
                 crate::ui::dropdown(ui, ("sound_pair", layer.id), 120.0).selected_text(name(layer.sound_pair)).show_ui(ui, |ui| {
                     for p in 0..pairs.max(layer.sound_pair + 1) {
                         crate::ui::pick_value(ui, &mut layer.sound_pair, p, name(p));
