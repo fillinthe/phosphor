@@ -142,6 +142,20 @@ impl Graph for Patch {
         }
         added
     }
+    fn extra_menu(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
+        let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) else { return false };
+        let Some(b) = patch::block(&n.block) else { return false };
+        if b.settings.is_empty() {
+            return false;
+        }
+        let defaults: Vec<f32> = b.settings.iter().map(|s| s.default).collect();
+        if n.values != defaults && crate::ui::command(ui, label(icon::ARROW_COUNTER_CLOCKWISE, "Reset settings")).on_hover_text("Every setting of this box back to its starting value").clicked() {
+            n.values = defaults;
+            ui.close();
+            return true;
+        }
+        false
+    }
     fn clip(&self, ids: &[u32]) -> Option<String> {
         Patch::clip(self, ids)
     }
@@ -207,8 +221,52 @@ fn block_menu(ui: &mut egui::Ui, generator: bool, on_wire: bool) -> Option<&'sta
 /// the patch changed (blocks, wires or settings).
 pub(crate) fn patch_canvas(ui: &mut egui::Ui, patch: &mut Patch, key: &str) -> bool {
     let key = format!("patch:{key}");
-    crate::ui::toolbar(ui, |ui| crate::ui::nodes::zoom_controls(ui, &key));
-    node_canvas(ui, patch, &key)
+    // Undo / redo: the patch as it was after each change (a drag counts once, when it's let go), kept per patch
+    // while the app runs. Cmd+Z / Shift+Cmd+Z with the pointer over the canvas, or the buttons.
+    let hist_id = egui::Id::new(("patch_history", &key));
+    let mut hist: History = ui.ctx().data(|d| d.get_temp(hist_id)).unwrap_or_default();
+    let committed = hist.committed.get_or_insert_with(|| patch.clone()).clone();
+    let (mut undo, mut redo) = (false, false);
+    crate::ui::toolbar(ui, |ui| {
+        crate::ui::nodes::zoom_controls(ui, &key);
+        undo = crate::ui::small_command_if(ui, !hist.undo.is_empty(), icon::ARROW_U_UP_LEFT).on_hover_text("Undo (Cmd+Z)").clicked();
+        redo = crate::ui::small_command_if(ui, !hist.redo.is_empty(), icon::ARROW_U_UP_RIGHT).on_hover_text("Redo (Shift+Cmd+Z)").clicked();
+    });
+    let area = ui.available_rect_before_wrap();
+    if ui.rect_contains_pointer(area) && !ui.ctx().egui_wants_keyboard_input() {
+        let (z, shift) = ui.input(|i| (i.modifiers.command && i.key_pressed(egui::Key::Z), i.modifiers.shift));
+        undo |= z && !shift;
+        redo |= z && shift;
+    }
+    let mut changed = node_canvas(ui, patch, &key);
+    if undo && let Some(prev) = hist.undo.pop() {
+        hist.redo.push(committed.clone());
+        *patch = prev;
+        hist.committed = Some(patch.clone());
+        changed = true;
+    } else if redo && let Some(next) = hist.redo.pop() {
+        hist.undo.push(committed.clone());
+        *patch = next;
+        hist.committed = Some(patch.clone());
+        changed = true;
+    } else if changed {
+        hist.undo.push(committed);
+        if hist.undo.len() > 50 {
+            hist.undo.remove(0);
+        }
+        hist.redo.clear();
+        hist.committed = Some(patch.clone());
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(hist_id, hist));
+    changed
+}
+
+/// A patch's undo history (`patch_canvas`): what to go back to, what to go forward to, and the patch as last saved.
+#[derive(Clone, Default)]
+struct History {
+    undo: Vec<Patch>,
+    redo: Vec<Patch>,
+    committed: Option<Patch>,
 }
 
 #[cfg(test)]
@@ -285,6 +343,44 @@ mod tests {
         assert!(frame(&ctx, &mut p, del));
         assert_eq!(p.nodes.len(), 1, "Input and Invert gone, Output kept");
         assert_eq!(p.nodes[0].block, "output");
+    }
+
+    /// Delete a block, Cmd+Z: it's back (the canvas with its zoom bar, as the Shader Editor draws it).
+    #[test]
+    fn undo_brings_a_deleted_block_back() {
+        let ctx = egui::Context::default();
+        let mut p = Patch::new("Test", false);
+        let inv = p.add("invert", [300.0, 200.0]);
+        let run = |ctx: &egui::Context, p: &mut Patch, events: Vec<egui::Event>| {
+            // (The held modifiers come from the input state, not the key event: a Cmd+A frame holds Cmd.)
+            let modifiers = events.iter().find_map(|e| if let egui::Event::Key { modifiers, .. } = e { Some(*modifiers) } else { None }).unwrap_or_default();
+            let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+            let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 600.0))), events, ..Default::default() };
+            let mut changed = false;
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| changed = patch_canvas(ui, p, "undo"));
+            });
+            out.textures_delta.clear();
+            changed
+        };
+        run(&ctx, &mut p, vec![]);
+        // Cmd+A selects every block, Delete removes the removable ones (Output stays).
+        let cmd = egui::Modifiers { command: true, ..Default::default() };
+        let over = egui::Event::PointerMoved(egui::pos2(600.0, 500.0));
+        run(&ctx, &mut p, vec![over.clone()]);
+        let all = egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: cmd };
+        run(&ctx, &mut p, vec![over.clone(), all]);
+        let del = egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        assert!(run(&ctx, &mut p, vec![over.clone(), del]));
+        assert!(p.node(inv).is_none(), "deleted");
+        assert_eq!(p.nodes.len(), 1);
+        let undo = egui::Event::Key { key: egui::Key::Z, physical_key: None, pressed: true, repeat: false, modifiers: cmd };
+        assert!(run(&ctx, &mut p, vec![over.clone(), undo]));
+        assert!(p.node(inv).is_some(), "back after Cmd+Z");
+        assert_eq!(p.nodes.len(), 3);
+        let redo = egui::Event::Key { key: egui::Key::Z, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers { command: true, shift: true, ..Default::default() } };
+        assert!(run(&ctx, &mut p, vec![over, redo]));
+        assert!(p.node(inv).is_none(), "gone again after Shift+Cmd+Z");
     }
 
     #[test]
