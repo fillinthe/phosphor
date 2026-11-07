@@ -192,18 +192,26 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
         ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w / aspect), g.enabled);
+        // The help (i) rides at the end of the name row (its sentence goes under the row when help icons are off).
+        let what = "A group: its layers mix together first; its opacity, blend and effects then apply to that mix. The screen button sends it to outputs of its own.";
+        let icons = crate::ui::help_icons();
         ui.horizontal(|ui| {
             toggle(ui, &mut g.enabled, "ON");
             ui.label(icon::STACK);
             send = outputs_menu(ui, outs).or(send);
-            ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(f32::INFINITY));
+            let room = if icons { 28.0 } else { 0.0 };
+            ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(ui.available_width() - room));
+            if icons {
+                help(ui, what);
+            }
         });
-        help(ui, "A group: its layers mix together first; its opacity, blend and effects then apply to that mix. The screen button sends it to outputs of its own.");
+        if !icons {
+            help(ui, what);
+        }
         ui.horizontal(|ui| {
             Level::percent(&mut g.opacity, "Opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
         });
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Blend");
+        crate::ui::field(ui, "Blend", |ui| {
             choice_combo(ui, ("group_blend_insp", g.id), &mut g.blend, 120.0, false);
         });
         crate::ui::toggle(ui, &mut g.in_mix, "In the mix").on_hover_text("Off: the group appears only on mapping surfaces that pick it");
