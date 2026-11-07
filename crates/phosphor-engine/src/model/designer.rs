@@ -163,6 +163,17 @@ impl Network {
         n
     }
 
+    /// Lays the boxes out left to right by wiring depth (`graph::tidy`), Output last; `height` = how tall each draws.
+    pub fn tidy(&mut self, col_w: f32, height: impl Fn(u32) -> f32) {
+        let ids: Vec<u32> = self.nodes.iter().map(|n| n.id).collect();
+        let placed = crate::graph::tidy(&ids, &self.wires, col_w, 24.0, |id| self.node(id).is_some_and(|n| n.kind == NodeKind::Output), height);
+        for (id, pos) in placed {
+            if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) {
+                n.pos = pos;
+            }
+        }
+    }
+
     pub fn node(&self, id: u32) -> Option<&Node> {
         self.nodes.iter().find(|n| n.id == id)
     }

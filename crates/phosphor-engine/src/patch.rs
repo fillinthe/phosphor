@@ -1203,28 +1203,12 @@ impl Patch {
     /// top to bottom in wiring order; `height_of` says how tall a block draws, `col_w` is a column's pitch.
     pub fn tidy(&mut self, col_w: f32, height_of: impl Fn(&Node) -> f32) {
         let ids: Vec<u32> = self.nodes.iter().map(|n| n.id).collect();
-        let order = crate::graph::order(&ids, &self.wires);
-        // Depth = the longest chain of wires before a block.
-        let mut depth: Vec<(u32, usize)> = Vec::new();
-        for id in &order {
-            let d = self.wires.iter().filter(|w| w.to == *id).filter_map(|w| depth.iter().find(|(n, _)| *n == w.from).map(|(_, d)| d + 1)).max().unwrap_or(0);
-            depth.push((*id, d));
-        }
-        // Output always last, on its own column.
-        let last = depth.iter().map(|(_, d)| *d).max().unwrap_or(0);
-        for (id, d) in depth.iter_mut() {
-            if self.node(*id).is_some_and(|n| n.block == "output") {
-                *d = last.max(1);
+        let placed = crate::graph::tidy(&ids, &self.wires, col_w, 24.0, |id| self.node(id).is_some_and(|n| n.block == "output"), |id| self.node(id).map_or(0.0, &height_of));
+        for (id, pos) in placed {
+            if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) {
+                n.pos = pos;
             }
         }
-        let mut next_y: Vec<f32> = vec![20.0; last + 2];
-        for (id, d) in &depth {
-            let Some(n) = self.nodes.iter_mut().find(|n| n.id == *id) else { continue };
-            let h = height_of(n);
-            n.pos = [20.0 + *d as f32 * col_w, next_y[*d]];
-            next_y[*d] += h + 24.0;
-        }
-        // Blocks in a loop (none, normally) stay where they were.
     }
 
     /// What's wired into input `input` of `to`.

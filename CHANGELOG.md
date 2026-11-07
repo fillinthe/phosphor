@@ -131,6 +131,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Four more ready-made patches in Shader Editor › + Patch: Neon Edges, Glitch TV, Tunnel Trails and Pulse Dots
   (the last two are generators). Open one and change any block.
 
+**Designer**
+- Tidy (in the Designer canvas's zoom bar) lays its boxes out left to right by their wiring, nothing overlapping.
+
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and
   permissions carry on as before, and other apps still find its Syphon, Spout and NDI picture as "Phosphor".
