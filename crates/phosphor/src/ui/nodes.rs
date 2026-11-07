@@ -288,6 +288,19 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             selected.clear();
         }
+        // Arrows nudge the selection a point (Shift: ten).
+        let (dx, dy, big) = ui.input(|i| {
+            let k = |a: egui::Key, b: egui::Key| i.key_pressed(b) as i32 - i.key_pressed(a) as i32;
+            (k(egui::Key::ArrowLeft, egui::Key::ArrowRight), k(egui::Key::ArrowUp, egui::Key::ArrowDown), i.modifiers.shift)
+        });
+        if (dx != 0 || dy != 0) && !selected.is_empty() {
+            let step = if big { 10.0 } else { 1.0 };
+            for n in &selected {
+                let p = graph.pos(*n);
+                graph.set_pos(*n, [p[0] + dx as f32 * step, p[1] + dy as f32 * step]);
+            }
+            changed = true;
+        }
         // Cmd+C copies the selection (within the app; it works between patches), Cmd+V pastes it at the pointer.
         let (copy, paste) = ui.input(|i| (i.modifiers.command && i.key_pressed(egui::Key::C), i.modifiers.command && i.key_pressed(egui::Key::V)));
         if copy && let Some(text) = graph.clip(&selected) {
