@@ -877,7 +877,7 @@ pub(crate) fn mask_attach_row(ui: &mut egui::Ui, mapping: &mut phosphor_engine::
     let name = |id: Option<u64>| id.and_then(|id| mapping.surfaces.iter().find(|s| s.id == id)).map_or("Nothing (stays put)".to_string(), |s| s.name.clone());
     let mut pick = current;
     crate::ui::field(ui, "Attached to", |ui| {
-        egui::ComboBox::from_id_salt(("mask_attach", mask)).selected_text(name(current)).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("mask_attach", mask), 160.0).selected_text(name(current)).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut pick, None, "Nothing (stays put)");
             for s in &mapping.surfaces {
                 crate::ui::pick_value(ui, &mut pick, Some(s.id), &s.name);

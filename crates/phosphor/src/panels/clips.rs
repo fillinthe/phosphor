@@ -274,8 +274,7 @@ pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerStat
             }
         });
         ui.data_mut(|d| d.insert_temp(key, (ch, note)));
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Shift its notes");
+        crate::ui::field(ui, "Shift notes", |ui| {
             for by in [-8, -1, 1, 8] {
                 if crate::ui::small_command(ui, format!("{by:+}")).on_hover_text("Move this row's note mappings (a bank on the controller)").clicked() {
                     *row_midi = Some(RowAct::Shift(by));
