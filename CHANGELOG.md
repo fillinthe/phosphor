@@ -136,6 +136,13 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 **Designer**
 - Tidy (in the Designer canvas's zoom bar) lays its boxes out left to right by their wiring, nothing overlapping.
 
+**Design system**
+- docs/DESIGN.md names the look ("Phosphor CRT": blue-black charcoal, one lit accent, six kind hues, square
+  sliders) and sets the rules for fonts, colours, spacing, every control, dark and light, and what never to do.
+  The tests hold the code to it: no raw egui sliders, radio rows or drop-downs in panels, and no new hand-picked
+  colours. The convert window's format list and five drop-downs (Stream size, Online, Output resolution, Layer
+  source, Session page) moved onto the kit.
+
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and
   permissions carry on as before, and other apps still find its Syphon, Spout and NDI picture as "Phosphor".

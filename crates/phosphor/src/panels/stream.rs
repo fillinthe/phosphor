@@ -100,7 +100,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         }
         crate::ui::field(ui, "Size", |ui| {
             let current = if s.height == 0 { format!("Canvas ({cw}×{ch})") } else { format!("{}p", s.height) };
-            ComboBox::from_id_salt("stream_size").selected_text(current).show_ui(ui, |ui| {
+            crate::ui::dropdown(ui, "stream_size", 120.0).selected_text(current).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut s.height, 0, format!("Canvas ({cw}×{ch})"));
                 for h in [720, 1080, 1440, 2160] {
                     crate::ui::pick_value(ui, &mut s.height, h, format!("{h}p"));

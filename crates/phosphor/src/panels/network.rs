@@ -124,7 +124,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     crate::ui::field(ui, "Surface page", |ui| {
         let pages = &st.comp.surface.pages;
         let current = play.surface_page.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "All pages".into());
-        ComboBox::from_id_salt("play_page").selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "play_page", 160.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut play.surface_page, None, "All pages");
             for (i, name) in pages.iter().enumerate() {
                 crate::ui::pick_value(ui, &mut play.surface_page, Some(i), name);

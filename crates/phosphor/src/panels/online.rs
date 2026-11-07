@@ -419,7 +419,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             (Want::XGifs, "GIFs from X".to_string()),
         ];
         let before = o.want;
-        ComboBox::from_id_salt("online_want").selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "online_want", 150.0).selected_text(opts.iter().find(|(w, _)| *w == o.want).map_or("", |(_, t)| t.as_str())).show_ui(ui, |ui| {
             for (w, text) in &opts {
                 crate::ui::pick_value(ui, &mut o.want, *w, text);
             }
