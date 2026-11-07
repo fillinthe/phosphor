@@ -71,6 +71,11 @@ pub(crate) trait Graph {
     fn tidy(&mut self) -> bool {
         false
     }
+    /// How many of the last `inputs` sit beside the settings rows (one a row, top to bottom) instead of in input
+    /// rows of their own: a patch's settings, each a number input.
+    fn body_ports(&self, _id: u32) -> usize {
+        0
+    }
 }
 
 /// How far point `p` is from the wire drawn from `a` to `b` (sampled along the curve).
@@ -201,15 +206,19 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     let mut inputs: Vec<(u32, usize, egui::Pos2, PortKind)> = Vec::new();
     for &n in &ids {
         let kinds = graph.inputs(n);
-        let ins = kinds.len();
-        let size = egui::vec2(graph.width(n), TITLE_H + ins as f32 * INPUT_H + shown_body(&measured, &*graph, n) + 6.0);
+        let beside = graph.body_ports(n).min(kinds.len());
+        let ins = kinds.len() - beside;
+        let body_h = shown_body(&measured, &*graph, n);
+        let size = egui::vec2(graph.width(n), TITLE_H + ins as f32 * INPUT_H + body_h + 6.0);
         let r = egui::Rect::from_min_size(at(graph.pos(n)), size);
         rects.push((n, r, ins));
         if graph.has_output(n) {
             outputs.push((n, egui::pos2(r.max.x, r.min.y + TITLE_H * 0.5), graph.output_kind(n)));
         }
+        let body_top = r.min.y + TITLE_H + ins as f32 * INPUT_H + 2.0;
         for (i, (_, kind)) in kinds.iter().enumerate() {
-            inputs.push((n, i, egui::pos2(r.min.x, r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H), *kind));
+            let y = if i < ins { r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H } else { body_top + ((i - ins) as f32 + 0.5) * body_h / beside.max(1) as f32 };
+            inputs.push((n, i, egui::pos2(r.min.x, y), *kind));
         }
     }
     let out_pos = |id: u32| outputs.iter().find(|(n, ..)| *n == id).map(|(_, p, _)| *p);
@@ -323,8 +332,8 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
                 ui.close();
             }
         });
-        // Input names, and their dots (drag a wired one away to unplug it).
-        for (i, (name, kind)) in graph.inputs(n).iter().enumerate() {
+        // Input names, and their dots (drag a wired one away to unplug it). Ports beside the settings have no row.
+        for (i, (name, kind)) in graph.inputs(n).iter().enumerate().take(ins) {
             let y = r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H;
             let colour = if *kind == PortKind::Number { port_colour(*kind, false).gamma_multiply(0.8) } else { Color32::from_gray(170) };
             painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), colour);

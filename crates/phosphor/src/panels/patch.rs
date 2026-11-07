@@ -15,6 +15,7 @@ fn group_colour(g: Group) -> Color32 {
         Group::Warp => Color32::from_rgb(170, 120, 60),
         Group::Blur => Color32::from_rgb(80, 140, 130),
         Group::Mix => Color32::from_rgb(110, 110, 170),
+        Group::Number => crate::theme::Hue::Control.color(),
         Group::Output => accent(),
     }
 }
@@ -41,7 +42,16 @@ impl Graph for Patch {
         self.node(id).and_then(|n| patch::block(&n.block)).map_or(Color32::GRAY, |b| group_colour(b.group))
     }
     fn inputs(&self, id: u32) -> Vec<(String, phosphor_engine::PortKind)> {
-        self.node(id).and_then(|n| patch::block(&n.block)).map_or_else(Vec::new, |b| b.inputs.iter().map(|s| (s.to_string(), phosphor_engine::PortKind::Picture)).collect())
+        use phosphor_engine::PortKind;
+        self.node(id).and_then(|n| patch::block(&n.block)).map_or_else(Vec::new, |b| {
+            b.inputs.iter().map(|s| (s.to_string(), PortKind::Picture)).chain(b.settings.iter().map(|s| (s.name.to_string(), PortKind::Number))).collect()
+        })
+    }
+    fn body_ports(&self, id: u32) -> usize {
+        self.node(id).and_then(|n| patch::block(&n.block)).map_or(0, |b| b.settings.len())
+    }
+    fn output_kind(&self, id: u32) -> phosphor_engine::PortKind {
+        if self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.number) { phosphor_engine::PortKind::Number } else { phosphor_engine::PortKind::Picture }
     }
     fn has_output(&self, id: u32) -> bool {
         self.node(id).is_some_and(|n| n.block != "output")
@@ -53,16 +63,24 @@ impl Graph for Patch {
         self.node(id).and_then(|n| patch::block(&n.block)).map_or(0.0, |b| b.settings.len() as f32 * SETTING_H)
     }
     fn body(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
-        let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) else { return false };
-        let Some(b) = patch::block(&n.block) else { return false };
+        let Some(b) = self.node(id).and_then(|n| patch::block(&n.block)) else { return false };
         let mut changed = false;
         let width = ui.available_width();
+        let wired: Vec<Option<String>> = (0..b.settings.len()).map(|i| Patch::setting_source(self, id, i).map(|from| self.title(from))).collect();
+        let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) else { return false };
         for (i, s) in b.settings.iter().enumerate() {
             if n.values.len() <= i {
                 n.values.resize(b.settings.len(), 0.0);
                 n.values[i] = s.default;
             }
-            if Level::range(&mut n.values[i], s.min, s.max, s.name).default(s.default).width(width).show(ui).changed() {
+            if let Some(from) = &wired[i] {
+                // Follows a number block: the row says so, as tall as the bar it replaces (its dot sits beside it).
+                let h = ui.spacing().interact_size.y.max(18.0);
+                let (rect, r) = ui.allocate_exact_size(egui::vec2(width, h), Sense::hover());
+                ui.painter().rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
+                ui.painter().text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, format!("{} {} {from}", s.name, icon::ARROW_LEFT), egui::FontId::proportional(12.0), crate::theme::Hue::Control.color());
+                r.on_hover_text(format!("{} follows {from} (drag the dot away to unplug it)", s.name));
+            } else if Level::range(&mut n.values[i], s.min, s.max, s.name).default(s.default).width(width).show(ui).changed() {
                 changed = true;
             }
         }
@@ -102,7 +120,7 @@ impl Graph for Patch {
         added
     }
     fn bypassable(&self, id: u32) -> bool {
-        self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.id != "output" && !b.inputs.is_empty())
+        self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.id != "output" && !b.inputs.is_empty() && !b.number)
     }
     fn bypassed(&self, id: u32) -> bool {
         self.node(id).is_some_and(|n| n.bypassed)
@@ -131,7 +149,7 @@ impl Graph for Patch {
 fn block_menu(ui: &mut egui::Ui, generator: bool, on_wire: bool) -> Option<&'static str> {
     let mut picked = None;
     for g in Group::ALL.into_iter().filter(|g| *g != Group::Output) {
-        let blocks: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator) && (!on_wire || !b.inputs.is_empty())).collect();
+        let blocks: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator) && (!on_wire || (!b.inputs.is_empty() && !b.number))).collect();
         if blocks.is_empty() {
             continue;
         }

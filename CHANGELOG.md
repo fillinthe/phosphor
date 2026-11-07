@@ -110,6 +110,11 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Tidy (in the zoom bar) lays the blocks out left to right, sources first, nothing overlapping, and fits them in view.
 - Fourteen new blocks: Plasma and Dots (pictures); Levels, Vignette, Scanlines, Colour split, Colour cycle and
   Strobe (colour); Polar, Shake and Glitch slices (warp); Zoom blur; Wipe and Chroma key (mix two).
+- Numbers: a new group of blocks that make a number instead of a picture: Value (one knob for several settings),
+  LFO, Pulse, Ramp (0 to 1 across the picture), Noise number and Brightness of (a picture's light as a number).
+  Every setting of every block has a small dot beside it: wire a number block into it and the setting follows
+  the number, per frame and per pixel (an LFO on Hue shift, a Ramp on Pixelate's size, one picture's brightness
+  on another's blur…). A setting that follows a number takes no parameter.
 - Four more ready-made patches in Shader Editor › + Patch: Neon Edges, Glitch TV, Tunnel Trails and Pulse Dots
   (the last two are generators). Open one and change any block.
 
