@@ -356,8 +356,7 @@ fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
         }
         let id = ui.id().with("dmx_monitor_uni");
         let mut uni = ui.data(|d| d.get_temp::<u16>(id)).filter(|u| unis.contains(u)).unwrap_or(unis[0]);
-        ui.horizontal_wrapped(|ui| {
-            ui.label("Universe");
+        crate::ui::field(ui, "Universe", |ui| {
             for u in &unis {
                 if crate::ui::pick_item(ui, *u == uni, u.to_string()).clicked() {
                     uni = *u;

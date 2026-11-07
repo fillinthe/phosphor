@@ -137,8 +137,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
 fn sound_device(ui: &mut egui::Ui) {
     use crate::media::video::sound;
     let key = egui::Id::new("sound_out_devices");
-    ui.horizontal(|ui| {
-        ui.label("Plays on");
+    crate::ui::field(ui, "Plays on", |ui| {
         let current = sound::output_device();
         let r = crate::ui::dropdown(ui, "sound_out_device", 220.0).selected_text(current.clone().unwrap_or_else(|| "The Mac's default output".into())).show_ui(ui, |ui| {
             let devices: Vec<String> = ui.ctx().data_mut(|d| d.get_temp(key)).unwrap_or_else(|| {
@@ -159,9 +158,8 @@ fn sound_device(ui: &mut egui::Ui) {
         if r.response.clicked() {
             ui.ctx().data_mut(|d| d.remove_temp::<Vec<String>>(key));
         }
-    })
-    .response
-    .on_hover_text("Where movie sound plays: headphones, an audio interface, a loopback for the DJ mixer… Streams get it from Stream & Record › Movie sound.");
+        r.response.on_hover_text("Where movie sound plays: headphones, an audio interface, a loopback for the DJ mixer… Streams get it from Stream & Record › Movie sound.");
+    });
 }
 
 fn sound_out(ui: &mut egui::Ui, comp: &mut phosphor_engine::Composition) {
