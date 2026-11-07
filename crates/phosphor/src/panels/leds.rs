@@ -243,8 +243,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                             });
                             guarded!(ui, f.motion_beats, egui::DragValue::new(&mut f.motion_beats).range(0.25..=64.0).speed(0.25).suffix(" beats"));
                         }
+                        help(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
                     });
-                    help(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
                     // Channels after the layout's (gobo, prism, zoom, strobe…), each a control of its own.
                     let mut gone = None;
                     let custom = f.head == phosphor_engine::HeadLayout::Custom;

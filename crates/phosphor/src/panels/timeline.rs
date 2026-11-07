@@ -45,6 +45,9 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         }
         super::timeline_lasers::look_menu(ui, st);
         render_menu(ui, st, now);
+        if st.comp.timeline.tracks.is_empty() && st.comp.timeline.laser_looks.is_empty() {
+            help(ui, "Right-click any slider or button › Key on the timeline: it gets a track here with a key at the playhead. Move the playhead, change the value, key it again.");
+        }
     });
     if let Some((p, done, frames)) = st.offline.as_ref().map(|o| (o.progress(), o.done, o.frames)) {
         let stop = ui.horizontal(|ui| {
@@ -55,9 +58,6 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
         if stop.inner {
             st.offline_stop();
         }
-    }
-    if st.comp.timeline.tracks.is_empty() && st.comp.timeline.laser_looks.is_empty() {
-        help(ui, "Right-click any slider or button › Key on the timeline: it gets a track here with a key at the playhead. Move the playhead, change the value, key it again.");
     }
     let names: HashMap<ControlTarget, String> = crate::control::all_targets(&st.comp).into_iter().collect();
     let length = st.comp.timeline.length.max(0.1);

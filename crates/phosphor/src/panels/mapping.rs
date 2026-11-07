@@ -691,6 +691,8 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
     }
 }
 
+const CANVAS_HELP: &str = "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.";
+
 pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     st.comp.ensure_outputs();
     if !st.comp.outputs.iter().any(|o| o.id == st.mapping_output) {
@@ -702,6 +704,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         venue_menu(ui, st);
         svg_menu(ui, st);
         outputs_actions(ui, st);
+        help(ui, CANVAS_HELP);
     });
     let oid = st.mapping_output;
     let tex = st.output_tex(oid);
@@ -758,7 +761,6 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
         }
         st.selected_surface = Some(id);
     }
-    help(ui, "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.");
 
     let State { comp, selected_surface, .. } = st;
     let others = picture_sources(comp, oid);
