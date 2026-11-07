@@ -1140,6 +1140,44 @@ impl Patch {
         Some(id)
     }
 
+    /// Blocks `ids` (Output left out) with the wires among them, as text for the clipboard: `paste` brings them
+    /// back here or into another patch. None when nothing's left to copy.
+    pub fn clip(&self, ids: &[u32]) -> Option<String> {
+        let nodes: Vec<&Node> = self.nodes.iter().filter(|n| ids.contains(&n.id) && n.block != "output").collect();
+        if nodes.is_empty() {
+            return None;
+        }
+        let keep: Vec<u32> = nodes.iter().map(|n| n.id).collect();
+        let wires: Vec<&Wire> = self.wires.iter().filter(|w| keep.contains(&w.from) && keep.contains(&w.to)).collect();
+        serde_json::to_string(&(nodes, wires)).ok()
+    }
+
+    /// Pastes blocks copied with `clip`, their top-left corner at `at`, with fresh ids. Returns the new ids (empty
+    /// when the text isn't a copied selection).
+    pub fn paste(&mut self, text: &str, at: [f32; 2]) -> Vec<u32> {
+        let Ok((nodes, wires)) = serde_json::from_str::<(Vec<Node>, Vec<Wire>)>(text) else { return Vec::new() };
+        let (left, top) = nodes.iter().fold((f32::MAX, f32::MAX), |(l, t), n| (l.min(n.pos[0]), t.min(n.pos[1])));
+        let mut map: Vec<(u32, u32)> = Vec::new();
+        for n in nodes {
+            if n.block == "output" || block(&n.block).is_none() {
+                continue;
+            }
+            let id = self.add(&n.block, [n.pos[0] - left + at[0], n.pos[1] - top + at[1]]);
+            if let Some(m) = self.nodes.iter_mut().find(|m| m.id == id) {
+                m.values = n.values;
+                m.bypassed = n.bypassed;
+            }
+            map.push((n.id, id));
+        }
+        let new = |old: u32| map.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
+        for w in wires {
+            if let (Some(from), Some(to)) = (new(w.from), new(w.to)) {
+                self.connect(from, to, w.input);
+            }
+        }
+        map.into_iter().map(|(_, n)| n).collect()
+    }
+
     /// Lays the blocks out left to right by how far they are from the sources (a column per step), each column
     /// top to bottom in wiring order; `height_of` says how tall a block draws, `col_w` is a column's pitch.
     pub fn tidy(&mut self, col_w: f32, height_of: impl Fn(&Node) -> f32) {
@@ -1519,6 +1557,26 @@ mod tests {
         p.remove(g);
         assert_eq!(p.look_at, None, "removing the block looked at goes back to the Output");
         assert!(serde_json::from_str::<Patch>(r#"{"name":"old","generator":false,"nodes":[],"wires":[]}"#).is_ok(), "old saves have no look_at");
+    }
+
+    #[test]
+    fn copied_blocks_paste_with_fresh_ids_and_their_wires() {
+        let mut p = Patch::kaleido_glow_trails();
+        let (input, out, k, g) = (p.nodes[0].id, p.nodes[1].id, p.nodes[2].id, p.nodes[3].id);
+        let text = p.clip(&[k, g, out]).unwrap();
+        assert!(p.clip(&[out]).is_none(), "Output alone: nothing to copy");
+        let mut q = Patch::new("Other", false);
+        let (q_in, q_out) = (q.nodes[0].id, q.nodes[1].id);
+        let pasted = q.paste(&text, [100.0, 300.0]);
+        assert_eq!(pasted.len(), 2);
+        assert_eq!(q.node(pasted[0]).unwrap().pos, [100.0, 300.0], "top-left lands at the point");
+        assert_eq!(q.source_of(pasted[1], 0), Some(pasted[0]), "the wire between them came along");
+        assert_eq!(q.source_of(pasted[0], 0), None, "the wire from Input didn't (Input wasn't copied)");
+        assert!(q.paste("not a selection", [0.0; 2]).is_empty());
+        q.connect(q_in, pasted[0], 0);
+        q.connect(pasted[1], q_out, 0);
+        check(&q);
+        let _ = (input, g);
     }
 
     #[test]
