@@ -192,22 +192,12 @@ pub(crate) fn group_inspector(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Opti
         ui.spacing_mut().slider_width = (ui.available_width() - 210.0).max(80.0);
         let w = ui.available_width().min(360.0);
         thumbnail(ui, thumb, egui::vec2(w, w / aspect), g.enabled);
-        // The help (i) rides at the end of the name row (its sentence goes under the row when help icons are off).
         let what = "A group: its layers mix together first; its opacity, blend and effects then apply to that mix. The screen button sends it to outputs of its own.";
-        let icons = crate::ui::help_icons();
-        ui.horizontal(|ui| {
+        crate::ui::name_row(ui, &mut g.name, what, |ui| {
             toggle(ui, &mut g.enabled, "ON");
             ui.label(icon::STACK);
             send = outputs_menu(ui, outs).or(send);
-            let room = if icons { 28.0 } else { 0.0 };
-            ui.add(egui::TextEdit::singleline(&mut g.name).desired_width(ui.available_width() - room));
-            if icons {
-                help(ui, what);
-            }
         });
-        if !icons {
-            help(ui, what);
-        }
         ui.horizontal(|ui| {
             Level::percent(&mut g.opacity, "Opacity").modulation(&mut g.opacity_mod).target(ControlTarget::LayerOpacity(g.id)).show(ui);
         });
