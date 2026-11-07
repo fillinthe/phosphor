@@ -146,7 +146,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Phosphor and viewers' audio, the MASTER Inspector, the Mapping panel (beside Identify), a moving head's motion
   row, the Timeline's Render button, Online's mood buttons, the phone layout step, AI assistants and the Cues
   settings, and the Lasers panel (the safety note beside Arm lasers, the controller note beside + Projector, the
-  Designer's beside its title); the Audio panel's two notes are one. An empty cue list says what to do in words.
+  Designer's beside its title) and the Mapping Studio's canvas help (beside Edit on output); the Audio panel's two
+  notes are one. An empty cue list says what to do in words.
 - Pick-one rows are the same buttons everywhere: the clip row menu's Autopilot (and its When the clip ends /
   After choice) and an output's Test pattern menu use the segmented buttons the rest of the app uses instead of
   round radio buttons; the Test pattern help sits in its title row.
