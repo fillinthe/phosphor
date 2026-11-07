@@ -619,7 +619,7 @@ pub(crate) fn media_tile(
     resp.dnd_set_drag_payload(MediaDrag(i));
     let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(w, h));
     let p = ui.painter();
-    p.rect_filled(thumb_rect, 4.0, Color32::from_gray(14));
+    p.rect_filled(thumb_rect, 4.0, crate::theme::PICTURE_BG);
     match thumbs.get(&item.path) {
         Some(tex) => paint_texture(p, tex, fit_rect(thumb_rect.shrink(1.0), thumbs.aspect(&item.path).unwrap_or(16.0 / 9.0))),
         None => {
@@ -629,7 +629,7 @@ pub(crate) fn media_tile(
         }
     }
     let on = targets.playing.get(&item.path);
-    let stroke = if on.is_some() { Stroke::new(2.5, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, Color32::from_gray(50)) };
+    let stroke = if on.is_some() { Stroke::new(2.5, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
     if on.is_some() {
         // On screen now: a play badge in the corner (which layers: on hover).
@@ -656,7 +656,7 @@ pub(crate) fn media_tile(
     let hover = resp.hovered() || star.hovered();
     if item.favorite || hover {
         let font = if item.favorite { crate::theme::filled_icons(15.0) } else { egui::FontId::proportional(15.0) };
-        let color = if item.favorite { Color32::from_rgb(255, 210, 90) } else if star.hovered() { Color32::WHITE } else { Color32::from_white_alpha(150) };
+        let color = if item.favorite { crate::theme::FAVOURITE } else if star.hovered() { Color32::WHITE } else { Color32::from_white_alpha(150) };
         let p = ui.painter();
         p.text(star_rect.center() + egui::vec2(0.5, 1.0), egui::Align2::CENTER_CENTER, icon::STAR, font.clone(), Color32::from_black_alpha(160));
         p.text(star_rect.center(), egui::Align2::CENTER_CENTER, icon::STAR, font, color);

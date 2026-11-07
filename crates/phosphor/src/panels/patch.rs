@@ -10,14 +10,14 @@ const SETTING_H: f32 = 22.0;
 
 fn group_colour(g: Group) -> Color32 {
     match g {
-        Group::Source => Color32::from_rgb(70, 110, 160),
-        Group::Colour => Color32::from_rgb(150, 90, 150),
-        Group::Warp => Color32::from_rgb(170, 120, 60),
-        Group::Blur => Color32::from_rgb(80, 140, 130),
-        Group::Mix => Color32::from_rgb(110, 110, 170),
+        Group::Source => crate::theme::BLOCK_TINTS[0],
+        Group::Colour => crate::theme::BLOCK_TINTS[1],
+        Group::Warp => crate::theme::BLOCK_TINTS[2],
+        Group::Blur => crate::theme::BLOCK_TINTS[3],
+        Group::Mix => crate::theme::BLOCK_TINTS[4],
         Group::Number => crate::theme::Hue::Control.color(),
         Group::Output => accent(),
-        Group::Note => Color32::from_rgb(120, 110, 70),
+        Group::Note => crate::theme::BLOCK_TINTS[5],
     }
 }
 
@@ -419,6 +419,46 @@ mod tests {
         let redo = egui::Event::Key { key: egui::Key::Z, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers { command: true, shift: true, ..Default::default() } };
         assert!(run(&ctx, &mut p, vec![over, redo]));
         assert!(p.node(inv).is_none(), "gone again after Shift+Cmd+Z");
+    }
+
+    /// Between two side panels (as in the Shader Editor) and zoomed out, nothing the canvas draws reaches past its
+    /// own edges, however far out a block sits.
+    #[test]
+    fn boxes_stay_inside_the_canvas() {
+        let ctx = egui::Context::default();
+        let mut p = Patch::kaleido_glow_trails();
+        p.add("invert", [2000.0, 40.0]);
+        let id = egui::Id::new(("node_canvas", "patch:clip"));
+        ctx.data_mut(|d| d.insert_temp(id.with("zoom"), 0.52f32));
+        let mut canvas = egui::Rect::NOTHING;
+        let mut shapes = Vec::new();
+        for _ in 0..3 {
+            let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 600.0))), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::Panel::left("l").resizable(false).default_size(200.0).show(ui, |_| {});
+                egui::Panel::right("r").resizable(false).default_size(400.0).show(ui, |_| {});
+                egui::CentralPanel::no_frame().show(ui, |ui| {
+                    // (In the app the canvas's parent can be clipped narrower than the room it's given.)
+                    let mut room = ui.available_rect_before_wrap();
+                    room.max.x -= 300.0;
+                    ui.set_clip_rect(room);
+                    canvas = room;
+                    node_canvas(ui, &mut p, "patch:clip");
+                });
+            });
+            out.textures_delta.clear();
+            shapes = out.shapes;
+        }
+        let past: Vec<String> = shapes
+            .iter()
+            // (Shapes clipped to somewhere inside the canvas, the boxes among them, whose clip runs past its right edge.
+            // The side panels' own shapes and the screen-wide ones aren't the canvas's.)
+            .filter(|s| s.clip_rect.min.x > canvas.min.x - 1.0 && s.clip_rect.min.x < canvas.max.x - 1.0 && s.clip_rect.max.x > canvas.max.x + 1.0)
+            .filter(|s| s.shape.visual_bounding_rect().intersects(egui::Rect::from_min_max(egui::pos2(canvas.max.x + 1.0, 0.0), egui::pos2(1200.0, 600.0))))
+            .map(|s| format!("clip {:?} shape {:?}", s.clip_rect, s.shape.visual_bounding_rect()))
+            .take(5)
+            .collect();
+        assert!(past.is_empty(), "canvas {canvas:?}; drawn past it:\n{}", past.join("\n"));
     }
 
     #[test]

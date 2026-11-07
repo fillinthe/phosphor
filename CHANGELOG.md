@@ -142,6 +142,12 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   The tests hold the code to it: no raw egui sliders, radio rows or drop-downs in panels, and no new hand-picked
   colours. The convert window's format list and five drop-downs (Stream size, Online, Output resolution, Layer
   source, Session page) moved onto the kit.
+- Colours have names now: record, danger, mapped, favourite, mask, handle, the black behind pictures and the
+  quiet greys come from one place, so the light side looks right everywhere (borders, placeholders and labels
+  used to stay dark-grey whatever the brightness).
+- The patch editor follows the brightness too (its canvas and blocks were always dark), blocks no longer draw over
+  the preview column next to the canvas, the ready-made patches open laid out with nothing overlapping, and the
+  editor's help sits in its heading row.
 
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and

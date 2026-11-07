@@ -92,7 +92,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
     if !spectrum.is_empty() {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 64.0), Sense::hover());
         let p = ui.painter();
-        p.rect_filled(rect, 4.0, Color32::from_gray(12));
+        p.rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
         let bw = rect.width() / spectrum.len() as f32;
         for (i, v) in spectrum.iter().enumerate() {
             let h = rect.height() * v.clamp(0.0, 1.0);
@@ -109,7 +109,7 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::heading(ui, format!("{} Beat detector", icon::HEARTBEAT));
         let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
         let pulse = mod_inputs.audio_beat;
-        ui.painter().circle_filled(r.center(), 4.0 + 5.0 * pulse, if pulse > 0.05 { Color32::from_rgb(255, 196, 70) } else { Color32::from_gray(50) });
+        ui.painter().circle_filled(r.center(), 4.0 + 5.0 * pulse, if pulse > 0.05 { crate::theme::MAPPED } else { crate::theme::line() });
         let an = audio.analysis();
         if an.bpm > 0.0 {
             ui.monospace(format!("{:.1} BPM", an.bpm));

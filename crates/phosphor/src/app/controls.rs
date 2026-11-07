@@ -125,7 +125,7 @@ impl PhosphorApp {
     pub(crate) fn learning_banner(&mut self, ctx: &egui::Context) {
         if self.state.map_mode && self.state.control.learning.is_none() {
             egui::Area::new(egui::Id::new("map_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(14, 34, 40)).show(ui, |ui| {
+                egui::Frame::popup(ui.style()).fill(crate::theme::CONTROL_FILL).show(ui, |ui| {
                     crate::ui::toolbar(ui, |ui| {
                         ui.label(egui::RichText::new(format!("{} MAP MODE", icon::PLUG)).strong().color(theme::accent()));
                         ui.label("Click any highlighted control, then move a knob, send OSC, or press a key.");
@@ -140,9 +140,9 @@ impl PhosphorApp {
         let Some(t) = self.state.control.learning.clone() else { return };
         let name = crate::control::target_label(&self.state.comp, &t);
         egui::Area::new(egui::Id::new("learn_banner")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 44.0)).show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).fill(egui::Color32::from_rgb(40, 34, 14)).show(ui, |ui| {
+            egui::Frame::popup(ui.style()).fill(crate::theme::MAPPED_FILL).show(ui, |ui| {
                 crate::ui::toolbar(ui, |ui| {
-                    ui.label(egui::RichText::new(format!("{} Learning: {name}", icon::BROADCAST)).color(egui::Color32::from_rgb(255, 205, 90)));
+                    ui.label(egui::RichText::new(format!("{} Learning: {name}", icon::BROADCAST)).color(crate::theme::MAPPED));
                     crate::ui::hint(ui, "move a knob, send OSC, or press a key");
                     if crate::ui::small_command(ui, "Cancel (Esc)").clicked() {
                         self.state.control.learning = None;

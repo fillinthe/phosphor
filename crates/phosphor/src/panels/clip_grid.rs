@@ -128,7 +128,7 @@ pub(crate) fn transport_bar(ui: &mut egui::Ui, st: &mut State) {
         for i in 0..4 {
             let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::hover());
             let lit = i == beat;
-            let color = if lit { accent().gamma_multiply(1.0 - 0.6 * phase) } else { Color32::from_gray(60) };
+            let color = if lit { accent().gamma_multiply(1.0 - 0.6 * phase) } else { crate::theme::line() };
             ui.painter().circle_filled(r.center(), if lit { 5.0 } else { 4.0 }, color);
         }
         if st.control.midi_clock.active(now) {
@@ -156,7 +156,7 @@ pub(crate) fn transport_bar(ui: &mut egui::Ui, st: &mut State) {
         }
         map_menu(ui, &auto, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
         if st.mod_inputs.audio_beat > 0.05 {
-            ui.painter().circle_filled(auto.rect.right_top() + egui::vec2(-2.0, 2.0), 2.0 + 3.0 * st.mod_inputs.audio_beat, Color32::from_rgb(255, 196, 70));
+            ui.painter().circle_filled(auto.rect.right_top() + egui::vec2(-2.0, 2.0), 2.0 + 3.0 * st.mod_inputs.audio_beat, crate::theme::MAPPED);
         }
         ui.separator();
         launch_controls(ui, &mut st.comp);
@@ -272,7 +272,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
                 match tex {
                     Some(t) => paint_texture(p, t, thumb_rect),
                     None => {
-                        p.rect_filled(thumb_rect, 4.0, Color32::from_gray(30));
+                        p.rect_filled(thumb_rect, 4.0, crate::theme::PICTURE_BG);
                         // Long names (imported clips) stay inside their own grid.cell; sound files get a note.
                         let label: String = if crate::media::is_sound_file(&k.source.label()) {
                             format!("{} {}", icon::MUSIC_NOTES, k.source.label().chars().take(13).collect::<String>())
@@ -307,7 +307,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
         }
         let stroke = if grid.drag_at.is_some_and(|p| rect.contains(p)) {
             // Files from the Finder land here (and fill the row to the right).
-            Stroke::new(2.5, Color32::from_rgb(255, 196, 70))
+            Stroke::new(2.5, crate::theme::MAPPED)
         } else if active {
             Stroke::new(2.0, accent())
         } else if resp.hovered() || resp.dnd_hover_payload::<MediaDrag>().is_some() || resp.dnd_hover_payload::<super::SourceDrag>().is_some() || resp.dnd_hover_payload::<crate::explorer::PaletteDrag>().is_some_and(|d| takes(&d)) {

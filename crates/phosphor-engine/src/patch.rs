@@ -1017,19 +1017,34 @@ impl Patch {
         p.connect(g, mix, 0);
         p.connect(last, mix, 1);
         p.connect(mix, out, 0);
+        p.tidy_default();
         p
     }
 
     /// Ready-made patches to start from (name, what it does, the patch): the Shader Editor's + Patch menu.
     pub fn examples() -> Vec<(&'static str, Patch)> {
-        vec![
+        let tidied = |mut p: Patch| {
+            p.tidy_default();
+            p
+        };
+        let list = vec![
             ("The picture through a kaleidoscope and a glow, mixed with its own last frame (trails)", Patch::kaleido_glow_trails()),
             ("Edges of the picture, glowing, their colours turning, over the picture", Patch::neon_edges()),
             ("Strips shoved sideways, red and blue apart, scanlines and dark corners: a broken TV", Patch::glitch_tv()),
             ("A generator: plasma wrapped into a tunnel, echoing its last frame", Patch::tunnel_trails()),
             ("A generator: pulsing dots streaked from the centre, colours cycling", Patch::pulse_dots()),
             ("Numbers at work: an LFO breathes the hue, a Ramp makes the pixels bigger across the picture, a Pulse strobes", Patch::numbers_at_work()),
-        ]
+        ];
+        list.into_iter().map(|(about, p)| (about, tidied(p))).collect()
+    }
+
+    /// `tidy` with the canvas's own box sizes (title 22, a picture input 18, a setting 22, a note 64, columns 260 apart).
+    pub fn tidy_default(&mut self) {
+        self.tidy(260.0, |n| match block(&n.block) {
+            Some(b) if b.id == "note" => 22.0 + 64.0 + 8.0,
+            Some(b) => 22.0 + b.inputs.len() as f32 * 18.0 + b.settings.len() as f32 * 22.0 + 8.0,
+            None => 60.0,
+        });
     }
 
     fn neon_edges() -> Patch {
@@ -1468,6 +1483,19 @@ mod tests {
         p.disconnect(hue, 2);
         assert!(p.connect(b, hue, 2));
         check(&p);
+    }
+
+    #[test]
+    fn example_blocks_dont_overlap() {
+        let height = |n: &Node| block(&n.block).map_or(60.0, |b| 22.0 + b.inputs.len() as f32 * 18.0 + b.settings.len() as f32 * 22.0 + 8.0);
+        for (_, p) in Patch::examples() {
+            for a in &p.nodes {
+                for b in p.nodes.iter().filter(|b| b.id > a.id) {
+                    let apart = (a.pos[0] - b.pos[0]).abs() >= 190.0 || (a.pos[1] + height(a) <= b.pos[1]) || (b.pos[1] + height(b) <= a.pos[1]);
+                    assert!(apart, "{}: {} and {} overlap", p.name, a.block, b.block);
+                }
+            }
+        }
     }
 
     #[test]

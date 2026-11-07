@@ -6,7 +6,7 @@ use super::*;
 pub(crate) fn thumbnail(ui: &mut egui::Ui, tex: Option<egui::TextureId>, size: egui::Vec2, enabled: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let p = ui.painter();
-    p.rect_filled(rect, 4.0, Color32::from_gray(10));
+    p.rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
     match tex {
         Some(t) => {
             let tint = if enabled { Color32::WHITE } else { Color32::from_white_alpha(80) };
@@ -16,7 +16,7 @@ pub(crate) fn thumbnail(ui: &mut egui::Ui, tex: Option<egui::TextureId>, size: e
             p.text(rect.center(), egui::Align2::CENTER_CENTER, "no source", egui::FontId::proportional(11.0), Color32::GRAY);
         }
     }
-    let stroke = if resp.hovered() { Stroke::new(1.0, accent()) } else { Stroke::new(1.0, Color32::from_gray(52)) };
+    let stroke = if resp.hovered() { Stroke::new(1.0, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
     p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
     resp
 }
@@ -63,7 +63,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
         });
     });
     let rect = ui.available_rect_before_wrap();
-    ui.painter().rect_filled(rect, 4.0, Color32::from_gray(6));
+    ui.painter().rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
     let frame = fit_rect(rect.shrink(6.0), st.aspect());
     match st.texture {
         Some(tex) => paint_texture(ui.painter(), tex, frame),

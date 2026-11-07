@@ -256,7 +256,7 @@ pub(crate) fn menu_item(ui: &mut egui::Ui, enabled: bool, text: impl Into<String
 pub(crate) fn big_action_button(ui: &mut egui::Ui, act: Act, text: impl Into<String>) -> egui::Response {
     let fill = match act {
         Act::Go => accent(),
-        Act::Record => Color32::from_rgb(225, 70, 60),
+        Act::Record => crate::theme::RECORD,
     };
     let ink = if act == Act::Go { Color32::from_gray(12) } else { Color32::WHITE };
     let text: String = text.into();
@@ -596,7 +596,7 @@ pub(crate) fn action_button_sized(ui: &mut egui::Ui, act: Act, text: impl Into<S
 fn action_button_named(ui: &mut egui::Ui, act: Act, text: impl Into<String>, size: egui::Vec2, name: Option<&str>) -> egui::Response {
     let fill = match act {
         Act::Go => accent(),
-        Act::Record => Color32::from_rgb(225, 70, 60),
+        Act::Record => crate::theme::RECORD,
     };
     let ink = if act == Act::Go { Color32::from_gray(12) } else { Color32::WHITE };
     let text: String = text.into();

@@ -99,8 +99,8 @@ pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
     canvases(&mut part(ui, center), st);
     properties(&mut part(ui, right), st);
     let p = ui.painter();
-    p.vline(left.right() + 4.0, full.y_range(), Stroke::new(1.0, Color32::from_gray(40)));
-    p.vline(right.left() - 4.0, full.y_range(), Stroke::new(1.0, Color32::from_gray(40)));
+    p.vline(left.right() + 4.0, full.y_range(), Stroke::new(1.0, crate::theme::line()));
+    p.vline(right.left() - 4.0, full.y_range(), Stroke::new(1.0, crate::theme::line()));
     ui.allocate_rect(full, Sense::hover());
 }
 
@@ -419,7 +419,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         let mut child = ui.new_child(UiBuilder::new().max_rect(area));
         child.set_clip_rect(area.intersect(ui.clip_rect()));
         let p = child.painter().clone();
-        p.rect_filled(area, 4.0, Color32::from_gray(14));
+        p.rect_filled(area, 4.0, crate::theme::PICTURE_BG);
         p.rect_filled(frame, 0.0, Color32::BLACK);
         if let Some(t) = tex {
             paint_texture(&p, t, frame);
@@ -438,7 +438,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
                 p.hline(frame.x_range(), frame.top() + f * frame.height(), stroke);
             }
         }
-        p.rect_stroke(frame, 0.0, Stroke::new(1.0, Color32::from_gray(80)), StrokeKind::Outside);
+        p.rect_stroke(frame, 0.0, Stroke::new(1.0, crate::theme::line()), StrokeKind::Outside);
         if vs.drawing || vs.drawing_line {
             let to_out = |p: egui::Pos2| [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
             let mut stroke: Vec<[f32; 2]> = ui.ctx().data(|d| d.get_temp(stroke_id)).unwrap_or_default();
@@ -750,17 +750,17 @@ fn input_view(
     let tex = sel_source.and_then(|id| layer_textures.get(&id).map(|(t, _)| *t)).or(program);
     let frame = fit_rect(area.shrink(12.0), aspect);
     let p = ui.painter_at(area);
-    p.rect_filled(area, 4.0, Color32::from_gray(14));
+    p.rect_filled(area, 4.0, crate::theme::PICTURE_BG);
     p.rect_filled(frame, 0.0, Color32::BLACK);
     if let Some(t) = tex {
         paint_texture(&p, t, frame);
     }
-    p.text(area.left_top() + egui::vec2(8.0, 6.0), egui::Align2::LEFT_TOP, "Input: the picture slices take their part from", egui::FontId::proportional(11.0), Color32::from_gray(150));
+    p.text(area.left_top() + egui::vec2(8.0, 6.0), egui::Align2::LEFT_TOP, "Input: the picture slices take their part from", egui::FontId::proportional(11.0), crate::theme::ON_PICTURE.gamma_multiply(0.65));
     let to_screen = |x: f32, y: f32| egui::pos2(frame.left() + x * frame.width(), frame.top() + y * frame.height());
     for s in o.mapping.surfaces.iter_mut().filter(|s| s.layer == sel_source) {
         let is_sel = Some(s.id) == selected;
         let r = egui::Rect::from_min_max(to_screen(s.input[0], s.input[1]), to_screen(s.input[0] + s.input[2], s.input[1] + s.input[3]));
-        let color = if is_sel { accent() } else { Color32::from_gray(140) };
+        let color = if is_sel { accent() } else { crate::theme::ON_PICTURE.gamma_multiply(0.65) };
         p.rect_stroke(r, 0.0, Stroke::new(if is_sel { 2.0 } else { 1.0 }, color), StrokeKind::Middle);
         p.text(r.left_top() + egui::vec2(4.0, 2.0), egui::Align2::LEFT_TOP, &s.name, egui::FontId::proportional(11.0), color);
         if !is_sel {

@@ -71,8 +71,8 @@ pub(crate) fn tracking_section(ui: &mut egui::Ui, st: &mut State) {
         let [fx, fy, _, ff] = phosphor_engine::FACE;
         let [hx, hy, _, hf] = phosphor_engine::HAND;
         let [bx, by, _, _, bf] = phosphor_engine::BODY;
-        dot(fx, fy, ff, Color32::from_rgb(255, 210, 80));
-        dot(hx, hy, hf, Color32::from_rgb(90, 220, 255));
-        dot(bx, by, bf, Color32::from_rgb(170, 255, 120));
+        dot(fx, fy, ff, crate::theme::TRACK_FACE);
+        dot(hx, hy, hf, crate::theme::TRACK_HAND);
+        dot(bx, by, bf, crate::theme::TRACK_BODY);
     });
 }

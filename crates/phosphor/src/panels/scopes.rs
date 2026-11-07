@@ -31,7 +31,7 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
     };
     hint(ui, hint_text);
     let rect = ui.available_rect_before_wrap();
-    ui.painter().rect_filled(rect, 4.0, Color32::from_gray(4));
+    ui.painter().rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
     match st.scopes.texture(ui.ctx()) {
         Some(t) => paint_texture(ui.painter(), t.id(), fit_rect(rect.shrink(4.0), 256.0 / 160.0)),
         None => {

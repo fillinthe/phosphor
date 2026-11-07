@@ -546,7 +546,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
     }
     let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(w, h));
     let p = ui.painter();
-    p.rect_filled(thumb_rect, 4.0, Color32::from_gray(14));
+    p.rect_filled(thumb_rect, 4.0, crate::theme::PICTURE_BG);
     match (item.thumb.starts_with("https://")).then(|| thumbs.get(&item.thumb)).flatten() {
         Some(tex) => paint_texture(p, tex, fit_rect(thumb_rect.shrink(1.0), thumbs.aspect(&item.thumb).unwrap_or(16.0 / 9.0))),
         None => {
@@ -554,7 +554,7 @@ fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumb
             p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(22.0), Color32::GRAY);
         }
     }
-    let stroke = if local.is_some() { Stroke::new(2.0, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, Color32::from_gray(50)) };
+    let stroke = if local.is_some() { Stroke::new(2.0, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
     // Kind, and a tick once it's in the media bin.
     let corner = thumb_rect.left_top() + egui::vec2(4.0, 3.0);

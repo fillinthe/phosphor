@@ -309,8 +309,8 @@ impl egui_dock::TabViewer for Viewer<'_> {
             Tab::MyPanel(_) => Some(crate::theme::Hue::Control),
             _ => tab.hue(),
         };
-        let full = hue.map_or(Color32::from_gray(230), |h| h.color());
-        let dim = hue.map_or(Color32::from_gray(140), |h| h.color().gamma_multiply(0.6));
+        let full = hue.map_or(crate::theme::ON_PICTURE, |h| h.color());
+        let dim = hue.map_or(crate::theme::faint(), |h| h.color().gamma_multiply(0.6));
         let mut style = global.clone();
         // No outline on the open tab (owner, 2026-11-04): the colour of the words says which one is open.
         for s in [&mut style.active, &mut style.active_with_kb_focus] {

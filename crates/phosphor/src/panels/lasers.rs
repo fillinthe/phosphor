@@ -50,7 +50,7 @@ fn safety_bar(ui: &mut egui::Ui, st: &mut State) {
             if crate::ui::steady_action_button(ui, Act::Record, label(icon::STOP, "Stop lasers"), &["Stop lasers", "Arm lasers"]).on_hover_text("Every laser goes dark now").clicked() {
                 l.armed = false;
             }
-            ui.colored_label(egui::Color32::from_rgb(255, 80, 60), RichText::new(format!("{} LASERS ON", icon::WARNING)).strong());
+            ui.colored_label(crate::theme::DANGER, RichText::new(format!("{} LASERS ON", icon::WARNING)).strong());
         } else if ui
             .add_enabled_ui(ready, |ui| crate::ui::steady_action_button(ui, Act::Record, label(icon::LIGHTNING, "Arm lasers"), &["Stop lasers", "Arm lasers"]))
             .inner
@@ -295,7 +295,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
     let side = ui.available_width().min(560.0).max(160.0);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click_and_drag());
     let p = ui.painter_at(rect);
-    p.rect_filled(rect, 0.0, egui::Color32::from_rgb(4, 4, 8));
+    p.rect_filled(rect, 0.0, crate::theme::PICTURE_BG);
     let to_screen = |x: f32, y: f32| rect.center() + egui::vec2(x, -y) * (side * 0.5);
     let from_screen = |q: egui::Pos2| ((q.x - rect.center().x) / (side * 0.5), -(q.y - rect.center().y) / (side * 0.5));
     if let Some((tex, aspect)) = onion {
@@ -304,7 +304,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         p.image(tex, egui::Rect::from_center_size(rect.center(), half * 2.0), egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), tint);
     }
     // Grid: centre lines and the scan area's edge.
-    let grid = egui::Stroke::new(1.0, egui::Color32::from_gray(28));
+    let grid = egui::Stroke::new(1.0, crate::theme::PICTURE_GRID);
     p.line_segment([to_screen(-1.0, 0.0), to_screen(1.0, 0.0)], grid);
     p.line_segment([to_screen(0.0, -1.0), to_screen(0.0, 1.0)], grid);
     // As the first projector showing this look draws it: its points a frame, and its safety floor (red).
@@ -313,8 +313,8 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
     let floor = projector.map_or(-1.0, |p| p.floor);
     if floor > -1.0 {
         let r = egui::Rect::from_two_pos(to_screen(-1.0, floor), to_screen(1.0, -1.0));
-        p.rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(255, 40, 30, 24));
-        p.line_segment([to_screen(-1.0, floor), to_screen(1.0, floor)], egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 60, 40)));
+        p.rect_filled(r, 0.0, crate::theme::danger_fill(0.1));
+        p.line_segment([to_screen(-1.0, floor), to_screen(1.0, floor)], egui::Stroke::new(1.0, crate::theme::DANGER));
     }
     // (A projector showing the test pattern: the pattern.)
     let paths = if projector.is_some_and(|p| p.test_pattern) { test_pattern() } else { look_paths(look, t, mods, inputs) };
@@ -327,7 +327,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         let (a, b) = (to_screen(w[0].x, w[0].y), to_screen(w[1].x, w[1].y));
         // Below the projector's floor the laser stays dark: shown grey.
         let cut = w[0].y.min(w[1].y) < floor;
-        let colour = if cut { egui::Color32::from_gray(70) } else { egui::Color32::from_rgb(c[0], c[1], c[2]) };
+        let colour = if cut { crate::theme::PICTURE_GRID } else { egui::Color32::from_rgb(c[0], c[1], c[2]) };
         if (a - b).length() < 0.5 {
             // A beam (the laser stays on one spot): a bright dot.
             p.circle_filled(a, 3.0, colour.gamma_multiply(0.35));
@@ -375,7 +375,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         for (i, u) in corners.iter_mut().enumerate() {
             let q = place(*u);
             let mut d = [0.0; 2];
-            crate::panels::mapping::point_handle(ui, egui::Id::new(("laser_drawing", s.id, i)), to_screen(q[0], q[1]), rect, egui::Color32::from_rgb(90, 220, 255), false, &mut d);
+            crate::panels::mapping::point_handle(ui, egui::Id::new(("laser_drawing", s.id, i)), to_screen(q[0], q[1]), rect, crate::theme::HANDLE, false, &mut d);
             if d != [0.0; 2] {
                 *u = unplace([(q[0] + d[0] * 2.0).clamp(-1.0, 1.0), (q[1] - d[1] * 2.0).clamp(-1.0, 1.0)]);
                 changed = true;
@@ -415,7 +415,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
     });
     let out = left_out(&paths, budget as usize);
     if out > 0 {
-        ui.colored_label(egui::Color32::from_rgb(255, 170, 80), format!("Too much for one frame: {out} short lines left out"))
+        ui.colored_label(crate::theme::WARN, format!("Too much for one frame: {out} short lines left out"))
             .on_hover_text("Fewer shapes or outlines, shorter words, or more points a second (if the laser takes them) draw everything");
     }
     ui.ctx().request_repaint();
@@ -487,7 +487,7 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
                 hint(ui, &name).on_hover_text(&s.file);
             });
             if let Some(e) = file_error(&s.file) {
-                ui.colored_label(egui::Color32::from_rgb(255, 120, 90), format!("Can't play it: {e}"));
+                ui.colored_label(crate::theme::WARN, format!("Can't play it: {e}"));
             }
         }
         LaserShapeKind::Trace => {
@@ -516,7 +516,7 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
                 crate::ui::toggle(ui, &mut s.picture_colors, "Its colours").on_hover_text("Lines take the picture's colours (off: this shape's colour)");
             });
             if let Some(e) = file_error(&s.image) {
-                ui.colored_label(egui::Color32::from_rgb(255, 120, 90), format!("Can't read it: {e}"));
+                ui.colored_label(crate::theme::WARN, format!("Can't read it: {e}"));
             }
             help(ui, "Outlines where the picture's brightness crosses the Level: bright shapes on dark work best (a silhouette, a logo, a camera with Remove background). An image traced here lines up with the same image as an onion skin.");
         }

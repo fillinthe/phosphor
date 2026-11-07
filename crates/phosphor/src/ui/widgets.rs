@@ -223,7 +223,7 @@ pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
             ui.label(RichText::new(format!("{} {n} receiving", icon::CHECK_CIRCLE)).small().color(accent()));
         }
         OutputStatus::Error(e) => {
-            ui.colored_label(Color32::from_rgb(255, 120, 90), e);
+            ui.colored_label(crate::theme::WARN, e);
         }
     }
 }
@@ -246,7 +246,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
     if let Some((lo, hi)) = region.as_mut() {
         if **lo > 0.0 || **hi < 1.0 {
             let r = egui::Rect::from_x_y_ranges(x_of(**lo)..=x_of(**hi), rect.y_range());
-            p.rect_filled(r, 0.0, Color32::from_rgba_unmultiplied(255, 196, 70, 40));
+            p.rect_filled(r, 0.0, crate::theme::mapped_fill(0.16));
         }
         for (i, v) in [&mut **lo, &mut **hi].into_iter().enumerate() {
             let x = x_of(*v);
@@ -257,7 +257,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
             {
                 *v = f_of(at.x);
             }
-            let color = if h.hovered() || h.dragged() { Color32::WHITE } else { Color32::from_rgb(255, 196, 70) };
+            let color = if h.hovered() || h.dragged() { Color32::WHITE } else { crate::theme::MAPPED };
             p.line_segment([egui::pos2(x, rect.top() - 2.0), egui::pos2(x, rect.bottom() + 2.0)], Stroke::new(2.0, color));
             let tip = if i == 0 { [egui::pos2(x, rect.top() - 2.0), egui::pos2(x + 6.0, rect.top() - 2.0), egui::pos2(x, rect.top() + 4.0)] } else { [egui::pos2(x, rect.top() - 2.0), egui::pos2(x - 6.0, rect.top() - 2.0), egui::pos2(x, rect.top() + 4.0)] };
             p.add(egui::Shape::convex_polygon(tip.to_vec(), color, Stroke::NONE));
@@ -424,7 +424,7 @@ pub(crate) fn history_graph(ui: &mut egui::Ui, size: egui::Vec2, values: &[f32],
     for (i, &bad) in marks.iter().enumerate().take(values.len()) {
         if bad {
             let r = egui::Rect::from_center_size(egui::pos2(x(i), rect.center().y), egui::vec2(step.max(2.0), rect.height()));
-            painter.rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(230, 70, 60, 110));
+            painter.rect_filled(r, 0.0, crate::theme::RECORD.gamma_multiply(0.43));
         }
     }
     let peak = values.iter().copied().fold(0.0f32, f32::max);

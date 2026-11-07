@@ -9,7 +9,7 @@ use egui_phosphor::regular as icon;
 use super::PhosphorApp;
 use crate::theme;
 
-const LIVE: Color32 = Color32::from_rgb(235, 80, 70);
+const LIVE: Color32 = crate::theme::RECORD;
 
 impl PhosphorApp {
     pub(crate) fn status_line(&mut self, ui: &mut egui::Ui) {
@@ -31,7 +31,7 @@ impl PhosphorApp {
                     .horizontal(|ui| {
                         ui.label(small(icon::PROJECTOR_SCREEN.to_string(), Color32::GRAY));
                         for (name, open) in &outs {
-                            let dot = if *open { theme::accent() } else { Color32::from_gray(90) };
+                            let dot = if *open { theme::accent() } else { crate::theme::faint() };
                             ui.label(small(format!("{} {name}", icon::CIRCLE), dot));
                         }
                     })

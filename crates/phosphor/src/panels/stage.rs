@@ -48,7 +48,7 @@ pub(crate) fn stage(ui: &mut egui::Ui, st: &mut State) {
             }
         }
         let r = child.interact(pic, child.id().with(("stage_pick", id)), Sense::click());
-        let border = if selected { accent() } else if r.hovered() { Color32::from_gray(140) } else { Color32::from_gray(50) };
+        let border = if selected { accent() } else if r.hovered() { crate::theme::faint() } else { crate::theme::line() };
         child.painter().rect_stroke(pic, 4.0, Stroke::new(if selected { 2.0 } else { 1.0 }, border), StrokeKind::Inside);
         if r.on_hover_text("Click: pick this output in the Mapping Studio").clicked() {
             pick = Some(id);
