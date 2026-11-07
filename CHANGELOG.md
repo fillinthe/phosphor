@@ -140,6 +140,7 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   a row of its own, in the clip row menu (MIDI notes, Plays on, Autopilot), the Network panel (Session, Phone /
   tablet remote, Audience play), the MIDI / OSC panel's Phone or tablet, Online's Start a show, Media's Follow an
   account, a controller's On the way in, the Mapping panel's slices selected, and a Control Surface widget's axis.
+  Same for the Mapping panel's Corners by number section and the cue Group menu (the (i) beside the name field).
 - Inspector, layer groups and comps: the help (i) sits at the end of the name row instead of on a row of its own;
   Blend and a comp's In the master are label rows like the other settings.
 - Inspector, movie layers: the Playback rows Section, Jump and Scratch (and a layer's Sound device and Plays on) are

@@ -207,8 +207,10 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     laser_menu(ui, cue, &projector_names, &look_names);
                     let group_title = if cue.group.is_empty() { "Group".to_string() } else { cue.group.clone() };
                     crate::ui::field_menu(ui, label(icon::FOLDER, &group_title), |ui| {
-                        help(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
-                        crate::ui::text_field(ui, &mut cue.group, "group name (empty = none)", Some(180.0));
+                        ui.horizontal(|ui| {
+                            crate::ui::text_field(ui, &mut cue.group, "group name (empty = none)", Some(180.0));
+                            help(ui, "Cues with the same group name, one after another, are a group (a song, a scene): it gets a heading and a Go button.");
+                        });
                         for g in &group_names {
                             if crate::ui::pick_item(ui, cue.group == *g, g).clicked() {
                                 cue.group.clone_from(g);
