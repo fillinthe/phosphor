@@ -966,6 +966,9 @@ pub struct Patch {
     pub generator: bool,
     pub nodes: Vec<Node>,
     pub wires: Vec<Wire>,
+    /// A block looked at while editing: the shader shows its picture instead of the Output's (None = the Output).
+    #[serde(default)]
+    pub look_at: Option<u32>,
 }
 
 /// The line that carries the patch inside its shader source.
@@ -974,7 +977,7 @@ const TAG: &str = "// @patch ";
 impl Patch {
     /// A new effect patch: Input wired straight to Output. A generator starts from Noise.
     pub fn new(name: &str, generator: bool) -> Patch {
-        let mut p = Patch { name: name.to_string(), generator, nodes: Vec::new(), wires: Vec::new() };
+        let mut p = Patch { name: name.to_string(), generator, nodes: Vec::new(), wires: Vec::new(), look_at: None };
         let from = p.add(if generator { "noise" } else { "input" }, [20.0, 40.0]);
         let to = p.add("output", [320.0, 40.0]);
         p.connect(from, to, 0);
@@ -1087,6 +1090,9 @@ impl Patch {
     pub fn remove(&mut self, id: u32) {
         self.nodes.retain(|n| n.id != id);
         crate::graph::remove(&mut self.wires, id);
+        if self.look_at == Some(id) {
+            self.look_at = None;
+        }
     }
 
     /// Wires `from`'s output into input `input` of `to` (replacing what was there). Refused (false) when it would
@@ -1167,8 +1173,14 @@ impl Patch {
         crate::graph::source_of(&self.wires, to, input)
     }
 
+    /// The block whose picture the shader shows: the one looked at (a picture block), else Output.
     fn output(&self) -> Option<&Node> {
-        self.nodes.iter().find(|n| n.block == "output")
+        self.look_at.and_then(|id| self.node(id)).filter(|n| block(&n.block).is_some_and(|b| !b.number)).or_else(|| self.nodes.iter().find(|n| n.block == "output"))
+    }
+
+    /// Looks at a picture block (its picture becomes the shader's while editing), or None for the Output again.
+    pub fn set_look_at(&mut self, id: Option<u32>) {
+        self.look_at = id.filter(|id| self.node(*id).and_then(|n| block(&n.block)).is_some_and(|b| !b.number && b.id != "output"));
     }
 
     /// Blocks that reach the output, in patch order: these get the shader's parameters.
@@ -1488,6 +1500,25 @@ mod tests {
         let old = serde_json::json!({ "id": 9, "block": "invert", "pos": [1.0, 2.0], "values": [1.0] });
         let n: Node = serde_json::from_value(old).unwrap();
         assert!(!n.bypassed);
+    }
+
+    #[test]
+    fn looking_at_a_block_shows_its_picture_instead_of_the_output() {
+        let mut p = Patch::kaleido_glow_trails();
+        let (k, g) = (p.nodes[2].id, p.nodes[3].id);
+        let all = crate::custom::parse_header(&check(&p)).unwrap().params.len();
+        p.set_look_at(Some(k));
+        let src = check(&p);
+        let h = crate::custom::parse_header(&src).unwrap();
+        assert!(src.contains(&format!("return n{k}(in.uv);")), "{src}");
+        assert!(h.params.len() < all, "only the blocks before the kaleidoscope take parameters");
+        assert!(!h.feedback, "Last frame isn't reached");
+        p.set_look_at(Some(p.nodes[4].id + 100));
+        assert_eq!(p.look_at, None, "an unknown block: the Output");
+        p.set_look_at(Some(g));
+        p.remove(g);
+        assert_eq!(p.look_at, None, "removing the block looked at goes back to the Output");
+        assert!(serde_json::from_str::<Patch>(r#"{"name":"old","generator":false,"nodes":[],"wires":[]}"#).is_ok(), "old saves have no look_at");
     }
 
     #[test]

@@ -109,15 +109,47 @@ impl Graph for Patch {
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool {
         let generator = self.generator;
         let mut added = false;
-        if let Some(b) = block_menu(ui, generator, false) {
+        // Type to find a block by name or what it does; Enter adds the first match.
+        let key = egui::Id::new("patch_block_search");
+        let mut query: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
+        let field = crate::ui::text_field(ui, &mut query, "Find a block…", Some(200.0));
+        if ui.memory(|m| m.focused().is_none()) {
+            field.request_focus();
+        }
+        let q = query.trim().to_lowercase();
+        if !q.is_empty() {
+            let found: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.id != "output" && (b.id != "input" || !generator) && (b.name.to_lowercase().contains(&q) || b.about.to_lowercase().contains(&q))).take(12).collect();
+            let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            for (i, b) in found.iter().enumerate() {
+                if crate::ui::command(ui, format!("{} · {}", b.name, b.group.name())).on_hover_text(b.about).clicked() || (enter && i == 0) {
+                    self.add(b.id, at);
+                    added = true;
+                    query.clear();
+                    ui.close();
+                }
+            }
+            if found.is_empty() {
+                hint(ui, "No block matches");
+            }
+        } else if let Some(b) = block_menu(ui, generator, false) {
             self.add(b, at);
             added = true;
         }
+        ui.ctx().data_mut(|d| d.insert_temp(key, query));
         if !self.nodes.iter().any(|n| n.block == "output") && crate::ui::command(ui, "Output").clicked() {
             self.add("output", [400.0, 40.0]);
             added = true;
         }
         added
+    }
+    fn lookable(&self, id: u32) -> bool {
+        self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.id != "output" && !b.number)
+    }
+    fn looked_at(&self, id: u32) -> bool {
+        self.look_at == Some(id)
+    }
+    fn look_at(&mut self, id: Option<u32>) {
+        Patch::set_look_at(self, id);
     }
     fn bypassable(&self, id: u32) -> bool {
         self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.id != "output" && !b.inputs.is_empty() && !b.number)

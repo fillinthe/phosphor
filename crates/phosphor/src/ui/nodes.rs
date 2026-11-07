@@ -9,7 +9,7 @@ use eframe::egui::{self, Color32, Sense, Stroke, StrokeKind};
 use egui_phosphor::regular as icon;
 use phosphor_engine::PortKind;
 
-use super::{accent, command, danger_button, label};
+use super::{RightMenu, accent, command, danger_button, label};
 
 pub(crate) const NODE_W: f32 = 190.0;
 pub(crate) const TITLE_H: f32 = 22.0;
@@ -71,6 +71,14 @@ pub(crate) trait Graph {
     fn tidy(&mut self) -> bool {
         false
     }
+    /// Whether the box can be looked at (the graph shows its picture instead of its output's while editing).
+    fn lookable(&self, _id: u32) -> bool {
+        false
+    }
+    fn looked_at(&self, _id: u32) -> bool {
+        false
+    }
+    fn look_at(&mut self, _id: Option<u32>) {}
     /// How many of the last `inputs` sit beside the settings rows (one a row, top to bottom) instead of in input
     /// rows of their own: a patch's settings, each a number input.
     fn body_ports(&self, _id: u32) -> usize {
@@ -270,6 +278,9 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         if all {
             selected = ids.clone();
         }
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            selected.clear();
+        }
     }
     for (n, r, ins) in &rects {
         let (n, r, ins) = (*n, *r, *ins);
@@ -282,7 +293,12 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         let picked = selected.contains(&n);
         painter.rect_stroke(r, 5.0, Stroke::new(if picked { 2.0 } else { 1.0 }, if picked { accent() } else { Color32::from_gray(60) }), StrokeKind::Inside);
         let off = graph.bypassed(n);
-        let title_text = if off { format!("{} · off", graph.title(n)) } else { graph.title(n) };
+        let watched = graph.looked_at(n);
+        let title_text = match (off, watched) {
+            (true, _) => format!("{} · off", graph.title(n)),
+            (false, true) => format!("{} {}", icon::EYE, graph.title(n)),
+            (false, false) => graph.title(n),
+        };
         painter.text(title.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, title_text, egui::FontId::proportional(13.0), if off { Color32::from_gray(150) } else { Color32::WHITE });
         let t = ui.interact(title, id.with(("title", n)), Sense::click_and_drag()).on_hover_text(graph.about(n));
         if t.clicked() && shift {
@@ -314,6 +330,14 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             }
             if graph.extra_menu(ui, n) {
                 changed = true;
+            }
+            if graph.lookable(n) {
+                let text = if watched { label(icon::EYE_SLASH, "Show the Output again") } else { label(icon::EYE, "Look at this box") };
+                if command(ui, text).on_hover_text("While editing, the picture shows what this box makes (the Output's wiring is left as it is)").clicked() {
+                    graph.look_at(if watched { None } else { Some(n) });
+                    changed = true;
+                    ui.close();
+                }
             }
             if graph.bypassable(n) {
                 let text = if off { label(icon::POWER, "Turn on") } else { label(icon::POWER, "Switch off") };
@@ -421,7 +445,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         pan = room.center() - screen_area.min - all.center().to_vec2() * zoom;
         ui.ctx().request_repaint();
     }
-    bg.context_menu(|ui| {
+    bg.right_field_menu(|ui| {
         let on_wire: Option<(u32, usize)> = ui.ctx().data(|d| d.get_temp(id.with("wire_at"))).flatten();
         if let Some((to, input)) = on_wire {
             super::heading(ui, "Put a box on this wire");

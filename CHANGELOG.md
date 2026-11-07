@@ -108,6 +108,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Select several blocks by dragging a band over the empty canvas (Shift keeps what was selected); Delete or
   Backspace removes them, Cmd+D duplicates them, Cmd+A selects every block. Middle-drag or scroll moves around.
 - Tidy (in the zoom bar) lays the blocks out left to right, sources first, nothing overlapping, and fits them in view.
+- Find a block: the add menu (right-click the canvas) starts with a search box; type a word from its name or what it
+  does, Enter adds the first match.
+- Look at any block: right-click › Look at this box, and the picture shows what that block makes (an eye in its
+  title and a "Showing …" button above the canvas) until you show the Output again. Escape clears the selection.
 - Fourteen new blocks: Plasma and Dots (pictures); Levels, Vignette, Scanlines, Colour split, Colour cycle and
   Strobe (colour); Polar, Shake and Glitch slices (warp); Zoom blur; Wipe and Chroma key (mix two).
 - Numbers: a new group of blocks that make a number instead of a picture: Value (one knob for several settings),

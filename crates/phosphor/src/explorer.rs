@@ -999,6 +999,12 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
     ui.horizontal(|ui| {
         crate::ui::heading(ui, if patch.generator { "Generator patch" } else { "Effect patch" });
         changed |= crate::ui::text_field(ui, &mut patch.name, "Name", Some(160.0)).changed();
+        if let Some(name) = patch.look_at.and_then(|id| patch.node(id)).and_then(|n| phosphor_engine::patch::block(&n.block)).map(|b| b.name) {
+            if crate::ui::small_command(ui, label(icon::EYE, &format!("Showing {name}"))).on_hover_text("The picture shows this block, not the Output: click to show the Output again").clicked() {
+                patch.set_look_at(None);
+                changed = true;
+            }
+        }
         crate::ui::toggle(ui, &mut show_code, label(icon::CODE, "Code")).on_hover_text("The shader these blocks make");
         if crate::ui::command(ui, label(icon::CODE, "Turn into code")).on_hover_text("Keep editing it as code from here on (the blocks are dropped)").clicked() {
             to_code = true;
