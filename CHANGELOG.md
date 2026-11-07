@@ -99,6 +99,16 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - The tab of the panel you're in has a soft wash of its colour under the words instead of a solid fill, and open
   tabs no longer have an outline. Rolling over a closed tab lights it with a wash of its colour.
 
+**Patches (node editor)**
+- Switch a block off: right-click › Switch off. Its first input passes straight through, as if the block weren't
+  there (its title reads "· off"); Turn on brings it back with its settings. A switched-off block takes no
+  parameters.
+- Put a block on a wire: right-click a wire (it lights up under the pointer) and pick a block; it lands between the
+  two, wired in. Unplug is there too.
+- Select several blocks by dragging a band over the empty canvas (Shift keeps what was selected); Delete or
+  Backspace removes them, Cmd+D duplicates them, Cmd+A selects every block. Middle-drag or scroll moves around.
+- Tidy (in the zoom bar) lays the blocks out left to right, sources first, nothing overlapping, and fits them in view.
+
 **Interface**
 - Phosphor is now called **Phosphor VJ** (menu bar, window title, installers). Your projects, settings, mappings and
   permissions carry on as before, and other apps still find its Syphon, Spout and NDI picture as "Phosphor".

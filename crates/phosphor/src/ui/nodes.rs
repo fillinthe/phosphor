@@ -55,6 +55,39 @@ pub(crate) trait Graph {
     }
     /// The box's title was double-clicked (a box of boxes opens).
     fn open(&mut self, _id: u32) {}
+    /// Whether the box can be switched off (its first input passing through).
+    fn bypassable(&self, _id: u32) -> bool {
+        false
+    }
+    fn bypassed(&self, _id: u32) -> bool {
+        false
+    }
+    fn set_bypassed(&mut self, _id: u32, _off: bool) {}
+    /// The right-click menu of a wire: entries that put a new box on it (`to`'s input `input`). True when one was.
+    fn insert_menu(&mut self, _ui: &mut egui::Ui, _to: u32, _input: usize) -> bool {
+        false
+    }
+    /// Lays the boxes out (the toolbar's Tidy). True when it did.
+    fn tidy(&mut self) -> bool {
+        false
+    }
+}
+
+/// How far point `p` is from the wire drawn from `a` to `b` (sampled along the curve).
+fn wire_distance(a: egui::Pos2, b: egui::Pos2, p: egui::Pos2) -> f32 {
+    let bend = ((b.x - a.x).abs() * 0.5).max(40.0);
+    let (c1, c2) = (a + egui::vec2(bend, 0.0), b - egui::vec2(bend, 0.0));
+    (0..=24)
+        .map(|k| {
+            let t = k as f32 / 24.0;
+            let s = 1.0 - t;
+            let q = egui::pos2(
+                s * s * s * a.x + 3.0 * s * s * t * c1.x + 3.0 * s * t * t * c2.x + t * t * t * b.x,
+                s * s * s * a.y + 3.0 * s * s * t * c1.y + 3.0 * s * t * t * c2.y + t * t * t * b.y,
+            );
+            q.distance(p)
+        })
+        .fold(f32::MAX, f32::min)
 }
 
 /// A wire being dragged out of box `from`'s output.
@@ -95,7 +128,6 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     let mut changed = false;
 
     let area = ui.available_rect_before_wrap();
-    let bg = ui.interact(area, id.with("bg"), Sense::click_and_drag());
     // Zoom: pinch or Cmd-scroll over the canvas, round the pointer; the toolbar's −, + round the middle.
     let mut zoom_by = ui.input(|i| i.zoom_delta());
     let mut zoom_at = ui.input(|i| i.pointer.latest_pos()).filter(|p| area.contains(*p));
@@ -128,20 +160,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         y += step;
     }
 
-    // Moving around: middle-drag, or drag the empty canvas, or scroll.
-    if bg.dragged_by(egui::PointerButton::Middle) || bg.dragged_by(egui::PointerButton::Primary) {
-        pan += bg.drag_delta();
-    }
-    // Several boxes at once: Shift-click their titles (a click on the canvas lets them all go).
-    let mut selected: Vec<u32> = ui.ctx().data(|d| d.get_temp(id.with("sel"))).unwrap_or_default();
-    let shift = ui.input(|i| i.modifiers.shift);
-    if bg.clicked() {
-        selected.clear();
-    }
     let mut wrap_all = false;
-    if bg.hovered() {
-        pan += ui.input(|i| i.smooth_scroll_delta);
-    }
     // The boxes: on their own layer over the canvas, scaled by the zoom. From here on, positions are the graph's own
     // (a box at its `pos`), and `area` is the part of them in view.
     let to_screen = egui::emath::TSTransform::new(area.min.to_vec2() + pan, zoom);
@@ -152,6 +171,23 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     let area = to_screen.inverse() * screen_area;
     let mut boxes = ui.new_child(egui::UiBuilder::new().layer_id(layer).max_rect(area));
     boxes.set_clip_rect(area);
+    // The empty canvas, on the boxes' layer (under them: they're registered after it, so they win the pointer):
+    // click lets the selection go, drag a band to select, middle-drag or scroll to move around, right-click to add.
+    let bg = boxes.interact(area, id.with("bg"), Sense::click_and_drag());
+    if bg.dragged_by(egui::PointerButton::Middle) {
+        pan += bg.drag_delta() * zoom;
+    }
+    if bg.hovered() {
+        pan += ui.input(|i| i.smooth_scroll_delta);
+    }
+    // Several boxes at once: Shift-click their titles, or drag a band over them on the empty canvas (a click on
+    // the canvas lets them all go). The band is drawn on the screen layer (in screen points).
+    let mut selected: Vec<u32> = ui.ctx().data(|d| d.get_temp(id.with("sel"))).unwrap_or_default();
+    let shift = ui.input(|i| i.modifiers.shift);
+    if bg.clicked() {
+        selected.clear();
+    }
+    let band = super::rubber_band(ui, &bg, id.with("band"));
     let ui = &mut boxes;
     let painter = ui.painter_at(area);
     let at = |p: [f32; 2]| egui::pos2(p[0], p[1]);
@@ -177,15 +213,55 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
     }
     let out_pos = |id: u32| outputs.iter().find(|(n, ..)| *n == id).map(|(_, p, _)| *p);
+    let pointer = ui.input(|i| i.pointer.interact_pos()).map(|p| to_screen.inverse() * p);
+    // The wire under the pointer (its box and input), lit; right-click it for its menu.
+    let mut wire_hit: Option<(u32, usize)> = None;
+    let mut wires: Vec<(u32, usize, egui::Pos2, egui::Pos2, PortKind)> = Vec::new();
     for (to, i, p, kind) in &inputs {
         if let Some(a) = graph.source_of(*to, *i).and_then(out_pos) {
-            painter.add(wire_shape(a, *p, port_colour(*kind, false).gamma_multiply(0.75)));
+            wires.push((*to, *i, a, *p, *kind));
         }
     }
-
+    if drag.is_none()
+        && let Some(p) = pointer
+        && rects.iter().all(|(_, r, _)| !r.contains(p))
+    {
+        wire_hit = wires.iter().filter(|(_, _, a, b, _)| wire_distance(*a, *b, p) < 6.0).map(|(to, i, ..)| (*to, *i)).next();
+    }
+    for (to, i, a, b, kind) in &wires {
+        let lit = wire_hit == Some((*to, *i));
+        painter.add(wire_shape(*a, *b, if lit { accent() } else { port_colour(*kind, false).gamma_multiply(0.75) }));
+    }
+    // A band let go: select what it touched (Shift keeps what was selected).
+    if let Some(band) = band {
+        let band = to_screen.inverse() * band;
+        if !shift {
+            selected.clear();
+        }
+        for (n, r, _) in &rects {
+            if r.intersects(band) && !selected.contains(n) {
+                selected.push(*n);
+            }
+        }
+    }
+    // Keys, while the pointer is over the canvas: Delete / Backspace removes the selection, Cmd+D duplicates it,
+    // Cmd+A selects every box.
     let mut remove: Option<u32> = None;
     let mut duplicate: Option<u32> = None;
-    let pointer = ui.input(|i| i.pointer.interact_pos()).map(|p| to_screen.inverse() * p);
+    let mut remove_many: Vec<u32> = Vec::new();
+    let mut duplicate_many: Vec<u32> = Vec::new();
+    if bg.hovered() && !ui.ctx().egui_wants_keyboard_input() {
+        let (del, dup, all) = ui.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace), i.modifiers.command && i.key_pressed(egui::Key::D), i.modifiers.command && i.key_pressed(egui::Key::A)));
+        if del {
+            remove_many = selected.iter().copied().filter(|n| graph.removable(*n)).collect();
+        }
+        if dup {
+            duplicate_many = selected.clone();
+        }
+        if all {
+            selected = ids.clone();
+        }
+    }
     for (n, r, ins) in &rects {
         let (n, r, ins) = (*n, *r, *ins);
         if !r.intersects(area) {
@@ -196,7 +272,9 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         painter.rect_filled(title, egui::CornerRadius { nw: 5, ne: 5, sw: 0, se: 0 }, graph.colour(n).gamma_multiply(0.55));
         let picked = selected.contains(&n);
         painter.rect_stroke(r, 5.0, Stroke::new(if picked { 2.0 } else { 1.0 }, if picked { accent() } else { Color32::from_gray(60) }), StrokeKind::Inside);
-        painter.text(title.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, graph.title(n), egui::FontId::proportional(13.0), Color32::WHITE);
+        let off = graph.bypassed(n);
+        let title_text = if off { format!("{} · off", graph.title(n)) } else { graph.title(n) };
+        painter.text(title.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, title_text, egui::FontId::proportional(13.0), if off { Color32::from_gray(150) } else { Color32::WHITE });
         let t = ui.interact(title, id.with(("title", n)), Sense::click_and_drag()).on_hover_text(graph.about(n));
         if t.clicked() && shift {
             if picked {
@@ -227,6 +305,14 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             }
             if graph.extra_menu(ui, n) {
                 changed = true;
+            }
+            if graph.bypassable(n) {
+                let text = if off { label(icon::POWER, "Turn on") } else { label(icon::POWER, "Switch off") };
+                if command(ui, text).on_hover_text("Off: its first input passes straight through, as if the box weren't there").clicked() {
+                    graph.set_bypassed(n, !off);
+                    changed = true;
+                    ui.close();
+                }
             }
             if command(ui, label(icon::COPY, "Duplicate")).clicked() {
                 duplicate = Some(n);
@@ -304,10 +390,17 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
     }
 
-    // Right-click the empty canvas: add a box where you clicked.
+    // Right-click the empty canvas: add a box where you clicked (or, on a wire, put a box on that wire).
     if bg.secondary_clicked() {
         let p = pointer.unwrap_or(area.center());
-        ui.ctx().data_mut(|d| d.insert_temp(id.with("add_at"), [p.x, p.y]));
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(id.with("add_at"), [p.x, p.y]);
+            d.insert_temp(id.with("wire_at"), wire_hit);
+        });
+    }
+    if ui.ctx().data_mut(|d| d.remove_temp::<bool>(id.with("tidy"))).is_some() && graph.tidy() {
+        changed = true;
+        ui.ctx().data_mut(|d| d.insert_temp(id.with("fit"), true));
     }
     // Fit (the toolbar asked, or a bench with PHOSPHOR_CANVAS_FIT): every box in view, no bigger than full size.
     let bench_fit = std::env::var_os("PHOSPHOR_CANVAS_FIT").is_some() && ui.ctx().cumulative_pass_nr() < 120;
@@ -320,11 +413,26 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         ui.ctx().request_repaint();
     }
     bg.context_menu(|ui| {
-        super::heading(ui, "Add a box");
-        let at: [f32; 2] = ui.ctx().data(|d| d.get_temp(id.with("add_at"))).unwrap_or([40.0, 40.0]);
-        if graph.add_menu(ui, at) {
-            changed = true;
-            ui.close();
+        let on_wire: Option<(u32, usize)> = ui.ctx().data(|d| d.get_temp(id.with("wire_at"))).flatten();
+        if let Some((to, input)) = on_wire {
+            super::heading(ui, "Put a box on this wire");
+            if graph.insert_menu(ui, to, input) {
+                changed = true;
+                ui.close();
+            }
+            ui.separator();
+            if danger_button(ui, label(icon::SCISSORS, "Unplug")).clicked() {
+                graph.disconnect(to, input);
+                changed = true;
+                ui.close();
+            }
+        } else {
+            super::heading(ui, "Add a box");
+            let at: [f32; 2] = ui.ctx().data(|d| d.get_temp(id.with("add_at"))).unwrap_or([40.0, 40.0]);
+            if graph.add_menu(ui, at) {
+                changed = true;
+                ui.close();
+            }
         }
     });
 
@@ -337,8 +445,17 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         graph.duplicate(d);
         changed = true;
     }
+    for d in duplicate_many {
+        graph.duplicate(d);
+        changed = true;
+    }
     if let Some(r) = remove {
         graph.remove(r);
+        changed = true;
+    }
+    for r in remove_many {
+        graph.remove(r);
+        selected.retain(|s| *s != r);
         changed = true;
     }
     ui.ctx().data_mut(|d| {
@@ -371,6 +488,9 @@ pub(crate) fn zoom_controls(ui: &mut egui::Ui, key: &str) {
     }
     if super::small_command(ui, label(icon::CORNERS_OUT, "Fit")).on_hover_text("Every box in view").clicked() {
         ui.ctx().data_mut(|d| d.insert_temp(id.with("fit"), true));
+    }
+    if super::small_command(ui, label(icon::BROOM, "Tidy")).on_hover_text("Lay the boxes out left to right, sources first, nothing overlapping").clicked() {
+        ui.ctx().data_mut(|d| d.insert_temp(id.with("tidy"), true));
     }
 }
 

@@ -4,9 +4,7 @@
 use phosphor_engine::patch::{self, BLOCKS, Group, Patch};
 
 use super::*;
-use crate::ui::nodes::{Graph, node_canvas};
-#[cfg(test)]
-use crate::ui::nodes::{INPUT_H, NODE_W, TITLE_H};
+use crate::ui::nodes::{Graph, INPUT_H, NODE_W, TITLE_H, node_canvas};
 
 const SETTING_H: f32 = 22.0;
 
@@ -93,16 +91,9 @@ impl Graph for Patch {
     fn add_menu(&mut self, ui: &mut egui::Ui, at: [f32; 2]) -> bool {
         let generator = self.generator;
         let mut added = false;
-        for g in Group::ALL.into_iter().filter(|g| *g != Group::Output) {
-            ui.menu_button(g.name(), |ui| {
-                for b in BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator)) {
-                    if crate::ui::command(ui, b.name).on_hover_text(b.about).clicked() {
-                        self.add(b.id, at);
-                        added = true;
-                        ui.close();
-                    }
-                }
-            });
+        if let Some(b) = block_menu(ui, generator, false) {
+            self.add(b, at);
+            added = true;
         }
         if !self.nodes.iter().any(|n| n.block == "output") && crate::ui::command(ui, "Output").clicked() {
             self.add("output", [400.0, 40.0]);
@@ -110,6 +101,50 @@ impl Graph for Patch {
         }
         added
     }
+    fn bypassable(&self, id: u32) -> bool {
+        self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.id != "output" && !b.inputs.is_empty())
+    }
+    fn bypassed(&self, id: u32) -> bool {
+        self.node(id).is_some_and(|n| n.bypassed)
+    }
+    fn set_bypassed(&mut self, id: u32, off: bool) {
+        Patch::set_bypassed(self, id, off);
+    }
+    fn insert_menu(&mut self, ui: &mut egui::Ui, to: u32, input: usize) -> bool {
+        let generator = self.generator;
+        match block_menu(ui, generator, true) {
+            Some(b) => self.insert(b, to, input).is_some(),
+            None => false,
+        }
+    }
+    fn tidy(&mut self) -> bool {
+        Patch::tidy(self, NODE_W + 70.0, |n| {
+            let b = patch::block(&n.block);
+            TITLE_H + b.map_or(0, |b| b.inputs.len()) as f32 * INPUT_H + b.map_or(0, |b| b.settings.len()) as f32 * SETTING_H + 8.0
+        });
+        true
+    }
+}
+
+/// The block list by group (the add menu and a wire's menu): the block picked, if one was. `on_wire` leaves out
+/// blocks with no input (a source can't sit on a wire).
+fn block_menu(ui: &mut egui::Ui, generator: bool, on_wire: bool) -> Option<&'static str> {
+    let mut picked = None;
+    for g in Group::ALL.into_iter().filter(|g| *g != Group::Output) {
+        let blocks: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator) && (!on_wire || !b.inputs.is_empty())).collect();
+        if blocks.is_empty() {
+            continue;
+        }
+        ui.menu_button(g.name(), |ui| {
+            for b in blocks {
+                if crate::ui::command(ui, b.name).on_hover_text(b.about).clicked() {
+                    picked = Some(b.id);
+                    ui.close();
+                }
+            }
+        });
+    }
+    picked
 }
 
 /// Draws and edits `patch`; `key` keeps this patch's view (scroll position) apart from others. Returns true when
@@ -176,6 +211,24 @@ mod tests {
         let inv_out = egui::pos2(300.0 + NODE_W, 200.0 + TITLE_H * 0.5);
         drag(&ctx, &mut p, inv_out, to);
         assert_eq!(p.source_of(inv, 0), None);
+    }
+
+    /// A band dragged over the empty canvas selects the boxes it touches; Delete then removes them (Output stays).
+    #[test]
+    fn a_band_selects_boxes_and_delete_removes_them() {
+        let ctx = egui::Context::default();
+        let mut p = Patch::new("Test", false);
+        let inv = p.add("invert", [300.0, 200.0]);
+        frame(&ctx, &mut p, vec![]);
+        // From empty canvas above-left of every box, over Input (20,40) and Invert (300,200), but not Output (320,40).
+        assert!(!drag(&ctx, &mut p, egui::pos2(5.0, 30.0), egui::pos2(310.0, 230.0)), "a selection isn't a change");
+        let id = egui::Id::new(("node_canvas", "patch:test"));
+        let sel: Vec<u32> = ctx.data(|d| d.get_temp(id.with("sel"))).unwrap_or_default();
+        assert_eq!(sel, vec![p.nodes[0].id, inv]);
+        let del = vec![egui::Event::PointerMoved(egui::pos2(500.0, 500.0)), egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }];
+        assert!(frame(&ctx, &mut p, del));
+        assert_eq!(p.nodes.len(), 1, "Input and Invert gone, Output kept");
+        assert_eq!(p.nodes[0].block, "output");
     }
 
     #[test]

@@ -619,6 +619,9 @@ pub struct Node {
     pub pos: [f32; 2],
     /// One per setting (defaults of the shader's parameters).
     pub values: Vec<f32>,
+    /// Switched off: its first input passes straight through (a source gives nothing). Its settings take no parameters.
+    #[serde(default)]
+    pub bypassed: bool,
 }
 
 pub use crate::graph::Wire;
@@ -669,7 +672,7 @@ impl Patch {
     pub fn add(&mut self, block_id: &str, pos: [f32; 2]) -> u32 {
         let id = self.nodes.iter().map(|n| n.id + 1).max().unwrap_or(1);
         let values = block(block_id).map(|b| b.settings.iter().map(|s| s.default).collect()).unwrap_or_default();
-        self.nodes.push(Node { id, block: block_id.to_string(), pos, values });
+        self.nodes.push(Node { id, block: block_id.to_string(), pos, values, bypassed: false });
         id
     }
 
@@ -688,6 +691,56 @@ impl Patch {
 
     pub fn disconnect(&mut self, to: u32, input: usize) {
         crate::graph::disconnect(&mut self.wires, to, input);
+    }
+
+    /// Switches a block off (its first input passes through) or on again. Output can't be switched off.
+    pub fn set_bypassed(&mut self, id: u32, off: bool) {
+        if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id && n.block != "output") {
+            n.bypassed = off;
+        }
+    }
+
+    /// Puts a new block on the wire into input `input` of `to`: what fed `to` now feeds the new block's first
+    /// input, and the new block feeds `to`. Placed halfway between the two. Returns the new block's id (None when
+    /// nothing is wired there, or the block has no input).
+    pub fn insert(&mut self, block_id: &str, to: u32, input: usize) -> Option<u32> {
+        let from = self.source_of(to, input)?;
+        if block(block_id).is_none_or(|b| b.inputs.is_empty()) {
+            return None;
+        }
+        let (a, b) = (self.node(from)?.pos, self.node(to)?.pos);
+        let id = self.add(block_id, [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5]);
+        self.connect(from, id, 0);
+        self.connect(id, to, input);
+        Some(id)
+    }
+
+    /// Lays the blocks out left to right by how far they are from the sources (a column per step), each column
+    /// top to bottom in wiring order; `height_of` says how tall a block draws, `col_w` is a column's pitch.
+    pub fn tidy(&mut self, col_w: f32, height_of: impl Fn(&Node) -> f32) {
+        let ids: Vec<u32> = self.nodes.iter().map(|n| n.id).collect();
+        let order = crate::graph::order(&ids, &self.wires);
+        // Depth = the longest chain of wires before a block.
+        let mut depth: Vec<(u32, usize)> = Vec::new();
+        for id in &order {
+            let d = self.wires.iter().filter(|w| w.to == *id).filter_map(|w| depth.iter().find(|(n, _)| *n == w.from).map(|(_, d)| d + 1)).max().unwrap_or(0);
+            depth.push((*id, d));
+        }
+        // Output always last, on its own column.
+        let last = depth.iter().map(|(_, d)| *d).max().unwrap_or(0);
+        for (id, d) in depth.iter_mut() {
+            if self.node(*id).is_some_and(|n| n.block == "output") {
+                *d = last.max(1);
+            }
+        }
+        let mut next_y: Vec<f32> = vec![20.0; last + 2];
+        for (id, d) in &depth {
+            let Some(n) = self.nodes.iter_mut().find(|n| n.id == *id) else { continue };
+            let h = height_of(n);
+            n.pos = [20.0 + *d as f32 * col_w, next_y[*d]];
+            next_y[*d] += h + 24.0;
+        }
+        // Blocks in a loop (none, normally) stay where they were.
     }
 
     /// What's wired into input `input` of `to`.
@@ -716,7 +769,7 @@ impl Patch {
     /// settings are written into the code as fixed numbers.
     pub fn param_slots(&self) -> Vec<(u32, usize)> {
         let mut slots = Vec::new();
-        for n in self.used() {
+        for n in self.used().into_iter().filter(|n| !n.bypassed) {
             let count = block(&n.block).map_or(0, |b| b.settings.len());
             slots.extend((0..count).map(|i| (n.id, i)));
         }
@@ -798,6 +851,13 @@ impl Gen<'_> {
                 Some(from) => self.node(from)?,
                 None => "none".to_string(),
             });
+        }
+        if n.bypassed {
+            let through = inputs.first().map_or("none", |s| s.as_str());
+            self.funcs.push_str(&format!("\n// {} (switched off)\nfn {name}(uv: vec2f) -> vec4f {{\n    return {through}(uv);\n}}\n", b.name));
+            self.visiting.retain(|v| *v != id);
+            self.done.push(id);
+            return Ok(name);
         }
         if b.id == "last" {
             self.feedback = true;
@@ -931,6 +991,46 @@ mod tests {
         let names: Vec<&str> = h.params.iter().map(|q| q.name).collect();
         assert_eq!(names, ["Invert Amount", "Hue shift Shift", "Hue shift Spin", "Hue shift 2 Shift", "Hue shift 2 Spin"]);
         assert_eq!(p.param_slots().len(), 5);
+    }
+
+    #[test]
+    fn a_switched_off_block_passes_its_input_through_and_takes_no_parameters() {
+        let mut p = Patch::new("Off", false);
+        let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+        let blur = p.insert("blur", out, 0).unwrap();
+        assert_eq!(p.source_of(blur, 0), Some(input));
+        assert_eq!(p.source_of(out, 0), Some(blur));
+        assert!(p.insert("colour", out, 0).is_none(), "a source has no input to put on a wire");
+        p.set_bypassed(blur, true);
+        let src = check(&p);
+        let h = crate::custom::parse_header(&src).unwrap();
+        assert!(h.params.is_empty() && h.passes.is_empty(), "off: no parameters, no passes");
+        assert!(src.contains("(switched off)"));
+        p.set_bypassed(out, true);
+        assert!(!p.node(out).unwrap().bypassed, "Output stays on");
+        p.set_bypassed(blur, false);
+        assert_eq!(crate::custom::parse_header(&check(&p)).unwrap().passes.len(), 2);
+        // Old saves (no `bypassed`) still open.
+        let old = serde_json::json!({ "id": 9, "block": "invert", "pos": [1.0, 2.0], "values": [1.0] });
+        let n: Node = serde_json::from_value(old).unwrap();
+        assert!(!n.bypassed);
+    }
+
+    #[test]
+    fn tidy_puts_each_block_a_column_after_what_feeds_it() {
+        let mut p = Patch::kaleido_glow_trails();
+        p.tidy(260.0, |_| 60.0);
+        let x = |id: u32| p.node(id).unwrap().pos[0];
+        let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+        let (k, g, last, mix) = (p.nodes[2].id, p.nodes[3].id, p.nodes[4].id, p.nodes[5].id);
+        assert_eq!(x(input), 20.0);
+        assert_eq!(x(last), 20.0, "a source: first column");
+        assert_eq!(x(k), 280.0);
+        assert_eq!(x(g), 540.0);
+        assert_eq!(x(mix), 800.0);
+        assert!(x(out) > x(mix), "Output last");
+        let ys: Vec<f32> = [input, last].iter().map(|id| p.node(*id).unwrap().pos[1]).collect();
+        assert_ne!(ys[0], ys[1], "two blocks in one column don't overlap");
     }
 
     #[test]

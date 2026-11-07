@@ -63,8 +63,9 @@ pub(crate) fn extending(ui: &egui::Ui) -> bool {
 pub(crate) fn rubber_band(ui: &mut egui::Ui, bg: &egui::Response, key: impl std::hash::Hash + std::fmt::Debug) -> Option<egui::Rect> {
     let id = egui::Id::new(key);
     let pointer = ui.ctx().input(|i| i.pointer.interact_pos());
+    // (From where the button went down, not where the drag was first noticed: a quick drag has moved by then.)
     if bg.drag_started_by(egui::PointerButton::Primary)
-        && let Some(p) = pointer
+        && let Some(p) = ui.ctx().input(|i| i.pointer.press_origin()).or(pointer)
     {
         ui.ctx().data_mut(|d| d.insert_temp(id, p));
     }
