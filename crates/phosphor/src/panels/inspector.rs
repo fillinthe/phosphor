@@ -1021,7 +1021,7 @@ pub(crate) fn transition_effect_combo(ui: &mut egui::Ui, id: impl std::hash::Has
         _ => return false,
     };
     let mut changed = false;
-    egui::ComboBox::from_id_salt(id).selected_text(current.unwrap_or(empty)).width(150.0).height(360.0).show_ui(ui, |ui| {
+    crate::ui::dropdown(ui, id, 150.0).selected_text(current.unwrap_or(empty)).height(360.0).show_ui(ui, |ui| {
         if list.is_empty() {
             crate::ui::empty_note(ui, "No shader transitions found (they come with the ISF collection).");
         }

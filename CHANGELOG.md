@@ -139,7 +139,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Labelled settings line up: rows that began with a bare word (When pressed, Shape, Blend, Shows, Destination,
   Format, Size, Audio, Camera, Lights, Tiles, Fade in, Each turn, Cells across, Line, Bars, Sound from, Order,
   Stream key, RTMP / SRT / WHIP URL, Token, File, Address, Password, Universe, Colour, Attached to, Picture, Fade,
-  Surface page, Send OSC, Plays on…) put the label in the same column as every other setting in their panel.
+  Surface page, Send OSC, Plays on, Shift notes…) put the label in the same column as every other setting in
+  their panel.
 - Pick-one rows are the same buttons everywhere: the clip row menu's Autopilot (and its When the clip ends /
   After choice) and an output's Test pattern menu use the segmented buttons the rest of the app uses instead of
   round radio buttons; the Test pattern help sits in its title row.
