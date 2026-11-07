@@ -876,17 +876,16 @@ pub(crate) fn mask_attach_row(ui: &mut egui::Ui, mapping: &mut phosphor_engine::
     let Some(current) = mapping.masks.iter().find(|m| m.id == mask).map(|m| m.attached) else { return };
     let name = |id: Option<u64>| id.and_then(|id| mapping.surfaces.iter().find(|s| s.id == id)).map_or("Nothing (stays put)".to_string(), |s| s.name.clone());
     let mut pick = current;
-    ui.horizontal(|ui| {
-        ui.label("Attached to");
+    crate::ui::field(ui, "Attached to", |ui| {
         egui::ComboBox::from_id_salt(("mask_attach", mask)).selected_text(name(current)).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut pick, None, "Nothing (stays put)");
             for s in &mapping.surfaces {
                 crate::ui::pick_value(ui, &mut pick, Some(s.id), &s.name);
             }
-        });
-    })
-    .response
-    .on_hover_text("Attached, the mask moves and warps with that slice");
+        })
+        .response
+        .on_hover_text("Attached, the mask moves and warps with that slice");
+    });
     if pick != current {
         mapping.attach_mask(mask, pick);
     }
@@ -1120,8 +1119,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             crate::ui::toggle(ui, &mut m.cull, "Hide back faces");
         });
         // How the picture wraps the model (MadMapper's UV), then moved / sized / turned on it.
-        ui.horizontal_wrapped(|ui| {
-            ui.label("Picture");
+        crate::ui::field(ui, "Picture", |ui| {
             choice_combo(ui, ("model_uv", s.id), &mut m.uv_mode, 130.0, false)
                 .on_hover_text("How the picture wraps the model: the model's own texture coordinates, thrown from one side, or Box (each face from the side it faces)");
             ui.horizontal(|ui| {
@@ -1255,12 +1253,11 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
         Level::range(&mut m.feather, 0.0, phosphor_engine::mapping::MASK_FEATHER_MAX, "Soft edge").default(0.0).modulation(&mut m.feather_mod).target(ControlTarget::MaskFeather(m.id)).tip("Fade the mask's edge (0 = hard)").show(ui);
     });
     if m.feather > 0.0 {
-        ui.horizontal(|ui| {
-            ui.label("Fade");
-            choice_buttons(ui, &mut m.edge, |_, _| {});
-        })
-        .response
-        .on_hover_text("Where the fade sits: centred on the outline, all inside the shape, or all outside it");
+        crate::ui::field(ui, "Fade", |ui| {
+            choice_buttons(ui, &mut m.edge, |_, r| {
+                r.clone().on_hover_text("Where the fade sits: centred on the outline, all inside the shape, or all outside it");
+            });
+        });
     }
     let mid = m.id;
     shape_transform_editor(ui, &mut m.transform, |part| ControlTarget::MaskTransform { mask: mid, part });

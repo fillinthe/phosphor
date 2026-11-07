@@ -53,42 +53,35 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
         }
         match s.destination {
             Destination::YouTube | Destination::Twitch => {
-                ui.horizontal(|ui| {
-                    ui.label("Stream key");
+                crate::ui::field(ui, "Stream key", |ui| {
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
                     crate::ui::toggle(ui, &mut s.secure, "Secure (RTMPS)").on_hover_text("Encrypted ingest (rtmps://, port 443): what YouTube and Twitch recommend; turn off only if a network blocks it");
                 });
             }
             Destination::CustomRtmp => {
-                ui.horizontal(|ui| {
-                    ui.label("RTMP URL");
+                crate::ui::field(ui, "RTMP URL", |ui| {
                     ui.add(egui::TextEdit::singleline(&mut s.rtmp_url).desired_width(260.0));
                 });
-                ui.horizontal(|ui| {
-                    ui.label("Stream key");
+                crate::ui::field(ui, "Stream key", |ui| {
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).desired_width(260.0));
                 });
             }
             Destination::Srt => {
-                ui.horizontal(|ui| {
-                    ui.label("SRT URL");
+                crate::ui::field(ui, "SRT URL", |ui| {
                     ui.add(egui::TextEdit::singleline(&mut s.srt_url).desired_width(300.0));
                 });
             }
             Destination::Whip => {
-                ui.horizontal(|ui| {
-                    ui.label("WHIP URL");
+                crate::ui::field(ui, "WHIP URL", |ui| {
                     ui.add(egui::TextEdit::singleline(&mut s.whip_url).hint_text("https://…/whip").desired_width(300.0));
                 });
-                ui.horizontal(|ui| {
-                    ui.label("Token");
+                crate::ui::field(ui, "Token", |ui| {
                     ui.add(egui::TextEdit::singleline(&mut s.stream_key).password(true).hint_text("bearer token, if the service gives one").desired_width(260.0));
                 });
                 help(ui, "WebRTC: under a second of delay. H.264 Baseline video, Opus audio. Goes out on its own (no second destination or copy).");
             }
             Destination::File => {
-                ui.horizontal(|ui| {
-                    ui.label("File");
+                crate::ui::field(ui, "File", |ui| {
                     ui.add(egui::TextEdit::singleline(&mut s.file_path).hint_text("…/recording.mp4 or .mov (ProRes)").desired_width(260.0));
                     #[cfg(not(target_arch = "wasm32"))]
                     if crate::ui::command(ui, "Choose…").clicked() {

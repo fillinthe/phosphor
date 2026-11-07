@@ -968,8 +968,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
         }
         ui.add_space(4.0);
         hint(ui, format!("OSC in: {}", crate::control::default_osc_address(&ControlTarget::Surface(id))));
-        ui.horizontal(|ui| {
-            ui.label("Send OSC");
+        crate::ui::field(ui, "Send OSC", |ui| {
             ui.add(egui::TextEdit::singleline(&mut w.osc_out).hint_text("/address (to the OSC out app)").desired_width(170.0))
                 .on_hover_text("Also send this widget's value to another app (TouchDesigner, lights, Resolume…) whenever it moves, whoever moves it. Set where it goes with OSC out at the top of the panel.");
         });

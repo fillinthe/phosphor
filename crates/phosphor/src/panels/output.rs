@@ -511,8 +511,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
         crate::ui::field(ui, "Line", |ui| {
             guarded!(ui, g.width, egui::DragValue::new(&mut g.width).range(0.5..=12.0).speed(0.1).suffix(" px"));
         });
-        ui.horizontal(|ui| {
-            ui.label("Colour");
+        crate::ui::field(ui, "Colour", |ui| {
             for c in [[255u8, 255, 255], [0, 255, 120], [255, 60, 60], [80, 160, 255], [255, 220, 0]] {
                 let (rect, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::click());
                 ui.painter().circle_filled(rect.center(), 7.0, Color32::from_rgb(c[0], c[1], c[2]));

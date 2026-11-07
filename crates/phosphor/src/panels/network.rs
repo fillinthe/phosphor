@@ -120,8 +120,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::toggle(ui, &mut play.surprise, "Surprise button");
     });
     crate::ui::toggle(ui, &mut play.show_names, "Show the players' names on the output").on_hover_text("A \"Now playing: …\" text layer along the bottom; guests type their name on the play page");
-    ui.horizontal(|ui| {
-        ui.label("Surface page");
+    crate::ui::field(ui, "Surface page", |ui| {
         let pages = &st.comp.surface.pages;
         let current = play.surface_page.and_then(|p| pages.get(p)).cloned().unwrap_or_else(|| "All pages".into());
         ComboBox::from_id_salt("play_page").selected_text(current).show_ui(ui, |ui| {
