@@ -146,8 +146,8 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                 st.comp.cues.calendar.clear();
             }
         }
+        help(ui, "Cues remember every layer, every mapping slice (on/off, opacity, corners) and every laser's look and brightness. GO fades to the next one; sources change through each layer's transition, slices glide into place, lasers switch looks.");
     });
-    help(ui, "Cues remember every layer, every mapping slice (on/off, opacity, corners) and every laser's look and brightness. GO fades to the next one; sources change through each layer's transition, slices glide into place, lasers switch looks.");
     ui.add_space(4.0);
     let mut fire = None;
     let mut update = None;
@@ -260,7 +260,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
             });
         }
         if st.comp.cues.cues.is_empty() {
-            help(ui, "Set up a look, press Record cue; change things, record again. Then GO steps through them.");
+            crate::ui::empty_note(ui, "Set up a look, press Record cue; change things, record again. Then GO steps through them.");
         }
     });
     if let Some((i, id)) = add_layer

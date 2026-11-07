@@ -522,8 +522,8 @@ fn ai_assistants(ui: &mut egui::Ui) {
             let config = serde_json::json!({ "mcpServers": { "phosphor": { "command": exe, "args": ["--mcp"] } } });
             ui.ctx().copy_text(serde_json::to_string_pretty(&config).unwrap_or_default());
         }
-    });
     help(ui, "An AI assistant can list Phosphor's controls, set them and look at the output (while the Session is on). It talks to Phosphor over OSC on this Mac, like TouchOSC.");
+    });
 }
 
 #[cfg(test)]

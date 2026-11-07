@@ -223,6 +223,8 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
 
 /// GIFs from X: saved accounts (click one to browse it), save the one typed, and the browser whose X sign-in is used.
 /// Returns true when an account was clicked (browse it now).
+const LIBRARIES_HELP: &str = "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualisers. Downloads go into the media bin with their credit (Credits, below).";
+
 fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
     use crate::online::x;
     let mut browse = false;
@@ -455,6 +457,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
                     start_show(st, s, ui.ctx());
                 }
             }
+            help(ui, LIBRARIES_HELP);
         });
         if let Some(name) = st.online.starter {
             let coming = st.online.downloads.iter().filter(|(_, t)| matches!(t, Then::Cell(..))).count();
@@ -464,7 +467,6 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             });
         }
         ui.add_space(6.0);
-        help(ui, "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualisers. Downloads go into the media bin with their credit (Credits, below).");
         credits(ui, &st.comp);
         return;
     };

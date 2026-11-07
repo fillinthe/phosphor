@@ -144,7 +144,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - The last help icons that sat alone under a row now ride in it: Stream & Record (beside Movie sound; the
   stream key field leaves room for the Secure toggle), Output's All output windows, Session's Follow another
   Phosphor and viewers' audio, the MASTER Inspector, the Mapping panel (beside Identify), a moving head's motion
-  row and the Timeline's Render button; the Audio panel's two notes are one.
+  row, the Timeline's Render button, Online's mood buttons, the phone layout step, AI assistants and the Cues
+  settings; the Audio panel's two notes are one. An empty cue list says what to do in words.
 - Pick-one rows are the same buttons everywhere: the clip row menu's Autopilot (and its When the clip ends /
   After choice) and an output's Test pattern menu use the segmented buttons the rest of the app uses instead of
   round radio buttons; the Test pattern help sits in its title row.
