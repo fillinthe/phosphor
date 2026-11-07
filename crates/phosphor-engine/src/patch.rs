@@ -21,10 +21,12 @@ pub enum Group {
     /// Blocks that make a number (0..1) to wire into any setting: LFO, a ramp across the picture, a picture's brightness…
     Number,
     Output,
+    /// A note: words on the canvas, wired to nothing.
+    Note,
 }
 
 impl Group {
-    pub const ALL: [Group; 7] = [Group::Source, Group::Colour, Group::Warp, Group::Blur, Group::Mix, Group::Number, Group::Output];
+    pub const ALL: [Group; 8] = [Group::Source, Group::Colour, Group::Warp, Group::Blur, Group::Mix, Group::Number, Group::Output, Group::Note];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -35,6 +37,7 @@ impl Group {
             Group::Mix => "Mix two",
             Group::Number => "Numbers",
             Group::Output => "Output",
+            Group::Note => "Note",
         }
     }
 }
@@ -925,6 +928,19 @@ pub const BLOCKS: &[Block] = &[
         number: true,
         code: "return clamp(luma($a(uv).rgb) * $0, 0.0, 1.0);",
     },
+    // A note
+    Block {
+        id: "note",
+        name: "Note",
+        group: Group::Note,
+        about: "Words on the canvas: what this part does, who made it, what to try. Wired to nothing",
+        inputs: &[],
+        settings: &[],
+        pass_input: false,
+        stages: &[],
+        number: false,
+        code: "return vec4f(0.0);",
+    },
     // Output
     Block {
         id: "output",
@@ -956,6 +972,9 @@ pub struct Node {
     /// Switched off: its first input passes straight through (a source gives nothing). Its settings take no parameters.
     #[serde(default)]
     pub bypassed: bool,
+    /// A Note block's words.
+    #[serde(default)]
+    pub text: String,
 }
 
 pub use crate::graph::Wire;
@@ -1082,7 +1101,7 @@ impl Patch {
     pub fn add(&mut self, block_id: &str, pos: [f32; 2]) -> u32 {
         let id = self.nodes.iter().map(|n| n.id + 1).max().unwrap_or(1);
         let values = block(block_id).map(|b| b.settings.iter().map(|s| s.default).collect()).unwrap_or_default();
-        self.nodes.push(Node { id, block: block_id.to_string(), pos, values, bypassed: false });
+        self.nodes.push(Node { id, block: block_id.to_string(), pos, values, bypassed: false, text: String::new() });
         id
     }
 
@@ -1100,8 +1119,9 @@ impl Patch {
     pub fn connect(&mut self, from: u32, to: u32, input: usize) -> bool {
         let Some(b) = self.node(to).and_then(|n| block(&n.block)) else { return false };
         let Some(f) = self.node(from).and_then(|n| block(&n.block)) else { return false };
-        // A picture goes into a picture input (the first ones); a number into a setting (the ones after).
-        if f.number != (input >= b.inputs.len()) {
+        // A picture goes into a picture input (the first ones); a number into a setting (the ones after). A note
+        // makes nothing.
+        if f.number != (input >= b.inputs.len()) || f.id == "note" {
             return false;
         }
         crate::graph::connect(&mut self.wires, from, to, input, b.inputs.len() + b.settings.len())
@@ -1166,6 +1186,7 @@ impl Patch {
             if let Some(m) = self.nodes.iter_mut().find(|m| m.id == id) {
                 m.values = n.values;
                 m.bypassed = n.bypassed;
+                m.text = n.text;
             }
             map.push((n.id, id));
         }
@@ -1392,7 +1413,7 @@ mod tests {
 
     #[test]
     fn every_block_compiles_wired_into_an_output() {
-        for b in BLOCKS.iter().filter(|b| b.id != "output") {
+        for b in BLOCKS.iter().filter(|b| b.id != "output" && b.id != "note") {
             let mut p = Patch::new(b.name, false);
             let input = p.nodes[0].id;
             let out = p.nodes[1].id;
@@ -1577,6 +1598,22 @@ mod tests {
         q.connect(pasted[1], q_out, 0);
         check(&q);
         let _ = (input, g);
+    }
+
+    #[test]
+    fn a_note_is_words_on_the_canvas_wired_to_nothing() {
+        let mut p = Patch::new("Noted", false);
+        let out = p.nodes[1].id;
+        let note = p.add("note", [0.0, 200.0]);
+        p.nodes.iter_mut().find(|n| n.id == note).unwrap().text = "Try more glow".into();
+        assert!(!p.connect(note, out, 0), "a note makes nothing");
+        let src = check(&p);
+        assert!(src.contains("Try more glow"), "saved in the patch line: {src}");
+        let text = p.clip(&[note]).unwrap();
+        let pasted = p.paste(&text, [50.0, 50.0]);
+        assert_eq!(p.node(pasted[0]).unwrap().text, "Try more glow");
+        let old = serde_json::json!({ "id": 9, "block": "note", "pos": [1.0, 2.0], "values": [] });
+        assert_eq!(serde_json::from_value::<Node>(old).unwrap().text, "");
     }
 
     #[test]

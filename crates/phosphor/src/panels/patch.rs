@@ -17,6 +17,7 @@ fn group_colour(g: Group) -> Color32 {
         Group::Mix => Color32::from_rgb(110, 110, 170),
         Group::Number => crate::theme::Hue::Control.color(),
         Group::Output => accent(),
+        Group::Note => Color32::from_rgb(120, 110, 70),
     }
 }
 
@@ -54,15 +55,27 @@ impl Graph for Patch {
         if self.node(id).and_then(|n| patch::block(&n.block)).is_some_and(|b| b.number) { phosphor_engine::PortKind::Number } else { phosphor_engine::PortKind::Picture }
     }
     fn has_output(&self, id: u32) -> bool {
-        self.node(id).is_some_and(|n| n.block != "output")
+        self.node(id).is_some_and(|n| n.block != "output" && n.block != "note")
+    }
+    fn width(&self, id: u32) -> f32 {
+        if self.node(id).is_some_and(|n| n.block == "note") { 240.0 } else { NODE_W }
     }
     fn removable(&self, id: u32) -> bool {
-        self.has_output(id)
+        self.node(id).is_some_and(|n| n.block != "output")
     }
     fn body_height(&self, id: u32) -> f32 {
-        self.node(id).and_then(|n| patch::block(&n.block)).map_or(0.0, |b| b.settings.len() as f32 * SETTING_H)
+        match self.node(id) {
+            Some(n) if n.block == "note" => 64.0,
+            Some(n) => patch::block(&n.block).map_or(0.0, |b| b.settings.len() as f32 * SETTING_H),
+            None => 0.0,
+        }
     }
     fn body(&mut self, ui: &mut egui::Ui, id: u32) -> bool {
+        if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id && n.block == "note") {
+            // Saved when the words are let be (the patch recompiles on every change).
+            let r = ui.add(egui::TextEdit::multiline(&mut n.text).hint_text("Write a note…").desired_rows(3).desired_width(ui.available_width()).font(egui::FontId::proportional(12.0)));
+            return r.lost_focus() && r.changed() || (r.changed() && !r.has_focus());
+        }
         let Some(b) = self.node(id).and_then(|n| patch::block(&n.block)) else { return false };
         let mut changed = false;
         let width = ui.available_width();
@@ -118,7 +131,7 @@ impl Graph for Patch {
         }
         let q = query.trim().to_lowercase();
         if !q.is_empty() {
-            let found: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.id != "output" && (b.id != "input" || !generator) && (b.name.to_lowercase().contains(&q) || b.about.to_lowercase().contains(&q))).take(12).collect();
+            let found: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.id != "output" && b.id != "note" && (b.id != "input" || !generator) && (b.name.to_lowercase().contains(&q) || b.about.to_lowercase().contains(&q))).take(12).collect();
             let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             for (i, b) in found.iter().enumerate() {
                 if crate::ui::command(ui, format!("{} · {}", b.name, b.group.name())).on_hover_text(b.about).clicked() || (enter && i == 0) {
@@ -138,6 +151,10 @@ impl Graph for Patch {
         ui.ctx().data_mut(|d| d.insert_temp(key, query));
         if !self.nodes.iter().any(|n| n.block == "output") && crate::ui::command(ui, "Output").clicked() {
             self.add("output", [400.0, 40.0]);
+            added = true;
+        }
+        if q.is_empty() && crate::ui::command(ui, label(icon::NOTE_PENCIL, "Note")).on_hover_text("Words on the canvas, wired to nothing").clicked() {
+            self.add("note", at);
             added = true;
         }
         added
@@ -200,7 +217,7 @@ impl Graph for Patch {
 /// blocks with no input (a source can't sit on a wire).
 fn block_menu(ui: &mut egui::Ui, generator: bool, on_wire: bool) -> Option<&'static str> {
     let mut picked = None;
-    for g in Group::ALL.into_iter().filter(|g| *g != Group::Output) {
+    for g in Group::ALL.into_iter().filter(|g| *g != Group::Output && *g != Group::Note) {
         let blocks: Vec<&patch::Block> = BLOCKS.iter().filter(|b| b.group == g && (b.id != "input" || !generator) && (!on_wire || (!b.inputs.is_empty() && !b.number))).collect();
         if blocks.is_empty() {
             continue;
