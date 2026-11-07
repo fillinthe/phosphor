@@ -223,12 +223,10 @@ fn render_menu(ui: &mut egui::Ui, st: &mut State, now: f64) {
             }
         });
         let o = &mut st.offline_setup;
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Format");
+        crate::ui::field(ui, "Format", |ui| {
             choice_combo(ui, "render_format", &mut o.format, 200.0, false);
         });
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("fps");
+        crate::ui::field(ui, "fps", |ui| {
             crate::ui::dropdown(ui, "render_fps", 60.0).selected_text(o.fps.to_string()).show_ui(ui, |ui| {
                 for f in [24, 25, 30, 50, 60] {
                     crate::ui::pick_value(ui, &mut o.fps, f, f.to_string());

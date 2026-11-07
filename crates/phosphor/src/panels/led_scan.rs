@@ -32,8 +32,7 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
             } else {
                 camera_combo(ui, "led_scan_camera", &cameras, &mut camera);
             }
-            crate::ui::toolbar(ui, |ui| {
-                ui.label("Lights");
+            crate::ui::field(ui, "Lights", |ui| {
                 let name = |id: Option<u64>| match id.and_then(|id| st.comp.dmx.fixtures.iter().find(|f| f.id == id)) {
                     Some(f) => f.name.clone(),
                     None => "Every LED fixture that's on".to_string(),

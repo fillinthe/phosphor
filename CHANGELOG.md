@@ -136,6 +136,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
+- Labelled settings line up: rows that began with a bare word (When pressed, Shape, Blend, Shows, Destination,
+  Format, Size, Audio, Camera, Lights, Tiles, Fade in, Each turn, Cells across, Line, Bars, Sound from, Order…)
+  put the label in the same column as every other setting in their panel.
 - Pick-one rows are the same buttons everywhere: the clip row menu's Autopilot (and its When the clip ends /
   After choice) and an output's Test pattern menu use the segmented buttons the rest of the app uses instead of
   round radio buttons; the Test pattern help sits in its title row.

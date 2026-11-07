@@ -1018,12 +1018,10 @@ fn slice_drop(ui: &mut egui::Ui, frame: egui::Rect, mapping: &Mapping) {
 
 pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], others: &[(u64, String)]) {
     surface_source(ui, s, layers, groups, others);
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Shape");
+    crate::ui::field(ui, "Shape", |ui| {
         choice_buttons(ui, &mut s.shape, |_, _| {});
     });
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Blend");
+    crate::ui::field(ui, "Blend", |ui| {
         choice_buttons(ui, &mut s.blend, |_, r| {
             r.clone().on_hover_text("How this slice lands on the slices under it (Add: overlaps get brighter)");
         });
@@ -1296,8 +1294,7 @@ pub(crate) fn picture_sources(comp: &phosphor_engine::Composition, except_output
 }
 
 pub(crate) fn surface_source(ui: &mut egui::Ui, s: &mut phosphor_engine::mapping::Surface, layers: &mut [phosphor_engine::LayerState], groups: &mut [phosphor_engine::LayerGroup], outputs: &[(u64, String)]) {
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Shows");
+    crate::ui::field(ui, "Shows", |ui| {
         let current = s.layer.map_or("Whole composition".into(), |id| match outputs.iter().find(|(o, _)| *o == id) {
             Some((_, name)) => name.clone(),
             None => groups.iter().find(|g| g.id == id).map_or_else(|| crate::ui::layer_name(layers, id), |g| g.name.clone()),

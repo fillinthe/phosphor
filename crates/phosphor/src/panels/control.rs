@@ -150,8 +150,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             }
         });
         // An Arduino board (StandardFirmata): its pins map like MIDI; PWM pins can be sent to (Send out).
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Arduino");
+        crate::ui::field(ui, "Arduino", |ui| {
             let current = control.arduino_port();
             let mut pick = current.clone();
             crate::ui::dropdown(ui, "arduino_port", 200.0).selected_text(if current.is_empty() { "(none)".to_string() } else { current.clone() }).show_ui(ui, |ui| {

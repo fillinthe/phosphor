@@ -110,8 +110,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
     if !play.enabled {
         return;
     }
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Each turn");
+    crate::ui::field(ui, "Each turn", |ui| {
         guarded!(ui, play.turn_secs, egui::DragValue::new(&mut play.turn_secs).range(10..=900).suffix(" s"));
         ui.label("Rest after");
         guarded!(ui, play.rest_secs, egui::DragValue::new(&mut play.rest_secs).range(0..=600).suffix(" s")).on_hover_text("How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.");

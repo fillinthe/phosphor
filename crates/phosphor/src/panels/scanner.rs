@@ -20,8 +20,7 @@ pub(crate) fn camera_layers(st: &State) -> Vec<(u64, String)> {
 
 /// "Camera [list]": pick one of `cameras` (id, name).
 pub(crate) fn camera_combo(ui: &mut egui::Ui, salt: &str, cameras: &[(u64, String)], camera: &mut u64) {
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Camera");
+    crate::ui::field(ui, "Camera", |ui| {
         let current = cameras.iter().find(|(id, _)| id == camera).map(|(_, n)| n.clone()).unwrap_or_else(|| "(none)".into());
         crate::ui::dropdown(ui, salt, 260.0).selected_text(current).show_ui(ui, |ui| {
             for (id, n) in cameras {
