@@ -18,11 +18,13 @@ pub enum Group {
     Warp,
     Blur,
     Mix,
+    /// Blocks that make a number (0..1) to wire into any setting: LFO, a ramp across the picture, a picture's brightness…
+    Number,
     Output,
 }
 
 impl Group {
-    pub const ALL: [Group; 6] = [Group::Source, Group::Colour, Group::Warp, Group::Blur, Group::Mix, Group::Output];
+    pub const ALL: [Group; 7] = [Group::Source, Group::Colour, Group::Warp, Group::Blur, Group::Mix, Group::Number, Group::Output];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -31,6 +33,7 @@ impl Group {
             Group::Warp => "Warp",
             Group::Blur => "Blur & edges",
             Group::Mix => "Mix two",
+            Group::Number => "Numbers",
             Group::Output => "Output",
         }
     }
@@ -61,6 +64,9 @@ pub struct Block {
     pub settings: &'static [Setting],
     pub pass_input: bool,
     pub stages: &'static [(&'static str, f32)],
+    /// Makes a number (`fn(uv) -> f32`, 0..1) instead of a picture: wire it into any setting of any block (the
+    /// setting then follows it, per pixel and per frame, and takes no parameter).
+    pub number: bool,
     pub code: &'static str,
 }
 
@@ -78,6 +84,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return src(uv);",
     },
     Block {
@@ -89,6 +96,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Zoom", 0.8, 1.25, 1.01), set("Turn", -0.1, 0.1, 0.0), set("Fade", 0.0, 1.0, 0.9)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "var p = (uv - 0.5) * vec2f(aspect(), 1.0) / $0;
     let r = $1;
     p = vec2f(p.x * cos(r) - p.y * sin(r), p.x * sin(r) + p.y * cos(r));
@@ -103,6 +111,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Hue", 0.0, 1.0, 0.6), set("Saturation", 0.0, 1.0, 0.8), set("Brightness", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return vec4f(hsv2rgb(vec3f($0, $1, $2)), 1.0);",
     },
     Block {
@@ -114,6 +123,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Angle", 0.0, 1.0, 0.0), set("Hue A", 0.0, 1.0, 0.6), set("Hue B", 0.0, 1.0, 0.9), set("Speed", -1.0, 1.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $0 * TAU;
     let t = dot(uv - 0.5, vec2f(cos(a), sin(a))) + 0.5 + u.time * $3;
     let k = 0.5 - 0.5 * cos(fract(t) * TAU);
@@ -128,6 +138,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Scale", 0.5, 20.0, 4.0), set("Speed", 0.0, 2.0, 0.3), set("Detail", 1.0, 6.0, 3.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "var p = centered(uv) * $0;
     let t = u.time * $1;
     var v = 0.0;
@@ -148,6 +159,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Count", 1.0, 40.0, 8.0), set("Speed", -4.0, 4.0, 1.0), set("Sharpness", 0.0, 1.0, 0.5)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let d = length(centered(uv));
     let w = 0.5 + 0.5 * sin(d * $0 * TAU - u.time * $1 * 3.0);
     let s = mix(0.5, 0.02, $2);
@@ -162,6 +174,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Count", 1.0, 60.0, 10.0), set("Angle", 0.0, 1.0, 0.0), set("Speed", -4.0, 4.0, 0.5)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $1 * TAU;
     let t = dot(centered(uv), vec2f(cos(a), sin(a))) * $0 - u.time * $2;
     return vec4f(vec3f(step(0.5, fract(t))), 1.0);",
@@ -175,6 +188,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Size", 0.0, 1.0, 0.3), set("Softness", 0.0, 1.0, 0.05), set("X", 0.0, 1.0, 0.5), set("Y", 0.0, 1.0, 0.5)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let d = length((uv - vec2f($2, $3)) * vec2f(aspect(), 1.0));
     return vec4f(vec3f(1.0 - smoothstep($0, $0 + $1 + 0.001, d)), 1.0);",
     },
@@ -187,6 +201,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Squares", 2.0, 64.0, 8.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let g = floor(centered(uv) * $0);
     return vec4f(vec3f(abs(g.x + g.y) % 2.0), 1.0);",
     },
@@ -200,6 +215,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Brightness", -1.0, 1.0, 0.0), set("Contrast", 0.0, 3.0, 1.0), set("Saturation", 0.0, 3.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     var rgb = (c.rgb - 0.5) * $1 + 0.5 + $0;
     rgb = mix(vec3f(luma(rgb)), rgb, $2);
@@ -214,6 +230,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Shift", 0.0, 1.0, 0.0), set("Spin", -2.0, 2.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     var h = rgb2hsv(c.rgb);
     h.x = fract(h.x + $0 + u.time * $1 * 0.1);
@@ -228,6 +245,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     return vec4f(mix(c.rgb, 1.0 - c.rgb, $0), c.a);",
     },
@@ -240,6 +258,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Level", 0.0, 1.0, 0.5), set("Softness", 0.0, 0.5, 0.02)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     return vec4f(vec3f(smoothstep($0 - $1, $0 + $1 + 0.0001, luma(c.rgb))), c.a);",
     },
@@ -252,6 +271,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Steps", 2.0, 16.0, 4.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     let n = max(floor($0), 2.0);
     return vec4f(min(floor(c.rgb * n), vec3f(n - 1.0)) / (n - 1.0), c.a);",
@@ -265,6 +285,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Hue", 0.0, 1.0, 0.6), set("Amount", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     return vec4f(mix(c.rgb, luma(c.rgb) * hsv2rgb(vec3f($0, 0.8, 1.0)) * 1.4, $1), c.a);",
     },
@@ -277,6 +298,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Shift", 0.0, 1.0, 0.0), set("Spread", 0.0, 3.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     return vec4f(palette(luma(c.rgb) * $1 + $0), c.a);",
     },
@@ -289,6 +311,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return $a(uv) * $0;",
     },
     // Warp
@@ -301,6 +324,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Zoom", 0.1, 4.0, 1.0), set("X", -1.0, 1.0, 0.0), set("Y", -1.0, 1.0, 0.0), set("Turn", -1.0, 1.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "var p = (uv - 0.5 - vec2f($1, $2)) * vec2f(aspect(), 1.0) / $0;
     let r = $3 * TAU;
     p = vec2f(p.x * cos(r) - p.y * sin(r), p.x * sin(r) + p.y * cos(r));
@@ -315,6 +339,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Left-right", 0.0, 1.0, 1.0), set("Top-bottom", 0.0, 1.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "var p = uv;
     if $0 > 0.5 {
         p.x = 0.5 - abs(p.x - 0.5);
@@ -333,6 +358,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Segments", 2.0, 16.0, 6.0), set("Turn", 0.0, 1.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let p = centered(uv);
     let seg = TAU / max(floor($0), 1.0);
     var a = atan2(p.y, p.x) + $1 * TAU;
@@ -349,6 +375,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 0.1, 0.02), set("Waves", 1.0, 40.0, 10.0), set("Speed", -4.0, 4.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let p = centered(uv);
     let off = normalize(p + 0.00001) * sin(length(p) * $1 * TAU - u.time * $2 * 3.0) * $0;
     return $a(uv + off / vec2f(aspect(), 1.0));",
@@ -362,6 +389,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 0.2, 0.03), set("Waves", 0.0, 20.0, 4.0), set("Speed", -4.0, 4.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return $a(uv + vec2f(sin(uv.y * $1 * TAU + u.time * $2 * 3.0) * $0, 0.0));",
     },
     Block {
@@ -373,6 +401,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", -4.0, 4.0, 1.5), set("Radius", 0.05, 1.0, 0.5)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let p = centered(uv);
     let k = max(0.0, 1.0 - length(p) / $1);
     let r = $0 * k * k;
@@ -388,6 +417,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Size", 1.0, 100.0, 20.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let n = u.resolution / max($0, 1.0);
     return $a((floor(uv * n) + 0.5) / n);",
     },
@@ -400,6 +430,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Count", 1.0, 8.0, 2.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return $a(fract(uv * floor(max($0, 1.0))));",
     },
     Block {
@@ -411,6 +442,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", -0.3, 0.3, 0.05)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let m = $b(uv);
     return $a(uv + (m.rg - 0.5) * $0);",
     },
@@ -432,6 +464,7 @@ pub const BLOCKS: &[Block] = &[
     return sum / 9.0;",
             1.0,
         )],
+        number: false,
         code: "let s = vec2f(0.0, $0 / u.resolution.y);
     var sum = vec4f(0.0);
     for (var i = -4; i <= 4; i++) {
@@ -457,6 +490,7 @@ pub const BLOCKS: &[Block] = &[
     return sum / 9.0;",
             0.5,
         )],
+        number: false,
         code: "let s = vec2f(0.0, $1 / u.resolution.y);
     var sum = vec4f(0.0);
     for (var i = -4; i <= 4; i++) {
@@ -474,6 +508,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Strength", 0.0, 8.0, 2.0)],
         pass_input: true,
         stages: &[],
+        number: false,
         code: "let px = 1.0 / u.resolution;
     let l = luma($A(uv - vec2f(px.x, 0.0)).rgb);
     let r = luma($A(uv + vec2f(px.x, 0.0)).rgb);
@@ -490,6 +525,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 3.0, 1.0)],
         pass_input: true,
         stages: &[],
+        number: false,
         code: "let px = 1.0 / u.resolution;
     let c = $A(uv);
     let n = $A(uv + vec2f(px.x, 0.0)) + $A(uv - vec2f(px.x, 0.0)) + $A(uv + vec2f(0.0, px.y)) + $A(uv - vec2f(0.0, px.y));
@@ -505,6 +541,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 1.0, 0.5)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return mix($a(uv), $b(uv), $0);",
     },
     Block {
@@ -516,6 +553,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 2.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $a(uv);
     let b = $b(uv);
     return vec4f(a.rgb + b.rgb * $0, max(a.a, b.a));",
@@ -529,6 +567,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $a(uv);
     return vec4f(a.rgb * mix(vec3f(1.0), $b(uv).rgb, $0), a.a);",
     },
@@ -541,6 +580,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $a(uv);
     let b = $b(uv).rgb * $0;
     return vec4f(1.0 - (1.0 - a.rgb) * (1.0 - b), a.a);",
@@ -554,6 +594,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $a(uv);
     return vec4f(mix(a.rgb, abs(a.rgb - $b(uv).rgb), $0), a.a);",
     },
@@ -566,6 +607,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return max($a(uv), $b(uv));",
     },
     Block {
@@ -577,6 +619,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Invert", 0.0, 1.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let m = luma($c(uv).rgb);
     return mix($b(uv), $a(uv), mix(m, 1.0 - m, $0));",
     },
@@ -589,6 +632,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Threshold", 0.0, 1.0, 0.2), set("Softness", 0.0, 0.5, 0.05)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $a(uv);
     return mix($b(uv), a, smoothstep($0 - $1, $0 + $1 + 0.0001, luma(a.rgb)));",
     },
@@ -602,6 +646,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Scale", 1.0, 20.0, 6.0), set("Speed", 0.0, 4.0, 1.0), set("Hue", 0.0, 1.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let p = centered(uv) * $0;
     let t = u.time * $1;
     let v = sin(p.x + t) + sin(p.y * 1.3 - t) + sin(length(p) - t);
@@ -616,6 +661,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Count", 2.0, 60.0, 12.0), set("Size", 0.0, 1.0, 0.5), set("Speed", 0.0, 8.0, 2.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let g = uv * vec2f(aspect(), 1.0) * $0;
     let d = length(fract(g) - 0.5);
     let pulse = 0.5 + 0.5 * sin(u.time * $2 + hash21(floor(g)) * TAU);
@@ -633,6 +679,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Black", 0.0, 1.0, 0.0), set("White", 0.0, 1.0, 1.0), set("Gamma", 0.2, 3.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     let x = clamp((c.rgb - $0) / max($1 - $0, 0.001), vec3f(0.0), vec3f(1.0));
     return vec4f(pow(x, vec3f(1.0 / $2)), c.a);",
@@ -646,6 +693,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Size", 0.0, 1.0, 0.6), set("Softness", 0.0, 1.0, 0.5)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     let v = 1.0 - smoothstep($0, $0 + $1 + 0.001, length(centered(uv)));
     return vec4f(c.rgb * v, c.a);",
@@ -659,6 +707,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Lines", 20.0, 600.0, 200.0), set("Strength", 0.0, 1.0, 0.5), set("Roll", -2.0, 2.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     let k = 0.5 + 0.5 * sin((uv.y + u.time * $2 * 0.1) * $0 * TAU);
     return vec4f(c.rgb * (1.0 - $1 * k), c.a);",
@@ -672,6 +721,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 0.05, 0.01), set("Angle", 0.0, 1.0, 0.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $1 * TAU;
     let o = vec2f(cos(a), sin(a)) * $0;
     let c = $a(uv);
@@ -686,6 +736,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Speed", -2.0, 2.0, 0.2), set("Amount", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     var hsv = rgb2hsv(c.rgb);
     hsv.x = fract(hsv.x + u.time * $0);
@@ -700,6 +751,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Rate", 0.5, 16.0, 4.0), set("On share", 0.05, 1.0, 0.5), set("Depth", 0.0, 1.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let c = $a(uv);
     let on = step(fract(u.time * $0), $1);
     return vec4f(c.rgb * mix(1.0, on, $2), c.a);",
@@ -714,6 +766,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Turns", 0.25, 4.0, 1.0), set("Zoom", 0.2, 3.0, 1.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let p = centered(uv);
     let r = clamp(length(p) * $1, 0.0, 1.0);
     let a = atan2(p.y, p.x) / TAU + 0.5;
@@ -728,6 +781,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 0.1, 0.02), set("Speed", 1.0, 30.0, 10.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let t = floor(u.time * $1);
     let o = (vec2f(hash21(vec2f(t, 1.0)), hash21(vec2f(t, 7.0))) - 0.5) * $0;
     return $a(uv + o);",
@@ -741,6 +795,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Strips", 2.0, 40.0, 12.0), set("Shift", 0.0, 0.2, 0.05), set("Speed", 0.0, 20.0, 6.0)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let t = floor(u.time * $2);
     let row = floor(uv.y * $0);
     let o = (hash21(vec2f(row, t)) - 0.5) * $1 * step(0.6, hash21(vec2f(t, row + 3.0)));
@@ -756,6 +811,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Amount", 0.0, 0.3, 0.08)],
         pass_input: true,
         stages: &[],
+        number: false,
         code: "var sum = vec4f(0.0);
     let c = vec2f(0.5);
     for (var i = 0; i < 12; i++) {
@@ -773,6 +829,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Position", 0.0, 1.0, 0.5), set("Angle", 0.0, 1.0, 0.0), set("Softness", 0.0, 0.5, 0.05)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $1 * TAU;
     let t = dot(uv - 0.5, vec2f(cos(a), sin(a))) + 0.5;
     return mix($a(uv), $b(uv), smoothstep($0 - $2, $0 + $2 + 0.0001, t));",
@@ -786,11 +843,87 @@ pub const BLOCKS: &[Block] = &[
         settings: &[set("Hue", 0.0, 1.0, 0.33), set("Range", 0.0, 0.5, 0.08), set("Softness", 0.0, 0.5, 0.05)],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "let a = $a(uv);
     let h = rgb2hsv(a.rgb);
     let d = min(abs(h.x - $0), 1.0 - abs(h.x - $0));
     let keep = max(smoothstep($1, $1 + $2 + 0.0001, d), step(h.y, 0.25));
     return mix($b(uv), a, keep);",
+    },
+    // Numbers: wire into any setting
+    Block {
+        id: "value",
+        name: "Value",
+        group: Group::Number,
+        about: "One number for several settings: wire it into each (map or modulate it once)",
+        inputs: &[],
+        settings: &[set("Value", 0.0, 1.0, 0.5)],
+        pass_input: false,
+        stages: &[],
+        number: true,
+        code: "return $0;",
+    },
+    Block {
+        id: "lfo",
+        name: "LFO",
+        group: Group::Number,
+        about: "A number swinging up and down so many times a second: sine, or squarer",
+        inputs: &[],
+        settings: &[set("Rate", 0.05, 8.0, 0.5), set("Square", 0.0, 1.0, 0.0), set("Phase", 0.0, 1.0, 0.0)],
+        pass_input: false,
+        stages: &[],
+        number: true,
+        code: "let x = 0.5 + 0.5 * sin((u.time * $0 + $2) * TAU);
+    return mix(x, step(0.5, x), $1);",
+    },
+    Block {
+        id: "pulse",
+        name: "Pulse",
+        group: Group::Number,
+        about: "Jumps to 1 and falls back, so many times a second (a beat-like hit)",
+        inputs: &[],
+        settings: &[set("Rate", 0.1, 8.0, 1.0), set("Sharpness", 0.0, 1.0, 0.5)],
+        pass_input: false,
+        stages: &[],
+        number: true,
+        code: "return pow(1.0 - fract(u.time * $0), 1.0 + $1 * 6.0);",
+    },
+    Block {
+        id: "ramp",
+        name: "Ramp",
+        group: Group::Number,
+        about: "0 at one side of the picture to 1 at the other, in any direction, sliding if you like: a setting that varies across the picture",
+        inputs: &[],
+        settings: &[set("Angle", 0.0, 1.0, 0.0), set("Slide", -2.0, 2.0, 0.0)],
+        pass_input: false,
+        stages: &[],
+        number: true,
+        code: "let a = $0 * TAU;
+    return fract(dot(uv - 0.5, vec2f(cos(a), sin(a))) + 0.5 + u.time * $1);",
+    },
+    Block {
+        id: "noisenum",
+        name: "Noise number",
+        group: Group::Number,
+        about: "Smooth random clouds as a number: different everywhere, drifting with time",
+        inputs: &[],
+        settings: &[set("Scale", 1.0, 20.0, 4.0), set("Speed", 0.0, 4.0, 1.0)],
+        pass_input: false,
+        stages: &[],
+        number: true,
+        code: "return value_noise(centered(uv) * $0 + vec2f(u.time * $1, 0.0));",
+    },
+    Block {
+        id: "brightness",
+        name: "Brightness of",
+        group: Group::Number,
+        about: "How bright a picture is at each point, as a number (one picture's light drives another's settings)",
+        inputs: PIC,
+        settings: &[set("Gain", 0.0, 4.0, 1.0)],
+        pass_input: false,
+        stages: &[],
+        number: true,
+        code: "return clamp(luma($a(uv).rgb) * $0, 0.0, 1.0);",
     },
     // Output
     Block {
@@ -802,6 +935,7 @@ pub const BLOCKS: &[Block] = &[
         settings: &[],
         pass_input: false,
         stages: &[],
+        number: false,
         code: "return $a(uv);",
     },
 ];
@@ -958,8 +1092,19 @@ impl Patch {
     /// Wires `from`'s output into input `input` of `to` (replacing what was there). Refused (false) when it would
     /// make a loop, or the input doesn't exist.
     pub fn connect(&mut self, from: u32, to: u32, input: usize) -> bool {
-        let inputs = self.node(to).and_then(|n| block(&n.block)).map_or(0, |b| b.inputs.len());
-        self.node(from).is_some() && crate::graph::connect(&mut self.wires, from, to, input, inputs)
+        let Some(b) = self.node(to).and_then(|n| block(&n.block)) else { return false };
+        let Some(f) = self.node(from).and_then(|n| block(&n.block)) else { return false };
+        // A picture goes into a picture input (the first ones); a number into a setting (the ones after).
+        if f.number != (input >= b.inputs.len()) {
+            return false;
+        }
+        crate::graph::connect(&mut self.wires, from, to, input, b.inputs.len() + b.settings.len())
+    }
+
+    /// What's wired into setting `i` of `id` (a number block), if anything.
+    pub fn setting_source(&self, id: u32, i: usize) -> Option<u32> {
+        let inputs = self.node(id).and_then(|n| block(&n.block)).map_or(0, |b| b.inputs.len());
+        self.source_of(id, inputs + i)
     }
 
     pub fn disconnect(&mut self, to: u32, input: usize) {
@@ -968,7 +1113,7 @@ impl Patch {
 
     /// Switches a block off (its first input passes through) or on again. Output can't be switched off.
     pub fn set_bypassed(&mut self, id: u32, off: bool) {
-        if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id && n.block != "output") {
+        if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id && n.block != "output" && block(&n.block).is_some_and(|b| !b.number)) {
             n.bypassed = off;
         }
     }
@@ -978,7 +1123,8 @@ impl Patch {
     /// nothing is wired there, or the block has no input).
     pub fn insert(&mut self, block_id: &str, to: u32, input: usize) -> Option<u32> {
         let from = self.source_of(to, input)?;
-        if block(block_id).is_none_or(|b| b.inputs.is_empty()) {
+        let pictures = self.node(to).and_then(|n| block(&n.block)).map_or(0, |b| b.inputs.len());
+        if input >= pictures || block(block_id).is_none_or(|b| b.inputs.is_empty() || b.number) {
             return None;
         }
         let (a, b) = (self.node(from)?.pos, self.node(to)?.pos);
@@ -1044,7 +1190,7 @@ impl Patch {
         let mut slots = Vec::new();
         for n in self.used().into_iter().filter(|n| !n.bypassed) {
             let count = block(&n.block).map_or(0, |b| b.settings.len());
-            slots.extend((0..count).map(|i| (n.id, i)));
+            slots.extend((0..count).filter(|i| self.setting_source(n.id, *i).is_none()).map(|i| (n.id, i)));
         }
         slots.truncate(crate::shaders::MAX_PARAMS);
         slots
@@ -1125,6 +1271,15 @@ impl Gen<'_> {
                 None => "none".to_string(),
             });
         }
+        // Settings wired to a number block: that block's function, scaled to the setting's range.
+        let mut wired: Vec<Option<String>> = Vec::new();
+        for i in 0..b.settings.len() {
+            wired.push(match self.patch.setting_source(id, i) {
+                Some(from) => Some(self.node(from)?),
+                None => None,
+            });
+        }
+        let ret = if b.number { "f32" } else { "vec4f" };
         if n.bypassed {
             let through = inputs.first().map_or("none", |s| s.as_str());
             self.funcs.push_str(&format!("\n// {} (switched off)\nfn {name}(uv: vec2f) -> vec4f {{\n    return {through}(uv);\n}}\n", b.name));
@@ -1141,9 +1296,10 @@ impl Gen<'_> {
                 c = c.replace(k, name);
             }
             for (i, s) in b.settings.iter().enumerate().rev() {
-                let v = match this.slots.iter().position(|(sid, si)| *sid == id && *si == i) {
-                    Some(slot) => format!("P({slot}u)"),
-                    None => format!("{:.5}", n.values.get(i).copied().unwrap_or(s.default)),
+                let v = match (&wired[i], this.slots.iter().position(|(sid, si)| *sid == id && *si == i)) {
+                    (Some(from), _) => format!("({:.5} + {:.5} * clamp({from}(uv), 0.0, 1.0))", s.min, s.max - s.min),
+                    (None, Some(slot)) => format!("P({slot}u)"),
+                    (None, None) => format!("{:.5}", n.values.get(i).copied().unwrap_or(s.default)),
                 };
                 c = c.replace(&format!("${i}"), &v);
             }
@@ -1162,10 +1318,10 @@ impl Gen<'_> {
                 prev = stage;
             }
             let code = fill(b.code, self).replace("$A", &format!("read_{first}")).replace("$S", &format!("read_{prev}"));
-            self.funcs.push_str(&format!("\n// {}\nfn {name}(uv: vec2f) -> vec4f {{\n    {code}\n}}\n", b.name));
+            self.funcs.push_str(&format!("\n// {}\nfn {name}(uv: vec2f) -> {ret} {{\n    {code}\n}}\n", b.name));
         } else {
             let code = fill(b.code, self);
-            self.funcs.push_str(&format!("\n// {}\nfn {name}(uv: vec2f) -> vec4f {{\n    {code}\n}}\n", b.name));
+            self.funcs.push_str(&format!("\n// {}\nfn {name}(uv: vec2f) -> {ret} {{\n    {code}\n}}\n", b.name));
         }
         self.visiting.retain(|v| *v != id);
         self.done.push(id);
@@ -1194,10 +1350,46 @@ mod tests {
             for i in 0..b.inputs.len() {
                 assert!(p.connect(input, x, i));
             }
-            assert!(p.connect(x, out, 0));
-            let src = check(&p);
-            assert_eq!(crate::custom::parse_header(&src).unwrap().params.len(), b.settings.len(), "{}", b.name);
+            if b.number {
+                // A number goes into a setting (Hue shift's Shift), never into Output.
+                assert!(!p.connect(x, out, 0));
+                let hue = p.add("hue", [0.0, 0.0]);
+                p.connect(input, hue, 0);
+                assert!(p.connect(x, hue, 1), "{}: into Shift", b.name);
+                p.connect(hue, out, 0);
+                let src = check(&p);
+                assert_eq!(crate::custom::parse_header(&src).unwrap().params.len(), b.settings.len() + 1, "{}: its own settings + Hue shift's Spin", b.name);
+            } else {
+                assert!(p.connect(x, out, 0));
+                let src = check(&p);
+                assert_eq!(crate::custom::parse_header(&src).unwrap().params.len(), b.settings.len(), "{}", b.name);
+            }
         }
+    }
+
+    #[test]
+    fn a_number_wired_into_a_setting_drives_it_and_kinds_must_match() {
+        let mut p = Patch::new("LFO hue", false);
+        let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+        let hue = p.insert("hue", out, 0).unwrap();
+        let lfo = p.add("lfo", [0.0, 0.0]);
+        assert!(!p.connect(input, hue, 1), "a picture can't go into a setting");
+        assert!(!p.connect(lfo, hue, 0), "a number can't go into a picture input");
+        assert!(p.connect(lfo, hue, 1));
+        assert_eq!(p.setting_source(hue, 0), Some(lfo));
+        assert!(p.insert("blur", hue, 1).is_none(), "nothing goes on a number wire");
+        let src = check(&p);
+        let names: Vec<&str> = crate::custom::parse_header(&src).unwrap().params.iter().map(|q| q.name).collect();
+        assert_eq!(names, ["Hue shift Spin", "LFO Rate", "LFO Square", "LFO Phase"], "Shift follows the LFO: no parameter");
+        assert!(src.contains("clamp(n4(uv), 0.0, 1.0)"), "{src}");
+        p.set_bypassed(lfo, true);
+        assert!(!p.node(lfo).unwrap().bypassed, "number blocks don't switch off");
+        // Brightness of: a picture in, a number out.
+        let b = p.add("brightness", [0.0, 0.0]);
+        p.connect(input, b, 0);
+        p.disconnect(hue, 2);
+        assert!(p.connect(b, hue, 2));
+        check(&p);
     }
 
     #[test]

@@ -28,7 +28,9 @@ def shown(text):
         return False
     if re.search(r"\.(rs|wgsl|glsl|json|ron|png|mov|mp4|txt|fs|vs)$", t):
         return False
-    if any(c in t for c in ("vec4", "vec2", "uniform", "fn ", "let ", "::", "=>")):
+    if any(c in t for c in ("vec4", "vec2", "uniform", "fn ", "let ", "::", "=>", "(uv", "$a(", "$0")):  # shader code
+        return False
+    if t.startswith("return "):
         return False
     return True
 
