@@ -119,6 +119,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   puts a block's settings back to their starting values.
 - Notes: right-click the canvas › Note puts a box of words on it (what this part does, what to try); it's saved
   with the patch and wired to nothing. Cmd+D now duplicates a selection with the wires among it.
+- Drag a wire out of a block and let go on empty canvas: the add menu opens there, and the block you pick
+  arrives already wired from it (a number goes into the new block's first setting).
 - Fourteen new blocks: Plasma and Dots (pictures); Levels, Vignette, Scanlines, Colour split, Colour cycle and
   Strobe (colour); Polar, Shake and Glitch slices (warp); Zoom blur; Wipe and Chroma key (mix two).
 - Numbers: a new group of blocks that make a number instead of a picture: Value (one knob for several settings),

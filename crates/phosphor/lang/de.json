@@ -260,6 +260,7 @@
 "Add": "Hinzufügen",
 "Add Layer": "Ebene hinzufügen",
 "Add a box": "Box hinzufügen",
+"Add a box wired from {0}": "Einen Kasten hinzufügen, verbunden von {0}",
 "Add a column beside it": "Spalte daneben hinzufügen",
 "Add a layer first": "Füge zuerst eine Ebene hinzu",
 "Add a layer showing your camera first (Live input), aimed at the lights. It can stay hidden.": "Füge zuerst eine Ebene mit deiner Kamera hinzu (Live-Eingang), auf die Lichter gerichtet. Sie kann versteckt bleiben.",
