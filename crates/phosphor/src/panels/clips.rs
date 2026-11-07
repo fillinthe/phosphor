@@ -308,20 +308,15 @@ pub(crate) fn row_menu(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerStat
         choice_buttons(ui, &mut layer.voices, |_, _| {});
         ui.separator();
         crate::ui::heading_help(ui, format!("{} Autopilot", icon::AIRPLANE_TILT), "When this clip is done: play another one by itself, or clear the layer.");
-        for a in Autopilot::ALL {
-            ui.radio_value(&mut layer.autopilot, a, a.name());
-        }
+        crate::ui::toolbar(ui, |ui| choice_buttons(ui, &mut layer.autopilot, |_, _| {}));
         if layer.autopilot != Autopilot::Off {
-            ui.separator();
             let mut at_end = layer.autopilot_beats <= 0.0;
             crate::ui::toolbar(ui, |ui| {
-                if ui.radio_value(&mut at_end, true, "When the clip ends").changed() {
-                    layer.autopilot_beats = 0.0;
-                }
-            });
-            crate::ui::toolbar(ui, |ui| {
-                if ui.radio_value(&mut at_end, false, "After").changed() {
-                    layer.autopilot_beats = 16.0;
+                let was = at_end;
+                let when: Vec<(bool, String)> = vec![(true, "When the clip ends".into()), (false, "After".into())];
+                segmented(ui, &mut at_end, &when, |_, _, _| {});
+                if at_end != was {
+                    layer.autopilot_beats = if at_end { 0.0 } else { 16.0 };
                 }
                 if !at_end {
                     guarded!(ui, layer.autopilot_beats, egui::DragValue::new(&mut layer.autopilot_beats).range(1.0..=256.0).speed(0.2).suffix(" beats"));

@@ -495,13 +495,15 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
     let name = if g.pattern == phosphor_engine::TestPattern::Grid { "GRID".to_string() } else { g.pattern.label().to_uppercase() };
     let r = toggle(ui, &mut g.on, label(icon::GRID_FOUR, &name)).on_hover_text("Alignment grid or test pattern on this output to line up the projector · right-click to pick the pattern and its settings · off for the show");
     r.right_field_menu(|ui| {
-        crate::ui::heading(ui, "Test pattern");
-        for &p in phosphor_engine::TestPattern::ALL.iter() {
-            if ui.radio_value(&mut g.pattern, p, p.label()).clicked() {
-                g.on = true;
-            }
-        }
-        help(ui, "Grid shows over the show; the others cover it. Test card: red top left, green top right, blue bottom right, yellow bottom left.");
+        crate::ui::heading_help(ui, "Test pattern", "Grid shows over the show; the others cover it. Test card: red top left, green top right, blue bottom right, yellow bottom left.");
+        let (pattern, on) = (&mut g.pattern, &mut g.on);
+        crate::ui::toolbar(ui, |ui| {
+            crate::ui::choice_buttons(ui, pattern, |_, r| {
+                if r.clicked() {
+                    *on = true;
+                }
+            });
+        });
         ui.separator();
         crate::ui::heading(ui, "Grid");
         crate::ui::toolbar(ui, |ui| {
