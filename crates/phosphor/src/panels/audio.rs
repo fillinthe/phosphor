@@ -125,10 +125,8 @@ pub(crate) fn audio(ui: &mut egui::Ui, st: &mut State) {
         let r = toggle(ui, follow_audio, label(icon::METRONOME, "Follow audio"))
             .on_hover_text("Lock Phosphor's tempo and beat to the music, so On beat / On bar launches land on the kick");
         map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::FollowAudio));
-        help(ui, "Also: Audio beat (kick) under any slider's wave button.");
+        help(ui, &format!("Press {} next to any slider to drive it with these signals or an LFO (Audio beat = the kick).", icon::WAVE_SINE));
     });
-    ui.add_space(4.0);
-    help(ui, &format!("Press {} next to any slider to drive it with these signals or an LFO.", icon::WAVE_SINE));
 }
 
 /// Mute all, master volume and levelling for everything Phosphor plays (Audio panel).

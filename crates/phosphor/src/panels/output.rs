@@ -77,12 +77,14 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
 
         ui.label("All output windows");
         let text = if st.output_open() { "Close" } else { "Open" };
-        if steady_button(ui, text, &["Close", "Open"]).clicked() {
-            st.toggle_output();
-        }
+        ui.horizontal(|ui| {
+            if steady_button(ui, text, &["Close", "Open"]).clicked() {
+                st.toggle_output();
+            }
+            help(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
+        });
         ui.end_row();
     });
-    help(ui, "In the output window: F = fullscreen, E = mapping handles, Esc = exit. Drag it to a projector first.");
     ui.separator();
 
     let s = st.stats.latest;

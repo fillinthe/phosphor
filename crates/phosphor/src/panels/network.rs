@@ -86,15 +86,16 @@ pub(crate) fn network(ui: &mut egui::Ui, st: &mut State) {
             net.viewers.load(std::sync::atomic::Ordering::Relaxed),
             net.audio_peers.load(std::sync::atomic::Ordering::Relaxed)
         ));
-        if !audio.is_network() {
-            if crate::ui::command(ui, label(icon::MICROPHONE, "React to viewers' audio")).clicked() {
-                audio.use_network();
+        crate::ui::toolbar(ui, |ui| {
+            if !audio.is_network() {
+                if crate::ui::command(ui, label(icon::MICROPHONE, "React to viewers' audio")).clicked() {
+                    audio.use_network();
+                }
+            } else {
+                ui.colored_label(accent(), "Audio analysis is listening to session viewers");
             }
-        } else {
-            ui.colored_label(accent(), "Audio analysis is listening to session viewers");
-        }
-        ui.add_space(4.0);
-        help(ui, "Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
+            help(ui, "Picture: MJPEG at up to 1280 px (works in any browser, Pi included). Mic sending needs a secure page: use http://localhost or add this origin to chrome://flags/#unsafely-treat-insecure-origin-as-secure on the viewer.");
+        });
     }
     if let Some(msg) = &st.notice {
         ui.colored_label(WARN, msg.as_str());
@@ -232,13 +233,15 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
             // A player: a Mac (or PC) that only plays this show, from login, on its own projectors.
             let addr = st.following.as_ref().map(|l| l.address.clone()).unwrap_or_default();
             let mut always = st.follow_at_launch == addr;
-            if crate::ui::toggle(ui, &mut always, "Every time Phosphor starts (a player)")
-                .on_hover_text("This Mac becomes a player: it follows this leader at launch. With \"Start Phosphor when this Mac logs in\" and \"Open outputs on their screens\" (Output panel) it needs no one to set it up after a restart")
-                .changed()
-            {
-                st.follow_at_launch = if always { addr } else { String::new() };
-            }
-            help(ui, "This Mac plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
+            crate::ui::toolbar(ui, |ui| {
+                if crate::ui::toggle(ui, &mut always, "Every time Phosphor starts (a player)")
+                    .on_hover_text("This Mac becomes a player: it follows this leader at launch. With \"Start Phosphor when this Mac logs in\" and \"Open outputs on their screens\" (Output panel) it needs no one to set it up after a restart")
+                    .changed()
+                {
+                    st.follow_at_launch = if always { addr } else { String::new() };
+                }
+                help(ui, "This Mac plays the leader's show on its own outputs and mapping. Your changes here are replaced by the leader's; its media must be at the same paths here.");
+            });
         }
         None => {
             let mut addr: String = ui.ctx().data(|d| d.get_temp(key)).unwrap_or_default();
@@ -248,8 +251,8 @@ fn follow_section(ui: &mut egui::Ui, st: &mut State) {
                 if crate::ui::command_if(ui, !addr.trim().is_empty(), label(icon::LINK, "Follow")).clicked() {
                     st.following = Some(crate::follow::Link::connect(&addr));
                 }
+                help(ui, "On the leading Mac, start its Session below. Then type its address here: both play the same show in sync, each on its own projectors.");
             });
-            help(ui, "On the leading Mac, start its Session below. Then type its address here: both play the same show in sync, each on its own projectors.");
             ui.ctx().data_mut(|d| d.insert_temp(key, addr));
         }
     }
