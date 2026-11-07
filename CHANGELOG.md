@@ -117,6 +117,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Undo and redo in the patch editor: Cmd+Z and Shift+Cmd+Z (or the arrows in the zoom bar) step back and forward
   through every change; the arrow keys nudge the selected blocks (Shift: ten points); right-click › Reset settings
   puts a block's settings back to their starting values.
+- Notes: right-click the canvas › Note puts a box of words on it (what this part does, what to try); it's saved
+  with the patch and wired to nothing. Cmd+D now duplicates a selection with the wires among it.
 - Fourteen new blocks: Plasma and Dots (pictures); Levels, Vignette, Scanlines, Colour split, Colour cycle and
   Strobe (colour); Polar, Shake and Glitch slices (warp); Zoom blur; Wipe and Chroma key (mix two).
 - Numbers: a new group of blocks that make a number instead of a picture: Value (one knob for several settings),

@@ -511,8 +511,22 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         graph.duplicate(d);
         changed = true;
     }
-    for d in duplicate_many {
-        graph.duplicate(d);
+    // Several at once: as a copy and paste a little down and right, so the wires among them come along.
+    if !duplicate_many.is_empty() {
+        let (left, top) = duplicate_many.iter().map(|n| graph.pos(*n)).fold((f32::MAX, f32::MAX), |(l, t), p| (l.min(p[0]), t.min(p[1])));
+        match graph.clip(&duplicate_many) {
+            Some(text) => {
+                let new = graph.paste(&text, [left + 24.0, top + 24.0]);
+                if !new.is_empty() {
+                    selected = new;
+                }
+            }
+            None => {
+                for d in &duplicate_many {
+                    graph.duplicate(*d);
+                }
+            }
+        }
         changed = true;
     }
     if let Some(r) = remove {
