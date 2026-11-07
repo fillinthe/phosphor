@@ -537,7 +537,7 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
         }
         // Leave room for the Open and Live icon buttons so the row never runs off the card.
         let width = (ui.available_width() - 2.0 * (ui.spacing().interact_size.y + 2.0 * ui.spacing().item_spacing.x)).clamp(60.0, 180.0);
-        ComboBox::from_id_salt(("source", layer.id)).width(width).selected_text(layer.source.label()).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, ("source", layer.id), width).selected_text(layer.source.label()).show_ui(ui, |ui| {
             // Search: every generator (built in and imported) by name; typing goes straight here.
             let id = ui.id().with(("source_search", layer.id));
             let mut q = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_default();

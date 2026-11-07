@@ -1,0 +1,35 @@
+# Raw colours (Color32::from_rgb / from_gray / from_rgba) each file outside theme.rs and ui/ may still have.
+# Lower a number when you move a colour to theme; never raise one (docs/DESIGN.md, section 3).
+app/controls.rs 3
+app/menus.rs 1
+app/projects.rs 3
+app/recovery.rs 1
+app/show.rs 2
+app/status.rs 2
+explorer.rs 8
+panels/audio.rs 3
+panels/clip_grid.rs 4
+panels/control.rs 4
+panels/designer.rs 2
+panels/devices.rs 1
+panels/laser_box.rs 1
+panels/laser_zones.rs 9
+panels/lasers.rs 12
+panels/leds.rs 2
+panels/mapping.rs 10
+panels/media.rs 3
+panels/media_sources.rs 3
+panels/mod.rs 2
+panels/monitor.rs 1
+panels/online.rs 2
+panels/output.rs 2
+panels/patch.rs 6
+panels/preview.rs 3
+panels/scopes.rs 1
+panels/stage.rs 2
+panels/studio.rs 7
+panels/surface.rs 9
+panels/timeline.rs 1
+panels/tracking.rs 3
+scopes.rs 3
+support.rs 1

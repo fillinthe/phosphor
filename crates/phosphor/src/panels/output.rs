@@ -41,7 +41,7 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
     egui::Grid::new("output_grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
         ui.label("Canvas");
         let current = format!("{}×{}", st.comp.width, st.comp.height);
-        ComboBox::from_id_salt("resolution").selected_text(current).show_ui(ui, |ui| {
+        crate::ui::dropdown(ui, "resolution", 140.0).selected_text(current).show_ui(ui, |ui| {
             for (w, h, label) in RESOLUTIONS {
                 if crate::ui::pick_item(ui, st.comp.width == *w && st.comp.height == *h, *label).clicked() {
                     st.comp.width = *w;

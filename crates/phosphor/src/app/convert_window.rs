@@ -58,10 +58,10 @@ impl PhosphorApp {
             let progress = c.progress.as_ref().map(|p| p.lock().unwrap().clone());
             let busy = progress.as_ref().is_some_and(|p| !p.finished);
             ui.add_enabled_ui(!busy, |ui| {
-                crate::ui::heading(ui, "Format");
-                for f in Format::ALL {
-                    ui.radio_value(&mut c.format, f, f.name());
-                }
+                crate::ui::field(ui, "Format", |ui| {
+                    let formats: Vec<(Format, String)> = Format::ALL.into_iter().map(|f| (f, f.name().to_string())).collect();
+                    crate::ui::segmented(ui, &mut c.format, &formats, |_, _, _| {});
+                });
                 crate::ui::hint(ui, c.format.about());
                 if c.format.has_quality() {
                     crate::ui::toolbar(ui, |ui| {
