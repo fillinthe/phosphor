@@ -150,7 +150,7 @@ fn side_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, upright: bool, f
     r
 }
 
-pub(crate) const MASK_COLOR: Color32 = Color32::from_rgb(255, 130, 80);
+pub(crate) const MASK_COLOR: Color32 = crate::theme::MASK;
 
 /// Draws every surface (corners or mesh grid) and mask over `frame` (the rect the output occupies
 /// on screen) with draggable handles, and applies drags. Shared by the Mapping panel and the
@@ -206,7 +206,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
             }
         }
         let mut d = [0.0, 0.0];
-        let base = if s.locked { Color32::from_gray(120) } else { base };
+        let base = if s.locked { crate::theme::faint() } else { base };
         let r = point_handle(ui, id.with("move"), to_screen(s.center()), frame, base, true, &mut d);
         if r.clicked() || (r.drag_started() && !many.contains(&s.id)) {
             clicked = Some(s.id);
@@ -335,7 +335,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
                     let Some((xy, _)) = m.project_point(*v, aspect) else { continue };
                     let at = to_screen(xy);
                     let r = ui.interact(egui::Rect::from_center_size(at, egui::vec2(12.0, 12.0)), id.with(("vert", k)), Sense::click());
-                    ui.painter().circle_filled(at, if r.hovered() { 5.0 } else { 3.0 }, if r.hovered() { Color32::WHITE } else { Color32::from_rgb(120, 200, 255) });
+                    ui.painter().circle_filled(at, if r.hovered() { 5.0 } else { 3.0 }, if r.hovered() { Color32::WHITE } else { crate::theme::HANDLE });
                     if r.on_hover_text("Pin this point, then drag the pin to where it really is").clicked() {
                         m.pins.push(phosphor_engine::mapping::Pin { model: *v, at: xy });
                         touched = true;
@@ -590,7 +590,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                         p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(12.0), Color32::GRAY);
                     }
                 }
-                let border = if selected { accent() } else if r.hovered() { Color32::from_gray(140) } else { Color32::from_gray(50) };
+                let border = if selected { accent() } else if r.hovered() { crate::theme::faint() } else { crate::theme::line() };
                 p.rect_stroke(pic, 4.0, Stroke::new(if selected { 2.0 } else { 1.0 }, border), egui::StrokeKind::Inside);
                 // Number badge, like Identify shows on the projector.
                 let badge = egui::Rect::from_min_size(pic.min + egui::vec2(4.0, 4.0), egui::vec2(18.0, 16.0));
@@ -611,13 +611,13 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                 let (dot, place) = match (open, on_screen) {
                     (true, true) => (accent(), format!("{} {}", icon::PROJECTOR_SCREEN, o.screen)),
                     (true, false) => (accent(), format!("{} window", icon::APP_WINDOW)),
-                    (false, _) if !o.screen.is_empty() => (Color32::from_gray(110), format!("closed · {}", o.screen)),
-                    _ => (Color32::from_gray(110), "not shown".to_string()),
+                    (false, _) if !o.screen.is_empty() => (crate::theme::faint(), format!("closed · {}", o.screen)),
+                    _ => (crate::theme::faint(), "not shown".to_string()),
                 };
                 let line = egui::pos2(pic.left() + 2.0, pic.bottom() + 19.0);
                 p.circle_filled(line + egui::vec2(4.0, 6.0), 3.5, dot);
                 let place = fit(&place, pic_w - 14.0);
-                p.text(line + egui::vec2(12.0, 0.0), egui::Align2::LEFT_TOP, place, egui::FontId::proportional(11.0), Color32::from_gray(150));
+                p.text(line + egui::vec2(12.0, 0.0), egui::Align2::LEFT_TOP, place, egui::FontId::proportional(11.0), crate::theme::faint());
                 if r.clicked() {
                     todo.push(Do::Select(id));
                 }
@@ -657,7 +657,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
             // Add an output (top-aligned with the pictures).
             let (rect, r) = ui.allocate_exact_size(egui::vec2(height.max(80.0), height + 34.0), Sense::click());
             let rect = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), height));
-            let c = if r.hovered() { Color32::WHITE } else { Color32::from_gray(110) };
+            let c = if r.hovered() { Color32::WHITE } else { crate::theme::faint() };
             ui.painter().rect_stroke(rect.shrink(2.0), 4.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, label(icon::PLUS, "Output"), egui::FontId::proportional(12.0), c);
             if r.on_hover_text("Another projector, screen or feed").clicked() {
@@ -776,7 +776,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     if let Some(t) = tex {
         paint_texture(ui.painter(), t, frame);
     }
-    ui.painter().rect_stroke(frame, 0.0, Stroke::new(1.0, Color32::from_gray(70)), StrokeKind::Outside);
+    ui.painter().rect_stroke(frame, 0.0, Stroke::new(1.0, crate::theme::line()), StrokeKind::Outside);
     // Handles stay on the canvas (the transform box moves inside a slice at the edge instead of onto the panel).
     let mut canvas = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     canvas.set_clip_rect(rect.intersect(ui.clip_rect()));

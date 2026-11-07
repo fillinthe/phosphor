@@ -72,7 +72,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
     match st.texture {
         Some(t) => paint_texture(ui.painter(), t, frame),
         None => {
-            ui.painter().rect_filled(frame, 2.0, Color32::from_gray(20));
+            ui.painter().rect_filled(frame, 2.0, crate::theme::PICTURE_BG);
         }
     }
     if bg.clicked() {
@@ -371,7 +371,7 @@ fn dmx_monitor(ui: &mut egui::Ui, st: &mut State) {
         let p = ui.painter();
         for (i, v) in data.iter().enumerate() {
             let r = egui::Rect::from_min_size(rect.min + egui::vec2((i % cols) as f32 * cell, (i / cols) as f32 * cell), egui::vec2(cell - 1.0, cell - 1.0));
-            p.rect_filled(r, 0.0, if *v == 0 { Color32::from_gray(24) } else { accent().gamma_multiply(0.15 + 0.85 * *v as f32 / 255.0) });
+            p.rect_filled(r, 0.0, if *v == 0 { crate::theme::PICTURE_GRID } else { accent().gamma_multiply(0.15 + 0.85 * *v as f32 / 255.0) });
         }
         if let Some(pos) = resp.hover_pos() {
             let (cx, cy) = (((pos.x - rect.left()) / cell) as usize, ((pos.y - rect.top()) / cell) as usize);

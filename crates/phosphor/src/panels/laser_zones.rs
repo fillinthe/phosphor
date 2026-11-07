@@ -58,7 +58,7 @@ pub(crate) fn zones_editor(ui: &mut egui::Ui, p: &mut LaserProjector, frame: &[L
     for (n, _) in p.dark.iter().enumerate() {
         crate::ui::toolbar(ui, |ui| {
             ui.push_id(("dark", n), |ui| {
-                ui.colored_label(egui::Color32::from_rgb(255, 90, 70), format!("Dark area {}", n + 1));
+                ui.colored_label(crate::theme::DANGER, format!("Dark area {}", n + 1));
                 if crate::ui::danger_button(ui, label(icon::TRASH, "")).on_hover_text("Remove this dark area").clicked() {
                     remove_dark = Some(n);
                 }
@@ -88,18 +88,18 @@ fn area_canvas(ui: &mut egui::Ui, p: &mut LaserProjector, frame: &[LaserPoint], 
     let side = ui.available_width().min(360.0).max(140.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
     let painter = ui.painter_at(rect.expand(8.0));
-    painter.rect_filled(rect, 0.0, egui::Color32::from_rgb(4, 4, 8));
+    painter.rect_filled(rect, 0.0, crate::theme::PICTURE_BG);
     let to_screen = |q: [f32; 2]| rect.center() + egui::vec2(q[0], -q[1]) * (side * 0.5);
-    let grid = egui::Stroke::new(1.0, egui::Color32::from_gray(28));
+    let grid = egui::Stroke::new(1.0, crate::theme::PICTURE_GRID);
     painter.line_segment([to_screen([-1.0, 0.0]), to_screen([1.0, 0.0])], grid);
     painter.line_segment([to_screen([0.0, -1.0]), to_screen([0.0, 1.0])], grid);
-    let red = egui::Color32::from_rgb(255, 60, 40);
+    let red = crate::theme::DANGER;
     if p.floor > -1.0 {
-        painter.rect_filled(egui::Rect::from_two_pos(to_screen([-1.0, p.floor]), to_screen([1.0, -1.0])), 0.0, egui::Color32::from_rgba_unmultiplied(255, 40, 30, 24));
+        painter.rect_filled(egui::Rect::from_two_pos(to_screen([-1.0, p.floor]), to_screen([1.0, -1.0])), 0.0, crate::theme::danger_fill(0.1));
     }
     for a in &p.dark {
         let r = egui::Rect::from_two_pos(to_screen([a.left, a.bottom]), to_screen([a.right, a.top]));
-        painter.rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(255, 40, 30, 40));
+        painter.rect_filled(r, 0.0, crate::theme::danger_fill(0.16));
         painter.rect_stroke(r, 0.0, egui::Stroke::new(1.0, red), egui::StrokeKind::Inside);
     }
     for w in frame.windows(2).filter(|w| w[0].lit() && w[1].lit()) {
@@ -111,7 +111,7 @@ fn area_canvas(ui: &mut egui::Ui, p: &mut LaserProjector, frame: &[LaserPoint], 
     let clamp = |q: [f32; 2]| q.map(|v| v.clamp(-1.0, 1.0));
     for z in &mut p.zones {
         let on = *picked == Some(z.id);
-        let colour = if on { egui::Color32::from_rgb(90, 220, 255) } else { egui::Color32::from_rgb(40, 110, 140) };
+        let colour = if on { crate::theme::HANDLE } else { crate::theme::HANDLE.gamma_multiply(0.45) };
         let pts: Vec<egui::Pos2> = z.corners.iter().map(|c| to_screen(*c)).collect();
         painter.add(egui::Shape::closed_line(pts.clone(), egui::Stroke::new(if on { 1.5 } else { 1.0 }, colour)));
         painter.text(pts[3] + egui::vec2(4.0, 2.0), egui::Align2::LEFT_TOP, &z.name, egui::FontId::proportional(11.0), colour);

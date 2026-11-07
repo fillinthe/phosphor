@@ -362,7 +362,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 match st.preview_tex(&key).filter(|_| st.explorer.preview_mode != PreviewMode::Off) {
                     Some(t) => panels::paint_texture(p, t, pic),
                     None => {
-                        p.rect_filled(pic, 4.0, Color32::from_gray(14));
+                        p.rect_filled(pic, 4.0, crate::theme::PICTURE_BG);
                         let glyph = if st.explorer.preview_mode == PreviewMode::Off { icon::MAGIC_WAND } else { "…" };
                         p.text(pic.center(), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(18.0), Color32::GRAY);
                     }
@@ -372,14 +372,14 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 p.text(egui::pos2(rect.left() + 6.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, cat, egui::FontId::proportional(10.0), Color32::GRAY);
                 let fav = st.explorer.favorites.iter().any(|f| f == desc.id);
                 if fav {
-                    p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, crate::theme::filled_icons(14.0), Color32::from_rgb(255, 210, 90));
+                    p.text(pic.right_top() + egui::vec2(-6.0, 4.0), egui::Align2::RIGHT_TOP, icon::STAR, crate::theme::filled_icons(14.0), crate::theme::FAVOURITE);
                 }
                 let stroke = if st.explorer.picked == Some(desc.id) {
                     Stroke::new(2.5, accent())
                 } else if resp.hovered() {
                     Stroke::new(1.5, accent())
                 } else {
-                    Stroke::new(1.0, Color32::from_gray(48))
+                    Stroke::new(1.0, crate::theme::line())
                 };
                 p.rect_stroke(rect, 6.0, stroke, StrokeKind::Inside);
                 let payload = if st.explorer.sources {
@@ -924,7 +924,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
     egui::Panel::right("shader_preview").resizable(true).default_size(260.0).show(ui, |ui| {
         let w = ui.available_width();
         let (rect, _) = ui.allocate_exact_size(egui::vec2(w, w / aspect), Sense::hover());
-        ui.painter().rect_filled(rect, 4.0, Color32::from_gray(10));
+        ui.painter().rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
         if let Some(t) = st.preview_tex(&format!("edit:{id}")) {
             panels::paint_texture(ui.painter(), t, rect);
         }
@@ -996,7 +996,7 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
     let mut show_code: bool = ui.ctx().data(|d| d.get_temp(code_id)).unwrap_or(false);
     let mut changed = false;
     let mut to_code = false;
-    ui.horizontal(|ui| {
+    crate::ui::toolbar(ui, |ui| {
         crate::ui::heading(ui, if patch.generator { "Generator patch" } else { "Effect patch" });
         changed |= crate::ui::text_field(ui, &mut patch.name, "Name", Some(160.0)).changed();
         if let Some(name) = patch.look_at.and_then(|id| patch.node(id)).and_then(|n| phosphor_engine::patch::block(&n.block)).map(|b| b.name) {
@@ -1015,9 +1015,9 @@ fn patch_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>
             (None, None) if sh.compiled => ui.colored_label(accent(), format!("{} compiled · saved", icon::RECORD)),
             _ => crate::ui::hint(ui, "not compiled"),
         };
+        crate::ui::help(ui, "Right-click the canvas (or drop a wire on it) to add a block: type to find one · drag from a block's right dot to another's left dot to wire it, or onto the dot beside a setting to drive it with a Numbers block · right-click a wire to put a block on it · drag a band to select several; Delete, Cmd+D, Cmd+C / V, arrows, Cmd+Z · right-click a block: Switch off, Look at this box, Reset settings · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
     });
     ui.ctx().data_mut(|d| d.insert_temp(code_id, show_code));
-    crate::ui::help(ui, "Right-click the canvas (or drop a wire on it) to add a block: type to find one · drag from a block's right dot to another's left dot to wire it, or onto the dot beside a setting to drive it with a Numbers block · right-click a wire to put a block on it · drag a band to select several; Delete, Cmd+D, Cmd+C / V, arrows, Cmd+Z · right-click a block: Switch off, Look at this box, Reset settings · every slider becomes a parameter of the effect (MIDI, modulation); here they set its starting values, a layer already using it keeps its own (Inspector)");
     if show_code {
         egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             ui.add(egui::TextEdit::multiline(&mut sh.source.as_str()).code_editor().font(egui::FontId::monospace(12.0)).desired_width(f32::INFINITY));
@@ -1055,7 +1055,7 @@ fn code_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>,
         };
     });
     if let Some(e) = &sh.error {
-        egui::Frame::new().fill(Color32::from_rgb(48, 22, 18)).corner_radius(4).inner_margin(6).show(ui, |ui| {
+        egui::Frame::new().fill(crate::theme::PROBLEM_FILL).corner_radius(4).inner_margin(6).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.colored_label(WARN, e.to_string());
         });
@@ -1067,7 +1067,7 @@ fn code_view(ui: &mut egui::Ui, sh: &mut UserShader, dirty_at: &mut Option<f64>,
             let lines = sh.source.lines().count().max(1);
             let mut gutter = egui::text::LayoutJob::default();
             for n in 1..=lines {
-                let color = if Some(n as u32) == err_line { WARN } else { Color32::from_gray(90) };
+                let color = if Some(n as u32) == err_line { WARN } else { crate::theme::ON_PICTURE.gamma_multiply(0.45) };
                 gutter.append(&format!("{n:>3}\n"), 0.0, egui::TextFormat { font_id: egui::FontId::monospace(13.0), color, ..Default::default() });
             }
             ui.add(egui::Label::new(gutter).selectable(false));
@@ -1344,12 +1344,12 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
                     match st.preview_tex(&key) {
                         Some(t) => panels::paint_texture(p, t, pic),
                         None => {
-                            p.rect_filled(pic, 4.0, Color32::from_gray(14));
+                            p.rect_filled(pic, 4.0, crate::theme::PICTURE_BG);
                         }
                     }
                     p.text(egui::pos2(rect.left() + 5.0, rect.bottom() - 3.0), egui::Align2::LEFT_BOTTOM, d.name, egui::FontId::proportional(11.5), Color32::WHITE);
                     let first = i == 0 && !b.search.is_empty();
-                    let stroke = if resp.hovered() || first { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, Color32::from_gray(48)) };
+                    let stroke = if resp.hovered() || first { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
                     p.rect_stroke(rect, 5.0, stroke, StrokeKind::Inside);
                     if resp.clicked() {
                         picked = Some((d.id, ui.input(|i| i.modifiers.shift)));

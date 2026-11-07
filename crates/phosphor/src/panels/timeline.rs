@@ -90,7 +90,7 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
     for (k, m) in st.comp.timeline.markers.iter_mut().enumerate() {
         let x = x_of(m.t);
         let color = match m.kind {
-            MarkerKind::Label => Color32::from_gray(170),
+            MarkerKind::Label => crate::theme::faint(),
             MarkerKind::Pause => crate::theme::WARN,
             MarkerKind::LoopBack => accent(),
         };

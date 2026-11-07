@@ -63,8 +63,16 @@ Values at the default brightness (0.35, "Dark"); `tone(g)` = `(g-3, g-1, g)`, th
 | `selection` | accent × 0.32 fill, accent stroke | Selected rows, cards, boxes. |
 | **accent** (`theme::accent`) | Green `#78FFAA` (dark) / `#108A4A` (light) | On, playing, selected, Go. The user may pick Cyan, Violet, Pink or Ice instead; code never assumes green. |
 | `theme::WARN` | `#FF8C5A` | Warnings, errors, Delete text. |
-| `Act::Record` fill | `#E1463C` | Record, Arm. White ink. |
-| `ui::learn::MAPPED` | `#FFC446` | Mapped to a controller (badge, stripe). |
+| `theme::RECORD` | `#E1463C` | Record, Arm, the LIVE dot. White ink. |
+| `theme::DANGER` · `danger_fill(k)` | `#FF503C` · see-through red | Danger in words and lines (LASERS ON, a laser's floor, a dark area); its zone over a picture. |
+| `theme::MAPPED` · `mapped_fill(k)` | `#FFC446` | Mapped to a controller, Learn, a beat (badge, stripe, dot). |
+| `theme::FAVOURITE` | `#FFD25A` | A favourite's star. |
+| `theme::MASK` | `#FF8250` | A mask's outline on the mapping canvas. |
+| `theme::HANDLE` | `#64D2FF` | Points you drag on a canvas. |
+| `theme::PICTURE_BG` · `PICTURE_GRID` · `ON_PICTURE` | `#050708` · `#282A2C` · `#DCDCDC` | Behind every picture at any brightness; grid and guides on it; words on a picture or a coloured fill. |
+| `theme::line()` · `theme::faint()` | follow the brightness | A resting border, separator, off dot · words and borders a step quieter than text. |
+| `PROBLEM_FILL` · `GOOD_FILL` · `CONTROL_FILL` · `MAPPED_FILL` | dark tints | Banners floating over everything: a problem, good news, Map mode, Learn. |
+| `BLOCK_TINTS` · `TRACK_FACE / HAND / BODY` · `DONATE` | see theme.rs | Patch block groups; video tracking's three kinds; the Donate button. |
 | `Hue::Media` | `#6996FF` / `#2850BE` | Movies, pictures, the media bin. |
 | `Hue::Effect` | `#B48CFF` / `#6941BE` | Generators, effects, shaders. |
 | `Hue::Live` | `#46CDBE` / `#0A786E` | Cameras, screens, streams, NDI / Syphon in. |
@@ -75,6 +83,9 @@ Values at the default brightness (0.35, "Dark"); `tone(g)` = `(g-3, g-1, g)`, th
 
 Accent on a fill: `theme::tint(base, amount)`. Dimmer accent: `accent().gamma_multiply(k)`. Never a second
 green, never a lighter copy of a hue by hand.
+
+What's still a raw colour outside the theme (21 → 11, `ui/colour_budget.txt`): colours that come from data (a
+laser shape's own colour, an accent swatch, a widget's tint). Everything else is a token.
 
 ## 4. Space, shape, depth
 

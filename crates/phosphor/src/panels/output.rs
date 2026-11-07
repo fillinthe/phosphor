@@ -300,7 +300,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
             if !o.screen.is_empty() {
                 crate::ui::toolbar(ui, |ui| {
                     let connected = crate::screens::find_screen(&displays, &o.screen).is_some();
-                    let (glyph, color) = if connected { (icon::CHECK_CIRCLE, accent()) } else { (icon::WARNING, Color32::from_rgb(230, 160, 60)) };
+                    let (glyph, color) = if connected { (icon::CHECK_CIRCLE, accent()) } else { (icon::WARNING, crate::theme::WARN) };
                     ui.label(RichText::new(format!("{glyph} Screen: {}", o.screen)).small().color(color))
                         .on_hover_text(if connected { "Saved with the project; \"All to their screens\" sends it here" } else { "That screen isn't connected right now" });
                     if crate::ui::small_command(ui, icon::X).on_hover_text("Forget this screen").clicked() {

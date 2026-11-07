@@ -25,7 +25,7 @@ fn permissions(ui: &mut egui::Ui) {
             let (glyph, color) = match status {
                 Status::Allowed => (icon::CHECK_CIRCLE, accent()),
                 Status::NotAsked => (icon::QUESTION, Color32::GRAY),
-                Status::Denied | Status::Restricted => (icon::WARNING, Color32::from_rgb(230, 160, 60)),
+                Status::Denied | Status::Restricted => (icon::WARNING, crate::theme::WARN),
             };
             ui.label(RichText::new(format!("{glyph} {}", status.label())).color(color));
             if *status != Status::Allowed && crate::ui::small_command(ui, "System Settings…").on_hover_text("Open the page where you can allow it").clicked() {

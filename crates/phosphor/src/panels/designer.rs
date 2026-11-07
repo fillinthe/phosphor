@@ -284,7 +284,7 @@ impl View<'_> {
         match part.and_then(|id| self.textures.get(&id)) {
             Some((tex, _)) => paint_texture(p, *tex, fit_rect(rect, self.aspect)),
             None => {
-                p.text(rect.center(), egui::Align2::CENTER_CENTER, "nothing yet", egui::FontId::proportional(11.0), Color32::from_gray(90));
+                p.text(rect.center(), egui::Align2::CENTER_CENTER, "nothing yet", egui::FontId::proportional(11.0), crate::theme::faint());
             }
         }
     }

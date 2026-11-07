@@ -237,7 +237,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
             if edit {
                 for gx in 0..=cols as i32 {
                     for gy in 0..=(height / cell) as i32 {
-                        painter.circle_filled(canvas.min + egui::vec2(gx as f32 * cell, gy as f32 * cell), 1.0, Color32::from_gray(55));
+                        painter.circle_filled(canvas.min + egui::vec2(gx as f32 * cell, gy as f32 * cell), 1.0, crate::theme::line());
                     }
                 }
             }
@@ -294,10 +294,10 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                     } else if picked.contains(&w.id) {
                         Stroke::new(1.5, accent().gamma_multiply(0.7))
                     } else {
-                        Stroke::new(1.0, Color32::from_gray(90))
+                        Stroke::new(1.0, crate::theme::faint())
                     };
                     painter.rect_stroke(rect, 6.0, outline, StrokeKind::Outside);
-                    painter.text(handle.center(), egui::Align2::CENTER_CENTER, if w.locked { icon::LOCK } else { icon::ARROWS_OUT_SIMPLE }, egui::FontId::proportional(11.0), Color32::from_gray(160));
+                    painter.text(handle.center(), egui::Align2::CENTER_CENTER, if w.locked { icon::LOCK } else { icon::ARROWS_OUT_SIMPLE }, egui::FontId::proportional(11.0), crate::theme::faint());
                     // The padlock: click it (or right-click it) to unlock.
                     if w.locked {
                         if corner.clicked() {
@@ -721,7 +721,7 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             p.text(anchor.0, anchor.1, &w.label, font.clone(), Color32::WHITE);
             if !edit {
                 let corner = if w.kind == WidgetKind::Fader { (rect.center_bottom() - egui::vec2(0.0, 4.0), egui::Align2::CENTER_BOTTOM) } else { (rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER) };
-                p.text(corner.0, corner.1, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), Color32::from_gray(220));
+                p.text(corner.0, corner.1, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), crate::theme::ON_PICTURE);
             }
         }
         WidgetKind::XyPad => {
@@ -797,7 +797,7 @@ fn draw_widget(p: &egui::Painter, w: &SurfaceWidget, rect: egui::Rect, edit: boo
             p.rect_stroke(rect, 6.0, Stroke::new(1.0, c.gamma_multiply(0.5)), StrokeKind::Inside);
             let shown = if w.formula.trim().is_empty() { "(no formula)" } else { w.formula.trim() };
             p.text(rect.left_center() + egui::vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, format!("{} = {shown}", w.label), font.clone(), Color32::WHITE);
-            p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), Color32::from_gray(220));
+            p.text(rect.right_center() - egui::vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, format!("{:.0}%", w.value * 100.0), egui::FontId::monospace(10.0), crate::theme::ON_PICTURE);
         }
         WidgetKind::Multi => {
             p.rect_filled(rect, 6.0, p.ctx().global_style().visuals.widgets.inactive.weak_bg_fill);

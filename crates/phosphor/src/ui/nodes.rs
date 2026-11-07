@@ -131,7 +131,7 @@ pub const LIGHT_COLOUR: Color32 = Color32::from_rgb(235, 200, 90);
 fn port_colour(kind: PortKind, lit: bool) -> Color32 {
     match (kind, lit) {
         (_, true) => accent(),
-        (PortKind::Picture, false) => Color32::from_gray(200),
+        (PortKind::Picture, false) => crate::theme::faint(),
         (PortKind::Number, false) => crate::theme::Hue::Control.color(),
         (PortKind::Points, false) => POINTS_COLOUR,
         (PortKind::Light, false) => LIGHT_COLOUR,
@@ -152,7 +152,9 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     let mut drag: Option<WireDrag> = ui.ctx().data(|d| d.get_temp(id.with("wire"))).flatten();
     let mut changed = false;
 
-    let area = ui.available_rect_before_wrap();
+    // The part of the room that shows: the boxes sit on a layer of their own, which doesn't inherit the parent's clip,
+    // so a parent clipped narrower than its room (the Shader Editor's middle column) would let them draw past it.
+    let area = ui.available_rect_before_wrap().intersect(ui.clip_rect());
     // Zoom: pinch or Cmd-scroll over the canvas, round the pointer; the toolbar's −, + round the middle.
     let mut zoom_by = ui.input(|i| i.zoom_delta());
     let mut zoom_at = ui.input(|i| i.pointer.latest_pos()).filter(|p| area.contains(*p));
@@ -171,7 +173,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         zoom = to;
     }
     let painter = ui.painter_at(area);
-    painter.rect_filled(area, 4.0, Color32::from_gray(16));
+    painter.rect_filled(area, 4.0, ui.visuals().extreme_bg_color);
     // Dots every 24 points (at this zoom), moving with the view.
     let step = 24.0 * zoom;
     let start = area.min + egui::vec2(pan.x.rem_euclid(step), pan.y.rem_euclid(step));
@@ -179,7 +181,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
     while y < area.max.y {
         let mut x = start.x;
         while x < area.max.x {
-            painter.circle_filled(egui::pos2(x, y), 0.8, Color32::from_gray(40));
+            painter.circle_filled(egui::pos2(x, y), 0.8, crate::theme::line());
             x += step;
         }
         y += step;
@@ -326,10 +328,10 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             continue;
         }
         let title = egui::Rect::from_min_size(r.min, egui::vec2(r.width(), TITLE_H));
-        painter.rect_filled(r, 5.0, Color32::from_gray(30));
+        painter.rect_filled(r, 5.0, ui.visuals().window_fill);
         painter.rect_filled(title, egui::CornerRadius { nw: 5, ne: 5, sw: 0, se: 0 }, graph.colour(n).gamma_multiply(0.55));
         let picked = selected.contains(&n);
-        painter.rect_stroke(r, 5.0, Stroke::new(if picked { 2.0 } else { 1.0 }, if picked { accent() } else { Color32::from_gray(60) }), StrokeKind::Inside);
+        painter.rect_stroke(r, 5.0, Stroke::new(if picked { 2.0 } else { 1.0 }, if picked { accent() } else { crate::theme::line() }), StrokeKind::Inside);
         let off = graph.bypassed(n);
         let watched = graph.looked_at(n);
         let title_text = match (off, watched) {
@@ -337,7 +339,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             (false, true) => format!("{} {}", icon::EYE, graph.title(n)),
             (false, false) => graph.title(n),
         };
-        painter.text(title.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, title_text, egui::FontId::proportional(13.0), if off { Color32::from_gray(150) } else { Color32::WHITE });
+        painter.text(title.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, title_text, egui::FontId::proportional(13.0), if off { ui.visuals().weak_text_color() } else { ui.visuals().strong_text_color() });
         let t = ui.interact(title, id.with(("title", n)), Sense::click_and_drag()).on_hover_text(graph.about(n));
         if t.clicked() && shift {
             if picked {
@@ -397,7 +399,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         // Input names, and their dots (drag a wired one away to unplug it). Ports beside the settings have no row.
         for (i, (name, kind)) in graph.inputs(n).iter().enumerate().take(ins) {
             let y = r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H;
-            let colour = if *kind == PortKind::Number { port_colour(*kind, false).gamma_multiply(0.8) } else { Color32::from_gray(170) };
+            let colour = if *kind == PortKind::Number { port_colour(*kind, false).gamma_multiply(0.8) } else { crate::theme::faint() };
             painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), colour);
         }
         // The settings: drawn by the graph, clipped to the canvas (a box half off the canvas shows what fits).
@@ -443,7 +445,7 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             changed = true;
         }
         let lit = drag.is_some() && hover_input.is_some_and(|(n, k, ..)| n == *nid && k == *i);
-        let fill = if lit || wired.is_some() { port_colour(*kind, lit) } else { Color32::from_gray(70) };
+        let fill = if lit || wired.is_some() { port_colour(*kind, lit) } else { crate::theme::line() };
         painter.circle(*pos, if *kind == PortKind::Number { PORT_R - 1.0 } else { PORT_R }, fill, Stroke::new(1.0, Color32::BLACK));
     }
     if let Some(d) = drag {

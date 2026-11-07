@@ -10,7 +10,7 @@ pub const DONATE_URL: &str = "https://phosphorfx.com/donate/";
 pub const ISSUES_URL: &str = "https://github.com/fillinthe/phosphor/issues/new";
 
 /// Donate's orange, the same as GCarve's (the one orange in either app).
-pub const DONATE_ORANGE: egui::Color32 = egui::Color32::from_rgb(0xff, 0x9a, 0x2e);
+pub const DONATE_ORANGE: egui::Color32 = crate::theme::DONATE;
 
 /// Heart button that opens the donation page (top bar, menus): filled orange with dark text, like GCarve's.
 pub fn donate_button(ui: &mut egui::Ui) {

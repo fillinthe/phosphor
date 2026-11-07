@@ -457,7 +457,7 @@ pub(crate) fn folder_tile(
     }
     let pic = egui::Rect::from_min_size(rect.min, egui::vec2(w, h));
     let p = ui.painter();
-    p.rect_filled(pic, 4.0, Color32::from_gray(24));
+    p.rect_filled(pic, 4.0, crate::theme::PICTURE_BG);
     if let Some(tex) = picture.and_then(|path| thumbs.get(path)) {
         crate::ui::paint_texture(p, tex, pic.shrink(1.0));
         p.rect_filled(pic, 4.0, Color32::from_black_alpha(150));
@@ -467,12 +467,12 @@ pub(crate) fn folder_tile(
         egui::Align2::CENTER_CENTER,
         icon::FOLDER,
         egui::FontId::proportional((h * 0.4).clamp(18.0, 44.0)),
-        Color32::from_gray(210),
+        crate::theme::ON_PICTURE,
     );
     let stroke = if resp.hovered() {
         Stroke::new(1.5, accent())
     } else {
-        Stroke::new(1.0, Color32::from_gray(50))
+        Stroke::new(1.0, crate::theme::line())
     };
     p.rect_stroke(pic, 4.0, stroke, StrokeKind::Inside);
     let max_chars = ((w / 6.5) as usize).max(8);

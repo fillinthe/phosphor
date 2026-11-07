@@ -4,6 +4,77 @@ use eframe::egui::{self, Color32, CornerRadius, Stroke};
 
 pub const WARN: Color32 = Color32::from_rgb(255, 140, 90);
 
+// Named colours (docs/DESIGN.md, section 3). Each owns one meaning; panels never write a colour of their own.
+
+/// Record, arm, a destructive fill (white words on it); the status line's LIVE dot.
+pub const RECORD: Color32 = Color32::from_rgb(225, 70, 60);
+/// Danger in words and lines: LASERS ON, a laser's floor, a dark area. Brighter than `RECORD` so it reads as text.
+pub const DANGER: Color32 = Color32::from_rgb(255, 80, 60);
+/// A danger zone's see-through fill over a picture (below a laser's floor, a dark area); `strength` 0..1.
+pub fn danger_fill(strength: f32) -> Color32 {
+    Color32::from_rgba_unmultiplied(255, 40, 30, (strength.clamp(0.0, 1.0) * 255.0) as u8)
+}
+/// Mapped to a controller, listening for one (Learn), a beat: gold.
+pub const MAPPED: Color32 = Color32::from_rgb(255, 196, 70);
+/// A see-through `MAPPED` (a loop's span on a bar, a mapped area); `strength` 0..1.
+pub fn mapped_fill(strength: f32) -> Color32 {
+    Color32::from_rgba_unmultiplied(255, 196, 70, (strength.clamp(0.0, 1.0) * 255.0) as u8)
+}
+/// A favourite's star.
+pub const FAVOURITE: Color32 = Color32::from_rgb(255, 210, 90);
+/// A mask's outline and words on the mapping canvas.
+pub const MASK: Color32 = Color32::from_rgb(255, 130, 80);
+/// Points you drag on a canvas (mesh corners, laser points, a dark area that's on).
+pub const HANDLE: Color32 = Color32::from_rgb(100, 210, 255);
+/// Behind every picture (previews, tiles, thumbnails, scopes, laser canvases): near-black at any brightness, so a
+/// picture's own black reads as black.
+pub const PICTURE_BG: Color32 = Color32::from_rgb(5, 7, 8);
+/// Grid lines and guides drawn over `PICTURE_BG`.
+pub const PICTURE_GRID: Color32 = Color32::from_rgb(40, 42, 44);
+/// Words drawn on a picture or a coloured fill (a fader's value, a tab with no kind).
+pub const ON_PICTURE: Color32 = Color32::from_gray(220);
+/// Banners and notices that float over everything (dark at any brightness, light words): a problem, good news,
+/// Map mode, Learn.
+pub const PROBLEM_FILL: Color32 = Color32::from_rgb(52, 26, 20);
+pub const GOOD_FILL: Color32 = Color32::from_rgb(22, 40, 31);
+pub const CONTROL_FILL: Color32 = Color32::from_rgb(14, 34, 40);
+pub const MAPPED_FILL: Color32 = Color32::from_rgb(40, 34, 14);
+/// The patch editor's block groups, in `patch::Group` order: pictures, colour, warp, blur, mix (Numbers use
+/// `Hue::Control`, Output the accent), and a Note.
+pub const BLOCK_TINTS: [Color32; 6] = [
+    Color32::from_rgb(70, 110, 160),
+    Color32::from_rgb(150, 90, 150),
+    Color32::from_rgb(170, 120, 60),
+    Color32::from_rgb(80, 140, 130),
+    Color32::from_rgb(110, 110, 170),
+    Color32::from_rgb(120, 110, 70),
+];
+/// Video tracking's three kinds on the preview: a face, a hand, a body.
+pub const TRACK_FACE: Color32 = Color32::from_rgb(255, 210, 80);
+pub const TRACK_HAND: Color32 = Color32::from_rgb(90, 220, 255);
+pub const TRACK_BODY: Color32 = Color32::from_rgb(170, 255, 120);
+/// The Donate button (the same orange as the owner's other apps).
+pub const DONATE: Color32 = Color32::from_rgb(0xff, 0x9a, 0x2e);
+
+/// The brightness the interface is at (`set_brightness`), as f32 bits.
+static BRIGHTNESS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+fn brightness() -> f32 {
+    f32::from_bits(BRIGHTNESS.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// A line that sits back: a resting border, a separator, a dot that's off. Follows the brightness.
+pub fn line() -> Color32 {
+    tone(palette(brightness()).stroke)
+}
+
+/// Words and borders a step quieter than the text: "not shown", a placeholder's icon, a hovered border.
+/// Follows the brightness (lighter than the panel on the dark side, darker on the light side).
+pub fn faint() -> Color32 {
+    let s = palette(brightness()).stroke;
+    if LIGHT.load(std::sync::atomic::Ordering::Relaxed) { tone(s.saturating_sub(80)) } else { tone(s.saturating_add(85)) }
+}
+
 /// True while the interface is on the light side (`set_brightness` above about half).
 static LIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -229,6 +300,7 @@ pub fn tooltips_on() -> bool {
 pub fn set_brightness(ctx: &egui::Context, b: f32) {
     let light = b > 0.5;
     LIGHT.store(light, std::sync::atomic::Ordering::Relaxed);
+    BRIGHTNESS.store(b.to_bits(), std::sync::atomic::Ordering::Relaxed);
     let p = palette(b);
     let accent = accent();
     let mut v = if light { egui::Visuals::light() } else { egui::Visuals::dark() };
@@ -279,6 +351,20 @@ pub fn set_brightness(ctx: &egui::Context, b: f32) {
 
 #[cfg(test)]
 mod brightness_tests {
+    /// `line` and `faint` follow the brightness: faint reads against the panel on both sides of the middle.
+    #[test]
+    fn quiet_colours_follow_the_brightness() {
+        let ctx = eframe::egui::Context::default();
+        for b in [0.0, 0.35, 0.5, 0.75, 1.0] {
+            super::set_brightness(&ctx, b);
+            let panel = super::palette(b).panel as i32;
+            let faint = super::faint().g() as i32;
+            assert!((faint - panel).abs() >= 70, "faint {faint} too close to the panel {panel} at {b}");
+            assert_ne!(super::line(), super::faint());
+        }
+        super::set_brightness(&ctx, super::DEFAULT_BRIGHTNESS);
+    }
+
     #[test]
     fn brightness_blends_between_anchors() {
         assert_eq!(super::palette(0.35).panel, 21, "the default is Phosphor's usual panel");

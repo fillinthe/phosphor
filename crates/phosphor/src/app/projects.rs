@@ -101,15 +101,15 @@ fn project_card(ui: &mut egui::Ui, card: &Card, picture: Option<egui::TextureId>
     let hovered = r.hovered() && card.there;
     p.rect_filled(rect, 6.0, if hovered { v.widgets.hovered.weak_bg_fill } else { v.faint_bg_color });
     let pic = egui::Rect::from_min_size(rect.min + egui::vec2(6.0, 6.0), egui::vec2(CARD_W - 12.0, PICTURE_H - 12.0));
-    let dim = if card.there { Color32::WHITE } else { Color32::from_gray(90) };
+    let dim = if card.there { Color32::WHITE } else { crate::theme::faint() };
     match picture {
         Some(tex) => {
             p.image(tex, pic, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), dim);
         }
         None => {
-            p.rect_filled(pic, 4.0, Color32::from_gray(18));
+            p.rect_filled(pic, 4.0, crate::theme::PICTURE_BG);
             let glyph = if card.path.is_none() { icon::CLOUD } else { icon::FILM_STRIP };
-            p.text(pic.center(), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(30.0), Color32::from_gray(70));
+            p.text(pic.center(), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(30.0), crate::theme::PICTURE_GRID);
         }
     }
     if !card.there {

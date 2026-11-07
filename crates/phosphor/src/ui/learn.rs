@@ -50,7 +50,7 @@ pub(crate) fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
 }
 
 /// The colour that says "mapped to a controller" (outline and tint on the control, Map mode, the menu).
-pub(crate) const MAPPED: Color32 = Color32::from_rgb(255, 196, 70);
+pub(crate) const MAPPED: Color32 = crate::theme::MAPPED;
 
 /// Typed-in mapping drafts, remembered per control while the menu is open.
 /// The "Map" section of any control's right-click menu: Learn, the built-in OSC address, typed

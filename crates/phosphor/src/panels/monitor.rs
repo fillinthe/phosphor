@@ -115,7 +115,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
     });
     st.monitors.insert(n, cfg);
     let rect = ui.available_rect_before_wrap();
-    ui.painter().rect_filled(rect, 4.0, Color32::from_gray(6));
+    ui.painter().rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
     let frame = fit_rect(rect.shrink(4.0), aspect);
     let tex = match cfg.source {
         MonitorSource::Output => st.texture,

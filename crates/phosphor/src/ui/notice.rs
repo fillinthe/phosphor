@@ -44,7 +44,7 @@ pub(crate) fn notice_bar(ctx: &egui::Context, st: &mut State, now: f64) {
         ctx.request_repaint_after(std::time::Duration::from_millis(500));
         return;
     }
-    let fill = if problem { egui::Color32::from_rgb(54, 30, 24) } else { egui::Color32::from_rgb(24, 34, 30) };
+    let fill = if problem { crate::theme::PROBLEM_FILL } else { crate::theme::GOOD_FILL };
     // (At the bottom, just above the status line: it never covers the menus or the panels' tabs.)
     egui::Area::new(egui::Id::new("notice_bar")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -36.0)).show(ctx, |ui| {
         ui.set_max_width(ctx.content_rect().width() - 40.0);

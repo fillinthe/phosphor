@@ -215,7 +215,7 @@ pub fn draw(kind: ScopeKind, rgba: &[u8], w: usize, h: usize) -> egui::ColorImag
     };
     let mut image = egui::ColorImage::new(SIZE, counts.iter().map(|c| colour(*c)).collect());
     // Guides: 25 / 50 / 75 % lines (or the vectorscope's circle).
-    let guide = egui::Color32::from_gray(55);
+    let guide = crate::theme::PICTURE_GRID;
     if kind == ScopeKind::Vectorscope {
         let (cx, cy, r) = (sw as f32 / 2.0, sh as f32 / 2.0, sh as f32 / 2.0 - 2.0);
         for k in 0..360 {

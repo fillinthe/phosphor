@@ -55,7 +55,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             .response
             .on_hover_text("Send MIDI clock (24 a beat, with Start) to a MIDI output: drum machines, sequencers and other apps follow Phosphor's tempo");
             if let Some(e) = &control.clock_out_error {
-                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(Color32::from_rgb(230, 160, 60)));
+                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(crate::theme::WARN));
             }
             let shown = if control.mtc_out_port.is_empty() { "Off".to_string() } else { control.mtc_out_port.clone() };
             crate::ui::dropdown(ui, "mtc_out", 140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
@@ -86,7 +86,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             .response
             .on_hover_text("Send MIDI timecode (25 fps) to a MIDI output: the show clock, or the time of day. Lighting desks, DAWs and other apps follow it");
             if let Some(e) = &control.mtc_out_error {
-                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(Color32::from_rgb(230, 160, 60)));
+                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(crate::theme::WARN));
             }
         }
         crate::ui::field_menu(ui, label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
@@ -303,7 +303,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
             None => {}
         }
         if listening {
-            ui.label(RichText::new(format!("{} Listening… touch a knob, pad or key, or send OSC", icon::EAR)).color(Color32::from_rgb(255, 205, 90)));
+            ui.label(RichText::new(format!("{} Listening… touch a knob, pad or key, or send OSC", icon::EAR)).color(crate::theme::MAPPED));
             ui.ctx().request_repaint();
             if crate::ui::command(ui, "Cancel").clicked() {
                 control.listen_source = false;
@@ -379,7 +379,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 // Live meter: lights up and shows the value while this input moves.
                 let live = last.as_ref().filter(|(s, _)| *s == m.source).map(|(_, v)| *v);
                 let (r, _) = ui.allocate_exact_size(egui::vec2(36.0, 8.0), Sense::hover());
-                ui.painter().rect_filled(r, 2.0, Color32::from_gray(35));
+                ui.painter().rect_filled(r, 2.0, crate::theme::line());
                 if let Some(v) = live {
                     let mut fill = r;
                     fill.set_width(r.width() * v.clamp(0.0, 1.0));
