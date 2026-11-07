@@ -1028,6 +1028,7 @@ impl Patch {
             ("Strips shoved sideways, red and blue apart, scanlines and dark corners: a broken TV", Patch::glitch_tv()),
             ("A generator: plasma wrapped into a tunnel, echoing its last frame", Patch::tunnel_trails()),
             ("A generator: pulsing dots streaked from the centre, colours cycling", Patch::pulse_dots()),
+            ("Numbers at work: an LFO breathes the hue, a Ramp makes the pixels bigger across the picture, a Pulse strobes", Patch::numbers_at_work()),
         ]
     }
 
@@ -1076,6 +1077,28 @@ impl Patch {
         p.connect(polar, mix, 0);
         p.connect(last, mix, 1);
         p.connect(mix, out, 0);
+        p
+    }
+
+    fn numbers_at_work() -> Patch {
+        let mut p = Patch::new("Numbers at Work", false);
+        let (input, out) = (p.nodes[0].id, p.nodes[1].id);
+        p.nodes[1].pos = [1060.0, 60.0];
+        let hue = p.add("hue", [280.0, 20.0]);
+        let pix = p.add("pixelate", [540.0, 20.0]);
+        let strobe = p.add("strobe", [800.0, 20.0]);
+        let lfo = p.add("lfo", [280.0, 220.0]);
+        let ramp = p.add("ramp", [540.0, 220.0]);
+        let pulse = p.add("pulse", [800.0, 220.0]);
+        p.connect(input, hue, 0);
+        p.connect(hue, pix, 0);
+        p.connect(pix, strobe, 0);
+        p.connect(strobe, out, 0);
+        // Into the first setting of each (Shift, Size, Rate).
+        let first = |p: &Patch, id: u32| p.node(id).and_then(|n| block(&n.block)).map_or(0, |b| b.inputs.len());
+        p.connect(lfo, hue, first(&p, hue));
+        p.connect(ramp, pix, first(&p, pix));
+        p.connect(pulse, strobe, first(&p, strobe) + 2);
         p
     }
 
@@ -1453,7 +1476,7 @@ mod tests {
             assert!(!about.is_empty());
             check(&p);
         }
-        assert_eq!(Patch::examples().len(), 5);
+        assert_eq!(Patch::examples().len(), 6);
     }
 
     #[test]

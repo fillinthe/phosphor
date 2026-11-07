@@ -128,8 +128,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Every setting of every block has a small dot beside it: wire a number block into it and the setting follows
   the number, per frame and per pixel (an LFO on Hue shift, a Ramp on Pixelate's size, one picture's brightness
   on another's blur…). A setting that follows a number takes no parameter.
-- Four more ready-made patches in Shader Editor › + Patch: Neon Edges, Glitch TV, Tunnel Trails and Pulse Dots
-  (the last two are generators). Open one and change any block.
+- Five more ready-made patches in Shader Editor › + Patch: Neon Edges, Glitch TV, Tunnel Trails and Pulse Dots
+  (the last two are generators) and Numbers at Work (an LFO, a Ramp and a Pulse driving settings). Open one and
+  change any block. The help above the canvas says what the editor can do now.
 
 **Designer**
 - Tidy (in the Designer canvas's zoom bar) lays its boxes out left to right by their wiring, nothing overlapping.
