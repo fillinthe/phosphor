@@ -820,9 +820,12 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
                     }
                 }
                 ui.separator();
-                if crate::ui::command(ui, "Example: kaleidoscope glow with trails").on_hover_text("The picture through a kaleidoscope and a glow, mixed with its own last frame (trails): open it and change any block").clicked() {
-                    create = Patch::kaleido_glow_trails().compile().ok();
-                    ui.close();
+                crate::ui::hint(ui, "Examples: open one and change any block");
+                for (about, example) in Patch::examples() {
+                    if crate::ui::command(ui, example.name.clone()).on_hover_text(about).clicked() {
+                        create = example.compile().ok();
+                        ui.close();
+                    }
                 }
             })
             .response
