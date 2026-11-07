@@ -95,8 +95,7 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
         let current = layer.clip_settings();
         let lid = layer.id;
         let k = layer.clip_slot_mut(c);
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("When pressed");
+        crate::ui::field(ui, "When pressed", |ui| {
             choice_combo(ui, ("clip_trigger", lid, c), &mut k.trigger, 150.0, false);
         });
         if is_movie {

@@ -222,8 +222,7 @@ pub(crate) fn group_settings(ui: &mut egui::Ui, mapping: &mut Mapping, ids: &[u6
         all(mapping, &|s| s.opacity = opacity);
     }
     let mut blend = first.blend;
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Blend");
+    crate::ui::field(ui, "Blend", |ui| {
         choice_buttons(ui, &mut blend, |_, _| {});
     });
     if blend != first.blend {

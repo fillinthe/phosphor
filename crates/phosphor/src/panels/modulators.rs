@@ -69,8 +69,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                 // Hand / MIDI knob: a fader that any knob, OSC message or the remote can move (right-click it: Learn).
                 if let Some(band) = &mut m.band {
                     // A sound band: its value follows the sound (the audio input or the clips' sound).
-                    crate::ui::toolbar(ui, |ui| {
-                        ui.label("Sound from");
+                    crate::ui::field(ui, "Sound from", |ui| {
                         guarded!(ui, band[0], egui::DragValue::new(&mut band[0]).range(20.0..=16_000.0).speed(2.0).suffix(" Hz"));
                         ui.label("to");
                         guarded!(ui, band[1], egui::DragValue::new(&mut band[1]).range(20.0..=16_000.0).speed(2.0).suffix(" Hz"));

@@ -921,8 +921,7 @@ pub(crate) fn widget_editor(ui: &mut egui::Ui, st: &mut State, id: u64, targets:
             ui.add_space(4.0);
         }
         if w.kind == WidgetKind::Multi {
-            crate::ui::toolbar(ui, |ui| {
-                ui.label("Bars");
+            crate::ui::field(ui, "Bars", |ui| {
                 let mut n = w.bars.len();
                 if guarded!(ui, n, egui::DragValue::new(&mut n).range(1..=64)).changed() {
                     w.set_bar_count(n);

@@ -273,8 +273,7 @@ pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &La
                     layer.collection = None;
                 }
             });
-            ui.horizontal_wrapped(|ui| {
-                ui.label("Order");
+            crate::ui::field(ui, "Order", |ui| {
                 use phosphor_engine::Autopilot;
                 let orders: Vec<(Autopilot, String)> = [Autopilot::Next, Autopilot::Previous, Autopilot::Random].into_iter().map(|a| (a, a.name().to_string())).collect();
                 segmented(ui, &mut layer.autopilot, &orders, |_, _, _| {});

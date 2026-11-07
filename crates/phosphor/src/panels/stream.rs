@@ -22,8 +22,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
     let running = stream.running();
     ui.add_enabled_ui(!running, |ui| {
         let s = &mut stream.settings;
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Destination");
+        crate::ui::field(ui, "Destination", |ui| {
             crate::ui::dropdown(ui, "stream_dest", 160.0).selected_text(s.destination.name()).show_ui(ui, |ui| {
                 for d in Destination::ALL {
                     crate::ui::pick_value(ui, &mut s.destination, d, d.name());
@@ -96,8 +95,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                         choose_file = true;
                     }
                 });
-                crate::ui::toolbar(ui, |ui| {
-                    ui.label("Format");
+                crate::ui::field(ui, "Format", |ui| {
                     choice_combo(ui, "record_format", &mut s.file_format, 200.0, false);
                     if s.file_format != crate::stream::FileFormat::Auto {
                         help(ui, "Hap is encoded by Phosphor at the full canvas size; the movie plays back with almost no CPU in Phosphor, VDMX, Resolume and MadMapper.");
@@ -105,8 +103,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
                 });
             }
         }
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Size");
+        crate::ui::field(ui, "Size", |ui| {
             let current = if s.height == 0 { format!("Canvas ({cw}×{ch})") } else { format!("{}p", s.height) };
             ComboBox::from_id_salt("stream_size").selected_text(current).show_ui(ui, |ui| {
                 crate::ui::pick_value(ui, &mut s.height, 0, format!("Canvas ({cw}×{ch})"));
@@ -126,8 +123,7 @@ pub(crate) fn stream(ui: &mut egui::Ui, st: &mut State) {
             s.kbps = kbps.round() as u32;
         }
         #[cfg(not(target_arch = "wasm32"))]
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Audio");
+        crate::ui::field(ui, "Audio", |ui| {
             let current = if s.audio_device < 0 {
                 "None".to_string()
             } else {

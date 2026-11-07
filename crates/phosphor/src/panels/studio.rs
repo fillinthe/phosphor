@@ -888,8 +888,7 @@ pub(crate) fn properties(ui: &mut egui::Ui, st: &mut State) {
             });
             toggle(ui, &mut o.mapping.enabled, label(icon::PROJECTOR_SCREEN, "Mapping on")).on_hover_text("When on, this output shows only its slices");
             super::program_picker(ui, o, &comps);
-            crate::ui::toolbar(ui, |ui| {
-                ui.label("Size");
+            crate::ui::field(ui, "Size", |ui| {
                 guarded!(ui, o.width, egui::DragValue::new(&mut o.width).range(0..=8192).suffix(" w"));
                 guarded!(ui, o.height, egui::DragValue::new(&mut o.height).range(0..=8192).suffix(" h"));
                 hint(ui, "0 = canvas size");

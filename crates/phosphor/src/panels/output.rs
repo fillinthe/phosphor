@@ -126,8 +126,7 @@ fn gpu_row(ui: &mut egui::Ui, st: &mut State) {
     if names.len() < 2 && wanted.is_none() {
         return;
     }
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Graphics card");
+    crate::ui::field(ui, "Graphics card", |ui| {
         let shown = wanted.clone().unwrap_or_else(|| "Automatic".into());
         let mut pick: Option<Option<String>> = None;
         crate::ui::dropdown(ui, "gpu_pick", 220.0).selected_text(&shown).show_ui(ui, |ui| {
@@ -454,8 +453,7 @@ pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputC
     if comps.len() < 2 {
         return;
     }
-    crate::ui::toolbar(ui, |ui| {
-        ui.label("Shows");
+    crate::ui::field(ui, "Shows", |ui| {
         let current = o.program.and_then(|id| comps.iter().find(|(c, _, _)| *c == id)).map_or("Main mix".to_string(), |(_, n, _)| format!("Comp: {n}"));
         crate::ui::dropdown(ui, ("output_program", o.id), 180.0).selected_text(current).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut o.program, None, "Main mix");
@@ -506,13 +504,11 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
         });
         ui.separator();
         crate::ui::heading(ui, "Grid");
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Cells across");
+        crate::ui::field(ui, "Cells across", |ui| {
             guarded!(ui, g.cells, egui::DragValue::new(&mut g.cells).range(2..=64));
         });
         crate::ui::toggle(ui, &mut g.crosshair, "Crosshair, circle and diagonals");
-        crate::ui::toolbar(ui, |ui| {
-            ui.label("Line");
+        crate::ui::field(ui, "Line", |ui| {
             guarded!(ui, g.width, egui::DragValue::new(&mut g.width).range(0.5..=12.0).speed(0.1).suffix(" px"));
         });
         ui.horizontal(|ui| {
