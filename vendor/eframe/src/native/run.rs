@@ -85,6 +85,9 @@ struct WinitAppWrapper<T: WinitApp> {
     winit_app: T,
     return_result: Result<(), crate::Error>,
     run_and_return: bool,
+    /// PHOSPHOR PATCH: true while painting unfocused windows directly (Windows), so the nested
+    /// `check_redraw_requests` doesn't paint them again (each is painted at most once per pass).
+    painting_unfocused: bool,
 }
 
 impl<T: WinitApp> WinitAppWrapper<T> {
@@ -94,6 +97,7 @@ impl<T: WinitApp> WinitAppWrapper<T> {
             winit_app,
             return_result: Ok(()),
             run_and_return,
+            painting_unfocused: false,
         }
     }
 
@@ -193,6 +197,7 @@ impl<T: WinitApp> WinitAppWrapper<T> {
         let now = Instant::now();
 
         let mut invisible_window_ids = Vec::new();
+        let mut unfocused_window_ids = Vec::new();
 
         self.windows_next_repaint_times
             .retain(|window_id, repaint_time| {
@@ -208,6 +213,13 @@ impl<T: WinitApp> WinitAppWrapper<T> {
                     // See: https://github.com/emilk/egui/issues/5229
                     if is_invisible_or_minimized(&window) {
                         invisible_window_ids.push(*window_id);
+                    } else if cfg!(target_os = "windows") && !window.has_focus() && !self.painting_unfocused {
+                        // PHOSPHOR PATCH: on Windows `request_redraw` becomes a WM_PAINT, which Windows only
+                        // delivers once a window's message queue is empty. While you drag in the control
+                        // window its mouse messages and immediate repaints never let that happen, so an output
+                        // window on a projector froze until clicked. Paint unfocused windows directly instead,
+                        // at the pace their repaints are asked for. Keep this when upgrading eframe.
+                        unfocused_window_ids.push(*window_id);
                     } else {
                         log::trace!("request_redraw for {window_id:?}");
                         // Don't switch to `ControlFlow::Poll` here. `request_redraw`
@@ -223,6 +235,16 @@ impl<T: WinitApp> WinitAppWrapper<T> {
                 }
                 false
             });
+
+        // PHOSPHOR PATCH (see above): unfocused windows on Windows, painted now.
+        if !unfocused_window_ids.is_empty() {
+            self.painting_unfocused = true;
+            for window_id in &unfocused_window_ids {
+                let event_result = self.winit_app.run_ui_and_paint(event_loop, *window_id);
+                self.handle_event_result(event_loop, event_result);
+            }
+            self.painting_unfocused = false;
+        }
 
         // Paint invisible windows directly, since they won't receive
         // RedrawRequested events on Windows. This ensures that viewport
