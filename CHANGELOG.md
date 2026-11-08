@@ -136,6 +136,12 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 **Designer**
 - Tidy (in the Designer canvas's zoom bar) lays its boxes out left to right by their wiring, nothing overlapping.
 
+**Effects panel**
+- Right-click an effect for **Send to**: the selected layer, any layer, group or comp, the clip picked in the grid,
+  a media file, or MASTER. A media file keeps the effect and brings it wherever the file plays. Right-click a
+  source for **Use on**: the selected layer, any layer, a new layer or the picked clip. Each opens the Inspector on
+  where it went, with the tile's settings if you set it up first.
+
 **Fixes**
 - Windows: an output window (on a projector, say) no longer freezes while you work in the main window. It used to
   update only after you clicked on it, so you couldn't watch a mapping change on the projector as you made it.

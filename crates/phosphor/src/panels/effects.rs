@@ -269,6 +269,24 @@ pub fn add_effect_as(st: &mut State, target: u64, effect: &str, values: Vec<f32>
     }
 }
 
+/// Adds an effect to a media file's own chain (with the picked tile's settings when it's this effect): it comes
+/// with the file wherever it plays. Returns whether the file is playing somewhere now (None: not in the media bin).
+pub fn add_effect_to_file(st: &mut State, path: &str, effect: &str) -> Option<bool> {
+    st.comp.media_bin.iter().find(|m| m.path == path)?;
+    let (values, mods, mix) = match st.explorer.setup_for(effect) {
+        Some(setup) => setup,
+        None => {
+            let fx = st.comp.new_effect(effect)?;
+            (fx.values, Vec::new(), fx.mix)
+        }
+    };
+    let owner = phosphor_engine::EffectsOwner::File(path.to_string());
+    let playing = st.comp.layers.iter().any(|l| l.clip_effects_from == owner);
+    let fx = prepare_effect(st, effect, values, mods, mix, playing)?;
+    log::info!(target: "phosphor::action", "effect added: {effect} on the file {path}");
+    st.comp.add_file_effect(path, fx).then_some(playing)
+}
+
 /// Adds an effect to one clip (slot `slot` on `layer`): it belongs to the clip and comes back whenever it plays.
 /// A clip playing now gets it on its layer's clip chain right away; otherwise it waits in the clip
 /// (`clip_own_chain` is both). Returns whether it went on live.

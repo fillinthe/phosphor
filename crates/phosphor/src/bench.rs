@@ -56,8 +56,9 @@ pub struct BenchConfig {
     pub hevc: bool,
     /// `--stream rtmp://…` (custom RTMP, no key) and `--stream2 rtmp://…` (second destination) and `--stream-copy file.mp4`.
     pub stream: Option<String>,
-    /// `--right-click-studio`: right-clicks the middle of the Mapping Studio's output canvas (shows its menu).
-    pub right_click_studio: bool,
+    /// `--right-click x,y` (window points, like `--drag`): a real right-click there a second in, so a UI shot shows
+    /// the menu it opens. `--right-click-studio` = just right of the middle of the Mapping Studio's output canvas.
+    pub right_click: Option<String>,
     /// `--drag x,y:x,y` (window points; `studio` = the middle of the Mapping Studio canvas): a real drag with the
     /// mouse, pressed at the first point, moved there in steps, released at the second (drag and drop tests).
     pub drag: Option<(String, String)>,
@@ -145,10 +146,11 @@ impl BenchConfig {
                     continue;
                 }
                 ("--right-click-studio", _) => {
-                    cfg.right_click_studio = true;
+                    cfg.right_click = Some("studio-menu".into());
                     i += 1;
                     continue;
                 }
+                ("--right-click", Some(v)) => cfg.right_click = Some(v),
                 ("--hevc", _) => {
                     cfg.hevc = true;
                     i += 1;
