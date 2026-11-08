@@ -1002,16 +1002,24 @@ pub struct PhosphorApp {
     heartbeat: crate::recovery::Heartbeat,
 }
 
+/// A bench point in window points: "x,y", "studio" (the middle of the Mapping Studio canvas) or "studio-menu" (just
+/// right of it, where its right-click menu opens). None until the Studio has been drawn.
+fn bench_point(ctx: &egui::Context, s: &str) -> Option<egui::Pos2> {
+    let studio = || ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("studio_canvas_rect")));
+    match s {
+        "studio" => studio().map(|r| r.center()),
+        "studio-menu" => studio().map(|r| r.center() + egui::vec2(r.width() * 0.08, 0.0)),
+        _ => {
+            let (x, y) = s.split_once(',')?;
+            Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
+        }
+    }
+}
+
 /// Bench `--drag`: one step of a scripted mouse drag per UI frame, starting a second in (the panels are drawn).
 fn bench_drag(run: &mut BenchRun, ctx: &egui::Context, raw: &mut egui::RawInput) {
     let Some((from, to)) = run.cfg.drag.clone() else { return };
-    let point = |s: &str| -> Option<egui::Pos2> {
-        if s == "studio" {
-            return ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("studio_canvas_rect"))).map(|r| r.center());
-        }
-        let (x, y) = s.split_once(',')?;
-        Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
-    };
+    let point = |s: &str| bench_point(ctx, s);
     let step = ctx.data(|d| d.get_temp::<u32>(egui::Id::new("bench_drag_step"))).unwrap_or(0);
     if ctx.input(|i| i.time) < 1.0 {
         return;
@@ -1032,21 +1040,24 @@ fn bench_drag(run: &mut BenchRun, ctx: &egui::Context, raw: &mut egui::RawInput)
 }
 
 impl eframe::App for PhosphorApp {
-    /// Bench `--right-click-studio`: a real right-click (press + release) in the middle of the Studio canvas, a
-    /// moment after it has been drawn, so a UI shot can show the menu.
+    /// Bench `--right-click x,y`: a real right-click (press + release) a second in (the panels are drawn), so a UI
+    /// shot can show the menu it opens.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         let Some(run) = self.bench.as_mut() else { return };
         bench_drag(run, ctx, raw);
-        if !run.cfg.right_click_studio {
+        let Some(at) = run.cfg.right_click.clone() else { return };
+        // "x,y@3": at 3 seconds instead of 1 (tiles and thumbnails settle first).
+        let (where_, when) = at.split_once('@').map_or((at.as_str(), 1.0), |(w, t)| (w, t.parse().unwrap_or(1.0)));
+        if ctx.input(|i| i.time) < when {
             return;
         }
-        let Some(rect) = ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("studio_canvas_rect"))) else { return };
-        let p = rect.center() + egui::vec2(rect.width() * 0.08, 0.0);
+        let Some(p) = bench_point(ctx, where_) else { return };
         raw.events.push(egui::Event::PointerMoved(p));
         for pressed in [true, false] {
             raw.events.push(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() });
         }
-        run.cfg.right_click_studio = false;
+        run.cfg.right_click = None;
+        println!("RIGHT_CLICK {at}");
     }
 
     /// Runs every frame, and on its own while the control window is minimized or covered

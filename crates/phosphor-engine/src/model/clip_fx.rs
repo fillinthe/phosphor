@@ -168,6 +168,18 @@ impl Composition {
         }
     }
 
+    /// Adds an effect to a media file's own chain: it comes with the file wherever it plays. A layer playing the file
+    /// now gets it at once (its clip chain is the file's while it plays). False when the file isn't in the media bin.
+    pub fn add_file_effect(&mut self, path: &str, fx: EffectState) -> bool {
+        let Some(item) = self.media_bin.iter_mut().find(|m| m.path == path) else { return false };
+        item.effects.push(fx.clone());
+        let owner = EffectsOwner::File(path.to_string());
+        for l in self.layers.iter_mut().filter(|l| l.clip_effects_from == owner) {
+            l.clip_effects.push(fx.clone());
+        }
+        true
+    }
+
     /// A file's own effects are dropped (also from layers playing it now). Returns how many there were.
     pub fn forget_file_effects(&mut self, path: &str) -> usize {
         let owner = EffectsOwner::File(path.to_string());
@@ -188,6 +200,23 @@ impl Composition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_effect_added_to_a_file_comes_with_it_and_shows_where_it_plays() {
+        let mut c = Composition::default();
+        c.media_bin.push(crate::MediaItem { name: "a.mov".into(), path: "/x/a.mov".into(), ..Default::default() });
+        let l = c.add_layer();
+        let lid = l.id;
+        c.layer_mut(lid).unwrap().source = movie("a.mov");
+        c.sync_clip_effects();
+        let blur = fx(&mut c, "blur");
+        assert!(c.add_file_effect("/x/a.mov", blur.clone()));
+        assert_eq!(c.media_bin[0].effects, vec![blur.clone()], "kept with the file");
+        assert_eq!(c.layer(lid).unwrap().clip_effects, vec![blur.clone()], "on the layer playing it, at once");
+        c.store_file_effects();
+        assert_eq!(c.media_bin[0].effects.len(), 1, "not doubled when the layer's chain is stored back");
+        assert!(!c.add_file_effect("/x/missing.mov", blur), "a file not in the media bin");
+    }
 
     fn fx(c: &mut Composition, name: &str) -> EffectState {
         EffectState { id: c.new_id(), effect: name.into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 }

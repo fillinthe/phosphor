@@ -142,7 +142,92 @@ enum AddTo {
     Clip(u64, usize),
 }
 
+/// Where a tile's right-click "Send to" puts it.
+enum SendTo {
+    /// A layer, group, comp or MASTER (an effect joins its chain; a source plays on the layer).
+    Chain(u64),
+    /// A clip in the grid: layer and slot.
+    Clip(u64, usize),
+    /// A media file's own effects (they come with it wherever it plays).
+    File(String),
+    /// A source on a new layer.
+    NewLayer,
+}
+
+/// The "Send to" part of a tile's right-click menu: the selected layer, any layer, group or comp, the clip picked in
+/// the grid, a media file, MASTER (effects); the selected layer, any layer, a new layer or the clip (sources).
+fn send_to_menu(ui: &mut egui::Ui, st: &State, sources: bool) -> Option<SendTo> {
+    let mut out = None;
+    let mut pick = |ui: &mut egui::Ui, text: String, to: SendTo| {
+        if crate::ui::command(ui, text).clicked() {
+            out = Some(to);
+            ui.close();
+        }
+    };
+    crate::ui::heading(ui, if sources { "Use on" } else { "Send to" });
+    if let Some(id) = st.selected.filter(|id| *id != MASTER_ID) {
+        let short = |n: &str| crate::ui::short_name(n, 24);
+        let text = st.comp.layer(id).map(|l| format!("Selected layer: {}", short(&l.name))).or_else(|| {
+            if sources {
+                None
+            } else {
+                st.comp.group(id).map(|g| format!("Selected group: {}", short(&g.name))).or_else(|| st.comp.comp(id).map(|c| format!("Selected comp: {}", short(&c.name))))
+            }
+        });
+        if let Some(text) = text {
+            pick(ui, label(icon::CURSOR_CLICK, &text), SendTo::Chain(id));
+        }
+    }
+    let layers: Vec<(u64, String)> = st.comp.layers.iter().filter(|l| st.comp.in_open_comp(l)).map(|l| (l.id, l.name.clone())).collect();
+    if !layers.is_empty() {
+        ui.menu_button(label(icon::STACK, "Layer"), |ui| {
+            for (id, name) in &layers {
+                pick(ui, crate::ui::short_name(name, 32), SendTo::Chain(*id));
+            }
+        });
+    }
+    if sources {
+        pick(ui, label(icon::PLUS, "A new layer"), SendTo::NewLayer);
+    } else {
+        if !st.comp.groups.is_empty() {
+            ui.menu_button(label(icon::FOLDERS, "Group"), |ui| {
+                for g in &st.comp.groups {
+                    pick(ui, crate::ui::short_name(&g.name, 32), SendTo::Chain(g.id));
+                }
+            });
+        }
+        if st.comp.comps.len() > 1 {
+            ui.menu_button(label(icon::FRAME_CORNERS, "Comp"), |ui| {
+                for c in &st.comp.comps {
+                    pick(ui, crate::ui::short_name(&c.name, 32), SendTo::Chain(c.id));
+                }
+            });
+        }
+    }
+    if let Some((l, c)) = st.selected_clip
+        && let Some(k) = st.comp.layer(l).and_then(|l| l.clips.get(c)).filter(|k| !k.is_empty())
+    {
+        pick(ui, label(icon::FILM_STRIP, &format!("Clip: {}", crate::ui::short_name(&k.name, 24))), SendTo::Clip(l, c));
+    }
+    if !sources {
+        if !st.comp.media_bin.is_empty() {
+            ui.menu_button(label(icon::FILE_VIDEO, "Media file"), |ui| {
+                crate::ui::hint(ui, "It comes with the file wherever it plays");
+                crate::ui::column_scroll(ui).max_height(320.0).show(ui, |ui| {
+                    for m in &st.comp.media_bin {
+                        pick(ui, crate::ui::short_name(&m.name, 32), SendTo::File(m.path.clone()));
+                    }
+                });
+            });
+        }
+        pick(ui, label(icon::GLOBE, "MASTER"), SendTo::Chain(MASTER_ID));
+    }
+    ui.separator();
+    out
+}
+
 enum TileAction {
+    Send(&'static str, SendTo),
     Apply(&'static str),
     Favorite(String),
     Hide(String),
@@ -396,6 +481,9 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                 let params: Vec<&str> = desc.params.iter().map(|p| p.name).collect();
                 let resp = resp.on_hover_text(format!("{about}\n\nControls: {}", if params.is_empty() { "none".into() } else { params.join(", ") }));
                 resp.right_menu(|ui| {
+                    if let Some(to) = send_to_menu(ui, st, st.explorer.sources) {
+                        action = Some(TileAction::Send(desc.id, to));
+                    }
                     let text = if fav { label(icon::STAR, "Remove from favourites") } else { label(icon::STAR, "Add to favourites") };
                     if crate::ui::command(ui, text).clicked() {
                         action = Some(TileAction::Favorite(desc.id.to_string()));
@@ -439,6 +527,38 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         st.open_tab = Some(Tab::Inspector);
     }
     match action {
+        // Sent from the right-click menu: the same paths as the Add buttons and drags; the target is selected and
+        // the Inspector opened on it (a media file: a notice says where it went).
+        Some(TileAction::Send(id, to)) => {
+            let sources = st.explorer.sources;
+            let drag = PaletteDrag { effect: (!sources).then_some(id), generator: sources.then_some(id) };
+            match to {
+                SendTo::Chain(t) => {
+                    apply_palette(st, drag, Some(t));
+                    st.selected = Some(t);
+                    st.open_tab = Some(Tab::Inspector);
+                }
+                SendTo::NewLayer => {
+                    let t = st.add_layer();
+                    apply_palette(st, drag, Some(t));
+                    st.selected = Some(t);
+                    st.open_tab = Some(Tab::Inspector);
+                }
+                SendTo::Clip(layer, slot) => {
+                    drop_on_clip(ui.ctx(), st, drag, layer, slot);
+                    st.open_tab = Some(Tab::Inspector);
+                }
+                SendTo::File(path) => {
+                    let name = shaders::effect(id).map_or(id, |d| d.name);
+                    let file = st.comp.media_bin.iter().find(|m| m.path == path).map(|m| m.name.clone()).unwrap_or_default();
+                    st.notice = Some(match panels::add_effect_to_file(st, &path, id) {
+                        Some(true) => format!("{name} added to {file}: on now, and it comes with the file wherever it plays"),
+                        Some(false) => format!("{name} added to {file}: it comes with the file wherever it plays"),
+                        None => format!("{file} isn't in the media bin any more"),
+                    });
+                }
+            }
+        }
         Some(TileAction::Apply(id)) => apply_palette(st, PaletteDrag { effect: (!st.explorer.sources).then_some(id), generator: st.explorer.sources.then_some(id) }, None),
         Some(TileAction::Hide(id)) => {
             if let Some(i) = st.explorer.hidden.iter().position(|h| *h == id) {
