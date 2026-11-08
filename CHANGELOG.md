@@ -136,6 +136,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 **Designer**
 - Tidy (in the Designer canvas's zoom bar) lays its boxes out left to right by their wiring, nothing overlapping.
 
+**Fixes**
+- Windows: an output window (on a projector, say) no longer freezes while you work in the main window. It used to
+  update only after you clicked on it, so you couldn't watch a mapping change on the projector as you made it.
+
 **Design system**
 - docs/DESIGN.md names the look ("Phosphor CRT": blue-black charcoal, one lit accent, six kind hues, square
   sliders) and sets the rules for fonts, colours, spacing, every control, dark and light, and what never to do.
