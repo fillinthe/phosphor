@@ -163,6 +163,7 @@ mod native {
         d.description().ok().map(|desc| desc.name().to_string())
     }
 
+    // "Make a joyful noise unto the LORD, all the earth: make a loud noise, and rejoice, and sing praise." Psalm 98:4 (KJV)
     pub struct AudioInput {
         stream: Option<cpal::Stream>,
         ring: Ring,

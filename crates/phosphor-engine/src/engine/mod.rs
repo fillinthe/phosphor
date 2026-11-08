@@ -657,6 +657,7 @@ impl Engine {
         }
     }
 
+    // "And God said, Let there be light: and there was light." Genesis 1:3 (KJV)
     pub fn render(&mut self, comp: &Composition, time: f32, mods: &ModInputs) -> FrameInfo {
         let (w, h) = (comp.width.max(16), comp.height.max(16));
         // (A jump in time, a pause: a normal step rather than a leap.)

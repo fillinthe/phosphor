@@ -289,6 +289,7 @@ impl State {
         })
     }
 
+    // "For where two or three are gathered together in my name, there am I in the midst of them." Matthew 18:20 (KJV)
     /// May the guest in seat `from` send this command right now? Only a player, only the
     /// controls the show allows: the Control Surface (their page), clip columns, Surprise.
     pub fn guest_may(&mut self, from: u64, cmd: &Value, now: f64) -> bool {

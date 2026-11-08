@@ -31,6 +31,7 @@ impl State {
         }
     }
 
+    // "So teach us to number our days, that we may apply our hearts unto wisdom." Psalm 90:12 (KJV)
     /// Every frame: moves the playhead while playing, and sets the tracks' controls when it has moved.
     pub(crate) fn run_timeline(&mut self, now: f64) {
         let mut events: Vec<phosphor_engine::Event> = Vec::new();
