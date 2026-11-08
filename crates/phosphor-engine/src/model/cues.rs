@@ -206,6 +206,7 @@ impl Composition {
         Cue { id: self.new_id(), name, layers, slices, lasers, laser_master: self.lasers.master, master_fade: self.master_fade, ..Default::default() }
     }
 
+    // "To every thing there is a season, and a time to every purpose under the heaven." Ecclesiastes 3:1 (KJV)
     /// Starts going to cue `index`: sources change now (through each layer's transition), numbers glide
     /// with `step_cue`. Returns None for a missing cue.
     pub fn go_to_cue(&mut self, index: usize, now: f32) -> Option<CueFade> {

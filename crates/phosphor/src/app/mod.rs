@@ -617,6 +617,7 @@ impl State {
         }
     }
 
+    // "Sing unto him a new song; play skilfully with a loud noise." Psalm 33:3 (KJV)
     /// Fires a trigger now, or queues it for the next beat when quantise is on.
     pub fn trigger(&mut self, t: Trigger, now: f64) {
         let locked = match &t {

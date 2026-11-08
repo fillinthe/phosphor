@@ -306,6 +306,7 @@ impl Composition {
         &mut self.layers[at]
     }
 
+    // "And the light shineth in darkness; and the darkness comprehended it not." John 1:5 (KJV)
     /// Moves the blackout along towards black (on) or lit (off); call once per frame with the time now (seconds).
     pub fn step_blackout(&mut self, now: f64) {
         let dt = ((now - self.blackout_clock) as f32).clamp(0.0, 0.25);

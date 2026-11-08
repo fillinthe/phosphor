@@ -59,6 +59,7 @@ impl PhosphorApp {
         }
     }
 
+    // "Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven." Matthew 5:16 (KJV)
     pub(crate) fn output_windows(&self, ctx: &egui::Context) {
         // Any output open: the displays stay awake (no display sleep / screen saver / lock in the middle of a show).
         let any_open = self.state.output.lock().unwrap().values().any(|o| o.open);

@@ -1,5 +1,6 @@
 //! The BPM clock: tap tempo, beat phase for modulation, and beat boundaries for quantised triggers.
 
+// "Praise him with the timbrel and dance: praise him with stringed instruments and organs." Psalm 150:4 (KJV)
 pub struct Clock {
     pub bpm: f32,
     /// Lock tempo and beat to the audio beat detector.

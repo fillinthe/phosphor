@@ -5,6 +5,7 @@ use phosphor_engine::{CueFade, TimecodeSource};
 
 use super::*;
 
+// "My times are in thy hand." Psalm 31:15 (KJV)
 /// Phosphor's own show clock for timecoded cues: play, pause, back to zero.
 #[derive(Default)]
 pub struct ShowClock {
@@ -69,6 +70,7 @@ pub struct CueRun {
 }
 
 impl State {
+    // "Let all things be done decently and in order." 1 Corinthians 14:40 (KJV)
     /// Goes to cue `index` (fading as the cue says).
     pub fn go_cue(&mut self, index: usize, now: f64) {
         if let Some(fade) = self.comp.go_to_cue(index, now as f32) {
