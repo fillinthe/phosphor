@@ -1,0 +1,5 @@
+# Windows: the C / C++ runtime is linked into Phosphor.exe. Without this the exe needs vcruntime140.dll, msvcp140.dll
+# and vcruntime140_1.dll, which a fresh Windows doesn't have ("VCRUNTIME140.dll was not found" on start) unless
+# something else installed Microsoft's Visual C++ Redistributable. The Windows build checks the exe names none of them.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

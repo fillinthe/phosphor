@@ -75,8 +75,21 @@ fi
 INTEL_RUN=$(bash scripts/ci-run.sh mac-intel.yml --success || true)
 rm -rf dist/intel
 if [ -n "$INTEL_RUN" ] && gh run download "$INTEL_RUN" -R fillinthe/phosphor -n Phosphor-mac-intel -D dist/intel 2>/dev/null; then
+  # GitHub signs it ad-hoc: sign and notarize it here so it opens without a warning, like the Apple Silicon one.
+  if security find-identity -v -p codesigning | grep -q 'Developer ID Application'; then
+    bash scripts/notarize-app-zip.sh dist/intel/Phosphor-mac-intel.zip
+  fi
   ASSETS="$ASSETS dist/intel/Phosphor-mac-intel.zip"
   echo "Adding the Intel Mac build from run $INTEL_RUN"
 fi
+# Unpack every download the ways people's computers do and check it opens (signature, Gatekeeper, libraries).
+CHECK=$(mktemp -d)
+for a in $ASSETS; do cp "$a" "$CHECK/"; done
+if ! bash scripts/check-downloads.sh "$CHECK"; then
+  rm -rf "$CHECK"
+  echo "The downloads didn't pass scripts/check-downloads.sh: nothing published." >&2
+  exit 1
+fi
+rm -rf "$CHECK"
 gh release create "$TAG" $ASSETS -R fillinthe/phosphor --title "Phosphor VJ $VER" --notes-file "$NOTES"
 echo "Published $TAG. Running apps install it within the hour, and when they next open."

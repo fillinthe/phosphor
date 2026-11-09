@@ -171,6 +171,12 @@ fn app_icon() -> std::sync::Arc<eframe::egui::IconData> {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().collect();
+    // Says which Phosphor this is and stops: scripts/check-downloads.sh runs it to see that a download starts at all
+    // (every bundled library found and loaded) without opening a window.
+    if args.get(1).map(String::as_str) == Some("--version") {
+        println!("Phosphor {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     if args.get(1).map(String::as_str) == Some("--watchdog") {
         if let Some(pid) = args.get(2).and_then(|p| p.parse().ok()) {
             recovery::run_watchdog(pid);

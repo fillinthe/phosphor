@@ -109,22 +109,8 @@ while IFS= read -r f; do
 done < <(find "$APP/Contents" -type f \( -name "*.dylib" -o -perm -u+x \) ! -name "*.icns" ! -name "*.plist")
 [[ $too_new == 0 ]] || { echo "Some bundled files need a newer macOS than $MIN_MACOS"; exit 1; }
 
-# Sign inside-out (libraries, framework, then the app); --deep is not reliable for this.
-SIGN_ID="${SIGN_ID:--}"
-if [[ "$SIGN_ID" == "-" ]]; then
-  SIGN_ARGS=(--force --sign -)
-else
-  SIGN_ARGS=(--force --timestamp --options runtime --sign "$SIGN_ID")
-fi
-for lib in "$APP"/Contents/Frameworks/*.dylib; do codesign "${SIGN_ARGS[@]}" "$lib" >/dev/null; done
-codesign "${SIGN_ARGS[@]}" "$APP/Contents/Frameworks/Syphon.framework" >/dev/null
-[[ -f "$APP/Contents/MacOS/ffmpeg" ]] && codesign "${SIGN_ARGS[@]}" "$APP/Contents/MacOS/ffmpeg" >/dev/null
-# The camera extension, before the app around it (its own entitlements; a real one also needs its provisioning profile,
-# see scripts/build-camera-extension.sh).
-CAM="$APP/Contents/Library/SystemExtensions/PhosphorCamera.systemextension"
-[[ -d "$CAM" ]] && codesign "${SIGN_ARGS[@]}" --entitlements vendor/PhosphorCamera.entitlements "$CAM" >/dev/null
-codesign "${SIGN_ARGS[@]}" --entitlements scripts/Phosphor.entitlements "$APP" >/dev/null
-codesign --verify --deep --strict "$APP"
+# Sign inside-out (scripts/sign-app.sh: ad-hoc by default, SIGN_ID = a certificate with the hardened runtime).
+scripts/sign-app.sh "$APP" "${SIGN_ID:--}"
 echo "built $APP ($(du -sh "$APP" | cut -f1))"
 
 # Every panel must draw without panicking before this build goes anywhere.

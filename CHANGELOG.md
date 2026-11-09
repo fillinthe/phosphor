@@ -4,7 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Next (not released yet)
+## 0.5.1 (2026-11-09)
+
+Installs that just work, and tidier panels.
+
+**Installing**
+- Windows: Phosphor starts on a PC that never had Microsoft's Visual C++ runtime installed (it used to stop with
+  "VCRUNTIME140.dll was not found").
+- Intel Macs: the download is signed and checked by Apple like the Apple Silicon one, so it opens without the
+  "could not verify" warning.
+- Every download is unpacked and checked the ways people's computers do it before a release goes out.
 
 **Tidier panels**
 - Control Surface: in a narrow panel the toolbar wraps instead of running off the edge, and the empty canvas's hint

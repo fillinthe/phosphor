@@ -6,7 +6,8 @@ background = defines["background"]  # noqa: F821
 name = os.path.basename(app)
 
 files = [app]
-hide_extensions = [name]
+# (No hide_extensions: it writes Finder information onto the app, which a strict signature check calls detritus.
+# Finder hides ".app" by itself.)
 symlinks = {"Applications": "/Applications"}
 format = "UDZO"
 filesystem = "HFS+"

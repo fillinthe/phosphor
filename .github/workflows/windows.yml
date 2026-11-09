@@ -49,6 +49,15 @@ jobs:
       - name: App
         run: cargo build -p phosphor --release
 
+      # A fresh Windows has no Visual C++ runtime: the exe must not ask for one (.cargo/config.toml links it in).
+      - name: Needs no Visual C++ runtime
+        shell: pwsh
+        run: |
+          $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\phosphor.exe"))
+          $found = [regex]::Matches($text, '(?i)(VCRUNTIME140(_1)?|MSVCP140|VCOMP140)\.dll') | ForEach-Object { $_.Value } | Sort-Object -Unique
+          if ($found) { "RUNTIME needed: $($found -join ', ')"; exit 1 }
+          "RUNTIME ok: Phosphor.exe names no Visual C++ runtime DLL"
+
       - name: App tests
         shell: pwsh
         run: |
