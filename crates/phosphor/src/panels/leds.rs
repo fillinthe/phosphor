@@ -194,7 +194,8 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     });
                 });
                 ui.horizontal_wrapped(|ui| {
-                    choice_buttons(ui, &mut f.shape, |_, _| {});
+                    // (A drop-down: six kinds side by side wrapped onto a second line in a narrow panel.)
+                    choice_combo(ui, ("led_shape", f.id), &mut f.shape, 130.0, false);
                     match f.shape {
                         FixtureShape::Scanned if !f.positions.is_empty() => {
                             hint(ui, format!("{} lights where the camera saw them", f.positions.len()));
@@ -210,7 +211,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                         }
                         FixtureShape::MovingHead if f.head == phosphor_engine::HeadLayout::Custom => {
                             let names: Vec<String> = f.roles.iter().enumerate().map(|(i, r)| format!("{}: {}", i + 1, custom_channel_name(f, *r))).collect();
-                            ui.label(format!("{} channels (its own mode)", f.roles.len())).on_hover_text(names.join("\n"));
+                            hint(ui, format!("{} channels (its own mode)", f.roles.len())).on_hover_text(names.join("\n"));
                         }
                         FixtureShape::MovingHead => {
                             choice_combo(ui, ("head_layout", f.id), &mut f.head, 230.0, false).on_hover_text("Set the head to the DMX mode with these channels");
@@ -252,7 +253,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                         if custom {
                             // A library light's own settings: named by the library, in its channel order.
                             ui.horizontal(|ui| {
-                                Level::percent(&mut e.value, &e.name).width(240.0).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
+                                Level::percent(&mut e.value, &e.name).target(ControlTarget::Fixture { fixture: f.id, param: 5 + i as u8 }).show(ui);
                             });
                             continue;
                         }
@@ -272,16 +273,15 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                         f.extra.push(phosphor_engine::ExtraChannel::default());
                     }
                 }
-                ui.horizontal_wrapped(|ui| {
+                ui.horizontal(|ui| {
                     guarded!(ui, f.universe, egui::DragValue::new(&mut f.universe).range(0..=32767).prefix("universe "));
                     guarded!(ui, f.channel, egui::DragValue::new(&mut f.channel).range(1..=512).prefix("channel "));
-                    ui.spacing_mut().slider_width = 90.0;
-                    ui.horizontal(|ui| {
-                        Level::percent(&mut f.brightness, "Bright").default(1.0).width(140.0).target(ControlTarget::Fixture { fixture: f.id, param: 4 }).show(ui);
-                    });
-                    ui.horizontal(|ui| {
-                        Level::range(&mut f.gamma, 1.0, 3.0, "Gamma").default(2.2).width(140.0).tip("2.2 makes fades look even on most LEDs").show(ui);
-                    });
+                });
+                // Two levels sharing the row, half each (side by side at fixed widths they ran off a narrow card).
+                ui.horizontal(|ui| {
+                    let w = ((ui.available_width() - ui.spacing().item_spacing.x) / 2.0).max(90.0);
+                    Level::percent(&mut f.brightness, "Bright").default(1.0).width(w).target(ControlTarget::Fixture { fixture: f.id, param: 4 }).show(ui);
+                    Level::range(&mut f.gamma, 1.0, 3.0, "Gamma").default(2.2).width(w).tip("2.2 makes fades look even on most LEDs").show(ui);
                 });
             });
             if r.response.clicked() {

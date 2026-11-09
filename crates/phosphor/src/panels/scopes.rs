@@ -30,10 +30,18 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
         crate::scopes::ScopeKind::Histogram => "How much of the picture sits at each level, per colour (left = dark)",
     };
     hint(ui, hint_text);
-    let rect = ui.available_rect_before_wrap();
+    // The frame hugs the scope, under its caption. A graph (waveform, parade, histogram) fills the width and may
+    // grow up to square for a closer read; the vectorscope keeps its own shape (its circle must stay a circle).
+    let room = ui.available_rect_before_wrap();
+    let rect = if st.scopes.kind == crate::scopes::ScopeKind::Vectorscope {
+        let fitted = fit_rect(room, 256.0 / 160.0);
+        fitted.translate(egui::vec2(0.0, room.top() - fitted.top()))
+    } else {
+        egui::Rect::from_min_size(room.min, egui::vec2(room.width(), room.height().min(room.width()).max(room.width() * 160.0 / 256.0).min(room.height())))
+    };
     ui.painter().rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
     match st.scopes.texture(ui.ctx()) {
-        Some(t) => paint_texture(ui.painter(), t.id(), fit_rect(rect.shrink(4.0), 256.0 / 160.0)),
+        Some(t) => paint_texture(ui.painter(), t.id(), rect.shrink(4.0)),
         None => {
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "measuring…", egui::FontId::proportional(13.0), Color32::GRAY);
         }

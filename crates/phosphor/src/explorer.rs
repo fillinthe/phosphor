@@ -423,7 +423,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         if filtered.is_empty() {
             crate::ui::help(ui, "Nothing matches. Clear the search or pick another category.");
         }
-        let tile_w = 152.0;
+        let tile_w = crate::ui::tile_width(ui.available_width(), 152.0, 8.0);
         let tile = egui::vec2(tile_w, tile_w / aspect + 30.0);
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
@@ -1443,7 +1443,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
             if shown.is_empty() {
                 crate::ui::hint(ui, "Nothing matches.");
             }
-            let tile_w = 128.0;
+            let tile_w = crate::ui::tile_width(ui.available_width(), 128.0, 6.0);
             let tile = egui::vec2(tile_w, tile_w / aspect + 20.0);
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);

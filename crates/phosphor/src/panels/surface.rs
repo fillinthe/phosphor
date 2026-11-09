@@ -101,8 +101,8 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     let mut act: Option<Act> = None;
     let copied: Vec<SurfaceWidget> = ctx.data(|d| d.get_temp(egui::Id::new(CLIPBOARD))).unwrap_or_default();
 
-    // Toolbar.
-    ui.horizontal(|ui| {
+    // Toolbar (wraps: the panel is often a narrow column).
+    crate::ui::toolbar(ui, |ui| {
         toggle(ui, &mut edit, label(icon::PENCIL_SIMPLE, "Edit")).on_hover_text("Edit: add, move (drag), resize (drag the corner) and wire up widgets. Off: play them.");
         if edit {
             ui.menu_button(label(icon::PLUS, "Add"), |ui| {
@@ -242,7 +242,8 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
                 }
             }
             if edit && st.comp.surface.on_page().next().is_none() {
-                painter.text(canvas.min + egui::vec2(cell * 0.5, cell * 0.5), egui::Align2::LEFT_TOP, "Right-click anywhere here to add a button, fader or pad (or use Add).", egui::FontId::proportional(13.0), Color32::from_gray(130));
+                let words = painter.layout(crate::i18n::tr("Right-click anywhere here to add a button, fader or pad (or use Add)."), egui::FontId::proportional(13.0), ui.visuals().weak_text_color(), (canvas.width() - cell).max(120.0));
+                painter.galley(canvas.min + egui::vec2(cell * 0.5, cell * 0.5), words, ui.visuals().weak_text_color());
             }
             let mut text_sets: Vec<(u64, String)> = Vec::new();
             for w in st.comp.surface.on_page() {

@@ -213,9 +213,8 @@ pub(crate) fn output_toggle(ui: &mut egui::Ui, on: &mut bool, glyph: &str, name:
 
 pub(crate) fn output_status(ui: &mut egui::Ui, status: OutputStatus) {
     match status {
-        OutputStatus::Off => {
-            hint(ui, "Off");
-        }
+        // (Nothing: the switch beside it already shows it's off, and "Off" after another switch read as that one's.)
+        OutputStatus::Off => {}
         OutputStatus::Waiting(text) => {
             hint(ui, text);
         }

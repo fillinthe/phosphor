@@ -532,11 +532,15 @@ pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, Str
 pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String, bool)]) -> Option<LayerAction> {
     let mut action = None;
     ui.horizontal(|ui| {
-        if crate::ui::command(ui, icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
+        // Too little room for the list and its three icon buttons (a Stack strip in a narrow panel): the list alone,
+        // with Open inside it. The icons used to run off the strip and over the layer's name.
+        let slot = ui.spacing().interact_size.y + 2.0 * ui.spacing().item_spacing.x;
+        let tight = ui.available_width() < 60.0 + 3.0 * slot;
+        if !tight && crate::ui::command(ui, icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
             action = Some(LayerAction::BrowseSources);
         }
         // Leave room for the Open and Live icon buttons so the row never runs off the card.
-        let width = (ui.available_width() - 2.0 * (ui.spacing().interact_size.y + 2.0 * ui.spacing().item_spacing.x)).clamp(60.0, 180.0);
+        let width = if tight { (ui.available_width() - ui.spacing().item_spacing.x).clamp(40.0, 180.0) } else { (ui.available_width() - 2.0 * slot).clamp(60.0, 180.0) };
         crate::ui::dropdown(ui, ("source", layer.id), width).selected_text(layer.source.label()).show_ui(ui, |ui| {
             // Search: every generator (built in and imported) by name; typing goes straight here.
             let id = ui.id().with(("source_search", layer.id));
@@ -564,6 +568,10 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
             }
             if crate::ui::pick_item(ui, layer.source == SourceSpec::None, "No source").clicked() {
                 layer.source = SourceSpec::None;
+            }
+            if tight && crate::ui::pick_item(ui, false, label(icon::FOLDER_OPEN, "Open an image or movie…")).clicked() {
+                action = Some(LayerAction::OpenFile);
+                ui.close();
             }
             if crate::ui::pick_item(ui, matches!(layer.source, SourceSpec::Text(_)), label(icon::TEXT_T, "Text")).on_hover_text("Words on the layer: type them in the Inspector").clicked() && !matches!(layer.source, SourceSpec::Text(_)) {
                 layer.source = SourceSpec::Text(crate::text::default_style());
@@ -631,11 +639,13 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
                 }
             }
         });
-        if crate::ui::command(ui, icon::FOLDER_OPEN).on_hover_text("Open an image or movie file (or drag one onto the window)").clicked() {
+        if !tight && crate::ui::command(ui, icon::FOLDER_OPEN).on_hover_text("Open an image or movie file (or drag one onto the window)").clicked() {
             action = Some(LayerAction::OpenFile);
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(source) = live_menu(ui, layer.id) {
+        if !tight
+            && let Some(source) = live_menu(ui, layer.id)
+        {
             action = Some(LayerAction::Launch(source));
         }
     });

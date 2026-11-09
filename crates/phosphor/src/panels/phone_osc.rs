@@ -46,7 +46,9 @@ pub(crate) fn phone_section(ui: &mut egui::Ui, st: &mut State) {
         let mut live: Vec<_> = senders.iter().filter(|s| s.last_seen.elapsed().as_secs() < 120).collect();
         live.sort_by_key(|s| s.last_seen.elapsed());
         if live.is_empty() {
-            hint(ui, "Nothing from the network yet: move a control on the phone. The Devices panel lists every sender.");
+            ui.label("Move a control on the phone:");
+            hint(ui, "nothing heard yet");
+            help(ui, "Once the phone sends something it's named here. The Devices panel lists every sender.");
         } else {
             let words: Vec<String> = live
                 .iter()

@@ -101,6 +101,13 @@ pub(crate) fn toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R
     .inner
 }
 
+/// How wide each tile of a wrapping grid is so the tiles fill the row: as many columns as fit at `min_w`, then the
+/// leftover shared out (no ragged empty strip down the right of a panel).
+pub(crate) fn tile_width(available: f32, min_w: f32, gap: f32) -> f32 {
+    let columns = ((available + gap) / (min_w + gap)).floor().max(1.0);
+    ((available - gap * (columns - 1.0)) / columns).floor().max(min_w.min(available))
+}
+
 /// One entry in a list or a drop-down (a layer, a device, a size): highlighted when it's the one picked. For a few
 /// options side by side use `segmented` / `choice_buttons`.
 pub(crate) fn pick_item(ui: &mut egui::Ui, picked: bool, text: impl Into<egui::WidgetText>) -> egui::Response {
@@ -923,4 +930,23 @@ pub(crate) fn pick_item_cut(ui: &mut egui::Ui, picked: bool, text: &str, max_wid
     }
     let r = pick_item(ui, picked, shown);
     if cut { r.on_hover_text(text) } else { r }
+}
+
+#[cfg(test)]
+mod tile_tests {
+    use super::tile_width;
+
+    #[test]
+    fn tiles_fill_the_row_and_never_wrap_early() {
+        for avail in [150.0_f32, 152.0, 300.0, 312.0, 385.0, 600.0, 1234.5] {
+            let (min_w, gap) = (152.0, 8.0);
+            let w = tile_width(avail, min_w, gap);
+            let columns = ((avail + gap) / (min_w + gap)).floor().max(1.0);
+            // All the columns that fit at the smallest size still fit at the wider one.
+            assert!(w * columns + gap * (columns - 1.0) <= avail.max(w) + 0.01, "{avail}: {w} x {columns}");
+            // Less than a column's worth is left over (one pixel a column for rounding).
+            assert!(avail - (w * columns + gap * (columns - 1.0)) <= columns.max(1.0) || avail < min_w, "{avail}");
+            assert!(w >= min_w.min(avail), "{avail}: {w}");
+        }
+    }
 }

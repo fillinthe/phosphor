@@ -38,11 +38,15 @@ pub(crate) fn stage(ui: &mut egui::Ui, st: &mut State) {
             let goes = if open { "window open".to_string() } else if screen.is_empty() { "not shown".to_string() } else { format!("to {screen}") };
             hint(ui, goes);
         });
-        let pic = child.available_rect_before_wrap();
+        // The frame is the output's own shape, under its name (the whole cell painted black read as a letterboxed
+        // picture in a tall panel).
+        let room = child.available_rect_before_wrap();
+        let fitted = fit_rect(room, ow as f32 / oh.max(1) as f32);
+        let pic = fitted.translate(egui::vec2(0.0, room.top() - fitted.top()));
         let p = child.painter();
         p.rect_filled(pic, 4.0, Color32::BLACK);
         match tex.filter(|_| o.enabled) {
-            Some(t) => paint_texture(p, t, fit_rect(pic.shrink(2.0), ow as f32 / oh.max(1) as f32)),
+            Some(t) => paint_texture(p, t, pic.shrink(2.0)),
             None => {
                 p.text(pic.center(), egui::Align2::CENTER_CENTER, "Off", egui::FontId::proportional(14.0), Color32::GRAY);
             }

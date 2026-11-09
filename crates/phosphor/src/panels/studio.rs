@@ -748,7 +748,8 @@ fn input_view(
     let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
     let sel_source = o.mapping.surfaces.iter().find(|s| Some(s.id) == selected).and_then(|s| s.layer);
     let tex = sel_source.and_then(|id| layer_textures.get(&id).map(|(t, _)| *t)).or(program);
-    let frame = fit_rect(area.shrink(12.0), aspect);
+    // (The caption has the top strip to itself.)
+    let frame = fit_rect(egui::Rect::from_min_max(area.min + egui::vec2(12.0, 24.0), area.max - egui::vec2(12.0, 12.0)), aspect);
     let p = ui.painter_at(area);
     p.rect_filled(area, 4.0, crate::theme::PICTURE_BG);
     p.rect_filled(frame, 0.0, Color32::BLACK);
