@@ -4,6 +4,20 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## Next (not released yet)
+
+**Tidier panels**
+- Control Surface: in a narrow panel the toolbar wraps instead of running off the edge, and the empty canvas's hint
+  wraps too.
+- LED / DMX: a light's card stays inside the panel (Bright and Gamma share a row; the kind is a drop-down).
+- MIDI / OSC: the settings sit in three rows by job (takeover, feedback, clock and timecode out); the mapping search
+  box appears once there are more than six mappings; phone step 3 reads as one line.
+- Effects: the tiles fill the panel's width.
+- Stage and Scopes: the frame is the size of the picture instead of a tall black box.
+- Mapping Studio: the Input view's caption no longer sits on top of the picture.
+- Stack in a narrow panel: the source list no longer covers the layer's name (Open an image or movie is in the list).
+- Outputs: the stray "Off" after a switch that's already off is gone (it read as "Sound Off" beside NDI).
+
 ## 0.5.0 (2026-11-09)
 
 Lasers with a Laser Designer, the Designer for building visuals as boxes wired together, AI assistants that can run

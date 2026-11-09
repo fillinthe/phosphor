@@ -35,60 +35,30 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
     #[cfg(not(target_arch = "wasm32"))]
     ai_assistants(ui);
     let control = &mut st.control;
+    // What a fader does when it disagrees with the screen.
     crate::ui::toolbar(ui, |ui| {
         crate::ui::toggle(ui, &mut control.soft_takeover, "Soft takeover")
             .on_hover_text("A fader or knob only takes over once it reaches the value on screen (moves it past it), so the picture never jumps when the hardware was left somewhere else");
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let shown = if control.clock_out_port.is_empty() { "Off".to_string() } else { control.clock_out_port.clone() };
-            crate::ui::dropdown(ui, "clock_out", 140.0).selected_text(format!("Clock out: {shown}")).show_ui(ui, |ui| {
-                if crate::ui::pick_item(ui, control.clock_out_port.is_empty(), "Off").clicked() {
-                    control.clock_out_port.clear();
-                }
-                for p in crate::control::clock_out::outputs() {
-                    if crate::ui::pick_item(ui, control.clock_out_port == p, &p).clicked() {
-                        control.clock_out_port = p;
-                        control.clock_out_error = None;
-                    }
-                }
-            })
-            .response
-            .on_hover_text("Send MIDI clock (24 a beat, with Start) to a MIDI output: drum machines, sequencers and other apps follow Phosphor's tempo");
-            if let Some(e) = &control.clock_out_error {
-                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(crate::theme::WARN));
-            }
-            let shown = if control.mtc_out_port.is_empty() { "Off".to_string() } else { control.mtc_out_port.clone() };
-            crate::ui::dropdown(ui, "mtc_out", 140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
-                if crate::ui::pick_item(ui, control.mtc_out_port.is_empty(), "Off").clicked() {
-                    control.mtc_out_port.clear();
-                }
-                for p in crate::control::clock_out::outputs() {
-                    if crate::ui::pick_item(ui, control.mtc_out_port == p, &p).clicked() {
-                        control.mtc_out_port = p;
-                        control.mtc_out_error = None;
-                    }
-                }
-                ui.separator();
-                crate::ui::toggle(ui, &mut control.mtc_time_of_day, "Time of day").on_hover_text("Send the clock time instead of the show clock (Cues panel)");
-                ui.separator();
-                ui.label(RichText::new("LTC (timecode as sound)").small());
-                let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
-                if crate::ui::pick_item(ui, control.ltc_out_pair.is_none(), "LTC off").clicked() {
-                    control.ltc_out_pair = None;
-                }
-                for p in 0..pairs.max(control.ltc_out_pair.map_or(0, |p| p + 1)) {
-                    let name = format!("LTC on outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
-                    if crate::ui::pick_item(ui, control.ltc_out_pair == Some(p), name).clicked() {
-                        control.ltc_out_pair = Some(p);
-                    }
-                }
-            })
-            .response
-            .on_hover_text("Send MIDI timecode (25 fps) to a MIDI output: the show clock, or the time of day. Lighting desks, DAWs and other apps follow it");
-            if let Some(e) = &control.mtc_out_error {
-                ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(crate::theme::WARN));
+        if control.soft_takeover {
+            crate::ui::toggle(ui, &mut control.takeover_glide, "Glide")
+                .on_hover_text("Instead of waiting for the fader to reach the value, the value glides to the fader (a smooth catch-up, no jump)");
+            let mut pct = control.pickup_near * 100.0;
+            if guarded!(ui, pct, egui::DragValue::new(&mut pct).range(0.5..=50.0).speed(0.1).max_decimals(1).prefix(format!("{} ", crate::i18n::tr("Within"))).suffix("%"))
+                .on_hover_text("How close a fader has to come to the value on screen to take over")
+                .changed()
+            {
+                control.pickup_near = pct / 100.0;
             }
         }
+    });
+    // What goes back to the controller.
+    crate::ui::toolbar(ui, |ui| {
+        crate::ui::toggle(ui, &mut control.feedback, "Send feedback")
+            .on_hover_text("Controllers follow Phosphor: values changed here (mouse, phone, other controllers) go back to TouchOSC faders and to MIDI controllers with motor faders or LED rings");
+        ui.add_enabled_ui(control.feedback, |ui| {
+            guarded!(ui, control.feedback_port, egui::DragValue::new(&mut control.feedback_port).range(1024..=65535).prefix("to port "))
+                .on_hover_text("The port your OSC controller listens on (TouchOSC: the connection's receive port, 9000 by default)");
+        });
         crate::ui::field_menu(ui, label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
             ui.set_min_width(260.0);
             help(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
@@ -103,23 +73,58 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
                 }
             });
         });
-        if control.soft_takeover {
-            crate::ui::toggle(ui, &mut control.takeover_glide, "Glide")
-                .on_hover_text("Instead of waiting for the fader to reach the value, the value glides to the fader (a smooth catch-up, no jump)");
-            let mut pct = control.pickup_near * 100.0;
-            if guarded!(ui, pct, egui::DragValue::new(&mut pct).range(0.5..=50.0).speed(0.1).max_decimals(1).prefix(format!("{} ", crate::i18n::tr("Within"))).suffix("%"))
-                .on_hover_text("How close a fader has to come to the value on screen to take over")
-                .changed()
-            {
-                control.pickup_near = pct / 100.0;
+    });
+    // Tempo and time for other gear.
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::ui::toolbar(ui, |ui| {
+        let shown = if control.clock_out_port.is_empty() { "Off".to_string() } else { control.clock_out_port.clone() };
+        crate::ui::dropdown(ui, "clock_out", 140.0).selected_text(format!("Clock out: {shown}")).show_ui(ui, |ui| {
+            if crate::ui::pick_item(ui, control.clock_out_port.is_empty(), "Off").clicked() {
+                control.clock_out_port.clear();
             }
+            for p in crate::control::clock_out::outputs() {
+                if crate::ui::pick_item(ui, control.clock_out_port == p, &p).clicked() {
+                    control.clock_out_port = p;
+                    control.clock_out_error = None;
+                }
+            }
+        })
+        .response
+        .on_hover_text("Send MIDI clock (24 a beat, with Start) to a MIDI output: drum machines, sequencers and other apps follow Phosphor's tempo");
+        if let Some(e) = &control.clock_out_error {
+            ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(crate::theme::WARN));
         }
-        crate::ui::toggle(ui, &mut control.feedback, "Send feedback")
-            .on_hover_text("Controllers follow Phosphor: values changed here (mouse, phone, other controllers) go back to TouchOSC faders and to MIDI controllers with motor faders or LED rings");
-        ui.add_enabled_ui(control.feedback, |ui| {
-            guarded!(ui, control.feedback_port, egui::DragValue::new(&mut control.feedback_port).range(1024..=65535).prefix("to port "))
-                .on_hover_text("The port your OSC controller listens on (TouchOSC: the connection's receive port, 9000 by default)");
-        });
+        let shown = if control.mtc_out_port.is_empty() { "Off".to_string() } else { control.mtc_out_port.clone() };
+        crate::ui::dropdown(ui, "mtc_out", 140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
+            if crate::ui::pick_item(ui, control.mtc_out_port.is_empty(), "Off").clicked() {
+                control.mtc_out_port.clear();
+            }
+            for p in crate::control::clock_out::outputs() {
+                if crate::ui::pick_item(ui, control.mtc_out_port == p, &p).clicked() {
+                    control.mtc_out_port = p;
+                    control.mtc_out_error = None;
+                }
+            }
+            ui.separator();
+            crate::ui::toggle(ui, &mut control.mtc_time_of_day, "Time of day").on_hover_text("Send the clock time instead of the show clock (Cues panel)");
+            ui.separator();
+            ui.label(RichText::new("LTC (timecode as sound)").small());
+            let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
+            if crate::ui::pick_item(ui, control.ltc_out_pair.is_none(), "LTC off").clicked() {
+                control.ltc_out_pair = None;
+            }
+            for p in 0..pairs.max(control.ltc_out_pair.map_or(0, |p| p + 1)) {
+                let name = format!("LTC on outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
+                if crate::ui::pick_item(ui, control.ltc_out_pair == Some(p), name).clicked() {
+                    control.ltc_out_pair = Some(p);
+                }
+            }
+        })
+        .response
+        .on_hover_text("Send MIDI timecode (25 fps) to a MIDI output: the show clock, or the time of day. Lighting desks, DAWs and other apps follow it");
+        if let Some(e) = &control.mtc_out_error {
+            ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(crate::theme::WARN));
+        }
     });
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -316,8 +321,11 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command(ui, label(icon::PLUS, "Add by hand")).clicked() {
             *map_draft = Some((phosphor_engine::ControlSource::MidiCc { channel: 0, cc: 1 }, None));
         }
-        ui.add(egui::TextEdit::singleline(map_search).hint_text("Search mappings").desired_width(140.0));
     });
+    // Worth a search box only once the list is longer than a glance; on its own row so it's never cut short.
+    if comp.control_maps.len() > 6 || !map_search.is_empty() {
+        crate::ui::text_field(ui, map_search, "Search mappings", None);
+    }
     let targets = crate::control::all_targets(comp);
     // The mapping being made: input heard (or typed) → pick a target → Add.
     let mut finish: Option<bool> = None;
