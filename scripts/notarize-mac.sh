@@ -23,12 +23,11 @@ echo "signing as: $SIGN_ID"
 SIGN_ID="$SIGN_ID" scripts/bundle-mac.sh --no-install
 
 # The app: Apple checks a zip of it, then the ticket is stapled to the app itself and it's zipped again.
-rm -f dist/Phosphor-mac.zip
-(cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
+
+scripts/zip-app.sh dist Phosphor.app Phosphor-mac.zip
 xcrun notarytool submit dist/Phosphor-mac.zip --keychain-profile "$PROFILE" --wait
 xcrun stapler staple dist/Phosphor.app
-rm -f dist/Phosphor-mac.zip
-(cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
+scripts/zip-app.sh dist Phosphor.app Phosphor-mac.zip
 spctl -a -t exec -vv dist/Phosphor.app
 
 # The installer: the stapled app inside, the disk image signed and notarized too.

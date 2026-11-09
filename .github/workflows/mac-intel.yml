@@ -62,7 +62,7 @@ jobs:
           if otool -L dist/Phosphor.app/Contents/MacOS/Phosphor | tail -n +2 | grep -v "@rpath\|/usr/lib\|/System/Library"; then exit 1; fi
 
       - name: Zip
-        run: (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac-intel.zip) && ls -la dist
+        run: scripts/zip-app.sh dist Phosphor.app Phosphor-mac-intel.zip && ls -la dist
 
       - uses: actions/upload-artifact@v4
         with:
