@@ -4,7 +4,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## Next (not released yet)
+## 0.5.0 (2026-11-09)
 
 Lasers with a Laser Designer, the Designer for building visuals as boxes wired together, AI assistants that can run
 the show with you, and old MadMapper, VDMX and Resolume shows opening in Phosphor.
@@ -251,6 +251,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   switch reads "Keep speed, loop and direction" so it fits the Inspector.
 - Inspector: the clip picked in the grid shows its own effects even while another clip is playing ("Clip effects:
   <name> (when it plays)"), so what you add to a clip is always there to see and edit; they come in when it plays.
+- Mac download: the app now opens when the zip is unpacked with another tool than Finder (The Unarchiver, Keka and
+  the like). Those tools used to leave hidden "._" files inside the app, and macOS then refused to open it.
 
 ## 0.4.0 (2026-10-27)
 
