@@ -27,8 +27,7 @@ else
   else
     scripts/bundle-mac.sh
   fi
-  rm -f dist/Phosphor-mac.zip
-  (cd dist && ditto -c -k --keepParent Phosphor.app Phosphor-mac.zip)
+  scripts/zip-app.sh dist Phosphor.app Phosphor-mac.zip
 fi
 # Only /Applications/Phosphor.app should be openable: the build copy goes (Spotlight / Launchpad could open it).
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$PWD/dist/Phosphor.app" 2>/dev/null || true
