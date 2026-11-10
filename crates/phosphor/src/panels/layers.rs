@@ -532,15 +532,16 @@ pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, Str
 pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[(u64, String, bool)]) -> Option<LayerAction> {
     let mut action = None;
     ui.horizontal(|ui| {
-        // Too little room for the list and its three icon buttons (a Stack strip in a narrow panel): the list alone,
-        // with Open inside it. The icons used to run off the strip and over the layer's name.
+        // Too little room for the list and its three icon buttons (a Stack strip in a narrow panel): the list and one
+        // "more" button holding Browse, Open and the live inputs. The icons used to run off the strip and over the
+        // layer's name.
         let slot = ui.spacing().interact_size.y + 2.0 * ui.spacing().item_spacing.x;
         let tight = ui.available_width() < 60.0 + 3.0 * slot;
         if !tight && crate::ui::command(ui, icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
             action = Some(LayerAction::BrowseSources);
         }
         // Leave room for the Open and Live icon buttons so the row never runs off the card.
-        let width = if tight { (ui.available_width() - ui.spacing().item_spacing.x).clamp(40.0, 180.0) } else { (ui.available_width() - 2.0 * slot).clamp(60.0, 180.0) };
+        let width = if tight { (ui.available_width() - slot).clamp(40.0, 180.0) } else { (ui.available_width() - 2.0 * slot).clamp(60.0, 180.0) };
         crate::ui::dropdown(ui, ("source", layer.id), width).selected_text(layer.source.label()).show_ui(ui, |ui| {
             // Search: every generator (built in and imported) by name; typing goes straight here.
             let id = ui.id().with(("source_search", layer.id));
@@ -568,10 +569,6 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
             }
             if crate::ui::pick_item(ui, layer.source == SourceSpec::None, "No source").clicked() {
                 layer.source = SourceSpec::None;
-            }
-            if tight && crate::ui::pick_item(ui, false, label(icon::FOLDER_OPEN, "Open an image or movie…")).clicked() {
-                action = Some(LayerAction::OpenFile);
-                ui.close();
             }
             if crate::ui::pick_item(ui, matches!(layer.source, SourceSpec::Text(_)), label(icon::TEXT_T, "Text")).on_hover_text("Words on the layer: type them in the Inspector").clicked() && !matches!(layer.source, SourceSpec::Text(_)) {
                 layer.source = SourceSpec::Text(crate::text::default_style());
@@ -648,6 +645,28 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
         {
             action = Some(LayerAction::Launch(source));
         }
+        if tight {
+            let r = crate::ui::field_menu(ui, icon::DOTS_THREE, |ui| {
+                ui.set_min_width(260.0);
+                if crate::ui::command(ui, label(icon::SPARKLE, "Browse sources…")).clicked() {
+                    action = Some(LayerAction::BrowseSources);
+                    ui.close();
+                }
+                if crate::ui::command(ui, label(icon::FOLDER_OPEN, "Open an image or movie…")).clicked() {
+                    action = Some(LayerAction::OpenFile);
+                    ui.close();
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    ui.separator();
+                    crate::ui::heading(ui, "Live input");
+                    if let Some(source) = live_items(ui, layer.id) {
+                        action = Some(LayerAction::Launch(source));
+                    }
+                }
+            });
+            r.response.on_hover_text("Browse sources, open a file, or a live input (camera, screen, Syphon, NDI, stream)");
+        }
     });
     action
 }
@@ -677,6 +696,18 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
     let mut picked = None;
     let r = crate::ui::field_menu(ui, icon::VIDEO_CAMERA, |ui| {
         ui.set_min_width(260.0);
+        picked = live_items(ui, layer);
+    });
+    r.response.on_hover_text("Live input: camera, capture card, a screen or window, Syphon, NDI or a network stream (RTSP, SRT, HLS, RTMP)");
+    picked
+}
+
+/// The live inputs to pick from (cameras, screens, windows, Syphon, NDI, a stream address): the body of the camera
+/// menu, also inside the narrow source picker's "more" menu. Closes the menu on a pick.
+#[cfg(not(target_arch = "wasm32"))]
+fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
+    let mut picked = None;
+    {
         let refresh = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("live_rescan"))).unwrap_or(false);
         let cams = crate::media::live::cameras_cached(ui.ctx(), refresh);
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("live_rescan"), false));
@@ -730,8 +761,7 @@ pub(crate) fn live_menu(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
             }
         });
         ui.ctx().data_mut(|d| d.insert_temp(url_id, url));
-    });
-    r.response.on_hover_text("Live input: camera, capture card, a screen or window, Syphon, NDI or a network stream (RTSP, SRT, HLS, RTMP)");
+    }
     picked
 }
 

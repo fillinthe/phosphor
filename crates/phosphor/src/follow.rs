@@ -284,8 +284,17 @@ pub fn merge(mut leader: Composition, local: &Composition) -> Composition {
     leader.spout = local.spout;
     leader.ndi = local.ndi.clone();
     leader.dmx = local.dmx.clone();
-    // Lasers are this room's hardware (controller boxes) and armed only by a press here: never the leader's.
-    leader.lasers = local.lasers.clone();
+    // Lasers: the leader's looks, brightness and which look each projector plays; this room's projectors (controller
+    // boxes, placement, zones) and arming (only ever by a press here).
+    let mut projectors = local.lasers.projectors.clone();
+    for p in &mut projectors {
+        if let Some(theirs) = leader.lasers.projectors.iter().find(|l| l.id == p.id) {
+            p.look = theirs.look;
+            p.clips.clone_from(&theirs.clips);
+        }
+    }
+    leader.lasers.projectors = projectors;
+    leader.lasers.armed = local.lasers.armed;
     leader.outputs_on_open = local.outputs_on_open;
     leader.next_id = leader.next_id.max(local.next_id);
     leader
@@ -297,12 +306,16 @@ mod tests {
 
     #[test]
     fn a_follower_keeps_its_own_lasers() {
-        let leader = Composition::default();
+        let mut leader = Composition::default();
+        leader.lasers.master = 0.4;
+        leader.lasers.projectors.push(phosphor_engine::LaserProjector { id: 7, look: 3, device: "theirs".into(), ..Default::default() });
         let mut local = Composition::default();
         local.lasers.armed = true;
-        local.lasers.projectors.push(Default::default());
+        local.lasers.projectors.push(phosphor_engine::LaserProjector { id: 7, look: 1, device: "mine".into(), ..Default::default() });
         let merged = merge(leader, &local);
-        assert!(merged.lasers.armed && merged.lasers.projectors.len() == 1);
+        let p = &merged.lasers.projectors[0];
+        assert!(merged.lasers.armed && merged.lasers.projectors.len() == 1, "this room's projectors and arming");
+        assert_eq!((p.device.as_str(), p.look, merged.lasers.master), ("mine", 3, 0.4), "the leader's looks and brightness");
     }
 
     #[test]

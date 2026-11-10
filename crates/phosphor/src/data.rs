@@ -162,15 +162,20 @@ pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data:
                         if !data.tables.contains_key(path) {
                             data.reads += 1;
                             data.tables.insert(path.clone(), (data.reads, None));
-                            let (tx, path, read) = (data.table_tx.clone(), path.clone(), data.reads);
-                            let _ = std::thread::Builder::new().name("data table".into()).spawn(move || {
-                                let r = std::fs::read_to_string(&path).map(|t| phosphor_engine::table_rows(&t)).map_err(|e| e.to_string());
-                                let _ = tx.send((path, read, r));
+                            let (tx, file, read) = (data.table_tx.clone(), path.clone(), data.reads);
+                            let spawned = std::thread::Builder::new().name("data table".into()).spawn(move || {
+                                let r = std::fs::read_to_string(&file).map(|t| phosphor_engine::table_rows(&t)).map_err(|e| e.to_string());
+                                let _ = tx.send((file, read, r));
                             });
+                            // No thread (the system is out of them): say so, and try again next frame.
+                            if spawned.is_err() {
+                                data.tables.remove(path);
+                            }
                         }
-                        match &data.tables[path].1 {
-                            None => shown = "reading…".to_string(),
-                            Some(Ok(rows)) if !rows.is_empty() => {
+                        match data.tables.get(path).map(|t| &t.1) {
+                            None => problem = Some("Couldn't start reading the table".to_string()),
+                            Some(None) => shown = "reading…".to_string(),
+                            Some(Some(Ok(rows))) if !rows.is_empty() => {
                                 let start = *data.started.entry(id).or_insert(now);
                                 let row = ((now - start) / (*seconds).max(0.05) as f64) as usize % rows.len();
                                 let cell = rows[row].get(*column).cloned().unwrap_or_default();
@@ -183,8 +188,8 @@ pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data:
                                     Err(_) => raw = row as f64,
                                 }
                             }
-                            Some(Ok(_)) => problem = Some("The table is empty".to_string()),
-                            Some(Err(e)) => problem = Some(format!("Couldn't read the table: {e}")),
+                            Some(Some(Ok(_))) => problem = Some("The table is empty".to_string()),
+                            Some(Some(Err(e))) => problem = Some(format!("Couldn't read the table: {e}")),
                         }
                     }
                 }

@@ -70,8 +70,11 @@ impl ExplorerState {
     }
 }
 
-/// The stage preview's key in `State::preview_wants`.
-const STAGE_KEY: &str = "stage:picked";
+/// The stage preview's key in `State::preview_wants`: one per picked effect / source, so picking another starts its
+/// picture fresh (a shader still building shows nothing, not the last pick's picture).
+fn stage_key(desc: &shaders::ShaderDesc) -> String {
+    format!("stage:{}", desc.id)
+}
 
 /// The picked tile, centre stage: a big live picture of it as it's set up (on the selected layer's picture, or the
 /// mix) beside every control of the effect / source and (for an effect) its mix, before it goes on anything. Side by
@@ -85,9 +88,9 @@ fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::Shade
     if show_picture {
         // (Its own made-up effect id, so an effect with memory keeps its own history apart from the tile's.)
         let item = PreviewItem::Stage(Box::new(tile_item(&st.explorer, desc, 99_999)));
-        st.preview_wants.push((STAGE_KEY.to_string(), item, true));
+        st.preview_wants.push((stage_key(desc), item, true));
     }
-    let tex = st.preview_tex(STAGE_KEY);
+    let tex = st.preview_tex(&stage_key(desc));
     let avail = ui.available_width();
     let wide = avail >= 560.0;
     let pic_w = if wide { (avail * 0.5).min(480.0) } else { avail.min(480.0) };
@@ -770,8 +773,10 @@ pub struct EditorState {
     pub shaders: Vec<UserShader>,
     pub current: Option<usize>,
     dirty_at: Option<f64>,
-    /// The patch drawn in the editor and the UI pass it was drawn in (see `end_stale_looks`).
+    /// The patch drawn in the editor and the app frame it was drawn in (see `end_stale_looks`). Our own count:
+    /// egui's pass numbers are per window, and the editor may sit in a detached window.
     patch_drawn: Option<(usize, u64)>,
+    frame: u64,
     loaded: bool,
     /// The Import from Shadertoy window, while open.
     shadertoy: Option<ShadertoyImport>,
@@ -1150,7 +1155,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     if st.editor.shaders[idx].patch.is_some() {
-        st.editor.patch_drawn = Some((idx, ui.ctx().cumulative_pass_nr()));
+        st.editor.patch_drawn = Some((idx, st.editor.frame));
     }
     if st.editor.dirty_at.is_some_and(|t| now - t > 0.35) {
         st.editor.dirty_at = None;
@@ -1169,9 +1174,11 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
 
 /// "Look at this box" is for while you edit: once a patch isn't on screen in the editor any more (another shader
 /// picked, the editor closed), its effect goes back to the whole patch, on every layer using it. Call once a frame.
-pub fn end_stale_looks(st: &mut State, pass: u64) {
+pub fn end_stale_looks(st: &mut State) {
+    let frame = st.editor.frame;
+    st.editor.frame += 1;
     for i in 0..st.editor.shaders.len() {
-        let on_screen = st.editor.patch_drawn.is_some_and(|(at, drawn)| at == i && drawn + 1 >= pass);
+        let on_screen = st.editor.patch_drawn.is_some_and(|(at, drawn)| at == i && drawn == frame);
         let Some(p) = st.editor.shaders[i].patch.as_mut().filter(|p| p.look_at.is_some() && !on_screen) else { continue };
         p.set_look_at(None);
         if let Ok(src) = p.compile() {

@@ -1099,5 +1099,5 @@ fn one_setting_keeps_the_others() {
     assert_eq!(v, vec![0.7, 0.25, 1.0]);
     let mut long = vec![0.1, 0.2, 0.3, 0.4];
     targets::fit_to_defaults(&mut long, vec![0.5, 0.5]);
-    assert_eq!(long, vec![0.1, 0.2]);
+    assert_eq!(long, vec![0.1, 0.2, 0.3, 0.4], "extra values are left alone");
 }

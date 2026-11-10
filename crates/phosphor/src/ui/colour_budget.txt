@@ -6,5 +6,5 @@ panels/designer.rs 1
 panels/laser_zones.rs 1
 panels/lasers.rs 2
 panels/output.rs 1
-panels/surface.rs 4
+panels/surface.rs 3
 scopes.rs 2

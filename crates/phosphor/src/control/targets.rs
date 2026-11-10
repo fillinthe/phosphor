@@ -143,11 +143,11 @@ pub fn unit_to(v: f32, min: f32, max: f32, log: bool) -> f32 {
     if log { min * (max / min).powf(v) } else { min + v * (max - min) }
 }
 
-/// A shader's values made as long as its parameters: the ones set are kept, missing ones get the defaults (so
-/// moving one setting never resets the others; `get_target` reads a missing value as its default too).
+/// A shader's values made at least as long as its parameters: the ones set are kept, missing ones get their own
+/// defaults (so moving one setting never changes the others; `get_target` reads a missing value as its default too).
+/// Any extra values are left alone.
 pub(super) fn fit_to_defaults(values: &mut Vec<f32>, defaults: Vec<f32>) {
-    values.truncate(defaults.len());
-    let have = values.len();
+    let have = values.len().min(defaults.len());
     values.extend_from_slice(&defaults[have..]);
 }
 
@@ -485,9 +485,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 && let Some(desc) = shaders::generator(g)
                 && let Some(p) = desc.params.get(*index)
             {
-                if l.generator_values.len() <= *index {
-                    l.generator_values.resize(index + 1, p.default);
-                }
+                fit_to_defaults(&mut l.generator_values, desc.defaults());
                 l.generator_values[*index] = scaled(p, v);
             }
         }
@@ -496,9 +494,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 && let Some(desc) = shaders::effect(&fx.effect)
                 && let Some(p) = desc.params.get(*index)
             {
-                if fx.values.len() <= *index {
-                    fx.values.resize(index + 1, p.default);
-                }
+                fit_to_defaults(&mut fx.values, desc.defaults());
                 fx.values[*index] = scaled(p, v);
             }
         }

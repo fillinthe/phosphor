@@ -95,14 +95,17 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             ui.label(RichText::new(format!("{} {e}", icon::WARNING)).small().color(crate::theme::WARN));
         }
         let shown = if control.mtc_out_port.is_empty() { "Off".to_string() } else { control.mtc_out_port.clone() };
-        crate::ui::dropdown(ui, "mtc_out", 140.0).selected_text(format!("Timecode out: {shown}")).show_ui(ui, |ui| {
+        // A field menu: it holds the Time of day switch (a plain dropdown closes on every click inside it).
+        crate::ui::field_menu(ui, format!("Timecode out: {shown} {}", icon::CARET_DOWN), |ui| {
             if crate::ui::pick_item(ui, control.mtc_out_port.is_empty(), "Off").clicked() {
                 control.mtc_out_port.clear();
+                ui.close();
             }
             for p in crate::control::clock_out::outputs() {
                 if crate::ui::pick_item(ui, control.mtc_out_port == p, &p).clicked() {
                     control.mtc_out_port = p;
                     control.mtc_out_error = None;
+                    ui.close();
                 }
             }
             ui.separator();
@@ -112,11 +115,13 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             let pairs = (crate::media::video::sound::output_channels() / 2).max(1) as u8;
             if crate::ui::pick_item(ui, control.ltc_out_pair.is_none(), "LTC off").clicked() {
                 control.ltc_out_pair = None;
+                ui.close();
             }
             for p in 0..pairs.max(control.ltc_out_pair.map_or(0, |p| p + 1)) {
                 let name = format!("LTC on outputs {}-{}", p as u32 * 2 + 1, p as u32 * 2 + 2);
                 if crate::ui::pick_item(ui, control.ltc_out_pair == Some(p), name).clicked() {
                     control.ltc_out_pair = Some(p);
+                    ui.close();
                 }
             }
         })
