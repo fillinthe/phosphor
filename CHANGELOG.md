@@ -4,6 +4,13 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.2 (2026-11-10)
+
+**Windows**
+- Fixed: with an output window open, Phosphor could stop responding: the output stayed frozen on top and no button,
+  not even close or minimise, did anything. Both windows now keep drawing and answering the mouse and keyboard.
+- No more terminal window opening beside Phosphor, and none flashing up when it converts or downloads a video.
+
 ## 0.5.1 (2026-11-09)
 
 Installs that just work, and tidier panels.
