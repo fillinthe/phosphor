@@ -21,6 +21,7 @@ pub struct History {
 /// Fields that change on their own (tempo following, transitions in flight, live text) aren't edits.
 fn settle_volatile(from: &Composition, into: &mut Composition) {
     into.bpm = from.bpm;
+    keep_lasers_live(from, into);
     for l in &mut into.layers {
         if let Some(src) = from.layers.iter().find(|s| s.id == l.id) {
             l.transition = src.transition.clone();
@@ -33,6 +34,16 @@ fn settle_volatile(from: &Composition, into: &mut Composition) {
                 t.live_start = st.live_start;
             }
         }
+    }
+}
+
+// "Wherefore let him that thinketh he standeth take heed lest he fall." 1 Corinthians 10:12 (KJV)
+/// Arming the lasers and their test patterns are live switches, not edits: never part of an undo step, and Undo /
+/// Redo keep them as they are now (an old snapshot must never switch beams back on).
+fn keep_lasers_live(from: &Composition, into: &mut Composition) {
+    into.lasers.armed = from.lasers.armed;
+    for p in &mut into.lasers.projectors {
+        p.test_pattern = from.lasers.projectors.iter().find(|f| f.id == p.id).is_some_and(|f| f.test_pattern);
     }
 }
 
@@ -78,7 +89,8 @@ impl History {
     pub fn undo(&mut self, current: &Composition) -> Option<Composition> {
         // An edit that hasn't settled yet is undone first.
         let pending = self.committed.as_ref().is_some_and(|c| c != current);
-        let target = if pending { self.committed.clone()? } else { self.undo.pop()? };
+        let mut target = if pending { self.committed.clone()? } else { self.undo.pop()? };
+        keep_lasers_live(current, &mut target);
         self.redo.push(current.clone());
         self.committed = Some(target.clone());
         self.changed_at = None;
@@ -86,7 +98,8 @@ impl History {
     }
 
     pub fn redo(&mut self, current: &Composition) -> Option<Composition> {
-        let target = self.redo.pop()?;
+        let mut target = self.redo.pop()?;
+        keep_lasers_live(current, &mut target);
         self.undo.push(current.clone());
         self.committed = Some(target.clone());
         self.changed_at = None;
@@ -125,6 +138,24 @@ mod tests {
         h.track(&edited, 3.0, false);
         h.track(&edited, 4.0, false);
         assert_eq!(h.undo(&edited).unwrap().master_fade, 0.2);
+    }
+
+    #[test]
+    fn undo_never_arms_the_lasers() {
+        let mut h = History::default();
+        let mut comp = Composition::default();
+        h.track(&comp, 0.0, false);
+        comp.lasers.armed = true; // Arm: not an edit
+        h.track(&comp, 1.0, false);
+        h.track(&comp, 2.0, false);
+        assert!(!h.can_undo(&comp), "arming made an undo step");
+        comp.master_fade = 0.5; // a real edit while armed
+        h.track(&comp, 3.0, false);
+        h.track(&comp, 4.0, false);
+        comp.lasers.armed = false; // Stop lasers
+        let back = h.undo(&comp).unwrap();
+        assert!(!back.lasers.armed, "Undo switched the lasers back on");
+        assert!(!h.redo(&back).unwrap().lasers.armed, "Redo switched the lasers back on");
     }
 
     #[test]

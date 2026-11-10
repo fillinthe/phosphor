@@ -284,6 +284,8 @@ pub fn merge(mut leader: Composition, local: &Composition) -> Composition {
     leader.spout = local.spout;
     leader.ndi = local.ndi.clone();
     leader.dmx = local.dmx.clone();
+    // Lasers are this room's hardware (controller boxes) and armed only by a press here: never the leader's.
+    leader.lasers = local.lasers.clone();
     leader.outputs_on_open = local.outputs_on_open;
     leader.next_id = leader.next_id.max(local.next_id);
     leader
@@ -292,6 +294,16 @@ pub fn merge(mut leader: Composition, local: &Composition) -> Composition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_follower_keeps_its_own_lasers() {
+        let leader = Composition::default();
+        let mut local = Composition::default();
+        local.lasers.armed = true;
+        local.lasers.projectors.push(Default::default());
+        let merged = merge(leader, &local);
+        assert!(merged.lasers.armed && merged.lasers.projectors.len() == 1);
+    }
 
     #[test]
     fn a_follower_keeps_its_own_outputs() {
