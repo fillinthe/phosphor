@@ -147,6 +147,8 @@ const RESERVED_IDS: u64 = u64::MAX - 100_000;
 
 /// Width of explorer preview tiles; height follows the canvas aspect.
 pub const PREVIEW_WIDTH: u32 = 192;
+/// Width of a `PreviewItem::Stage` picture: the picked effect / source shown big while it's set up.
+pub const STAGE_WIDTH: u32 = 640;
 
 /// Something to render as a small live preview in the effects explorer.
 #[derive(Clone, Debug)]
@@ -156,6 +158,9 @@ pub enum PreviewItem {
     Generator(String),
     /// A generator with given settings (clip thumbnails).
     Clip(String, Vec<f32>),
+    /// The same thing drawn big (`STAGE_WIDTH`), from the source's full picture where there is one: the Explorer's
+    /// picked tile while its settings are tried out.
+    Stage(Box<PreviewItem>),
 }
 
 /// A frame source after it has been resolved for this frame.
@@ -319,6 +324,8 @@ pub struct Engine {
     externals: external::Externals,
     preview_source: u64,
     preview_src: Option<Target>,
+    /// The source picture at `STAGE_WIDTH`, while a `PreviewItem::Stage` is asked for.
+    preview_src_stage: Option<Target>,
     preview_targets: Vec<Option<Target>>,
     /// Which previews hold a real picture of what's asked for now (not a shader still building, not another tile's
     /// picture after the list moved).
@@ -391,6 +398,7 @@ impl Engine {
             externals: Default::default(),
             preview_source: MASTER_ID,
             preview_src: None,
+            preview_src_stage: None,
             preview_targets: Vec::new(),
             preview_ready: Vec::new(),
             custom_generation: 0,
@@ -714,7 +722,7 @@ impl Engine {
         let any_solo = comp.layers.iter().any(|l| l.enabled && l.solo);
         // Layers shown on their own by a mapping surface, and their pictures this frame.
         // Full-size pictures kept for mapping surfaces and for layers that use another layer as their source.
-        let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.effective_mapping().layer_feeds().collect::<Vec<_>>()).chain(comp.feed_sources()).collect();
+        let wanted: HashSet<u64> = comp.outputs.iter().filter(|o| o.enabled).flat_map(|o| o.effective_mapping().layer_feeds().collect::<Vec<_>>()).chain(comp.feed_sources()).chain(self.stage_source()).collect();
         let mut feeds: HashMap<u64, wgpu::TextureView> = HashMap::new();
         let pre_wanted: HashSet<u64> = comp.pre_fx_feed_sources().collect();
         let ctx = MixCtx { canvas: (w, h), time, mods, thumb_h, wanted: &wanted, pre_wanted: &pre_wanted, layers: &comp.layers, monitors: &monitors };

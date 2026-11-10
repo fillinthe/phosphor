@@ -8,6 +8,11 @@ const NEW_PREVIEWS_PER_FRAME: usize = 6;
 const WARM_UP_FRAMES: usize = 16;
 
 impl Engine {
+    /// The layer whose full-size picture a big preview needs this frame (its thumbnail would be a blur at that size).
+    pub(super) fn stage_source(&self) -> Option<u64> {
+        (self.preview_source != MASTER_ID && self.previews.iter().any(|(item, _)| matches!(item, PreviewItem::Stage(_)))).then_some(self.preview_source)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_previews(&mut self, master: &wgpu::TextureView, canvas: (u32, u32), time: f32, mods: &ModInputs, layers: &[LayerState], passes: &mut Vec<Pass>) {
         let items = std::mem::take(&mut self.previews);
@@ -38,6 +43,18 @@ impl Engine {
         Target::ensure(&mut self.preview_src, &self.gpu.device, "preview source", PREVIEW_WIDTH, ph);
         let src_view = self.preview_src.as_ref().unwrap().view.clone();
         copy(src_view.clone(), layer_thumb.unwrap_or_else(|| master.clone()), (PREVIEW_WIDTH, ph), passes);
+        // The big preview's source: the layer's full picture (kept this frame because it was asked for), else the mix.
+        let stage_h = (STAGE_WIDTH * h / w).max(1);
+        let stage_src = items.iter().any(|(item, _)| matches!(item, PreviewItem::Stage(_))).then(|| {
+            let full = (self.preview_source != MASTER_ID).then(|| self.layers.get(&self.preview_source).and_then(|r| r.feed.as_ref().or(r.thumbnail.as_ref())).map(|t| t.view.clone())).flatten();
+            Target::ensure(&mut self.preview_src_stage, &self.gpu.device, "stage preview source", STAGE_WIDTH, stage_h);
+            let view = self.preview_src_stage.as_ref().unwrap().view.clone();
+            copy(view.clone(), full.unwrap_or_else(|| master.clone()), (STAGE_WIDTH, stage_h), passes);
+            view
+        });
+        if stage_src.is_none() {
+            self.preview_src_stage = None;
+        }
 
         if self.preview_targets.len() < items.len() {
             self.preview_targets.resize_with(items.len(), || None);
@@ -50,6 +67,11 @@ impl Engine {
             if *refresh == PreviewRefresh::No && ready {
                 continue;
             }
+            // A big one is the same item at the stage size, from the stage's source.
+            let (item, pw, ph, src_view) = match (item, &stage_src) {
+                (PreviewItem::Stage(inner), Some(src)) => (&**inner, STAGE_WIDTH, stage_h, src.clone()),
+                (item, _) => (item, PREVIEW_WIDTH, ph, src_view.clone()),
+            };
             // An effect whose shader is still being built: ask for it (a few build at a time) and come back; drawing
             // it now would only pass the picture through untouched.
             if let PreviewItem::Effect(fx) = item
@@ -80,19 +102,21 @@ impl Engine {
                 PreviewItem::Effect(fx) => {
                     let mut out = None;
                     for _ in 0..warm {
-                        out = Some(self.apply_effects(rid, std::slice::from_ref(fx), Frame::Rgb { view: src_view.clone(), w: PREVIEW_WIDTH, h: ph }, time, mods, layers, passes));
+                        out = Some(self.apply_effects(rid, std::slice::from_ref(fx), Frame::Rgb { view: src_view.clone(), w: pw, h: ph }, time, mods, layers, passes));
                     }
                     out
                 }
                 PreviewItem::Generator(id) => shaders::generator(id).and_then(|desc| {
-                    self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), &desc.defaults(), &[], false, PREVIEW_WIDTH, ph, time, mods, passes)
+                    self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), &desc.defaults(), &[], false, pw, ph, time, mods, passes)
                 }),
                 // A few seconds in, so shaders that start dark (fades, feedback) show something in a still.
-                PreviewItem::Clip(id, values) => self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), values, &[], false, PREVIEW_WIDTH, ph, time + 7.0, mods, passes),
+                PreviewItem::Clip(id, values) => self.resolve_spec(rid, &SourceSpec::Generator(id.clone()), values, &[], false, pw, ph, time + 7.0, mods, passes),
+                // (Unwrapped above; a Stage inside a Stage draws nothing.)
+                PreviewItem::Stage(_) => None,
             };
             let Some(Frame::Rgb { view, .. }) = frame else { continue };
-            Target::ensure(&mut self.preview_targets[i], &self.gpu.device, "preview", PREVIEW_WIDTH, ph);
-            copy(self.preview_targets[i].as_ref().unwrap().view.clone(), view, (PREVIEW_WIDTH, ph), passes);
+            Target::ensure(&mut self.preview_targets[i], &self.gpu.device, "preview", pw, ph);
+            copy(self.preview_targets[i].as_ref().unwrap().view.clone(), view, (pw, ph), passes);
             self.preview_ready[i] = true;
         }
     }

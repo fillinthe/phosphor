@@ -1517,6 +1517,7 @@
 "How far each jump goes": "每次跳跃多远",
 "How fast the levels fall after a hit: short = flickery, long = slow fades": "击打后电平下降多快:短 = 闪烁,长 = 缓慢淡出",
 "How fast the levels rise: 0 = instantly (punchy), higher = smoother swells": "电平上升多快:0 = 瞬时(有力),越高越平滑",
+"How it looks with these settings, on the selected layer's picture (or the whole mix). It isn't on anything yet: add it with the buttons above, or drag its tile.": "使用这些设置时的效果，叠加在所选图层的画面（或整个混合画面）上。它还没有应用到任何地方：用上方的按钮添加，或拖动它的缩略图。",
 "How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.": "手机在其回合结束后需等多久才能再次操作。0:没人等待时,当前玩家保留控制权。",
 "How long each headline shows": "每条头条显示多久",
 "How long each step lasts": "每一步持续多久",

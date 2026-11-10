@@ -70,21 +70,66 @@ impl ExplorerState {
     }
 }
 
-/// The picked tile's settings: every control of the effect / source and (for an effect) its mix, before it goes on
-/// anything.
-fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::ShaderDesc) {
-    let ex = &mut st.explorer;
-    if desc.params.is_empty() && ex.sources {
+/// The stage preview's key in `State::preview_wants`.
+const STAGE_KEY: &str = "stage:picked";
+
+/// The picked tile, centre stage: a big live picture of it as it's set up (on the selected layer's picture, or the
+/// mix) beside every control of the effect / source and (for an effect) its mix, before it goes on anything. Side by
+/// side in a wide panel, the picture above the controls in a narrow one.
+fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::ShaderDesc, aspect: f32) {
+    let show_picture = st.explorer.preview_mode != PreviewMode::Off;
+    let has_controls = !(desc.params.is_empty() && st.explorer.sources);
+    if !show_picture && !has_controls {
         return;
     }
-    crate::ui::column_scroll(ui).id_salt("picked_setup").max_height(200.0).show(ui, |ui| {
-        for (i, p) in desc.params.iter().enumerate() {
-            crate::ui::param_slider(ui, &mut ex.picked_values, &mut ex.picked_mods, i, p, None);
+    if show_picture {
+        // (Its own made-up effect id, so an effect with memory keeps its own history apart from the tile's.)
+        let item = PreviewItem::Stage(Box::new(tile_item(&st.explorer, desc, 99_999)));
+        st.preview_wants.push((STAGE_KEY.to_string(), item, true));
+    }
+    let tex = st.preview_tex(STAGE_KEY);
+    let avail = ui.available_width();
+    let wide = avail >= 560.0;
+    let pic_w = if wide { (avail * 0.5).min(480.0) } else { avail.min(480.0) };
+    let pic = egui::vec2(pic_w, pic_w / aspect.max(0.1));
+    let picture = |ui: &mut egui::Ui| {
+        let (rect, resp) = ui.allocate_exact_size(pic, Sense::hover());
+        let p = ui.painter();
+        p.rect_filled(rect, 4.0, crate::theme::PICTURE_BG);
+        match tex {
+            Some(t) => panels::paint_texture(p, t, rect),
+            None => {
+                p.text(rect.center(), egui::Align2::CENTER_CENTER, "…", egui::FontId::proportional(18.0), Color32::GRAY);
+            }
         }
-        if !ex.sources {
-            crate::ui::Level::percent(&mut ex.picked_mix, "Mix").tip("How much of the effect: 0% = bypassed").show(ui);
+        p.rect_stroke(rect, 4.0, Stroke::new(1.0, crate::theme::line()), StrokeKind::Inside);
+        resp.on_hover_text("How it looks with these settings, on the selected layer's picture (or the whole mix). It isn't on anything yet: add it with the buttons above, or drag its tile.");
+    };
+    let controls = |ui: &mut egui::Ui, ex: &mut ExplorerState, max_h: f32| {
+        crate::ui::column_scroll(ui).id_salt("picked_setup").max_height(max_h).show(ui, |ui| {
+            for (i, p) in desc.params.iter().enumerate() {
+                crate::ui::param_slider(ui, &mut ex.picked_values, &mut ex.picked_mods, i, p, None);
+            }
+            if !ex.sources {
+                crate::ui::Level::percent(&mut ex.picked_mix, "Mix").tip("How much of the effect: 0% = bypassed").show(ui);
+            }
+        });
+    };
+    if show_picture && wide {
+        ui.horizontal_top(|ui| {
+            picture(ui);
+            if has_controls {
+                ui.vertical(|ui| controls(ui, &mut st.explorer, pic.y.max(120.0)));
+            }
+        });
+    } else {
+        if show_picture {
+            picture(ui);
         }
-    });
+        if has_controls {
+            controls(ui, &mut st.explorer, 200.0);
+        }
+    }
     ui.add_space(2.0);
 }
 
@@ -378,7 +423,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         }
     });
     if let Some(d) = picked {
-        picked_setup(ui, st, d);
+        picked_setup(ui, st, d, aspect);
     }
     // Shader packs: a row only while ISF is still importing or an FFGL plugin can't be used (otherwise the counts
     // are in the category menu's tooltip, so a panel in use isn't wearing a status line).
