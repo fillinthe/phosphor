@@ -145,7 +145,7 @@ fn start_encoder(inner: Arc<Mutex<Inner>>, size: (u32, u32), fps: u32) -> Option
     } else {
         &["-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-profile:v", "baseline"]
     };
-    let mut child = std::process::Command::new(ffmpeg)
+    let mut child = crate::os::command(ffmpeg)
         .args(["-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", &format!("{}x{}", size.0, size.1), "-r", &fps.to_string(), "-i", "-"])
         .args(["-vf", "scale='min(1280,iw)':-2,format=yuv420p"])
         .args(codec)

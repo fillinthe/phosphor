@@ -143,7 +143,7 @@ impl Saver {
 /// Starts the watchdog for this process (a second copy of the binary with `--watchdog <pid>`).
 pub fn spawn_watchdog() {
     let Ok(exe) = std::env::current_exe() else { return };
-    let _ = std::process::Command::new(exe)
+    let _ = crate::os::command(exe)
         .args(["--watchdog", &std::process::id().to_string()])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -238,7 +238,7 @@ fn process_alive(pid: u32) -> bool {
 #[cfg(target_os = "macos")]
 fn stuck_at(pid: u32) -> Option<String> {
     let file = crash_log_path()?.with_file_name("freeze-sample.txt");
-    std::process::Command::new("/usr/bin/sample")
+    crate::os::command("/usr/bin/sample")
         .args([&pid.to_string(), "1", "-mayDie", "-file"])
         .arg(&file)
         .stdout(std::process::Stdio::null())
@@ -315,7 +315,7 @@ fn relaunch() {
             crate::os::open(&path[..i + 4]);
         }
         None => {
-            let _ = std::process::Command::new(exe).spawn();
+            let _ = crate::os::command(exe).spawn();
         }
     }
 }

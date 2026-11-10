@@ -5,7 +5,7 @@
 //! group in Media, and the files are on this Mac: a show works offline.
 
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -243,7 +243,7 @@ pub const NO_BROWSER: &str = "Pick the browser you're signed in with (X and Inst
 /// two minutes.
 pub fn gallery_list(url: &str, count: usize, browser: &str, cursor: Option<&str>) -> Result<(Vec<u8>, Vec<String>), String> {
     let tool = crate::web_media::find_gallery_dl().ok_or(NO_TOOL)?;
-    let mut cmd = Command::new(tool);
+    let mut cmd = crate::os::command(tool);
     // -v: gallery-dl says "Cursor: …" for each page it asks for (debug lines, on stderr).
     cmd.args(["-j", "-v", "--range", &format!("1-{}", count.max(1)), "--cookies-from-browser", browser]);
     if let Some(c) = cursor {

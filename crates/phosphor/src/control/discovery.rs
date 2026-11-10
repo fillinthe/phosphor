@@ -20,7 +20,7 @@ fn computer_names() -> &'static (String, String) {
     static N: OnceLock<(String, String)> = OnceLock::new();
     N.get_or_init(|| {
         let ask = |args: &[&str]| {
-            std::process::Command::new(args[0]).args(&args[1..]).output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|s| !s.is_empty())
+            crate::os::command(args[0]).args(&args[1..]).output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|s| !s.is_empty())
         };
         let pretty = if cfg!(target_os = "macos") { ask(&["scutil", "--get", "ComputerName"]) } else { std::env::var("COMPUTERNAME").ok().or_else(|| ask(&["hostname"])) };
         let pretty = pretty.unwrap_or_else(|| "this computer".into());

@@ -88,6 +88,8 @@ struct WinitAppWrapper<T: WinitApp> {
     /// PHOSPHOR PATCH: true while painting unfocused windows directly (Windows), so the nested
     /// `check_redraw_requests` doesn't paint them again (each is painted at most once per pass).
     painting_unfocused: bool,
+    /// PHOSPHOR PATCH: true inside `about_to_wait`, the only place unfocused windows are painted directly.
+    in_about_to_wait: bool,
 }
 
 impl<T: WinitApp> WinitAppWrapper<T> {
@@ -98,6 +100,7 @@ impl<T: WinitApp> WinitAppWrapper<T> {
             return_result: Ok(()),
             run_and_return,
             painting_unfocused: false,
+            in_about_to_wait: false,
         }
     }
 
@@ -219,6 +222,15 @@ impl<T: WinitApp> WinitAppWrapper<T> {
                         // window its mouse messages and immediate repaints never let that happen, so an output
                         // window on a projector froze until clicked. Paint unfocused windows directly instead,
                         // at the pace their repaints are asked for. Keep this when upgrading eframe.
+                        //
+                        // Only from `about_to_wait`, once the queued messages are handled (bug report #28):
+                        // painting here waits for vsync (~16 ms), and this runs after EVERY event (raw mouse
+                        // movement arrives up to 1000 times a second), so painting per event let input pile up
+                        // without end: the whole app stopped responding and a newly opened (focused) output
+                        // window never got its first WM_PAINT. Until then it stays due, waiting here.
+                        if !self.in_about_to_wait {
+                            return true;
+                        }
                         unfocused_window_ids.push(*window_id);
                     } else {
                         log::trace!("request_redraw for {window_id:?}");
@@ -383,6 +395,20 @@ impl<T: WinitApp> ApplicationHandler<UserEvent> for WinitAppWrapper<T> {
         }
 
         self.check_redraw_requests(event_loop);
+    }
+
+    // "Let all things be done decently and in order." 1 Corinthians 14:40 (KJV)
+    /// PHOSPHOR PATCH: winit calls this once the queued messages are handled; on Windows the unfocused
+    /// windows (outputs on projectors, or the control window behind a focused output) are painted here.
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if !cfg!(target_os = "windows") {
+            return;
+        }
+        event_loop_context::with_event_loop_context(event_loop, move || {
+            self.in_about_to_wait = true;
+            self.check_redraw_requests(event_loop);
+            self.in_about_to_wait = false;
+        });
     }
 
     fn window_event(

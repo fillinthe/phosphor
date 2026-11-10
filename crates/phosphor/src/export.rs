@@ -116,7 +116,7 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
         if app.exists() {
             std::fs::remove_dir_all(&app).map_err(|e| format!("couldn't replace {}: {e}", app.display()))?;
         }
-        sh(Command::new("ditto").arg(&src).arg(&app))?;
+        sh(crate::os::command("ditto").arg(&src).arg(&app))?;
         let show = app.join("Contents/Resources/Show");
         (app, show)
     } else {
@@ -229,10 +229,10 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
             ("CFBundleDisplayName", name.clone()),
             ("CFBundleIdentifier", format!("co.fillintheblank.phosphor.show.{}", slug(&name))),
         ] {
-            sh(Command::new("plutil").args(["-replace", key, "-string", &value]).arg(&plist))?;
+            sh(crate::os::command("plutil").args(["-replace", key, "-string", &value]).arg(&plist))?;
         }
-        let _ = Command::new("xattr").args(["-cr"]).arg(&app).output();
-        sh(Command::new("codesign").args(["--force", "--deep", "--sign", "-"]).arg(&app))?;
+        let _ = crate::os::command("xattr").args(["-cr"]).arg(&app).output();
+        sh(crate::os::command("codesign").args(["--force", "--deep", "--sign", "-"]).arg(&app))?;
     }
 
     let mut zip = None;
@@ -241,10 +241,10 @@ fn run(req: Request, p: &Shared) -> Result<(), String> {
         let z = req.dest.join(format!("{name}.zip"));
         let _ = std::fs::remove_file(&z);
         if cfg!(target_os = "macos") {
-            sh(Command::new("ditto").args(["-c", "-k", "--sequesterRsrc", "--keepParent"]).arg(&app).arg(&z))?;
+            sh(crate::os::command("ditto").args(["-c", "-k", "--sequesterRsrc", "--keepParent"]).arg(&app).arg(&z))?;
         } else {
             // Windows' tar writes zips (-a picks the format from the name).
-            sh(Command::new("tar").arg("-a").arg("-c").arg("-f").arg(&z).arg("-C").arg(&req.dest).arg(&name))?;
+            sh(crate::os::command("tar").arg("-a").arg("-c").arg("-f").arg(&z).arg("-C").arg(&req.dest).arg(&name))?;
         }
         zip = Some(z);
     }
@@ -278,7 +278,7 @@ fn find_isf(slug: &str) -> Option<PathBuf> {
 
 /// Local date and time, e.g. "2026-10-14 15:02" (UTC where there's no `date` command).
 fn chrono_now() -> String {
-    let local = Command::new("date").arg("+%Y-%m-%d %H:%M").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|s| s.len() == 16);
+    let local = crate::os::command("date").arg("+%Y-%m-%d %H:%M").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|s| s.len() == 16);
     local.unwrap_or_else(|| {
         let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
         let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));

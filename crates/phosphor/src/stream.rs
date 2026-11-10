@@ -3,7 +3,7 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::mpsc::{SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 
@@ -331,7 +331,7 @@ pub fn reconnect_delay(n: u32) -> f64 {
 /// AVFoundation audio capture devices as (index, name), from FFmpeg's device listing.
 pub fn list_audio_devices() -> Vec<(i32, String)> {
     let Some(ffmpeg) = ffmpeg_path() else { return Vec::new() };
-    let Ok(out) = Command::new(ffmpeg).args(["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""]).stdin(Stdio::null()).output() else {
+    let Ok(out) = crate::os::command(ffmpeg).args(["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""]).stdin(Stdio::null()).output() else {
         return Vec::new();
     };
     let text = String::from_utf8_lossy(&out.stderr);
@@ -362,7 +362,7 @@ pub fn ffmpeg_path() -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
         .or_else(|| ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/opt/local/bin/ffmpeg"].iter().find(|p| std::path::Path::new(p).exists()).map(|p| p.to_string()))
         .or_else(|| {
-            Command::new("ffmpeg").arg("-version").stdout(Stdio::null()).stderr(Stdio::null()).status().ok().map(|_| "ffmpeg".into())
+            crate::os::command("ffmpeg").arg("-version").stdout(Stdio::null()).stderr(Stdio::null()).status().ok().map(|_| "ffmpeg".into())
         })
 }
 
@@ -624,7 +624,7 @@ impl Streamer {
         }
 
         log::debug!("ffmpeg {}", args.join(" "));
-        let mut child = Command::new(ffmpeg)
+        let mut child = crate::os::command(ffmpeg)
             .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

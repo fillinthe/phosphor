@@ -6,7 +6,7 @@
 //! The conversation is only ever appended to (its answers go back exactly as they came), so a fix keeps the
 //! reasoning behind the first try. `PHOSPHOR_AI_URL` points it at another server (tests use a local one).
 
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::mpsc;
 
 use phosphor_engine::custom;
@@ -38,7 +38,7 @@ pub fn load_key() -> Option<String> {
         return Some(k.trim().to_string());
     }
     if cfg!(target_os = "macos") {
-        let out = Command::new("/usr/bin/security").args(["find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"]).stderr(Stdio::null()).output().ok()?;
+        let out = crate::os::command("/usr/bin/security").args(["find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"]).stderr(Stdio::null()).output().ok()?;
         let k = String::from_utf8_lossy(&out.stdout).trim().to_string();
         return (out.status.success() && !k.is_empty()).then_some(k);
     }
@@ -57,7 +57,7 @@ pub fn store_key(key: &str) -> Result<(), String> {
         } else {
             format!("add-generic-password -U -s \"{KEYCHAIN_SERVICE}\" -a phosphor -w {key}\n")
         };
-        let mut child = Command::new("/usr/bin/security").arg("-i").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
+        let mut child = crate::os::command("/usr/bin/security").arg("-i").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
             let _ = stdin.write_all(line.as_bytes());

@@ -127,7 +127,7 @@ fn probe(path: &Path) -> Entry {
 fn probe_safely(path: &Path) -> Entry {
     let failed = |e: &str| Entry { path: path.to_path_buf(), id: format!("{}{}", shaders::FFGL_EFFECT, slug(path)), name: path.file_stem().unwrap_or_default().to_string_lossy().to_string(), kind: plugin::EFFECT, params: Vec::new(), error: Some(e.to_string()), modified: modified(path) };
     let Ok(exe) = std::env::current_exe() else { return failed("can't start the check") };
-    let Ok(mut child) = std::process::Command::new(exe).arg("--ffgl-probe").arg(path).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn() else {
+    let Ok(mut child) = crate::os::command(exe).arg("--ffgl-probe").arg(path).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn() else {
         return failed("can't start the check");
     };
     // Read what it prints as it goes (a chatty plugin would otherwise fill the pipe and look hung).

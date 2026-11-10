@@ -4,7 +4,7 @@
 //! (video.twimg.com), which download without a sign-in and loop like any clip.
 
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -57,7 +57,7 @@ pub fn list(handle: &str, page: usize) -> Result<Vec<u8>, String> {
     let settings = XSettings::load();
     let Some(browser) = settings.browser else { return Err(NO_BROWSER.into()) };
     let first = (page.max(1) - 1) * PER_PAGE + 1;
-    let mut child = Command::new(tool)
+    let mut child = crate::os::command(tool)
         .args(["-j", "--range", &format!("{first}-{}", first + PER_PAGE - 1), "--cookies-from-browser", &browser])
         .arg(format!("https://x.com/{handle}/media"))
         .stdin(Stdio::null())

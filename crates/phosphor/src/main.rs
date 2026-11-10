@@ -1,3 +1,6 @@
+// The Windows app opens no terminal window beside it (bug report #28). Debug builds keep the console for logs.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 // "And whatsoever ye do in word or deed, do all in the name of the Lord Jesus, giving thanks to God and the Father by
 // him." Colossians 3:17 (KJV)
 
@@ -169,8 +172,26 @@ fn app_icon() -> std::sync::Arc<eframe::egui::IconData> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+/// Windows: started from a terminal with flags (`--version`, `--bench`), print into that terminal. The app has no
+/// console of its own; output already sent to a file or pipe (CI, an MCP client) is left alone.
+#[cfg(windows)]
+fn console_for_flags() {
+    use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_OUTPUT_HANDLE};
+    // SAFETY: plain Win32 calls with no pointers.
+    unsafe {
+        let out = GetStdHandle(STD_OUTPUT_HANDLE);
+        if out.is_null() || out == windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
+            AttachConsole(ATTACH_PARENT_PROCESS);
+        }
+    }
+}
+
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(windows)]
+    if args.len() > 1 {
+        console_for_flags();
+    }
     // Says which Phosphor this is and stops: scripts/check-downloads.sh runs it to see that a download starts at all
     // (every bundled library found and loaded) without opening a window.
     if args.get(1).map(String::as_str) == Some("--version") {
