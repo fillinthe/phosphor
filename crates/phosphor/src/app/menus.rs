@@ -51,7 +51,7 @@ impl PhosphorApp {
                     _ => self.state.account_window = true,
                 }
             }
-            A::OpenFromAccount => self.state.account_window = true,
+            A::Account | A::OpenFromAccount => self.state.account_window = true,
             A::Projects => self.state.projects.open = true,
             A::ImportResolume => {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -258,8 +258,11 @@ impl PhosphorApp {
                 let in_window = self.native_menu.is_none();
                 #[cfg(not(target_os = "macos"))]
                 let in_window = true;
+                // Out of room even with icon buttons (level 2), or a small window: the menus fold into one ☰ button.
+                let squeeze: u8 = ui.ctx().data(|d| d.get_temp(egui::Id::new("top_bar_squeezed"))).unwrap_or(0);
+                let folded = squeeze >= 2 || ui.ctx().content_rect().width() < 1100.0;
                 if in_window {
-                    let clicked = self.menu_bar(ui);
+                    let clicked = self.menu_bar(ui, folded);
                     let ctx = ui.ctx().clone();
                     for a in clicked {
                         self.run_action(&ctx, a, now);
@@ -405,11 +408,14 @@ impl PhosphorApp {
                     // Frame rate and CPU live in the status line (bottom right), where there's room.
                     ui.min_rect().left()
                 });
-                // Squeezed: the left part reached the right part. Room again: well clear of it by what the icons saved
-                // (about 260 points).
+                // Squeezed: the left part reached the right part.
                 let gap = right.inner - left_end;
+                // Level 1: the buttons go to icons; still touching: level 2, the menus fold into ☰ (in-window menus
+                // only). Each level comes back only with well more room than folding saved (~330 / ~260 points).
                 let now_squeezed = match squeezed {
-                    _ if gap < 8.0 => 1,
+                    0 if gap < 8.0 => 1,
+                    1 if gap < 8.0 && in_window => 2,
+                    2 if gap > 330.0 => 1,
                     1 if gap > 270.0 => 0,
                     s => s,
                 };
@@ -421,124 +427,139 @@ impl PhosphorApp {
         });
     }
 
-    /// File / Edit / View / Output / Help inside the window (same actions as the macOS menu bar).
-    pub(crate) fn menu_bar(&mut self, ui: &mut egui::Ui) -> Vec<crate::menu::Action> {
-        use crate::menu::{Action, Entry, MENUS, shortcut_text};
-        let mut clicked: Vec<Action> = Vec::new();
+    /// File / Edit / View / Output / Help inside the window (same actions as the macOS menu bar). `folded`: one
+    /// menu button (☰) holding them all as submenus, for a top bar that has run out of room.
+    pub(crate) fn menu_bar(&mut self, ui: &mut egui::Ui, folded: bool) -> Vec<crate::menu::Action> {
+        use crate::menu::MENUS;
+        let mut clicked = Vec::new();
+        if folded {
+            ui.menu_button(icon::LIST, |ui| {
+                for (title, entries) in MENUS {
+                    ui.menu_button(*title, |ui| self.menu_entries(ui, entries, &mut clicked));
+                }
+            })
+            .response
+            .on_hover_text("Menu: File, Edit, Quick, View, Output, Help");
+        } else {
+            for (title, entries) in MENUS {
+                ui.menu_button(*title, |ui| self.menu_entries(ui, entries, &mut clicked));
+            }
+        }
+        clicked
+    }
+
+    /// One menu's items (shared by the menu bar and the folded ☰ menu); picked actions go into `clicked`.
+    fn menu_entries(&mut self, ui: &mut egui::Ui, entries: &[crate::menu::Entry], clicked: &mut Vec<crate::menu::Action>) {
+        use crate::menu::{Action, Entry, shortcut_text};
         let can_undo = self.state.history.can_undo(&self.state.comp);
         let can_redo = self.state.history.can_redo();
         let has_layer = self.state.selected.is_some_and(|id| id != phosphor_engine::MASTER_ID && self.state.comp.layers.iter().any(|l| l.id == id));
-        for (title, entries) in MENUS {
-            ui.menu_button(*title, |ui| {
-                ui.set_min_width(230.0);
-                for e in entries.iter() {
-                    match e {
-                        Entry::Sep => {
+        ui.set_min_width(230.0);
+        for e in entries.iter() {
+            match e {
+                Entry::Sep => {
+                    ui.separator();
+                }
+                Entry::Item(a, label, sc) => {
+                    let enabled = match a {
+                        Action::Undo => can_undo,
+                        Action::Redo => can_redo,
+                        Action::DuplicateLayer | Action::DeleteLayer => has_layer,
+                        Action::Group => has_layer && self.state.selected.and_then(|id| self.state.comp.layers.iter().find(|l| l.id == id)).is_some_and(|l| l.parent.is_none()),
+                        Action::Ungroup => panels::selected_group(&self.state.comp, self.state.selected).is_some(),
+                        Action::Syphon | Action::Ndi => cfg!(any(target_os = "macos", windows)),
+                        _ => true,
+                    };
+                    let text = match a {
+                        // Translated in pieces: the whole line isn't in the language packs.
+                        Action::Syphon => format!("{}  ({})", crate::i18n::tr(label), crate::i18n::tr(if self.state.comp.share_out() { "On" } else { "Off" })),
+                        Action::Ndi => format!("{}  ({})", crate::i18n::tr(label), crate::i18n::tr(if self.state.comp.ndi.enabled { "On" } else { "Off" })),
+                        _ => label.to_string(),
+                    };
+                    if crate::ui::menu_item(ui, enabled, text, shortcut_text(*sc)).clicked() {
+                        clicked.push(*a);
+                        ui.close();
+                    }
+                }
+                Entry::Dynamic("Open Recent") => {
+                    ui.add_enabled_ui(!self.state.recent.is_empty(), |ui| {
+                        ui.menu_button("Open Recent", |ui| {
+                            for p in self.state.recent.clone() {
+                                let name = std::path::Path::new(&p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
+                                if crate::ui::command(ui, name).on_hover_text(&p).clicked() {
+                                    self.state.open_project_file(&p);
+                                    ui.close();
+                                }
+                            }
                             ui.separator();
+                            if crate::ui::command(ui, "Clear Menu").clicked() {
+                                self.state.recent.clear();
+                                ui.close();
+                            }
+                        });
+                    });
+                }
+                Entry::Dynamic("Panels") => {
+                    ui.menu_button("Panels", |ui| {
+                        crate::ui::help(ui, "Drag any tab to move it; drag it outside to float it.");
+                        for (i, tab) in Tab::ALL.iter().enumerate() {
+                            let open = self.detached.contains(tab) || self.dock.find_tab(tab).is_some();
+                            if crate::ui::pick_item(ui, open, tab.title()).clicked() {
+                                clicked.push(Action::Panel(i));
+                            }
                         }
-                        Entry::Item(a, label, sc) => {
-                            let enabled = match a {
-                                Action::Undo => can_undo,
-                                Action::Redo => can_redo,
-                                Action::DuplicateLayer | Action::DeleteLayer => has_layer,
-                                Action::Group => has_layer && self.state.selected.and_then(|id| self.state.comp.layers.iter().find(|l| l.id == id)).is_some_and(|l| l.parent.is_none()),
-                                Action::Ungroup => panels::selected_group(&self.state.comp, self.state.selected).is_some(),
-                                Action::Syphon | Action::Ndi => cfg!(any(target_os = "macos", windows)),
-                                _ => true,
-                            };
-                            let text = match a {
-                                // Translated in pieces: the whole line isn't in the language packs.
-                                Action::Syphon => format!("{}  ({})", crate::i18n::tr(label), crate::i18n::tr(if self.state.comp.share_out() { "On" } else { "Off" })),
-                                Action::Ndi => format!("{}  ({})", crate::i18n::tr(label), crate::i18n::tr(if self.state.comp.ndi.enabled { "On" } else { "Off" })),
-                                _ => label.to_string(),
-                            };
-                            if crate::ui::menu_item(ui, enabled, text, shortcut_text(*sc)).clicked() {
-                                clicked.push(*a);
+                    });
+                }
+                Entry::Dynamic("Layouts") => {
+                    ui.menu_button("Layouts", |ui| {
+                        let names = self.layouts.names();
+                        let startup = self.layouts.startup.clone();
+                        for (i, name) in names.iter().enumerate() {
+                            if i == LAYOUTS.len() && i < names.len() {
+                                ui.separator();
+                            }
+                            let text = if startup.as_deref() == Some(name.as_str()) { format!("{name}  (startup)") } else { name.clone() };
+                            if crate::ui::command(ui, text).clicked() {
+                                clicked.push(Action::Layout(i));
                                 ui.close();
                             }
                         }
-                        Entry::Dynamic("Open Recent") => {
-                            ui.add_enabled_ui(!self.state.recent.is_empty(), |ui| {
-                                ui.menu_button("Open Recent", |ui| {
-                                    for p in self.state.recent.clone() {
-                                        let name = std::path::Path::new(&p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
-                                        if crate::ui::command(ui, name).on_hover_text(&p).clicked() {
-                                            self.state.open_project_file(&p);
-                                            ui.close();
-                                        }
-                                    }
-                                    ui.separator();
-                                    if crate::ui::command(ui, "Clear Menu").clicked() {
-                                        self.state.recent.clear();
-                                        ui.close();
-                                    }
-                                });
-                            });
+                        ui.separator();
+                        if crate::ui::command(ui, format!("{} Save Current Layout…", icon::FLOPPY_DISK)).clicked() {
+                            clicked.push(Action::SaveLayout);
+                            ui.close();
                         }
-                        Entry::Dynamic("Panels") => {
-                            ui.menu_button("Panels", |ui| {
-                                crate::ui::help(ui, "Drag any tab to move it; drag it outside to float it.");
-                                for (i, tab) in Tab::ALL.iter().enumerate() {
-                                    let open = self.detached.contains(tab) || self.dock.find_tab(tab).is_some();
-                                    if crate::ui::pick_item(ui, open, tab.title()).clicked() {
-                                        clicked.push(Action::Panel(i));
-                                    }
-                                }
-                            });
-                        }
-                        Entry::Dynamic("Layouts") => {
-                            ui.menu_button("Layouts", |ui| {
-                                let names = self.layouts.names();
-                                let startup = self.layouts.startup.clone();
-                                for (i, name) in names.iter().enumerate() {
-                                    if i == LAYOUTS.len() && i < names.len() {
-                                        ui.separator();
-                                    }
-                                    let text = if startup.as_deref() == Some(name.as_str()) { format!("{name}  (startup)") } else { name.clone() };
-                                    if crate::ui::command(ui, text).clicked() {
-                                        clicked.push(Action::Layout(i));
-                                        ui.close();
-                                    }
-                                }
-                                ui.separator();
-                                if crate::ui::command(ui, format!("{} Save Current Layout…", icon::FLOPPY_DISK)).clicked() {
-                                    clicked.push(Action::SaveLayout);
+                        ui.menu_button("Open at Startup", |ui| {
+                            if crate::ui::pick_item(ui, startup.is_none(), "However I left it").clicked() {
+                                self.layouts.startup = None;
+                                ui.close();
+                            }
+                            for name in &names {
+                                if crate::ui::pick_item(ui, startup.as_deref() == Some(name.as_str()), name).clicked() {
+                                    self.layouts.startup = Some(name.clone());
                                     ui.close();
                                 }
-                                ui.menu_button("Open at Startup", |ui| {
-                                    if crate::ui::pick_item(ui, startup.is_none(), "However I left it").clicked() {
-                                        self.layouts.startup = None;
+                            }
+                        });
+                        if !self.layouts.saved.is_empty() {
+                            ui.menu_button("Delete", |ui| {
+                                for name in self.layouts.saved.iter().map(|l| l.name.clone()).collect::<Vec<_>>() {
+                                    if crate::ui::command(ui, &name).clicked() {
+                                        self.layouts.remove(&name);
+                                        self.install_native_menu();
                                         ui.close();
                                     }
-                                    for name in &names {
-                                        if crate::ui::pick_item(ui, startup.as_deref() == Some(name.as_str()), name).clicked() {
-                                            self.layouts.startup = Some(name.clone());
-                                            ui.close();
-                                        }
-                                    }
-                                });
-                                if !self.layouts.saved.is_empty() {
-                                    ui.menu_button("Delete", |ui| {
-                                        for name in self.layouts.saved.iter().map(|l| l.name.clone()).collect::<Vec<_>>() {
-                                            if crate::ui::command(ui, &name).clicked() {
-                                                self.layouts.remove(&name);
-                                                self.install_native_menu();
-                                                ui.close();
-                                            }
-                                        }
-                                    });
                                 }
                             });
                         }
-                        Entry::Dynamic("Send Output To") => {
-                            ui.menu_button("Send Output To", |ui| crate::ui::screen_menu(ui, &mut self.state));
-                        }
-                        Entry::Dynamic(_) => {}
-                    }
+                    });
                 }
-            });
+                Entry::Dynamic("Send Output To") => {
+                    ui.menu_button("Send Output To", |ui| crate::ui::screen_menu(ui, &mut self.state));
+                }
+                Entry::Dynamic(_) => {}
+            }
         }
-        clicked
     }
 }
 
@@ -600,7 +621,7 @@ impl PhosphorApp {
             let mut close = false;
             egui::Window::new("Welcome to Phosphor").collapsible(false).resizable(false).anchor(egui::Align2::RIGHT_TOP, [-12.0, 44.0]).show(ctx, |ui| {
                 ui.set_max_width(320.0);
-                ui.label("Phosphor is free. A free phosphorfx.com account keeps your projects and layouts on every computer you use. It's optional.");
+                ui.label("Phosphor is free. A free account keeps your projects and layouts on every computer you use. It's optional: sign in any time from File › Account & Sign In… or Sign in at the top right.");
                 crate::ui::toolbar(ui, |ui| {
                     if crate::ui::command(ui, format!("{} Sign in or create one", icon::USER_CIRCLE)).clicked() {
                         st.account_window = true;
