@@ -731,7 +731,7 @@ impl Graph for View<'_> {
     fn can_wrap_many(&self, ids: &[u32]) -> bool {
         self.level().is_none_or(|l| l.can_wrap_many(ids))
     }
-        fn wrap_many(&mut self, ids: &[u32]) {
+    fn wrap_many(&mut self, ids: &[u32]) {
         let kinds: HashMap<u32, Vec<PortKind>> = ids.iter().filter_map(|id| self.node(*id).map(|n| (*id, self.comp.node_inputs(n).iter().map(|(_, k)| *k).collect()))).collect();
         if let Some(l) = self.level_mut() {
             l.wrap_many(ids, &|id| kinds.get(&id).cloned().unwrap_or_default());

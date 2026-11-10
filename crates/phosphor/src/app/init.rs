@@ -9,6 +9,9 @@ impl PhosphorApp {
         std::thread::spawn(|| {
             crate::text::fonts();
         });
+        // A Session port written by an earlier run is stale until this run's Session starts (the AI link's look).
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::mcp::note_session_port(None);
         theme::apply(&cc.egui_ctx);
 
         let stored = |key: &str| if bench.is_none() { cc.storage.and_then(|s| s.get_string(key)) } else { None };

@@ -118,6 +118,9 @@ mod tests {
             let allowed = budget.get(&rel).copied().unwrap_or(0);
             if n > allowed {
                 over.push(format!("{rel}: {n} raw colours, budget {allowed}"));
+            } else if n < allowed {
+                // A colour moved to theme: the budget goes down with it, so it can't quietly come back.
+                over.push(format!("{rel}: {n} raw colours, budget {allowed}: lower its number in ui/colour_budget.txt"));
             }
         }
         println!("UI_RAW_COLOURS total {total}");
