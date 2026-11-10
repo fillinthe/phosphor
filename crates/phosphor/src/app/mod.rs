@@ -1103,6 +1103,7 @@ impl eframe::App for PhosphorApp {
         self.ui_frames += 1;
         // A bug in one frame should not take the show down: skip that frame and carry on.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.ui_frame(ui, frame)));
+        crate::explorer::end_stale_looks(&mut self.state, ui.ctx().cumulative_pass_nr());
         if result.is_err() {
             let now = ui.ctx().input(|i| i.time);
             self.panics.retain(|t| now - t < 5.0);

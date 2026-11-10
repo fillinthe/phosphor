@@ -50,6 +50,10 @@ pub(crate) trait Graph {
     /// A box's own right-click entries (before Duplicate / Delete). True when something changed.
     /// Puts several boxes in one box of boxes (Shift-click selects; the menu offers it).
     fn wrap_many(&mut self, _ids: &[u32]) {}
+    /// The boxes can go in one box (at most one of them feeds boxes outside: a box of boxes has one output).
+    fn can_wrap_many(&self, _ids: &[u32]) -> bool {
+        true
+    }
     fn extra_menu(&mut self, _ui: &mut egui::Ui, _id: u32) -> bool {
         false
     }
@@ -364,9 +368,13 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         }
         let removable = graph.removable(n);
         t.context_menu(|ui| {
-            if picked && selected.len() > 1 && command(ui, label(icon::PACKAGE, &format!("Wrap {} boxes in a box", selected.len()))).on_hover_text("Puts the selected boxes inside one new box of boxes, their wires kept").clicked() {
-                wrap_all = true;
-                ui.close();
+            if picked && selected.len() > 1 {
+                let ok = graph.can_wrap_many(&selected);
+                let tip = if ok { "Puts the selected boxes inside one new box of boxes, their wires kept" } else { "Only one of the selected boxes may feed boxes outside them: a box of boxes has one output" };
+                if ui.add_enabled_ui(ok, |ui| command(ui, label(icon::PACKAGE, &format!("Wrap {} boxes in a box", selected.len())))).inner.on_hover_text(tip).on_disabled_hover_text(tip).clicked() {
+                    wrap_all = true;
+                    ui.close();
+                }
             }
             if graph.extra_menu(ui, n) {
                 changed = true;

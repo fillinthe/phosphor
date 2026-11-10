@@ -1,4 +1,3 @@
-use core::f32;
 
 use emath::{GuiRounding as _, Pos2};
 

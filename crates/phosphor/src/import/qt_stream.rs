@@ -225,7 +225,9 @@ impl Reader<'_> {
             80 => Qv::Nums(self.nums(6)?),
             81 => Qv::Nums(self.nums(9)?),
             82 => Qv::Nums(self.nums(16)?),
-            83..=86 => Qv::Nums(self.nums(t as usize - 81)?),
+            // QVector2D, QVector3D, QVector4D: 2, 3, 4 numbers; QQuaternion: 4 (scalar, x, y, z).
+            83..=85 => Qv::Nums(self.nums(t as usize - 81)?),
+            86 => Qv::Nums(self.nums(4)?),
             // A type of the app's own: its name, then its data.
             127 => {
                 let name = String::from_utf8_lossy(&self.bytes()?).trim_end_matches('\0').to_string();
@@ -295,6 +297,13 @@ pub mod write {
     pub fn str_v(out: &mut Vec<u8>, s: &str) {
         head(out, 10);
         string(out, s);
+    }
+    /// A Qt 4 QQuaternion (type 86): four doubles.
+    pub fn quaternion(out: &mut Vec<u8>, q: [f64; 4]) {
+        head(out, 86);
+        for n in q {
+            out.extend(n.to_be_bytes());
+        }
     }
     pub fn num(out: &mut Vec<u8>, n: f64) {
         head(out, 6);
@@ -394,5 +403,19 @@ mod tests {
         huge[at..].copy_from_slice(&u32::MAX.to_be_bytes());
         assert!(read_file(&huge).is_err());
         assert!(read_file(b"not a project at all").is_err());
+    }
+
+    /// A rotation (QQuaternion) is four numbers: the value after it still reads.
+    #[test]
+    fn a_quaternion_is_four_numbers() {
+        let bytes = write::file(|o| {
+            write::key(o, "rotation");
+            write::quaternion(o, [1.0, 0.0, 0.5, 0.0]);
+            write::key(o, "opacity");
+            write::num(o, 0.25);
+        });
+        let v = read_file(&bytes).unwrap();
+        assert_eq!(v[0].1.nums(), &[1.0, 0.0, 0.5, 0.0]);
+        assert_eq!(v[1].1.num(), Some(0.25));
     }
 }
