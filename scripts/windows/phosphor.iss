@@ -29,6 +29,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\Phosphor.exe
+SetupIconFile=..\..\assets\icon.ico
 CloseApplications=yes
 ChangesAssociations=yes
 
