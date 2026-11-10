@@ -143,6 +143,14 @@ pub fn unit_to(v: f32, min: f32, max: f32, log: bool) -> f32 {
     if log { min * (max / min).powf(v) } else { min + v * (max - min) }
 }
 
+/// A shader's values made as long as its parameters: the ones set are kept, missing ones get the defaults (so
+/// moving one setting never resets the others; `get_target` reads a missing value as its default too).
+pub(super) fn fit_to_defaults(values: &mut Vec<f32>, defaults: Vec<f32>) {
+    values.truncate(defaults.len());
+    let have = values.len();
+    values.extend_from_slice(&defaults[have..]);
+}
+
 /// Sets any target to a 0..1 value (or `FLIP` for on/off ones). Clip launches and app-wide
 /// controls the composition can't do itself are pushed onto `out` for the app.
 pub fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, out: &mut Vec<Deferred>) {
@@ -258,9 +266,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 && let Some(desc) = shaders::transition(&l.transition_effect)
                 && let Some(p) = desc.params.get(*index)
             {
-                if l.transition_values.len() != desc.params.len() {
-                    l.transition_values = desc.defaults();
-                }
+                fit_to_defaults(&mut l.transition_values, desc.defaults());
                 l.transition_values[*index] = scaled(p, v);
             }
         }
@@ -269,9 +275,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 && let Some(desc) = l.mixer.as_deref().and_then(shaders::mixer)
                 && let Some(p) = desc.params.get(*index)
             {
-                if l.mixer_values.len() != desc.params.len() {
-                    l.mixer_values.resize(desc.params.len(), 0.0);
-                }
+                fit_to_defaults(&mut l.mixer_values, desc.defaults());
                 l.mixer_values[*index] = scaled(p, v);
             }
         }

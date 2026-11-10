@@ -251,14 +251,32 @@ impl Network {
         v
     }
 
+    fn wrappable(&self, ids: &[u32]) -> Vec<u32> {
+        ids.iter().copied().filter(|id| self.node(*id).is_some_and(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput))).collect()
+    }
+
+    /// Boxes `ids` can go in one Group: at most one of them feeds boxes outside the set (the group's one output).
+    pub fn can_wrap_many(&self, ids: &[u32]) -> bool {
+        let ids = self.wrappable(ids);
+        let mut feeding: Vec<u32> = self.wires.iter().filter(|w| ids.contains(&w.from) && !ids.contains(&w.to)).map(|w| w.from).collect();
+        feeding.sort_unstable();
+        feeding.dedup();
+        feeding.len() <= 1
+    }
+
     /// Puts boxes `ids` inside one new Group (where the first is): wires among them kept, wires in from outside
     /// become Input / Number input boxes, the box feeding outside (or the Output) becomes the group's picture.
     /// `inputs` = each box's input kinds. Returns the group's id.
+    /// None (nothing changed) when more than one of them feeds boxes outside: a group has one picture out, so the
+    /// other wires would be lost (see `can_wrap_many`).
     pub fn wrap_many(&mut self, ids: &[u32], inputs: &dyn Fn(u32) -> Vec<PortKind>) -> Option<u32> {
-        let ids: Vec<u32> = ids.iter().copied().filter(|id| self.node(*id).is_some_and(|n| !matches!(n.kind, NodeKind::Output | NodeKind::Input | NodeKind::NumberInput))).collect();
+        let ids = self.wrappable(ids);
         let first = self.node(*ids.first()?)?.clone();
         if ids.len() == 1 {
             return self.wrap(ids[0], &inputs(ids[0]));
+        }
+        if !self.can_wrap_many(&ids) {
+            return None;
         }
         let inside = |id: u32| ids.contains(&id);
         let among: Vec<Wire> = self.wires.iter().filter(|w| inside(w.from) && inside(w.to)).copied().collect();
@@ -1156,6 +1174,7 @@ mod tests {
         let net = comp.comp(cid).unwrap().network.clone().unwrap();
         let inputs = |id: u32| net.node(id).map(|n| comp.node_inputs(n).iter().map(|(_, k)| *k).collect::<Vec<_>>()).unwrap_or_default();
         let mut net2 = net.clone();
+        assert!(!net2.can_wrap_many(&[pic, lfo]) && net2.wrap_many(&[pic, lfo], &inputs).is_none(), "both feed the group outside: one would lose its wire");
         let big = net2.wrap_many(&[pic, g], &inputs).unwrap();
         let inner = net2.node(big).unwrap().inner.clone().unwrap();
         assert!(inner.node(pic).is_some() && inner.node(g).is_some(), "both inside");

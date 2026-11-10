@@ -1,6 +1,6 @@
 //! Data boxes (Designer phase 5): fills every modulator that has a `DataFeed` each frame (a live reading from
 //! `live_data::Feeds`, a web address answering JSON fetched on a thread when due, a timer, the clock, a table file
-//! read once) and fires events (a modulator's value crossing its threshold sets a control). Costs nothing while no
+//! read once, on a thread too) and fires events (a modulator's value crossing its threshold sets a control). Costs nothing while no
 //! modulator has data or an event.
 
 use std::collections::HashMap;
@@ -27,7 +27,12 @@ pub struct DataRun {
     web: HashMap<String, Web>,
     /// When each timer (or table) modulator was started.
     started: HashMap<u64, f64>,
-    tables: HashMap<String, Result<Vec<Vec<String>>, String>>,
+    /// Each table file: the read it waits for (a number, so a read from before `forget_table` is dropped) and its rows
+    /// (None while the file is read, off the UI thread: a slow drive must never hold up the show).
+    tables: HashMap<String, (u64, Option<Result<Vec<Vec<String>>, String>>)>,
+    reads: u64,
+    table_tx: Sender<(String, u64, Result<Vec<Vec<String>>, String>)>,
+    table_rx: Receiver<(String, u64, Result<Vec<Vec<String>>, String>)>,
     /// Whether each event modulator was last above its threshold.
     above: HashMap<u64, bool>,
 }
@@ -35,7 +40,8 @@ pub struct DataRun {
 impl Default for DataRun {
     fn default() -> Self {
         let (tx, rx) = channel();
-        DataRun { tx, rx, web: HashMap::new(), started: HashMap::new(), tables: HashMap::new(), above: HashMap::new() }
+        let (table_tx, table_rx) = channel();
+        DataRun { tx, rx, web: HashMap::new(), started: HashMap::new(), tables: HashMap::new(), reads: 0, table_tx, table_rx, above: HashMap::new() }
     }
 }
 
@@ -76,6 +82,11 @@ pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data:
             let w = data.web.entry(url).or_default();
             w.busy = false;
             w.value = Some(r);
+        }
+        for (path, read, r) in data.table_rx.try_iter() {
+            if let Some(t) = data.tables.get_mut(&path).filter(|t| t.0 == read) {
+                t.1 = Some(r);
+            }
         }
         let (tod, _) = crate::clock::local_time();
         let mut fetch: Vec<String> = Vec::new();
@@ -148,9 +159,18 @@ pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data:
                     if path.trim().is_empty() {
                         problem = Some("Pick a table file".to_string());
                     } else {
-                        let rows = data.tables.entry(path.clone()).or_insert_with(|| std::fs::read_to_string(path).map(|t| phosphor_engine::table_rows(&t)).map_err(|e| e.to_string()));
-                        match rows {
-                            Ok(rows) if !rows.is_empty() => {
+                        if !data.tables.contains_key(path) {
+                            data.reads += 1;
+                            data.tables.insert(path.clone(), (data.reads, None));
+                            let (tx, path, read) = (data.table_tx.clone(), path.clone(), data.reads);
+                            let _ = std::thread::Builder::new().name("data table".into()).spawn(move || {
+                                let r = std::fs::read_to_string(&path).map(|t| phosphor_engine::table_rows(&t)).map_err(|e| e.to_string());
+                                let _ = tx.send((path, read, r));
+                            });
+                        }
+                        match &data.tables[path].1 {
+                            None => shown = "reading…".to_string(),
+                            Some(Ok(rows)) if !rows.is_empty() => {
                                 let start = *data.started.entry(id).or_insert(now);
                                 let row = ((now - start) / (*seconds).max(0.05) as f64) as usize % rows.len();
                                 let cell = rows[row].get(*column).cloned().unwrap_or_default();
@@ -163,8 +183,8 @@ pub fn run(data: &mut DataRun, comp: &mut Composition, feeds: &crate::live_data:
                                     Err(_) => raw = row as f64,
                                 }
                             }
-                            Ok(_) => problem = Some("The table is empty".to_string()),
-                            Err(e) => problem = Some(format!("Couldn't read the table: {e}")),
+                            Some(Ok(_)) => problem = Some("The table is empty".to_string()),
+                            Some(Err(e)) => problem = Some(format!("Couldn't read the table: {e}")),
                         }
                     }
                 }
@@ -222,6 +242,14 @@ mod tests {
         let step = |data: &mut DataRun, comp: &mut Composition, shared: &[(u64, f32)], now: f64| run(data, comp, &feeds, shared, now);
         step(&mut data, &mut comp, &shared, 100.0);
         let m = |comp: &Composition, id: u64| comp.modulators.iter().find(|m| m.id == id).unwrap().clone();
+        assert_eq!(m(&comp, 3).live.shown, "reading…", "the file is read off the UI thread");
+        for _ in 0..200 {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            step(&mut data, &mut comp, &shared, 100.0);
+            if m(&comp, 3).live.shown != "reading…" {
+                break;
+            }
+        }
         assert_eq!(m(&comp, 3).live.shown, "level", "the first row (the heading) first");
         step(&mut data, &mut comp, &shared, 105.0);
         assert!((m(&comp, 1).value - 0.5).abs() < 0.01, "half way: {}", m(&comp, 1).value);

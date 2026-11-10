@@ -432,7 +432,9 @@ impl ControlSurface {
             Arrange::SameHeight => picked.iter().for_each(|&i| ws[i].h = first.h),
             Arrange::SameSize => picked.iter().for_each(|&i| (ws[i].w, ws[i].h) = (first.w, first.h)),
         }
-        for &id in ids {
+        // Locked ones stay exactly where they are (keep_inside could move or resize them).
+        let moved: Vec<u64> = self.widgets.iter().filter(|w| ids.contains(&w.id) && !w.locked).map(|w| w.id).collect();
+        for id in moved {
             self.keep_inside(id);
         }
     }
@@ -579,6 +581,12 @@ mod page_tests {
         sf.arrange(&[a, b, c], Arrange::Bottom);
         assert_eq!((sf.widget(a).unwrap().x, sf.widget(a).unwrap().y), before, "a locked widget doesn't move");
         assert_ne!(sf.widget(b).unwrap().x, 6.0, "the others still did");
+        // A locked widget sticking out past the columns isn't pulled in or shrunk by Arrange either.
+        if let Some(w) = sf.widget_mut(a) {
+            (w.x, w.w) = (6.0, 5.0);
+        }
+        sf.arrange(&[a, b], Arrange::Left);
+        assert_eq!((sf.widget(a).unwrap().x, sf.widget(a).unwrap().w), (6.0, 5.0), "locked: left as it was");
     }
 }
 

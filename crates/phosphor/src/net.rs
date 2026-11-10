@@ -404,6 +404,7 @@ impl NetSession {
             .map_err(|e| e.to_string())?;
         self.thumb_encoder = Some(tx);
         self.status = format!("Serving {}", self.url());
+        crate::mcp::note_session_port(Some(self.port));
         Ok(())
     }
 
@@ -416,6 +417,10 @@ impl NetSession {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(d) = self.mdns.take() {
             let _ = d.shutdown();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.running.load(Ordering::Relaxed) {
+            crate::mcp::note_session_port(None);
         }
         self.running.store(false, Ordering::Relaxed);
         self.encoder = None;
@@ -500,15 +505,15 @@ mod native {
     const ICON_192: &[u8] = include_bytes!("../../../assets/icon-192.png");
     const ICON_512: &[u8] = include_bytes!("../../../assets/icon-512.png");
 
-    /// The web app manifest for the remote (or, `play`, the audience) page: "Add to Home Screen" then opens it
-    /// full-screen with Phosphor's icon, like an app.
-    /// One whole HTTP 200 answer: `kind` = content type, `cache` = the Cache-Control value (None = the browser's choice).
-    fn respond_ok(stream: &mut impl Write, kind: &str, cache: Option<&str>, body: &[u8]) {
-        let cache = cache.map(|c| format!("Cache-Control: {c}\r\n")).unwrap_or_default();
-        let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\n{cache}Content-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
+    /// One whole HTTP 200 answer: `kind` = content type, `headers` = any more (Cache-Control, Content-Disposition…).
+    fn respond_ok(stream: &mut impl Write, kind: &str, headers: &[(&str, &str)], body: &[u8]) {
+        let more: String = headers.iter().map(|(k, v)| format!("{k}: {v}\r\n")).collect();
+        let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\n{more}Content-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes());
         let _ = stream.write_all(body);
     }
 
+    /// The web app manifest for the remote (or, `play`, the audience) page: "Add to Home Screen" then opens it
+    /// full-screen with Phosphor's icon, like an app.
     fn manifest(play: bool) -> String {
         let (name, short, start) = if play { ("Phosphor Play", "Play", "/play") } else { ("Phosphor Remote", "Phosphor", "/remote") };
         serde_json::json!({
@@ -632,6 +637,8 @@ mod native {
             return;
         }
         let _ = tcp.set_nodelay(true);
+        // A file the app offered (one lock, the copy taken before answering).
+        let offered = files.lock().unwrap().get(path.as_str()).cloned();
         match path.as_str() {
             "/stream.mjpeg" => {
                 let seat = super::Seat::join(&registry, super::PeerKind::Viewer, &ip, &device);
@@ -663,7 +670,7 @@ mod native {
                 let frame = latest.0.lock().unwrap().clone();
                 match frame {
                     Some(f) => {
-                        respond_ok(&mut stream, "image/jpeg", None, &f);
+                        respond_ok(&mut stream, "image/jpeg", &[], &f);
                     }
                     None => {
                         let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
@@ -676,7 +683,7 @@ mod native {
                 let jpeg = id.and_then(|id| thumbs.lock().unwrap().get(&id).map(|(_, f)| f.clone()));
                 match jpeg {
                     Some(f) => {
-                        respond_ok(&mut stream, "image/jpeg", Some("no-cache"), &f);
+                        respond_ok(&mut stream, "image/jpeg", &[("Cache-Control", "no-cache")], &f);
                     }
                     None => {
                         let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
@@ -684,26 +691,23 @@ mod native {
                 }
             }
             // A file the app offered (the TouchOSC layout): downloaded, not shown.
-            p if files.lock().unwrap().contains_key(p) => {
-                let (kind, name, bytes) = files.lock().unwrap().get(p).cloned().unwrap_or(("application/octet-stream", String::new(), Vec::new()));
-                let _ = stream.write_all(
-                    format!("HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Disposition: attachment; filename=\"{name}\"\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", bytes.len()).as_bytes(),
-                );
-                let _ = stream.write_all(&bytes);
+            _ if let Some((kind, name, bytes)) = &offered => {
+                let disposition = format!("attachment; filename=\"{name}\"");
+                respond_ok(&mut stream, kind, &[("Content-Disposition", &disposition), ("Cache-Control", "no-cache")], bytes);
             }
             // The remote page as a home-screen web app: its manifest and icon.
             p if p.starts_with("/manifest.webmanifest") => {
-                respond_ok(&mut stream, "application/manifest+json", Some("no-cache"), manifest(p.contains("play")).as_bytes());
+                respond_ok(&mut stream, "application/manifest+json", &[("Cache-Control", "no-cache")], manifest(p.contains("play")).as_bytes());
             }
             "/icon-192.png" | "/icon-512.png" | "/apple-touch-icon.png" => {
-                respond_ok(&mut stream, "image/png", Some("max-age=86400"), if path == "/icon-512.png" { ICON_512 } else { ICON_192 });
+                respond_ok(&mut stream, "image/png", &[("Cache-Control", "max-age=86400")], if path == "/icon-512.png" { ICON_512 } else { ICON_192 });
             }
             // The remote page doubles as the audience page (it reads its own path).
             p if p.starts_with("/remote") || p.starts_with("/play") => {
-                respond_ok(&mut stream, "text/html; charset=utf-8", Some("no-cache"), REMOTE_HTML.as_bytes());
+                respond_ok(&mut stream, "text/html; charset=utf-8", &[("Cache-Control", "no-cache")], REMOTE_HTML.as_bytes());
             }
             _ => {
-                respond_ok(&mut stream, "text/html; charset=utf-8", None, PLAYER_HTML.as_bytes());
+                respond_ok(&mut stream, "text/html; charset=utf-8", &[], PLAYER_HTML.as_bytes());
             }
         }
     }

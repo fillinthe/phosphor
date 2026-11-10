@@ -1617,7 +1617,7 @@ mod tests {
 
     #[test]
     fn copied_blocks_paste_with_fresh_ids_and_their_wires() {
-        let mut p = Patch::kaleido_glow_trails();
+        let p = Patch::kaleido_glow_trails();
         let (input, out, k, g) = (p.nodes[0].id, p.nodes[1].id, p.nodes[2].id, p.nodes[3].id);
         let text = p.clip(&[k, g, out]).unwrap();
         assert!(p.clip(&[out]).is_none(), "Output alone: nothing to copy");

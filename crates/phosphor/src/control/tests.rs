@@ -1090,3 +1090,14 @@ fn laser_look_buttons_switch_looks() {
     assert_eq!(default_osc_address(&to(12)), "/phosphor/laser/5/look/12");
     assert!(all_targets(&comp).iter().any(|(t, name)| *t == to(12) && name.contains("look")));
 }
+
+/// Moving one mixer / transition setting keeps the others: missing ones get their defaults, never 0.
+#[test]
+fn one_setting_keeps_the_others() {
+    let mut v = vec![0.7];
+    targets::fit_to_defaults(&mut v, vec![0.5, 0.25, 1.0]);
+    assert_eq!(v, vec![0.7, 0.25, 1.0]);
+    let mut long = vec![0.1, 0.2, 0.3, 0.4];
+    targets::fit_to_defaults(&mut long, vec![0.5, 0.5]);
+    assert_eq!(long, vec![0.1, 0.2]);
+}

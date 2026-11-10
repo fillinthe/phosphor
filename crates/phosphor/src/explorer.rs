@@ -752,8 +752,16 @@ pub struct UserShader {
 }
 
 impl UserShader {
-    fn new(slug: String, source: String) -> UserShader {
-        UserShader { id: id_for(&slug, &source), patch: Patch::from_source(&source), patch_error: None, slug, source, error: None, compiled: false }
+    fn new(slug: String, mut source: String) -> UserShader {
+        let mut patch = Patch::from_source(&source);
+        // Saved while a block was looked at: the effect is the whole patch again (looking is only for editing).
+        if let Some(p) = patch.as_mut().filter(|p| p.look_at.is_some()) {
+            p.set_look_at(None);
+            if let Ok(src) = p.compile() {
+                source = src;
+            }
+        }
+        UserShader { id: id_for(&slug, &source), patch, patch_error: None, slug, source, error: None, compiled: false }
     }
 }
 
@@ -762,6 +770,8 @@ pub struct EditorState {
     pub shaders: Vec<UserShader>,
     pub current: Option<usize>,
     dirty_at: Option<f64>,
+    /// The patch drawn in the editor and the UI pass it was drawn in (see `end_stale_looks`).
+    patch_drawn: Option<(usize, u64)>,
     loaded: bool,
     /// The Import from Shadertoy window, while open.
     shadertoy: Option<ShadertoyImport>,
@@ -1139,6 +1149,9 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             code_view(ui, sh, dirty_at, now, is_generator);
         }
     });
+    if st.editor.shaders[idx].patch.is_some() {
+        st.editor.patch_drawn = Some((idx, ui.ctx().cumulative_pass_nr()));
+    }
     if st.editor.dirty_at.is_some_and(|t| now - t > 0.35) {
         st.editor.dirty_at = None;
         compile(st, idx, true);
@@ -1151,6 +1164,20 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             let _ = std::fs::remove_file(dir.join(format!("{}.wgsl", sh.slug)));
         }
         st.editor.current = None;
+    }
+}
+
+/// "Look at this box" is for while you edit: once a patch isn't on screen in the editor any more (another shader
+/// picked, the editor closed), its effect goes back to the whole patch, on every layer using it. Call once a frame.
+pub fn end_stale_looks(st: &mut State, pass: u64) {
+    for i in 0..st.editor.shaders.len() {
+        let on_screen = st.editor.patch_drawn.is_some_and(|(at, drawn)| at == i && drawn + 1 >= pass);
+        let Some(p) = st.editor.shaders[i].patch.as_mut().filter(|p| p.look_at.is_some() && !on_screen) else { continue };
+        p.set_look_at(None);
+        if let Ok(src) = p.compile() {
+            st.editor.shaders[i].source = src;
+            compile(st, i, true);
+        }
     }
 }
 

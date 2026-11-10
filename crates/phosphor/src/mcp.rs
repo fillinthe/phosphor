@@ -13,14 +13,32 @@ use serde_json::{Value, json};
 /// Where the open Phosphor answers.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Link {
+    #[serde(default)]
     pub osc_port: u16,
+    #[serde(default)]
     pub query_port: u16,
+    /// The Session server (pictures for `look`), while it runs.
+    #[serde(default)]
+    pub session_port: Option<u16>,
 }
 
 const LINK_FILE: &str = "ai-link.json";
 
-/// Called by the open app whenever OSC (re)starts.
+/// Called by the open app whenever OSC (re)starts: the OSC ports (the Session's port written there is kept).
 pub fn write_link(link: &Link) {
+    let session_port = read_link().and_then(|l| l.session_port);
+    store_link(&Link { session_port, ..link.clone() });
+}
+
+/// Called by the open app when the Session server starts (`Some(port)`) or stops (`None`).
+pub fn note_session_port(port: Option<u16>) {
+    let link = read_link().unwrap_or(Link { osc_port: 0, query_port: 0, session_port: None });
+    if link.session_port != port {
+        store_link(&Link { session_port: port, ..link });
+    }
+}
+
+fn store_link(link: &Link) {
     if let Some(dir) = crate::show::storage_dir() {
         let _ = std::fs::create_dir_all(&dir);
         let _ = std::fs::write(dir.join(LINK_FILE), serde_json::to_string(link).unwrap_or_default());
@@ -127,6 +145,10 @@ fn tools() -> Value {
 
 fn call(name: &str, args: &Value, link: &impl Fn() -> Option<Link>) -> Result<Value, String> {
     let link = link().ok_or("Phosphor isn't open (or hasn't been opened yet on this Mac). Open it, then try again.")?;
+    // Only the Session wrote the link: OSC hasn't been on yet.
+    if name != "look" && link.query_port == 0 {
+        return Err("Turn on OSC in Phosphor (the MIDI / OSC panel), then try again.".into());
+    }
     match name {
         "list_controls" => {
             let all = controls(&link)?;
@@ -162,7 +184,7 @@ fn call(name: &str, args: &Value, link: &impl Fn() -> Option<Link>) -> Result<Va
             Ok(json!([{ "type": "text", "text": format!("Pressed {address}.") }]))
         }
         "look" => {
-            let port = std::env::var("PHOSPHOR_SESSION_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(crate::net::DEFAULT_PORT);
+            let port = std::env::var("PHOSPHOR_SESSION_PORT").ok().and_then(|p| p.parse().ok()).or(link.session_port).unwrap_or(crate::net::DEFAULT_PORT);
             let bytes = get_bytes(&format!("http://127.0.0.1:{port}/snapshot.jpg"))
                 .map_err(|_| "Can't see the output: turn on the Session in Phosphor (Outputs › Session), then look again.".to_string())?;
             use base64::Engine as _;
@@ -246,7 +268,7 @@ mod tests {
         ]);
         let osc = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
         osc.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
-        let link = Link { osc_port: osc.local_addr().unwrap().port(), query_port: query.port };
+        let link = Link { osc_port: osc.local_addr().unwrap().port(), query_port: query.port, session_port: None };
         let ask = |id: u64, method: &str, params: Value| handle(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }), || Some(link.clone())).unwrap();
         let text = |r: &Value| r["result"]["content"][0]["text"].as_str().unwrap_or("").to_string();
 
