@@ -4,6 +4,20 @@
 use std::path::Path;
 use std::process::Command;
 
+/// A child process (FFmpeg, yt-dlp, curl, …) that opens no window of its own. The Windows app has no console, so a
+/// console program it starts would otherwise flash up a terminal window. Use this instead of `Command::new`.
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 /// Opens a file, folder or app with the system (a folder shows in Finder / Explorer).
 pub fn open(path: impl AsRef<Path>) {
     let p = path.as_ref();

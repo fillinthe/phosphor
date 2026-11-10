@@ -65,7 +65,7 @@ fn skipped(path: &str) -> bool {
 fn find_all() -> Vec<Found> {
     let mut paths: Vec<PathBuf> = Vec::new();
     #[cfg(target_os = "macos")]
-    if let Ok(out) = std::process::Command::new("/usr/bin/mdfind").arg("kMDItemFSName == '*.phosphor'c").output() {
+    if let Ok(out) = crate::os::command("/usr/bin/mdfind").arg("kMDItemFSName == '*.phosphor'c").output() {
         paths.extend(String::from_utf8_lossy(&out.stdout).lines().filter(|l| !l.is_empty()).map(PathBuf::from));
     }
     for place in places() {

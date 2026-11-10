@@ -72,7 +72,7 @@ mod tests {
     /// docs/DESIGN.md, section 7: the patterns no panel may use (each has a kit component instead).
     #[test]
     fn design_rules_hold() {
-        let banned: [(&str, &str, &[&str]); 8] = [
+        let banned: [(&str, &str, &[&str]); 9] = [
             ("egui::Slider", "ui::Level (square bar)", &["ui/"]),
             ("ui.weak(", "ui::hint", &["ui/"]),
             (".radio_value(", "ui::choice_buttons / segmented", &["ui/"]),
@@ -81,6 +81,7 @@ mod tests {
             ("ComboBox::from_id_salt(", "ui::dropdown (it makes room)", &["ui/"]),
             ("Command::new(\"open\")", "os::open / os::reveal", &["os.rs"]),
             (".dnd_release_payload", "ui::drop_payload", &["ui/widgets.rs"]),
+            ("Command::new(", "os::command (no console window on Windows)", &["os.rs", "media/video/tests.rs", "ui/budget.rs"]),
         ];
         let mut bad = Vec::new();
         for (rel, text) in sources() {

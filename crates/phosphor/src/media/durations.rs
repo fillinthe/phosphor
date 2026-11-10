@@ -65,7 +65,7 @@ mod tests {
         let mut paths = Vec::new();
         for secs in [1, 3, 2] {
             let p = dir.join(format!("c{secs}.mp4"));
-            let ok = std::process::Command::new(ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=64x36:rate=10", "-t", &secs.to_string(), "-pix_fmt", "yuv420p"]).arg(&p).status().is_ok_and(|s| s.success());
+            let ok = crate::os::command(ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=64x36:rate=10", "-t", &secs.to_string(), "-pix_fmt", "yuv420p"]).arg(&p).status().is_ok_and(|s| s.success());
             assert!(ok);
             let p = p.to_string_lossy().into_owned();
             d.want(&p);

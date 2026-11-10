@@ -10,7 +10,7 @@
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::mpsc;
 
 /// Browsers yt-dlp can take a sign-in from (`--cookies-from-browser`).
@@ -21,7 +21,7 @@ pub fn find_ytdlp() -> Option<PathBuf> {
     let own = crate::show::storage_dir().map(|d| d.join("bin").join("yt-dlp"));
     let fixed = ["/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp", "/opt/local/bin/yt-dlp"].map(PathBuf::from);
     own.into_iter().chain(fixed).find(|p| p.exists()).or_else(|| {
-        Command::new("yt-dlp").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().ok().filter(|s| s.success()).map(|_| PathBuf::from("yt-dlp"))
+        crate::os::command("yt-dlp").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().ok().filter(|s| s.success()).map(|_| PathBuf::from("yt-dlp"))
     })
 }
 
@@ -29,7 +29,7 @@ pub fn find_ytdlp() -> Option<PathBuf> {
 pub fn find_gallery_dl() -> Option<PathBuf> {
     let fixed = ["/opt/homebrew/bin/gallery-dl", "/usr/local/bin/gallery-dl"].map(PathBuf::from);
     fixed.into_iter().find(|p| p.exists()).or_else(|| {
-        Command::new("gallery-dl").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().ok().filter(|s| s.success()).map(|_| PathBuf::from("gallery-dl"))
+        crate::os::command("gallery-dl").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().ok().filter(|s| s.success()).map(|_| PathBuf::from("gallery-dl"))
     })
 }
 
@@ -137,13 +137,13 @@ impl Job {
             if is_direct_file(&u) {
                 let dest = dir.join(direct_name(&u));
                 send(Status::Working("downloading the file…".into()));
-                let ok = Command::new("curl").args(["-fsSL", "--max-time", "120", "-o"]).arg(&dest).arg(&u).status().is_ok_and(|s| s.success());
+                let ok = crate::os::command("curl").args(["-fsSL", "--max-time", "120", "-o"]).arg(&dest).arg(&u).status().is_ok_and(|s| s.success());
                 send(if ok && dest.exists() { Status::Downloaded(vec![dest.to_string_lossy().to_string()]) } else { Status::Failed("couldn't download that file".into()) });
                 return;
             }
             let ffmpeg = crate::stream::ffmpeg_path();
             let args = download_args(&u, &dir.to_string_lossy(), b.as_deref(), ffmpeg.as_deref());
-            let child = Command::new(tool).args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
+            let child = crate::os::command(tool).args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
             let Ok(mut child) = child else {
                 send(Status::Failed("couldn't start yt-dlp".into()));
                 return;
@@ -175,7 +175,7 @@ impl Job {
                 && let Some(gdl) = find_gallery_dl()
             {
                 send(Status::Working("looking for GIFs and pictures…".into()));
-                let mut cmd = Command::new(gdl);
+                let mut cmd = crate::os::command(gdl);
                 cmd.args(["--quiet", "-D"]).arg(&dir).args(["--filter", "extension in ('gif', 'webp', 'mp4', 'webm', 'mov', 'png', 'jpg', 'jpeg')"]);
                 if let Some(b) = &b {
                     cmd.args(["--cookies-from-browser", b]);
@@ -208,7 +208,7 @@ impl Job {
                 args.extend(["--cookies-from-browser".into(), b]);
             }
             args.push(u);
-            let out = Command::new(tool).args(args).output();
+            let out = crate::os::command(tool).args(args).output();
             let status = match out {
                 Ok(o) if o.status.success() => {
                     let text = String::from_utf8_lossy(&o.stdout).to_string();
@@ -242,7 +242,7 @@ impl Job {
 /// Blocking: call off the UI thread.
 pub fn live_url(page: &str) -> Result<String, String> {
     let tool = find_ytdlp().ok_or("needs yt-dlp (free): brew install yt-dlp")?;
-    let out = Command::new(tool).args(["-f", "bv[height<=1080]/b[height<=1080]/bv/b", "--print", "%(url)s", page.trim()]).output().map_err(|_| "couldn't start yt-dlp".to_string())?;
+    let out = crate::os::command(tool).args(["-f", "bv[height<=1080]/b[height<=1080]/bv/b", "--print", "%(url)s", page.trim()]).output().map_err(|_| "couldn't start yt-dlp".to_string())?;
     if !out.status.success() {
         return Err(reason(&String::from_utf8_lossy(&out.stderr)));
     }

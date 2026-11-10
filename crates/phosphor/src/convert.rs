@@ -5,7 +5,7 @@
 //! ffmpeg (Hap frames go through Phosphor's own encoder, the one recording uses).
 
 use std::io::{BufRead, Read};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 
 use ffmpeg_next as ff;
@@ -290,7 +290,7 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
             // Decode with ffmpeg to RGBA frames, encode them with Phosphor's Hap encoder.
             let kind = job.format.hap().unwrap_or(crate::media::video::hap_encode::HapKind::Hap);
             let fps = job.probe.fps.round().max(1.0) as u32;
-            let mut child = Command::new(&ffmpeg)
+            let mut child = crate::os::command(&ffmpeg)
                 .args(["-hide_banner", "-loglevel", "error", "-i", &job.src, "-an", "-vf", &scale, "-f", "rawvideo", "-pix_fmt", "rgba", "-"])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
@@ -337,7 +337,7 @@ fn run(job: &Job, out: &str, s: &Shared) -> Result<(), String> {
                 args.extend(["-c:a", "aac", "-b:a", "192k"].map(String::from));
             }
             args.push(out.to_string());
-            let mut child = Command::new(&ffmpeg).args(&args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("couldn't start FFmpeg ({e})"))?;
+            let mut child = crate::os::command(&ffmpeg).args(&args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("couldn't start FFmpeg ({e})"))?;
             if let Some(stdout) = child.stdout.take() {
                 for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
                     if let Some(us) = line.strip_prefix("out_time_us=").and_then(|v| v.trim().parse::<f64>().ok()) {

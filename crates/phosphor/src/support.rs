@@ -160,7 +160,7 @@ pub fn recent_activity(log: &str, n: usize) -> String {
 fn os_version() -> String {
     #[cfg(target_os = "macos")]
     {
-        if let Ok(o) = std::process::Command::new("sw_vers").arg("-productVersion").output() {
+        if let Ok(o) = crate::os::command("sw_vers").arg("-productVersion").output() {
             return format!("macOS {}", String::from_utf8_lossy(&o.stdout).trim());
         }
     }

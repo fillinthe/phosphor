@@ -118,7 +118,7 @@ pub fn decode_still(path: &str) -> Result<image::DynamicImage, String> {
         other => {
             let first = other.and_then(|r| r.err()).map(|e| e.to_string());
             let ffmpeg = crate::stream::ffmpeg_path().ok_or_else(|| first.clone().unwrap_or_else(|| "FFmpeg not found".into()))?;
-            let out = std::process::Command::new(ffmpeg)
+            let out = crate::os::command(ffmpeg)
                 .args(["-v", "error", "-i", path, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"])
                 .stdin(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
@@ -877,7 +877,7 @@ fn every_picture_format_opens() {
     let mut made = Vec::new();
     for fmt in ["psd", "heic", "tiff", "bmp"] {
         let out = dir.join(format!("a.{fmt}"));
-        let ok = std::process::Command::new("sips").args(["-s", "format", fmt]).arg(&png).arg("--out").arg(&out).output().is_ok_and(|o| o.status.success());
+        let ok = crate::os::command("sips").args(["-s", "format", fmt]).arg(&png).arg("--out").arg(&out).output().is_ok_and(|o| o.status.success());
         if ok {
             made.push(out);
         }
@@ -885,7 +885,7 @@ fn every_picture_format_opens() {
     for fmt in ["exr", "hdr"] {
         let out = dir.join(format!("a.{fmt}"));
         let pix = if fmt == "exr" { "gbrapf32le" } else { "rgb48le" };
-        let ok = std::process::Command::new(&ffmpeg).args(["-v", "error", "-y", "-i"]).arg(&png).args(["-pix_fmt", pix]).arg(&out).output().is_ok_and(|o| o.status.success());
+        let ok = crate::os::command(&ffmpeg).args(["-v", "error", "-y", "-i"]).arg(&png).args(["-pix_fmt", pix]).arg(&out).output().is_ok_and(|o| o.status.success());
         if ok {
             made.push(out);
         }

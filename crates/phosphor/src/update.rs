@@ -328,13 +328,12 @@ fn test_build_in(plist: &str) -> Option<String> {
 /// curl → unzip → swap the bundle. Returns (path, installed?).
 #[cfg(not(target_arch = "wasm32"))]
 fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<(PathBuf, bool), String> {
-    use std::process::Command;
     let work = std::env::temp_dir().join(format!("phosphor-update-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let zip = work.join("Phosphor.zip");
     // curl ships with macOS and with Windows 10 and later.
-    let out = Command::new("curl").args(["-L", "-f", "-s", "-S", "-o"]).arg(&zip).arg(zip_url).output().map_err(|e| format!("curl: {e}"))?;
+    let out = crate::os::command("curl").args(["-L", "-f", "-s", "-S", "-o"]).arg(&zip).arg(zip_url).output().map_err(|e| format!("curl: {e}"))?;
     if !out.status.success() {
         return Err(format!("Download failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
@@ -343,9 +342,9 @@ fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<
     std::fs::create_dir_all(&unpacked).map_err(|e| e.to_string())?;
     // ditto on the Mac (keeps the bundle's attributes); Windows' tar reads zips.
     let out = if cfg!(target_os = "macos") {
-        Command::new("ditto").args(["-x", "-k"]).arg(&zip).arg(&unpacked).output()
+        crate::os::command("ditto").args(["-x", "-k"]).arg(&zip).arg(&unpacked).output()
     } else {
-        Command::new("tar").arg("-xf").arg(&zip).arg("-C").arg(&unpacked).output()
+        crate::os::command("tar").arg("-xf").arg(&zip).arg("-C").arg(&unpacked).output()
     }
     .map_err(|e| format!("unpack: {e}"))?;
     if !out.status.success() {
@@ -363,7 +362,6 @@ fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<
 
 /// Mac: swap the .app bundle we run from (or hand back the unpacked app when we don't run from one).
 fn install_mac(unpacked: &std::path::Path) -> Result<(PathBuf, bool), String> {
-    use std::process::Command;
     let new_app = find_app(unpacked).ok_or("The download has no Phosphor.app in it")?;
     if !new_app.join("Contents/MacOS/phosphor").exists() {
         return Err("The downloaded app is incomplete".into());
@@ -374,13 +372,13 @@ fn install_mac(unpacked: &std::path::Path) -> Result<(PathBuf, bool), String> {
     let old = dest.with_extension("old.app");
     let _ = std::fs::remove_dir_all(&old);
     std::fs::rename(&dest, &old).map_err(|e| format!("Couldn't replace {}: {e}", dest.display()))?;
-    let copied = Command::new("ditto").arg(&new_app).arg(&dest).output().map_err(|e| e.to_string())?;
+    let copied = crate::os::command("ditto").arg(&new_app).arg(&dest).output().map_err(|e| e.to_string())?;
     if !copied.status.success() {
         let _ = std::fs::remove_dir_all(&dest);
         let _ = std::fs::rename(&old, &dest);
         return Err(format!("Install failed: {}", String::from_utf8_lossy(&copied.stderr).trim()));
     }
-    let _ = Command::new("xattr").args(["-dr", "com.apple.quarantine"]).arg(&dest).output();
+    let _ = crate::os::command("xattr").args(["-dr", "com.apple.quarantine"]).arg(&dest).output();
     let _ = std::fs::remove_dir_all(&old);
     Ok((dest, true))
 }
@@ -460,9 +458,9 @@ pub fn relaunch(ctx: &egui::Context, app: &std::path::Path) {
     let path = app.to_string_lossy().to_string();
     if cfg!(windows) {
         // ping is cmd's portable "wait a moment".
-        let _ = std::process::Command::new("cmd").args(["/C", &format!("ping -n 3 127.0.0.1 >nul & start \"\" \"{path}\"")]).spawn();
+        let _ = crate::os::command("cmd").args(["/C", &format!("ping -n 3 127.0.0.1 >nul & start \"\" \"{path}\"")]).spawn();
     } else {
-        let _ = std::process::Command::new("sh").arg("-c").arg(format!("sleep 1.5; open \"{path}\"")).spawn();
+        let _ = crate::os::command("sh").arg("-c").arg(format!("sleep 1.5; open \"{path}\"")).spawn();
     }
     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
 }
