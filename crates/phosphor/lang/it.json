@@ -1517,6 +1517,7 @@
 "How far each jump goes": "Quanto va lontano ogni salto",
 "How fast the levels fall after a hit: short = flickery, long = slow fades": "Quanto velocemente i livelli scendono dopo un colpo: breve = sfarfallio, lungo = dissolvenze lente",
 "How fast the levels rise: 0 = instantly (punchy), higher = smoother swells": "Quanto velocemente i livelli salgono: 0 = subito (incisivo), più alto = crescite più morbide",
+"How it looks with these settings, on the selected layer's picture (or the whole mix). It isn't on anything yet: add it with the buttons above, or drag its tile.": "Come appare con queste impostazioni, sull'immagine del livello selezionato (o sull'intero mix). Non è ancora applicato a niente: aggiungilo con i pulsanti qui sopra o trascina il suo riquadro.",
 "How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.": "Per quanto un telefono resta fuori dopo il suo turno prima di poter suonare di nuovo. 0: se nessuno aspetta, chi suona mantiene i controlli.",
 "How long each headline shows": "Quanto dura ogni titolo",
 "How long each step lasts": "Quanto dura ogni passo",

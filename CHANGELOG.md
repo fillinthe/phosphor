@@ -15,6 +15,11 @@ Installs that just work, and tidier panels.
   "could not verify" warning.
 - Every download is unpacked and checked the ways people's computers do it before a release goes out.
 
+**See an effect big before you use it**
+- Effects panel: pick a tile and it shows centre stage, big and live, beside its settings, on the selected layer's
+  picture (or the whole mix). Change the settings and watch it; when it looks right, add it to the layer, clip,
+  media file or MASTER, or drag the tile. Nothing changes in the show until you do.
+
 **Tidier panels**
 - Control Surface: in a narrow panel the toolbar wraps instead of running off the edge, and the empty canvas's hint
   wraps too.

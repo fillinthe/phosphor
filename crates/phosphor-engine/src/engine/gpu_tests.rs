@@ -1062,3 +1062,30 @@ fn a_slice_transform_moves_its_picture() {
     comp.outputs[0].mapping.surfaces[0].transform.x = 0.5;
     assert!(green_at(&mut engine, &comp, 0.25) < 30 && green_at(&mut engine, &comp, 0.75) > 200, "moved right");
 }
+
+/// The Explorer's picked tile, centre stage: a `Stage` preview comes at `STAGE_WIDTH` (a tile's at `PREVIEW_WIDTH`),
+/// for the mix and for a selected layer (whose full picture is kept that frame), and a tile beside it keeps its size.
+#[test]
+fn a_stage_preview_is_drawn_big() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 320, height: 180, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("plasma".into()), ..Default::default() });
+    let fx = crate::model::EffectState { id: 9_000_001, effect: "invert".into(), enabled: true, values: Vec::new(), mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 };
+    for source in [MASTER_ID, 1] {
+        for _ in 0..3 {
+            engine.request_previews(source, vec![
+                (PreviewItem::Stage(Box::new(PreviewItem::Effect(fx.clone()))), PreviewRefresh::Live),
+                (PreviewItem::Effect(fx.clone()), PreviewRefresh::Live),
+                (PreviewItem::Stage(Box::new(PreviewItem::Generator("plasma".into()))), PreviewRefresh::Live),
+            ]);
+            engine.render(&comp, 0.0, &ModInputs::default());
+        }
+        let size = |i: usize| engine.preview(i).map(|t| (t.width, t.height));
+        assert_eq!(size(0), Some((STAGE_WIDTH, STAGE_WIDTH * 180 / 320)), "effect, source {source}");
+        assert_eq!(size(1), Some((PREVIEW_WIDTH, PREVIEW_WIDTH * 180 / 320)), "tile, source {source}");
+        assert_eq!(size(2), Some((STAGE_WIDTH, STAGE_WIDTH * 180 / 320)), "generator, source {source}");
+    }
+    // Nothing big asked for any more: the layer's full picture is no longer kept for it.
+    engine.request_previews(1, vec![(PreviewItem::Effect(fx), PreviewRefresh::Live)]);
+    assert_eq!(engine.stage_source(), None);
+}

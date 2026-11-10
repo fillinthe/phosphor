@@ -1517,6 +1517,7 @@
 "How far each jump goes": "1回のジャンプの大きさ",
 "How fast the levels fall after a hit: short = flickery, long = slow fades": "ヒット後にレベルが下がる速さ: 短い = ちらつく、長い = ゆっくりフェード",
 "How fast the levels rise: 0 = instantly (punchy), higher = smoother swells": "レベルが上がる速さ: 0 = 即時(パンチがある)、大きいほどなめらか",
+"How it looks with these settings, on the selected layer's picture (or the whole mix). It isn't on anything yet: add it with the buttons above, or drag its tile.": "この設定での見た目です。選択したレイヤーの映像（またはミックス全体）に重ねています。まだどこにも適用されていません。上のボタンで追加するか、タイルをドラッグしてください。",
 "How long a phone sits out after its turn before it can play again. 0: with nobody waiting, a player keeps the controls.": "スマートフォンが自分の番の後、再び再生できるまでの待ち時間。0: 待っている人がいなければ、プレーヤーがコントロールを保持します。",
 "How long each headline shows": "各ヘッドラインの表示時間",
 "How long each step lasts": "各ステップの長さ",
