@@ -44,7 +44,6 @@ mod net_tls;
 #[cfg(not(target_arch = "wasm32"))]
 mod link;
 mod ltc;
-#[cfg(not(target_arch = "wasm32"))]
 mod os;
 mod calendar;
 #[cfg(not(target_arch = "wasm32"))]
@@ -171,7 +170,6 @@ fn app_icon() -> std::sync::Arc<eframe::egui::IconData> {
     })
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 /// Windows: started from a terminal with flags (`--version`, `--bench`), print into that terminal. The app has no
 /// console of its own; output already sent to a file or pipe (CI, an MCP client) is left alone.
 #[cfg(windows)]
@@ -186,6 +184,7 @@ fn console_for_flags() {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().collect();
     #[cfg(windows)]
