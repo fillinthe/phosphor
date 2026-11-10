@@ -163,7 +163,26 @@ fn memory_mb() -> Option<f64> {
     }
 }
 
-#[cfg(not(any(target_os = "macos", windows)))]
+/// Linux: the resident memory from /proc (VmRSS, in kB).
+#[cfg(target_os = "linux")]
+fn memory_mb() -> Option<f64> {
+    rss_from_status(&std::fs::read_to_string("/proc/self/status").ok()?)
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn rss_from_status(status: &str) -> Option<f64> {
+    let kb: f64 = status.lines().find_map(|l| l.strip_prefix("VmRSS:"))?.trim().trim_end_matches("kB").trim().parse().ok()?;
+    Some(kb / 1024.0)
+}
+
+#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
 fn memory_mb() -> Option<f64> {
     None
+}
+
+#[cfg(test)]
+#[test]
+fn linux_memory_is_read_from_proc() {
+    assert_eq!(rss_from_status("Name:\tphosphor\nVmRSS:\t  204800 kB\nThreads:\t9\n"), Some(200.0));
+    assert_eq!(rss_from_status("Name:\tphosphor\n"), None);
 }
