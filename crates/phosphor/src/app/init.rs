@@ -267,7 +267,8 @@ impl PhosphorApp {
                 cloud_project: None,
                 account_window: false,
                 account_hello: bench.is_none() && !cfg!(target_arch = "wasm32") && stored(KEY_ACCOUNT_HELLO).is_none(),
-                account_hello_never: false,
+                // Ticked from the start: the card shows once, then never again unless they untick it.
+                account_hello_never: true,
                 recent: stored(KEY_RECENT_PROJECTS).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
                 history: Default::default(),
                 export: Default::default(),
