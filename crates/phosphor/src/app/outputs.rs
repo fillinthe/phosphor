@@ -167,7 +167,9 @@ impl PhosphorApp {
                 if let Some(tex) = out.texture {
                     panels::paint_texture(ui.painter(), tex, frame);
                 }
-                if fullscreen {
+                // A projector shows no pointer, except while its mapping handles are out: then you need it to drag them
+                // (bug report: Edit on output in fullscreen on Windows, no pointer to move anything with).
+                if fullscreen && !out.edit_mapping {
                     ctx.set_cursor_icon(egui::CursorIcon::None);
                 }
                 if !out.edit_mapping {
