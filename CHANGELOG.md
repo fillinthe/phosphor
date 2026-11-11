@@ -4,6 +4,38 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.3 (2026-11-11)
+
+**Windows**
+- Phosphor has its icon in the Start menu, on the desktop shortcut, in Explorer and on the taskbar.
+- A fullscreen output shows the mouse pointer while you edit its mapping (Edit on output, or E), so you can drag the
+  corners; it hides again when you're done.
+
+**Phone remote**
+- A text field on your Control Surface can be typed in: the phone's keyboard no longer closes as soon as it opens.
+
+**Smaller screens**
+- When the top bar runs out of room, File, Edit, Quick, View, Output and Help fold into one menu button.
+- In a narrow layer strip, a "more" button holds Browse sources, Open a file and every live input (camera, screen,
+  Syphon, NDI, stream).
+
+**Sign-in**
+- The sign-in card shows once, not at every launch. Sign in any time from File › Account & Sign In… or the top right.
+
+**Fixes**
+- Lasers: Undo and Redo never switch armed lasers back on. A computer following another Phosphor keeps its own laser
+  projectors and arming, and takes the leader's laser looks.
+- MIDI / OSC: moving one setting of an effect, generator, mixer or transition no longer resets its other settings.
+- Effects panel: picking another effect no longer shows the last one's big picture while the new one loads.
+- Patches: "Look at this box" ends when you leave the Shader Editor, so the effect is the whole patch again (also in a
+  Shader Editor in its own window).
+- Designer: "Wrap in a box" won't drop wires; it's greyed out when the boxes can't share one output.
+- Control Surface: Arrange never moves or resizes a locked widget.
+- MadMapper projects with rotations import.
+- A table file in a data box is read in the background (a slow drive no longer stalls the show).
+- MIDI / OSC panel: the Timecode out menu stays open while you switch Time of day.
+- Linux: the status bar shows how much memory Phosphor uses.
+
 ## 0.5.2 (2026-11-10)
 
 **Windows**
