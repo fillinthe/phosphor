@@ -311,9 +311,8 @@ function renderSurface() {
   const box = $('#surface');
   const sig = surfPage + '#' + sf.columns + '|' + sf.widgets.map(w => [w.id, w.kind, w.x, w.y, w.w, w.h, w.label, w.color, (w.items || []).join(';'), (w.bars || []).length].join(',')).join('|');
   if (box.dataset.sig !== sig) {
-    box.dataset.sig = sig; box.innerHTML = '';
-    const cell = Math.max(28, (box.clientWidth || window.innerWidth - 24) / sf.columns - 6);
-    box.style.gridTemplateColumns = `repeat(${sf.columns}, 1fr)`; box.style.gridAutoRows = cell + 'px';
+    box.dataset.sig = sig; box.innerHTML = ''; box.dataset.cols = sf.columns;
+    box.style.gridTemplateColumns = `repeat(${sf.columns}, 1fr)`; sizeSurface(box);
     $('#surfhint').textContent = sf.widgets.length ? '' : 'No Control Surface yet. Build one on the Mac (Control Surface panel → Edit).';
     sf.widgets.forEach(w => {
       const X = { Surface: w.id }, Y = { SurfaceY: w.id };
@@ -475,7 +474,14 @@ function connect() {
 connect();
 // Turning the phone or resizing the window: lay the surface grid out again for the new width.
 let resizeTimer = 0;
-addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { const b = $('#surface'); if (b) { b.dataset.sig = ''; if (state) render(); } }, 150); });
+// Square cells for the surface's grid, from its width. On a resize only the cells change size: the controls are never
+// rebuilt, since a phone's keyboard opening is a resize too, and rebuilding took away the text box being typed in
+// (the keyboard closed as soon as it opened).
+function sizeSurface(box) {
+  const cols = +box.dataset.cols || 1;
+  box.style.gridAutoRows = Math.max(28, (box.clientWidth || window.innerWidth - 24) / cols - 6) + 'px';
+}
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { const b = $('#surface'); if (b && b.dataset.cols) sizeSurface(b); }, 150); });
 </script>
 </body>
 </html>
