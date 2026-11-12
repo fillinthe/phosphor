@@ -263,8 +263,71 @@ pub fn mouse_location() -> Option<(f32, f32)> {
     None
 }
 
-/// Off the Mac the output window is already borderless and sized to the display by the caller; nothing more to do.
-#[cfg(not(target_os = "macos"))]
+/// Windows: the borderless window still has a resize frame (Windows 11 draws it as a thin white line round the
+/// window) and sits under the taskbar. Covering = a plain popup (no frame, no DWM border, square corners), topmost,
+/// exactly the monitor's pixels, so Windows treats it as full screen and the taskbar goes behind it. Back to a window
+/// = the styles it had before. (Bug report 2026-11-12: taskbar and a white border on the projector.)
+#[cfg(windows)]
+pub fn cover_window(title: &str, cover: Option<&Display>) -> bool {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, GWL_EXSTYLE, GWL_STYLE, GetWindowLongPtrW, HWND_NOTOPMOST, HWND_TOPMOST, SWP_FRAMECHANGED,
+        SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME,
+        WS_EX_STATICEDGE, WS_EX_WINDOWEDGE, WS_POPUP, WS_VISIBLE,
+    };
+    // Styles before covering, by window handle, to put back.
+    static SAVED: Mutex<Option<HashMap<isize, (isize, isize)>>> = Mutex::new(None);
+    const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+    const DWMWA_BORDER_COLOR: u32 = 34;
+    let wide: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: plain Win32 calls on our own window, found by its (unique) title; the attribute values are u32s we own.
+    unsafe {
+        let hwnd = FindWindowW(std::ptr::null(), wide.as_ptr());
+        if hwnd.is_null() {
+            return false;
+        }
+        let key = hwnd as isize;
+        let dwm = |attr: u32, value: u32| {
+            DwmSetWindowAttribute(hwnd, attr as _, &value as *const u32 as *const _, 4);
+        };
+        let mut saved = SAVED.lock().unwrap();
+        let saved = saved.get_or_insert_with(HashMap::new);
+        match cover {
+            Some(d) => {
+                saved.entry(key).or_insert_with(|| (GetWindowLongPtrW(hwnd, GWL_STYLE), GetWindowLongPtrW(hwnd, GWL_EXSTYLE)));
+                let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & !((WS_EX_CLIENTEDGE | WS_EX_DLGMODALFRAME | WS_EX_STATICEDGE | WS_EX_WINDOWEDGE) as isize);
+                SetWindowLongPtrW(hwnd, GWL_STYLE, (WS_POPUP | WS_VISIBLE) as isize);
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex);
+                dwm(DWMWA_BORDER_COLOR, 0xFFFF_FFFE); // DWMWA_COLOR_NONE
+                dwm(DWMWA_WINDOW_CORNER_PREFERENCE, 1); // DWMWCP_DONOTROUND
+                // The display in pixels (its points times its own scale).
+                let scale = d.pixels.0 as f32 / d.w.max(1.0);
+                let (x, y) = ((d.x * scale).round() as i32, (d.y * scale).round() as i32);
+                let (w, h) = (d.pixels.0 as i32, d.pixels.1 as i32);
+                // Twice: moving onto a monitor with another scale makes the window resize itself for the new DPI
+                // during the first call; the second one lands exactly.
+                for _ in 0..2 {
+                    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+                }
+            }
+            None => {
+                if let Some((style, ex)) = saved.remove(&key) {
+                    SetWindowLongPtrW(hwnd, GWL_STYLE, style);
+                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex);
+                }
+                dwm(DWMWA_BORDER_COLOR, 0xFFFF_FFFF); // DWMWA_COLOR_DEFAULT
+                dwm(DWMWA_WINDOW_CORNER_PREFERENCE, 0); // DWMWCP_DEFAULT
+                SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            }
+        }
+    }
+    true
+}
+
+/// Linux: the output window is already borderless and sized to the display by the caller; nothing more to do.
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn cover_window(_title: &str, _cover: Option<&Display>) -> bool {
     true
 }
