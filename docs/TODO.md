@@ -6,8 +6,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 
 - [x] **Name**: shown as **Phosphor VJ** (2026-10-30); internal names, settings, saves, permissions and the names
       other apps connect by are unchanged.
-- [ ] **Web app faster start** (web hub note): fetch sign-in / projects / layouts during the download; smaller
-      browser build. Loading screen itself done 2026-10-30 (not live until a web deploy).
+- [x] **Web app faster start** (web hub note): loading screen from the first paint (2026-10-30, live). Measured
+      2026-11-13 on phosphorfx.com/app/: download done 0.41 s, first sign-in request 0.53 s (was 6.1 s). Not needed now:
+      fetching sign-in during the download, splitting the browser build.
+- [ ] **Real-hardware checks** (2026-11-13): Windows fullscreen output on a real second screen / mixed scaling (0.5.4,
+      reporter #41); the Windows #28 freeze on a PC with a real graphics card (the VMs have none).
 - [ ] **Clip grid column buttons** greyed out while there are no layers? (owner to say)
 - [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
 - [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.
