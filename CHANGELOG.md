@@ -4,6 +4,12 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.4 (2026-11-13)
+
+**Windows**
+- An output sent to a screen is true full screen: the taskbar no longer shows over it and there's no white border
+  round the edge. F, Esc or a double-click turn it back into a normal window.
+
 ## 0.5.3 (2026-11-11)
 
 **Windows**
