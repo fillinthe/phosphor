@@ -562,6 +562,15 @@ pub(crate) fn browser_pick(ui: &mut egui::Ui, view: &mut MediaView) {
         if changed {
             view.following.save();
         }
+        // Sign in where Phosphor reads the sign-in from (the browser picked here).
+        let browser = view.following.browser.clone().unwrap_or_else(|| "safari".into());
+        for (site, url) in [(crate::online::following::Site::X, "https://x.com/login"), (crate::online::following::Site::Instagram, "https://www.instagram.com/accounts/login/")] {
+            if view.following.accounts.iter().any(|a| a.site == site)
+                && crate::ui::small_command(ui, label(icon::SIGN_IN, &format!("Sign in to {}…", site.name()))).on_hover_text(format!("Opens {}'s sign-in page in {browser}: sign in there, then Refresh", site.name())).clicked()
+            {
+                crate::os::open_url_in(&browser, url);
+            }
+        }
     });
     if !*view
         .has_gallery_dl
