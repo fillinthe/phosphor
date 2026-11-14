@@ -1089,3 +1089,30 @@ fn a_stage_preview_is_drawn_big() {
     engine.request_previews(1, vec![(PreviewItem::Effect(fx), PreviewRefresh::Live)]);
     assert_eq!(engine.stage_source(), None);
 }
+
+/// The alignment grid mirrors itself round the middle of the output: on a 16:9 output the rows of square cells
+/// leave the same part row at the top and the bottom (they started at the top: a part row at the bottom only, and
+/// the grid looked off centre on the projector).
+#[test]
+fn the_grid_is_centred() {
+    let Some(mut engine) = test_engine() else { return };
+    let (w, h) = (160u32, 90u32);
+    let mut comp = Composition { width: w, height: h, ..Default::default() };
+    let mut black = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    black.generator_values = vec![0.0, 0.0, 0.0];
+    comp.layers.push(black);
+    comp.ensure_outputs();
+    let oid = comp.outputs[0].id;
+    comp.outputs[0].grid = crate::model::GridOverlay { on: true, cells: 8, crosshair: false, width: 1.0, ..Default::default() };
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (ow, oh, px) = engine.read_output_of(oid).expect("output");
+    assert_eq!((ow, oh), (w, h));
+    // Down a column between two vertical lines (x = 30: lines every 20 px from the centre at 80): the rows lit.
+    let lit = |y: u32| px[((y * ow + 30) * 4) as usize] > 60;
+    let rows: Vec<u32> = (3..oh - 3).filter(|y| lit(*y) && !lit(*y - 1)).collect();
+    // Cells of 20 px from the middle (45): lines at 5, 25, 45, 65, 85 → the ones inside the border band.
+    assert!(rows.iter().any(|y| (44..=46).contains(y)), "a line through the middle: {rows:?}");
+    let above = rows.iter().filter(|y| **y < 44).count();
+    let below = rows.iter().filter(|y| **y > 46).count();
+    assert_eq!(above, below, "as many lines above the middle as below: {rows:?}");
+}
