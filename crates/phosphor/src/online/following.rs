@@ -577,3 +577,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 }
+/// Runs a real Refresh of one followed account (`PHOSPHOR_FOLLOW_TEST=name`) into the real Following folder and
+/// prints what it reported. `cargo test -p phosphor --bin phosphor refresh_one_live -- --ignored --nocapture`.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn refresh_one_live() {
+    let Ok(name) = std::env::var("PHOSPHOR_FOLLOW_TEST") else { return };
+    let mut f = Following::load();
+    f.accounts.retain(|a| a.name.eq_ignore_ascii_case(&name));
+    assert!(!f.accounts.is_empty(), "not followed: {name}");
+    let p = refresh(&f, None);
+    let until = Instant::now() + Duration::from_secs(300);
+    while p.lock().unwrap().running && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    let p = p.lock().unwrap();
+    println!("REFRESH {:?} new_files {}", p.lines, p.new_files);
+}

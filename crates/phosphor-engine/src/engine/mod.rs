@@ -1000,7 +1000,8 @@ impl Engine {
 }
 
 /// A layer's placement for the composite shader, `u.p[9..15]`: p[9], p[10] (move / scale / rotate; p[10].w = on),
-/// p[11] (crop), p[12..14] (corner pin: inverse homography, p[14].w = on). None when it sits as it is.
+/// p[11] (crop), p[12..14] (corner pin: inverse homography; p[14].w = 1 a corner pin, which fills its quad, 2 a 3D
+/// placement, which keeps the layer's fit). None when it sits as it is.
 fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModInputs) -> Option<[[f32; 4]; 6]> {
     if t.is_identity() {
         return None;
@@ -1019,13 +1020,14 @@ fn transform_uniforms(t: &crate::LayerTransform, canvas: (u32, u32), mods: &ModI
     let rotation = modulate(t.rotation, -180.0, 180.0, t.rotation_mod.as_ref(), mods);
     let aspect = canvas.0 as f32 / canvas.1.max(1) as f32;
     let (x, y) = (modulate(t.x, -1.0, 1.0, t.x_mod.as_ref(), mods), modulate(t.y, -1.0, 1.0, t.y_mod.as_ref(), mods));
-    // Depth or tilt: the corners in perspective, drawn as a corner pin.
+    // Depth or tilt: the corners in perspective, drawn as a corner pin of the whole canvas, the picture fitted in it
+    // as usual (Fill / Fit / Stretch: it was stretched to the canvas, so a touch of depth squashed it, bug 2026-11-14).
     if t.is_3d()
         && let Some(inv) = crate::mapping::quad_to_square(&t.corners_3d(aspect, scale, rotation, x, y))
     {
         p[3] = [inv[0], inv[1], inv[2], inv[3]];
         p[4] = [inv[4], inv[5], inv[6], inv[7]];
-        p[5] = [inv[8], 0.0, 0.0, 1.0];
+        p[5] = [inv[8], 0.0, 0.0, 2.0];
         return Some(p);
     }
     if (crate::LayerTransform { crop: [0.0; 4], corners: None, ..t.clone() }).is_identity() {

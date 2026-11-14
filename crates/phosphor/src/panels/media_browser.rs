@@ -498,13 +498,18 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
     let _ = (more, account);
 }
 
-/// Refresh every account, or Load more of the one in `account_dir` (how many clips it has now: its files here).
+/// Refresh or Load more the account in `account_dir` (Refresh does every account only when none matches). Refreshing
+/// all six one after another kept the one being looked at waiting (owner, 2026-11-14: "just the one I am on").
 #[cfg(not(target_arch = "wasm32"))]
 fn follow_fetch(st: &mut State, act: src::FollowAct, account_dir: &str, ctx: &egui::Context) {
     use crate::online::following as fl;
     let view = &mut st.media_view;
+    let this = view.following.accounts.iter().find(|a| a.dir().is_some_and(|d| d.to_string_lossy() == account_dir)).cloned();
     view.refresh = Some(match act {
-        src::FollowAct::Refresh => fl::refresh(&view.following, Some(ctx.clone())),
+        src::FollowAct::Refresh => match this {
+            Some(a) => fl::refresh(&fl::Following { accounts: vec![a], ..view.following.clone() }, Some(ctx.clone())),
+            None => fl::refresh(&view.following, Some(ctx.clone())),
+        },
         src::FollowAct::KeepAll | src::FollowAct::PickLibrary => return,
         src::FollowAct::More => {
             let Some(a) = view.following.accounts.iter().find(|a| a.dir().is_some_and(|d| d.to_string_lossy() == account_dir)).cloned() else { return };
