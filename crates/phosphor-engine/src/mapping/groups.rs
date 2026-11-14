@@ -82,6 +82,28 @@ impl Mapping {
         self.prune_groups();
     }
 
+    /// Moves slices and masks next to `target` (a slice or mask): into its layout / group, and just before it in
+    /// the list (so in the drawing order) when they're the same kind. Dragging rows in the Studio's list.
+    pub fn move_next_to(&mut self, moving: &[u64], target: u64) {
+        let moving: Vec<u64> = moving.iter().copied().filter(|id| *id != target).collect();
+        let group = match (self.surfaces.iter().find(|s| s.id == target), self.masks.iter().find(|m| m.id == target)) {
+            (Some(s), _) => s.group,
+            (_, Some(m)) => m.group,
+            _ => return,
+        };
+        let (mut held, mut rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.surfaces).into_iter().partition(|s| moving.contains(&s.id));
+        let at = rest.iter().position(|s| s.id == target).unwrap_or(rest.len());
+        held.iter_mut().for_each(|s| s.group = group);
+        rest.splice(at..at, held);
+        self.surfaces = rest;
+        let (mut held, mut rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.masks).into_iter().partition(|m| moving.contains(&m.id));
+        let at = rest.iter().position(|m| m.id == target).unwrap_or(rest.len());
+        held.iter_mut().for_each(|m| m.group = group);
+        rest.splice(at..at, held);
+        self.masks = rest;
+        self.prune_groups();
+    }
+
     /// Moves group `id` inside `to` (None = top level). Refused if `to` is `id` or inside it.
     pub fn move_group(&mut self, id: u64, to: Option<u64>) -> bool {
         if to.is_some_and(|t| t == id || self.inside(t, id)) {
@@ -261,6 +283,24 @@ impl Mapping {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rows_move_next_to_another_row() {
+        let mut m = three();
+        m.add_layout(10);
+        m.add_layout(11);
+        // Slice 1 dragged onto slice 3: just before it, still in Layout 1.
+        m.move_next_to(&[1], 3);
+        assert_eq!(m.surfaces.iter().map(|s| s.id).collect::<Vec<_>>(), [2, 1, 3]);
+        // Into the other layout, then slice 3 dropped on slice 2 there: joins that layout.
+        m.move_to_group(&[2], Some(11));
+        m.move_next_to(&[3], 2);
+        assert_eq!(m.surfaces.iter().find(|s| s.id == 3).unwrap().group, Some(11));
+        assert_eq!(m.surfaces.iter().map(|s| s.id).collect::<Vec<_>>(), [3, 2, 1]);
+        // Dropped on itself: nothing moves.
+        m.move_next_to(&[1], 1);
+        assert_eq!(m.surfaces.len(), 3);
+    }
 
     fn three() -> Mapping {
         let mut m = Mapping::default();

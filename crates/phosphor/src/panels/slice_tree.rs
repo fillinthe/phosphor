@@ -27,6 +27,8 @@ enum Edit {
     Rename(u64, String),
     Fold(u64),
     SlicesTo(Vec<u64>, Option<u64>),
+    /// Rows dropped on another slice / mask row: into its layout / group, just before it.
+    NextTo(Vec<u64>, u64),
     GroupTo(u64, Option<u64>),
     /// Delete a group / layout and everything in it.
     DeleteGroup(u64),
@@ -51,6 +53,7 @@ pub(super) fn slice_rows(ui: &mut egui::Ui, mapping: &mut Mapping, selected: &mu
                 }
             }
             Edit::SlicesTo(ids, to) => mapping.move_to_group(&ids, to),
+            Edit::NextTo(ids, target) => mapping.move_next_to(&ids, target),
             Edit::GroupTo(g, to) => {
                 mapping.move_group(g, to);
             }
@@ -66,6 +69,26 @@ pub(super) fn slice_rows(ui: &mut egui::Ui, mapping: &mut Mapping, selected: &mu
     }
 }
 
+/// Slice and mask rows being dragged in the list (the whole selection when the row is part of it).
+struct RowDrag(Vec<u64>);
+
+/// Makes a slice / mask row draggable (clicks still reach the row), and returns rows dropped on it.
+fn row_drag(ui: &egui::Ui, r: &egui::Response, id: u64, picked: &[u64]) -> Option<Vec<u64>> {
+    let grab = ui.interact(r.rect, r.id.with("row_drag"), Sense::drag());
+    if grab.drag_started() {
+        grab.dnd_set_drag_payload(RowDrag(if picked.contains(&id) { picked.to_vec() } else { vec![id] }));
+    }
+    drop_rows(ui, r)
+}
+
+/// Rows dropped on `r` (a row, a group, a layout button); it's outlined while rows hover over it.
+fn drop_rows(ui: &egui::Ui, r: &egui::Response) -> Option<Vec<u64>> {
+    if r.dnd_hover_payload::<RowDrag>().is_some() {
+        ui.painter().rect_stroke(r.rect, 0.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
+    }
+    crate::ui::drop_payload::<RowDrag>(r).map(|p| p.0.clone())
+}
+
 /// The output's layouts as buttons: click one to fade to it (auto-fade time), right-click to map it to a pad / key
 /// / OSC, rename, copy or delete it.
 fn layouts_bar(ui: &mut egui::Ui, mapping: &mut Mapping, acts: &mut Vec<SliceAct>) {
@@ -79,15 +102,17 @@ fn layouts_bar(ui: &mut egui::Ui, mapping: &mut Mapping, acts: &mut Vec<SliceAct
             if r.clicked() {
                 acts.push(SliceAct::SwitchLayout(*id));
             }
+            // Rows dragged from the list and let go on a layout's button move into that layout.
+            if let Some(rows) = drop_rows(ui, &r) {
+                mapping.move_to_group(&rows, Some(*id));
+            }
+            if let Some(new) = crate::ui::renamed(ui.ctx(), ("layout_name", *id))
+                && let Some(g) = mapping.groups.iter_mut().find(|g| g.id == *id)
+            {
+                g.name = new;
+            }
             r.right_menu(|ui| {
-                crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-                    if let Some(new) = rename_menu(ui, ("layout_name", *id), name) {
-                        if let Some(g) = mapping.groups.iter_mut().find(|g| g.id == *id) {
-                            g.name = new;
-                        }
-                        ui.close();
-                    }
-                });
+                crate::ui::rename_item(ui, ("layout_name", *id), name);
                 if crate::ui::command(ui, label(icon::COPY, "Duplicate")).on_hover_text("A copy of every slice and mask in it, to change into another arrangement").clicked() {
                     acts.push(SliceAct::DuplicateGroup(*id));
                     ui.close();
@@ -148,16 +173,17 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             if r.clicked() {
                 super::mapping_points::select_slices(ui.ctx(), selected, members.clone());
             }
+            if let Some(rows) = drop_rows(ui, &r) {
+                edits.push(Edit::SlicesTo(rows, Some(gid)));
+            }
+            if let Some(name) = crate::ui::renamed(ui.ctx(), ("slice_group", gid)) {
+                edits.push(Edit::Rename(gid, name));
+            }
             // Its own fade, on top of each slice's and mask's (mappable; layouts crossfade with it).
             // On / off without moving the fader (mappable).
             Level::percent(&mut g.opacity, "").default(1.0).width(fade_w).target(ControlTarget::SliceOpacity(gid)).switch(&mut g.enabled, Some(target.clone())).show(ui);
             r.right_menu(|ui| {
-                crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-                    if let Some(name) = rename_menu(ui, ("slice_group", gid), &name) {
-                        edits.push(Edit::Rename(gid, name));
-                        ui.close();
-                    }
-                });
+                crate::ui::rename_item(ui, ("slice_group", gid), &name);
                 if !is_layout {
                     move_menu(ui, movable.clone(), Some(gid), group_parent, &mut |to| edits.push(Edit::GroupTo(gid, to)));
                     if crate::ui::command(ui, label(icon::SELECTION_SLASH, "Ungroup")).on_hover_text("What's in it stays, one level up").clicked() {
@@ -190,10 +216,13 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             ui.add_space(indent);
             let s = &mut mapping.surfaces[i];
             crate::ui::eye_toggle(ui, &mut s.enabled);
-            let r = crate::ui::pick_item(ui, picked.contains(&s.id), format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several");
+            let r = crate::ui::pick_item(ui, picked.contains(&s.id), format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several · drag onto a layout, a group or another row to move it there");
             if r.clicked() {
                 let shift = ui.input(|i| i.modifiers.shift);
                 super::mapping_points::click_slice(ui.ctx(), selected, id, shift);
+            }
+            if let Some(rows) = row_drag(ui, &r, id, &picked) {
+                edits.push(Edit::NextTo(rows, id));
             }
             row_menu(&r, id, s.group, &picked, &groups_now, true, acts, edits);
         });
@@ -205,10 +234,13 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
             ui.add_space(indent);
             let eye = crate::ui::eye_toggle(ui, &mut m.enabled);
             crate::ui::map_menu(ui, &eye, ControlTarget::MaskEnabled(id));
-            let r = crate::ui::pick_item(ui, picked.contains(&id) || *selected == Some(id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR)).on_hover_text("Shift-click to select several");
+            let r = crate::ui::pick_item(ui, picked.contains(&id) || *selected == Some(id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR)).on_hover_text("Shift-click to select several · drag onto a layout, a group or another row to move it there");
             if r.clicked() {
                 let shift = ui.input(|i| i.modifiers.shift);
                 super::mapping_points::click_slice(ui.ctx(), selected, id, shift);
+            }
+            if let Some(rows) = row_drag(ui, &r, id, &picked) {
+                edits.push(Edit::NextTo(rows, id));
             }
             row_menu(&r, id, m.group, &picked, &groups_now, false, acts, edits);
         });
@@ -246,8 +278,8 @@ fn move_menu(ui: &mut egui::Ui, groups: Vec<(u64, String, usize)>, moving: Optio
     if targets.is_empty() && now.is_none() {
         return;
     }
-    ui.menu_button(label(icon::ARROW_SQUARE_IN, "Move to group"), |ui| {
-        if now.is_some() && crate::ui::command(ui, "Out of every group").clicked() {
+    ui.menu_button(label(icon::ARROW_SQUARE_IN, "Move to layout / group"), |ui| {
+        if now.is_some() && crate::ui::command(ui, "Out of every layout and group").clicked() {
             pick(None);
             ui.close();
         }

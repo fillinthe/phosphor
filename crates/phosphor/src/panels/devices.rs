@@ -34,6 +34,11 @@ fn permissions(ui: &mut egui::Ui) {
             ui.end_row();
         }
     });
+    // The switch can be on in System Settings and still read "not allowed" here (owner, 2026-11-14): macOS tells an
+    // app only after it restarts, and a switch left by an older copy of Phosphor doesn't count for this one.
+    if list.iter().any(|(name, _, status, _)| name == "Screen recording" && *status != crate::permissions::Status::Allowed) {
+        crate::ui::help(ui, "Screen recording already switched on in System Settings? Quit Phosphor and open it again: macOS only tells an app after a restart. Still not allowed: select Phosphor in that list, press − to take it out, then allow it again (the switch belonged to an older copy of Phosphor).");
+    }
     ui.separator();
 }
 

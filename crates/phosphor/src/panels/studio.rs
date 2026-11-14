@@ -186,7 +186,7 @@ fn apply(st: &mut State, action: Option<TreeAction>, canvas: (u32, u32)) {
         Some(TreeAction::AddSlice(oid)) => {
             let id = st.comp.new_id();
             if let Some(o) = st.comp.output_mut(oid) {
-                o.mapping.add_surface(id);
+                o.mapping.add_surface_in_place(id);
                 o.mapping.enabled = true;
             }
             st.selected_surface = Some(id);
@@ -194,9 +194,14 @@ fn apply(st: &mut State, action: Option<TreeAction>, canvas: (u32, u32)) {
         Some(TreeAction::AddSliceAt(oid, at)) => {
             let id = st.comp.new_id();
             if let Some(o) = st.comp.output_mut(oid) {
-                let s = o.mapping.add_surface(id);
-                let c = s.center();
-                s.translate(at[0] - c[0], at[1] - c[1]);
+                let first = o.mapping.surfaces.is_empty();
+                let s = o.mapping.add_surface_in_place(id);
+                // (The first slice is the whole output wherever you clicked; later ones go where you clicked.)
+                if !first {
+                    let c = s.center();
+                    s.translate(at[0] - c[0], at[1] - c[1]);
+                    s.input_from_place();
+                }
                 o.mapping.enabled = true;
             }
             st.selected_surface = Some(id);

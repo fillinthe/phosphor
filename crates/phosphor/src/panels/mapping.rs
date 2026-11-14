@@ -747,7 +747,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     if add_surface {
         let id = st.comp.new_id();
         if let Some(o) = st.comp.output_mut(oid) {
-            o.mapping.add_surface(id);
+            o.mapping.add_surface_in_place(id);
             o.mapping.enabled = true;
         }
         st.selected_surface = Some(id);

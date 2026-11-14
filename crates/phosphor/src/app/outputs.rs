@@ -44,19 +44,35 @@ impl PhosphorApp {
         }
     }
 
-    /// Pulls corner drags made in the output window back into the composition.
+    /// Pulls corner drags made in the output window back into the composition, then any Undo / Redo asked for there.
     pub(crate) fn sync_mapping_from_output(&mut self) {
-        let mut map = self.state.output.lock().unwrap();
-        for (id, out) in map.iter_mut() {
-            if out.mapping_changed {
-                if let Some(o) = self.state.comp.outputs.iter_mut().find(|o| o.id == *id) {
-                    o.mapping = out.mapping.clone();
+        let mut steps: Vec<i8> = Vec::new();
+        {
+            let mut map = self.state.output.lock().unwrap();
+            for (id, out) in map.iter_mut() {
+                if out.mapping_changed {
+                    if let Some(o) = self.state.comp.outputs.iter_mut().find(|o| o.id == *id) {
+                        o.mapping = out.mapping.clone();
+                    }
+                    self.state.selected_surface = out.selected_surface;
+                    self.state.mapping_output = *id;
+                    out.mapping_changed = false;
                 }
-                self.state.selected_surface = out.selected_surface;
-                self.state.mapping_output = *id;
-                out.mapping_changed = false;
+                steps.append(&mut out.undo_steps);
             }
         }
+        for step in steps {
+            self.state.undo_step(step);
+        }
+        let (can_undo, can_redo) = (self.state.history.can_undo(&self.state.comp), self.state.history.can_redo());
+        for out in self.state.output.lock().unwrap().values_mut() {
+            (out.can_undo, out.can_redo) = (can_undo, can_redo);
+        }
+    }
+
+    /// A mouse button is down in an output window (a mapping drag there is one undo step, like one in the main window).
+    pub(crate) fn output_pointer_down(&self) -> bool {
+        self.state.output.lock().unwrap().values().any(|o| o.open && o.pointer_down)
     }
 
     // "Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven." Matthew 5:16 (KJV)
@@ -91,6 +107,19 @@ impl PhosphorApp {
                 let fullscreen = out.fullscreen;
                 if ctx.input(|i| i.key_pressed(egui::Key::E)) {
                     out.edit_mapping = !out.edit_mapping;
+                }
+                // Undo / Redo typed here (the main window's shortcuts don't see this window's keys; on the Mac the
+                // menu bar takes them first, so they never arrive twice). Ctrl+Y = Redo too.
+                out.pointer_down = ctx.input(|i| i.pointer.any_down());
+                let (undo, redo) = ctx.input_mut(|i| {
+                    let redo = i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z))
+                        || i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Y));
+                    (i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Z)), redo)
+                });
+                if redo {
+                    out.undo_steps.push(1);
+                } else if undo {
+                    out.undo_steps.push(-1);
                 }
                 // Screen placement: leave macOS full screen if somehow in it, then cover the display.
                 if let Some((d, step, wait)) = out.place.as_mut() {
@@ -226,16 +255,32 @@ impl PhosphorApp {
                     if panels::mapping_handles(ui, frame, mapping, selected_surface, true) {
                         *mapping_changed = true;
                     }
-                    ui.painter().text(
-                        rect.left_bottom() + egui::vec2(12.0, -12.0),
-                        egui::Align2::LEFT_BOTTOM,
-                        "Mapping edit: drag corners · E hides handles · F fullscreen",
-                        egui::FontId::proportional(13.0),
-                        Color32::from_white_alpha(160),
-                    );
+                    // Undo / Redo right here: on a projector there's no menu bar to reach for after a bad drag.
+                    let bar = egui::Rect::from_min_size(rect.left_bottom() + egui::vec2(12.0, -42.0), egui::vec2(rect.width() - 24.0, 30.0));
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+                        if crate::ui::command_if(ui, out.can_undo, crate::ui::label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text("Undo the last change (Cmd/Ctrl+Z)").clicked() {
+                            out.undo_steps.push(-1);
+                        }
+                        if crate::ui::command_if(ui, out.can_redo, crate::ui::label(icon::ARROW_CLOCKWISE, "Redo")).on_hover_text("Redo (Shift+Cmd/Ctrl+Z)").clicked() {
+                            out.undo_steps.push(1);
+                        }
+                        ui.label(egui::RichText::new("Mapping edit: drag corners · Cmd/Ctrl+Z undo · E hides handles · F fullscreen").size(13.0).color(Color32::from_white_alpha(160)));
+                    });
                 }
             },
         );
         ctx.request_repaint_of(id);
+    }
+}
+
+impl State {
+    /// One step back (-1) or forward (+1) in the project's history: the Edit menu, the shortcuts and the output
+    /// windows all come through here.
+    pub(crate) fn undo_step(&mut self, step: i8) {
+        let got = if step < 0 { self.history.undo(&self.comp) } else { self.history.redo(&self.comp) };
+        if let Some(c) = got {
+            self.comp = c;
+            self.comp.ensure_outputs();
+        }
     }
 }

@@ -617,6 +617,9 @@ pub(crate) fn media_tile(
         return;
     }
     resp.dnd_set_drag_payload(MediaDrag(i));
+    if let Some(name) = crate::ui::renamed(ui.ctx(), ("media", &item.path)) {
+        acts.push(MediaAct::Rename(i, name));
+    }
     let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(w, h));
     let p = ui.painter();
     p.rect_filled(thumb_rect, 4.0, crate::theme::PICTURE_BG);
@@ -719,11 +722,7 @@ pub(crate) fn media_tile(
             acts.push(MediaAct::ForgetEffects(i));
             ui.close();
         }
-        crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-            if let Some(name) = rename_menu(ui, ("rename", &item.path), &item.name) {
-                acts.push(MediaAct::Rename(i, name));
-            }
-        });
+        crate::ui::rename_item(ui, ("media", &item.path), &item.name);
         #[cfg(not(target_arch = "wasm32"))]
         if crate::media::is_movie(&item.name) && crate::ui::command(ui, label(icon::FILM_STRIP, "Convert…")).on_hover_text("Make a copy that plays better in a show (Hap, ProRes, or H.264 with every frame a keyframe); see the size first").clicked() {
             acts.push(MediaAct::Convert(i));
