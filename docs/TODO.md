@@ -15,7 +15,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **3D fly-through with the audience playing** (asked 2026-11-14): load a 3D model (glTF / GLB first) and fly a
       camera through it; audience phones get a game pad (up / down / left / right, A, B) on the Play page that steers
       it. A world built in Unreal / Unity: either exported as glTF, or run in its own engine and sent in over
-      NDI / Spout / Syphon with the pad forwarded to it as OSC. Plan in docs/NOTES.md, waiting on the owner's choice.
+      NDI / Spout / Syphon with the pad forwarded to it as OSC. Plan: docs/design/game-pad.md (build week of 2026-11-16).
 - [ ] **Clip grid column buttons** greyed out while there are no layers? (owner to say)
 - [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
 - [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.
