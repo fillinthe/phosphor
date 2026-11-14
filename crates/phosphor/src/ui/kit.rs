@@ -550,10 +550,76 @@ pub(crate) fn field_menu<'a, R>(ui: &mut egui::Ui, atoms: impl egui::IntoAtoms<'
     egui::InnerResponse::new(inner.map(|i| i.inner), response)
 }
 
-/// The body of a "Rename" menu: a field with the current name, OK (or Enter). Returns the new name when confirmed
-/// (trimmed, never empty). `id` keeps what's typed while the menu is open.
-pub(crate) fn rename_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str) -> Option<String> {
-    name_menu(ui, id, current, "OK", "")
+/// A rename waiting in its pop-up: whose it is, what's typed, and when its owner last drew it.
+#[derive(Clone)]
+struct RenameAsk {
+    key: egui::Id,
+    text: String,
+    seen: f64,
+    fresh: bool,
+}
+
+const RENAME_ASK: &str = "phosphor_rename_ask";
+
+/// "Rename…" in a menu: closes the menu and opens a small pop-up in the middle of the window with the name in a
+/// field (the owner found a field tucked in a submenu a strange way to rename, 2026-11-14). Pair it with `renamed`
+/// (same `id`), called every frame outside the menu: that draws the pop-up and returns the new name.
+pub(crate) fn rename_item(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str) {
+    if super::command(ui, super::label(icon::PENCIL_SIMPLE, "Rename…")).clicked() {
+        ask_rename(ui.ctx(), id, current);
+        ui.close();
+    }
+}
+
+/// Opens the rename pop-up for `id` (a plain Rename button; `rename_item` is the menu entry).
+pub(crate) fn ask_rename(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug, current: &str) {
+    let ask = RenameAsk { key: egui::Id::new(("rename", id)), text: current.to_string(), seen: ctx.input(|i| i.time), fresh: true };
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(RENAME_ASK), ask));
+}
+
+/// The pop-up for `rename_item(.., id, ..)` while it's open: a field (focused, the name selected), Rename (or Enter)
+/// and Cancel (or Escape, or a click outside). Returns the new name once, trimmed and never empty. Call every frame
+/// from where the thing is drawn; a pop-up whose owner stopped drawing it goes away.
+pub(crate) fn renamed(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug) -> Option<String> {
+    let slot = egui::Id::new(RENAME_ASK);
+    let mut ask: RenameAsk = ctx.data(|d| d.get_temp(slot))?;
+    let now = ctx.input(|i| i.time);
+    if ask.key != egui::Id::new(("rename", id)) {
+        return None;
+    }
+    if now - ask.seen > 0.5 {
+        ctx.data_mut(|d| d.remove::<RenameAsk>(slot));
+        return None;
+    }
+    let (mut done, mut cancel) = (false, false);
+    let modal = egui::Modal::new(egui::Id::new("phosphor_rename_modal")).show(ctx, |ui| {
+        ui.set_width(300.0);
+        heading(ui, "Rename");
+        let field = text_field(ui, &mut ask.text, "", Some(300.0));
+        if ask.fresh {
+            field.request_focus();
+            // The whole name selected: typing replaces it.
+            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), field.id) {
+                let end = egui::text::CCursor::new(ask.text.chars().count());
+                state.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(0), end)));
+                state.store(ui.ctx(), field.id);
+                ask.fresh = false;
+            }
+        }
+        let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+        ui.horizontal(|ui| {
+            let ok = ui.add_enabled(!ask.text.trim().is_empty(), egui::Button::new("Rename")).clicked();
+            done = (ok || enter) && !ask.text.trim().is_empty();
+            cancel = ui.button("Cancel").clicked();
+        });
+    });
+    if done || cancel || modal.should_close() {
+        ctx.data_mut(|d| d.remove::<RenameAsk>(slot));
+        return done.then(|| ask.text.trim().to_string());
+    }
+    ask.seen = now;
+    ctx.data_mut(|d| d.insert_temp(slot, ask));
+    None
 }
 
 /// The body of a "New …" menu: an empty field with `hint`, a `confirm` button (or Enter). Returns the name typed.

@@ -1679,6 +1679,19 @@ impl Surface {
         [(c[0][0] + c[1][0] + c[2][0] + c[3][0]) * 0.25, (c[0][1] + c[1][1] + c[2][1] + c[3][1]) * 0.25]
     }
 
+    /// Shows the part of the picture that's where the slice sits (the box round its corners, kept inside the
+    /// picture): the output looks the same with or without it.
+    pub fn input_from_place(&mut self) {
+        let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+        for c in &self.corners {
+            (x0, y0, x1, y1) = (x0.min(c[0]), y0.min(c[1]), x1.max(c[0]), y1.max(c[1]));
+        }
+        let (x0, y0, x1, y1) = (x0.clamp(0.0, 1.0), y0.clamp(0.0, 1.0), x1.clamp(0.0, 1.0), y1.clamp(0.0, 1.0));
+        if x1 - x0 > 0.01 && y1 - y0 > 0.01 {
+            self.input = [x0, y0, x1 - x0, y1 - y0];
+        }
+    }
+
     pub fn translate(&mut self, dx: f32, dy: f32) {
         if let Some(m) = &mut self.model {
             m.center[0] += dx;
@@ -1754,9 +1767,29 @@ pub struct Mapping {
 
 impl Mapping {
     pub fn add_surface(&mut self, id: u64) -> &mut Surface {
-        let surface = Surface::new(id, self.surfaces.len());
+        let mut surface = Surface::new(id, self.surfaces.len());
+        // A name no other slice has (after a delete, the count alone gave two "Surface 2").
+        let mut n = self.surfaces.len() + 1;
+        while self.surfaces.iter().any(|s| s.name == format!("Surface {n}")) {
+            n += 1;
+        }
+        surface.name = format!("Surface {n}");
         self.surfaces.push(surface);
         self.surfaces.last_mut().unwrap()
+    }
+
+    /// A new slice that leaves the output looking as it did: the first one covers the whole output with the whole
+    /// picture; later ones are a smaller box showing the part of the picture that's already there (its input region
+    /// is where it sits). Before, every new slice squeezed the whole picture into a box, so adding the first one
+    /// shrank the output (owner, 2026-11-14).
+    pub fn add_surface_in_place(&mut self, id: u64) -> &mut Surface {
+        let first = self.surfaces.is_empty();
+        let s = self.add_surface(id);
+        if first {
+            s.corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        }
+        s.input_from_place();
+        s
     }
 
     /// Layers that enabled surfaces show on their own (they need a full-size picture rendered).
@@ -2110,6 +2143,20 @@ mod shape_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_new_slice_leaves_the_output_as_it_was() {
+        let mut m = Mapping::default();
+        let first = m.add_surface_in_place(1).clone();
+        assert_eq!(first.corners, [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+        assert_eq!(first.input, [0.0, 0.0, 1.0, 1.0]);
+        // The next one: a smaller box showing what's under it.
+        let second = m.add_surface_in_place(2).clone();
+        let (c, i) = (second.corners, second.input);
+        assert!(c[0][0] > 0.0 && c[2][0] < 1.0);
+        assert!((i[0] - c[0][0]).abs() < 1e-6 && (i[1] - c[0][1]).abs() < 1e-6);
+        assert!((i[2] - (c[2][0] - c[0][0])).abs() < 1e-6 && (i[3] - (c[2][1] - c[0][1])).abs() < 1e-6);
+    }
+
     use super::*;
 
     #[test]

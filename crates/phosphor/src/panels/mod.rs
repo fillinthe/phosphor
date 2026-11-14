@@ -353,11 +353,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
         if let Tab::MyPanel(n) = *tab
             && let Some(name) = self.st.comp.surface.pages.get_mut(n as usize)
         {
-            crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename…"), |ui| {
-                if let Some(n) = crate::ui::rename_menu(ui, ("panel_name", n), name) {
-                    *name = n;
-                }
-            });
+            crate::ui::rename_item(ui, ("panel_name", n), name);
             if self.st.comp.surface.pages.len() > 1 && crate::ui::danger_button(ui, label(icon::TRASH, "Delete this panel and its controls")).clicked() {
                 surface::remove_page(ui.ctx(), &mut self.st.comp.surface, n as usize);
                 ui.close();

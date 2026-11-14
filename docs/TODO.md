@@ -16,6 +16,12 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       camera through it; audience phones get a game pad (up / down / left / right, A, B) on the Play page that steers
       it. A world built in Unreal / Unity: either exported as glTF, or run in its own engine and sent in over
       NDI / Spout / Syphon with the pad forwarded to it as OSC. Plan: docs/design/game-pad.md (build week of 2026-11-16).
+- [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
+      same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
+      add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.
+- [ ] **Outputs: layering and masking like MadMapper** (owner, 2026-11-14): done so far: undo in the output window,
+      new slices in place, drag rows between layouts / groups / onto another row, rename pop-up. Still to design
+      with the owner: what else should move like MadMapper (masks attached to a slice, layer order across layouts…).
 - [ ] **Clip grid column buttons** greyed out while there are no layers? (owner to say)
 - [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
 - [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.

@@ -335,6 +335,9 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
                             layer_menu(ui, layer, s.others, &mut o);
                         });
                         r.response.on_hover_text(format!("{} · click: fill, the beat, MIDI, autopilot, duplicate, group, delete…", layer.name));
+                        if let Some(n) = crate::ui::renamed(ui.ctx(), ("stack_rename", layer.id)) {
+                            layer.name = n;
+                        }
                         if fill {
                             out.fill_row = Some(layer.id);
                         }
@@ -400,12 +403,7 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
 /// The rest of a layer's menu (after the row items): sources, effects, duplicate, move, group, delete.
 fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)], o: &mut StripOut) {
     let mut picked: Option<LayerAction> = None;
-    crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-        if let Some(n) = rename_menu(ui, ("stack_rename", layer.id), &layer.name) {
-            layer.name = n;
-            ui.close();
-        }
-    });
+    crate::ui::rename_item(ui, ("stack_rename", layer.id), &layer.name);
     let mut act = |ui: &mut egui::Ui, a: LayerAction| {
         picked = Some(a);
         ui.close();
@@ -508,13 +506,11 @@ fn group_band(ui: &mut egui::Ui, g: &mut LayerGroup, thumb: Option<egui::Texture
         if !g.in_mix {
             hint(ui, "surfaces only");
         }
+        if let Some(n) = crate::ui::renamed(ui.ctx(), ("stack_group_rename", g.id)) {
+            g.name = n;
+        }
         ui.menu_button(icon::DOTS_THREE, |ui| {
-            crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-                if let Some(n) = rename_menu(ui, ("stack_group_rename", g.id), &g.name) {
-                    g.name = n;
-                    ui.close();
-                }
-            });
+            crate::ui::rename_item(ui, ("stack_group_rename", g.id), &g.name);
             if crate::ui::command(ui, label(icon::MAGIC_WAND, "Add effect to the group…")).clicked() {
                 action = Some(GroupAction::BrowseEffects);
                 ui.close();
@@ -590,13 +586,11 @@ pub(crate) fn comp_band(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui::Tex
         }
         let size = if c.width == 0 { "master size".to_string() } else { format!("{}×{}", c.width, c.height) };
         hint(ui, if c.in_mix { size } else { format!("{size} · outputs only") });
+        if let Some(n) = crate::ui::renamed(ui.ctx(), ("stack_comp_rename", c.id)) {
+            action = Some(CompBandAct::Rename(n));
+        }
         ui.menu_button(icon::DOTS_THREE, |ui| {
-            crate::ui::field_menu(ui, label(icon::PENCIL_SIMPLE, "Rename"), |ui| {
-                if let Some(n) = rename_menu(ui, ("stack_comp_rename", c.id), &c.name) {
-                    action = Some(CompBandAct::Rename(n));
-                    ui.close();
-                }
-            });
+            crate::ui::rename_item(ui, ("stack_comp_rename", c.id), &c.name);
             if crate::ui::command(ui, label(icon::SLIDERS_HORIZONTAL, "Size, outputs, effects (Inspector)")).clicked() {
                 select = true;
                 ui.close();

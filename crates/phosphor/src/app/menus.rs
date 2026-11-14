@@ -94,18 +94,8 @@ impl PhosphorApp {
             }
             A::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             A::Lock => self.lock.window = true,
-            A::Undo => {
-                if let Some(c) = st.history.undo(&st.comp) {
-                    st.comp = c;
-                    st.comp.ensure_outputs();
-                }
-            }
-            A::Redo => {
-                if let Some(c) = st.history.redo(&st.comp) {
-                    st.comp = c;
-                    st.comp.ensure_outputs();
-                }
-            }
+            A::Undo => st.undo_step(-1),
+            A::Redo => st.undo_step(1),
             A::AddLayer => {
                 st.add_layer();
             }

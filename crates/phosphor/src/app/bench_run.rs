@@ -585,6 +585,11 @@ impl PhosphorApp {
                 println!("QUICK line: line slice on output {oid}");
                 continue;
             }
+            // The rename pop-up, for pictures (drawn each frame in `logic` while a bench runs).
+            if name == "rename" {
+                crate::ui::ask_rename(ctx, "bench_rename", "Layout 1");
+                continue;
+            }
             if name == "welcome" {
                 self.welcome_open = true;
                 continue;

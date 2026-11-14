@@ -157,6 +157,14 @@ pub struct OutputShared {
     pub fullscreen: bool,
     /// Move the output window to this display and go fullscreen: (display, step, frames waited).
     pub place: Option<(crate::screens::Display, u8, u32)>,
+    /// Undo / redo asked for from this window (its keys or its buttons): steps back (-1) or forward (+1), taken by
+    /// the app each frame.
+    pub undo_steps: Vec<i8>,
+    /// What the buttons in this window may do (set by the app each frame).
+    pub can_undo: bool,
+    pub can_redo: bool,
+    /// A mouse button is down in this window (a drag in flight: no undo step until it's let go).
+    pub pointer_down: bool,
 }
 
 /// A launch: a clip, a whole column, or any new source on a layer. Fired now, or on the next

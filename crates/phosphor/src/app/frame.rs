@@ -66,7 +66,7 @@ impl PhosphorApp {
         self.menu_actions(&ctx, now);
         self.fade_in_effects();
         self.shortcuts(&ctx);
-        let busy = ctx.input(|i| i.pointer.any_down());
+        let busy = ctx.input(|i| i.pointer.any_down()) || self.output_pointer_down();
         if ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { .. } | egui::Event::Key { .. } | egui::Event::MouseWheel { .. }))) {
             self.state.touched(now);
         }
@@ -155,6 +155,16 @@ impl PhosphorApp {
         }
         self.remote_sync(now);
         self.sync_mapping_from_output();
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.bench.is_some() {
+            let _ = crate::ui::renamed(&ctx, "bench_rename");
+        }
+        // A custom panel renamed from its tab's menu (the pop-up is drawn here: an unfocused tab draws nothing).
+        for (n, name) in self.state.comp.surface.pages.iter_mut().enumerate() {
+            if let Some(new) = crate::ui::renamed(&ctx, ("panel_name", n as u8)) {
+                *name = new;
+            }
+        }
         self.remember_output_screens();
         crate::panels::follow_selection_comp(&mut self.state.comp, self.state.selected);
         {
