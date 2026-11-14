@@ -324,11 +324,21 @@ impl<'a> Level<'a> {
                 let shown = if locked { format!("{} {shown}", icon::LOCK) } else { shown };
                 let value_g = p.layout_no_wrap(shown.clone(), font.clone(), color);
                 let room = (rect.width() - value_g.size().x - pad * 3.0).max(0.0);
-                // The name only when it fits whole: a narrow bar (cards) shows its value alone and the name in its
-                // tooltip, rather than "Spe…".
+                // The name whole when it fits; cut short with "…" when there's real room for some of it (a long
+                // shader setting name in the Inspector); a narrow bar (cards) shows its value alone and the name in
+                // its tooltip, rather than "Spe…".
                 if !text.is_empty() && room > 16.0 {
                     let g = p.layout_no_wrap(text.clone(), font.clone(), color);
-                    if g.size().x <= room {
+                    let g = if g.size().x <= room {
+                        Some(g)
+                    } else if room >= 60.0 {
+                        let mut job = egui::text::LayoutJob::single_section(text.clone(), egui::TextFormat::simple(font.clone(), color));
+                        job.wrap = egui::text::TextWrapping::truncate_at_width(room);
+                        Some(p.layout_job(job))
+                    } else {
+                        None
+                    };
+                    if let Some(g) = g {
                         p.galley(egui::pos2(rect.left() + pad, rect.center().y - g.size().y / 2.0), g, color);
                     }
                 }

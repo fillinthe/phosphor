@@ -419,7 +419,34 @@ fn install_folder(unpacked: &std::path::Path, exe: &std::path::Path) -> Result<(
             return Err(format!("Install failed at {}: {e}", target.display()));
         }
     }
+    // The folders beside it (the ISF shaders, LUTs and transitions Phosphor ships): before, only the files at the
+    // top were copied, so an update never brought new or fixed shaders. Nothing holds these open, so each file is
+    // copied beside its target and renamed over it (whole or not at all). A file that can't be replaced keeps the
+    // old copy: the update itself still counts.
+    for entry in std::fs::read_dir(&src).map_err(|e| e.to_string())?.flatten() {
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &dest.join(entry.file_name()));
+        }
+    }
     Ok((exe, true))
+}
+
+/// Copies a folder over another, file by file (new files added, changed ones replaced, nothing removed).
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(from) else { return };
+    let _ = std::fs::create_dir_all(to);
+    for entry in entries.flatten() {
+        let (src, target) = (entry.path(), to.join(entry.file_name()));
+        if src.is_dir() {
+            copy_tree(&src, &target);
+            continue;
+        }
+        let part = PathBuf::from(format!("{}.part", target.display()));
+        if let Err(e) = std::fs::copy(&src, &part).and_then(|_| std::fs::rename(&part, &target)) {
+            let _ = std::fs::remove_file(&part);
+            log::warn!("update: couldn't replace {}: {e}", target.display());
+        }
+    }
 }
 
 fn find_file(dir: &std::path::Path, name: &str) -> Option<PathBuf> {
@@ -620,6 +647,16 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "new exe");
         assert_eq!(std::fs::read_to_string(dest.join("avcodec.dll")).unwrap(), "new dll");
         assert_eq!(std::fs::read_to_string(format!("{}.old", exe.display())).unwrap(), "old exe");
+        // The shipped folders come along too (new files added, changed ones replaced).
+        std::fs::create_dir_all(unpacked.join("isf/sub")).unwrap();
+        std::fs::write(unpacked.join("isf/new.fs"), "new shader").unwrap();
+        std::fs::write(unpacked.join("isf/sub/fixed.fs"), "fixed").unwrap();
+        std::fs::create_dir_all(dest.join("isf/sub")).unwrap();
+        std::fs::write(dest.join("isf/sub/fixed.fs"), "broken").unwrap();
+        assert!(super::install_folder(&root.join("unpacked"), &exe).is_ok());
+        assert_eq!(std::fs::read_to_string(dest.join("isf/new.fs")).unwrap(), "new shader");
+        assert_eq!(std::fs::read_to_string(dest.join("isf/sub/fixed.fs")).unwrap(), "fixed");
+        assert!(!dest.join("isf/sub/fixed.fs.part").exists());
         // A second update replaces the leftovers of the first.
         assert!(super::install_folder(&root.join("unpacked"), &exe).is_ok());
         let _ = std::fs::remove_dir_all(&root);
