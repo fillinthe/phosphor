@@ -262,7 +262,18 @@ pub fn gallery_list(url: &str, count: usize, browser: &str, cursor: Option<&str>
     });
     let cursors = std::thread::spawn(move || {
         use std::io::BufRead;
-        std::io::BufReader::new(err).lines().map_while(Result::ok).filter_map(|l| l.split_once("Cursor: ").map(|(_, c)| c.trim().to_string())).filter(|c| !c.is_empty()).collect::<Vec<String>>()
+        let mut cursors = Vec::new();
+        for l in std::io::BufReader::new(err).lines().map_while(Result::ok) {
+            if let Some((_, c)) = l.split_once("Cursor: ") {
+                if !c.trim().is_empty() {
+                    cursors.push(c.trim().to_string());
+                }
+            } else if l.contains("[error]") || l.contains("[warning]") || (l.contains("[cookies]") && !l.contains("[debug]")) {
+                // What gallery-dl said (sign-in, cookies, the site's answer): in the session log, for "why not?".
+                log::warn!("gallery-dl: {l}");
+            }
+        }
+        cursors
     });
     let until = Instant::now() + Duration::from_secs(120);
     loop {
@@ -316,6 +327,7 @@ pub fn parse(account: &Account, body: &[u8]) -> Result<Vec<Item>, String> {
     for e in entries {
         let kind = e.get(0).and_then(Value::as_i64).unwrap_or(0);
         if kind == -1 {
+            log::warn!("gallery-dl stopped on {}: {}", account.label(), e[1]);
             let msg = e[1]["message"].as_str().unwrap_or("");
             let err = e[1]["error"].as_str().unwrap_or("");
             return Err(if err == "AuthRequired" || msg.contains("cookies") || msg.contains("login") {

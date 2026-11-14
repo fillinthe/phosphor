@@ -30,6 +30,25 @@ pub fn open(path: impl AsRef<Path>) {
     };
 }
 
+/// Opens a web page in one browser (`web_media::BROWSERS` names: "brave", "chrome"…), so a sign-in lands where
+/// Phosphor reads it from; the default browser when that one can't be opened.
+pub fn open_url_in(browser: &str, url: &str) {
+    if cfg!(target_os = "macos") {
+        let app = match browser {
+            "safari" => "Safari",
+            "chrome" => "Google Chrome",
+            "brave" => "Brave Browser",
+            "firefox" => "Firefox",
+            "edge" => "Microsoft Edge",
+            _ => "",
+        };
+        if !app.is_empty() && Command::new("open").args(["-a", app, url]).status().is_ok_and(|s| s.success()) {
+            return;
+        }
+    }
+    open(url);
+}
+
 /// Shows a file selected in its folder.
 pub fn reveal(path: impl AsRef<Path>) {
     let p = path.as_ref();
