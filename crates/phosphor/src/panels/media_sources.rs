@@ -574,7 +574,7 @@ pub(crate) fn browser_pick(ui: &mut egui::Ui, view: &mut MediaView) {
 /// What a followed account's buttons asked for.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum FollowAct {
-    /// New posts, every account.
+    /// New posts of this account (the one being looked at; every account if none is).
     Refresh,
     /// The next older clips of this account.
     More,
@@ -594,7 +594,7 @@ pub(crate) fn load_more(ui: &mut egui::Ui, view: &MediaView) -> bool {
         .clicked()
 }
 
-/// A followed account's header: Refresh (all accounts), Load more and what the last fetch found.
+/// A followed account's header: Refresh (this account), Load more and what the last fetch found.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn account_header(ui: &mut egui::Ui, view: &mut MediaView, account_dir: &str) -> Option<FollowAct> {
     let mut refresh = None;
@@ -605,7 +605,7 @@ pub(crate) fn account_header(ui: &mut egui::Ui, view: &mut MediaView, account_di
         .unwrap_or(false);
     crate::ui::toolbar(ui, |ui| {
         if crate::ui::command_if(ui, !running, label(icon::ARROW_CLOCKWISE, "Refresh"))
-            .on_hover_text("Look for new posts on every followed account")
+            .on_hover_text("Look for new posts on this account")
             .clicked()
         {
             refresh = Some(FollowAct::Refresh);

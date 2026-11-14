@@ -1116,3 +1116,21 @@ fn the_grid_is_centred() {
     let below = rows.iter().filter(|y| **y > 46).count();
     assert_eq!(above, below, "as many lines above the middle as below: {rows:?}");
 }
+
+/// A layer placed in 3D (here a hair of depth, as a slider leaves it) keeps its fit: a square picture on a 16:9
+/// canvas, Fit, stays square with black either side (it was stretched across the whole canvas).
+#[test]
+fn depth_keeps_the_fit() {
+    let Some(mut engine) = test_engine() else { return };
+    let (w, h) = (160u32, 90u32);
+    let mut comp = Composition { width: w, height: h, ..Default::default() };
+    let mut layer = LayerState { id: 1, source: SourceSpec::Movie { name: "sq".into(), path: Some("sq.png".into()) }, fit: crate::FitMode::Fit, ..Default::default() };
+    layer.transform.z = -0.003;
+    comp.layers.push(layer);
+    engine.upload_rgba(1, 8, 8, &[255u8; 8 * 8 * 4]);
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (ow, _, px) = engine.read_output().expect("output");
+    let at = |x: u32| px[((45 * ow + x) * 4) as usize];
+    assert!(at(80) > 200, "the middle is the picture");
+    assert!(at(10) < 30 && at(150) < 30, "black beside a square picture: {} {}", at(10), at(150));
+}

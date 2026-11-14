@@ -124,7 +124,8 @@ fn fs_composite(in: VOut) -> @location(0) vec4f {
         q.x = q.x / u.p[10].z;
         uv = q / u.p[9].zw + vec2f(0.5);
     }
-    let st = select(uv * u.uv_xform.xy + u.uv_xform.zw, uv, pinned);
+    // A corner pin (p[14].w = 1) fills its quad with the whole picture; a 3D placement (2) keeps the layer's fit.
+    let st = select(uv * u.uv_xform.xy + u.uv_xform.zw, uv, pinned && u.p[14].w < 1.5);
     var s = sample_source(st);
     // Outside the picture, or cropped off (p[11] = left, right, top, bottom).
     let c = u.p[11];
