@@ -181,12 +181,12 @@ impl PhosphorApp {
             A::ShaderFolder | A::LutFolder => {}
             #[cfg(not(target_arch = "wasm32"))]
             A::ShaderFolder => {
-                // ~/Library/Application Support/Phosphor/isf: scanned at startup like VDMX's ISF folders.
+                // The settings folder's isf (Mac: ~/Library/Application Support/Phosphor/isf; Windows: %APPDATA%\Phosphor\data\isf),
+                // scanned at startup like VDMX's ISF folders and watched for new files after.
                 if let Some(dir) = crate::show::storage_dir().map(|d| d.join("isf")) {
                     let _ = std::fs::create_dir_all(&dir);
-                    #[cfg(target_os = "macos")]
                     crate::os::open(&dir);
-                    st.notice = Some(format!("ISF shaders you drop into {} appear in the browsers at the next launch", dir.display()));
+                    st.notice = Some(format!("ISF shaders you drop into {} appear in the browsers within a few seconds", dir.display()));
                 }
             }
             A::Autosave => {
@@ -211,7 +211,7 @@ impl PhosphorApp {
                 if let Some(dir) = crate::show::storage_dir().map(|d| d.join("luts")) {
                     let _ = std::fs::create_dir_all(&dir);
                     crate::os::open(&dir);
-                    st.notice = Some("Colour-grading LUTs (.cube) you drop in this folder become effects (category LUT) at the next launch".into());
+                    st.notice = Some("Colour-grading LUTs (.cube) you drop in this folder become effects (category LUT) within a few seconds".into());
                 }
             }
             A::ReportBug => st.bug.open = true,

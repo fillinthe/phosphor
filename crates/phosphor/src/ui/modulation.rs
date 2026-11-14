@@ -14,9 +14,8 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
         let names = ui.ctx().data(|d| d.get_temp::<std::sync::Arc<Vec<String>>>(egui::Id::new(LAYER_NAMES))).unwrap_or_default();
         let n = values[i].round().max(0.0) as usize;
         let name_of = |k: usize| if k == 0 { "(none)".to_string() } else { names.get(k - 1).cloned().unwrap_or_else(|| format!("Layer {k} (gone)")) };
-        ui.horizontal(|ui| {
-            ui.label(p.name.trim_end_matches(" #"));
-            let r = egui::ComboBox::from_id_salt(("param_layer", p.name, i)).selected_text(name_of(n)).show_ui(ui, |ui| {
+        crate::ui::field(ui, p.name.trim_end_matches(" #"), |ui| {
+            let r = fitted_combo(ui, ("param_layer", p.name, i)).selected_text(name_of(n)).show_ui(ui, |ui| {
                 for k in 0..=names.len().min(p.max as usize) {
                     if crate::ui::pick_item(ui, n == k, name_of(k)).clicked() {
                         values[i] = k as f32;
@@ -31,10 +30,9 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
     }
     // A menu (ISF "long" inputs, the LUT mixer's LUTs): pick a name instead of sliding a number.
     if !p.labels.is_empty() {
-        ui.horizontal(|ui| {
-            ui.label(p.name);
+        crate::ui::field(ui, p.name, |ui| {
             let current = p.label_of(values[i]).unwrap_or("?");
-            let r = egui::ComboBox::from_id_salt(("param_menu", p.name, i)).selected_text(current).show_ui(ui, |ui| {
+            let r = fitted_combo(ui, ("param_menu", p.name, i)).selected_text(current).show_ui(ui, |ui| {
                 for (k, name) in p.labels.iter().enumerate() {
                     let v = p.min + k as f32;
                     if crate::ui::pick_item(ui, (values[i] - v).abs() < 0.5, *name).clicked() {
@@ -76,6 +74,13 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
             (None, None) => {}
         }
     });
+}
+
+/// A setting's menu exactly as wide as the room left in its row, its text cut short (whole in the list). A menu
+/// as wide as its longest name made the row wider than the panel, and egui then lays every row under it out that
+/// wide: the Inspector's buttons on the right (remove, up / down) went out of sight (bug report 2026-11-14, Windows).
+fn fitted_combo(ui: &egui::Ui, id: impl std::hash::Hash + std::fmt::Debug) -> egui::ComboBox {
+    egui::ComboBox::from_id_salt(id).width((ui.available_width() - ui.spacing().item_spacing.x).max(40.0)).truncate()
 }
 
 /// The `~` button next to a control: opens the modulation editor; lit when a signal is attached.

@@ -411,36 +411,42 @@ impl IsfLibrary {
                 let mut luts: Vec<(String, crate::lut::Lut)> = Vec::new();
                 // Every file loaded, with when it was last changed (watched after the first scan).
                 let mut watched: Vec<(std::path::PathBuf, String, String, Option<std::time::SystemTime>)> = Vec::new();
-                for dir in folders() {
-                    for path in shader_files(dir) {
-                        let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
-                        let slug = phosphor_engine::custom::slug(&stem);
-                        // The same shader under a differently spelled name ("Bow Tie Horizontal" / "BowTieHorizontal").
-                        let loose: String = stem.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_lowercase();
-                        if !seen.insert(slug.clone()) || !seen_loose.insert(loose) {
-                            continue;
-                        }
-                        let Ok(fs) = std::fs::read_to_string(&path) else { continue };
-                        watched.push((path.clone(), stem.clone(), slug.clone(), modified(&path)));
-                        // A colour-grading LUT (.cube): an effect of its own.
-                        if path.extension().is_some_and(|e| e == "cube") {
-                            let sent = match crate::lut::parse_cube(&fs) {
-                                Ok(lut) => {
-                                    let effect = lut_effect(&slug, &stem, &lut);
-                                    if luts.len() < 32 {
-                                        luts.push((display_name(&stem), lut));
-                                    }
-                                    tx.send(Found::New(Ok(effect)))
+                let dirs = folders();
+                // One file found (at the first scan, or dropped in a folder later): converted and sent unless a
+                // shader of that name is already loaded. Err = the app has gone (stop the thread).
+                let mut add = |path: std::path::PathBuf, luts: &mut Vec<(String, crate::lut::Lut)>, watched: &mut Vec<_>| -> Result<(), ()> {
+                    let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { return Ok(()) };
+                    let slug = phosphor_engine::custom::slug(&stem);
+                    // The same shader under a differently spelled name ("Bow Tie Horizontal" / "BowTieHorizontal").
+                    let loose: String = stem.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_lowercase();
+                    if seen.contains(&slug) || seen_loose.contains(&loose) {
+                        return Ok(());
+                    }
+                    let Ok(fs) = std::fs::read_to_string(&path) else { return Ok(()) };
+                    seen.insert(slug.clone());
+                    seen_loose.insert(loose);
+                    watched.push((path.clone(), stem.clone(), slug.clone(), modified(&path)));
+                    // A colour-grading LUT (.cube): an effect of its own.
+                    let found = if path.extension().is_some_and(|e| e == "cube") {
+                        match crate::lut::parse_cube(&fs) {
+                            Ok(lut) => {
+                                let effect = lut_effect(&slug, &stem, &lut);
+                                if luts.len() < 32 {
+                                    luts.push((display_name(&stem), lut));
                                 }
-                                Err(e) => tx.send(Found::New(Err(format!("{stem}.cube: {e}")))),
-                            };
-                            if sent.is_err() {
-                                return;
+                                Ok(effect)
                             }
-                            continue;
+                            Err(e) => Err(format!("{stem}.cube: {e}")),
                         }
-                        let Some(result) = load(&path, &stem, &slug, fs) else { continue };
-                        if tx.send(Found::New(result)).is_err() {
+                    } else {
+                        let Some(result) = load(&path, &stem, &slug, fs) else { return Ok(()) };
+                        result
+                    };
+                    tx.send(Found::New(found)).map_err(|_| ())
+                };
+                for dir in &dirs {
+                    for path in shader_files(dir.clone()) {
+                        if add(path, &mut luts, &mut watched).is_err() {
                             return;
                         }
                     }
@@ -453,9 +459,21 @@ impl IsfLibrary {
                 if tx.send(Found::ScanDone).is_err() {
                     return;
                 }
-                // Then watch: a file saved again (in an editor) is converted again and replaces the old one.
+                // Then watch: a file saved again (in an editor) is converted again and replaces the old one, and a file
+                // dropped into one of your folders is added (it took a restart before: bug report 2026-11-14). The
+                // folders Phosphor ships aren't looked at again (they only change with an update).
+                let shipped: Vec<std::path::PathBuf> = ["isf", "luts", "gl-transitions"].into_iter().filter_map(bundled).collect();
+                let yours: Vec<std::path::PathBuf> = dirs.into_iter().filter(|d| !shipped.contains(d) && !d.starts_with("/Applications")).collect();
+                let mut luts_later = Vec::new();
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(2));
+                    for dir in &yours {
+                        for path in shader_files(dir.clone()) {
+                            if !watched.iter().any(|(p, ..)| *p == path) && add(path, &mut luts_later, &mut watched).is_err() {
+                                return;
+                            }
+                        }
+                    }
                     for (path, stem, slug, when) in &mut watched {
                         let now = modified(path);
                         if now == *when {
@@ -486,6 +504,9 @@ impl IsfLibrary {
         loop {
             match rx.try_recv() {
                 Ok(Found::New(Ok(l))) => {
+                    if !self.scanning {
+                        log::info!("ISF: {} added (new file in a shader folder)", l.name);
+                    }
                     register(engine, l);
                     self.loaded += 1;
                 }
