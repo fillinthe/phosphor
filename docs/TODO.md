@@ -16,6 +16,17 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       camera through it; audience phones get a game pad (up / down / left / right, A, B) on the Play page that steers
       it. A world built in Unreal / Unity: either exported as glTF, or run in its own engine and sent in over
       NDI / Spout / Syphon with the pad forwarded to it as OSC. Plan: docs/design/game-pad.md (build week of 2026-11-16).
+- [ ] **Import Morpholio Trace files** (.morpholiotrace, owner 2026-11-14; sample in `_local/samples/`, not in git): a
+      zip of `data-books.plist` (the layers in order: title, hidden, opacity, blend, a 4×4 transform, `drawingToken`),
+      one 4096×4096 transparent PNG per layer (`<token>_original.png`), and a SQLite file with each layer's pen
+      strokes (`stroke_<token>`: NSKeyedArchiver blobs, readable with `import::keyed::unarchive`) and tiles. Plan: each
+      drawing layer → a Phosphor layer (name, on / off, opacity, placed by its transform), PNGs copied beside the
+      project; later the strokes as lines that draw themselves on (and for lasers).
+- [ ] **Tidy the project folders** (owner 2026-11-14): everything Phosphor in one folder. Now beside
+      it: `phosphor-next` (the work tree every build uses), `phosphor-web-archive` (deploy script; a permission rule
+      names its path), `phosphor-private`, `phosphor-private-docs`, two history backup bundles, two instruction
+      backups. Proposal: move them under `phosphor/_local/` (git-ignored) and fix the paths in scripts, memory notes
+      and the permission rule in one go; ask before doing it.
 - [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
       same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
       add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.
