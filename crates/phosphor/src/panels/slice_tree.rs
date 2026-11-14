@@ -72,15 +72,6 @@ pub(super) fn slice_rows(ui: &mut egui::Ui, mapping: &mut Mapping, selected: &mu
 /// Slice and mask rows being dragged in the list (the whole selection when the row is part of it).
 struct RowDrag(Vec<u64>);
 
-/// Makes a slice / mask row draggable (clicks still reach the row), and returns rows dropped on it.
-fn row_drag(ui: &egui::Ui, r: &egui::Response, id: u64, picked: &[u64]) -> Option<Vec<u64>> {
-    let grab = ui.interact(r.rect, r.id.with("row_drag"), Sense::drag());
-    if grab.drag_started() {
-        grab.dnd_set_drag_payload(RowDrag(if picked.contains(&id) { picked.to_vec() } else { vec![id] }));
-    }
-    drop_rows(ui, r)
-}
-
 /// Rows dropped on `r` (a row, a group, a layout button); it's outlined while rows hover over it.
 fn drop_rows(ui: &egui::Ui, r: &egui::Response) -> Option<Vec<u64>> {
     if r.dnd_hover_payload::<RowDrag>().is_some() {
@@ -212,46 +203,122 @@ fn level(ui: &mut egui::Ui, mapping: &mut Mapping, parent: Option<u64>, depth: u
     let ids: Vec<u64> = mapping.surfaces.iter().filter(|s| s.group == parent).map(|s| s.id).collect();
     for id in ids {
         let Some(i) = mapping.surfaces.iter().position(|s| s.id == id) else { continue };
-        crate::ui::toolbar(ui, |ui| {
-            ui.add_space(indent);
-            let s = &mut mapping.surfaces[i];
-            crate::ui::eye_toggle(ui, &mut s.enabled);
-            let r = crate::ui::pick_item(ui, picked.contains(&s.id), format!("{} {}", icon::POLYGON, s.name)).on_hover_text("Shift-click to select several · drag onto a layout, a group or another row to move it there");
-            if r.clicked() {
-                let shift = ui.input(|i| i.modifiers.shift);
-                super::mapping_points::click_slice(ui.ctx(), selected, id, shift);
+        let mut solo = mapping.solo.contains(&id);
+        let was_solo = solo;
+        let s = &mut mapping.surfaces[i];
+        if let Some(name) = crate::ui::renamed(ui.ctx(), ("slice_name", id)) {
+            s.name = name;
+        }
+        let name = s.name.clone();
+        let is_picked = picked.contains(&id);
+        let (enabled, opacity, locked) = (&mut s.enabled, &mut s.opacity, &mut s.locked);
+        // A narrow list keeps the name readable: the fader stays, solo and lock show once there's room (a locked
+        // or soloed row always shows its own, so you can see why it won't move / why the rest is dark).
+        let room = ui.available_width() - indent;
+        let r = layer_row(ui, indent, is_picked, icon::POLYGON, &name, None, enabled, |ui| {
+            Level::percent(opacity, "").default(1.0).width(FADE_W).target(ControlTarget::SliceOpacity(id)).tip("This slice's opacity").show(ui);
+            if room > 300.0 || *locked {
+                let glyph = if *locked { icon::LOCK } else { icon::LOCK_OPEN };
+                crate::ui::icon_toggle(ui, locked, glyph).on_hover_text("Locked: its points can't be dragged or nudged");
             }
-            if let Some(rows) = row_drag(ui, &r, id, &picked) {
-                edits.push(Edit::NextTo(rows, id));
+            if room > 300.0 || solo {
+                crate::ui::icon_toggle(ui, &mut solo, "S").on_hover_text("Solo: the output shows only the soloed slices (to see which is which on the real object)");
             }
-            row_menu(&r, id, s.group, &picked, &groups_now, true, acts, edits);
         });
+        row_clicks(ui, &r, id, &name, &picked, selected, edits);
+        row_menu(&r, id, &name, s.group, &picked, &groups_now, Some(&mut s.blend), acts, edits);
+        if solo != was_solo {
+            if solo {
+                mapping.solo.push(id);
+            } else {
+                mapping.solo.retain(|x| *x != id);
+            }
+        }
     }
     let masks: Vec<u64> = mapping.masks.iter().filter(|m| m.group == parent).map(|m| m.id).collect();
     for id in masks {
         let Some(m) = mapping.masks.iter_mut().find(|m| m.id == id) else { continue };
-        crate::ui::toolbar(ui, |ui| {
-            ui.add_space(indent);
-            let eye = crate::ui::eye_toggle(ui, &mut m.enabled);
-            crate::ui::map_menu(ui, &eye, ControlTarget::MaskEnabled(id));
-            let r = crate::ui::pick_item(ui, picked.contains(&id) || *selected == Some(id), RichText::new(format!("{} {}", icon::SELECTION, m.name)).color(MASK_COLOR)).on_hover_text("Shift-click to select several · drag onto a layout, a group or another row to move it there");
-            if r.clicked() {
-                let shift = ui.input(|i| i.modifiers.shift);
-                super::mapping_points::click_slice(ui.ctx(), selected, id, shift);
+        if let Some(name) = crate::ui::renamed(ui.ctx(), ("slice_name", id)) {
+            m.name = name;
+        }
+        let name = m.name.clone();
+        let is_picked = picked.contains(&id) || *selected == Some(id);
+        let (enabled, opacity, invert) = (&mut m.enabled, &mut m.opacity, &mut m.invert);
+        let r = layer_row(ui, indent, is_picked, icon::SELECTION, &name, Some(MASK_COLOR), enabled, |ui| {
+            Level::percent(opacity, "").default(1.0).width(FADE_W).tip("How strongly this mask hides").show(ui);
+            if ui.available_width() > 150.0 || *invert {
+                crate::ui::icon_toggle(ui, invert, icon::SELECTION_INVERSE).on_hover_text("Inverted: only the inside of the mask shows");
             }
-            if let Some(rows) = row_drag(ui, &r, id, &picked) {
-                edits.push(Edit::NextTo(rows, id));
-            }
-            row_menu(&r, id, m.group, &picked, &groups_now, false, acts, edits);
         });
+        row_clicks(ui, &r, id, &name, &picked, selected, edits);
+        row_menu(&r, id, &name, m.group, &picked, &groups_now, None, acts, edits);
     }
+}
+
+/// A row's opacity fader (slices, masks) is this wide, so they line up down the list.
+const FADE_W: f32 = 52.0;
+
+/// One slice or mask as a layer row across the whole list: a grip, its eye, its kind and name, and `tail` (its own
+/// controls, added from the right edge). The whole row is the thing you click, drag and right-click (owner,
+/// 2026-11-14: "more like layers and not chips").
+#[allow(clippy::too_many_arguments)]
+fn layer_row(ui: &mut egui::Ui, indent: f32, picked: bool, glyph: &str, name: &str, colour: Option<Color32>, shown: &mut bool, tail: impl FnOnce(&mut egui::Ui)) -> egui::Response {
+    let h = crate::ui::CONTROL_H + 6.0;
+    let (outer, row) = ui.allocate_exact_size(egui::vec2(ui.available_width(), h), Sense::click_and_drag());
+    let rect = egui::Rect::from_min_max(outer.min + egui::vec2(indent, 0.0), outer.max).shrink2(egui::vec2(0.0, 1.0));
+    let fill = if picked { ui.visuals().selection.bg_fill } else if row.hovered() { ui.visuals().widgets.hovered.weak_bg_fill } else { ui.visuals().faint_bg_color };
+    ui.painter().rect_filled(rect, 0.0, fill);
+    // Its kind down the left edge (a mask is the mask colour).
+    let edge = colour.unwrap_or_else(accent);
+    ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(3.0, rect.height())), 0.0, if *shown { edge } else { edge.gamma_multiply(0.35) });
+    let words = if !*shown { ui.visuals().weak_text_color() } else { colour.unwrap_or_else(|| ui.visuals().strong_text_color()) };
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect.shrink2(egui::vec2(6.0, 0.0))).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
+        tail(ui);
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.add(egui::Label::new(RichText::new(icon::DOTS_SIX_VERTICAL).color(ui.visuals().weak_text_color())).selectable(false));
+            crate::ui::eye_toggle(ui, shown);
+            ui.add(egui::Label::new(RichText::new(format!("{glyph} {name}")).color(words)).truncate().selectable(false));
+        });
+    });
+    row
+}
+
+/// A layer row's clicks: select (Shift adds), double-click renames, drag moves it, rows dropped on it land before it.
+fn row_clicks(ui: &egui::Ui, r: &egui::Response, id: u64, name: &str, picked: &[u64], selected: &mut Option<u64>, edits: &mut Vec<Edit>) {
+    if r.double_clicked() {
+        crate::ui::ask_rename(ui.ctx(), ("slice_name", id), name);
+    } else if r.clicked() {
+        let shift = ui.input(|i| i.modifiers.shift);
+        super::mapping_points::click_slice(ui.ctx(), selected, id, shift);
+    }
+    if r.drag_started() {
+        r.dnd_set_drag_payload(RowDrag(if picked.contains(&id) { picked.to_vec() } else { vec![id] }));
+    }
+    if let Some(rows) = drop_rows(ui, r) {
+        edits.push(Edit::NextTo(rows, id));
+    }
+    r.clone().on_hover_text("Click to select (Shift adds) · double-click to rename · drag onto a layout, a group or another row · right-click for more");
 }
 
 /// The right-click menu of a slice or mask row (on the whole selection when the row is part of it).
 #[allow(clippy::too_many_arguments)]
-fn row_menu(r: &egui::Response, id: u64, group: Option<u64>, picked: &[u64], groups: &[(u64, String, usize)], slice: bool, acts: &mut Vec<SliceAct>, edits: &mut Vec<Edit>) {
+fn row_menu(r: &egui::Response, id: u64, name: &str, group: Option<u64>, picked: &[u64], groups: &[(u64, String, usize)], mut blend: Option<&mut phosphor_engine::mapping::SliceBlend>, acts: &mut Vec<SliceAct>, edits: &mut Vec<Edit>) {
     let these: Vec<u64> = if picked.contains(&id) { picked.to_vec() } else { vec![id] };
+    let slice = blend.is_some();
     r.right_menu(|ui| {
+        crate::ui::rename_item(ui, ("slice_name", id), name);
+        // How a slice lands on the ones under it.
+        if let Some(blend) = blend.as_deref_mut() {
+            ui.menu_button(label(icon::CIRCLES_THREE, &format!("Blend: {}", blend.name())), |ui| {
+                for b in phosphor_engine::mapping::SliceBlend::ALL {
+                    if crate::ui::pick_item(ui, *blend == b, b.name()).clicked() {
+                        *blend = b;
+                        ui.close();
+                    }
+                }
+            });
+        }
+        ui.separator();
         let n = these.len();
         let text = if n > 1 { format!("Group these {n}") } else { "Put in a new group".into() };
         if crate::ui::command(ui, label(icon::FOLDER_PLUS, &text)).clicked() {
