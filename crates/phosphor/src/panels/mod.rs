@@ -367,6 +367,14 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 }
 
+/// Temp-data key: layers whose video is decoded on the CPU (layer id → codec and size), refreshed once a second.
+pub(crate) const CPU_LAYERS: &str = "phosphor_cpu_layers";
+
+/// A layer decoding its video on the CPU: its codec and size (cards and clip rows warn).
+pub(crate) fn cpu_heavy(ctx: &egui::Context, layer: u64) -> Option<String> {
+    ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, String>>)>(egui::Id::new(CPU_LAYERS))).and_then(|(_, m)| m.get(&layer).cloned())
+}
+
 /// Draws one panel (the dock and the areas both use this).
 pub(crate) fn draw_tab(ui: &mut egui::Ui, st: &mut State, tab: Tab) {
     match tab {

@@ -1635,7 +1635,6 @@
 "Its cycle follows the tempo": "周期跟随速度",
 "Its effects": "其效果",
 "Its files leave the bin; the folder stays on disk": "其文件会离开媒体库;文件夹仍留在磁盘上",
-"Its newest clips come into Media and stay on this Mac (X: animated GIFs; Instagram: videos). Refresh brings in new posts.": "其最新片段进入媒体并保留在这台 Mac 上(X:动图 GIF;Instagram:视频)。刷新会载入新帖子。",
 "Its own channels (from the library)": "自己的通道(来自素材库)",
 "Its own effects (in order):": "自有效果(按顺序):",
 "Its own effects: {0}": "自有效果:{0}",
@@ -4670,5 +4669,8 @@
 "~small.jpg": "~small.jpg",
 "· clip {0} (column {1})": "· 片段 {0}(第 {1} 列)",
 "…/recording.mp4 or .mov (ProRes)": "…/recording.mp4 或 .mov (ProRes)",
-"…/show.mp4 or .mov (ProRes)": "…/show.mp4 或 .mov (ProRes)"
+"…/show.mp4 or .mov (ProRes)": "…/show.mp4 或 .mov (ProRes)",
+"Its newest clips come into Media and stay on this Mac (X: animated GIFs, and videos if you switch them on; Instagram: videos). Refresh brings in new posts.": "最新的片段会进入媒体并保存在这台 Mac 上(X:动图，打开后也包括视频；Instagram:视频)。刷新会拉取新帖子。",
+"Videos too": "也要视频",
+"Bring in this account's videos as well as its animated GIFs (Refresh to get them)": "除了动图外，也获取此账号的视频（刷新即可获取）"
 }

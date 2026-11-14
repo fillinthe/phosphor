@@ -53,16 +53,18 @@ pub struct Account {
     /// The account (for your likes / bookmarks on X: unused; for your Instagram saved posts: your name).
     pub name: String,
     pub feed: Feed,
+    /// X: its videos come in too, not only animated GIFs (owner, 2026-11-14; off by default, as before).
+    pub videos: bool,
 }
 
 impl Account {
     pub fn new(site: Site, name: &str) -> Account {
-        Account { site, name: name.to_string(), feed: Feed::Posts }
+        Account { site, name: name.to_string(), feed: Feed::Posts, videos: false }
     }
 
     /// One of your own lists: X likes / bookmarks, Instagram saved (needs your name).
     pub fn mine(site: Site, feed: Feed, name: &str) -> Account {
-        Account { site, name: name.to_string(), feed }
+        Account { site, name: name.to_string(), feed, videos: false }
     }
 
     /// Its folder's name and how it's listed: "@name (X)", "My likes (X)", "My saved (Instagram)".
@@ -337,7 +339,8 @@ pub fn parse(account: &Account, body: &[u8]) -> Result<Vec<Item>, String> {
         let (wanted, post, page, words) = match account.site {
             Site::X => {
                 let post = text("tweet_id");
-                (info["type"].as_str() == Some("animated_gif"), post.clone(), format!("https://x.com/{}/status/{post}", author), text("content"))
+                let kind = info["type"].as_str();
+                (kind == Some("animated_gif") || (account.videos && kind == Some("video")), post.clone(), format!("https://x.com/{}/status/{post}", author), text("content"))
             }
             Site::Instagram => {
                 let code = text("post_shortcode");
@@ -508,6 +511,16 @@ mod tests {
         assert_eq!(handle("https://x.com/nasa/media"), Some((Some(Site::X), "nasa".into())));
         assert_eq!(handle("instagram.com/some.artist/"), Some((Some(Site::Instagram), "some.artist".into())));
         assert_eq!(handle("not an account!"), None);
+    }
+
+    #[test]
+    fn x_videos_come_in_when_asked() {
+        let listing = br#"[[3, "https://video.twimg.com/tweet_video/G.mp4", {"tweet_id": 5, "type": "animated_gif"}],
+            [3, "https://video.twimg.com/ext_tw_video/7/pu/vid/V.mp4", {"tweet_id": 7, "type": "video"}],
+            [3, "https://pbs.twimg.com/media/P.jpg?name=orig", {"tweet_id": 6, "type": "photo"}]]"#;
+        assert_eq!(parse(&Account::new(Site::X, "a"), listing).unwrap().len(), 1, "GIFs only by default");
+        let with = Account { videos: true, ..Account::new(Site::X, "a") };
+        assert_eq!(parse(&with, listing).unwrap().len(), 2, "GIFs and videos, never photos");
     }
 
     #[test]
