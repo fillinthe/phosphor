@@ -4,6 +4,16 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.5 (2026-11-14)
+
+**Inspector**
+- An effect whose setting is a menu with long names no longer pushes the panel's buttons (hide, up / down, remove)
+  out of sight: the menu fits the panel and its text is cut short.
+
+**ISF shaders**
+- A shader or LUT you drop into your ISF or LUT folder appears within a few seconds, without restarting Phosphor.
+- Windows and Linux: File › Open ISF Shader Folder opens the folder (it only showed a message before).
+
 ## 0.5.4 (2026-11-13)
 
 **Windows**
