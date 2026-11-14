@@ -146,9 +146,13 @@ fn fs_grid(in: VOut) -> @location(0) vec4f {
     let px = in.uv * u.resolution;
     let cell = u.resolution.x / max(u.p[0].x, 1.0);
     let half = u.p[0].y * 0.5;
-    // Distance to the nearest grid line, in pixels (both axes).
-    let gx = abs(fract(px.x / cell + 0.5) - 0.5) * cell;
-    let gy = abs(fract(px.y / cell + 0.5) - 0.5) * cell;
+    // Distance to the nearest grid line, in pixels (both axes), counted out from the centre: the lines mirror each
+    // other round the middle (a line through it, any part cell at both edges alike). Counted from the top left, a
+    // 16:9 output got 4½ square rows: a part row at the bottom only, so the grid looked off centre on the projector
+    // (owner, 2026-11-14).
+    let g = px - u.resolution * 0.5;
+    let gx = abs(fract(g.x / cell + 0.5) - 0.5) * cell;
+    let gy = abs(fract(g.y / cell + 0.5) - 0.5) * cell;
     var a = max(1.0 - smoothstep(half - 0.5, half + 0.5, min(gx, gy)), 0.0) * 0.55;
     if u.p[0].z > 0.5 {
         let c = u.resolution * 0.5;
@@ -179,7 +183,7 @@ fn fs_grid(in: VOut) -> @location(0) vec4f {
         case 2u: { c = bar; }
         case 3u: { c = vec3f(1.0); }
         case 4u: {
-            let k = floor(px / cell);
+            let k = floor((px - u.resolution * 0.5) / cell) + vec2f(1000.0);
             c = vec3f(f32((u32(k.x) + u32(k.y)) % 2u));
         }
         case 5u: { c = vec3f(min(step, 1.0)); }
