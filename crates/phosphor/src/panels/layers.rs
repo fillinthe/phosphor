@@ -235,6 +235,11 @@ pub(crate) struct CardOut {
 
 /// What's changed on a layer as (badge, what it means): the clip's effects, speed / direction, trim, moved,
 /// animated. The layer's own effects are the "N fx" toggle.
+/// What a layer's card says when its video is decoded on the CPU (`panels::cpu_heavy`).
+pub(crate) fn cpu_words(codec: &str) -> String {
+    format!("{} {codec} is decoded on the CPU: the Mac works hard (Media › right-click the file › Convert… › Hap plays it on the GPU)", icon::CPU)
+}
+
 pub(crate) fn mark_list(m: &phosphor_engine::LayerMarks) -> Vec<(String, &'static str)> {
     let mut out = Vec::new();
     if m.clip_fx > 0 {
@@ -419,6 +424,9 @@ pub(crate) fn layer_card(
                 });
             });
         });
+        if let Some(codec) = super::cpu_heavy(ui.ctx(), layer.id) {
+            ui.colored_label(WARN, cpu_words(&codec));
+        }
         if let Some(err) = err {
             ui.colored_label(WARN, err);
         }

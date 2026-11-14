@@ -810,6 +810,25 @@ impl MediaManager {
         }
     }
 
+    /// A movie layer whose picture is decoded on the CPU and big enough to cost (720p and up, not Hap, which goes
+    /// to the GPU as it is): its codec and size, for a warning on its card. None for anything cheap.
+    pub fn cpu_heavy(&self, layer: u64) -> Option<String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let p = self.players.get(&layer)?;
+            let s = p.stats();
+            let (w, h) = p.size();
+            let codec = s.codec.to_lowercase();
+            let cheap = s.hardware || codec.starts_with("hap") || p.is_live() || (w as u64) * (h as u64) < 1280 * 720 || s.frames_decoded < 10;
+            return (!cheap).then(|| format!("{} {w}×{h}", s.codec.to_uppercase()));
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = layer;
+            None
+        }
+    }
+
     /// Codec and decoder details for a movie layer, for the Inspector.
     pub fn video_info(&self, layer: u64) -> Option<String> {
         #[cfg(not(target_arch = "wasm32"))]

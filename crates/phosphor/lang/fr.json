@@ -1635,7 +1635,6 @@
 "Its cycle follows the tempo": "Son cycle suit le tempo",
 "Its effects": "Ses effets",
 "Its files leave the bin; the folder stays on disk": "Ses fichiers quittent la bibliothèque ; le dossier reste sur le disque",
-"Its newest clips come into Media and stay on this Mac (X: animated GIFs; Instagram: videos). Refresh brings in new posts.": "Ses clips les plus récents arrivent dans Médias et restent sur ce Mac (X : GIF animés ; Instagram : vidéos). Actualiser ramène les nouveaux posts.",
 "Its own channels (from the library)": "Ses propres canaux (depuis la bibliothèque)",
 "Its own effects (in order):": "Ses propres effets (dans l’ordre) :",
 "Its own effects: {0}": "Ses propres effets : {0}",
@@ -4670,5 +4669,8 @@
 "~small.jpg": "~small.jpg",
 "· clip {0} (column {1})": "· clip {0} (colonne {1})",
 "…/recording.mp4 or .mov (ProRes)": "…/enregistrement.mp4 ou .mov (ProRes)",
-"…/show.mp4 or .mov (ProRes)": "…/show.mp4 ou .mov (ProRes)"
+"…/show.mp4 or .mov (ProRes)": "…/show.mp4 ou .mov (ProRes)",
+"Its newest clips come into Media and stay on this Mac (X: animated GIFs, and videos if you switch them on; Instagram: videos). Refresh brings in new posts.": "Ses clips les plus récents arrivent dans Médias et restent sur ce Mac (X : GIF animés, et vidéos si vous les activez ; Instagram : vidéos). Actualiser récupère les nouveaux posts.",
+"Videos too": "Vidéos aussi",
+"Bring in this account's videos as well as its animated GIFs (Refresh to get them)": "Récupérer aussi les vidéos de ce compte, en plus de ses GIF animés (Actualiser les télécharge)"
 }

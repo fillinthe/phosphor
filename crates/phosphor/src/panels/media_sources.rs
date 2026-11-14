@@ -493,7 +493,7 @@ pub(crate) fn follow_box(ui: &mut egui::Ui, view: &mut MediaView) -> Option<crat
     use crate::online::following::{Account, Feed, Site, handle};
     let mut out = None;
     egui::Frame::group(ui.style()).show(ui, |ui| {
-        crate::ui::heading_help(ui, label(icon::PLUS, "Follow an account"), "Its newest clips come into Media and stay on this Mac (X: animated GIFs; Instagram: videos). Refresh brings in new posts.");
+        crate::ui::heading_help(ui, label(icon::PLUS, "Follow an account"), "Its newest clips come into Media and stay on this Mac (X: animated GIFs, and videos if you switch them on; Instagram: videos). Refresh brings in new posts.");
         let r = crate::ui::text_field(ui, &mut view.follow_text, "@name or a link to the account", Some(ui.available_width().min(320.0)));
         let typed = handle(&view.follow_text);
         if let Some((Some(site), _)) = &typed {
@@ -634,6 +634,12 @@ pub(crate) fn account_header(ui: &mut egui::Ui, view: &mut MediaView, account_di
             hint(ui, l);
         }
     });
+    // X accounts: GIFs only, or their videos too (the next Refresh brings them in).
+    if let Some(a) = view.following.accounts.iter_mut().find(|a| a.site == crate::online::following::Site::X && a.feed == crate::online::following::Feed::Posts && a.dir().is_some_and(|d| d.to_string_lossy() == account_dir)) {
+        if crate::ui::toggle(ui, &mut a.videos, label(icon::FILM_STRIP, "Videos too")).on_hover_text("Bring in this account's videos as well as its animated GIFs (Refresh to get them)").changed() {
+            view.following.save();
+        }
+    }
     crate::ui::toolbar(ui, |ui| {
         if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Keep all"))
             .on_hover_text("Copy this account's clips (with their credits) into your library folder, to hold onto them")

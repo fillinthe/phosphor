@@ -353,6 +353,10 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
         if m.fx > 0 {
             badges.insert(0, (format!("{} fx", m.fx), "The layer's own effects"));
         }
+        let cpu = super::cpu_heavy(ui.ctx(), layer.id).map(|c| super::layers::cpu_words(&c));
+        if let Some(words) = &cpu {
+            badges.insert(0, (icon::CPU.to_string(), words.as_str()));
+        }
         let marks = super::layers::badge_chip(p, pic, &badges);
         if r.on_hover_text(format!("Click to edit this layer (Inspector){marks}")).clicked() {
             *selected = Some(layer.id);
