@@ -50,11 +50,14 @@ pub struct ShapeTransform {
     pub scale_x_mod: Option<Modulation>,
     pub scale_y_mod: Option<Modulation>,
     pub rotation_mod: Option<Modulation>,
+    /// Scale X and Y move together (keeping the shape's proportions): one Scale slider, and a controller or
+    /// modulation on Scale X stretches Y alike. Off by default (old projects as they were).
+    pub scale_linked: bool,
 }
 
 impl Default for ShapeTransform {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, scale_x: 1.0, scale_y: 1.0, rotation: 0.0, x_mod: None, y_mod: None, scale_x_mod: None, scale_y_mod: None, rotation_mod: None }
+        Self { x: 0.0, y: 0.0, scale_x: 1.0, scale_y: 1.0, rotation: 0.0, x_mod: None, y_mod: None, scale_x_mod: None, scale_y_mod: None, rotation_mod: None, scale_linked: false }
     }
 }
 
@@ -124,15 +127,38 @@ impl ShapeTransform {
 
     /// Sets value `part` from 0..1 across its range.
     pub fn set_unit(&mut self, part: usize, u: f32) {
-        *self.part_mut(part).0 = Self::PARTS[part.min(4)].from_unit(u);
+        let v = Self::PARTS[part.min(4)].from_unit(u);
+        if self.scale_linked && (part == 2 || part == 3) {
+            self.set_scale_linked(part, v);
+        } else {
+            *self.part_mut(part).0 = v;
+        }
+    }
+
+    /// Scale X (`part` 2) or Y (3) to `v`, the other following so the proportions stay.
+    pub fn set_scale_linked(&mut self, part: usize, v: f32) {
+        let (min, max) = (Self::PARTS[2].min, Self::PARTS[2].max);
+        let (from, other) = if part == 2 { (self.scale_x, self.scale_y) } else { (self.scale_y, self.scale_x) };
+        let k = if from.abs() > 1e-6 { v / from } else { 1.0 };
+        let other = (other * k).clamp(min, max);
+        if part == 2 {
+            (self.scale_x, self.scale_y) = (v, other);
+        } else {
+            (self.scale_y, self.scale_x) = (v, other);
+        }
     }
 
     /// The five values now, modulation included.
     pub fn values(&self, mods: &ModInputs) -> [f32; 5] {
-        std::array::from_fn(|i| {
+        let mut out: [f32; 5] = std::array::from_fn(|i| {
             let (v, m) = self.part(i);
             modulate(v, Self::PARTS[i].min, Self::PARTS[i].max, m, mods)
-        })
+        });
+        // Linked: Y follows X's movement (its own proportion to X kept).
+        if self.scale_linked && self.scale_x.abs() > 1e-6 {
+            out[3] = out[2] * self.scale_y / self.scale_x;
+        }
+        out
     }
 
     /// Something moves it over time (a modulation on any value).
@@ -142,7 +168,8 @@ impl ShapeTransform {
 
     /// Does nothing (and nothing animates it).
     pub fn is_identity(&self) -> bool {
-        *self == Self::default()
+        // (The link alone moves nothing.)
+        *self == Self { scale_linked: self.scale_linked, ..Self::default() }
     }
 
     /// `shape` moved, stretched and turned by this transform at `mods`, round its own centre (`aspect` = output width
@@ -168,6 +195,25 @@ impl ShapeTransform {
 mod tests {
     use super::*;
     use crate::mapping::Mask;
+
+    #[test]
+    fn linked_scale_keeps_proportions() {
+        let mut t = ShapeTransform { scale_x: 1.0, scale_y: 0.5, scale_linked: true, ..Default::default() };
+        t.set_scale_linked(2, 2.0);
+        assert_eq!((t.scale_x, t.scale_y), (2.0, 1.0));
+        // From a controller on Scale Y: X follows.
+        t.set_unit(3, ShapeTransform::PARTS[3].to_unit(0.5));
+        assert!((t.scale_x - 1.0).abs() < 1e-3 && (t.scale_y - 0.5).abs() < 1e-3, "{t:?}");
+        // Modulation / playback: Y keeps its proportion to X.
+        let v = t.values(&ModInputs::default());
+        assert!((v[3] - v[2] * 0.5).abs() < 1e-3, "{v:?}");
+        // Linking alone is still "as drawn".
+        assert!(ShapeTransform { scale_linked: true, ..Default::default() }.is_identity());
+        // Unlinked: each on its own.
+        let mut u = ShapeTransform::default();
+        u.set_unit(2, ShapeTransform::PARTS[2].to_unit(2.0));
+        assert_eq!(u.scale_y, 1.0);
+    }
 
     fn square() -> Mask {
         Mask { points: vec![[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], ..Default::default() }

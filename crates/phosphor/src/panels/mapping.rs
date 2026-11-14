@@ -1276,6 +1276,27 @@ pub(crate) fn shape_transform_editor(ui: &mut egui::Ui, t: &mut phosphor_engine:
         }
     });
     for (i, p) in ShapeTransform::PARTS.iter().enumerate() {
+        // Linked: one Scale slider (on X) with the link switch beside it; Y follows, keeping the proportions.
+        if t.scale_linked && i == 3 {
+            continue;
+        }
+        if i == 2 {
+            ui.horizontal(|ui| {
+                let linked = t.scale_linked;
+                let before = t.scale_x;
+                let room = ui.available_width() - crate::ui::CONTROL_H - ui.spacing().item_spacing.x;
+                let (value, modulation) = t.part_mut(2);
+                Level::range(value, p.min, p.max, if linked { "Scale" } else { p.name }).default(p.default).modulation(modulation).target(target(2)).width(room).log().show(ui);
+                if linked && t.scale_x != before {
+                    let now = t.scale_x;
+                    t.scale_x = before;
+                    t.set_scale_linked(2, now);
+                }
+                let glyph = if linked { icon::LINK } else { icon::LINK_BREAK };
+                crate::ui::icon_toggle(ui, &mut t.scale_linked, glyph).on_hover_text(if linked { "X and Y scale together (keeping the proportions): click to set them apart" } else { "Link X and Y: one Scale slider that keeps the proportions" });
+            });
+            continue;
+        }
         let (value, modulation) = t.part_mut(i);
         let level = Level::range(value, p.min, p.max, p.name).default(p.default).modulation(modulation).target(target(i as u8));
         if p.log { level.log() } else { level }.show(ui);
