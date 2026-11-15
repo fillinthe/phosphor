@@ -736,10 +736,14 @@ pub enum SliceBlend {
     Screen,
     /// Darkens: only lets through what's under it.
     Multiply,
+    /// The brighter of the two wins (no build-up where slices overlap).
+    Lighten,
+    /// Takes its light away from what's under it.
+    Subtract,
 }
 
 impl SliceBlend {
-    pub const ALL: [SliceBlend; 4] = [SliceBlend::Normal, SliceBlend::Add, SliceBlend::Screen, SliceBlend::Multiply];
+    pub const ALL: [SliceBlend; 6] = [SliceBlend::Normal, SliceBlend::Add, SliceBlend::Screen, SliceBlend::Multiply, SliceBlend::Lighten, SliceBlend::Subtract];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -747,6 +751,8 @@ impl SliceBlend {
             SliceBlend::Add => "Add",
             SliceBlend::Screen => "Screen",
             SliceBlend::Multiply => "Multiply",
+            SliceBlend::Lighten => "Lighten",
+            SliceBlend::Subtract => "Subtract",
         }
     }
 
@@ -761,6 +767,24 @@ impl SliceBlend {
             (true, SliceBlend::Add) => "fs_mesh_add",
             (true, SliceBlend::Screen) => "fs_mesh_screen",
             (true, SliceBlend::Multiply) => "fs_mesh_mul",
+            (false, SliceBlend::Lighten) => "fs_surface_lighten",
+            (false, SliceBlend::Subtract) => "fs_surface_sub",
+            (true, SliceBlend::Lighten) => "fs_mesh_lighten",
+            (true, SliceBlend::Subtract) => "fs_mesh_sub",
+        }
+    }
+}
+
+impl SliceBlend {
+    /// The entry that pastes a slice drawn on its own picture (cut by its masks) onto the output, blended this way.
+    pub fn paste_entry(self) -> &'static str {
+        match self {
+            SliceBlend::Normal => "fs_paste",
+            SliceBlend::Add => "fs_paste_add",
+            SliceBlend::Screen => "fs_paste_screen",
+            SliceBlend::Multiply => "fs_paste_mul",
+            SliceBlend::Lighten => "fs_paste_lighten",
+            SliceBlend::Subtract => "fs_paste_sub",
         }
     }
 }
@@ -1914,6 +1938,15 @@ impl Mapping {
     }
 
     /// Attaches mask `mask` to slice `slice` (or detaches it with None), keeping it where it is on the output.
+    /// A new mask on slice `slice`: a box in its middle that moves and warps with it, in the slice's group.
+    pub fn add_mask_on(&mut self, id: u64, slice: u64) -> Option<&mut Mask> {
+        let s = self.surfaces.iter().find(|s| s.id == slice)?;
+        let (name, group) = (format!("Mask on {}", s.name), s.group);
+        let points = vec![[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]];
+        self.masks.push(Mask { id, name, points, attached: Some(slice), group, ..Default::default() });
+        self.masks.last_mut()
+    }
+
     pub fn attach_mask(&mut self, mask: u64, slice: Option<u64>) {
         let Some(i) = self.masks.iter().position(|m| m.id == mask) else { return };
         let out: Vec<[f32; 2]> = self.masks[i].points.iter().map(|p| mask_to_output(&self.surfaces, &self.masks[i], *p)).collect();

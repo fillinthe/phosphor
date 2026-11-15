@@ -211,7 +211,7 @@ impl Gpu {
 
     /// Compiles every pipeline up front so the first use of an effect never hitches a show.
     pub fn prewarm(&mut self) {
-        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_mesh", "fs_mask", "fs_sample", "fs_surface_add", "fs_surface_screen", "fs_surface_mul", "fs_mesh_add", "fs_mesh_screen", "fs_mesh_mul"];
+        let fixed = ["fs_composite", "fs_to_rgb", "fs_mix", "fs_crossfade", "fs_finalize", "fs_surface", "fs_mesh", "fs_mask", "fs_sample", "fs_surface_add", "fs_surface_screen", "fs_surface_mul", "fs_mesh_add", "fs_mesh_screen", "fs_mesh_mul", "fs_surface_lighten", "fs_surface_sub", "fs_mesh_lighten", "fs_mesh_sub", "fs_clear", "fs_mask_cut", "fs_paste", "fs_paste_add", "fs_paste_screen", "fs_paste_mul", "fs_paste_lighten", "fs_paste_sub"];
         let all = fixed
             .into_iter()
             .chain(shaders::all_effect_entries())
@@ -257,7 +257,9 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
     // fullscreen triangle that overwrites its target.
     let surface = entry.starts_with("fs_surface");
     // Mesh-warped surfaces and masks draw triangles from a vertex buffer (x, y, s, t).
-    let mesh = entry.starts_with("fs_mesh") || entry == "fs_mask";
+    let mesh = entry.starts_with("fs_mesh") || entry == "fs_mask" || entry == "fs_mask_cut";
+    // A slice's own picture pasted onto the output: a fullscreen triangle, blended like the slice.
+    let paste = entry.starts_with("fs_paste");
     // Slice blend modes (`SliceBlend::entry`), all on premultiplied color.
     let slice_blend = |src_factor, dst_factor| {
         let c = wgpu::BlendComponent { src_factor, dst_factor, operation: wgpu::BlendOperation::Add };
@@ -322,13 +324,26 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format,
-                blend: if entry.ends_with("_add") && (surface || mesh) {
+                blend: if entry == "fs_mask_cut" {
+                    // Rubs out what's drawn: color and alpha scaled by 1 - the mask's darkness.
+                    let c = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::Zero, dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha, operation: wgpu::BlendOperation::Add };
+                    Some(wgpu::BlendState { color: c, alpha: c })
+                } else if entry.ends_with("_add") && (surface || mesh || paste) {
                     slice_blend(wgpu::BlendFactor::One, wgpu::BlendFactor::One)
                 } else if entry.ends_with("_screen") {
                     slice_blend(wgpu::BlendFactor::One, wgpu::BlendFactor::OneMinusSrc)
                 } else if entry.ends_with("_mul") {
                     slice_blend(wgpu::BlendFactor::Dst, wgpu::BlendFactor::OneMinusSrcAlpha)
-                } else if surface || mesh || entry == "fs_grid" {
+                } else if entry.ends_with("_lighten") && (surface || mesh || paste) {
+                    // The brighter of the slice and what's under it (Max takes both whole).
+                    let c = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Max };
+                    Some(wgpu::BlendState { color: c, alpha: c })
+                } else if entry.ends_with("_sub") && (surface || mesh || paste) {
+                    // What's under it, less the slice's light; the output stays as solid as it was.
+                    let c = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::ReverseSubtract };
+                    let a = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::Zero, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add };
+                    Some(wgpu::BlendState { color: c, alpha: a })
+                } else if surface || mesh || paste || entry == "fs_grid" {
                     Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING)
                 } else if rutt || (pts && entry != "fs_pts_mesh") {
                     Some(wgpu::BlendState { color: additive, alpha: additive })

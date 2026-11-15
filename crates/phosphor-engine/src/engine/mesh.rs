@@ -81,13 +81,38 @@ impl Engine {
         passes.push(Pass { entry: "fs_scan", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
     }
 
+    /// A slice drawn on `scratch`: its own masks rub it out there, then it's pasted onto the output with its blend.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn finish_cut(&mut self, output: u64, mapping: &mapping::Mapping, scratch: &wgpu::TextureView, view: &wgpu::TextureView, size: (u32, u32), mods: &crate::ModInputs, slice: u64, blend: mapping::SliceBlend, passes: &mut Vec<Pass>) {
+        self.push_mask_set(output, mapping, scratch, size, mods, passes, MaskSet::On(slice));
+        let u = Uniforms { resolution: [size.0 as f32, size.1 as f32], ..Uniforms::with_params(&[]) };
+        passes.push(Pass { entry: blend.paste_entry(), target: view.clone(), tex0: scratch.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+    }
+
     pub(super) fn push_masks(&mut self, output: u64, mapping: &mapping::Mapping, view: &wgpu::TextureView, size: (u32, u32), mods: &crate::ModInputs, passes: &mut Vec<Pass>) {
-        if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled) {
+        self.push_mask_set(output, mapping, view, size, mods, passes, MaskSet::All);
+    }
+
+    /// The masks of `set` over `view`: every one (an output without slices), the ones on no slice (over the finished
+    /// output), or one slice's own (rubbing the slice out of its own picture: `fs_mask_cut`).
+    pub(super) fn push_mask_set(&mut self, output: u64, mapping: &mapping::Mapping, view: &wgpu::TextureView, size: (u32, u32), mods: &crate::ModInputs, passes: &mut Vec<Pass>, set: MaskSet) {
+        let wanted = |m: &mapping::Mask| match set {
+            MaskSet::All => true,
+            MaskSet::Loose => m.attached.is_none(),
+            MaskSet::On(slice) => m.attached == Some(slice),
+        };
+        if !mapping.enabled || !mapping.masks.iter().any(|m| m.enabled && wanted(m)) {
             return;
         }
+        let ids: Vec<u64> = mapping.masks.iter().filter(|m| wanted(m)).map(|m| m.id).collect();
+        let (key, entry) = match set {
+            MaskSet::On(slice) => ((output, slice | 1 << 60), "fs_mask_cut"),
+            _ => ((output, u64::MAX), "fs_mask"),
+        };
         // Attached masks are placed on their slice first, then moved by their (maybe animated) transform: the hash
         // follows both, so the shape is rebuilt only on frames where it changed.
-        let placed = mapping.placed_masks_at(mods, size.0 as f32 / size.1.max(1) as f32);
+        let mut placed = mapping.placed_masks_at(mods, size.0 as f32 / size.1.max(1) as f32);
+        placed.retain(|m| ids.contains(&m.id));
         // Everything that changes the outline: points, handles, smooth, corners, invert, feather.
         let handles: Vec<[f32; 2]> = placed.iter().flat_map(|m| m.handles.iter().map(|h| h.unwrap_or([f32::NAN; 2]))).collect();
         let flags: Vec<u32> = placed
@@ -98,9 +123,19 @@ impl Engine {
             })
             .collect();
         let hash = hash_points(placed.iter().flat_map(|m| m.points.iter()).chain(handles.iter()), &flags);
-        let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, (output, u64::MAX), hash, || mapping::masks_triangles(&placed)) else { return };
+        let Some(draw) = self.meshes.get(&self.gpu.device, &self.gpu.queue, key, hash, || mapping::masks_triangles(&placed)) else { return };
         let mut u = Uniforms::with_params(&[]);
         u.resolution = [size.0 as f32, size.1 as f32];
-        passes.push(Pass { entry: "fs_mask", target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+        passes.push(Pass { entry, target: view.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
     }
+}
+
+/// Which masks `push_mask_set` draws.
+#[derive(Clone, Copy)]
+pub(super) enum MaskSet {
+    All,
+    /// The ones on no slice.
+    Loose,
+    /// One slice's own.
+    On(u64),
 }

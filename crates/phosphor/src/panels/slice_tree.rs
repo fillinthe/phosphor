@@ -12,6 +12,8 @@ pub(super) enum SliceAct {
     /// Group these slices / masks (the Studio gives the new group its id).
     Group(Vec<u64>),
     Duplicate(u64),
+    /// A new mask on this slice (it moves and warps with it).
+    MaskOn(u64),
     /// Delete slices or masks by id.
     Delete(Vec<u64>),
     /// A new layout on this output.
@@ -327,6 +329,10 @@ fn row_menu(r: &egui::Response, id: u64, name: &str, group: Option<u64>, picked:
         }
         move_menu(ui, groups.to_vec(), None, group, &mut |to| edits.push(Edit::SlicesTo(these.clone(), to)));
         ui.separator();
+        if slice && crate::ui::command(ui, label(icon::SELECTION, "Add a mask on it")).on_hover_text("A mask that moves and warps with this slice: shape it on the canvas").clicked() {
+            acts.push(SliceAct::MaskOn(id));
+            ui.close();
+        }
         if slice && crate::ui::command(ui, label(icon::COPY, "Duplicate")).clicked() {
             acts.push(SliceAct::Duplicate(id));
             ui.close();

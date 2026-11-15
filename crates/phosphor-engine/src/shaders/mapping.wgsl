@@ -118,6 +118,14 @@ fn fs_mesh_add(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
 fn fs_mesh_screen(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
 @fragment
 fn fs_mesh_mul(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
+@fragment
+fn fs_surface_lighten(in: VOut) -> @location(0) vec4f { return corner_pinned(in); }
+@fragment
+fn fs_surface_sub(in: VOut) -> @location(0) vec4f { return corner_pinned(in); }
+@fragment
+fn fs_mesh_lighten(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
+@fragment
+fn fs_mesh_sub(in: VOut) -> @location(0) vec4f { return surface_color(in.uv); }
 
 // 3D model light: the picture already drawn is multiplied by each face's brightness (s).
 @fragment
@@ -138,6 +146,26 @@ fn fs_mask(in: VOut) -> @location(0) vec4f {
     // Premultiplied black at the vertex's darkness (1 inside, fading across a feathered edge).
     return vec4f(0.0, 0.0, 0.0, clamp(in.uv.x, 0.0, 1.0));
 }
+
+// A mask on its own slice (`Mask.attached`): the slice is drawn on a clear picture, the mask rubs it out there
+// (`fs_mask_cut`: the pipeline scales what's drawn by 1 - darkness), and the picture is pasted onto the output with
+// the slice's blend (`SliceBlend::paste_entry`). So the mask cuts its slice only, never what's under it.
+@fragment
+fn fs_clear(in: VOut) -> @location(0) vec4f { return vec4f(0.0); }
+@fragment
+fn fs_mask_cut(in: VOut) -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, clamp(in.uv.x, 0.0, 1.0)); }
+@fragment
+fn fs_paste(in: VOut) -> @location(0) vec4f { return textureSampleLevel(tex0, samp, in.uv, 0.0); }
+@fragment
+fn fs_paste_add(in: VOut) -> @location(0) vec4f { return textureSampleLevel(tex0, samp, in.uv, 0.0); }
+@fragment
+fn fs_paste_screen(in: VOut) -> @location(0) vec4f { return textureSampleLevel(tex0, samp, in.uv, 0.0); }
+@fragment
+fn fs_paste_mul(in: VOut) -> @location(0) vec4f { return textureSampleLevel(tex0, samp, in.uv, 0.0); }
+@fragment
+fn fs_paste_lighten(in: VOut) -> @location(0) vec4f { return textureSampleLevel(tex0, samp, in.uv, 0.0); }
+@fragment
+fn fs_paste_sub(in: VOut) -> @location(0) vec4f { return textureSampleLevel(tex0, samp, in.uv, 0.0); }
 
 // Alignment grid over an output (`GridOverlay`): square cells (p[0].x across), a center crosshair with a circle
 // (p[0].z), lines p[0].y pixels wide, color p[1]. Drawn with alpha blending over the finished output.
