@@ -27,6 +27,26 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
             let signal = phosphor_engine::Modulation { source: phosphor_engine::ModSource::Hand, ..Default::default() };
             st.comp.modulators.push(Modulator { id, name: format!("Band {n}"), signal, band: Some([40.0, 120.0]), value: 0.0, ..Default::default() });
         }
+        // Saved modulators: the ones here by name (one or a chained set), added back into any project.
+        let State { comp, modulator_presets, modulator_preset_name, notice, .. } = st;
+        let picked = crate::ui::saves_menu(ui, &label(icon::FLOPPY_DISK, "Saved"), "Modulators by name. Save keeps every modulator here as one set; Load adds a set to the ones you have.", modulator_presets, modulator_preset_name, "modulator set", || {
+            let mine: Vec<&Modulator> = comp.modulators.iter().filter(|m| !m.designer).collect();
+            if mine.is_empty() { String::new() } else { serde_json::to_string(&mine).unwrap_or_default() }
+        });
+        match picked {
+            Some(crate::ui::SaveAction::Load(json)) => match serde_json::from_str::<Vec<Modulator>>(&json) {
+                Ok(saved) => {
+                    let asked = saved.len();
+                    let added = comp.add_modulators(saved);
+                    if added < asked {
+                        *notice = Some(format!("Only {added} of {asked} fit: a project holds {} modulators.", phosphor_engine::control::MAX_SHARED));
+                    }
+                }
+                Err(e) => *notice = Some(format!("Couldn't load those modulators: {e}")),
+            },
+            Some(crate::ui::SaveAction::Error(e)) => *notice = Some(e),
+            None => {}
+        }
         help(ui, "One source drives many controls: right-click any slider, Modulate, then pick it. Chain one into the next.");
     });
     #[cfg(not(target_arch = "wasm32"))]
@@ -49,6 +69,9 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
         Vec::new()
     };
     let n = st.comp.modulators.len();
+    // What follows each one (its "followed by" line).
+    let followers: Vec<Vec<String>> = st.comp.modulators.iter().map(|m| st.comp.modulator_followers(m.id)).collect();
+    let cycles: Vec<Option<f32>> = st.comp.modulators.iter().map(|m| st.mod_phases.cycle_of(m.id)).collect();
     crate::ui::column_scroll(ui).show(ui, |ui| {
         for (i, m) in st.comp.modulators.iter_mut().enumerate() {
             let value = inputs.shared.iter().find(|(id, _)| *id == m.id).map_or(0.0, |x| x.1);
@@ -101,6 +124,9 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         crate::ui::binding_list(ui, ("fires", m.id), &targets, &mut track.fires);
                     }
                 } else {
+                    if let Some(at) = cycles.get(i).copied().flatten() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(crate::ui::MOD_CYCLE), at));
+                    }
                     let mut sig = Some(m.signal);
                     ui.push_id(("modsig", m.id), |ui| modulation_editor_signal(ui, &mut sig));
                     if let Some(s) = sig {
@@ -110,6 +136,17 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         let s = &m.signal;
                         let per_beat = if s.sync { 8.0 / s.rate.max(0.25) } else { 2.0 };
                         m.sequence = Some(phosphor_engine::StepTrack { steps: s.steps.to_vec(), per_beat, ..Default::default() });
+                    }
+                }
+                match followers.get(i).filter(|f| !f.is_empty()) {
+                    Some(f) => {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(RichText::new(format!("{} Followed by:", icon::LINK)).small().color(accent()));
+                            ui.label(RichText::new(f.join(", ")).small());
+                        });
+                    }
+                    None => {
+                        hint(ui, "Nothing follows it yet");
                     }
                 }
                 // Chain: take from an earlier modulator.

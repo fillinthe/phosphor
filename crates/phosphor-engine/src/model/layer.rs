@@ -58,10 +58,18 @@ pub enum ModSource {
     Hand,
     /// A wave you draw: a smooth loop through the eight `steps` points.
     Drawn,
+    /// A ramp that falls (full at the start of each cycle, then down to nothing).
+    RampDown,
+    /// Random values, one a cycle, gliding from each to the next.
+    SmoothRandom,
+    /// Wandering noise: slow drifts with smaller, faster ones on top.
+    Noise,
+    /// A ramp that starts slowly and rushes up at the end of each cycle (pulse width = how sharp).
+    Exp,
 }
 
 impl ModSource {
-    pub const ALL: [ModSource; 14] = [
+    pub const ALL: [ModSource; 18] = [
         ModSource::AudioLevel,
         ModSource::AudioLow,
         ModSource::AudioMid,
@@ -70,9 +78,13 @@ impl ModSource {
         ModSource::LfoSine,
         ModSource::LfoTriangle,
         ModSource::LfoSaw,
+        ModSource::RampDown,
+        ModSource::Exp,
         ModSource::LfoSquare,
         ModSource::Beat,
         ModSource::Random,
+        ModSource::SmoothRandom,
+        ModSource::Noise,
         ModSource::Steps,
         ModSource::Drawn,
         ModSource::Hand,
@@ -94,13 +106,17 @@ impl ModSource {
             ModSource::AudioBeat => "Audio beat (kick)",
             ModSource::Hand => "Hand / MIDI knob",
             ModSource::Drawn => "Drawn wave",
+            ModSource::RampDown => "Ramp down",
+            ModSource::SmoothRandom => "Smooth random",
+            ModSource::Noise => "Noise",
+            ModSource::Exp => "Exponential",
         }
     }
 
     pub fn is_lfo(self) -> bool {
         matches!(
             self,
-            ModSource::LfoSine | ModSource::LfoTriangle | ModSource::LfoSaw | ModSource::LfoSquare | ModSource::Random | ModSource::Steps | ModSource::Drawn
+            ModSource::LfoSine | ModSource::LfoTriangle | ModSource::LfoSaw | ModSource::LfoSquare | ModSource::Random | ModSource::Steps | ModSource::Drawn | ModSource::RampDown | ModSource::SmoothRandom | ModSource::Noise | ModSource::Exp
         )
     }
 
@@ -128,6 +144,10 @@ pub struct Modulation {
     pub steps: [f32; 8],
     /// Follows a shared modulator (its id; 0 = its own signal above).
     pub link: u64,
+    /// Where in its cycle an LFO starts (0..1 of a cycle): two LFOs half a cycle apart move against each other.
+    pub phase: f32,
+    /// Pulse width: how much of a square wave's cycle is on (0.5 = half), and how sharp the exponential ramp is.
+    pub width: f32,
 }
 
 impl Default for Modulation {
@@ -143,6 +163,8 @@ impl Default for Modulation {
             invert: false,
             steps: [1.0, 0.0, 0.5, 0.0, 1.0, 0.25, 0.75, 0.0],
             link: 0,
+            phase: 0.0,
+            width: 0.5,
         }
     }
 }
