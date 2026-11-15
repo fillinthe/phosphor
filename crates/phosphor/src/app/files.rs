@@ -50,7 +50,7 @@ impl PhosphorApp {
                 (Ok(to), Some((_, _, px))) => {
                     let from = phosphor_engine::color_stats(&px);
                     match self.state.comp.add_color_match(layer, from, to) {
-                        Some(_) => "Colour Match added: the layer's colours follow the picture (tweak it in its effects)".into(),
+                        Some(_) => "Color Match added: the layer's colors follow the picture (tweak it in its effects)".into(),
                         None => "That layer is gone".into(),
                     }
                 }

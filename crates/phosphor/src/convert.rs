@@ -54,9 +54,9 @@ impl Format {
         match self {
             Format::Hap => "Smoothest on any computer (Mac or Windows): the graphics card decodes it. Plays backwards and jumps instantly. Big files; no sound.",
             Format::HapAlpha => "Hap that keeps transparency (for overlays). Bigger than Hap; no sound.",
-            Format::HapQ => "Hap with much better colour (smooth gradients, skin, logos), still decoded by the graphics card. Twice the size of Hap; no sound.",
+            Format::HapQ => "Hap with much better color (smooth gradients, skin, logos), still decoded by the graphics card. Twice the size of Hap; no sound.",
             Format::HapQAlpha => "Hap Q that keeps transparency. The biggest Hap; no sound.",
-            Format::HapR => "Hap's best colour, and keeps transparency. The size of Hap Q, slower to convert; plays in newer Hap players. No sound.",
+            Format::HapR => "Hap's best color, and keeps transparency. The size of Hap Q, slower to convert; plays in newer Hap players. No sound.",
             Format::ProRes => "Smooth, plays backwards well, keeps the sound. Very big files.",
             Format::H264Keyframes => "Plays backwards smoothly and keeps the sound, at a fraction of the size of the others. Uses a bit more of the computer than Hap.",
         }

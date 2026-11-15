@@ -25,9 +25,9 @@ pub(crate) fn scopes(ui: &mut egui::Ui, st: &mut State) {
     });
     let hint_text = match st.scopes.kind {
         crate::scopes::ScopeKind::Waveform => "Brightness across the picture: top = white, bottom = black",
-        crate::scopes::ScopeKind::Parade => "Red, green and blue side by side: level them to balance colour",
-        crate::scopes::ScopeKind::Vectorscope => "Colour: the centre is grey, further out = more saturated",
-        crate::scopes::ScopeKind::Histogram => "How much of the picture sits at each level, per colour (left = dark)",
+        crate::scopes::ScopeKind::Parade => "Red, green and blue side by side: level them to balance color",
+        crate::scopes::ScopeKind::Vectorscope => "Color: the center is gray, further out = more saturated",
+        crate::scopes::ScopeKind::Histogram => "How much of the picture sits at each level, per color (left = dark)",
     };
     hint(ui, hint_text);
     // The frame hugs the scope, under its caption. A graph (waveform, parade, histogram) fills the width and may

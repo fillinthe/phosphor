@@ -54,7 +54,7 @@ fn hap_q_alpha_composites_like_straight_alpha() {
     let alpha: Vec<u8> = [128u8, 128, 0, 0, 0, 0, 0, 0].iter().copied().cycle().take(16 * 8).collect();
     engine.upload_compressed(2, false, 16, 16, CompressedFormat::Bc3YCoCg, &blocks, Some(&alpha));
     let px = middle(&mut engine, &comp);
-    assert!((px[1] as i32 - 102).abs() <= 6, "40% grey expected, got {px:?}");
+    assert!((px[1] as i32 - 102).abs() <= 6, "40% gray expected, got {px:?}");
 }
 
 /// A zero-copy AYUV frame (ProRes 4444): TV-range white at alpha 50% over black = 50% grey.
@@ -86,7 +86,7 @@ fn ayuv_frames_convert_with_their_alpha() {
     engine.set_layer_ayuv_texture(2, false, texture);
     let px = middle(&mut engine, &comp);
     for c in &px[..3] {
-        assert!((*c as i32 - 128).abs() <= 4, "50% grey expected, got {px:?}");
+        assert!((*c as i32 - 128).abs() <= 4, "50% gray expected, got {px:?}");
     }
 }
 
@@ -167,7 +167,7 @@ fn blend_modes_match_their_formulas() {
     comp.layers.push(red);
     let px = middle(&mut engine, &comp);
     if (px[0] as i32 - 255).abs() > 4 || (px[1] as i32 - 73).abs() > 5 || (px[2] as i32 - 73).abs() > 5 {
-        wrong.push(format!("Color: red over grey gave {px:?}, expected about [255, 73, 73]"));
+        wrong.push(format!("Color: red over gray gave {px:?}, expected about [255, 73, 73]"));
     }
     assert!(wrong.is_empty(), "{wrong:?}");
 }
@@ -464,7 +464,7 @@ fn points_shapes_travel_as_feeds_and_render() {
     };
     let (dots, red) = lit(&mut engine, &comp);
     assert!(dots > 0.02 && dots < 0.7, "dots: {dots} lit");
-    assert!(red > 0.01, "coloured from the other layer: {red}");
+    assert!(red > 0.01, "colored from the other layer: {red}");
     assert!(comp.layers[2].is_data() && comp.layers[3].is_data() && !comp.layers[1].is_data());
     for id in ["pts_lines", "pts_mesh"] {
         let mut fx = comp.new_effect(id).unwrap();

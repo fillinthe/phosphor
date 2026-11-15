@@ -67,12 +67,12 @@ pub(crate) fn output(ui: &mut egui::Ui, st: &mut State) {
         });
         ui.end_row();
 
-        ui.label("Colour depth");
+        ui.label("Color depth");
         crate::ui::toolbar(ui, |ui| {
             if st.comp.deep_color && !phosphor_engine::deep_colour() {
                 crate::ui::hint(ui, "This graphics card can't: mixing stays 8-bit.");
             }
-            crate::ui::toggle(ui, &mut st.comp.deep_color, "Deep colour").on_hover_text("Layers mixed and effects worked out at 16 bits a channel instead of 8: no banding in dark gradients, feedback or long effect chains. Uses more GPU memory. Outputs stay 8-bit.");
+            crate::ui::toggle(ui, &mut st.comp.deep_color, "Deep color").on_hover_text("Layers mixed and effects worked out at 16 bits a channel instead of 8: no banding in dark gradients, feedback or long effect chains. Uses more GPU memory. Outputs stay 8-bit.");
         });
         ui.end_row();
 
@@ -172,7 +172,7 @@ pub(crate) fn outputs_list(ui: &mut egui::Ui, st: &mut State) {
         });
         if crate::ui::small_command(ui, label(icon::GRADIENT, "Soft edges")).on_hover_text("Work out the soft-edge blends from where the slices' parts of the picture overlap (projectors side by side or stacked); replaces the edges set by hand").clicked() {
             let n = st.comp.auto_soft_edges();
-            st.notice = Some(if n == 0 { "No overlaps found: give neighbouring slices overlapping parts of the picture (Input) first".into() } else { format!("Soft edges set on {n} slices from their overlaps") });
+            st.notice = Some(if n == 0 { "No overlaps found: give neighboring slices overlapping parts of the picture (Input) first".into() } else { format!("Soft edges set on {n} slices from their overlaps") });
         }
     });
     #[cfg(not(target_arch = "wasm32"))]
@@ -473,7 +473,7 @@ pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputC
 }
 
 pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_engine::ColorGrade) {
-    let title = if g.is_neutral() { label(icon::PALETTE, "Colour") } else { label(icon::PALETTE, "Colour (adjusted)") };
+    let title = if g.is_neutral() { label(icon::PALETTE, "Color") } else { label(icon::PALETTE, "Color (adjusted)") };
     crate::ui::section(ui, ("color_grade", id), title, false, |ui| {
         ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
         // Each one mappable and on the timeline (`ControlTarget::Color`).
@@ -483,7 +483,7 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
                 if p.log { level.log() } else { level }.show(ui);
             });
         }
-        if crate::ui::command_if(ui, !g.is_neutral(), label(icon::ARROW_COUNTER_CLOCKWISE, "Reset colour")).clicked() {
+        if crate::ui::command_if(ui, !g.is_neutral(), label(icon::ARROW_COUNTER_CLOCKWISE, "Reset color")).clicked() {
             *g = Default::default();
         }
     });
@@ -514,7 +514,7 @@ pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverla
         crate::ui::field(ui, "Line", |ui| {
             guarded!(ui, g.width, egui::DragValue::new(&mut g.width).range(0.5..=12.0).speed(0.1).suffix(" px"));
         });
-        crate::ui::field(ui, "Colour", |ui| {
+        crate::ui::field(ui, "Color", |ui| {
             for c in [[255u8, 255, 255], [0, 255, 120], [255, 60, 60], [80, 160, 255], [255, 220, 0]] {
                 let (rect, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::click());
                 ui.painter().circle_filled(rect.center(), 7.0, Color32::from_rgb(c[0], c[1], c[2]));

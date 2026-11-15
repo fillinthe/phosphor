@@ -1006,6 +1006,8 @@ impl ControlHub {
                 })
                 .collect();
             for (address, v) in osc {
+                // Addresses use American spelling since 0.5.6 ("colour", "centre", "grey" before): an old controller setup still lands.
+                let address = address.replace("colour", "color").replace("Colour", "Color").replace("centre", "center").replace("grey", "gray");
                 let lower = address.to_lowercase();
                 let pattern = is_osc_pattern(&address);
                 for (t, by_id, by_name) in &targets {

@@ -131,7 +131,7 @@ fn projectors(ui: &mut egui::Ui, st: &mut State) {
                 crate::ui::toggle(ui, &mut p.flip_x, "Flip across");
                 crate::ui::toggle(ui, &mut p.flip_y, "Flip up/down");
                 crate::ui::toggle(ui, &mut p.test_pattern, "Test pattern")
-                    .on_hover_text("Draws a pattern instead of the look, to line the laser up: the edge of its area, a circle, a cross, an arrow pointing up, and a corner in each colour (red top left, green top right, blue bottom right, white bottom left)");
+                    .on_hover_text("Draws a pattern instead of the look, to line the laser up: the edge of its area, a circle, a cross, an arrow pointing up, and a corner in each color (red top left, green top right, blue bottom right, white bottom left)");
             });
             crate::ui::toolbar(ui, |ui| {
                 Level::range(&mut p.floor, -1.0, 1.0, "Floor").default(-1.0).width(150.0).tip("Audience safety: nothing is drawn below this height (-1 = no limit)").show(ui);
@@ -405,7 +405,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         }
     }
     crate::ui::toolbar(ui, |ui| {
-        if crate::ui::command_if(ui, fill.is_some(), "Fill area").on_hover_text("The picked shape, centred and sized to fill the laser's area (then drag its corners to size it)").clicked()
+        if crate::ui::command_if(ui, fill.is_some(), "Fill area").on_hover_text("The picked shape, centered and sized to fill the laser's area (then drag its corners to size it)").clicked()
             && let Some((id, size)) = fill
             && let Some(s) = lasers.shape_mut(id)
         {
@@ -468,7 +468,7 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
         Level::percent(&mut s.color[i], *name).default(1.0).width(w).target(field(9 + i as u8)).show(ui);
     }
     let mut h = phosphor_engine::hue_of(s.color);
-    if Level::range(&mut h, 0.0, 1.0, "Hue").default(0.0).width(w).target(field(12)).tip("Round the colour wheel, as bright as it is: key it on the timeline to sweep colours").show(ui).changed() {
+    if Level::range(&mut h, 0.0, 1.0, "Hue").default(0.0).width(w).target(field(12)).tip("Round the color wheel, as bright as it is: key it on the timeline to sweep colors").show(ui).changed() {
         s.set_field(12, h);
     }
     match s.kind {
@@ -513,7 +513,7 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
                         ui.close();
                     }
                 });
-                crate::ui::toggle(ui, &mut s.picture_colors, "Its colours").on_hover_text("Lines take the picture's colours (off: this shape's colour)");
+                crate::ui::toggle(ui, &mut s.picture_colors, "Its colors").on_hover_text("Lines take the picture's colors (off: this shape's color)");
             });
             if let Some(e) = file_error(&s.image) {
                 ui.colored_label(crate::theme::WARN, format!("Can't read it: {e}"));

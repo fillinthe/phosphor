@@ -46,7 +46,7 @@ app that's much smaller and lighter on the CPU.
    - [ ] Later: native iPadOS/iOS app that can run shows on its own (same engine + UI)
 3. ~~**Control Surface panel**~~ ✔ buttons/toggles/faders/sliders/XY pads, each driving many targets with ranges,
    mappable themselves; Mappings editor with Listen + ranges. on the phone/iPad remote ✔. Next: TouchOSC `.tosc` export, multiple surface pages
-4. ~~**Mapping upgrades**~~ mesh warp ✔ (Catmull-Rom grid up to 8×8), masks ✔ (polygons, invert). Per-output colour ✔,
+4. ~~**Mapping upgrades**~~ mesh warp ✔ (Catmull-Rom grid up to 8×8), masks ✔ (polygons, invert). Per-output color ✔,
    blend curve ✔, mask feather ✔, circle/triangle masks ✔, smooth (Catmull-Rom) mask outlines ✔, bezier handles on mask points ✔ (0.2.84), curved (bezier) slice edges ✔ (2026-10-21)
 5. **OBS / pro I/O**: Syphon out ✔, NDI out ✔, cameras/capture ✔, network streams in ✔, Syphon in ✔, NDI in ✔. Next:
    virtual camera out (needs a Developer ID); capture-card audio shows up as an input device already (Audio panel)
@@ -89,7 +89,7 @@ app that's much smaller and lighter on the CPU.
     - [x] Shadertoy importer (Shader Editor › Import from Shadertoy…; single pass, iChannel0 = the layer) (2026-10-20)
     - [ ] Next sources (docs/research/generative-visuals.md): a Shadertoy MIT/CC0 pack (check each header), TiXL/Tooll 3 operators (MIT, HLSL port), lostjared/shaders (MIT, curate),
           Godot Shaders CC0/MIT (curate), daitomanabe/isf-shaders-for-vj (MIT, drop-in)
-    - [ ] Gather more free ISF/GLSL packs (Vidvox ISF-Files, Shadertoy ports with a licence that allows it,
+    - [ ] Gather more free ISF/GLSL packs (Vidvox ISF-Files, Shadertoy ports with a license that allows it,
           Interactive Shader Format community), test each with `isf_corpus`, ship the ones that work
     - [ ] The last MadMapper materials/Surface FX that fail; MadMapper 3D particle generators
     - [x] FFGL plugins (Resolume / VDMX effect plugins): load .bundle FFGL 2 effects and generators (0.2.89, Mac)
@@ -100,7 +100,7 @@ app that's much smaller and lighter on the CPU.
     - [x] "New from template…" in the Shader Editor: 8 starters, every line explained (2026-10-20)
     - [x] Feedback in user shaders (`// @feedback` → `last(uv)`) + Trails template (2026-10-20)
     - [x] User shaders with several passes / blur buffers (`// @pass`, 0.2.85)
-    - [x] Node/patch editor: chain blocks (blur, warp, colour, mix, feedback) into an effect without code (0.2.88: Shader Editor › + Patch)
+    - [x] Node/patch editor: chain blocks (blur, warp, color, mix, feedback) into an effect without code (0.2.88: Shader Editor › + Patch)
     - [x] Describe it in words → the AI drafts the shader, compile-checked and auto-fixed (Shader Editor › Describe it…, your API key; 0.2.92)
     - [ ] Share effects to your account / the online library
 14. **Web control for the audience and guests** (asked 2026-10-20):
@@ -172,12 +172,12 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] 12 built-in effects (WGSL) with per-effect Mix (dry/wet), 7 generators, 10 blend modes, fit/fill/stretch
 - [x] Live thumbnails per layer, Presets panel (built-in + yours), duplicate layer, dark theme, Phosphor icon font
 - [x] Layer workflow: drag thumbnails to reorder, Solo, FX bypass, right-click menu, Space/⌫/⌘D shortcuts
-- [x] **Effects explorer**: live previews of every effect on the selected layer, categories, search, favourites,
+- [x] **Effects explorer**: live previews of every effect on the selected layer, categories, search, favorites,
       click or drag onto any layer/MASTER, Sources view for generators
 - [x] **Shader Editor**: write WGSL effects/generators in-app, compile-as-you-type with line-accurate errors,
       live preview, "Edit a copy" of built-ins, saved to ~/Library/Application Support/Phosphor/effects
 - [x] **⌘K command palette**: every effect, source, panel and action, fuzzy search
-- [x] **+ Add effect browser**: pop-up with search (Enter adds first match), categories, Recent, Favourites,
+- [x] **+ Add effect browser**: pop-up with search (Enter adds first match), categories, Recent, Favorites,
       previews on that layer; Shift-click adds several. Same browser for layer sources (✦ button)
 - [x] **Monitors**: any number of preview panels (View ▸ Add monitor), each showing Output, Mix, or one
       layer; dock/float/detach anywhere; optional thirds grid
@@ -219,7 +219,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [ ] Browser video: `<video>` → `copy_external_image_to_texture`
 - [x] Live camera / capture card input, network streams (RTSP/SRT/HLS), Syphon In
 - [x] Media bin with thumbnails (background FFmpeg frame grabs), import files, click or drag onto layers
-- [x] Media organising: favourites, your own collections, search, filter (videos/images/favourites/collection),
+- [x] Media organizing: favorites, your own collections, search, filter (videos/images/favorites/collection),
       sort (name/newest/type), tile size, rename
 - [x] **Launch settings** for everything (clicks, drags, clips, MIDI/OSC triggers): Cut or Fade (time), Now / On beat / On bar
 - [x] **Audio beat detector**: kick detection + BPM estimate with confidence (verified 128.6 BPM on a 128 BPM track);
@@ -260,7 +260,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Dockable, rearrangeable panels; layout saved with the project
 - [x] **Control surfaces**: buttons, toggles, faders, sliders, XY pads, labels; each drives many targets with ranges
 - [x] Control surface: multiple pages (Mac + phone, page switch mappable)
-- [x] Control surface: colour pickers
+- [x] Control surface: color pickers
 - [x] Data sources: audio input analysis (level, low/mid/high, 32-band spectrum) + LFOs (sine/tri/ramp/square),
       random (S&H), 8-step sequencer, beat; **tempo sync** (1/4 beat … 8 bars), Add or **Sweep a range** (from/to),
       invert, live meter; a green tick on every modulated slider shows where it really is
@@ -282,7 +282,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 
 ### Phase 4: Projection mapping (MadMapper-easy)
 - [x] Surfaces: corner-pinned quads with true perspective (homography), any number per output
-- [x] Direct manipulation: drag corners/centre in the Mapping panel **or on the projector output** (E)
+- [x] Direct manipulation: drag corners/center in the Mapping panel **or on the projector output** (E)
 - [x] Input region per surface (slice of the master), per-surface opacity, soft edge for projector blending
 - [x] Alignment grid test pattern with orientation marker
 - [x] Choose the output screen: Output ▾ menu / Screens list → window moves there and goes fullscreen (no menu bar)
@@ -295,7 +295,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] Mapping: slice "input from another output"
 - [x] Open outputs on their saved screens automatically when a project opens (per-project setting, off by default)
 - [x] Curved mask edges: Smooth outline + per-point sharp corners (right-click a point) ✔ 2026-10-18
-- [x] Per-output identify / colour correction, surface blend curve
+- [x] Per-output identify / color correction, surface blend curve
 - [x] Per-surface color correction / brightness
 - [x] Save mapping with the project
 - [x] Quick-recall mapping presets per venue (Mapping › Venues)
@@ -307,7 +307,7 @@ Legend: [x] done · [~] in progress · [ ] not started
 - [x] ISF imported images ✔, MadMapper includes ✔ (MadNoise, MadSDF, MadCommon), curve/audio inputs ✔, FLOAT buffers (16-bit) ✔
 - [x] v002 ports: Blurs ✔, Glitch ✔ (analog), Film Effects ✔ (Technicolor, Bleach, Vignette, Grain); lit Rutt-Etra ✔ (shading from the height gradient, `shade` in ruttetra.wgsl). Motion Flow (normal optical flow: displace / show / moving-only) ✔ 2026-10-17. Rutt-Etra can now displace from another layer's picture
 - [x] Multi-pass effects (blur, glow, feedback/trails)
-- [x] Text / title source (any installed font, size, colour, alignment, outline)
+- [x] Text / title source (any installed font, size, color, alignment, outline)
 - [x] Syphon in/out, NDI out
 - [x] NDI in
 - [x] Recording to ProRes / Hap (own Hap encoder: DXT1/DXT5 + Snappy, muxed in-process)

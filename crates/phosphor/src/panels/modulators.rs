@@ -93,7 +93,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
                         m.sequence = None;
                         m.signal.source = phosphor_engine::ModSource::LfoSine;
                     } else if track.is_colour() {
-                        ui.label(RichText::new("Paints its colour into:").small());
+                        ui.label(RichText::new("Paints its color into:").small());
                         super::sequencer::colour_targets(ui, ("paint", m.id), &colour_reds, &mut track.paint);
                     } else if track.gate {
                         // Lit steps fire clips, columns or anything else.

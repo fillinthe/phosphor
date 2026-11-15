@@ -55,7 +55,7 @@ pub(crate) fn shape_box(ui: &mut egui::Ui, frame: egui::Rect, s: &LaserShape, pa
                 change = Some(BoxChange::Size((s.size * (now - centre).length() / before).clamp(0.01, 1.0)));
             }
         }
-        r.on_hover_text("Drag to size it (from its centre)");
+        r.on_hover_text("Drag to size it (from its center)");
     }
     // Turn: a round handle above its top edge.
     let top = corners[2].lerp(corners[3], 0.5);

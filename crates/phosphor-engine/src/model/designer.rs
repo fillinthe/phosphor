@@ -458,7 +458,7 @@ impl Composition {
                     if crate::shaders::points_in(d.id) {
                         v[0] = ("Points".to_string(), PortKind::Points);
                         if render {
-                            v.push(("Colour".to_string(), PortKind::Picture));
+                            v.push(("Color".to_string(), PortKind::Picture));
                         }
                     }
                     v.extend(d.params.iter().map(|p| (p.name.to_string(), PortKind::Number)));
@@ -1075,11 +1075,11 @@ mod tests {
         assert!(!comp.connect_boxes(cid, &[], shape, out, 0), "points into Output");
         assert!(comp.connect_boxes(cid, &[], shape, mv, 0));
         assert!(comp.connect_boxes(cid, &[], mv, render, 0));
-        assert!(comp.connect_boxes(cid, &[], pic, render, 1), "the colour picture");
+        assert!(comp.connect_boxes(cid, &[], pic, render, 1), "the color picture");
         assert!(comp.connect_boxes(cid, &[], render, out, 0));
         comp.sync_network(cid);
         assert_eq!(feed_of(&comp, part(render)), Some(part(mv)));
-        assert_eq!(comp.layer(part(render)).unwrap().effects[0].other, part(pic), "colours from the plasma");
+        assert_eq!(comp.layer(part(render)).unwrap().effects[0].other, part(pic), "colors from the plasma");
         assert!(comp.layer(part(render)).unwrap().in_mix);
         assert!(comp.layer(part(mv)).unwrap().is_data());
         // A Model instead of the shape: the render reads in order on its own (through Move); a shape again: as a grid.

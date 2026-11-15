@@ -104,7 +104,7 @@ mod tests {
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[0].len(), 5);
         assert!(frames[0][0].blank && !frames[0][1].blank);
-        assert_eq!(frames[0][1].rgb, [255, 0, 0], "colours are stored blue, green, red");
+        assert_eq!(frames[0][1].rgb, [255, 0, 0], "colors are stored blue, green, red");
         assert!((frames[0][2].x - 20000.0 / 32767.0).abs() < 1e-6 && frames[0][2].y > 0.0);
     }
 

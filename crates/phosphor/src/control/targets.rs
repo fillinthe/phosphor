@@ -546,7 +546,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     effects("MASTER", &comp.master_effects, &mut out);
     let colors = |name: &str, owner: u64, out: &mut Vec<(ControlTarget, String)>| {
         for (i, part) in phosphor_engine::ColorGrade::PARTS.iter().enumerate() {
-            out.push((ControlTarget::Color { owner, part: i as u8 }, format!("{name} · colour {}", part.name.to_lowercase())));
+            out.push((ControlTarget::Color { owner, part: i as u8 }, format!("{name} · color {}", part.name.to_lowercase())));
         }
     };
     for o in &comp.outputs {
@@ -720,7 +720,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::SliceFeather(id) => format!("/phosphor/slice/{id}/soft_edge"),
         ControlTarget::Color { owner, part } => {
             let name = phosphor_engine::ColorGrade::PARTS.get(*part as usize).map_or("part", |p| p.name);
-            format!("/phosphor/colour/{owner}/{}", name.to_lowercase())
+            format!("/phosphor/color/{owner}/{}", name.to_lowercase())
         }
         ControlTarget::Fixture { fixture, param } => match phosphor_engine::Fixture::PARAMS.get(*param as usize) {
             Some(name) => format!("/phosphor/light/{fixture}/{}", name.replace(' ', "_")),

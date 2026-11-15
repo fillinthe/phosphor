@@ -122,8 +122,8 @@ mod hider_tests {
         };
         let at = inputs(0.75, 0.25, 0.4);
         let m = |v, lo, hi, md: &Option<crate::Modulation>| crate::control::modulate(v, lo, hi, md.as_ref(), &at);
-        assert!((m(t.x, -1.0, 1.0, &t.x_mod) - 0.25).abs() < 1e-4, "face right of centre");
-        assert!((m(t.y, -1.0, 1.0, &t.y_mod) + 0.25).abs() < 1e-4, "face below centre");
+        assert!((m(t.x, -1.0, 1.0, &t.x_mod) - 0.25).abs() < 1e-4, "face right of center");
+        assert!((m(t.y, -1.0, 1.0, &t.y_mod) + 0.25).abs() < 1e-4, "face below center");
         assert!((m(t.scale, 0.01, 8.0, &t.scale_mod) - (0.01 + 0.4 * 1.3)).abs() < 1e-3, "about the face's size");
         assert!(!c.follow_face(99));
     }

@@ -88,7 +88,7 @@ pub(crate) fn describe(item: &MediaItem, probe: Option<&Result<crate::convert::P
         t.push(format!("From watched folder: {}", item.folder));
     }
     if item.favorite {
-        t.push("A favourite".into());
+        t.push("A favorite".into());
     }
     if !item.collections.is_empty() {
         t.push(format!("Collections: {}", item.collections.join(", ")));

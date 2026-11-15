@@ -333,7 +333,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
             acts.push(MediaAct::RandomOne(shown.clone()));
         }
         if !in_collection {
-            let name = if st.media_view.filter == MediaFilter::Favorites { "Favourites" } else { "Shuffle" }.to_string();
+            let name = if st.media_view.filter == MediaFilter::Favorites { "Favorites" } else { "Shuffle" }.to_string();
             if crate::ui::command_if(ui, shown.len() > 1, label(icon::SHUFFLE, "Shuffle layer")).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
                 acts.push(MediaAct::ShuffleLayer(shown.clone(), name));
             }
@@ -664,7 +664,7 @@ pub(crate) fn media_tile(
         p.text(star_rect.center() + egui::vec2(0.5, 1.0), egui::Align2::CENTER_CENTER, icon::STAR, font.clone(), Color32::from_black_alpha(160));
         p.text(star_rect.center(), egui::Align2::CENTER_CENTER, icon::STAR, font, color);
     }
-    let star = star.on_hover_text(if item.favorite { "A favourite: click to unstar" } else { "Click to make it a favourite" });
+    let star = star.on_hover_text(if item.favorite { "A favorite: click to unstar" } else { "Click to make it a favorite" });
     if star.clicked() {
         acts.push(MediaAct::Favorite(i));
     }
@@ -701,7 +701,7 @@ pub(crate) fn media_tile(
             ui.close();
         }
         ui.separator();
-        let fav = if item.favorite { "Remove from favourites" } else { "Add to favourites" };
+        let fav = if item.favorite { "Remove from favorites" } else { "Add to favorites" };
         if crate::ui::command(ui, label(icon::STAR, fav)).clicked() {
             acts.push(MediaAct::Favorite(i));
             ui.close();

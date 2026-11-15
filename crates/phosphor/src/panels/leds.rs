@@ -219,7 +219,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                     }
                     if f.shape != FixtureShape::MovingHead {
                         choice_combo(ui, ("led_order", f.id), &mut f.order, 90.0, false);
-                        crate::ui::toggle(ui, &mut f.average, "Average").on_hover_text("Each light takes the average of its own patch of the picture (9 samples) instead of the one point at its centre: steadier on detailed or moving pictures");
+                        crate::ui::toggle(ui, &mut f.average, "Average").on_hover_text("Each light takes the average of its own patch of the picture (9 samples) instead of the one point at its center: steadier on detailed or moving pictures");
                     }
                 });
                 if f.shape == FixtureShape::MovingHead {
@@ -244,7 +244,7 @@ pub(crate) fn leds(ui: &mut egui::Ui, st: &mut State) {
                             });
                             guarded!(ui, f.motion_beats, egui::DragValue::new(&mut f.motion_beats).range(0.25..=64.0).speed(0.25).suffix(" beats"));
                         }
-                        help(ui, "Its colour is the picture under the dot; it moves on the beat. Drag the dot to choose the colour.");
+                        help(ui, "Its color is the picture under the dot; it moves on the beat. Drag the dot to choose the color.");
                     });
                     // Channels after the layout's (gobo, prism, zoom, strobe…), each a control of its own.
                     let mut gone = None;

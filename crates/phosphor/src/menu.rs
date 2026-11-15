@@ -218,7 +218,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             I(A::Roadmap, "Roadmap", None),
             I(A::Website, "phosphorfx.com", None),
             I(A::ShaderFolder, "Open ISF Shader Folder", None),
-            I(A::LutFolder, "Open LUT Folder (colour grades)", None),
+            I(A::LutFolder, "Open LUT Folder (color grades)", None),
             I(A::Donate, "Donate to Phosphor…", None),
             S,
             I(A::ReportBug, "Report a Bug…", None),

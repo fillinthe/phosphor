@@ -28,14 +28,14 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
     });
     ui.horizontal_wrapped(|ui| {
         let mut colour = track.is_colour();
-        if toggle(ui, &mut colour, "Colours").on_hover_text("A colour on each step, painted into colour settings (a solid colour, a tint…)").changed() {
+        if toggle(ui, &mut colour, "Colors").on_hover_text("A color on each step, painted into color settings (a solid color, a tint…)").changed() {
             track.set_colour(colour);
         }
         if !colour {
             toggle(ui, &mut track.gate, "Gates").on_hover_text("On/off steps (pads) instead of levels");
         }
         if colour {
-            toggle(ui, &mut track.glide, "Glide").on_hover_text("Fade from one step's colour to the next");
+            toggle(ui, &mut track.glide, "Glide").on_hover_text("Fade from one step's color to the next");
         } else if !track.gate {
             let mut index = track.choices >= 2;
             if toggle(ui, &mut index, "Choices").on_hover_text("Each step picks one of a few choices (a clip, blend mode, direction…) instead of a level").changed() {
@@ -110,7 +110,7 @@ pub(crate) fn colour_targets(ui: &mut egui::Ui, id: impl std::hash::Hash + std::
         paint.remove(i);
     }
     if reds.is_empty() {
-        crate::ui::empty_note(ui, "Nothing with a colour yet: add a Solid colour layer, or an effect with a colour (Tint, Colorize…).");
+        crate::ui::empty_note(ui, "Nothing with a color yet: add a Solid color layer, or an effect with a color (Tint, Colorize…).");
     } else if let Some(t) = target_picker(ui, (id, "add"), reds, None, 220.0) {
         paint.push(t);
     }

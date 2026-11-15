@@ -241,7 +241,7 @@ pub(crate) mod tests {
             assert!(((p[0] * p[0] + p[1] * p[1]).sqrt() - r).abs() < 0.06, "on the disc's edge: {p:?}");
         }
         let c = u.colors.as_ref().unwrap()[0];
-        assert!(c[0] == 1.0 && (c[1] - 120.0 / 255.0).abs() < 0.02 && c[2] == 0.0, "the disc's colour at full brightness: {c:?}");
+        assert!(c[0] == 1.0 && (c[1] - 120.0 / 255.0).abs() < 0.02 && c[2] == 0.0, "the disc's color at full brightness: {c:?}");
         assert!(outlines(&disc(64, 36, [255, 120, 0]), 0.3, 10, false)[0].colors.is_none());
         let flat = Picture { width: 16, height: 16, rgba: vec![200; 16 * 16 * 4] };
         assert!(outlines(&flat, 0.5, 10, true).is_empty());

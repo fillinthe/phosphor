@@ -33,7 +33,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [ ] **Outputs: layering and masking like MadMapper** (owner, 2026-11-14): done so far: undo in the output window,
       new slices in place, drag rows between layouts / groups / onto another row, rename pop-up. Still to design
       with the owner: what else should move like MadMapper (masks attached to a slice, layer order across layouts…).
-- [ ] **Clip grid column buttons** greyed out while there are no layers? (owner to say)
+- [ ] **Clip grid column buttons** grayed out while there are no layers? (owner to say)
 - [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
 - [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.
 - [ ] **Phone test** (2026-11-04): MIDI / OSC › Phone or tablet › Get it on the phone: scan the QR code with the iPad,
@@ -74,7 +74,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       boxes), saved by name (boxes preset folder) and added again from the canvas menu; Duplicate copies the inside.
       **Phase 4 done 2026-10-29** (not installed): points. Points: Shape (grid / sphere / cube / ring / helix /
       random), Relief (a picture as points), Model (an OBJ file's vertices), Move, Particles, and Dots / Lines / Mesh
-      renders with a camera (distance, lens, turn) and a light (shade, fog), coloured from a second picture input;
+      renders with a camera (distance, lens, turn) and a light (shade, fog), colored from a second picture input;
       a green Points wire kind; `--quick points` (+ `PHOSPHOR_POINTS_MODEL=file.obj`). Checked on screenshots + a
       GPU test. **Phase 5 done 2026-10-29** (not installed): data. Number boxes take their value from a live
       reading (weather / ISS / earthquakes), a web address answering JSON (a dotted path to the number, 0-at / 1-at),
@@ -87,7 +87,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       `docs/design/nodes.md` are built. Points: done (2026-10-30: Mesh has a depth buffer, Lines have a real width, a render fed by a
       Model reads in order by itself; particles step by the real frame time; effects after a render run at the canvas
       size, also on a Model layer; **Light boxes**: Points › Light, its settings = where from (left / right, below /
-      above), colour, colour amount, strength, ambient, wired into a render's Light input (a yellow wire; the render's
+      above), color, color amount, strength, ambient, wired into a render's Light input (a yellow wire; the render's
       Shade goes all the way while one is wired); one light a render, no shadows). **Small items done 2026-10-30:** Number input boxes on a
       box of boxes, Wrap in a box (one box at a time: no multi-select on the canvas yet), Undo (toolbar button and
       Cmd-Z over the canvas, 50 steps per comp, boxes and wires only: a slider change isn't undone), Duplicate copies
@@ -133,7 +133,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [x] *(dropped by the owner, 2026-10-27)* **Saving removes the clip on the active layer.** *(No cause found in code or the log of 12 saves: need what disappears and when.)* Save with a clip playing on the selected layer: the clip is
       gone afterwards. Data loss: find and fix before anything else.
 - [x] **A removed effect keeps running** *(it was the comp's own copy: the Inspector now lists group / comp / MASTER effects on each layer; clips no longer bring removed effects back)* on the layer (it's gone from the list but still changes the picture).
-- [x] *(an inverting mask named 'Rectangle 1'; masks are now named and labelled)* **Moving an output's rectangle in Mapping makes the clip disappear.** Videos must keep playing while a
+- [x] *(an inverting mask named 'Rectangle 1'; masks are now named and labeled)* **Moving an output's rectangle in Mapping makes the clip disappear.** Videos must keep playing while a
       surface is moved.
 - [x] *(vertex budget 400,000 per pass; GPU errors caught)* **Rutt-Etra went wrong:** other clips started loading by themselves. Reproduce with Rutt-Etra on a layer.
 - [x] *(copied to this Mac on first open, thumbnail cache, no per-frame file check, lighter folder scans, load log)* **Clips from an external drive** (WD Black SSD over USB-C, sometimes through a hub): loading jitters the show,
@@ -161,7 +161,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [x] **Map any button:** every button, toggle, menu item and slider gets the same right-click Learn / map menu
       (the kit's buttons gain it once, so nothing is missed). *Menu items done 2026-10-25 (all in the target list);
       right-click Learn on any kit button without its own menu done 2026-10-27, tested.*
-- [x] *(comps as bands in Layers; Clips + Layers is the Show layout again)* **Organise in the Layers panel, not the Stack** (owner, 2026-10-25: likes Layers and the Mixer; the Stack is
+- [x] *(comps as bands in Layers; Clips + Layers is the Show layout again)* **Organize in the Layers panel, not the Stack** (owner, 2026-10-25: likes Layers and the Mixer; the Stack is
       confusing). Bring groups and comps into Layers as foldable cards (comp = a group with its own size), with the
       quick buttons (eye, solo, mute, stop, fx count, rename), keep Clips as the grid; then retire the Stack or keep it
       as an option. Ask the owner before changing the default layout again.
@@ -172,7 +172,7 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
 - [x] **Speed next to the clip's preview** in the Inspector, so you can see the speed while changing it.
 - [x] **Speed in the Mixer strips** (speed and opacity are what matter most live).
 - [x] **A clip's in / out points saved with the media file**, so a clip cut once stays cut wherever it's used.
-- [x] **Favourite a clip from a layer** (and see favourites later in Media).
+- [x] **Favorite a clip from a layer** (and see favorites later in Media).
 - [x] **Map the Random clip button**, and run it on a timer or the beat (load a new random clip every N bars).
 - [x] **Sort media by length** (View › Sort by: Name / Newest / Type / Length; needs each movie's duration, read
       off the show's thread and kept with the media item).
@@ -212,10 +212,10 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Jump row in Playback: back / forward, step in beats (at the layer's speed) or seconds; both mappable. Checked: unit test of the step.
 - [x] 5. **Reload a media file** from disk after you've edited it (M).
       Media bin right-click › Reload, and a Reload button in Playback; keeps the place in a movie. Not tried with a file edited while playing.
-- [x] 6. **Media info**: fps, bit rate, colour space, sound; **used by** count (which layers/clips use a file) (M). Has codec, size, length.
-      Playback line now shows fps, bit rate, pixel format, colour space (when the file says) and sound; media tiles say how many layers and clips use the file. Checked: unit test + screenshot.
-- [x] 7. **More blend modes**: Soft/Hard/Vivid/Linear/Pin Light, Hard Mix, Colour Burn/Dodge, Divide, Hue, Saturation, Colour, Luminosity (V). Has 10 + 3 masks.
-      13 more (Soft / Hard / Vivid / Linear / Pin Light, Hard Mix, Colour Burn / Dodge, Divide, Hue, Saturation, Colour, Luminosity). Checked: GPU test of every mode's formula.
+- [x] 6. **Media info**: fps, bit rate, color space, sound; **used by** count (which layers/clips use a file) (M). Has codec, size, length.
+      Playback line now shows fps, bit rate, pixel format, color space (when the file says) and sound; media tiles say how many layers and clips use the file. Checked: unit test + screenshot.
+- [x] 7. **More blend modes**: Soft/Hard/Vivid/Linear/Pin Light, Hard Mix, Color Burn/Dodge, Divide, Hue, Saturation, Color, Luminosity (V). Has 10 + 3 masks.
+      13 more (Soft / Hard / Vivid / Linear / Pin Light, Hard Mix, Color Burn / Dodge, Divide, Hue, Saturation, Color, Luminosity). Checked: GPU test of every mode's formula.
 - [x] 8. **Crossfader curve** (V). Fixed straight line now.
       Mixer: Both full in the middle (as before) / Smooth (no dip) / Straight / Cut. Checked: unit test + screenshot.
 - [x] 9. **Soft takeover settings**: pickup distance, and "glide to the controller" (V). Has pickup at a fixed distance.
@@ -242,22 +242,22 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       Delay 0–10 frames per output. Checked: GPU test (2 frames late shows the frame from 2 frames before).
 - [x] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
       Partly: a camera button on each output saves a picture of it after mapping (the mix snapshot already existed). Layers, groups and comps: right-click › Save a picture….
-- [x] 21. **Hide effects** you never use from the menus (V). Favourites exist.
+- [x] 21. **Hide effects** you never use from the menus (V). Favorites exist.
       Right-click an effect or source › Hide from the lists; they show under "Hidden" (to bring back) and still work where used. Kept between launches.
 - [x] 22. **Slice: match the media's size / shape** (M).
-      Mapping Studio: "Match the picture's shape" (keeps the height and centre, sets the width). Checked: test.
+      Mapping Studio: "Match the picture's shape" (keeps the height and center, sets the width). Checked: test.
 - [x] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
       Random cue (button + mappable), a countdown to the next cue that fires by itself, CSV out and in (names and timings; the looks stay recorded). Cue groups: not done. Checked: CSV test, bench run (countdown right, random never repeats), screenshot.
 - [x] 24. **Permissions panel** (Mac): camera, microphone, screen recording, network at a glance (V).
       Devices panel: camera, microphone and screen recording, each with a System Settings button. Checked: screenshot (all three read right here).
 - [x] 25. **Choose the graphics card** on machines with more than one (V).
       Output panel › Graphics card (shown when there's more than one, or one was chosen); used from the next start. Checked: test of the choice. Not tried on a Mac with two GPUs (none here).
-- [x] 26. **Step sequencer colour and index tracks** (V). Has value and gate tracks.
-      Index tracks: "Choices" on a level track, each step picks one of N (a clip, blend mode, direction). Colour tracks: a colour on each step (rainbow to start; Glide fades between them), painted into any colour settings (pick the colour; its red, green and blue all follow). Checked: tests; the real app (a white solid layer painted blue by a track).
+- [x] 26. **Step sequencer color and index tracks** (V). Has value and gate tracks.
+      Index tracks: "Choices" on a level track, each step picks one of N (a clip, blend mode, direction). Color tracks: a color on each step (rainbow to start; Glide fades between them), painted into any color settings (pick the color; its red, green and blue all follow). Checked: tests; the real app (a white solid layer painted blue by a track).
 - [x] 27. **DMX monitor**: live view of the channels being sent (M).
       LED / DMX panel › Monitor: one universe's 512 channels as a grid, value on hover; copied only while it's open. Checked: test.
-- [x] 28. **Colour swatches** saved and usable on every colour control (M).
-      A colour button with saved swatches: on text colour and on every shader colour input (ISF colours). Kept between launches. Not checked on screen.
+- [x] 28. **Color swatches** saved and usable on every color control (M).
+      A color button with saved swatches: on text color and on every shader color input (ISF colors). Kept between launches. Not checked on screen.
 - [x] 29. **More picture formats**: EXR and HDR (float), PSD, HEIC as a layer (M). Has PNG, JPEG, WebP, BMP, TIFF, GIF.
       EXR, HDR, TGA, QOI through the image library, PSD and HEIC through FFmpeg. Also fixed: BMP and TIFF were offered but couldn't open. Checked: test making each format with macOS's sips / FFmpeg.
 - [x] 30. **Look fade time**: a saved look fades in instead of cutting (V).
@@ -267,7 +267,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 32. **ISF files reload when edited** on disk (V). Loaded once at start now.
       Shader files are watched (every 2 s): a saved edit replaces the shader on screen. Checked: GPU test (black → red after the edit) and a bench run with a file edited mid-run.
 - [x] 33. **LUT mask mixer** (two LUTs mixed by a mask) and a few **built-in LUT looks** (V). LUT Mix exists.
-      8 looks ship (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film, Night; made by scripts/make-luts.py), and LUT Split: two LUTs by brightness, left/right, top/bottom or from the centre. LUT Split › Split by › Mask layer: another layer's brightness picks LUT B (bright) or LUT A (dark). Checked: tests; GPU test (a black mask gives LUT A, a white one LUT B).
+      8 looks ship (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film, Night; made by scripts/make-luts.py), and LUT Split: two LUTs by brightness, left/right, top/bottom or from the center. LUT Split › Split by › Mask layer: another layer's brightness picks LUT B (bright) or LUT A (dark). Checked: tests; GPU test (a black mask gives LUT A, a white one LUT B).
 - [x] 34. **Saved "show only these" slice sets** while mapping (M).
       Mapping Studio › Sets: save the selected slices as a named set, pick it to select them and show only them. Saved with the project.
 - [x] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
@@ -279,7 +279,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 37. **Blend mode per effect**: how an effect's output mixes back with its input (V). Dry/wet exists.
       A blend menu beside each effect's Mix. Checked: GPU test (Invert with Multiply).
 - [x] 38. **Wipe blend modes** driven by opacity (radial, star, blocks…) (V). Wipes exist as clip transitions only.
-      Six blend modes: Wipe left to right, top down, from the centre, diamond, blocks, and Dissolve; opacity = how far it's come in. Checked: GPU tests.
+      Six blend modes: Wipe left to right, top down, from the center, diamond, blocks, and Dissolve; opacity = how far it's come in. Checked: GPU tests.
 - [x] 39. **Your own blend modes** written as shaders (V).
 - [x] 40. **Generator size per layer / clip** (V). Generators render at the comp's size.
       Inspector › Render size 100 / 75 / 50 / 25% for generators (effects run at that size too). Checked: GPU test.
@@ -289,22 +289,22 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
       Preview bar: a mouse button; dragging moves the selected layer's point settings (ISF point2D). Shadertoy shaders that read iMouse get a Mouse point and a Mouse down button: dragging in the preview moves it and holds the button. Checked: test of the point mapping; GPU test (the mouse's place and button reach the shader).
 - [x] 44. **Previews**: drag to scrub the movie, frame-rate cap (V).
-- [x] 45. **Eyedropper**: pick a colour from a preview (V).
+- [x] 45. **Eyedropper**: pick a color from a preview (V).
 - [x] 46. **Endless scratch** control for movies (V).
       Playback › Scratch strip (drag; wraps at the ends).
 - [x] 47. **Movie chapter markers**: jump to chapters stored in the file (V).
       Playback › Chapters menu when the file has chapters. Checked: test with a movie made with two chapters.
 - [x] 48. **Text from a file**, shown word / line / sentence at a time with next / previous; **animated text styles** (beat, scrolling, fade); **text set by OSC** (V).
       Text › Parts: from a file or by splitting, by lines / sentences / words / paragraphs; next / previous (mappable). Animated text styles: not yet. Checked: tests.
-- [x] 49. **Strings and colours from controllers** (OSC text and colour values) (V).
-      OSC words into text layers (`/phosphor/layer/<id>/text`, or any mapped address). Colours from controllers: not done. Checked: test.
+- [x] 49. **Strings and colors from controllers** (OSC text and color values) (V).
+      OSC words into text layers (`/phosphor/layer/<id>/text`, or any mapped address). Colors from controllers: not done. Checked: test.
 - [x] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
       Right-click any control › Send out: OSC to the Control Surface's OSC-out host, MIDI CC or note. Checked: real UDP test.
-- [x] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, colour wheel, computed values (V).
-      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field (onto a text layer; Mac and phone). A button grid or pop-up menu = Choices (+ "pick a clip by value"); the colour wheel = the Colour widget. Multi-slider (bars with their own targets; draw across them; Mac, phone, TouchOSC export). Computed value: a formula of other controls (a, b, c…, time, beat) that drives its targets. Checked: tests.
+- [x] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, color wheel, computed values (V).
+      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field (onto a text layer; Mac and phone). A button grid or pop-up menu = Choices (+ "pick a clip by value"); the color wheel = the Color widget. Multi-slider (bars with their own targets; draw across them; Mac, phone, TouchOSC export). Computed value: a formula of other controls (a, b, c…, time, beat) that drives its targets. Checked: tests.
 - [x] 52. **Import TouchOSC layouts** (V). Export exists.
       MIDI / OSC panel › Import TouchOSC layout: pages, controls in place, OSC addresses mapped. Checked: round-trip test with the export.
-- [x] 53. **Clip grid lights on Launchpad / APC**: pad colours for empty / loaded / playing / queued (V, M).
+- [x] 53. **Clip grid lights on Launchpad / APC**: pad colors for empty / loaded / playing / queued (V, M).
       MIDI / OSC panel › Clip pad lights (presets for Launchpad / APC mini mk2 and the first APC mini). Checked: test of the states; not tried on a real Launchpad.
 - [x] 54. **Map a whole row of clips at once** (first and last note), bank / transpose the mapping, pick a clip by index or value (V).
       Clip row name menu › MIDI notes: map the row from a note, shift by ±1 / ±8; "Pick a clip by value" (mappable). Checked: tests.
@@ -328,8 +328,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 70. **Mapping**: drop a file on the stage to make a slice at its shape; draw a line slice freehand (M).
 - [x] 71. **Automatic soft edges** from overlapping slices (M). Set by hand now.
 - [x] 72. **One canvas across several displays** (2×2 etc.) and **one output shown on several displays** (V, M).
-- [x] 73. **LED fixtures**: circle and curve shapes, sampling (centre / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master, Average (each light averages its own patch: 9 samples), Video wall… (tiles across × down covering the picture, each patched on fresh universes). Checked: tests (CPU and GPU).
-- [x] 74. **Vision effects**: blur / pixelate faces, picture over faces, colour match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
+- [x] 73. **LED fixtures**: circle and curve shapes, sampling (center / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master, Average (each light averages its own patch: 9 samples), Video wall… (tiles across × down covering the picture, each patched on fresh universes). Checked: tests (CPU and GPU).
+- [x] 74. **Vision effects**: blur / pixelate faces, picture over faces, color match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
 - [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
 - [x] 76. **NDI sound** in and out (V). Out: with the picture. In: Audio › input list has every NDI source ("NDI · name"); its sound drives the meters, beat and modulators (audio-only receiver, no picture over the network). Checked: loopback test (our own NDI sender's tone comes back at 48 kHz, right level).
 - [x] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
@@ -339,8 +339,8 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 81. **SVG and Lottie** (After Effects) animations as clips (M). SVG; Lottie .json (not yet .lottie zips).
 - [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
       View › Lock Panels On / Off.
-- [x] 83. **Interface colour themes** (V). Has a brightness slider.
-- [x] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M). Done: smooth edges (anti-aliasing) per output; Deep colour (Output panel): layers mixed and effects worked out at 16 bits a channel, same looks, no banding (on cards that can draw into 16-bit textures). Checked: GPU tests (fine detail kept: 33 vs 8-bit's 64 for a true 33; every saved test project looks the same with it on).
+- [x] 83. **Interface color themes** (V). Has a brightness slider.
+- [x] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M). Done: smooth edges (anti-aliasing) per output; Deep color (Output panel): layers mixed and effects worked out at 16 bits a channel, same looks, no banding (on cards that can draw into 16-bit textures). Checked: GPU tests (fine detail kept: 33 vs 8-bit's 64 for a true 33; every saved test project looks the same with it on).
 - [x] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
 
 ### Large
@@ -353,7 +353,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
 - [x] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view); handles on each mesh point (select a point: drag its tips across and down; right-click › Straighten). Checked: tests (no handles = the same surface as before; GPU: a handle moves the picture, straightening restores it).
 - [x] 91. **Read text and QR codes** from video into data (V).
 - [x] 92. **LED scanner**: a camera finds each LED and places the fixtures (M). Built; not tried with real lights and a camera yet.
-- [x] 93. **MilkDrop visualiser** (projectM) (V). .milk / .milk2 presets as layers (lactea, on our wgpu device). Presets not bundled (O10).
+- [x] 93. **MilkDrop visualizer** (projectM) (V). .milk / .milk2 presets as layers (lactea, on our wgpu device). Presets not bundled (O10).
 - [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
 - [x] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Both built; not tried on real hardware yet.
       Done: Enttec DMX USB Pro and compatibles (LEDs panel › USB (Enttec Pro) › its port; one universe). Checked: tests (packet; a pseudo-terminal gets the bytes unchanged). Not tried with the real box. Open DMX (the cheap kind without its own timing): not done.
@@ -365,7 +365,7 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       (Designer area): projectors (controller box found by itself: Ether Dream, IDN, LaserCube network / USB, Helios,
       via the laser-dac crate, MIT), the Laser Designer (looks of shapes: line, circle, polygon, star, wave, Lissajous,
       spiral, beams; spin, draw-on, rainbow, motion, LFO / sound modulation; canvas draws the traced path within the
-      projector's points a second), arming (never saved), Blackout, a floor per projector, colour balance, flips;
+      projector's points a second), arming (never saved), Blackout, a floor per projector, color balance, flips;
       ControlTarget::LaserShape / LaserBrightness (MIDI, OSC /phosphor/laser/…, cues, AI). ILDA files still play as
       video clips. *(engine tests for tracing / budget / safety; screenshots; bench --quick lasers prints LASER.
       **Not tried on a real laser**: needs you with one.)* **ILDA files and text as laser looks done 2026-10-30**
@@ -376,19 +376,19 @@ Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are 
       frames drop the shortest lines and the Designer says so). **Zones done 2026-10-30** (LaserProjector.zones: look,
       brightness (mappable), place / size / turn, four corners through a homography; dark areas blank the beam; area
       editor with handles). **Image trace, drawings, onion skin done 2026-10-30** (Trace `image`; Drawing shape
-      `points` drawn on the canvas; `LaserLook.onion` + opacity behind the canvas; brightness = strongest colour). **Transform box, colour as settings done 2026-10-30** (`panels::laser_box`;
+      `points` drawn on the canvas; `LaserLook.onion` + opacity behind the canvas; brightness = strongest color). **Transform box, color as settings done 2026-10-30** (`panels::laser_box`;
       LASER_FIELDS red / green / blue / hue, `LaserShape::set_field`, `hue_of`; all keyable on the timeline). **Laser looks on the Timeline done 2026-10-30** (`Timeline.laser_looks`
       `LookChange` by look id, `look_at` / `set_look`; lanes in `panels::timeline_lasers`; applied in `run_timeline`). **Laser cues done 2026-10-30** (`Cue.{lasers, laser_master, sets_lasers}`, `CueLaser`;
       look switches at GO, brightness glides; never arms; cue row laser menu). **Laser looks in the clip grid done 2026-10-30** (`LaserProjector.clips`,
       `Lasers::trigger_column` from `Composition::trigger_column`; `panels::clip_lasers`). **Laser looks on the Control Surface done 2026-10-30** (`ControlTarget::LaserLook`;
       surface Add › Laser look buttons).
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
-      colours to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
+      colors to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
       system, to see what it accepts.
 
 ### Not planned (say if you want any)
 Quartz Composer / Vuo / TouchDesigner hosting (QC is dead, the others need their own apps), Core Image filters,
-Wiimote, Leap Motion, Makey Makey, weather data, Canon / Sony DSLR inputs, MiniMad hardware export, licences / demo mode.
+Wiimote, Leap Motion, Makey Makey, weather data, Canon / Sony DSLR inputs, MiniMad hardware export, licenses / demo mode.
 
 Already in Phosphor and not listed: everything else in the two research files at headline level (see `docs/PARITY.md`).
 
@@ -397,12 +397,12 @@ Already in Phosphor and not listed: everything else in the two research files at
 Goal: someone with nothing on their computer can open Phosphor and fill a show from free, openly licensed sources
 online. One **Online** panel in the Library searches every source at once: thumbnails, preview on hover, drag onto a
 clip cell or layer. Files download into the project's media folder (so the show works offline and in exports), each
-with its licence and credit saved next to it (a Credits list for the show; "only ones I can use commercially"
+with its license and credit saved next to it (a Credits list for the show; "only ones I can use commercially"
 filter). Sources that need an API key: a key field per source (like the AI key), or later through a phosphorfx.com
 proxy (**needs you**: the server).
 
 **Done 2026-10-23 (no keys needed):** Library › Online searches videos, pictures, icons, textures, MilkDrop
-visualisers, fonts, music and ISF shaders (NASA, Wikimedia Commons, Internet Archive, Openverse, Art Institute of
+visualizers, fonts, music and ISF shaders (NASA, Wikimedia Commons, Internet Archive, Openverse, Art Institute of
 Chicago, Iconify, Poly Haven, projectM's pack, Google Fonts, netlabels, isf.video); credits kept with the project;
 Start a show (5 moods); live data modulators and live text (weather, ISS, earthquakes, city clocks, headlines); real
 lights from the Open Fixture Library.
@@ -419,13 +419,13 @@ library: your OK). Public webcams need a hand-picked list that's kept up to date
   effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label
   them). Overlaps #94.
 - [x] O4. **Lottie animations**: Online › Animations (Lottie): LottieFiles' free animations (no key, Lottie Simple License: free, also commercially), downloaded as .json and played as Lottie clips. Checked: parse test + a live search and download onto a layer (2026-10-27).
-- [~] O5. **Icons and vector shapes** (Iconify done: every open icon set, white SVG; emoji sets come with it): Iconify (200,000+ open-licence SVG icons, one API, no key), Phosphor icons,
+- [~] O5. **Icons and vector shapes** (Iconify done: every open icon set, white SVG; emoji sets come with it): Iconify (200,000+ open-license SVG icons, one API, no key), Phosphor icons,
   OpenMoji / Twemoji (emoji as SVG): as SVG clips or text-layer symbols.
 - [~] O6. **3D models, textures, HDRIs** (Poly Haven textures and 360 panoramas (+ the 360 View effect) done; models next; ambientCG skipped 2026-10-27: its previews are spheres and its textures come only as zips): Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
   models, Smithsonian 3D: for 3D-model slices and textures.
 - [~] O7. **Music and sound** (Online › Music: Internet Archive netlabel releases, Creative Commons; Freesound / Jamendo need keys): Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
   audio, Pixabay music: clip sound, timeline sound tracks, and something for the beat detection to follow.
-- [x] O8. **Fonts** (Online › Fonts: Google Fonts families, regular + bold into Phosphor's fonts folder): Google Fonts (open licences; the GitHub repo or the API) for text layers.
+- [x] O8. **Fonts** (Online › Fonts: Google Fonts families, regular + bold into Phosphor's fonts folder): Google Fonts (open licenses; the GitHub repo or the API) for text layers.
 - [x] O9. **DMX fixture definitions** (LED / DMX › A real light…: any Open Fixture Library light and mode): Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving
   head / LED bar by name instead of typing channels.
 - [x] O10. **MilkDrop presets** (Online › Visualizers: the whole Cream of the Crop pack, searchable): projectM's preset packs ("cream of the crop") once #93 lands.
@@ -442,7 +442,7 @@ Released in **0.2.97** (Mac, Windows zip + installer, Linux ARM; installed here)
 Hap R is in **0.2.98**, lostjared's effects in **0.2.99** (both published). This round is done.
 
 - [x] **Mapped controls stand out** (asked mid-way): gold outline and tint on every mapped control. Checked on a screenshot.
-- [x] **Stereo audio pictures**: row 0 left, row 1 right, both sides in each pixel's colours; newest 512 samples in
+- [x] **Stereo audio pictures**: row 0 left, row 1 right, both sides in each pixel's colors; newest 512 samples in
       a row. Checked with test tones, left only and then 2:3 stereo. Curve Ink Scope (px-stream) ships and draws the
       Lissajous figure; X.1–X.5 need a picture drawn by their Max patch, not sound.
 - [x] **Instanced vertex shaders**: a shader can draw its quad many times (`gl_InstanceID`, MadMapper
@@ -501,7 +501,7 @@ Hap R is in **0.2.98**, lostjared's effects in **0.2.99** (both published). This
       must be at the same paths as on the Mac.
 
 - [x] **Crash reports, app side** (#5): Report a Bug › "Send crash reports by themselves" (off unless chosen;
-      greyed until the server exists). After a crash, the same diagnostics the bug window shows (version,
+      grayed until the server exists). After a crash, the same diagnostics the bug window shows (version,
       system, project shape as counts, end of crash.log; no project content, no file names) are posted once,
       and the recovery banner says whether it went. Checked: a local server received the JSON POST (test).
 

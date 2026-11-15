@@ -101,7 +101,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
                 crate::ui::pick_value(ui, &mut cfg.source, MonitorSource::OneOutput(o.id), format!("Output: {} (mapped)", o.name));
             }
         });
-        toggle(ui, &mut cfg.grid, label(icon::GRID_FOUR, "Guides")).on_hover_text("Thirds and centre guides");
+        toggle(ui, &mut cfg.grid, label(icon::GRID_FOUR, "Guides")).on_hover_text("Thirds and center guides");
         let rate = PREVIEW_RATES.iter().find(|r| r.0 == cfg.fps).map_or("Every frame", |r| r.1);
         crate::ui::dropdown(ui, ("monitor_fps", n), 90.0).selected_text(rate).show_ui(ui, |ui| {
             for (v, name) in PREVIEW_RATES {

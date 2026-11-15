@@ -79,9 +79,9 @@ impl FileFormat {
             FileFormat::Auto => "H.264 (.mp4) / ProRes (.mov)",
             FileFormat::Hap => "Hap (.mov)",
             FileFormat::HapAlpha => "Hap Alpha (.mov)",
-            FileFormat::HapQ => "Hap Q (.mov, better colour)",
+            FileFormat::HapQ => "Hap Q (.mov, better color)",
             FileFormat::HapQAlpha => "Hap Q Alpha (.mov)",
-            FileFormat::HapR => "Hap R (.mov, best colour + alpha)",
+            FileFormat::HapR => "Hap R (.mov, best color + alpha)",
             FileFormat::Hevc => "HEVC (.mp4, smaller files)",
         }
     }
@@ -507,7 +507,7 @@ impl Streamer {
         self.frame_size = (width, height);
         self.pacer.reset(now);
         self.started = Some(now);
-        let name = self.settings.file_format.name().trim_end_matches(" (.mov)").trim_end_matches(" (.mov, better colour)");
+        let name = self.settings.file_format.name().trim_end_matches(" (.mov)").trim_end_matches(" (.mov, better color)");
         *self.shared.lock().unwrap() = Shared { status: format!("Recording {name} · {path}"), ..Default::default() };
         Ok(())
     }

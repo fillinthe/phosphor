@@ -84,7 +84,7 @@ pub(crate) fn clip_editor(ui: &mut egui::Ui, layer: &mut LayerState, c: usize, f
                 act = Some(ClipAct::MatchBeat);
             }
             let file = matches!(&layer.clip_slot_mut(c).source, SourceSpec::Movie { path: Some(_), .. } | SourceSpec::Image { path: Some(_), .. });
-            if file && crate::ui::command(ui, label(icon::STAR, "Favourite")).on_hover_text("Star this clip's file in Media (Media › Favourites lists them; click again to unstar)").clicked() {
+            if file && crate::ui::command(ui, label(icon::STAR, "Favorite")).on_hover_text("Star this clip's file in Media (Media › Favorites lists them; click again to unstar)").clicked() {
                 act = Some(ClipAct::Favorite);
             }
             #[cfg(not(target_arch = "wasm32"))]
@@ -165,7 +165,7 @@ pub(crate) fn apply_clip_act(st: &mut State, layer: u64, c: usize, act: ClipAct,
             st.comp.add_media(&name, &path);
             if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
                 m.favorite = !m.favorite;
-                st.notice = Some(if m.favorite { format!("{name} is a favourite (Media › Favourites)") } else { format!("{name} is no longer a favourite") });
+                st.notice = Some(if m.favorite { format!("{name} is a favorite (Media › Favorites)") } else { format!("{name} is no longer a favorite") });
             }
         }
         ClipAct::Clear => {

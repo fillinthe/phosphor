@@ -137,7 +137,7 @@ fn lut_effect(slug: &str, stem: &str, lut: &crate::lut::Lut) -> Loaded {
     Loaded {
         id: format!("{}lut_{slug}", shaders::ISF_EFFECT),
         name: display_name(stem),
-        about: format!("Colour grade from {stem}.cube ({n}³ LUT)", n = lut.size),
+        about: format!("Color grade from {stem}.cube ({n}³ LUT)", n = lut.size),
         params: vec![Param::new("Amount", 0.0, 1.0, 1.0)],
         wgsl: crate::lut::wgsl(&entry, lut.size),
         entry,
@@ -152,7 +152,7 @@ fn lut_effect(slug: &str, stem: &str, lut: &crate::lut::Lut) -> Loaded {
 
 /// VDMX's LUT Mixer: every LUT found, LUT A and LUT B picked by name, Mix between them, Amount over the picture.
 /// What decides where LUT Split changes from LUT A to LUT B.
-const SPLIT_BY: &[&str] = &["Brightness", "Left to right", "Top to bottom", "From the centre", "Mask layer"];
+const SPLIT_BY: &[&str] = &["Brightness", "Left to right", "Top to bottom", "From the center", "Mask layer"];
 
 fn lut_mix_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
     lut_mixer(luts, false)
@@ -183,9 +183,9 @@ fn lut_mixer(luts: &[(String, crate::lut::Lut)], split: bool) -> Loaded {
         id: format!("{}{key}", shaders::ISF_EFFECT),
         name: if split { "LUT Split".into() } else { "LUT Mix".into() },
         about: if split {
-            format!("Two of your {} colour grades in different parts of the picture: shadows and highlights, left and right, centre and edges, or where another layer is bright (Mask layer)", luts.len())
+            format!("Two of your {} color grades in different parts of the picture: shadows and highlights, left and right, center and edges, or where another layer is bright (Mask layer)", luts.len())
         } else {
-            format!("Blend between two of your {} colour grades (LUT A to LUT B)", luts.len())
+            format!("Blend between two of your {} color grades (LUT A to LUT B)", luts.len())
         },
         params,
         wgsl: crate::lut::wgsl_mix(&entry, luts.len(), split),
@@ -773,7 +773,7 @@ fn lut_split_follows_a_mask_layer() {
     };
     let dark = middle(&mut engine, 0.0);
     let bright = middle(&mut engine, 1.0);
-    assert!(dark < 80 && bright > 170, "black mask = LUT A (the same grey), white mask = LUT B (inverted): {dark} {bright}");
+    assert!(dark < 80 && bright > 170, "black mask = LUT A (the same gray), white mask = LUT B (inverted): {dark} {bright}");
 }
 
 /// Where an ISF shader goes in the Effects panel: the first of its own CATEGORIES that means one of Phosphor's,

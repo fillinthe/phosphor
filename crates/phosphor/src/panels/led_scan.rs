@@ -72,7 +72,7 @@ pub(crate) fn led_scan_window(ctx: &egui::Context, st: &mut State) {
                 Status::Done { placed, fixtures, seen, total } => ui.colored_label(
                     WARN,
                     format!(
-                        "Found {seen} of {total} lights; the others were placed between their neighbours. {placed} of {fixtures} fixtures moved (one moves when a quarter of its lights were seen). Check them on the picture."
+                        "Found {seen} of {total} lights; the others were placed between their neighbors. {placed} of {fixtures} fixtures moved (one moves when a quarter of its lights were seen). Check them on the picture."
                     ),
                 ),
                 Status::Failed(e) => ui.colored_label(WARN, e),

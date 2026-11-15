@@ -86,7 +86,7 @@ mod tests {
         assert_eq!(p.outputs.len(), 4);
         let inputs: Vec<[f32; 4]> = p.outputs.iter().map(|o| o.mapping.surfaces[0].input).collect();
         assert!((inputs[3][0] + inputs[3][2] - 1.0).abs() < 1e-5, "the last ends at the right edge: {inputs:?}");
-        assert!(inputs[1][0] < inputs[0][0] + inputs[0][2], "neighbours overlap");
+        assert!(inputs[1][0] < inputs[0][0] + inputs[0][2], "neighbors overlap");
         let w = led_wall();
         assert!(w.dmx.enabled && w.dmx.fixtures[0].cols == 32);
         let m = ab_mixer();

@@ -56,7 +56,7 @@ pub fn decode(packet: &[u8], out: &mut Vec<u8>, alpha: &mut Vec<u8>) -> Result<(
             }
             at += h + n;
         }
-        let format = format.ok_or("Hap frame with no colour image")?;
+        let format = format.ok_or("Hap frame with no color image")?;
         return Ok((format, !alpha.is_empty()));
     }
     let format = texture(ty)?;

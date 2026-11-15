@@ -750,7 +750,7 @@ mod tests {
         let taps = f.sample_taps();
         assert_eq!(taps.len(), 18);
         assert!(taps[..9].iter().all(|p| p[0] < 0.5) && taps[9..].iter().all(|p| p[0] > 0.5), "{taps:?}");
-        assert_eq!(taps[4], [0.25, 0.5], "the middle sample is the centre");
+        assert_eq!(taps[4], [0.25, 0.5], "the middle sample is the center");
         // Half the first pixel's samples white, half black: it sends the average.
         let settings = DmxSettings { fixtures: vec![Fixture { gamma: 1.0, ..f.clone() }], ..Default::default() };
         let mut colors = vec![[0u8, 0, 0, 255]; 18];

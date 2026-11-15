@@ -201,7 +201,7 @@ impl PhosphorApp {
                 if let Some(dir) = crate::show::storage_dir().map(|d| d.join("luts")) {
                     let _ = std::fs::create_dir_all(&dir);
                     crate::os::open(&dir);
-                    st.notice = Some("Colour-grading LUTs (.cube) you drop in this folder become effects (category LUT) within a few seconds".into());
+                    st.notice = Some("Color-grading LUTs (.cube) you drop in this folder become effects (category LUT) within a few seconds".into());
                 }
             }
             A::ReportBug => st.bug.open = true,

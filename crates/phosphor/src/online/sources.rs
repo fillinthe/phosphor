@@ -73,18 +73,18 @@ impl Source {
     pub fn about(self) -> &'static str {
         match self {
             Source::Nasa => "NASA's pictures and videos of space, rockets and Earth. Public domain.",
-            Source::Openverse => "Millions of Creative Commons photos from Flickr, museums and more. Some licences need a credit or forbid paid use.",
-            Source::Commons => "Wikipedia's media library: photos and videos under open licences.",
+            Source::Openverse => "Millions of Creative Commons photos from Flickr, museums and more. Some licenses need a credit or forbid paid use.",
+            Source::Commons => "Wikipedia's media library: photos and videos under open licenses.",
             Source::Archive => "Old public-domain films from the Prelinger Archives, and Creative Commons music from netlabels.",
             Source::Artic => "Paintings and art from the Art Institute of Chicago's public-domain collection (CC0).",
             Source::Cleveland => "Over 30,000 artworks from the Cleveland Museum of Art's open access collection (CC0): paintings, prints, photos.",
-            Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to colour with effects).",
+            Source::Iconify => "Over 200,000 icons and symbols from open icon sets, as sharp SVG pictures (white, to color with effects).",
             Source::PolyHaven => "Photo textures (stone, wood, metal, fabric…) and about 1,000 360 panoramas of skies and places (look around in them with the 360 View effect). CC0.",
             Source::X => "An X account's animated GIFs (needs gallery-dl and your browser's X sign-in).",
-            Source::IsfOnline => "Thousands of effects and generators people shared on isf.video (licences vary: check the credit).",
+            Source::IsfOnline => "Thousands of effects and generators people shared on isf.video (licenses vary: check the credit).",
             Source::LottieFiles => "Over 100,000 free vector animations (Lottie): sharp at any size, with see-through backgrounds. Free to use, also in paid work.",
-            Source::GoogleFonts => "About 1,900 open-licence font families for text layers.",
-            Source::MilkDrop => "Nearly 10,000 MilkDrop visualisers (projectM's \"Cream of the Crop\" pack, sorted by Isosceles) that move to the music.",
+            Source::GoogleFonts => "About 1,900 open-license font families for text layers.",
+            Source::MilkDrop => "Nearly 10,000 MilkDrop visualizers (projectM's \"Cream of the Crop\" pack, sorted by Isosceles) that move to the music.",
         }
     }
 
@@ -671,7 +671,7 @@ fn google_fonts(v: &Value, query: &str, page: usize) -> Vec<Item> {
                 credit: phosphor_engine::Credit {
                     title: family.clone(),
                     author: designers,
-                    licence: "Open font licence (OFL, Apache or Ubuntu)".into(),
+                    licence: "Open font license (OFL, Apache or Ubuntu)".into(),
                     licence_url: "https://fonts.google.com/attribution".into(),
                     page: format!("https://fonts.google.com/specimen/{}", family.replace(' ', "+")),
                     source: "Google Fonts".into(),
@@ -833,7 +833,7 @@ pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), Stri
                     let url = text(&f["url"]);
                     (!url.is_empty()).then(|| (url, f["size"].as_u64()))
                 })
-                .ok_or_else(|| "Poly Haven has no colour picture for this texture".into())
+                .ok_or_else(|| "Poly Haven has no color picture for this texture".into())
         }
         _ => item.file.clone().map(|f| (f, item.size)).ok_or_else(|| "no file".into()),
     }
@@ -936,7 +936,7 @@ mod tests {
         let sh = Source::IsfOnline.parse(Kind::Shader, isf).unwrap();
         assert_eq!(sh.len(), 1, "private ones are left out");
         assert_eq!((sh[0].title.as_str(), sh[0].thumb.as_str()), ("Square Tunnel", "https://res.cloudinary.com/hrlz5rsqo/image/upload/w_256/z9tk.jpg"));
-        assert!(!sh[0].credit.commercial(), "no licence stated: not for paid work");
+        assert!(!sh[0].credit.commercial(), "no license stated: not for paid work");
     }
 
     #[test]

@@ -853,7 +853,7 @@ pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextSt
         segmented(ui, &mut style.align, &aligns, |_, r, a| {
             r.clone().on_hover_text(match a {
                 TextAlign::Left => "Left",
-                TextAlign::Center => "Centre",
+                TextAlign::Center => "Center",
                 TextAlign::Right => "Right",
             });
         });

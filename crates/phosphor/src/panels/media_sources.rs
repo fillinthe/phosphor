@@ -131,7 +131,7 @@ pub(crate) fn entries(st: &State) -> Vec<Entry> {
     };
     add(
         None,
-        format!("{} Favourites", icon::STAR),
+        format!("{} Favorites", icon::STAR),
         count(&|m| m.favorite).to_string(),
         false,
         Pick::Source(MediaSource::Favorites, None),

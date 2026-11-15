@@ -7,21 +7,21 @@ the code, never the other way round.
 ## 1. One direction: "Phosphor CRT", dark technical
 
 A VJ tool is used in the dark, next to a projector, by someone looking at the output, not at the app. So the
-interface is a **blue-black control surface with one lit colour**: the look of a phosphor monitor at rest, where
+interface is a **blue-black control surface with one lit color**: the look of a phosphor monitor at rest, where
 only the thing that matters glows. Everything else is flat, quiet and square.
 
-- **Dominant:** near-black charcoal with a hint of blue (never pure grey, never pure black except the darkest step).
+- **Dominant:** near-black charcoal with a hint of blue (never pure gray, never pure black except the darkest step).
 - **Accent:** one phosphor green, used only for *on / playing / selected / go*. Nothing decorative is green.
-- **Kind hues:** six muted colours say what a thing *is* (a movie, a generator, a camera, text, an output, a
-  controller), as a tab colour or a stripe. They never mean "on".
-- **Warnings** are orange, **record / delete** red, **mapped** gold. Those four meanings own those colours.
+- **Kind hues:** six muted colors say what a thing *is* (a movie, a generator, a camera, text, an output, a
+  controller), as a tab color or a stripe. They never mean "on".
+- **Warnings** are orange, **record / delete** red, **mapped** gold. Those four meanings own those colors.
 - **Shape:** sliders are square bars, controls have 5-point corners, pills only for on/off toggles, nothing casts a
   shadow except a floating window or menu.
 - **Atmosphere** comes from depth, not decoration: three tones of charcoal (panel, window, well), one accent, the
   picture itself. No patterns, no gradients, no textures, no illustration.
 
 Not this: anything that reads as a website. No hero sections, no card grids for the sake of it, no gradients,
-no gradient text, no emoji, no purple-to-indigo anything, no "modern clean" grey-on-white.
+no gradient text, no emoji, no purple-to-indigo anything, no "modern clean" gray-on-white.
 
 ## 2. Type
 
@@ -37,16 +37,16 @@ Sizes (points, `theme::apply`): Small 9 · Body 11.5 · Button 11.5 · Heading 1
 `ui::heading` (strong Body) or a `section` title; there is no larger display size in panels.
 
 **Never:** Inter, Roboto, Open Sans, Arial, Helvetica, SF / system-ui, Segoe, Noto Sans as a body font. Any new
-font must be OFL or similarly free, bundled in `assets/fonts` with its licence file, loaded in `theme::set_fonts`,
+font must be OFL or similarly free, bundled in `assets/fonts` with its license file, loaded in `theme::set_fonts`,
 and have a role in this table first.
 
 **Case:** sentence case everywhere ("Add effect", "Stream key"). All caps only for the wordmark and single-word
 state badges of eight letters or fewer (MASTER, GRID, ON, LASERS ON). No all-caps eyebrows or section labels.
 
-## 3. Colour tokens
+## 3. Color tokens
 
-All colours come from `theme` (or egui's `Visuals`, which `theme::set_brightness` fills). Panels never write a
-`Color32::from_rgb` of their own: the design test ratchets the count of raw colours outside `theme.rs` and the kit
+All colors come from `theme` (or egui's `Visuals`, which `theme::set_brightness` fills). Panels never write a
+`Color32::from_rgb` of their own: the design test ratchets the count of raw colors outside `theme.rs` and the kit
 down, never up.
 
 Values at the default brightness (0.35, "Dark"); `tone(g)` = `(g-3, g-1, g)`, the blue hint.
@@ -66,10 +66,10 @@ Values at the default brightness (0.35, "Dark"); `tone(g)` = `(g-3, g-1, g)`, th
 | `theme::RECORD` | `#E1463C` | Record, Arm, the LIVE dot. White ink. |
 | `theme::DANGER` · `danger_fill(k)` | `#FF503C` · see-through red | Danger in words and lines (LASERS ON, a laser's floor, a dark area); its zone over a picture. |
 | `theme::MAPPED` · `mapped_fill(k)` | `#FFC446` | Mapped to a controller, Learn, a beat (badge, stripe, dot). |
-| `theme::FAVOURITE` | `#FFD25A` | A favourite's star. |
+| `theme::FAVORITE` | `#FFD25A` | A favorite's star. |
 | `theme::MASK` | `#FF8250` | A mask's outline on the mapping canvas. |
 | `theme::HANDLE` | `#64D2FF` | Points you drag on a canvas. |
-| `theme::PICTURE_BG` · `PICTURE_GRID` · `ON_PICTURE` | `#050708` · `#282A2C` · `#DCDCDC` | Behind every picture at any brightness; grid and guides on it; words on a picture or a coloured fill. |
+| `theme::PICTURE_BG` · `PICTURE_GRID` · `ON_PICTURE` | `#050708` · `#282A2C` · `#DCDCDC` | Behind every picture at any brightness; grid and guides on it; words on a picture or a colored fill. |
 | `theme::line()` · `theme::faint()` | follow the brightness | A resting border, separator, off dot · words and borders a step quieter than text. |
 | `PROBLEM_FILL` · `GOOD_FILL` · `CONTROL_FILL` · `MAPPED_FILL` | dark tints | Banners floating over everything: a problem, good news, Map mode, Learn. |
 | `BLOCK_TINTS` · `TRACK_FACE / HAND / BODY` · `DONATE` | see theme.rs | Patch block groups; video tracking's three kinds; the Donate button. |
@@ -79,13 +79,13 @@ Values at the default brightness (0.35, "Dark"); `tone(g)` = `(g-3, g-1, g)`, th
 | `Hue::Text` | `#E1D2AA` / `#786432` | Text layers. |
 | `Hue::Output` | `#F57DAA` / `#AA285F` | Outputs, mapping, LEDs, streaming. |
 | `Hue::Control` | `#5FCDFF` / `#006EA0` | MIDI, OSC, modulators, the control surface, number wires. |
-| Ink | egui `text_color` / `strong_text_color` / `weak_text_color` | Words. `hint` = weak. Never a hand-picked grey for text. |
+| Ink | egui `text_color` / `strong_text_color` / `weak_text_color` | Words. `hint` = weak. Never a hand-picked gray for text. |
 
 Accent on a fill: `theme::tint(base, amount)`. Dimmer accent: `accent().gamma_multiply(k)`. Never a second
 green, never a lighter copy of a hue by hand.
 
-What's still a raw colour outside the theme (21 → 11, `ui/colour_budget.txt`): colours that come from data (a
-laser shape's own colour, an accent swatch, a widget's tint). Everything else is a token.
+What's still a raw color outside the theme (21 → 11, `ui/color_budget.txt`): colors that come from data (a
+laser shape's own color, an accent swatch, a widget's tint). Everything else is a token.
 
 ## 4. Space, shape, depth
 
@@ -100,13 +100,13 @@ laser shape's own colour, an accent swatch, a widget's tint). Everything else is
 | Corner radius | controls 5 · menus 6 · windows 8 · action buttons 6 · segmented frame 6, segment 4 · list rows 3 · toggles full pill · **sliders and meters 0** | The owner's choice: square bars. |
 | Outlines | 1 point, same width in every state (a resting outline is transparent) so nothing moves on hover | `theme::set_brightness` |
 | Shadows | egui's window and popup shadow only | Nothing in a panel casts a shadow. |
-| Expansion on hover / press | 0 | Buttons stay put; the state shows in colour and outline. |
+| Expansion on hover / press | 0 | Buttons stay put; the state shows in color and outline. |
 
 No other numbers. A new size is a named constant in `ui/kit.rs` with a comment saying what it's for.
 
 ## 5. Motion
 
-- Only state changes animate, and only through egui's own transitions (about 100 ms): hover colour, a collapsing
+- Only state changes animate, and only through egui's own transitions (about 100 ms): hover color, a collapsing
   section opening, a menu appearing. Nothing moves on its own to decorate.
 - Live things that *should* move (a meter, a modulation position on a slider, a scope) move because the data does.
 - No staggered reveals, no bouncing, no spinners except `ui.spinner()` beside words that say what's loading.
@@ -118,8 +118,8 @@ Every control is one of these. A panel never hand-rolls a button, slider, field,
 
 | Job | Component | Variants / sizes | States |
 |---|---|---|---|
-| Makes something happen now | `action_button(Act::Go)` (accent, dark ink) · `Act::Record` (red, white ink) | `action_button_sized`, `steady_action_button` (width held while the label changes) | hover: white outline · disabled: `command_if` style grey · mapped: gold badge |
-| A command (opens, edits, adds) | `command` · `small_command` (tight row) · `command_sized` · `wide_button` · `callout_button` (Donate, an update) | `*_if(enabled)` greys it out until it can be used | hover: lifted fill + accent outline · pressed: accent fill · disabled: grey |
+| Makes something happen now | `action_button(Act::Go)` (accent, dark ink) · `Act::Record` (red, white ink) | `action_button_sized`, `steady_action_button` (width held while the label changes) | hover: white outline · disabled: `command_if` style gray · mapped: gold badge |
+| A command (opens, edits, adds) | `command` · `small_command` (tight row) · `command_sized` · `wide_button` · `callout_button` (Donate, an update) | `*_if(enabled)` grays it out until it can be used | hover: lifted fill + accent outline · pressed: accent fill · disabled: gray |
 | Delete / remove | `danger_button` (red words) | — | confirm only when a lot is lost |
 | On / off | `toggle` (pill with a light) · `toggle_mapped` · `icon_toggle` (compact) · `eye_toggle` (show / hide) | `toggle_locked` | on: accent light and outline · off: hollow |
 | Pick one of a few | `segmented` · `choice_buttons` · `choice_mapped` · `segmented_list` | wraps in a narrow panel | picked: raised segment |
@@ -131,14 +131,14 @@ Every control is one of these. A panel never hand-rolls a button, slider, field,
 | Lists and rows | `list_row(picked, text, right, badge)` · `counts` | — | hovered fill, picked = selection |
 | Empty, loading, error | `empty_note` ("Nothing saved yet. Name the current look above and save it.") · `ui.spinner()` + `hint` · `colored_label(WARN, …)` with what to do | — | every panel says what to do next when empty |
 | Menus with fields | `field_menu` / `right_field_menu` (stay open while you type); commands in them `ui.close()` | — | — |
-| Windows | `dialog` (opens centred) | — | — |
+| Windows | `dialog` (opens centered) | — | — |
 | Area tabs | `section_tab` (an area in its hue; active = filled with black words) | — | — |
 | Any box graph | `ui::nodes::node_canvas` + a `Graph` impl | — | band select, keys, wire menus, Tidy |
 
 Accessibility on a desktop: every control is reachable by the pointer with a 22-point target and names itself
 (`widget_info`) for the mapping system; keyboard shortcuts come from `menu::MENUS`; contrast: words are white or
 `weak_text_color` on charcoal, dark on the accent (AA at these sizes); the light side flips ink and deepens every
-colour. The phone pages (`remote.html`, `player.html`) use 44-pixel targets.
+color. The phone pages (`remote.html`, `player.html`) use 44-pixel targets.
 
 ## 7. Anti-patterns (the test fails on the ones it can see)
 
@@ -152,15 +152,15 @@ colour. The phone pages (`remote.html`, `player.html`) use 44-pixel targets.
 - `Command::new("open")`: `os::open` / `os::reveal`. `Response::dnd_release_payload`: `ui::drop_payload`.
 - A menu with a field that isn't a `field_menu`.
 - Per-frame work that nothing needs (scans, string building, allocation in a draw closure).
-- Website patterns: hero blocks, three centred cards, gradient text, purple gradients, all-caps eyebrows, cookie
+- Website patterns: hero blocks, three centered cards, gradient text, purple gradients, all-caps eyebrows, cookie
   banners, marketing copy. Panels are tools.
 
 ## 8. Dark and light
 
 One slider, "Brightness" (0 darkest … 1 light; default 0.35), not a dark / light switch. Below the middle the
-text is light on charcoal; above it dark on soft grey up to white. The step at 0.5 is deliberate: **there is no
-mid-grey**, where neither ink reads. On the light side the accent and every kind hue switch to their deeper
-variant (`theme::accent`, `Hue::color`) so they still read as text. Anything that draws a colour asks `theme` at
+text is light on charcoal; above it dark on soft gray up to white. The step at 0.5 is deliberate: **there is no
+mid-gray**, where neither ink reads. On the light side the accent and every kind hue switch to their deeper
+variant (`theme::accent`, `Hue::color`) so they still read as text. Anything that draws a color asks `theme` at
 draw time, never caches it (the user can change brightness or accent at any moment). Tested in
 `theme::brightness_tests`.
 

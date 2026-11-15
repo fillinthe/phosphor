@@ -453,7 +453,7 @@ fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)
         act(ui, LayerAction::GroupWithBelow);
     }
     #[cfg(not(target_arch = "wasm32"))]
-    if crate::ui::command(ui, label(icon::PALETTE, "Match colour to a picture…")).clicked() {
+    if crate::ui::command(ui, label(icon::PALETTE, "Match color to a picture…")).clicked() {
         act(ui, LayerAction::MatchColour);
     }
     if crate::ui::command(ui, label(icon::SWATCHES, "Palette from this picture")).clicked() {

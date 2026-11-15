@@ -265,9 +265,9 @@ pub struct Template {
 /// Starters for the Shader Editor. Every one compiles (tested).
 pub const TEMPLATES: &[Template] = &[
     Template {
-        name: "Colour: tint and hue spin",
-        about: "Recolours the picture: a tint you mix in, and a hue that turns over time",
-        source: "// @name My Colour
+        name: "Color: tint and hue spin",
+        about: "Recolors the picture: a tint you mix in, and a hue that turns over time",
+        source: "// @name My Color
 // @kind effect
 // @param Amount 0 1 1
 // @param Hue spin 0 2 0.3
@@ -311,7 +311,7 @@ fn main(in: VOut) -> @location(0) vec4f {
     },
     Template {
         name: "Pixelate: blocks",
-        about: "Chunky pixels: snaps each point to the centre of its block",
+        about: "Chunky pixels: snaps each point to the center of its block",
         source: "// @name My Pixelate
 // @kind effect
 // @param Blocks across 4 200 40
@@ -327,7 +327,7 @@ fn main(in: VOut) -> @location(0) vec4f {
     },
     Template {
         name: "Mirror: kaleidoscope",
-        about: "Folds the picture around the centre into slices",
+        about: "Folds the picture around the center into slices",
         source: "// @name My Kaleidoscope
 // @kind effect
 // @param Slices 2 16 6
@@ -469,7 +469,7 @@ fn main(in: VOut) -> @location(0) vec4f {
     },
     Template {
         name: "Generator: pulsing rings",
-        about: "Rings moving out from the centre; map Pulse to the kick to make them hit with the music",
+        about: "Rings moving out from the center; map Pulse to the kick to make them hit with the music",
         source: "// @name My Rings
 // @kind generator
 // @param Rings 1 30 8
@@ -491,13 +491,13 @@ fn main(in: VOut) -> @location(0) vec4f {
     },
     Template {
         name: "Generator: noise clouds",
-        about: "Soft drifting clouds from layered noise, coloured by a palette",
+        about: "Soft drifting clouds from layered noise, colored by a palette",
         source: "// @name My Clouds
 // @kind generator
 // @param Scale 0.5 12 3
 // @param Speed 0 2 0.3
 // @param Detail 1 6 4
-// @param Colour shift 0 1 0
+// @param Color shift 0 1 0
 
 @fragment
 fn main(in: VOut) -> @location(0) vec4f {

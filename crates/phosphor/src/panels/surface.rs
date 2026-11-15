@@ -560,7 +560,7 @@ fn arrange_items(ui: &mut egui::Ui, ids: &[u64], menu: bool) -> Option<Act> {
     let mut picked = None;
     let items: [(&str, &str, Arrange); 11] = [
         (icon::ALIGN_LEFT, "Left edges", Arrange::Left),
-        (icon::ALIGN_CENTER_HORIZONTAL, "Centres across", Arrange::Centre),
+        (icon::ALIGN_CENTER_HORIZONTAL, "Centers across", Arrange::Centre),
         (icon::ALIGN_RIGHT, "Right edges", Arrange::Right),
         (icon::ALIGN_TOP, "Top edges", Arrange::Top),
         (icon::ALIGN_CENTER_VERTICAL, "Middles down", Arrange::Middle),

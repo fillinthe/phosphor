@@ -223,7 +223,7 @@ pub(crate) fn online_poll(ctx: &egui::Context, st: &mut State) {
 
 /// GIFs from X: saved accounts (click one to browse it), save the one typed, and the browser whose X sign-in is used.
 /// Returns true when an account was clicked (browse it now).
-const LIBRARIES_HELP: &str = "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualisers. Downloads go into the media bin with their credit (Credits, below).";
+const LIBRARIES_HELP: &str = "Free videos, pictures, icons and textures to start a show with: NASA, Wikimedia Commons, the Internet Archive's old films, Openverse's Creative Commons photos, the Art Institute of Chicago, Iconify's icons, Poly Haven's textures and nearly 10,000 MilkDrop visualizers. Downloads go into the media bin with their credit (Credits, below).";
 
 fn x_accounts(ui: &mut egui::Ui, o: &mut Online) -> bool {
     use crate::online::x;
@@ -425,7 +425,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
             }
         });
         go |= o.want != before && o.search.is_some();
-        go |= toggle(ui, &mut o.commercial, "Paid work OK").on_hover_text("Only results whose licence allows use in paid work (no \"NC\" licences)").changed() && o.search.is_some();
+        go |= toggle(ui, &mut o.commercial, "Paid work OK").on_hover_text("Only results whose license allows use in paid work (no \"NC\" licenses)").changed() && o.search.is_some();
         crate::ui::field_menu(ui, label(icon::BOOKS, "Libraries"), |ui| {
             for s in Source::ALL {
                 let mut on = !o.off.contains(&s);
@@ -640,7 +640,7 @@ fn credits(ui: &mut egui::Ui, comp: &phosphor_engine::Composition) {
     let n = comp.media_bin.iter().filter(|m| m.credit.is_some()).count();
     crate::ui::section(ui, "online_credits", format!("{} Credits ({n})", icon::IDENTIFICATION_CARD), false, |ui| {
         if n == 0 {
-            help(ui, "Files downloaded here keep who made them and their licence. Most need a credit when you show them in public: copy them all from here.");
+            help(ui, "Files downloaded here keep who made them and their license. Most need a credit when you show them in public: copy them all from here.");
             return;
         }
         if crate::ui::command(ui, label(icon::COPY, "Copy all credits")).clicked() {
@@ -649,7 +649,7 @@ fn credits(ui: &mut egui::Ui, comp: &phosphor_engine::Composition) {
         for m in comp.media_bin.iter().filter(|m| m.credit.is_some()) {
             let c = m.credit.as_ref().expect("filtered");
             let line = ui.add(egui::Label::new(format!("{} {}", if c.commercial() { icon::CHECK_CIRCLE } else { icon::WARNING }, c.line())).truncate());
-            line.on_hover_text(if c.commercial() { "May be used in paid work (credit as shown)" } else { "Non-commercial licence: not for paid work" });
+            line.on_hover_text(if c.commercial() { "May be used in paid work (credit as shown)" } else { "Non-commercial license: not for paid work" });
         }
     });
 }

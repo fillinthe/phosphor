@@ -15,7 +15,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
   mask. Drag a row onto a layout, a group or another row to move it there. Double-click a row to rename it.
 - Rename opens a small window in the middle of the screen everywhere (it was a field tucked in a menu).
 - Link X and Y scale on slices and masks: one Scale slider that keeps the proportions.
-- The alignment grid is centred on the output: its lines mirror round the middle.
+- The alignment grid is centered on the output: its lines mirror round the middle.
 
 **Layers**
 - New layers blend Add, so you can see them mix with what's below.
@@ -38,7 +38,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - Sign in to X / Instagram opens the sign-in page in the browser Phosphor reads from.
 
 **Windows and Linux**
-- Updating from inside Phosphor also brings the new and fixed shaders, colour looks and transitions.
+- Updating from inside Phosphor also brings the new and fixed shaders, color looks and transitions.
 
 ## 0.5.5 (2026-11-14)
 
@@ -81,7 +81,7 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - Effects panel: picking another effect no longer shows the last one's big picture while the new one loads.
 - Patches: "Look at this box" ends when you leave the Shader Editor, so the effect is the whole patch again (also in a
   Shader Editor in its own window).
-- Designer: "Wrap in a box" won't drop wires; it's greyed out when the boxes can't share one output.
+- Designer: "Wrap in a box" won't drop wires; it's grayed out when the boxes can't share one output.
 - Control Surface: Arrange never moves or resizes a locked widget.
 - MadMapper projects with rotations import.
 - A table file in a data box is read in the background (a slow drive no longer stalls the show).
@@ -107,7 +107,7 @@ Installs that just work, and tidier panels.
 - Every download is unpacked and checked the ways people's computers do it before a release goes out.
 
 **See an effect big before you use it**
-- Effects panel: pick a tile and it shows centre stage, big and live, beside its settings, on the selected layer's
+- Effects panel: pick a tile and it shows center stage, big and live, beside its settings, on the selected layer's
   picture (or the whole mix). Change the settings and watch it; when it looks right, add it to the layer, clip,
   media file or MASTER, or drag the tile. Nothing changes in the show until you do.
 
@@ -138,7 +138,7 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Italic, Gothic), the kind of letters lasers draw cleanly.
 - Laser show files (.ild, ILDA) as part of a look: they play at their own speed, placed, sized, spun and drawn on
   like any shape, mixed with your own shapes and words.
-- Video trace: any layer, the whole mix, or an image file, traced into laser outlines in the picture's colours.
+- Video trace: any layer, the whole mix, or an image file, traced into laser outlines in the picture's colors.
   Bright shapes on dark work best: a silhouette, a logo, a camera with Remove background.
 - Drawing shapes: click on the Laser Designer's canvas to draw a line, drag its corners to adjust it.
 - A transform box round the picked laser shape: drag its corners to size it, the knob to turn it, the middle to move
@@ -151,7 +151,7 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   switching a laser's look is a control like any other (MIDI, OSC /phosphor/laser/<laser>/look/<look>, events).
 - Laser cues: a cue remembers each laser's look and brightness and the lasers' master; going to it switches the
   looks and glides the brightness (it never arms the lasers). Each cue shows its look, and you can change it there.
-- Laser shape colours as sliders (red, green, blue and a hue sweep), so colour can be keyed on the timeline, cued or
+- Laser shape colors as sliders (red, green, blue and a hue sweep), so color can be keyed on the timeline, cued or
   mapped like any other setting.
 - Onion skin: a picture shown faintly behind the Laser Designer's canvas, to trace over by hand or line shapes up
   with (the laser never shows it).
@@ -159,10 +159,10 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   dragging its corners (straighten a wall or screen seen at an angle). Dark areas: parts of the area the beam never
   lights, whatever is drawn (a balcony, a doorway).
 - A test pattern per projector for lining lasers up (in each zone when it has zones): the edge of its area, a circle, a cross, an arrow pointing up
-  and a corner in each colour to check flips and colour balance.
+  and a corner in each color to check flips and color balance.
 - When a look has more lines than a laser can draw in one frame, the shortest are left out (the Designer says how
   many) instead of the laser slowing down.
-- Each projector has its look, brightness, size, position, rotation, flips and colour balance.
+- Each projector has its look, brightness, size, position, rotation, flips and color balance.
 - Safety first: lasers light up only while armed, every project opens with them off, Blackout and closing Phosphor
   turn them off, and each projector has a floor (nothing drawn below it, to keep beams off the audience).
 - Laser brightness and every shape's settings can be mapped to MIDI, OSC, cues and AI assistants.
@@ -211,12 +211,12 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Several widgets at once: Shift-click (or Cmd-click) adds one to the selection, dragging a band on empty space
   selects everything it touches, Cmd+A selects the page, Escape selects nothing. Selected widgets drag, nudge,
   duplicate, copy, delete and go to the front or back together. **Arrange** (toolbar, right-click, and the side
-  panel) lines them up by any edge or centre, spreads them out evenly, or gives them the same width, height or
+  panel) lines them up by any edge or center, spreads them out evenly, or gives them the same width, height or
   size. A widget's exact X, Y, width and height can be typed in its editor.
 - **Lock** a widget (right-click › Lock, the Lock switch in its editor, or Cmd+L): it stays where it is through
   drags, nudges and Arrange until you unlock it. A small padlock shows in its corner: click it to unlock.
-- The tab of the panel you're in has a soft wash of its colour under the words instead of a solid fill, and open
-  tabs no longer have an outline. Rolling over a closed tab lights it with a wash of its colour.
+- The tab of the panel you're in has a soft wash of its color under the words instead of a solid fill, and open
+  tabs no longer have an outline. Rolling over a closed tab lights it with a wash of its color.
 
 **Patches (node editor)**
 - Switch a block off: right-click › Switch off. Its first input passes straight through, as if the block weren't
@@ -241,8 +241,8 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Drag a wire out of a block and let go on empty canvas: the add menu opens there, and the block you pick
   arrives already wired from it (a number goes into the new block's first setting).
 - Space over the empty canvas opens the add menu at the pointer, like a right-click.
-- Fourteen new blocks: Plasma and Dots (pictures); Levels, Vignette, Scanlines, Colour split, Colour cycle and
-  Strobe (colour); Polar, Shake and Glitch slices (warp); Zoom blur; Wipe and Chroma key (mix two).
+- Fourteen new blocks: Plasma and Dots (pictures); Levels, Vignette, Scanlines, Color split, Color cycle and
+  Strobe (color); Polar, Shake and Glitch slices (warp); Zoom blur; Wipe and Chroma key (mix two).
 - Numbers: a new group of blocks that make a number instead of a picture: Value (one knob for several settings),
   LFO, Pulse, Ramp (0 to 1 across the picture), Noise number and Brightness of (a picture's light as a number).
   Every setting of every block has a small dot beside it: wire a number block into it and the setting follows
@@ -267,13 +267,13 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 
 **Design system**
 - docs/DESIGN.md names the look ("Phosphor CRT": blue-black charcoal, one lit accent, six kind hues, square
-  sliders) and sets the rules for fonts, colours, spacing, every control, dark and light, and what never to do.
+  sliders) and sets the rules for fonts, colors, spacing, every control, dark and light, and what never to do.
   The tests hold the code to it: no raw egui sliders, radio rows or drop-downs in panels, and no new hand-picked
-  colours. The convert window's format list and five drop-downs (Stream size, Online, Output resolution, Layer
+  colors. The convert window's format list and five drop-downs (Stream size, Online, Output resolution, Layer
   source, Session page) moved onto the kit.
-- Colours have names now: record, danger, mapped, favourite, mask, handle, the black behind pictures and the
-  quiet greys come from one place, so the light side looks right everywhere (borders, placeholders and labels
-  used to stay dark-grey whatever the brightness).
+- Colors have names now: record, danger, mapped, favorite, mask, handle, the black behind pictures and the
+  quiet grays come from one place, so the light side looks right everywhere (borders, placeholders and labels
+  used to stay dark-gray whatever the brightness).
 - The patch editor follows the brightness too (its canvas and blocks were always dark), blocks no longer draw over
   the preview column next to the canvas, the ready-made patches open laid out with nothing overlapping, and the
   editor's help sits in its heading row.
@@ -285,7 +285,7 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   and Fit (every box in view).
 - Designer boxes are as tall as their settings (a Timer's or Event's last switch no longer hangs below the box).
 - Designer Event boxes can send OSC / MIDI / an Arduino pin out as well as (or instead of) setting a control.
-- The section you're in and the panel you last clicked show in their colour; a tab's close X takes its colour too
+- The section you're in and the panel you last clicked show in their color; a tab's close X takes its color too
   (black on the tab you're in).
 - Surprise moved from the top bar to the Quick menu and the Layers panel.
 - The top bar, effect lists, slice groups and the mixer no longer run out of room, in any language.
@@ -315,9 +315,9 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   Inspector opens on the clip and scrolls to its effects (the same after Add to clip), so the new effect's Mix is
   right there. An effect added to a clip that isn't playing arrives at the Mix you set (it used to be left at 0%
   with Launch › Fade on, the fade never reaching it).
-- Labelled settings line up: rows that began with a bare word (When pressed, Shape, Blend, Shows, Destination,
+- Labeled settings line up: rows that began with a bare word (When pressed, Shape, Blend, Shows, Destination,
   Format, Size, Audio, Camera, Lights, Tiles, Fade in, Each turn, Cells across, Line, Bars, Sound from, Order,
-  Stream key, RTMP / SRT / WHIP URL, Token, File, Address, Password, Universe, Colour, Attached to, Picture, Fade,
+  Stream key, RTMP / SRT / WHIP URL, Token, File, Address, Password, Universe, Color, Attached to, Picture, Fade,
   Surface page, Send OSC, Plays on, Shift notes…) put the label in the same column as every other setting in
   their panel.
 - The last help icons that sat alone under a row now ride in it: Stream & Record (beside Movie sound; the
@@ -346,7 +346,7 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
 - Inspector: Surprise · Shuffle · React · Fill fit on one row (the last one read "Fill clips" and wrapped onto a row
   of its own); Fade style is a label row like Moves and Frame rate, with its menu sized to the column so its help
   stays beside it.
-- Inspector, text layers: the words come first, then font / colour / alignment and the size bars; Live text (clock,
+- Inspector, text layers: the words come first, then font / color / alignment and the size bars; Live text (clock,
   countdown, headlines…) and Parts are folded under one line, open only while in use. A plain text layer's whole
   Inspector now fits on screen. The duplicate "Text" title is gone.
 - Two more rows that held nothing but a help icon are gone: the Effects Explorer's "how the tiles work" (i) sits at
@@ -361,7 +361,7 @@ the show with you, and old MadMapper, VDMX and Resolume shows opening in Phospho
   ISF is still importing or a plugin can't be used (the counts are in the category menu's tooltip, and "Open the
   FFGL folder" is at the bottom of that menu on the Mac).
 - Effects Explorer: the rows of category pills are gone: one "All categories" menu beside Effects / Sources holds
-  Favourites, Hidden and the categories, so the tiles start higher. A long layer or clip name on the Add buttons is
+  Favorites, Hidden and the categories, so the tiles start higher. A long layer or clip name on the Add buttons is
   cut short with an ellipsis instead of running the button off the panel.
 - Effects Explorer: the settings you make on a picked tile now come along every way the effect is added: a tile
   dropped on the Inspector's effects list and the + list in the Inspector used to add it with its defaults.
@@ -404,7 +404,7 @@ Phosphor speaks eight languages now, maps like MadMapper, and lets you build you
 - Stop all, and a stop button on each layer.
 - Media tiles and layers show badges when they carry effects, speed changes or trims.
 - File info (right-click a media file): everything about it, copyable, and its effects to copy.
-- Sort media by length, a "Plays on" picker, random clip on a layer, favourites from a clip.
+- Sort media by length, a "Plays on" picker, random clip on a layer, favorites from a clip.
 - Clips from an external drive are copied to this computer the first time they play, so shows don't stall on a slow drive.
 - Scratch moves only while you scratch; the playhead sits above Speed and Opacity in the Inspector.
 - A new start screen for projects (File › Projects…).
@@ -430,9 +430,9 @@ Phosphor speaks eight languages now, maps like MadMapper, and lets you build you
 A big one: the rest of the VDMX and MadMapper list, free media from the internet, and a build for older Intel Macs.
 
 **Start with no media of your own** (Library › Online)
-- **Search free libraries** for videos, pictures, icons, textures, fonts, music, MilkDrop visualisers and ISF shaders:
+- **Search free libraries** for videos, pictures, icons, textures, fonts, music, MilkDrop visualizers and ISF shaders:
   NASA, Wikimedia Commons, the Internet Archive, Openverse, the Art Institute of Chicago, Iconify, Poly Haven, Google
-  Fonts, netlabel music and isf.video. Click to bring one in; "Paid work OK" hides non-commercial licences.
+  Fonts, netlabel music and isf.video. Click to bring one in; "Paid work OK" hides non-commercial licenses.
 - **Credits** stay with each file in the project; copy them all from the Credits list.
 - **Start a show:** one click builds three layers of clips for a mood (Space, Nature, Retro, Club, Gallery).
 - **Live data:** weather anywhere, the space station and earthquakes as modulators; news headlines and a clock in any
@@ -463,8 +463,8 @@ A big one: the rest of the VDMX and MadMapper list, free media from the internet
   output channels or sound device; NDI sends sound too; sound band modulators (kick, snare, voice).
 
 **Looks and effects**
-- Your own blend modes; blend mode per effect; Hide Face, Blur Background, Colour Match and Palette effects; the
-  Particles generator; deep colour (16 bits a channel); hold the eye button to compare without an effect.
+- Your own blend modes; blend mode per effect; Hide Face, Blur Background, Color Match and Palette effects; the
+  Particles generator; deep color (16 bits a channel); hold the eye button to compare without an effect.
 - Text layers in parts (lyrics, scripts), with ready-made movement, live clock / countdown / stopwatch.
 
 **Control**
@@ -474,7 +474,7 @@ A big one: the rest of the VDMX and MadMapper list, free media from the internet
 
 **Everyday**
 - File › Merge Project and New from Template; edit several layers or clips at once; Lock Panels; interface accent
-  colour; eyedropper; save a picture of any layer.
+  color; eyedropper; save a picture of any layer.
 - The top bar's buttons sit in the middle of the bar; thumbnails keep their shape.
 
 **Older Macs:** a separate download, **Phosphor-mac-intel.zip**, for Intel Macs on macOS 10.15 Catalina or later.
@@ -487,15 +487,15 @@ More from the VDMX and MadMapper list.
 
 - **Shaders reload when you save them:** edit an ISF file in any editor and Phosphor picks up the change in a couple
   of seconds.
-- **8 colour looks built in** (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film,
-  Night), and **LUT Split**: one look in the shadows and another in the highlights (or left / right, centre / edges).
+- **8 color looks built in** (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film,
+  Night), and **LUT Split**: one look in the shadows and another in the highlights (or left / right, center / edges).
 - **More picture files:** Photoshop (PSD), HEIC, EXR, HDR, TGA and QOI. BMP and TIFF now open too (they were offered but
   didn't load).
 - **Backups:** every save keeps the previous version in a "Backups" folder next to the project (the last 10).
   File › Autosave saves a changed project every 5 minutes.
 - **Cues:** a Random button, a countdown to the next cue that fires by itself, and Save / Read CSV for names and timings.
 - **Sliders can be limited** to part of their range (right-click › Limits): a controller then covers just that part.
-- **Colour swatches:** save colours and reuse them on text and on shader colour settings.
+- **Color swatches:** save colors and reuse them on text and on shader color settings.
 - **Index steps:** a step sequencer track can pick one of a few choices per step (a clip, a blend mode…).
 - **DMX monitor** in the LED / DMX panel: see the values going out.
 - **Permissions** in the Devices panel: camera, microphone and screen recording at a glance.
@@ -512,12 +512,12 @@ The first batch of what VDMX and MadMapper have that Phosphor didn't.
 - **Jump back / forward** buttons in Playback, by a number of beats or seconds; MIDI, OSC and keys can press them.
 - **1:1 pixels:** a layer can show its picture at its own size (no scaling), next to Fit, Fill and Stretch.
 - **Reload** a movie or picture after changing it in another app (media right-click, or the button in Playback).
-- Playback shows more about a file: frame rate, bit rate, pixel format, colour space, sound. Media tiles say how
+- Playback shows more about a file: frame rate, bit rate, pixel format, color space, sound. Media tiles say how
   many layers and clips use each file.
 
 **Mixing**
-- **13 more blend modes:** Soft, Hard, Vivid, Linear and Pin Light, Hard Mix, Colour Burn and Dodge, Divide, Hue,
-  Saturation, Colour, Luminosity.
+- **13 more blend modes:** Soft, Hard, Vivid, Linear and Pin Light, Hard Mix, Color Burn and Dodge, Divide, Hue,
+  Saturation, Color, Luminosity.
 - **Crossfader curves:** both full in the middle (as before), smooth (no dip), straight, or a cut.
 
 **Outputs**
@@ -549,7 +549,7 @@ The first batch of what VDMX and MadMapper have that Phosphor didn't.
 
 ## 0.2.98 (2026-10-21)
 
-- **Hap R:** record and convert to Hap R, Hap's best quality (better colour than Hap Q, and it keeps
+- **Hap R:** record and convert to Hap R, Hap's best quality (better color than Hap Q, and it keeps
   transparency). Hap R movies from other apps now play too.
 
 ## 0.2.97 (2026-10-21)
@@ -581,8 +581,8 @@ The first batch of what VDMX and MadMapper have that Phosphor didn't.
 
 - **ProRes plays far more lightly:** ProRes 422 now goes straight from the Mac's video decoder to the graphics card
   (about half the CPU), and **ProRes 4444 with transparency** is decoded by the Mac's hardware too: four 1080p layers
-  went from nearly five CPU cores to under half of one, with truer colours.
-- **Record and convert to Hap Q and Hap Q Alpha:** much better colour than Hap (smooth gradients, skin, logos), still
+  went from nearly five CPU cores to under half of one, with truer colors.
+- **Record and convert to Hap Q and Hap Q Alpha:** much better color than Hap (smooth gradients, skin, logos), still
   decoded by the graphics card.
 - **More MadMapper Surface FX work:** Extend, Vertex Noise and the FX template now load (their settings live in
   the vertex part, which also moves the picture).
@@ -693,7 +693,7 @@ The first batch of what VDMX and MadMapper have that Phosphor didn't.
 ## 0.2.88 (2026-10-21)
 
 - **Patches: build an effect from blocks, no code.** In the Shader Editor, **+ Patch** opens a canvas: right-click
-  to add blocks (pictures like noise, rings and stripes; colour; warps like kaleidoscope, ripple and swirl; blur,
+  to add blocks (pictures like noise, rings and stripes; color; warps like kaleidoscope, ripple and swirl; blur,
   glow and edges; ways to mix two pictures; and **Last frame** for trails), then drag from one block's dot to the
   next to wire them. The result is a normal effect or generator: it shows in the Effects list, and every block
   slider becomes one of its settings, so you can map it to MIDI and modulate it. **Code** shows the shader the
@@ -718,7 +718,7 @@ The first batch of what VDMX and MadMapper have that Phosphor didn't.
 - **Several "show only inside" masks work together:** two inverted masks now show two windows of the picture.
   Before, each one blacked out the other's window and the output went black.
 - **Scopes** (as in VDMX): a new Scopes panel (View › Panels, or the Outputs area) shows a waveform, RGB parade,
-  vectorscope or histogram of the mix or any layer, for matching colours between cameras, clips and projectors.
+  vectorscope or histogram of the mix or any layer, for matching colors between cameras, clips and projectors.
   It only measures while it's on screen.
 
 ## 0.2.85 (2026-10-21)
@@ -741,7 +741,7 @@ The first batch of what VDMX and MadMapper have that Phosphor didn't.
   scrubs and syncs like a movie. Watched folders and Export Show handle them too.
 - **Only selected** (MadMapper's "show only selected"): a Mapping Studio switch that makes the output (and the
   projector) show only the selected slice(s) while you line them up.
-- **Mask soft edge inside or outside:** with a soft edge on a mask, Fade picks where it sits: centred on the
+- **Mask soft edge inside or outside:** with a soft edge on a mask, Fade picks where it sits: centered on the
   outline, all inside the shape, or all outside it (as in MadMapper).
 - **Flip a slice's picture** (as in MadMapper): a slice's Input region has Flip left-right and Flip upside down
   (both = turned half round), for rear projection or a projector hung from the ceiling.
@@ -797,7 +797,7 @@ The first batch of what VDMX and MadMapper have that Phosphor didn't.
 
 - **Preview windows as an XY pad** (as in VDMX): switch on XY in a preview window, then click or drag on the
   picture. Two modulators, "Preview 1 X" and "Preview 1 Y", follow the pointer; any slider can follow them
-  (right-click › Modulate › pick one). Handy for moving a layer or an effect's centre by pointing at the picture.
+  (right-click › Modulate › pick one). Handy for moving a layer or an effect's center by pointing at the picture.
 - **Select several slices** (as in MadMapper): Shift-click slices on the canvas or in the list. Drag one to move
   them all, arrows nudge them all, and Properties sets on/off, lock, opacity and blend for all of them together.
 - **Draw a mask by hand:** Mapping Studio › Draw mask, then drag around what to hide. It becomes a smooth mask you
@@ -817,14 +817,14 @@ Projection mapping, more like MadMapper:
 - **Edit a mesh line by line:** select a mesh point, then right-click the canvas to add a column or row beside it,
   or remove its column or row. The picture keeps its shape.
 - **Copy a slice's look:** right-click a slice › Copy its look to another slice or every slice on the output
-  (opacity, soft edges, colour, blend, shape; not its place or picture).
+  (opacity, soft edges, color, blend, shape; not its place or picture).
 - **Fine-tune one point:** click a corner or mesh point (or press Tab) in the Mapping Studio. Tab and Shift-Tab
   go to the next and previous point, the arrows nudge it one pixel (Shift = 10), and Properties shows its X and Y
   in pixels to type. Esc goes back to moving the whole slice.
 - **Snap to other slices:** with Snap on, a dragged point lands on another slice's point when it comes within a
-  few pixels (otherwise on the grid), so neighbouring slices meet exactly.
-- **Test patterns:** right-click an output's GRID: Grid, Test card (colour bars, grey ramp and a different colour in
-  each corner, so a flipped projector is obvious), Colour bars, White, Checkerboard, Grey ramp.
+  few pixels (otherwise on the grid), so neighboring slices meet exactly.
+- **Test patterns:** right-click an output's GRID: Grid, Test card (color bars, gray ramp and a different color in
+  each corner, so a flipped projector is obvious), Color bars, White, Checkerboard, Gray ramp.
 - **Stage photo:** Mapping Studio › Stage photo: a photo of the real stage taken from the projector shows behind
   the slices while you line them up (never on the output).
 - **Blend per slice:** Normal, Add, Screen or Multiply: overlapping slices can add up instead of covering.
@@ -859,7 +859,7 @@ Projection mapping, more like MadMapper:
   Now / Beat / Bar, Forward / Reverse, the media filters) are joined segments. Delete is red.
 - **Type a slider's value:** right-click a slider and the value is already selected; type a number and press Enter.
 - **Lock any control:** right-click › Lock. A locked slider, button, clip or column can't be changed by the
-  mouse, a controller, OSC or a phone until you unlock it. Locked sliders turn grey with a lock.
+  mouse, a controller, OSC or a phone until you unlock it. Locked sliders turn gray with a lock.
 - **Snap points:** hold Shift while dragging a slider to land on the ends, the default or 100%. Right-click ›
   Snap points to add your own (they show as small ticks).
 - **Soft edge per side** (as in MadMapper): a slice can fade only the side that overlaps the next projector
@@ -872,7 +872,7 @@ Projection mapping, more like MadMapper:
   Switch Pro and most USB / Bluetooth pads) are control sources like MIDI: press Listen in MIDI / OSC (or right-click
   a slider › Listen) and move a stick. Buttons act like pads; sticks and triggers like faders.
 
-- **LUT colour grades as effects** (as in VDMX): drop `.cube` files (from grading apps, cameras or LUT packs) into
+- **LUT color grades as effects** (as in VDMX): drop `.cube` files (from grading apps, cameras or LUT packs) into
   *Help › Open LUT Folder*, and each one is an effect (category LUT) with an Amount slider at the next launch.
 
 - **MIDI / OSC monitor:** the MIDI / OSC panel lists every message as it comes in (which knob, pad or OSC address,
@@ -912,8 +912,8 @@ Projection mapping, more like MadMapper:
 ## 0.2.68 (2026-10-20)
 
 - **Alignment grid on any output:** the GRID button on an output (Outputs panel, or the strip in the Outputs
-  area) draws cells, a centre crosshair, a circle, the diagonals and a border over that output, to line up a
-  projector. Right-click it for the number of cells, line width and colour. The old per-slice pattern is now
+  area) draws cells, a center crosshair, a circle, the diagonals and a border over that output, to line up a
+  projector. Right-click it for the number of cells, line width and color. The old per-slice pattern is now
   called "Slice test pattern".
 - **Corners by number:** a slice's four corners can be typed or nudged as percentages in its settings, for
   fine alignment (arrow keys on the canvas still nudge the selected slice; Shift = 10 px).
@@ -930,7 +930,7 @@ Projection mapping, more like MadMapper:
 
 ## 0.2.66 (2026-10-20)
 
-- **Shader transition settings:** a shader transition's own controls (shadow, bounces, angle, colour…) are in the
+- **Shader transition settings:** a shader transition's own controls (shadow, bounces, angle, color…) are in the
   Inspector under the transition you picked, and each layer remembers them.
 - **Readable effect names:** imported effects and transitions show proper names ("Book Flip", "Multi Pass
   Gaussian Blur") instead of file ids.
@@ -942,7 +942,7 @@ Projection mapping, more like MadMapper:
   Daito Manabe's free isf-shaders-for-vj collection.
 - **Import from Shadertoy:** in the Shader Editor, *Import from Shadertoy…*: paste a shader's code from
   shadertoy.com, name it, and it becomes a source (or an effect, if it reads the layer's picture). Check a shader's
-  licence before sharing a show that uses it.
+  license before sharing a show that uses it.
 
 ## 0.2.64 (2026-10-20)
 
@@ -958,11 +958,11 @@ Projection mapping, more like MadMapper:
 
 ## 0.2.63 (2026-10-20)
 
-- **Control Surface → other apps:** give any button, fader, XY pad or colour on your Control Surface a *Send OSC*
+- **Control Surface → other apps:** give any button, fader, XY pad or color on your Control Surface a *Send OSC*
   address, and set *OSC out* (the other computer's address and port) at the top of the panel. Whenever it moves,
   from your Mac, a guest's phone, a MIDI knob or a modulator, its value goes to TouchDesigner, a lighting desk,
-  Resolume or anything that speaks OSC. XY pads send x and y, colours red, green and blue.
-- **327 more effects for everyone:** Phosphor now ships Vidvox's free ISF collection (blurs, glitches, colour,
+  Resolume or anything that speaks OSC. XY pads send x and y, colors red, green and blue.
+- **327 more effects for everyone:** Phosphor now ships Vidvox's free ISF collection (blurs, glitches, color,
   distortions, generators and transitions), so Windows and Macs without VDMX get all of them too.
 - **Feedback in your own effects:** add `// @feedback` to a shader in the Shader Editor and `last(uv)` gives
   its picture from the frame before, for trails, echoes and tunnels. New template: *Feedback: trails*.
@@ -972,7 +972,7 @@ Projection mapping, more like MadMapper:
 ## 0.2.62 (2026-10-20)
 
 - **Make your own effects from a template:** Shader Editor › *New from template…* gives eight starters that each do
-  one thing, with every line explained: colour tint and hue spin, wave warp, pixelate, kaleidoscope, soft circle
+  one thing, with every line explained: color tint and hue spin, wave warp, pixelate, kaleidoscope, soft circle
   mask, glow, pulsing rings and noise clouds. Change a number and watch it update live; right-click any of its
   sliders › Modulate to make it move with the music.
 
@@ -984,7 +984,7 @@ Projection mapping, more like MadMapper:
   On / Off*, or a pad you map) and phones can only watch; their screens say the visuals are run from the booth.
   Click again to hand control back.
 - **Mute all sound** is also in the Output menu.
-- **Simpler sliders in every panel:** mapping, output colour, LEDs, modulators, text layers and the
+- **Simpler sliders in every panel:** mapping, output color, LEDs, modulators, text layers and the
   modulation editor use the new bars too.
 - **Plays every common format:** checked 27 formats, from H.264, HEVC, AV1, VP9 with alpha and ProRes 4444 to DNxHR,
   Cineform, Hap and Resolume DXV.
@@ -1044,7 +1044,7 @@ Projection mapping, more like MadMapper:
 ## 0.2.56 (2026-10-19)
 - **Interface brightness:** the sun button in the top bar sets how dark or light Phosphor looks, from *Darkest*
   (for dark rooms and shows) through *Dark* (the usual) and *Dim* to *Soft light* and *Light* (daylight), or
-  anywhere in between with the slider. Text and the accent colour adjust so everything stays readable.
+  anywhere in between with the slider. Text and the accent color adjust so everything stays readable.
 - **Nothing hidden in narrow columns:** the Library's search box no longer sits under its buttons, the Effects
   list's controls wrap instead of running off the edge, layer cards always have room, and the side columns
   shrink with the window.
@@ -1145,7 +1145,7 @@ Projection mapping, more like MadMapper:
   download instead.
 
 ## 0.2.42 (2026-10-17)
-- **Moving heads (DMX):** colour taken from the picture, smooth 16-bit pan/tilt, beat-timed circle, figure-8 and
+- **Moving heads (DMX):** color taken from the picture, smooth 16-bit pan/tilt, beat-timed circle, figure-8 and
   sweep motions; 8, 9 and 10 channel layouts.
 
 ## 0.2.41 (2026-10-17)
@@ -1273,7 +1273,7 @@ Projection mapping, more like MadMapper:
   shaders, 60 shader parameters.
 
 ## 0.2.2 (2026-10-16)
-- All clip columns in one scrolling grid; QR code colour styles; audience guests keep their place if they reconnect.
+- All clip columns in one scrolling grid; QR code color styles; audience guests keep their place if they reconnect.
 
 ## 0.2.1 (2026-10-16)
 - QR card with a title and address; a thanks moment on the guest page.

@@ -913,7 +913,7 @@ fn every_picture_format_opens() {
     for p in &made {
         let img = decode_still(&p.to_string_lossy()).unwrap_or_else(|e| panic!("{}: {e}", p.display())).to_rgba8();
         assert_eq!(img.dimensions(), (48, 32), "{}", p.display());
-        assert!(img.get_pixel(10, 10)[0] > 150, "{}: wrong colour {:?}", p.display(), img.get_pixel(10, 10));
+        assert!(img.get_pixel(10, 10)[0] > 150, "{}: wrong color {:?}", p.display(), img.get_pixel(10, 10));
         assert!(is_picture(&p.to_string_lossy()));
     }
     let _ = std::fs::remove_dir_all(&dir);
