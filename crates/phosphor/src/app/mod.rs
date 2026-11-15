@@ -59,6 +59,7 @@ pub(crate) use quick::{dice, layers_quick_menu};
 mod recording;
 pub(crate) mod recorders;
 mod computed;
+mod follows;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod timeline_sound;
 pub(crate) mod offline;
@@ -416,6 +417,8 @@ pub struct State {
     pub color_ref: Option<std::sync::mpsc::Receiver<(u64, Result<[(f32, f32); 3], String>)>>,
     /// Mappings copied from a control's menu (their target is replaced on paste).
     pub maps_clipboard: Vec<phosphor_engine::ControlMap>,
+    /// Each followed control's value last frame (`run_follows` hands on changes only).
+    pub follow_seen: std::collections::HashMap<phosphor_engine::ControlTarget, f32>,
     pub fx_browser: Option<crate::explorer::FxBrowser>,
     pub monitors: std::collections::HashMap<u8, panels::MonitorCfg>,
     /// Monitor pictures requested this frame: (monitor number, source, width, height).

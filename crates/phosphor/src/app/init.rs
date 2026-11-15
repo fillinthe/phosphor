@@ -218,6 +218,7 @@ impl PhosphorApp {
                 open_tab: None,
                 panel_browser: false,
                 maps_clipboard: Vec::new(),
+                follow_seen: Default::default(),
                 snapshot_output: None,
                 clip_thumb_request: None,
                 timeline_pos: 0.0,

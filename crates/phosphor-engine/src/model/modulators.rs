@@ -110,6 +110,50 @@ impl super::Composition {
         self.modulators.push(Modulator { id, name: name.to_string(), signal, value: v, ..Default::default() });
     }
 
+    /// What follows shared modulator `id`, in words ("Layer 1 · opacity", "Blur · Amount"): the controls whose
+    /// modulation is linked to it, and the modulators chained from it.
+    pub fn modulator_followers(&self, id: u64) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut add = |m: &Option<super::Modulation>, what: String| {
+            if m.as_ref().is_some_and(|m| m.link == id) {
+                out.push(what);
+            }
+        };
+        add(&self.master_fade_mod, "Master fade".into());
+        for c in &self.comps {
+            add(&c.opacity_mod, format!("Comp {} · opacity", c.name));
+        }
+        for g in &self.groups {
+            add(&g.opacity_mod, format!("{} · opacity", g.name));
+        }
+        for l in &self.layers {
+            add(&l.opacity_mod, format!("{} · opacity", l.name));
+            add(&l.transform.x_mod, format!("{} · position X", l.name));
+            add(&l.transform.y_mod, format!("{} · position Y", l.name));
+            add(&l.transform.scale_mod, format!("{} · scale", l.name));
+            add(&l.transform.rotation_mod, format!("{} · rotation", l.name));
+            if let super::SourceSpec::Generator(g) = &l.source
+                && let Some(desc) = crate::shaders::generator(g)
+            {
+                for pm in &l.generator_mods {
+                    add(&Some(pm.m), format!("{} · {} · {}", l.name, desc.name, desc.params.get(pm.index).map_or("setting", |p| p.name)));
+                }
+            }
+        }
+        for fx in self.all_effects() {
+            let Some(desc) = crate::shaders::effect(&fx.effect) else { continue };
+            for pm in &fx.mods {
+                add(&Some(pm.m), format!("{} · {}", desc.name, desc.params.get(pm.index).map_or("setting", |p| p.name)));
+            }
+        }
+        for m in &self.modulators {
+            if m.chain.is_some_and(|c| c.from == id) {
+                out.push(format!("{} (modulator)", m.name));
+            }
+        }
+        out
+    }
+
     /// The value of the Hand modulator called `name`, if there is one.
     pub fn hand(&self, name: &str) -> Option<f32> {
         self.modulators.iter().find(|m| m.name == name).map(|m| m.value)

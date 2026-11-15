@@ -59,6 +59,16 @@ impl Backend {
 
     /// One message with any number of floats to every recipient; never blocks (UDP).
     pub fn send_osc_args(&mut self, ips: &[String], port: u16, address: &str, values: &[f32]) {
+        self.send_osc_message(ips, port, address, values.iter().map(|v| rosc::OscType::Float(*v)).collect());
+    }
+
+    /// A query's answer: the value, and a menu item's name after it.
+    pub fn send_osc_answer(&mut self, ip: &str, port: u16, address: &str, value: f32, name: Option<String>) {
+        let args = std::iter::once(rosc::OscType::Float(value)).chain(name.map(rosc::OscType::String)).collect();
+        self.send_osc_message(&[ip.to_string()], port, address, args);
+    }
+
+    fn send_osc_message(&mut self, ips: &[String], port: u16, address: &str, args: Vec<rosc::OscType>) {
         if ips.is_empty() {
             return;
         }
@@ -66,7 +76,7 @@ impl Backend {
             self.osc_out = UdpSocket::bind("0.0.0.0:0").and_then(|s| s.set_nonblocking(true).map(|()| s)).ok();
         }
         let Some(sock) = &self.osc_out else { return };
-        let msg = rosc::OscPacket::Message(rosc::OscMessage { addr: address.to_string(), args: values.iter().map(|v| rosc::OscType::Float(*v)).collect() });
+        let msg = rosc::OscPacket::Message(rosc::OscMessage { addr: address.to_string(), args });
         let Ok(bytes) = rosc::encoder::encode(&msg) else { return };
         for ip in ips {
             let _ = sock.send_to(&bytes, (ip.as_str(), port));
@@ -75,17 +85,17 @@ impl Backend {
 
     /// Listens for OSC on `port` (announced over Zeroconf) and on each of `extra` (other apps that only send to
     /// their own port). Replaces any listeners already open. Returns the extra ports that couldn't open (and why).
-    pub fn open_osc(&mut self, port: u16, extra: &[u16], tx: mpsc::Sender<Incoming>, text_tx: mpsc::Sender<(String, String)>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<Vec<String>, String> {
+    pub fn open_osc(&mut self, port: u16, extra: &[u16], tx: mpsc::Sender<Incoming>, text_tx: mpsc::Sender<(String, String)>, ask_tx: mpsc::Sender<super::ask::OscAsk>, ip: Option<&str>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<Vec<String>, String> {
         if let Some(stop) = self.osc_stop.take() {
             stop.store(true, Ordering::Relaxed);
         }
         self.mdns = None;
         let stop = Arc::new(AtomicBool::new(false));
         self.osc_stop = Some(stop.clone());
-        listen_osc(port, stop.clone(), tx.clone(), text_tx.clone(), activity.clone())?;
+        listen_osc(port, stop.clone(), tx.clone(), text_tx.clone(), ask_tx.clone(), activity.clone())?;
         let mut failed = Vec::new();
         for &p in extra.iter().filter(|p| **p != port) {
-            if let Err(e) = listen_osc(p, stop.clone(), tx.clone(), text_tx.clone(), activity.clone()) {
+            if let Err(e) = listen_osc(p, stop.clone(), tx.clone(), text_tx.clone(), ask_tx.clone(), activity.clone()) {
                 failed.push(format!("{p}: {e}"));
             }
         }
@@ -116,7 +126,7 @@ fn parse_midi(msg: &[u8]) -> Option<Incoming> {
 }
 
 /// One OSC port's listener thread: every message is counted per sender (unless blocked) and delivered.
-fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, text_tx: mpsc::Sender<(String, String)>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
+fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, text_tx: mpsc::Sender<(String, String)>, ask_tx: mpsc::Sender<super::ask::OscAsk>, activity: Arc<std::sync::Mutex<super::Activity>>) -> Result<(), String> {
     let socket = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| e.to_string())?;
     socket.set_read_timeout(Some(Duration::from_millis(200))).map_err(|e| e.to_string())?;
     std::thread::Builder::new()
@@ -148,16 +158,36 @@ fn listen_osc(port: u16, stop: Arc<AtomicBool>, tx: mpsc::Sender<Incoming>, text
                     e.last_address = address;
                     e.last_seen = std::time::Instant::now();
                 }
-                deliver(packet, &tx, &text_tx);
+                deliver(packet, &ip, &tx, &text_tx, &ask_tx);
             }
         })
         .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>, text_tx: &mpsc::Sender<(String, String)>) {
+fn deliver(packet: rosc::OscPacket, from: &str, tx: &mpsc::Sender<Incoming>, text_tx: &mpsc::Sender<(String, String)>, ask_tx: &mpsc::Sender<super::ask::OscAsk>) {
+    use super::ask::Arg;
     match packet {
         rosc::OscPacket::Message(m) => {
+            // A built-in address asked something ("?", "+" 0.1, a menu item by number or name).
+            let args: Vec<Arg> = m
+                .args
+                .iter()
+                .filter_map(|a| match a {
+                    rosc::OscType::String(s) => Some(Arg::Text(s.clone())),
+                    rosc::OscType::Int(i) => Some(Arg::Whole(*i as i64)),
+                    rosc::OscType::Long(i) => Some(Arg::Whole(*i)),
+                    rosc::OscType::Float(f) => Some(Arg::Number(*f)),
+                    rosc::OscType::Double(d) => Some(Arg::Number(*d as f32)),
+                    _ => None,
+                })
+                .collect();
+            if let Some((kind, quiet)) = super::ask::parse(&m.addr, &args) {
+                let _ = ask_tx.send(super::ask::OscAsk { address: m.addr.clone(), from: from.to_string(), kind });
+                if quiet {
+                    return;
+                }
+            }
             // Words (for text layers) go their own way, as well as counting as a press.
             if let Some(words) = m.args.iter().find_map(|a| if let rosc::OscType::String(s) = a { Some(s.clone()) } else { None }) {
                 let _ = text_tx.send((m.addr.clone(), words));
@@ -192,7 +222,7 @@ fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>, text_tx: &mpsc:
         }
         rosc::OscPacket::Bundle(b) => {
             for p in b.content {
-                deliver(p, tx, text_tx);
+                deliver(p, from, tx, text_tx, ask_tx);
             }
         }
     }

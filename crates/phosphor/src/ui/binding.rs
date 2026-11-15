@@ -124,7 +124,32 @@ pub(crate) fn range_editor(ui: &mut egui::Ui, range: &mut ValueRange) {
     crate::ui::icon_toggle(ui, &mut range.invert, icon::ARROWS_DOWN_UP).on_hover_text("Invert (up = down)");
 }
 
-/// The targets one control drives, each with its own range: pick, adjust, remove, add more.
+/// One target's own settings: the part of the fader it listens to, its value effects, its range.
+pub(crate) fn binding_editor(ui: &mut egui::Ui, b: &mut Binding) {
+    let part = &mut b.part;
+    let whole = part.is_whole();
+    let text = if whole { RichText::new(icon::ARROWS_HORIZONTAL) } else { RichText::new(format!("{} {:.0}–{:.0}%", icon::ARROWS_HORIZONTAL, part.from * 100.0, part.to * 100.0)).color(accent()) };
+    crate::ui::field_menu(ui, text, |ui| {
+        ui.set_min_width(240.0);
+        crate::ui::heading_help(ui, "Part of the fader", "This target runs through its whole range over just this part of the fader's travel, and holds below and above it. Give each target its own part and one knob plays them one after another.");
+        ui.horizontal(|ui| {
+            let (mut from, mut to) = (part.from * 100.0, part.to * 100.0);
+            guarded!(ui, from, egui::DragValue::new(&mut from).range(0.0..=100.0).speed(0.5).max_decimals(0).prefix("from ").suffix("%"));
+            guarded!(ui, to, egui::DragValue::new(&mut to).range(0.0..=100.0).speed(0.5).max_decimals(0).prefix("to ").suffix("%"));
+            (part.from, part.to) = (from / 100.0, to / 100.0);
+            if !whole && crate::ui::small_command(ui, "Whole").on_hover_text("Listen to the whole fader again").clicked() {
+                *part = Default::default();
+            }
+        });
+    })
+    .response
+    .on_hover_text("The part of the fader this target listens to");
+    value_fx_menu(ui, &mut b.fx, false);
+    range_editor(ui, &mut b.range);
+}
+
+/// The targets one control drives, each with its own part of the fader, value effects and range: pick, adjust,
+/// remove, add more.
 pub(crate) fn binding_list(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + std::fmt::Debug + Copy, targets: &[(ControlTarget, String)], bindings: &mut Vec<Binding>) {
     let mut remove = None;
     for (i, b) in bindings.iter_mut().enumerate() {
@@ -132,7 +157,7 @@ pub(crate) fn binding_list(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + st
             if let Some(t) = target_picker(ui, (id_salt, i), targets, Some(&b.target), 200.0) {
                 b.target = t;
             }
-            range_editor(ui, &mut b.range);
+            binding_editor(ui, b);
             if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Remove").clicked() {
                 remove = Some(i);
             }
@@ -144,7 +169,101 @@ pub(crate) fn binding_list(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + st
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::PLUS).color(accent()));
         if let Some(t) = target_picker(ui, (id_salt, "add"), targets, None, 200.0) {
-            bindings.push(Binding { target: t, range: ValueRange::default() });
+            bindings.push(Binding::new(t));
         }
     });
 }
+
+/// The ~ menu on a mapping: effects its value goes through (smooth, steps, curve, formula), in order.
+/// `timed` = also offer the ones that work over time (smooth, delay, fall, endless knob, dead band): a controller
+/// mapping has those; a target of a fader or of another control takes the instant ones only.
+pub(crate) fn value_fx_menu(ui: &mut egui::Ui, fx: &mut Vec<phosphor_engine::ValueFx>, timed: bool) {
+    use phosphor_engine::ValueFx;
+    let text = if fx.is_empty() { RichText::new(icon::WAVE_SINE) } else { RichText::new(format!("{} {}", icon::WAVE_SINE, fx.len())).color(accent()) };
+    crate::ui::field_menu(ui, text, |ui| {
+        ui.set_min_width(260.0);
+        crate::ui::heading_help(ui, "On the way in", "The controller's value goes through these, top to bottom, before its range.");
+        let mut remove = None;
+        for (k, f) in fx.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                crate::ui::heading(ui, f.name());
+                match f {
+                    ValueFx::Smooth(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=10.0).speed(0.01).suffix(" s")).on_hover_text("Glide to each new value over this long");
+                    }
+                    ValueFx::Steps(n) => {
+                        guarded!(ui, *n, egui::DragValue::new(n).range(2..=64)).on_hover_text("Snap to this many steps");
+                    }
+                    ValueFx::Curve(c) => {
+                        guarded!(ui, *c, egui::DragValue::new(c).range(0.1..=8.0).speed(0.02)).on_hover_text("Above 1: slow then fast; below 1: fast then slow");
+                    }
+                    ValueFx::Formula(f) => {
+                        text_field(ui, f, "1 - $VAL", Some(140.0)).on_hover_text("$VAL is the value (0..1); + - * / %, pow, sin, cos (a turn per 1.0), abs, min, max, clamp, mix, fract, floor…");
+                    }
+                    ValueFx::Delay(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=30.0).speed(0.01).suffix(" s")).on_hover_text("Each move lands this much later");
+                    }
+                    ValueFx::Threshold(t) => {
+                        guarded!(ui, *t, egui::DragValue::new(t).range(0.0..=1.0).speed(0.005).max_decimals(2)).on_hover_text("On (full) at or above this, off below: a fader becomes a switch");
+                    }
+                    ValueFx::Clamp(lo, hi) => {
+                        guarded!(ui, *lo, egui::DragValue::new(lo).range(0.0..=1.0).speed(0.005).max_decimals(2).prefix("from ")).on_hover_text("Lowest value it can send");
+                        guarded!(ui, *hi, egui::DragValue::new(hi).range(0.0..=1.0).speed(0.005).max_decimals(2).prefix("to ")).on_hover_text("Highest value it can send");
+                    }
+                    ValueFx::Repeat(n) => {
+                        guarded!(ui, *n, egui::DragValue::new(n).range(1..=32).suffix("×")).on_hover_text("The range repeats this many times along the fader");
+                    }
+                    ValueFx::Randomize(a) => {
+                        guarded!(ui, *a, egui::DragValue::new(a).range(0.0..=1.0).speed(0.005).max_decimals(2)).on_hover_text("Up to this much random wobble on each value");
+                    }
+                    ValueFx::Fall(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=10.0).speed(0.01).suffix(" s")).on_hover_text("Rises land at once; drops glide down over this long (peak hold)");
+                    }
+                    ValueFx::Endless(s) => {
+                        guarded!(ui, *s, egui::DragValue::new(s).range(0.001..=0.25).speed(0.0005).max_decimals(3).prefix("per click ")).on_hover_text("For knobs that turn forever (relative MIDI: 1–63 up, 65–127 down): how far one click moves the value (0.01 = 1%)");
+                    }
+                    ValueFx::DeadBand(d) => {
+                        guarded!(ui, *d, egui::DragValue::new(d).range(0.001..=0.25).speed(0.0005).max_decimals(3)).on_hover_text("Changes smaller than this are ignored (a jittery fader or sensor)");
+                    }
+                    ValueFx::Lookup(points) => {
+                        // Draw the output: left = fader at 0, right = fader at full.
+                        crate::ui::step_bars(ui, points, None, false, 40.0);
+                    }
+                }
+                if crate::ui::small_command(ui, icon::X).clicked() {
+                    remove = Some(k);
+                }
+            });
+        }
+        if let Some(k) = remove {
+            fx.remove(k);
+        }
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            let fresh = [
+                ValueFx::Smooth(0.3),
+                ValueFx::Steps(4),
+                ValueFx::Curve(2.0),
+                ValueFx::Formula("1 - $VAL".into()),
+                ValueFx::Delay(0.5),
+                ValueFx::Threshold(0.5),
+                ValueFx::Clamp(0.0, 1.0),
+                ValueFx::Repeat(2),
+                ValueFx::Randomize(0.1),
+                ValueFx::Fall(0.5),
+                ValueFx::Lookup((0..9).map(|i| i as f32 / 8.0).collect()),
+                ValueFx::Endless(0.01),
+                ValueFx::DeadBand(0.02),
+            ];
+            for f in fresh.into_iter().filter(|f| timed || !matches!(f, ValueFx::Smooth(_) | ValueFx::Delay(_) | ValueFx::Fall(_) | ValueFx::Endless(_) | ValueFx::DeadBand(_))) {
+                let name = f.name();
+                if crate::ui::small_command(ui, label(icon::PLUS, name)).clicked() {
+                    fx.push(f);
+                }
+            }
+        });
+    })
+    .response
+    .on_hover_text(if timed { "Smooth, steps, curve or a formula on this mapping's value" } else { "This target's own steps, curve or formula" });
+}
+

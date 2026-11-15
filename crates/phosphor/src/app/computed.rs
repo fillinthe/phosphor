@@ -37,7 +37,7 @@ impl State {
             let v = phosphor_engine::control::modulate(w.value, 0.0, 1.0, Some(m), &self.mod_inputs);
             if (v - w.live).abs() > 1e-4 {
                 w.live = v;
-                sends.extend(w.bindings.iter().map(|b| (b.target.clone(), b.range.apply(v))));
+                sends.extend(w.bindings.iter().map(|b| (b.target.clone(), b.value(v))));
             }
         }
         for (target, v) in sends {

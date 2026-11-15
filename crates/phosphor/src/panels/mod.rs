@@ -24,6 +24,7 @@ pub(crate) mod clip_bar;
 mod clip_grid;
 mod stack;
 mod control;
+mod links;
 mod cues;
 mod devices;
 mod drag_ghost;

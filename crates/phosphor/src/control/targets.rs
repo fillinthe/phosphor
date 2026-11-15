@@ -95,6 +95,10 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         ControlTarget::LayerDirection(id) => {
             layer(id)?.direction.unit()
         }
+        ControlTarget::LayerBlend(id) => match layer(id) {
+            Some(l) => l.blend.unit(),
+            None => comp.group(*id)?.blend.unit(),
+        },
         ControlTarget::GeneratorParam { layer: lid, index } => {
             let l = layer(lid)?;
             let phosphor_engine::SourceSpec::Generator(g) = &l.source else { return None };
@@ -184,7 +188,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
             b.value = v.clamp(0.0, 1.0);
             let (value, bindings) = (b.value, b.bindings.clone());
             for b in bindings {
-                set_target_depth(comp, &b.target, b.range.apply(value), out, depth + 1);
+                set_target_depth(comp, &b.target, b.value(value), out, depth + 1);
             }
         }
         ControlTarget::Surface(id) | ControlTarget::SurfaceY(id) => {
@@ -209,7 +213,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 let lists = [w.bindings.clone(), w.bindings_y.clone(), w.bindings_z.clone()];
                 for (c, list) in rgb.into_iter().zip(lists) {
                     for b in list {
-                        set_target_depth(comp, &b.target, b.range.apply(c), out, depth + 1);
+                        set_target_depth(comp, &b.target, b.value(c), out, depth + 1);
                     }
                 }
                 return;
@@ -228,7 +232,7 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 w.bindings.clone()
             };
             for b in bindings {
-                set_target_depth(comp, &b.target, b.range.apply(value), out, depth + 1);
+                set_target_depth(comp, &b.target, b.value(value), out, depth + 1);
             }
         }
         ControlTarget::LayerFxBypass(id) => {
@@ -354,6 +358,13 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
         ControlTarget::LayerDirection(id) => {
             if let Some(l) = comp.layer_mut(*id) {
                 l.direction = Choice::from_unit(v);
+            }
+        }
+        ControlTarget::LayerBlend(id) => {
+            if let Some(l) = comp.layer_mut(*id) {
+                l.blend = Choice::from_unit(v);
+            } else if let Some(g) = comp.group_mut(*id) {
+                g.blend = Choice::from_unit(v);
             }
         }
         ControlTarget::LayerScrub(id) => out.push(Deferred::Scrub(*id, v.clamp(0.0, 1.0))),
@@ -599,6 +610,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         out.push((ControlTarget::LayerOpacity(g.id), format!("{} · opacity", g.name)));
         out.push((ControlTarget::LayerEnabled(g.id), format!("{} · on/off", g.name)));
         out.push((ControlTarget::LayerFxBypass(g.id), format!("{} · effects bypass", g.name)));
+        out.push((ControlTarget::LayerBlend(g.id), format!("{} · blend", g.name)));
         effects(&g.name, &g.effects, &mut out);
     }
     for l in &comp.layers {
@@ -607,6 +619,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
         out.push((ControlTarget::SelectLayer(l.id), format!("{} · select", l.name)));
         out.push((ControlTarget::LayerSpeed(l.id), format!("{} · speed", l.name)));
         out.push((ControlTarget::LayerFxBypass(l.id), format!("{} · effects bypass", l.name)));
+        out.push((ControlTarget::LayerBlend(l.id), format!("{} · blend", l.name)));
         out.push((ControlTarget::LayerX(l.id), format!("{} · position X", l.name)));
         out.push((ControlTarget::LayerY(l.id), format!("{} · position Y", l.name)));
         out.push((ControlTarget::LayerScale(l.id), format!("{} · scale", l.name)));
@@ -702,6 +715,17 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
 /// - after either, `fx/1/mix` = that layer's first effect (`/phosphor/fx/<id>/mix`).
 /// None for any other address, or a place with nothing in it.
 pub fn placed_address(comp: &Composition, selected: Option<u64>, address: &str) -> Option<String> {
+    // A group by place (groups share the layers' addresses: opacity, on, blend, fxbypass).
+    if let Some((n, rest)) = address.strip_prefix("/phosphor/groups/").and_then(|r| r.split_once('/')) {
+        let n: usize = n.parse().ok().filter(|n| *n >= 1)?;
+        let g = comp.groups.get(n - 1)?;
+        if let Some(fx) = rest.strip_prefix("fx/") {
+            let (k, tail) = fx.split_once('/')?;
+            let k: usize = k.parse().ok().filter(|k| *k >= 1)?;
+            return Some(format!("/phosphor/fx/{}/{tail}", g.effects.get(k - 1)?.id));
+        }
+        return Some(format!("/phosphor/layer/{}/{rest}", g.id));
+    }
     let (layer, rest) = if let Some(rest) = address.strip_prefix("/phosphor/selected/layer/") {
         (comp.layer(selected?)?, rest)
     } else {
@@ -773,6 +797,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::LayerLoopIn(id) => format!("/phosphor/layer/{id}/loop/in"),
         ControlTarget::LayerLoopOut(id) => format!("/phosphor/layer/{id}/loop/out"),
         ControlTarget::LayerDirection(id) => format!("/phosphor/layer/{id}/direction"),
+        ControlTarget::LayerBlend(id) => format!("/phosphor/layer/{id}/blend"),
         ControlTarget::LayerScrub(id) => format!("/phosphor/layer/{id}/scrub"),
         ControlTarget::LayerText(id) => format!("/phosphor/layer/{id}/text"),
         ControlTarget::LayerClipPick(id) => format!("/phosphor/layer/{id}/clip/pick"),
