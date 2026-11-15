@@ -13,7 +13,9 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
     if shaders::is_layer_pick(p) {
         let names = ui.ctx().data(|d| d.get_temp::<std::sync::Arc<Vec<String>>>(egui::Id::new(LAYER_NAMES))).unwrap_or_default();
         let n = values[i].round().max(0.0) as usize;
-        let name_of = |k: usize| if k == 0 { "(none)".to_string() } else { names.get(k - 1).cloned().unwrap_or_else(|| format!("Layer {k} (gone)")) };
+        // (0 = the effect's own layer where the setting reads from a layer, "Displace from layer #"; else nothing.)
+        let none = if p.name.starts_with("Displace from") { "(this layer)" } else { "(none)" };
+        let name_of = |k: usize| if k == 0 { none.to_string() } else { names.get(k - 1).cloned().unwrap_or_else(|| format!("Layer {k} (gone)")) };
         crate::ui::field(ui, p.name.trim_end_matches(" #"), |ui| {
             let r = fitted_combo(ui, ("param_layer", p.name, i)).selected_text(name_of(n)).show_ui(ui, |ui| {
                 for k in 0..=names.len().min(p.max as usize) {
