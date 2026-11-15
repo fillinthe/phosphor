@@ -151,6 +151,29 @@ fn fx_zoom_rotate(in: VOut) -> @location(0) vec4f {
     return textureSampleLevel(tex0, samp_mirror, p + 0.5, 0.0);
 }
 
+// Transform: P0/P1 move (picture widths / heights, y up), P2 scale, P3/P4 scale across / down, P5 turn (degrees,
+// clockwise), P6/P7 flip across / down (on above 0.5). Outside the moved picture: see-through.
+@fragment
+fn fx_transform(in: VOut) -> @location(0) vec4f {
+    let asp = aspect();
+    var p = in.uv - 0.5 - vec2f(P(0u), -P(1u));
+    p.x = p.x * asp;
+    let a = -P(5u) * TAU / 360.0;
+    let cs = cos(a);
+    let sn = sin(a);
+    p = vec2f(p.x * cs - p.y * sn, p.x * sn + p.y * cs);
+    p.x = p.x / asp;
+    let s = max(vec2f(P(2u) * P(3u), P(2u) * P(4u)), vec2f(0.001));
+    p = p / s;
+    if (P(6u) > 0.5) { p.x = -p.x; }
+    if (P(7u) > 0.5) { p.y = -p.y; }
+    let uv = p + 0.5;
+    if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
+        return vec4f(0.0);
+    }
+    return textureSampleLevel(tex0, samp, uv, 0.0);
+}
+
 @fragment
 fn fx_wave(in: VOut) -> @location(0) vec4f {
     var uv = in.uv;

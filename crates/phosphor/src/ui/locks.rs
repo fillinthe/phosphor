@@ -49,7 +49,7 @@ pub(crate) fn limits(ui: &egui::Ui, target: &ControlTarget) -> Option<(f32, f32)
 /// "Limits" for a slider's right-click menu: the lowest / highest it can go, set at the current value.
 pub(crate) fn limit_items(ui: &mut egui::Ui, target: &ControlTarget, unit: f32, show: &dyn Fn(f32) -> String) {
     let now = limits(ui, target);
-    ui.menu_button(label(icon::ARROWS_IN_LINE_HORIZONTAL, "Limits…"), |ui| {
+    ui.menu_button(crate::ui::menu_label(icon::ARROWS_IN_LINE_HORIZONTAL, if now.is_some() { "Limits" } else { "Limits…" }, now.map(|(lo, hi)| format!("{} to {}", show(lo), show(hi)))), |ui| {
         ui.set_min_width(240.0);
         help(ui, "Use only part of the slider: the mouse stays inside, and a controller's whole travel covers just that part.");
         if let Some((lo, hi)) = now {
@@ -87,7 +87,8 @@ pub(crate) fn lock_item(ui: &mut egui::Ui, target: &ControlTarget) {
     } else {
         (icon::LOCK, "Lock", "Nothing moves it: not the mouse, a controller, OSC or a phone")
     };
-    if crate::ui::command(ui, label(glyph, text)).on_hover_text(tip).clicked() {
+    let words = if locked { crate::ui::menu_label(glyph, "Locked", Some("click to unlock".into())) } else { crate::ui::menu_label(glyph, text, None) };
+    if crate::ui::command(ui, words).on_hover_text(tip).clicked() {
         ask(ui, PrefChange::Lock(target.clone(), !locked));
         ui.close();
     }
@@ -106,7 +107,8 @@ pub(crate) fn lock_badge(ui: &egui::Ui, resp: &egui::Response, target: &ControlT
 /// `unit` = the current value as 0..1 of the range; `show` writes a 0..1 point the way the slider shows values.
 pub(crate) fn snap_items(ui: &mut egui::Ui, target: &ControlTarget, unit: f32, show: &dyn Fn(f32) -> String) {
     let points = snap_points(ui, target);
-    ui.menu_button(label(icon::MAGNET, "Snap points…"), |ui| {
+    let yours = points.len();
+    ui.menu_button(crate::ui::menu_label(icon::MAGNET, if yours > 0 { "Snap points" } else { "Snap points…" }, (yours > 0).then(|| yours.to_string())), |ui| {
         ui.set_min_width(220.0);
         help(ui, "Hold Shift while dragging to land on a snap point (the ends, the default and 100% always count)");
         if crate::ui::command(ui, label(icon::PLUS, &format!("Add one here ({})", show(unit)))).clicked() {

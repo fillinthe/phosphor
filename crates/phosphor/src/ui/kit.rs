@@ -67,6 +67,16 @@ pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui
 }
 
 /// Show / hide: an eye, crossed out in orange when hidden. Marks the response changed.
+/// A menu entry's words: lit in the accent color with what it's set to when that thing is on ("Modulate: LFO",
+/// "Mapped: MIDI CC 12"), plain otherwise, so what's active on a control shows in its right-click menu without
+/// opening anything (owner, 2026-11-14).
+pub(crate) fn menu_label(glyph: &str, text: &str, active: Option<String>) -> egui::RichText {
+    match active {
+        Some(what) => RichText::new(format!("{glyph} {text}: {what}")).color(accent()).strong(),
+        None => RichText::new(format!("{glyph} {text}")),
+    }
+}
+
 /// A bare icon button the size of `eye_toggle` (the column in front of a card's bars: play / pause by the playhead).
 pub(crate) fn row_icon(ui: &mut egui::Ui, glyph: &str, height: f32) -> egui::Response {
     ui.add(egui::Button::new(glyph).frame(false).min_size(egui::vec2(22.0, height)))

@@ -1134,3 +1134,29 @@ fn depth_keeps_the_fit() {
     assert!(at(80) > 200, "the middle is the picture");
     assert!(at(10) < 30 && at(150) < 30, "black beside a square picture: {} {}", at(10), at(150));
 }
+
+/// Transform on MASTER moves the whole output: a white picture scaled to half and moved a quarter right leaves the left
+/// side see-through (black) and lands right of the middle; at its defaults it changes nothing.
+#[test]
+fn transform_on_master_moves_the_whole_output() {
+    let Some(mut engine) = test_engine() else { return };
+    let (w, h) = (160u32, 90u32);
+    let mut comp = Composition { width: w, height: h, ..Default::default() };
+    let mut white = LayerState { id: 1, source: SourceSpec::Generator("solid".into()), ..Default::default() };
+    white.generator_values = vec![1.0, 1.0, 1.0];
+    comp.layers.push(white);
+    let mut fx = comp.new_effect("transform").expect("transform effect");
+    let row = |engine: &mut Engine, comp: &Composition| {
+        engine.render(comp, 0.0, &ModInputs::default());
+        let (ow, _, px) = engine.read_output().expect("output");
+        move |x: u32| px[((45 * ow + x) * 4) as usize]
+    };
+    comp.master_effects.push(fx.clone());
+    let at = row(&mut engine, &comp);
+    assert!(at(5) > 200 && at(155) > 200, "defaults: the whole picture");
+    fx.values = vec![0.25, 0.0, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0];
+    comp.master_effects = vec![fx];
+    let at = row(&mut engine, &comp);
+    assert!(at(30) < 30, "left side empty: {}", at(30));
+    assert!(at(120) > 200, "picture right of the middle: {}", at(120));
+}

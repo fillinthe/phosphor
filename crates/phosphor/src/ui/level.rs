@@ -114,7 +114,7 @@ impl<'a> Level<'a> {
         let lit_mod = moving.is_some();
         let size = match vertical {
             Some(h) => egui::vec2(22.0, h),
-            None => egui::vec2((width.unwrap_or(ui.available_width() - if lit_mod { 22.0 } else { 0.0 }) - switch_w).max(40.0), ui.spacing().interact_size.y.max(18.0)),
+            None => egui::vec2((width.unwrap_or(ui.available_width()) - switch_w).max(40.0), ui.spacing().interact_size.y.max(18.0)),
         };
         let (rect, mut r) = ui.allocate_exact_size(size, Sense::click_and_drag());
         let locked = target.as_ref().is_some_and(|t| is_locked(ui, t));
@@ -319,6 +319,9 @@ impl<'a> Level<'a> {
         }
         if hovered {
             p.rect_stroke(rect, 0.0, Stroke::new(1.0, base), StrokeKind::Inside);
+        } else if lit_mod {
+            // Something moves it: a thin accent outline, so it shows without a right-click (owner, 2026-11-14).
+            p.rect_stroke(rect, 0.0, Stroke::new(1.0, crate::theme::accent()), StrokeKind::Inside);
         }
         // The limit brackets: always when set, both while the pointer is on the bar.
         let near = hovered || limit_marks.iter().any(|(_, _, a)| *a);
@@ -344,6 +347,8 @@ impl<'a> Level<'a> {
                 // The name whole when it fits; cut short with "…" when there's real room for some of it (a long
                 // shader setting name in the Inspector); a narrow bar (cards) shows its value alone and the name in
                 // its tooltip, rather than "Spe…".
+                // Modulated: a wave before its name (the ~ button after the bar can be out of sight on a fixed width).
+                let text = if lit_mod { format!("{} {text}", icon::WAVE_SINE) } else { text.clone() };
                 if !text.is_empty() && room > 16.0 {
                     let g = p.layout_no_wrap(text.clone(), font.clone(), color);
                     let g = if g.size().x <= room {
@@ -414,12 +419,9 @@ impl<'a> Level<'a> {
         if *value != before {
             r.mark_changed();
         }
-        // A lit ~ only while something moves it (the right-click menu adds one otherwise).
-        if let Some(m) = m
-            && m.is_some()
-        {
-            mod_button(ui, m);
-        }
+        // (A modulated bar shows it inside: a wave by its name and an accent outline; its right-click menu says what
+        // moves it. The lit ~ button that sat after the bar was pushed out of sight or onto a line of its own.)
+        let _ = m;
         r
     }
 }

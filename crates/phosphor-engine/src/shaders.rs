@@ -168,6 +168,23 @@ pub const EFFECTS: &[ShaderDesc] = &[
         entry: "fx_zoom_rotate",
         params: &[p("Zoom", 0.25, 4.0, 1.4), p("Rotate", -1.0, 1.0, 0.0), p("Spin", -2.0, 2.0, 0.15)],
     },
+    // Moves, scales, turns and flips the whole picture: on MASTER the whole output, on a group or layer that part
+    // (owner, 2026-11-14: "transform as an effect I can add to master"). Outside the moved picture is see-through.
+    ShaderDesc {
+        id: "transform",
+        name: "Transform",
+        entry: "fx_transform",
+        params: &[
+            p("Move X", -1.0, 1.0, 0.0),
+            p("Move Y", -1.0, 1.0, 0.0),
+            p("Scale", 0.05, 4.0, 1.0),
+            p("Scale X", 0.05, 4.0, 1.0),
+            p("Scale Y", 0.05, 4.0, 1.0),
+            p("Rotate", -180.0, 180.0, 0.0),
+            Param { name: "Flip X", min: 0.0, max: 1.0, default: 0.0, labels: &["Off", "On"] },
+            Param { name: "Flip Y", min: 0.0, max: 1.0, default: 0.0, labels: &["Off", "On"] },
+        ],
+    },
     ShaderDesc {
         id: "wave",
         name: "Wave Warp",
@@ -850,6 +867,7 @@ pub fn info(id: &str) -> (&'static str, &'static str) {
         "view_360" => ("Distort", "Look around inside a 360 panorama (sky, room, 360 video)"),
         "mirror" => ("Distort", "Mirror halves or quarters"),
         "zoom_rotate" => ("Distort", "Zoom and spin"),
+        "transform" => ("Distort", "Move, scale, turn or flip the picture (on MASTER: the whole output)"),
         "wave" => ("Distort", "Wavy warp"),
         "tile" => ("Distort", "Repeat the image"),
         "pixelate" => ("Stylize", "Big pixels"),
