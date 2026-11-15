@@ -18,6 +18,7 @@ impl PhosphorApp {
         // (i) icons unless you chose words (the brightness menu): the room goes to the controls.
         let help_icons = stored(KEY_HELP_ICONS).is_none_or(|v| v == "1") || std::env::var_os("PHOSPHOR_HELP_ICONS").is_some();
         let tooltips_off = stored(KEY_TOOLTIPS).is_some_and(|v| v == "0");
+        let sliders_jump = stored(KEY_SLIDERS_JUMP).is_none_or(|v| v == "1");
         // The interface language: as chosen, else the computer's (PHOSPHOR_LANG=de for a bench).
         let lang = std::env::var("PHOSPHOR_LANG").ok().or_else(|| stored(KEY_LANGUAGE)).map_or(crate::i18n::Lang::Auto, |c| crate::i18n::Lang::from_code(&c));
         crate::i18n::set_language(&cc.egui_ctx, lang);
@@ -403,6 +404,7 @@ impl PhosphorApp {
         theme::set_accent(accent);
         // Help as (i) icons / tooltips off (the brightness menu). PHOSPHOR_HELP_ICONS=1: icons in a bench.
         crate::ui::set_help_icons(help_icons);
+        crate::ui::set_sliders_jump(sliders_jump);
         if tooltips_off {
             theme::set_tooltips(&cc.egui_ctx, false);
         }

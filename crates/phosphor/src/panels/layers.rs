@@ -401,9 +401,21 @@ pub(crate) fn layer_card(
                 }
                 opacity_row(ui, layer);
                 if matches!(layer.source, SourceSpec::Movie { .. }) {
-                    let w = ui.available_width();
-                    super::clip_bar::card_bar(ui, layer, w);
-                    super::clip_bar::speed_level(ui, layer, w);
+                    // Each row starts with a button in the eye's column, so the playhead and Speed line up with
+                    // Opacity (they started further left, under the eye).
+                    ui.horizontal(|ui| {
+                        let (glyph, tip) = if layer.playing { (icon::PAUSE, "Pause") } else { (icon::PLAY, "Play") };
+                        if crate::ui::row_icon(ui, glyph, 12.0).on_hover_text(tip).clicked() {
+                            layer.playing = !layer.playing;
+                        }
+                        let w = ui.available_width();
+                        super::clip_bar::card_bar(ui, layer, w);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.add_sized([22.0, crate::ui::CONTROL_H], egui::Label::new(RichText::new(icon::GAUGE).color(ui.visuals().weak_text_color())).selectable(false));
+                        let w = ui.available_width();
+                        super::clip_bar::speed_level(ui, layer, w);
+                    });
                 }
                 crate::ui::toolbar(ui, |ui| {
                     // A mixer plugin blends it instead of its blend mode (Inspector › Mixer plugin).

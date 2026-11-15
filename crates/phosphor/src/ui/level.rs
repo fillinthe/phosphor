@@ -142,14 +142,31 @@ impl<'a> Level<'a> {
 
         // Primary button only: right-click opens the menu without moving the value.
         let primary = ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released());
+        // Jump (the default): the value goes to the spot pressed. Drag from value: it moves from where it was by how far
+        // the pointer has gone since the press, and a plain click leaves it.
+        let jump = super::sliders_jump();
+        let start_key = r.id.with("drag_from");
+        if !jump && r.drag_started() {
+            let t0 = to_t(*value);
+            ui.ctx().data_mut(|d| d.insert_temp(start_key, t0));
+        }
         if primary
             && !locked
-            && (r.dragged() || r.clicked())
+            && (r.dragged() || (jump && r.clicked()))
             && let Some(p) = r.interact_pointer_pos()
         {
-            let t = match vertical {
-                Some(_) => (rect.bottom() - p.y) / rect.height(),
-                None => (p.x - rect.left()) / rect.width(),
+            let t = if jump {
+                match vertical {
+                    Some(_) => (rect.bottom() - p.y) / rect.height(),
+                    None => (p.x - rect.left()) / rect.width(),
+                }
+            } else {
+                let t0 = ui.ctx().data(|d| d.get_temp::<f32>(start_key)).unwrap_or_else(|| to_t(*value));
+                let from = ui.input(|i| i.pointer.press_origin()).unwrap_or(p);
+                t0 + match vertical {
+                    Some(_) => (from.y - p.y) / rect.height(),
+                    None => (p.x - from.x) / rect.width(),
+                }
             };
             let mut t = t.clamp(0.0, 1.0);
             if shift {

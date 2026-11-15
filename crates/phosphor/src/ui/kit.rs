@@ -67,6 +67,11 @@ pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui
 }
 
 /// Show / hide: an eye, crossed out in orange when hidden. Marks the response changed.
+/// A bare icon button the size of `eye_toggle` (the column in front of a card's bars: play / pause by the playhead).
+pub(crate) fn row_icon(ui: &mut egui::Ui, glyph: &str, height: f32) -> egui::Response {
+    ui.add(egui::Button::new(glyph).frame(false).min_size(egui::vec2(22.0, height)))
+}
+
 pub(crate) fn eye_toggle(ui: &mut egui::Ui, shown: &mut bool) -> egui::Response {
     let (glyph, color, tip) = if *shown { (icon::EYE, ui.visuals().text_color(), "Showing: click to hide") } else { (icon::EYE_SLASH, crate::theme::WARN, "Hidden: click to show") };
     let mut r = ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false).min_size(egui::vec2(22.0, CONTROL_H))).on_hover_text(tip);
