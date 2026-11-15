@@ -184,6 +184,8 @@ pub fn to_composition(file: &AvcFile, decks: &[usize]) -> (Composition, usize) {
     let ids: Vec<u64> = (0..n_layers)
         .map(|i| {
             let l = comp.add_layer();
+            // (As it was in the other app until a look says otherwise, not Phosphor's new-layer Add.)
+            l.blend = phosphor_engine::BlendMode::Normal;
             l.name = file.layers.get(i).cloned().unwrap_or_else(|| format!("Layer {}", i + 1));
             l.id
         })

@@ -294,7 +294,8 @@ impl Composition {
         ids
     }
 
-    /// Adds a layer on top of the open comp's stack.
+    /// Adds a layer on top of the open comp's stack, blended Add (so a new layer visibly mixes with what's under it;
+    /// the owner, 2026-11-14). Saved projects keep the blend each layer has.
     pub fn add_layer(&mut self) -> &mut LayerState {
         let id = self.new_id();
         let comp = self.open_comp();
@@ -302,7 +303,7 @@ impl Composition {
         let transition_kind = self.launch.style;
         // On top of its comp: after that comp's last layer (comps keep their layers together).
         let at = self.layers.iter().rposition(|l| self.comp_of(l) == comp).map_or(self.layers.len(), |i| i + 1);
-        self.layers.insert(at, LayerState { id, name, transition_kind, comp, ..Default::default() });
+        self.layers.insert(at, LayerState { id, name, transition_kind, comp, blend: crate::BlendMode::Add, ..Default::default() });
         &mut self.layers[at]
     }
 

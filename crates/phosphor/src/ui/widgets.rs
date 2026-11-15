@@ -338,6 +338,18 @@ pub(crate) fn help_icons() -> bool {
     HELP_ICONS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Sliders (`ui::Level`): a click jumps to that spot (true, the default), or the value moves from where it is by
+/// how far you drag, and a plain click leaves it (false). The owner's choice, 2026-11-14.
+static SLIDERS_JUMP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub(crate) fn sliders_jump() -> bool {
+    SLIDERS_JUMP.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub(crate) fn set_sliders_jump(on: bool) {
+    SLIDERS_JUMP.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub(crate) fn set_help_icons(on: bool) {
     HELP_ICONS.store(on, std::sync::atomic::Ordering::Relaxed);
 }

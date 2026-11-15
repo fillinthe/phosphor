@@ -246,6 +246,7 @@ pub fn add_to(comp: &mut Composition, file: &MadFile, aspect: AspectOf) -> Impor
             comp.add_media(&name, path);
         }
         let l = comp.add_layer();
+        l.blend = phosphor_engine::BlendMode::Normal;
         l.name = if v.name.is_empty() { format!("MadMapper {}", v.id) } else { v.name.clone() };
         l.source = source;
         l.generator_values = generator_values;
