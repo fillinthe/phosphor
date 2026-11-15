@@ -376,6 +376,66 @@ fn output_backgrounds_show_behind_slices() {
     assert!((bg[0] as i32 - 128).abs() < 10 && bg[1] < 20, "half-strength red behind: {bg:?}");
 }
 
+/// Slice blends Lighten and Subtract: a green slice over a red backdrop keeps the brighter of each color (yellow);
+/// over a yellow one it takes its green away (red).
+#[test]
+fn slices_lighten_and_subtract() {
+    let Some(mut engine) = test_engine() else { return };
+    for (blend, backdrop, want) in [(crate::mapping::SliceBlend::Lighten, [255u8, 0, 0, 255], [255u8, 255, 0]), (crate::mapping::SliceBlend::Subtract, [255, 255, 0, 255], [255, 0, 0])] {
+        let mut comp = Composition { width: 32, height: 32, next_id: 100, ..Default::default() };
+        comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 1.0, 0.0], ..Default::default() });
+        let out = comp.add_output();
+        let sid = comp.new_id();
+        let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+        let s = o.mapping.add_surface(sid);
+        s.corners = [[0.0, 0.0], [0.5, 0.0], [0.5, 0.5], [0.0, 0.5]];
+        s.blend = blend;
+        o.mapping.enabled = true;
+        o.background = "back.png".into();
+        o.background_opacity = 1.0;
+        let back: Vec<u8> = backdrop.repeat(4 * 4);
+        engine.set_output_background(out, Some((4, 4, &back)));
+        engine.render(&comp, 0.0, &ModInputs::default());
+        let (w, h, px) = engine.read_output_of(out).expect("output");
+        let at = |x: u32, y: u32| { let i = ((y * w + x) * 4) as usize; [px[i], px[i + 1], px[i + 2]] };
+        let got = at(w / 4, h / 4);
+        assert!(got.iter().zip(want).all(|(g, w)| (*g as i32 - w as i32).abs() < 12), "{blend:?}: {got:?}, wanted {want:?}");
+        let outside = at(w * 3 / 4, h * 3 / 4);
+        assert!(outside.iter().zip(backdrop).all(|(g, w)| (*g as i32 - w as i32).abs() < 12), "{blend:?} outside the slice: {outside:?}");
+    }
+}
+
+/// A mask on a slice cuts that slice only: under a blue slice masked on its left half, the green slice shows there
+/// (it was blacked out too); a mask on no slice still blacks out everything.
+#[test]
+fn a_mask_on_a_slice_cuts_only_that_slice() {
+    let Some(mut engine) = test_engine() else { return };
+    let mut comp = Composition { width: 32, height: 32, next_id: 100, ..Default::default() };
+    comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 1.0, 0.0], in_mix: false, ..Default::default() });
+    comp.layers.push(LayerState { id: 2, source: SourceSpec::Generator("solid".into()), generator_values: vec![0.0, 0.0, 1.0], in_mix: false, ..Default::default() });
+    let out = comp.add_output();
+    let (a, b, m, loose) = (comp.new_id(), comp.new_id(), comp.new_id(), comp.new_id());
+    let o = comp.outputs.iter_mut().find(|o| o.id == out).unwrap();
+    let full = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+    let s = o.mapping.add_surface(a);
+    (s.corners, s.layer) = (full, Some(1));
+    let s = o.mapping.add_surface(b);
+    (s.corners, s.layer) = (full, Some(2));
+    o.mapping.add_mask_on(m, b).unwrap().points = vec![[0.0, 0.0], [0.5, 0.0], [0.5, 1.0], [0.0, 1.0]];
+    // A mask on no slice, over the bottom quarter.
+    o.mapping.masks.push(crate::mapping::Mask { id: loose, points: vec![[0.0, 0.75], [1.0, 0.75], [1.0, 1.0], [0.0, 1.0]], ..Default::default() });
+    o.mapping.enabled = true;
+    engine.render(&comp, 0.0, &ModInputs::default());
+    let (w, h, px) = engine.read_output_of(out).expect("output");
+    let at = |x: u32, y: u32| { let i = ((y * w + x) * 4) as usize; [px[i], px[i + 1], px[i + 2]] };
+    let left = at(w / 4, h / 4);
+    let right = at(w * 3 / 4, h / 4);
+    let bottom = at(w / 2 + 4, h * 7 / 8);
+    assert!(left[1] > 200 && left[2] < 30, "the slice under shows where the top one is masked: {left:?}");
+    assert!(right[2] > 200 && right[1] < 30, "the top slice where it isn't masked: {right:?}");
+    assert!(bottom.iter().all(|c| *c < 20), "a mask on no slice blacks out everything: {bottom:?}");
+}
+
 /// Blackout: a mapped output, its backdrop included, fades to black over the blackout time and back.
 #[test]
 fn blackout_takes_every_output_to_black_and_back() {

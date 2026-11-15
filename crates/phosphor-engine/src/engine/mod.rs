@@ -88,6 +88,8 @@ struct LayerResources {
     fx: [Option<Target>; 3],
     /// Reduced-size target for Rutt-Etra (and Points: Lines); its scale sets the apparent line width.
     rutt: Option<Target>,
+    /// A slice drawn on its own (the output's size) before its own masks cut it; keyed by the slice's id.
+    cut: Option<Target>,
     /// What a points render (dots, mesh) draws into: the canvas size, whatever size the points came at.
     pts: Option<Target>,
     /// The effect chain's views after a points render: the canvas size in the mix format (the chain before it
@@ -843,7 +845,24 @@ impl Engine {
                 bu.uv_xform = fit::fit_transform((bg.width, bg.height), (ow, oh), FitMode::Fill);
                 passes.push(Pass { entry: "fs_composite", target: view.clone(), tex0: bg.view.clone(), tex1: None, tex2: None, uniforms: bu, mesh: None, bufs: Vec::new() });
             }
+            let mut cut: Option<(wgpu::TextureView, u64, mapping::SliceBlend)> = None;
             for s in mapping.shown() {
+                // A slice with masks of its own is drawn on a clear picture, cut there by its masks, then pasted on
+                // with its blend (the one before it first): its masks never touch the slices under it.
+                if let Some((scratch, sid, blend)) = cut.take() {
+                    self.finish_cut(o.id, &mapping, &scratch, &view, (ow, oh), mods, sid, blend, &mut passes);
+                }
+                let (tv, draw_blend) = if mapping.masks.iter().any(|m| m.enabled && m.attached == Some(s.id)) {
+                    let res = self.layers.entry(s.id).or_default();
+                    Target::ensure(&mut res.cut, &device, "slice before its masks", ow, oh);
+                    let scratch = res.cut.as_ref().unwrap().view.clone();
+                    let cu = Uniforms { resolution: [ow as f32, oh as f32], ..Uniforms::with_params(&[]) };
+                    passes.push(Pass { entry: "fs_clear", target: scratch.clone(), tex0: self.gpu.blank.clone(), tex1: None, tex2: None, uniforms: cu, mesh: None, bufs: Vec::new() });
+                    cut = Some((scratch.clone(), s.id, s.blend));
+                    (scratch, mapping::SliceBlend::Normal)
+                } else {
+                    (view.clone(), s.blend)
+                };
                 // A layer's, group's or comp's own picture (black while it's off); the mix if it's gone.
                 let src = match s.layer {
                     Some(id) if comp.layers.iter().any(|l| l.id == id) || comp.group(id).is_some() || comp.comp(id).is_some() => feeds.get(&id).cloned().unwrap_or_else(|| self.gpu.blank.clone()),
@@ -889,20 +908,20 @@ impl Engine {
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
-                    passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    passes.push(Pass { entry: draw_blend.entry(true), target: tv.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     // Its light (faces shaded, multiplied over the picture) and glowing edges (added on top).
                     let plain = Uniforms { resolution: [ow as f32, oh as f32], ..Uniforms::with_params(&[]) };
                     if m.shade > 0.001 || m.shadows > 0.001 {
                         let hash = hash_points(key.iter().chain([&[m.shade, m.shadows], &m.light]), &[ow, oh, 1]);
                         if let Some(shade) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id | 1 << 62), hash, || m.shade_triangles(aspect)) {
-                            passes.push(Pass { entry: "fs_mesh_shade_mul", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: plain, mesh: Some(shade), bufs: Vec::new() });
+                            passes.push(Pass { entry: "fs_mesh_shade_mul", target: tv.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: plain, mesh: Some(shade), bufs: Vec::new() });
                         }
                     }
                     if m.edges > 0.0 && m.edge_glow > 0.0 {
                         let hash = hash_points(key.iter().chain([&[m.edges, 0.0]]), &[ow, oh, 2]);
                         if let Some(edges) = self.meshes.get(&device, &self.gpu.queue, (o.id, s.id | 1 << 61), hash, || m.edge_triangles(aspect, m.edges, (ow, oh))) {
                             let glow = Uniforms { opacity: m.edge_glow * s.opacity * fade, ..plain };
-                            passes.push(Pass { entry: "fs_mesh_glow_add", target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: glow, mesh: Some(edges), bufs: Vec::new() });
+                            passes.push(Pass { entry: "fs_mesh_glow_add", target: tv.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: glow, mesh: Some(edges), bufs: Vec::new() });
                         }
                     }
                     continue;
@@ -922,7 +941,7 @@ impl Engine {
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
-                    passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    passes.push(Pass { entry: draw_blend.entry(true), target: tv.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
                 // Mesh warp or curved edges: one pass drawing the cached, finely subdivided mesh.
@@ -943,7 +962,7 @@ impl Engine {
                     u.p[5] = g0;
                     u.p[6] = g1;
                     [u.p[7], u.p[8]] = s.color.uniforms();
-                    passes.push(Pass { entry: s.blend.entry(true), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
+                    passes.push(Pass { entry: draw_blend.entry(true), target: tv.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: Some(draw), bufs: Vec::new() });
                     continue;
                 }
                 let Some(inv) = mapping::quad_to_square(&s.corners) else { continue };
@@ -961,9 +980,12 @@ impl Engine {
                 u.p[5] = g0;
                 u.p[6] = g1;
                 [u.p[7], u.p[8]] = s.color.uniforms();
-                passes.push(Pass { entry: s.blend.entry(false), target: view.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
+                passes.push(Pass { entry: draw_blend.entry(false), target: tv.clone(), tex0: src.clone(), tex1: None, tex2: None, uniforms: u, mesh: None, bufs: Vec::new() });
             }
-            self.push_masks(o.id, &mapping, &view, (ow, oh), mods, &mut passes);
+            if let Some((scratch, sid, blend)) = cut.take() {
+                self.finish_cut(o.id, &mapping, &scratch, &view, (ow, oh), mods, sid, blend, &mut passes);
+            }
+            self.push_mask_set(o.id, &mapping, &view, (ow, oh), mods, &mut passes, mesh::MaskSet::Loose);
             self.push_grid(&o.grid, &view, (ow, oh), &mut passes);
         }
         self.finish_outputs(comp, &device, &mut passes);

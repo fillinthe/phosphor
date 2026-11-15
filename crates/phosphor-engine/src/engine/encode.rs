@@ -101,7 +101,7 @@ impl Engine {
                 ],
             }));
             // Surfaces, meshes and masks draw on top of what the output already has.
-            let surface = pass.entry.starts_with("fs_surface") || pass.entry.starts_with("fs_mesh") || matches!(pass.entry, "fs_mask" | "fs_grid");
+            let surface = pass.entry.starts_with("fs_surface") || pass.entry.starts_with("fs_mesh") || matches!(pass.entry, "fs_mask" | "fs_mask_cut" | "fs_grid") || pass.entry.starts_with("fs_paste");
             let vertices = match pass.entry {
                 _ if pass.mesh.is_some() => pass.mesh.as_ref().map_or(0, |m| m.vertices),
                 e if e.starts_with("fs_surface") => 6,

@@ -58,10 +58,11 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
 - [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
       same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
       add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.
-- [ ] **Outputs: layering and masking like MadMapper** (owner, 2026-11-14): done so far: undo in the output window,
-      new slices in place, drag rows between layouts / groups / onto another row, rename pop-up. Still to design
-      with the owner: what else should move like MadMapper (masks attached to a slice, layer order across layouts…).
-- [ ] **Clip grid column buttons** grayed out while there are no layers? (owner to say)
+- [~] **Outputs: layering and masking like MadMapper** (owner, 2026-11-14; "full MadMapper-style" 2026-11-15). Built
+      (tests pass, not seen on screen yet): a mask on a slice cuts that slice only (right-click a slice › Add a mask
+      on it; it moves and warps with the slice); slice blends Lighten and Subtract. Already there: slices listed like
+      layers (eye, opacity, solo, lock, drag to reorder / group / another layout), soft mask edges, mask groups, the
+      Studio's input view, undo, rename pop-up. Left: a mask shared by several slices, the blend shown on the row.
 - [ ] **Real-hardware checks** (2026-11-13): Windows fullscreen output on a real second screen / mixed scaling (0.5.4,
       reporter #41); the Windows #28 freeze on a PC with a real graphics card (the VMs have none); 0.5.5's Inspector
       and ISF-folder fixes (reporter #42). Owner will use a real PC later.

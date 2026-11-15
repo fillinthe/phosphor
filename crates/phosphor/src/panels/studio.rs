@@ -48,6 +48,8 @@ enum TreeAction {
     /// A line slice drawn by hand on output `.0`.
     DrawnLine(u64, Vec<[f32; 2]>),
     Duplicate(u64),
+    /// A new mask on slice `.1` of output `.0`.
+    MaskOn(u64, u64),
     Delete(u64, u64),
     DeleteMany(u64, Vec<u64>),
     /// Put these slices of output `.0` into a new group.
@@ -130,6 +132,7 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
                 match a {
                     SliceAct::Group(ids) => action = Some(TreeAction::Group(o.id, ids)),
                     SliceAct::Duplicate(id) => action = Some(TreeAction::Duplicate(id)),
+                    SliceAct::MaskOn(id) => action = Some(TreeAction::MaskOn(o.id, id)),
                     SliceAct::Delete(ids) => action = Some(TreeAction::DeleteMany(o.id, ids)),
                     SliceAct::AddLayout => action = Some(TreeAction::AddLayout(o.id)),
                     SliceAct::SwitchLayout(id) => action = Some(TreeAction::SwitchLayout(id)),
@@ -205,6 +208,14 @@ fn apply(st: &mut State, action: Option<TreeAction>, canvas: (u32, u32)) {
                 o.mapping.enabled = true;
             }
             st.selected_surface = Some(id);
+        }
+        Some(TreeAction::MaskOn(oid, slice)) => {
+            let id = st.comp.new_id();
+            if let Some(o) = st.comp.output_mut(oid)
+                && o.mapping.add_mask_on(id, slice).is_some()
+            {
+                st.selected_surface = Some(id);
+            }
         }
         Some(TreeAction::AddMask(oid, shape)) => {
             let id = st.comp.new_id();
