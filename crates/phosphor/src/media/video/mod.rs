@@ -772,7 +772,8 @@ impl VideoPlayer {
 
     /// Where the clip is (seconds from its start), for the scrub bar and crash recovery.
     pub fn position(&self) -> f64 {
-        self.shown
+        // A jump still waiting its turn: report where it's going (the bar doesn't snap back after a drag).
+        self.scrub.next.unwrap_or(self.shown)
     }
 
     /// Returns a frame's buffers for reuse by the decoder (optional; avoids reallocations).

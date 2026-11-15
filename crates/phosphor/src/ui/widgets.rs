@@ -236,6 +236,13 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
     let width = ui.available_width().max(60.0);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click_and_drag());
     let frac = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) as f32 } else { 0.0 };
+    // While you drag it, the playhead is under the pointer (the movie's own position lags a jump behind and played on
+    // between them, so the line jittered between the two: owner, 2026-11-14).
+    let held = resp.dragged_by(egui::PointerButton::Primary) || resp.is_pointer_button_down_on();
+    let frac = match resp.interact_pointer_pos().filter(|_| held) {
+        Some(at) => ((at.x - rect.left()) / rect.width()).clamp(0.0, 1.0),
+        None => frac,
+    };
     // 0 and 1 are the bar's very ends (they sat 5 points inside, so a loop starting at 0 looked like it didn't:
     // owner, 2026-11-14); a mark's grab area reaches past the end, so one there can still be taken.
     let x_of = |f: f32| rect.left() + rect.width() * f.clamp(0.0, 1.0);
