@@ -461,6 +461,7 @@ impl Graph for View<'_> {
     fn title(&self, id: u32) -> String {
         let Some(n) = self.node(id) else { return String::new() };
         match n.kind {
+            NodeKind::Layer => self.comp.layer(n.layer).map_or_else(|| "Layer".to_string(), |l| format!("Layer: {}", l.name)),
             NodeKind::Picture => n.parts.first().and_then(|p| self.comp.layer(*p)).map_or_else(|| "Picture".to_string(), |l| l.source.label()),
             NodeKind::Effect => n.parts.first().and_then(|p| self.comp.layer(*p)).and_then(|l| l.effects.first()).and_then(|e| shaders::effect(&e.effect)).map_or_else(|| "Effect".to_string(), |d| d.name.to_string()),
             NodeKind::Number => n.modulator().and_then(|m| self.comp.modulators.iter().find(|x| x.id == m)).map_or_else(
@@ -487,7 +488,7 @@ impl Graph for View<'_> {
             _ => {}
         }
         match self.node(id).map(|n| n.kind) {
-            Some(NodeKind::Picture | NodeKind::Input) => crate::theme::Hue::Media.color(),
+            Some(NodeKind::Layer | NodeKind::Picture | NodeKind::Input) => crate::theme::Hue::Media.color(),
             Some(NodeKind::Effect) => crate::theme::Hue::Effect.color(),
             Some(NodeKind::Mix) => crate::theme::Hue::Live.color(),
             Some(NodeKind::Number | NodeKind::NumberInput) => crate::theme::Hue::Control.color(),
@@ -514,6 +515,7 @@ impl Graph for View<'_> {
         let Some(n) = self.node(id) else { return 0.0 };
         let pic = self.preview_h() + 3.0;
         match n.kind {
+            NodeKind::Layer => pic + ROW_H,
             NodeKind::Picture => {
                 let text = n.parts.first().and_then(|p| self.comp.layer(*p)).is_some_and(|l| matches!(l.source, SourceSpec::Text(_)));
                 pic + ROW_H + if text { PARAM_H } else { 0.0 }
@@ -541,6 +543,30 @@ impl Graph for View<'_> {
         let Some(n) = self.node(id).cloned() else { return false };
         let width = ui.available_width();
         match n.kind {
+            // One of your own layers, as it is: pick which. Nothing is made for it.
+            NodeKind::Layer => {
+                self.preview(ui, (n.layer != 0).then_some(n.layer));
+                let shown = self.feeds.iter().find(|(l, _, is_layer)| *is_layer && *l == n.layer).map_or("Pick a layer…".to_string(), |(_, name, _)| name.clone());
+                let mut pick: Option<u64> = None;
+                crate::ui::dropdown(ui, ("designer_layer", id), width - 20.0).selected_text(shown).show_ui(ui, |ui| {
+                    crate::ui::column_scroll(ui).max_height(320.0).show(ui, |ui| {
+                        for (l, name, _) in self.feeds.iter().filter(|(_, _, is_layer)| *is_layer) {
+                            if crate::ui::pick_item(ui, n.layer == *l, name).clicked() {
+                                pick = Some(*l);
+                            }
+                        }
+                        if !self.feeds.iter().any(|(_, _, is_layer)| *is_layer) {
+                            hint(ui, "No layers yet: make one in Layers or Clips");
+                        }
+                    });
+                });
+                if let Some(l) = pick {
+                    if let Some(node) = self.level_mut().and_then(|x| x.node_mut(id)) {
+                        node.layer = l;
+                    }
+                    return true;
+                }
+            }
             NodeKind::Picture => {
                 self.preview(ui, n.parts.first().copied());
                 let before = n.parts.first().and_then(|p| self.comp.layer(*p)).map(|l| l.source.clone());

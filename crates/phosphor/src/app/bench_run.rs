@@ -607,6 +607,13 @@ impl PhosphorApp {
                 net.nodes.iter_mut().find(|n| n.id == out).unwrap().pos = [820.0, 60.0];
                 // A box of boxes passes the picture through (Input → Output inside) between the two.
                 let group = net.add(NodeKind::Group, [300.0, 60.0]);
+                // PHOSPHOR_DESIGNER_LAYER=1: a Layer box showing the first layer of the project (the bench's own).
+                if std::env::var("PHOSPHOR_DESIGNER_LAYER").is_ok()
+                    && let Some(mine) = comp.layers.iter().find(|l| !l.designer).map(|l| l.id)
+                {
+                    let lb = net.add(NodeKind::Layer, [300.0, 330.0]);
+                    net.node_mut(lb).unwrap().layer = mine;
+                }
                 net.connect(pic, group, 0);
                 net.connect(group, fx, 0);
                 net.connect(fx, out, 0);
