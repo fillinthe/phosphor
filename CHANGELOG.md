@@ -4,6 +4,30 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.7 (2026-11-14)
+
+**Effects**
+- Transform: move, scale, rotate and flip the picture. Put it on MASTER to move the whole output.
+
+**Sliders**
+- A slider that something moves (an LFO, the sound, a modulator) shows it: a wave by its name and a thin outline.
+- The right-click menu lights up what's on: what modulates it, what it's mapped to, Locked, snap points, limits.
+
+**Converting files**
+- The Convert window keeps its size whatever you pick, and shows where the new file goes, with Change… to pick
+  another folder. Clips from followed accounts convert into your library folder.
+
+**Designer**
+- A box's source row fits inside the box, so its buttons can be clicked.
+- A comp can't be picked as its own source any more (it drew nothing and its movies stopped).
+
+**Following accounts**
+- When macOS keeps Phosphor from reading your browser's sign-in, it says so, with a button to the Full Disk Access
+  settings.
+
+**Windows**
+- Phosphor installs updates by itself, like on the Mac (from the next update after this one).
+
 ## 0.5.6 (2026-11-14)
 
 **Outputs and mapping**
