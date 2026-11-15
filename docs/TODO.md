@@ -18,7 +18,7 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
 
 ## Needs your decision
 
-- [ ] **Designer needs work** (owner, 2026-11-14): every box quietly makes layers of its own (Picture = a layer,
+- [~] **Designer needs work** (owner, 2026-11-14; **Layer box built 2026-11-15**, not seen on screen yet: Designer › right-click › Layer, pick one of your layers; nothing is made for it): every box quietly makes layers of its own (Picture = a layer,
       Effect = a layer, Mix = two), so layers keep appearing while you work. Owner: "I should be able to make layers
       and then attach them to something". Proposal: hide the Designer's own layers from Layers / Clips / Mixer, and a
       "Layer" box that brings an existing layer into the network. Fixed 2026-11-14 (not released, not seen on screen yet): a box's
@@ -62,8 +62,6 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
       new slices in place, drag rows between layouts / groups / onto another row, rename pop-up. Still to design
       with the owner: what else should move like MadMapper (masks attached to a slice, layer order across layouts…).
 - [ ] **Clip grid column buttons** grayed out while there are no layers? (owner to say)
-- [ ] **Tidy the project folders** (owner, 2026-11-14): everything for Phosphor in one folder, organized. Details in
-      the local notes; ask before moving anything (the build, the deploy script and a permission rule use the paths).
 - [ ] **Real-hardware checks** (2026-11-13): Windows fullscreen output on a real second screen / mixed scaling (0.5.4,
       reporter #41); the Windows #28 freeze on a PC with a real graphics card (the VMs have none); 0.5.5's Inspector
       and ISF-folder fixes (reporter #42). Owner will use a real PC later.

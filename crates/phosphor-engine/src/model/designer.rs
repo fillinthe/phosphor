@@ -25,6 +25,9 @@ use crate::graph::{self, Wire};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeKind {
+    /// One of your own layers, brought into the network: nothing is made for it (owner, 2026-11-15: "I should be
+    /// able to make layers and then attach them to something").
+    Layer,
     Picture,
     Effect,
     Mix,
@@ -50,7 +53,7 @@ pub enum PortKind {
 
 impl NodeKind {
     /// The kinds you add from the menu (Input only inside a Group; Output comes with every network).
-    pub const ALL: [NodeKind; 6] = [NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Number, NodeKind::Group, NodeKind::Output];
+    pub const ALL: [NodeKind; 7] = [NodeKind::Layer, NodeKind::Picture, NodeKind::Effect, NodeKind::Mix, NodeKind::Number, NodeKind::Group, NodeKind::Output];
 
     /// What its output carries (a Picture or Effect box's may be points, by its shader: `Composition::node_output`).
     pub fn output(self) -> PortKind {
@@ -59,6 +62,7 @@ impl NodeKind {
 
     pub fn name(self) -> &'static str {
         match self {
+            NodeKind::Layer => "Layer",
             NodeKind::Picture => "Picture",
             NodeKind::Effect => "Effect",
             NodeKind::Mix => "Mix",
@@ -72,6 +76,7 @@ impl NodeKind {
 
     pub fn about(self) -> &'static str {
         match self {
+            NodeKind::Layer => "One of your layers, as it is (its clips, effects and settings stay in Layers): pick it in the box",
             NodeKind::Picture => "A movie, picture, generator, camera, text or visualizer",
             NodeKind::Effect => "Runs an effect on the picture wired in",
             NodeKind::Mix => "Blends B over A (blend mode and opacity)",
@@ -90,7 +95,7 @@ impl NodeKind {
             NodeKind::Mix => &["A", "B"],
             NodeKind::Output => &["In"],
             NodeKind::Number => &["Chain"],
-            NodeKind::Picture | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput => &[],
+            NodeKind::Layer | NodeKind::Picture | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput => &[],
         }
     }
 }
@@ -109,11 +114,13 @@ pub struct Node {
     pub inner: Option<Network>,
     /// The layer or group whose finished picture this box puts out (set by `sync_network`; 0 = none).
     pub shows: u64,
+    /// A Layer box's layer (0 = none picked yet).
+    pub layer: u64,
 }
 
 impl Default for Node {
     fn default() -> Self {
-        Self { id: 0, kind: NodeKind::Picture, pos: [0.0, 0.0], parts: Vec::new(), inner: None, shows: 0 }
+        Self { id: 0, kind: NodeKind::Picture, pos: [0.0, 0.0], parts: Vec::new(), inner: None, shows: 0, layer: 0 }
     }
 }
 
@@ -122,7 +129,7 @@ impl Node {
     pub fn picture(&self) -> Option<u64> {
         match self.kind {
             NodeKind::Output | NodeKind::Number | NodeKind::NumberInput => None,
-            NodeKind::Group | NodeKind::Input => (self.shows != 0).then_some(self.shows),
+            NodeKind::Group | NodeKind::Input | NodeKind::Layer => (self.shows != 0).then_some(self.shows),
             _ => self.parts.first().copied(),
         }
     }
@@ -526,7 +533,30 @@ impl Composition {
         let mut found = Synced::default();
         self.sync_level(comp_id, &mut net, &[], &[], &mut found);
         // Only the box wired into Output shows; Mix members mix inside their group.
-        let shown = net.shown().and_then(|id| net.node(id)).and_then(|n| n.picture());
+        let mut shown = net.shown().and_then(|id| net.node(id)).and_then(|n| n.picture());
+        // A picture that isn't one of the network's own (a Layer box wired straight into Output): Output gets one
+        // pass-through layer to mix it into the comp. Any other time it has none.
+        if let Some(oi) = net.nodes.iter().position(|n| n.kind == NodeKind::Output) {
+            let have = net.nodes[oi].parts.first().copied().filter(|p| self.layers.iter().any(|l| l.id == *p));
+            let own = net.parts();
+            match (shown.filter(|p| !own.contains(p)), have) {
+                (Some(p), have) => {
+                    let part = have.unwrap_or_else(|| self.add_part(comp_id, "Output"));
+                    let name = self.layer(p).map(|l| l.name.clone()).unwrap_or_default();
+                    if let Some(l) = self.layer_mut(part) {
+                        l.source = SourceSpec::Feed { id: p, name, before_fx: false };
+                    }
+                    net.nodes[oi].parts = vec![part];
+                    found.layers.push(part);
+                    shown = Some(part);
+                }
+                (None, Some(_)) => {
+                    self.remove_parts(&net.nodes[oi].parts.clone());
+                    net.nodes[oi].parts.clear();
+                }
+                (None, None) => net.nodes[oi].parts.clear(),
+            }
+        }
         for part in net.parts() {
             let on = found.members.contains(&part) || Some(part) == shown;
             if let Some(l) = self.layers.iter_mut().find(|l| l.id == part) {
@@ -577,11 +607,15 @@ impl Composition {
             if kind == NodeKind::Group && net.nodes[i].inner.is_none() {
                 net.nodes[i].inner = Some(Network::group_inner());
             }
+            // (Output's pass-through layer, when it has one, is `sync_network`'s business.)
+            if kind == NodeKind::Output {
+                continue;
+            }
             let have = net.nodes[i].parts.len();
             let need = match kind {
                 NodeKind::Picture | NodeKind::Effect | NodeKind::Number => 1,
                 NodeKind::Mix => 3,
-                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput => 0,
+                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Layer => 0,
             };
             if have == need {
                 continue;
@@ -612,7 +646,7 @@ impl Composition {
                         vec![mid]
                     }
                 }
-                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput => Vec::new(),
+                NodeKind::Output | NodeKind::Group | NodeKind::Input | NodeKind::NumberInput | NodeKind::Layer => Vec::new(),
             };
         }
         // Wires to inputs a box no longer has (its effect changed, an Input box went) go.
@@ -674,6 +708,11 @@ impl Composition {
                         found.members.push(part);
                     }
                     parts[0]
+                }
+                // Your own layer, as it is (not one of this network's parts: a box can't show its own insides).
+                NodeKind::Layer => {
+                    let l = net.nodes[i].layer;
+                    if self.layers.iter().any(|x| x.id == l && !x.designer) { l } else { 0 }
                 }
                 NodeKind::Input => {
                     let k = net.input_boxes().iter().position(|x| *x == id).unwrap_or(0);
@@ -996,6 +1035,56 @@ mod tests {
     /// A Number box is a shared modulator; wired into an effect's setting it becomes a linked modulation over the
     /// setting's whole range; into another Number it chains; the wrong kind of wire is refused; unwiring and
     /// removing clean up.
+    /// A Layer box brings one of your own layers in: nothing is made for it, an Effect box reads it, and wired
+    /// straight into Output the comp shows it through one pass-through layer (which goes again when it isn't needed).
+    #[test]
+    fn a_layer_box_uses_your_own_layer() {
+        let mut comp = Composition::default();
+        let mine = comp.add_layer().id;
+        let cid = comp.add_comp("Designer");
+        comp.start_network(cid);
+        let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let out = net.nodes.iter().find(|n| n.kind == NodeKind::Output).unwrap().id;
+        let before = comp.layers.len();
+        let lb = net.add(NodeKind::Layer, [40.0, 300.0]);
+        net.node_mut(lb).unwrap().layer = mine;
+        let fx = net.add(NodeKind::Effect, [200.0, 300.0]);
+        net.connect(lb, fx, 0);
+        net.connect(fx, out, 0);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        assert!(net.node(lb).unwrap().parts.is_empty(), "no layer made for a Layer box");
+        assert_eq!(comp.layers.len(), before + 1, "only the Effect box's layer is new");
+        let fx_layer = net.node(fx).unwrap().parts[0];
+        assert!(matches!(comp.layer(fx_layer).unwrap().source, SourceSpec::Feed { id, .. } if id == mine));
+        assert!(net.node(out).unwrap().parts.is_empty());
+
+        // Straight into Output: one pass-through layer shows it.
+        let mut net = net;
+        net.connect(lb, out, 0);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        let pass = net.node(out).unwrap().parts[0];
+        let l = comp.layer(pass).unwrap();
+        assert!(l.in_mix && l.designer);
+        assert!(matches!(l.source, SourceSpec::Feed { id, .. } if id == mine));
+        assert!(!comp.layer(fx_layer).unwrap().in_mix);
+        assert!(!comp.layer(mine).unwrap().designer, "your layer stays yours");
+
+        // The Effect box into Output again: the pass-through layer goes.
+        let mut net = net;
+        net.connect(fx, out, 0);
+        comp.comp_mut(cid).unwrap().network = Some(net);
+        comp.sync_network(cid);
+        let net = comp.comp(cid).unwrap().network.clone().unwrap();
+        assert!(net.node(out).unwrap().parts.is_empty());
+        assert!(comp.layer(pass).is_none());
+        assert!(comp.layer(fx_layer).unwrap().in_mix);
+        assert_eq!(Composition::from_json(&comp.to_json()).unwrap(), comp);
+    }
+
     #[test]
     fn number_boxes_drive_settings() {
         let mut comp = Composition::default();
