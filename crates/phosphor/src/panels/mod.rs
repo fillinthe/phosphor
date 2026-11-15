@@ -387,7 +387,11 @@ pub(crate) fn cpu_color(share: f32) -> Color32 {
 }
 
 /// A layer's CPU: "CPU 34%" in its color, one width whatever the number (the row never shifts), the advice on hover.
-pub(crate) fn cpu_chip(ui: &mut egui::Ui, share: f32) {
+pub(crate) fn cpu_chip(ui: &mut egui::Ui, share: Option<f32>) {
+    let Some(share) = share else {
+        ui.add_space(62.0);
+        return;
+    };
     let pct = (share * 100.0).round() as u32;
     let text = RichText::new(format!("CPU {pct:>3}%")).small().monospace().color(cpu_color(share));
     let tip = if share >= 0.3 {

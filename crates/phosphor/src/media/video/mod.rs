@@ -746,7 +746,8 @@ impl VideoPlayer {
             self.scrub.next = Some(t);
             return;
         }
-        self.scrub = Scrub { waiting: Some(std::time::Instant::now()), next: None };
+        // (A sound-only clip has no picture to wait for: its jumps go straight away; they waited 300 ms each.)
+        self.scrub = Scrub { waiting: (!self.audio_only).then(std::time::Instant::now), next: None };
         let t = match self.duration {
             Some(d) if d > 0.0 => t.clamp(0.0, (d - 1e-3).max(0.0)),
             _ => t.max(0.0),

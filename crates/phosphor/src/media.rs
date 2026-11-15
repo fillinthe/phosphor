@@ -826,7 +826,8 @@ impl MediaManager {
                     continue;
                 }
                 let busy = p.busy_ns();
-                if let Some((t, b)) = self.cpu_samples.get(id) {
+                // (A smaller count = a new player on this layer: start over, not a 0% reading.)
+                if let Some((t, b)) = self.cpu_samples.get(id).filter(|(_, b)| busy >= *b) {
                     let dt = now.duration_since(*t).as_secs_f64();
                     if dt > 0.2 {
                         out.insert(*id, (busy.saturating_sub(*b) as f64 / 1e9 / dt) as f32);

@@ -3,6 +3,8 @@
 use super::*;
 
 pub(crate) enum LayerAction {
+    /// Star the file it's playing in Media (Favorites).
+    Favorite,
     BrowseSources,
     OpenFile,
     /// Pick a 3D model (OBJ) to show as points.
@@ -429,9 +431,9 @@ pub(crate) fn layer_card(
                     }
                     choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
                     // How much CPU its movie takes (measured; was a long warning line).
-                    if let Some(share) = super::cpu_share(ui.ctx(), layer.id) {
-                        super::cpu_chip(ui, share);
-                    }
+                    // Its place is always kept (empty until measured, and for pictures that aren't movies): the
+                    // chip appearing a second after a movie loaded pushed the A / B buttons along (review 2026-11-15).
+                    super::cpu_chip(ui, super::cpu_share(ui.ctx(), layer.id));
                     // Its crossfader side, right here (it was only in the Mixer; owner, 2026-11-14).
                     for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
                         let on = layer.group == g;
@@ -461,6 +463,12 @@ pub(crate) fn layer_card(
         ui.menu_button(label(icon::CURSOR_CLICK, "Map \"select this layer\"…"), |ui| {
             learn_items(ui, &ControlTarget::SelectLayer(layer.id));
         });
+        if super::clips::file_of(&layer.source).is_some()
+            && crate::ui::command(ui, label(icon::STAR, "Add its file to favorites")).on_hover_text("Star the file playing here in Media (Media › Favorites): handy after Random picked it").clicked()
+        {
+            action = Some(LayerAction::Favorite);
+            ui.close();
+        }
         ui.separator();
         if crate::ui::command(ui, label(icon::SPARKLE, "Browse sources…")).clicked() {
             action = Some(LayerAction::BrowseSources);
@@ -556,9 +564,9 @@ pub(crate) fn layer_card(
 /// What a layer can show another's picture from: (id, name, is a layer (has a "before its effects" picture too)).
 pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, String, bool)> {
     std::iter::once((MASTER_ID, "Program (feedback)".to_string(), false))
-        // Every comp but the one being edited: a comp fed into itself drew nothing, and the movies in it stopped
-        // (owner, 2026-11-14: "it stopped all video when I mapped to a comp").
-        .chain(comp.comps.iter().filter(|c| comp.comps.len() > 1 && comp.open_comp() != Some(c.id)).map(|c| (c.id, format!("Comp: {}", c.name), false)))
+        // Every comp (`source_picker` leaves out the layer's own: a comp fed into itself drew nothing and the movies
+        // in it stopped; owner, 2026-11-14. Per layer, since the Stack lists every comp's layers).
+        .chain(comp.comps.iter().filter(|_| comp.comps.len() > 1).map(|c| (c.id, format!("Comp: {}", c.name), false)))
         .chain(comp.groups.iter().map(|g| (g.id, g.name.clone(), false)))
         .chain(comp.layers.iter().rev().map(|l| (l.id, l.name.clone(), true)))
         .collect()
@@ -615,7 +623,8 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
             }
             ui.menu_button(label(icon::ARROW_BEND_DOWN_RIGHT, "From another layer"), |ui| {
                 help(ui, "Use another layer's finished picture (with its effects), or the program for video feedback.");
-                for (id, name, _) in feeds.iter().filter(|(id, ..)| *id != layer.id) {
+                // (Not itself, nor its own comp: with two or more comps every layer names its comp, `normalize_comps`.)
+                for (id, name, _) in feeds.iter().filter(|(id, ..)| *id != layer.id && Some(*id) != layer.comp) {
                     let active = matches!(&layer.source, SourceSpec::Feed { id: cur, before_fx: false, .. } if cur == id);
                     if crate::ui::pick_item(ui, active, name).clicked() {
                         layer.source = SourceSpec::Feed { id: *id, name: name.clone(), before_fx: false };
@@ -808,6 +817,11 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
 /// Carries out a layer card's action (Layers panel and Layer Windows).
 pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, now: f64) {
     match action {
+        LayerAction::Favorite => {
+            if let Some(source) = st.comp.layer(id).map(|l| l.source.clone()) {
+                super::clips::favorite_file(st, &source, Some(true));
+            }
+        }
         LayerAction::Up => st.comp.move_layer(id, true),
         LayerAction::Down => st.comp.move_layer(id, false),
         LayerAction::GroupWithBelow => group_with_below(&mut st.comp, &mut st.selected, id),

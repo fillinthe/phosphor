@@ -158,6 +158,11 @@ impl MediaView {
     }
 }
 
+/// The files of `shown` that aren't marked Skip.
+fn playable(st: &State, shown: &[usize]) -> Vec<usize> {
+    shown.iter().copied().filter(|&i| st.comp.media_bin.get(i).is_some_and(|m| !m.skip)).collect()
+}
+
 pub(crate) enum MediaAct {
     Assign(usize),
     NewLayer(usize),
@@ -170,6 +175,8 @@ pub(crate) enum MediaAct {
     /// Open the file again from disk (it was edited).
     Reload(usize),
     Favorite(usize),
+    /// Skip it (or play it again): it stays in Media but Random, Shuffle, autopilot and collections pass it by.
+    Skip(usize),
     /// Drop the file's own effects.
     ForgetEffects(usize),
     Toggle(usize, String),
@@ -463,6 +470,12 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                     m.favorite = !m.favorite;
                 }
             }
+            MediaAct::Skip(i) => {
+                if let Some(m) = st.comp.media_bin.get_mut(i) {
+                    m.skip = !m.skip;
+                    st.notice = Some(if m.skip { format!("{} is skipped: Random, Shuffle and autopilot pass it by", m.name) } else { format!("{} plays again", m.name) });
+                }
+            }
             MediaAct::ForgetEffects(i) => {
                 if let Some(path) = st.comp.media_bin.get(i).map(|m| m.path.clone()) {
                     st.comp.forget_file_effects(&path);
@@ -494,6 +507,7 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                 st.comp.place_clips(sel, 0, items);
             }
             MediaAct::ShownToLayer(shown) => {
+                let shown = playable(st, &shown);
                 let items = clip_items(shown.iter().filter_map(|i| st.comp.media_bin.get(*i)));
                 let layer = st.add_layer();
                 let n = st.comp.place_clips(layer, 0, items);
@@ -503,6 +517,7 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                 st.notice = Some(format!("New layer with {n} clips"));
             }
             MediaAct::RandomOne(shown) => {
+                let shown = playable(st, &shown);
                 let Some(i) = crate::app::dice().pick(&shown).copied() else { continue };
                 let Some(item) = st.comp.media_bin.get(i).cloned() else { continue };
                 let target = match plays_on_layer(st) {
@@ -513,6 +528,7 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                 st.launch_source(target, crate::media::spec_for_path(&item.path), Vec::new(), item.name, now);
             }
             MediaAct::ShuffleLayer(shown, name) => {
+                let shown = playable(st, &shown);
                 let items = clip_items(shown.iter().filter_map(|i| st.comp.media_bin.get(*i)));
                 let layer = st.add_layer();
                 let n = st.comp.place_clips(layer, 0, items);
@@ -634,11 +650,27 @@ pub(crate) fn media_tile(
     let on = targets.playing.get(&item.path);
     let stroke = if on.is_some() { Stroke::new(2.5, accent()) } else if resp.hovered() { Stroke::new(1.5, accent()) } else { Stroke::new(1.0, crate::theme::line()) };
     p.rect_stroke(thumb_rect, 4.0, stroke, StrokeKind::Inside);
-    if on.is_some() {
-        // On screen now: a play badge in the corner (which layers: on hover).
-        let badge = egui::Rect::from_min_size(thumb_rect.left_bottom() + egui::vec2(4.0, -20.0), egui::vec2(18.0, 16.0));
+    if item.skip {
+        // Skipped: dimmed, with the sign in the middle (it stays here but isn't played).
+        p.rect_filled(thumb_rect, 4.0, Color32::from_black_alpha(150));
+        p.text(thumb_rect.center(), egui::Align2::CENTER_CENTER, icon::PROHIBIT, egui::FontId::proportional(20.0), Color32::from_white_alpha(170));
+    }
+    if let Some(layers) = on {
+        // On screen now: which layers, at a glance (was a play badge; the names only on hover). Cut to the tile.
+        let font = egui::FontId::proportional(10.5);
+        let room = (thumb_rect.width() - 14.0).max(20.0);
+        let mut text = format!("{} {}", icon::PLAY, layers.join(", "));
+        let mut g = p.layout_no_wrap(text.clone(), font.clone(), Color32::BLACK);
+        while g.size().x > room && text.chars().count() > 3 {
+            text.pop();
+            while text.ends_with([',', ' ']) {
+                text.pop();
+            }
+            g = p.layout_no_wrap(format!("{text}…"), font.clone(), Color32::BLACK);
+        }
+        let badge = egui::Rect::from_min_size(thumb_rect.left_bottom() + egui::vec2(4.0, -19.0), egui::vec2(g.size().x + 8.0, 15.0));
         p.rect_filled(badge, 3.0, accent());
-        p.text(badge.center(), egui::Align2::CENTER_CENTER, icon::PLAY, egui::FontId::proportional(11.0), Color32::BLACK);
+        p.galley(badge.left_center() + egui::vec2(4.0, -g.size().y / 2.0), g, Color32::BLACK);
     }
     let max_chars = ((w / 6.5) as usize).max(8);
     let mut name = item.name.clone();
@@ -704,6 +736,15 @@ pub(crate) fn media_tile(
         let fav = if item.favorite { "Remove from favorites" } else { "Add to favorites" };
         if crate::ui::command(ui, label(icon::STAR, fav)).clicked() {
             acts.push(MediaAct::Favorite(i));
+            ui.close();
+        }
+        let (skip_icon, skip_text, skip_tip) = if item.skip {
+            (icon::PLAY, "Play it again", "Random, Shuffle, autopilot and collections play it again")
+        } else {
+            (icon::PROHIBIT, "Skip", "Keep it in Media but never play it from Random, Shuffle, autopilot or a collection (you can still play it yourself)")
+        };
+        if crate::ui::command(ui, label(skip_icon, skip_text)).on_hover_text(skip_tip).clicked() {
+            acts.push(MediaAct::Skip(i));
             ui.close();
         }
         crate::ui::field_menu(ui, label(icon::BOOKMARKS_SIMPLE, "Collections"), |ui| {

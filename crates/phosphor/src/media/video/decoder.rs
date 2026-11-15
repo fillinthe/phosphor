@@ -238,7 +238,7 @@ impl Decoder {
                 }
                 continue;
             }
-            let busy = std::time::Instant::now();
+            let busy = CpuClock::start();
             let more = match self.next_frame() {
                 Ok(more) => more,
                 Err(e) if self.hw && self.origin.is_none() => {
@@ -247,7 +247,7 @@ impl Decoder {
                 }
                 Err(e) => return Err(e),
             };
-            sh.busy_ns.fetch_add(busy.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            sh.busy_ns.fetch_add(busy.spent_ns(), Ordering::Relaxed);
             if !more && self.live {
                 return Err("the input stopped (unplugged or closed?)".into());
             }
@@ -304,9 +304,9 @@ impl Decoder {
                     self.live_start = Some((rel, std::time::Instant::now()));
                 }
             }
-            let busy_pic = std::time::Instant::now();
+            let busy_pic = CpuClock::start();
             let out = self.picture(sh)?;
-            sh.busy_ns.fetch_add(busy_pic.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            sh.busy_ns.fetch_add(busy_pic.spent_ns(), Ordering::Relaxed);
             // Keep the frames just shown (only ones that are cheap to keep): about a second, so a switch to reverse
             // starts at once; ping-pong keeps the end of the forward pass for its turn.
             let pingpong_end = mode.direction == PlayDirection::PingPong && hi.is_finite() && rel >= hi - (self.rev_cap(sh) as f64 + 1.0) * dur.max(1e-3);
@@ -488,9 +488,9 @@ impl Decoder {
             if job.done {
                 return Ok(());
             }
-            let busy = std::time::Instant::now();
+            let busy = CpuClock::start();
             let more = self.next_frame()?;
-            sh.busy_ns.fetch_add(busy.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            sh.busy_ns.fetch_add(busy.spent_ns(), Ordering::Relaxed);
             if !more {
                 self.rev_job = Some(RevJob { done: true, ..job });
                 return Ok(());
@@ -515,9 +515,9 @@ impl Decoder {
             if rel + 1e-6 < keep_from {
                 continue;
             }
-            let busy_pic = std::time::Instant::now();
+            let busy_pic = CpuClock::start();
             let out = self.picture(sh)?;
-            sh.busy_ns.fetch_add(busy_pic.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            sh.busy_ns.fetch_add(busy_pic.spent_ns(), Ordering::Relaxed);
             self.rev_next.push((rel, dur, out));
         }
         Ok(())
@@ -977,4 +977,50 @@ fn describe(input: &ff::format::context::Input, stream: usize, fps: f64) -> Stri
         None => parts.push("no sound".into()),
     }
     parts.join(" · ")
+}
+
+/// CPU time this thread spends between `start` and `spent_ns`: the decoder's real work, not the time it waits on
+/// the disk or on the hardware decoder (wall time read hardware-decoded and slow-disk movies as busy; review
+/// 2026-11-15). Falls back to wall time where the system can't say.
+struct CpuClock {
+    cpu: Option<u64>,
+    wall: std::time::Instant,
+}
+
+impl CpuClock {
+    fn start() -> Self {
+        CpuClock { cpu: thread_cpu_ns(), wall: std::time::Instant::now() }
+    }
+
+    fn spent_ns(&self) -> u64 {
+        match (self.cpu, thread_cpu_ns()) {
+            (Some(a), Some(b)) => b.saturating_sub(a),
+            _ => self.wall.elapsed().as_nanos() as u64,
+        }
+    }
+}
+
+#[cfg(unix)]
+fn thread_cpu_ns() -> Option<u64> {
+    let mut t = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    // SAFETY: clock_gettime writes one timespec we own.
+    let ok = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut t) } == 0;
+    ok.then(|| t.tv_sec as u64 * 1_000_000_000 + t.tv_nsec as u64)
+}
+
+#[cfg(windows)]
+fn thread_cpu_ns() -> Option<u64> {
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::System::Threading::{GetCurrentThread, GetThreadTimes};
+    let z = || FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+    let (mut c, mut e, mut k, mut u) = (z(), z(), z(), z());
+    // SAFETY: GetThreadTimes fills four FILETIMEs we own; the pseudo-handle needs no closing.
+    let ok = unsafe { GetThreadTimes(GetCurrentThread(), &mut c, &mut e, &mut k, &mut u) } != 0;
+    let ns = |f: FILETIME| ((f.dwHighDateTime as u64) << 32 | f.dwLowDateTime as u64) * 100;
+    ok.then(|| ns(k) + ns(u))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn thread_cpu_ns() -> Option<u64> {
+    None
 }

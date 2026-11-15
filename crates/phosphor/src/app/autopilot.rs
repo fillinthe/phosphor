@@ -57,7 +57,7 @@ impl State {
             }
             // A cheap random number is plenty for "pick another clip".
             let pick = ((now * 7919.0).fract() * 0.618_034 + (beats * 0.137).fract()).fract() as f32;
-            if let Some(slot) = layer.autopilot_next(pick) {
+            if let Some(slot) = layer.autopilot_next_but(pick, |c| self.comp.is_skipped(&c.source)) {
                 fire.push((layer.id, slot));
             }
             // Wait for the new clip (or, if the same one is picked again, a fresh count).
