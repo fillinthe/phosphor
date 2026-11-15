@@ -19,8 +19,10 @@ pub(crate) fn timeline_panel(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.input(|i| i.time);
     let playing = st.timeline_play.is_some();
     ui.horizontal_wrapped(|ui| {
-        let (icon_, text) = if playing { (icon::PAUSE, "Pause") } else { (icon::PLAY, "Play") };
-        if action_button(ui, Act::Go, label(icon_, text)).clicked() {
+        // One width for both words, so the buttons after it don't move each time it's pressed.
+        let (pause, play) = (label(icon::PAUSE, "Pause"), label(icon::PLAY, "Play"));
+        let text = if playing { pause.clone() } else { play.clone() };
+        if crate::ui::steady_action_button(ui, Act::Go, text, &[&pause, &play]).clicked() {
             st.timeline_toggle(now);
         }
         if crate::ui::command(ui, label(icon::SKIP_BACK, "To the start")).clicked() {
