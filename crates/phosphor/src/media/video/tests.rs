@@ -283,3 +283,46 @@ fn decoding_time_is_counted() {
     assert!(play(&mut p, 0.0, 1.0).is_some(), "frames");
     assert!(p.busy_ns() > 0, "the decoder's work is counted");
 }
+
+/// Dragging the playhead to the very end shows the end of the clip, not its first frames: a file can say it's
+/// longer than its last picture (sound that runs on, a rounded-up length), and the jump then found nothing to show
+/// and looped round to the start.
+#[test]
+fn a_jump_to_the_very_end_shows_the_end() {
+    // (long_sound.mp4: 2 s of picture, 4 s of sound. PHOSPHOR_TEST_CLIP = one more file to try.)
+    let extra = std::env::var("PHOSPHOR_TEST_CLIP").ok();
+    let stock = ["long_sound.mp4", "h264.mp4", "av.mp4", "hevc.mov", "vp9.webm", "av1.mkv"].map(|n| format!("{}/../../media/test/{n}", env!("CARGO_MANIFEST_DIR")));
+    for path in stock.into_iter().chain(extra) {
+        let name = path.rsplit('/').next().unwrap_or(&path).to_string();
+        if !std::path::Path::new(&path).exists() {
+            continue;
+        }
+        let mut p = VideoPlayer::open(&path).unwrap();
+        // (The length is known once it has opened.)
+        let mut length = None;
+        for _ in 0..2000 {
+            if let Some(f) = p.poll_frame(0.0) {
+                p.recycle(f);
+            }
+            length = p.duration.filter(|d| *d > 0.0);
+            if length.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        let Some(length) = length else { continue };
+        p.seek(length + 5.0);
+        let mut shown = None;
+        for _ in 0..3000 {
+            if let Some(f) = p.poll_frame(0.0) {
+                shown = Some(p.position());
+                p.recycle(f);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        let at = shown.unwrap_or_else(|| panic!("{name}: no picture after jumping to the end"));
+        // (The picture can end well before the file does; what must not happen is a frame from the start.)
+        assert!(at > length * 0.4, "{name}: jumped to the end ({length:.2} s) but the picture is from {at:.2} s");
+    }
+}

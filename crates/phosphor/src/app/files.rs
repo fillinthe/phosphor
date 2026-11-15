@@ -524,6 +524,16 @@ impl PhosphorApp {
             return;
         }
         let st = &mut self.state;
+        // Onto the Media panel: into the media bin and nothing else (no layer, no clips, nothing starts playing).
+        // A collection that's showing takes them; any other view switches to Added files so they're in sight.
+        let media = ctx.data(|d| d.get_temp::<(u64, egui::Rect)>(egui::Id::new(crate::panels::MEDIA_DROP)));
+        if let (Some(p), Some((pass, area))) = (drop_point(ctx), media)
+            && ctx.cumulative_pass_nr() <= pass + 2
+            && area.contains(p)
+        {
+            st.notice = Some(add_to_media_only(st, &files));
+            return;
+        }
         for (name, path) in &files {
             if let Some(p) = path {
                 st.comp.add_media(name, p);
@@ -563,7 +573,7 @@ impl PhosphorApp {
             #[cfg(not(target_arch = "wasm32"))]
             st.auto_match_new(layer, slot, n);
             st.selected = Some(layer);
-            st.notice = Some(format!("{n} clip{} added to the row", if n == 1 { "" } else { "s" }));
+            st.notice = Some(format!("{n} clip{} added to the row (also in Media, under Added files)", if n == 1 { "" } else { "s" }));
         } else if files.len() == 1 {
             let target = match st.selected {
                 Some(id) if st.comp.layers.iter().any(|l| l.id == id) => id,
@@ -582,8 +592,36 @@ impl PhosphorApp {
             st.selected = Some(layer);
             st.clip_page = 0;
             st.trigger(Trigger::Clip { layer, slot: 0 }, now);
-            st.notice = Some(format!("New layer with {n} clips (drop onto a clip cell to fill a row there instead)"));
+            st.notice = Some(format!("New layer with {n} clips (drop onto a clip cell to fill a row there, or onto the Media panel to only add them to your media)"));
         }
+    }
+}
+
+/// Files dropped on the Media panel: added to the media bin (and to the collection on show), nothing else. Returns
+/// what to tell the user.
+fn add_to_media_only(st: &mut State, files: &[(String, Option<String>)]) -> String {
+    use crate::panels::MediaSource;
+    let into = match &st.media_view.source {
+        MediaSource::Collection(c) => Some(c.clone()),
+        _ => None,
+    };
+    let before = st.comp.media_bin.len();
+    let mut count = 0;
+    for (name, path) in files {
+        if let Some(p) = path {
+            st.comp.add_media_to(name, p, into.as_deref());
+            count += 1;
+        }
+    }
+    let new = st.comp.media_bin.len() - before;
+    // Somewhere the new files wouldn't show (Favorites, a watched folder, Online…): show Added files.
+    if into.is_none() && !matches!(st.media_view.source, MediaSource::All | MediaSource::Added | MediaSource::Recent) {
+        st.media_view.show(MediaSource::Added, None);
+    }
+    let already = if new < count { format!(" ({} already there)", count - new) } else { String::new() };
+    match into {
+        Some(c) => format!("{count} file{} added to \"{c}\"{already}", if count == 1 { "" } else { "s" }),
+        None => format!("{new} file{} added to your media{already}", if new == 1 { "" } else { "s" }),
     }
 }
 
