@@ -63,6 +63,8 @@ pub(super) struct Decoder {
     generation: u64,
     /// After a seek: decode and drop frames until this media time.
     seek_target: Option<f64>,
+    /// The jump asked for was past the last frame, and the last frame is being fetched instead (once per jump).
+    seek_past_end: bool,
     /// Live pacing: (first pts, when it arrived). Inputs that run faster than real time (test
     /// sources, recorded streams) are slowed to their timestamps; cameras already are.
     live_start: Option<(f64, std::time::Instant)>,
@@ -185,6 +187,7 @@ impl Decoder {
             live_start: None,
             generation: 0,
             seek_target: None,
+            seek_past_end: false,
         })
     }
 
@@ -197,6 +200,7 @@ impl Decoder {
             if let Some((t, generation)) = seek {
                 self.generation = generation;
                 self.out_clock = None;
+                self.seek_past_end = false;
                 let turning = mode.direction == PlayDirection::Reverse && !self.live && !self.reversing;
                 // Turning around where we are: the frames just shown play backwards straight away (no wait for
                 // decoding); the group before them is decoded while they play.
@@ -252,6 +256,19 @@ impl Decoder {
                 return Err("the input stopped (unplugged or closed?)".into());
             }
             if !more {
+                // A jump to the very end (the file says it's longer than its last frame, or the playhead was dragged
+                // right to the end): every frame came before the target, so none was shown and the movie would
+                // loop round and show its first frames. Show the last frame instead.
+                if let (Some(asked), false, true) = (self.seek_target, self.seek_past_end, self.last_rel >= 0.0) {
+                    let last = self.last_rel;
+                    self.seek_to(last)?;
+                    self.seek_past_end = true;
+                    // The player's clock is where it asked to be: the last frame is stamped for then, so the frames
+                    // of the next loop come after it (stamped earlier, the player took them all at once and showed
+                    // the start of the movie).
+                    self.out_clock = Some(asked);
+                    continue;
+                }
                 if self.frames_in_loop == 0 && self.hw && self.origin.is_none() {
                     self.fallback_to_software("no frames", sh)?;
                     continue;

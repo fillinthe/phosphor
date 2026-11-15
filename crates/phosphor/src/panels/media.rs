@@ -203,7 +203,27 @@ pub(crate) enum MediaAct {
     Keep(Vec<usize>),
 }
 
+/// Temp-data key: the Media panel's area this frame (pass, rect). Files dropped there from the Finder go into the
+/// media bin only (`handle_dropped_files`); anywhere else they also play or fill clips.
+pub(crate) const MEDIA_DROP: &str = "phosphor_media_drop";
+
 pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
+    let area = ui.max_rect();
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(MEDIA_DROP), (ui.ctx().cumulative_pass_nr(), area)));
+    // Files held over the panel: say what letting go does here.
+    if crate::app::file_drag_point(ui.ctx()).is_some_and(|p| area.contains(p)) {
+        let into = match &st.media_view.source {
+            MediaSource::Collection(c) => format!("Drop to add to \"{c}\"") ,
+            _ => "Drop to add to your media (no layer or clip is made)".to_string(),
+        };
+        let p = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("media_drop_hint")));
+        p.rect_stroke(area.shrink(2.0), 0.0, Stroke::new(2.5, crate::theme::MAPPED), egui::StrokeKind::Inside);
+        let at = area.center_top() + egui::vec2(0.0, 28.0);
+        let text = p.layout_no_wrap(into, egui::FontId::proportional(14.0), ui.visuals().strong_text_color());
+        let back = egui::Rect::from_center_size(at, text.size() + egui::vec2(16.0, 8.0));
+        p.rect_filled(back, 0.0, ui.visuals().extreme_bg_color);
+        p.galley(back.min + egui::vec2(8.0, 4.0), text, ui.visuals().strong_text_color());
+    }
     if st.media_view.classic {
         return media_classic(ui, st);
     }
