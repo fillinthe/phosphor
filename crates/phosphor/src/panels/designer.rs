@@ -105,7 +105,7 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::nodes::zoom_controls(ui, &format!("designer:{cid}:{path:?}"));
         help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · double-click a box of boxes to build inside it");
     });
-    let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id)).collect();
+    let feeds = super::layers::feed_choices(comp).into_iter().filter(|(id, ..)| !net.parts().contains(id) && *id != cid).collect();
     let aspect = comp.width.max(1) as f32 / comp.height.max(1) as f32;
     let mut view = View { net, comp, cid, path: path.clone(), textures: layer_textures, shared, feeds, aspect, resync: false, boxes: box_presets, go: None, error: None, preset: None, action: None, targets, restart: None, pick_table: None, hovered: false };
     let canvas_changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
