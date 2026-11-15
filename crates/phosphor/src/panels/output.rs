@@ -449,7 +449,7 @@ pub fn vcam_row(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
-/// Colour correction for an output or a mapping surface: match projectors, screens and materials.
+/// Color correction for an output or a mapping surface: match projectors, screens and materials.
 /// What an output shows when it isn't mapped: the main mix, or one comp as its own program (masters). Only offered
 /// when the project has comps (`comps` = id, name, in the main mix).
 pub(crate) fn program_picker(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, comps: &[(u64, String, bool)]) {
@@ -490,7 +490,7 @@ pub(crate) fn color_grade_editor(ui: &mut egui::Ui, id: u64, g: &mut phosphor_en
 }
 
 /// The alignment grid toggle for an output (GRID), with its settings on right-click: cells across, crosshair,
-/// line width, colour. Used in the Outputs panel and the Mapping Studio.
+/// line width, color. Used in the Outputs panel and the Mapping Studio.
 pub(crate) fn grid_toggle(ui: &mut egui::Ui, g: &mut phosphor_engine::GridOverlay) {
     use phosphor_engine::Choice;
     let name = if g.pattern == phosphor_engine::TestPattern::Grid { "GRID".to_string() } else { g.pattern.label().to_uppercase() };

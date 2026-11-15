@@ -164,7 +164,7 @@ fn font_data(id: &str) -> Result<(std::borrow::Cow<'static, [u8]>, u32), String>
     }
 }
 
-/// Draws the text centred vertically in a `w`×`h` transparent picture (straight RGBA).
+/// Draws the text centered vertically in a `w`×`h` transparent picture (straight RGBA).
 pub fn render(style: &TextStyle, w: u32, h: u32) -> Result<image::RgbaImage, String> {
     let (bytes, index) = font_data(&style.font)?;
     let font = FontRef::try_from_slice_and_index(&bytes, index).map_err(|_| format!("{} isn't a font Phosphor can read", font_name(&style.font)))?;
@@ -229,7 +229,7 @@ pub fn render(style: &TextStyle, w: u32, h: u32) -> Result<image::RgbaImage, Str
         if alpha <= 0.0 {
             continue;
         }
-        // Text colour over a black outline.
+        // Text color over a black outline.
         let mix = |c: u8| ((c as f32 * fill) / alpha).round().min(255.0) as u8;
         *p = image::Rgba([mix(r), mix(g), mix(b), (alpha * 255.0).round() as u8]);
     }
@@ -260,7 +260,7 @@ fn dilate(src: &[f32], w: usize, h: usize, r: usize) -> Vec<f32> {
 mod tests {
     use super::*;
 
-    /// Text lands in the middle, in its colour, on a transparent picture; an outline adds dark edges.
+    /// Text lands in the middle, in its color, on a transparent picture; an outline adds dark edges.
     #[test]
     fn draws_centred_text_with_an_outline() {
         let style = TextStyle { text: "HELLO\nWORLD".into(), color: [255, 0, 0, 255], outline: 0.06, ..Default::default() };

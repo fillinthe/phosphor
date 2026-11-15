@@ -58,8 +58,8 @@ pub enum IsfInputKind {
     Color { default: [f32; 4] },
     Point2D { default: [f32; 2], min: [f32; 2], max: [f32; 2] },
     Image,
-    /// `audio` (waveform, one row of samples centred on 0.5) / `audioFFT` (spectrum, one row of magnitudes):
-    /// bound as a picture the app refreshes every frame from its audio analyser.
+    /// `audio` (waveform, one row of samples centered on 0.5) / `audioFFT` (spectrum, one row of magnitudes):
+    /// bound as a picture the app refreshes every frame from its audio analyzer.
     Audio { fft: bool },
     /// Momentary trigger: 1.0 on the frame it fires, else 0.0.
     Event,

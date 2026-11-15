@@ -1,5 +1,5 @@
 //! Online media (Library › Online): search free libraries of videos and pictures (`sources`) and bring files into the
-//! media bin, each with its credit and licence (`MediaItem::credit`), so someone with no media of their own can start
+//! media bin, each with its credit and license (`MediaItem::credit`), so someone with no media of their own can start
 //! a show. Searches and downloads run on their own threads; downloads go to Phosphor's downloads folder (`online/`,
 //! one folder per library) with a `.credit.json` beside each file, and a file already downloaded isn't fetched again.
 
@@ -576,7 +576,7 @@ mod tests {
             println!("ONLINE {} video {url}", src.name());
             assert!(url.starts_with("https://") && url.to_ascii_lowercase().ends_with(".mp4"), "{url}");
         }
-        // Icons and textures: an icon opens as an SVG picture; a texture finds its 2K colour picture.
+        // Icons and textures: an icon opens as an SVG picture; a texture finds its 2K color picture.
         let mut s = Search::start("stone", &[Source::Iconify, Source::PolyHaven], &[Kind::Icon, Kind::Texture], false, None);
         while s.busy() {
             std::thread::sleep(Duration::from_millis(100));

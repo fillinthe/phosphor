@@ -4,7 +4,7 @@ use eframe::egui::{self, Color32, CornerRadius, Stroke};
 
 pub const WARN: Color32 = Color32::from_rgb(255, 140, 90);
 
-// Named colours (docs/DESIGN.md, section 3). Each owns one meaning; panels never write a colour of their own.
+// Named colors (docs/DESIGN.md, section 3). Each owns one meaning; panels never write a color of their own.
 
 /// Record, arm, a destructive fill (white words on it); the status line's LIVE dot.
 pub const RECORD: Color32 = Color32::from_rgb(225, 70, 60);
@@ -20,7 +20,7 @@ pub const MAPPED: Color32 = Color32::from_rgb(255, 196, 70);
 pub fn mapped_fill(strength: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(255, 196, 70, (strength.clamp(0.0, 1.0) * 255.0) as u8)
 }
-/// A favourite's star.
+/// A favorite's star.
 pub const FAVOURITE: Color32 = Color32::from_rgb(255, 210, 90);
 /// A mask's outline and words on the mapping canvas.
 pub const MASK: Color32 = Color32::from_rgb(255, 130, 80);
@@ -31,7 +31,7 @@ pub const HANDLE: Color32 = Color32::from_rgb(100, 210, 255);
 pub const PICTURE_BG: Color32 = Color32::from_rgb(5, 7, 8);
 /// Grid lines and guides drawn over `PICTURE_BG`.
 pub const PICTURE_GRID: Color32 = Color32::from_rgb(40, 42, 44);
-/// Words drawn on a picture or a coloured fill (a fader's value, a tab with no kind).
+/// Words drawn on a picture or a colored fill (a fader's value, a tab with no kind).
 pub const ON_PICTURE: Color32 = Color32::from_gray(220);
 /// Banners and notices that float over everything (dark at any brightness, light words): a problem, good news,
 /// Map mode, Learn.
@@ -39,7 +39,7 @@ pub const PROBLEM_FILL: Color32 = Color32::from_rgb(52, 26, 20);
 pub const GOOD_FILL: Color32 = Color32::from_rgb(22, 40, 31);
 pub const CONTROL_FILL: Color32 = Color32::from_rgb(14, 34, 40);
 pub const MAPPED_FILL: Color32 = Color32::from_rgb(40, 34, 14);
-/// The patch editor's block groups, in `patch::Group` order: pictures, colour, warp, blur, mix (Numbers use
+/// The patch editor's block groups, in `patch::Group` order: pictures, color, warp, blur, mix (Numbers use
 /// `Hue::Control`, Output the accent), and a Note.
 pub const BLOCK_TINTS: [Color32; 6] = [
     Color32::from_rgb(70, 110, 160),
@@ -78,10 +78,10 @@ pub fn faint() -> Color32 {
 /// True while the interface is on the light side (`set_brightness` above about half).
 static LIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Which accent colour (index into `ACCENTS`).
+/// Which accent color (index into `ACCENTS`).
 static ACCENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// The accent colours to choose from: (name, on dark backgrounds, on light ones). Gold means "mapped" and orange
+/// The accent colors to choose from: (name, on dark backgrounds, on light ones). Gold means "mapped" and orange
 /// "warning", so neither is offered.
 pub const ACCENTS: [(&str, [u8; 3], [u8; 3]); 5] = [
     ("Green", [120, 255, 170], [16, 138, 74]),
@@ -91,14 +91,14 @@ pub const ACCENTS: [(&str, [u8; 3], [u8; 3]); 5] = [
     ("Ice", [200, 230, 255], [60, 100, 150]),
 ];
 
-/// The accent colour: bright on dark backgrounds, deeper on light ones (readable as text).
+/// The accent color: bright on dark backgrounds, deeper on light ones (readable as text).
 pub fn accent() -> Color32 {
     let (_, dark, light) = ACCENTS[ACCENT.load(std::sync::atomic::Ordering::Relaxed).min(ACCENTS.len() - 1)];
     let [r, g, b] = if LIGHT.load(std::sync::atomic::Ordering::Relaxed) { light } else { dark };
     Color32::from_rgb(r, g, b)
 }
 
-/// Picks the accent colour (call `set_brightness` after to repaint the widgets with it).
+/// Picks the accent color (call `set_brightness` after to repaint the widgets with it).
 pub fn set_accent(i: usize) {
     ACCENT.store(i.min(ACCENTS.len() - 1), std::sync::atomic::Ordering::Relaxed);
 }
@@ -112,14 +112,14 @@ pub fn tint(base: Color32, amount: f32) -> Color32 {
     base.lerp_to_gamma(accent(), amount)
 }
 
-/// What kind of thing something is, shown by one colour everywhere (a panel's tab, a stripe on a clip or layer):
+/// What kind of thing something is, shown by one color everywhere (a panel's tab, a stripe on a clip or layer):
 /// so a glance tells a movie from a generator from a camera, and an output panel from a controller panel. The
 /// accent stays for "on / playing / selected"; gold means mapped, orange a warning, red record / delete.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Hue {
     /// Movies, pictures, the media bin, online media.
     Media,
-    /// Generators, effects, shaders, visualisers.
+    /// Generators, effects, shaders, visualizers.
     Effect,
     /// Cameras, screens, streams, NDI / Syphon in, sound in.
     Live,
@@ -132,7 +132,7 @@ pub enum Hue {
 }
 
 impl Hue {
-    /// Its colour: bright on dark backgrounds, deeper on light ones.
+    /// Its color: bright on dark backgrounds, deeper on light ones.
     pub fn color(self) -> Color32 {
         let (dark, light): ([u8; 3], [u8; 3]) = match self {
             Hue::Media => ([105, 150, 255], [40, 80, 190]),
@@ -183,7 +183,7 @@ struct Palette {
 }
 
 /// Anchors, blended in between. Two families: dark (light text) up to 0.5 = a lifted charcoal, light (dark text)
-/// from just above 0.5 = soft grey, up to white at 1. No mid-grey in between, where neither text would read.
+/// from just above 0.5 = soft gray, up to white at 1. No mid-gray in between, where neither text would read.
 const ANCHORS: [(f32, Palette); 5] = [
     (0.0, Palette { panel: 6, window: 10, extreme: 0, faint: 14, noninteractive: 10, stroke: 28, inactive: 24, inactive_weak: 18, hovered: 38, hovered_weak: 32 }),
     (0.35, Palette { panel: 21, window: 27, extreme: 13, faint: 31, noninteractive: 27, stroke: 47, inactive: 45, inactive_weak: 39, hovered: 60, hovered_weak: 53 }),
@@ -212,19 +212,19 @@ fn palette(b: f32) -> Palette {
     }
 }
 
-/// A grey with a hint of blue (Phosphor's panels aren't pure grey).
+/// A gray with a hint of blue (Phosphor's panels aren't pure gray).
 fn tone(g: u8) -> Color32 {
     Color32::from_rgb(g.saturating_sub(3), g.saturating_sub(1), g)
 }
 
 const LOGO_FAMILY: &str = "phosphor-logo";
 
-/// The PHOSPHOR VJ wordmark at `size`, in the logo's font and the accent colour (top bar, locked top bar).
+/// The PHOSPHOR VJ wordmark at `size`, in the logo's font and the accent color (top bar, locked top bar).
 pub fn logo(size: f32) -> egui::RichText {
     egui::RichText::new("PHOSPHOR VJ").font(egui::FontId::new(size, egui::FontFamily::Name(LOGO_FAMILY.into()))).color(accent())
 }
 
-/// The solid icons (a filled star for a favourite): draw an `icon::` glyph with `filled_icons(size)`.
+/// The solid icons (a filled star for a favorite): draw an `icon::` glyph with `filled_icons(size)`.
 const FILLED_ICONS: &str = "phosphor-fill";
 
 pub fn filled_icons(size: f32) -> egui::FontId {
@@ -275,7 +275,7 @@ pub fn apply(ctx: &egui::Context) {
         let sc = &mut s.spacing.scroll;
         sc.floating_allocated_width = sc.bar_inner_margin + sc.bar_width + sc.bar_outer_margin;
         // Tooltips only when the pointer rests (a second), not as it passes over a list: they sit right under the
-        // pointer and covered the next items ("Add a file" and the rows under it). Moving to a neighbour shows its
+        // pointer and covered the next items ("Add a file" and the rows under it). Moving to a neighbor shows its
         // tooltip at once only inside the grace time, so a list doesn't flicker either.
         s.interaction.tooltip_delay = 1.0;
         s.interaction.tooltip_grace_time = 0.1;
@@ -335,7 +335,7 @@ pub fn set_brightness(ctx: &egui::Context, b: f32) {
     ] {
         w.corner_radius = CornerRadius::same(5);
         // Nothing grows when hovered or pressed (egui's default is a pixel each side): buttons stay put; hover and
-        // press show in their colour and outline.
+        // press show in their color and outline.
         w.expansion = 0.0;
         // Every state has the same outline width (a resting button's is just invisible): egui sizes a button by its
         // outline, so a 0-wide resting outline and a 1-wide hovered one made every button 2 points smaller on hover

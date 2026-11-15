@@ -786,7 +786,7 @@ impl Graph for View<'_> {
 }
 
 /// A Points: Light's look on its box: a ball lit from where the light comes (left / right, below / above), in its
-/// colour, with its ambient on the dark side. Drawn as rings stepping toward the bright spot (no texture).
+/// color, with its ambient on the dark side. Drawn as rings stepping toward the bright spot (no texture).
 fn light_ball(ui: &mut egui::Ui, values: &[f32], h: f32) {
     let v = |i: usize, d: f32| values.get(i).copied().unwrap_or(d);
     let (across, up, hue, amount, strength, ambient) = (v(0, -0.5), v(1, 0.6), v(2, 0.1), v(3, 0.0), v(4, 1.0), v(5, 0.15));

@@ -208,7 +208,7 @@ pub const BLOCKS: &[Block] = &[
         code: "let g = floor(centered(uv) * $0);
     return vec4f(vec3f(abs(g.x + g.y) % 2.0), 1.0);",
     },
-    // Colour
+    // Color
     Block {
         id: "adjust",
         name: "Adjust",
@@ -672,7 +672,7 @@ pub const BLOCKS: &[Block] = &[
     let k = 1.0 - smoothstep(r - 0.02, r, d);
     return vec4f(vec3f(k), 1.0);",
     },
-    // More colour
+    // More color
     Block {
         id: "levels",
         name: "Levels",

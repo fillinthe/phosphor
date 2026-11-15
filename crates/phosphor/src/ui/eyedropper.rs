@@ -1,4 +1,4 @@
-//! Eyedropper: a colour button waits (`arm`), a click on the preview asks for the colour there (`want`), the app
+//! Eyedropper: a color button waits (`arm`), a click on the preview asks for the color there (`want`), the app
 //! reads that pixel once (`take_request` → `deliver`) and the waiting button takes it (`take_result`).
 use eframe::egui;
 
@@ -12,12 +12,12 @@ fn result_key() -> egui::Id {
     egui::Id::new("eyedropper_result")
 }
 
-/// The colour button `id` waits for a pick (None = stop waiting).
+/// The color button `id` waits for a pick (None = stop waiting).
 pub(crate) fn arm(ctx: &egui::Context, id: Option<egui::Id>) {
     ctx.data_mut(|d| d.insert_temp(armed_key(), id));
 }
 
-/// The colour button waiting for a pick, if any.
+/// The color button waiting for a pick, if any.
 pub(crate) fn armed(ctx: &egui::Context) -> Option<egui::Id> {
     ctx.data(|d| d.get_temp::<Option<egui::Id>>(armed_key())).flatten()
 }
@@ -31,7 +31,7 @@ pub(crate) fn take_request(ctx: &egui::Context) -> Option<[f32; 2]> {
     ctx.data_mut(|d| d.remove_temp::<Option<[f32; 2]>>(request_key())).flatten()
 }
 
-/// The colour read at the requested point goes to the waiting button.
+/// The color read at the requested point goes to the waiting button.
 pub(crate) fn deliver(ctx: &egui::Context, rgb: [f32; 3]) {
     if let Some(id) = armed(ctx) {
         ctx.data_mut(|d| d.insert_temp(result_key(), Some((id, rgb))));
@@ -39,7 +39,7 @@ pub(crate) fn deliver(ctx: &egui::Context, rgb: [f32; 3]) {
     }
 }
 
-/// A picked colour for the button `id`, once.
+/// A picked color for the button `id`, once.
 pub(crate) fn take_result(ctx: &egui::Context, id: egui::Id) -> Option<[f32; 3]> {
     let r = ctx.data(|d| d.get_temp::<Option<(egui::Id, [f32; 3])>>(result_key())).flatten()?;
     if r.0 != id {
@@ -49,7 +49,7 @@ pub(crate) fn take_result(ctx: &egui::Context, id: egui::Id) -> Option<[f32; 3]>
     Some(r.1)
 }
 
-/// The colour at `uv` in an RGBA8 picture `w` × `h`.
+/// The color at `uv` in an RGBA8 picture `w` × `h`.
 pub(crate) fn pixel_at(w: u32, h: u32, px: &[u8], uv: [f32; 2]) -> Option<[f32; 3]> {
     if w == 0 || h == 0 {
         return None;

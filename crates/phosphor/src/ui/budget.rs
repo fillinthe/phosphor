@@ -99,7 +99,7 @@ mod tests {
         assert!(bad.is_empty(), "docs/DESIGN.md, section 7:\n{}", bad.join("\n"));
     }
 
-    /// docs/DESIGN.md, section 3: raw colours outside theme.rs and ui/ only go down (colour_budget.txt).
+    /// docs/DESIGN.md, section 3: raw colors outside theme.rs and ui/ only go down (color_budget.txt).
     #[test]
     fn raw_colours_only_go_down() {
         let budget: std::collections::HashMap<String, usize> = include_str!("colour_budget.txt")
@@ -119,7 +119,7 @@ mod tests {
             if n > allowed {
                 over.push(format!("{rel}: {n} raw colors, budget {allowed}"));
             } else if n < allowed {
-                // A colour moved to theme: the budget goes down with it, so it can't quietly come back.
+                // A color moved to theme: the budget goes down with it, so it can't quietly come back.
                 over.push(format!("{rel}: {n} raw colors, budget {allowed}: lower its number in ui/color_budget.txt"));
             }
         }

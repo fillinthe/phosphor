@@ -1,5 +1,5 @@
-//! ILDA files (.ild, the laser world's interchange format): every frame's points. Formats 0, 1 (indexed colour,
-//! 3D / 2D), 2 (a palette), 4 and 5 (true colour, 3D / 2D). Used by laser looks (`laser`) and by the app, which
+//! ILDA files (.ild, the laser world's interchange format): every frame's points. Formats 0, 1 (indexed color,
+//! 3D / 2D), 2 (a palette), 4 and 5 (true color, 3D / 2D). Used by laser looks (`laser`) and by the app, which
 //! also plays these files as video clips.
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -12,7 +12,7 @@ pub struct Point {
     pub blank: bool,
 }
 
-/// The ILDA standard 64-colour palette (used until a file brings its own): red → yellow → green → cyan → blue →
+/// The ILDA standard 64-color palette (used until a file brings its own): red → yellow → green → cyan → blue →
 /// magenta → white → back toward red.
 pub fn default_palette() -> Vec<[u8; 3]> {
     let mut p = Vec::with_capacity(64);
@@ -41,7 +41,7 @@ pub fn default_palette() -> Vec<[u8; 3]> {
     p
 }
 
-/// Every frame of an ILDA file (palette sections change the colours of the frames after them).
+/// Every frame of an ILDA file (palette sections change the colors of the frames after them).
 pub fn parse(data: &[u8]) -> Result<Vec<Vec<Point>>, String> {
     let mut frames = Vec::new();
     let mut palette = default_palette();

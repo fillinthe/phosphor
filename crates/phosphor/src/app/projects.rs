@@ -89,7 +89,7 @@ const CARD_W: f32 = 196.0;
 const PICTURE_H: f32 = CARD_W * 9.0 / 16.0;
 
 /// A project card: its picture (or a placeholder), the name, where / when. The current project is outlined in the
-/// accent colour; one whose file isn't there (a drive unplugged) is dimmed and says so.
+/// accent color; one whose file isn't there (a drive unplugged) is dimmed and says so.
 fn project_card(ui: &mut egui::Ui, card: &Card, picture: Option<egui::TextureId>) -> egui::Response {
     let size = egui::vec2(CARD_W, PICTURE_H + 44.0);
     let (rect, r) = ui.allocate_exact_size(size, if card.there { Sense::click() } else { Sense::hover() });

@@ -52,7 +52,7 @@ pub fn look(rgba: &[u8], width: u32, height: u32, cfg: &phosphor_engine::Trackin
         }
         handler.performRequests_error(&NSArray::from_slice(&requests)).map_err(|e| format!("Tracking: {}", e.localizedDescription()))?;
         let mut found = Found::new();
-        // The biggest face: its centre (Vision's y counts up from the bottom, like the XY pads) and height.
+        // The biggest face: its center (Vision's y counts up from the bottom, like the XY pads) and height.
         if let Some(r) = &faces
             && let Some(face) = r.results().and_then(|list| list.iter().max_by(|a, b| area(a.boundingBox()).total_cmp(&area(b.boundingBox()))))
         {
@@ -185,7 +185,7 @@ fn area(r: objc2_core_foundation::CGRect) -> f64 {
     r.size.width * r.size.height
 }
 
-/// A recognised point's (x, y) when Vision is sure enough of it.
+/// A recognized point's (x, y) when Vision is sure enough of it.
 unsafe fn sure(p: Option<Retained<VNRecognizedPoint>>) -> Option<[f32; 2]> {
     let p = p?;
     if unsafe { p.confidence() } < SURE {

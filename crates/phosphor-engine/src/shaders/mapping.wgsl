@@ -3,7 +3,7 @@
 //   u.p[2], u.p[3], u.p[4].x = inverse homography, row-major 3x3, output -> surface (s, t)
 //   u.uv_xform = input region (w, h, x, y) of the master frame; u.p[4].y = feather
 //   u.opacity = surface opacity * master fade; u.mode = 1 draws the alignment grid
-//   u.p[5], u.p[6] = output colour; u.p[7], u.p[8] = surface colour (`ColorGrade::uniforms`)
+//   u.p[5], u.p[6] = output color; u.p[7], u.p[8] = surface color (`ColorGrade::uniforms`)
 
 @vertex
 fn vs_surface(@builtin(vertex_index) vi: u32) -> VOut {
@@ -38,7 +38,7 @@ fn alignment_grid(st: vec2f) -> vec3f {
 /// its input region of the frame (or the alignment grid), feathered edges, premultiplied.
 fn surface_color(st: vec2f) -> vec4f {
     let uv = u.uv_xform.zw + st * u.uv_xform.xy;
-    // The surface's own colour (u.p[7] / u.p[8]), then the output's.
+    // The surface's own color (u.p[7] / u.p[8]), then the output's.
     var rgb = grade(grade_with(textureSampleLevel(tex0, samp, uv, 0.0).rgb, u.p[7], u.p[8]));
     if (u.mode == 1u) {
         rgb = alignment_grid(st);
@@ -139,16 +139,16 @@ fn fs_mask(in: VOut) -> @location(0) vec4f {
     return vec4f(0.0, 0.0, 0.0, clamp(in.uv.x, 0.0, 1.0));
 }
 
-// Alignment grid over an output (`GridOverlay`): square cells (p[0].x across), a centre crosshair with a circle
-// (p[0].z), lines p[0].y pixels wide, colour p[1]. Drawn with alpha blending over the finished output.
+// Alignment grid over an output (`GridOverlay`): square cells (p[0].x across), a center crosshair with a circle
+// (p[0].z), lines p[0].y pixels wide, color p[1]. Drawn with alpha blending over the finished output.
 @fragment
 fn fs_grid(in: VOut) -> @location(0) vec4f {
     let px = in.uv * u.resolution;
     let cell = u.resolution.x / max(u.p[0].x, 1.0);
     let half = u.p[0].y * 0.5;
-    // Distance to the nearest grid line, in pixels (both axes), counted out from the centre: the lines mirror each
+    // Distance to the nearest grid line, in pixels (both axes), counted out from the center: the lines mirror each
     // other round the middle (a line through it, any part cell at both edges alike). Counted from the top left, a
-    // 16:9 output got 4½ square rows: a part row at the bottom only, so the grid looked off centre on the projector
+    // 16:9 output got 4½ square rows: a part row at the bottom only, so the grid looked off center on the projector
     // (owner, 2026-11-14).
     let g = px - u.resolution * 0.5;
     let gx = abs(fract(g.x / cell + 0.5) - 0.5) * cell;
@@ -157,7 +157,7 @@ fn fs_grid(in: VOut) -> @location(0) vec4f {
     if u.p[0].z > 0.5 {
         let c = u.resolution * 0.5;
         let d = px - c;
-        // Crosshair through the centre (thicker), a circle of a quarter of the height, and the two diagonals.
+        // Crosshair through the center (thicker), a circle of a quarter of the height, and the two diagonals.
         let cross = min(abs(d.x), abs(d.y));
         let ring = abs(length(d) - u.resolution.y * 0.25);
         let diag = min(abs(d.x - d.y), abs(d.x + d.y)) * 0.7071;
@@ -188,7 +188,7 @@ fn fs_grid(in: VOut) -> @location(0) vec4f {
         }
         case 5u: { c = vec3f(min(step, 1.0)); }
         default: {
-            // Test card: dark grey, bars across the middle, a ramp under them, coloured corners, the grid on top.
+            // Test card: dark gray, bars across the middle, a ramp under them, colored corners, the grid on top.
             c = vec3f(0.12);
             if (uv.y > 0.36 && uv.y < 0.52) { c = bar; }
             if (uv.y >= 0.52 && uv.y < 0.6) { c = vec3f(min(step, 1.0)); }

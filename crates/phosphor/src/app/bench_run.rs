@@ -276,7 +276,7 @@ impl PhosphorApp {
                 Ok(()) => println!("SNAPSHOT {path}"),
                 Err(e) => eprintln!("snapshot failed: {e}"),
             }
-            // Outputs that differ from the program (mapping, masks, colour), as <name>-out<N>.png.
+            // Outputs that differ from the program (mapping, masks, color), as <name>-out<N>.png.
             for (i, o) in self.state.comp.outputs.iter().enumerate().filter(|(_, o)| o.mapping.active() || !o.mapping.masks.is_empty() || !o.color.is_neutral() || o.program.is_some()) {
                 if let Some((w, h, px)) = engine.read_output_of(o.id) {
                     let p = path.trim_end_matches(".png").to_string() + &format!("-out{}.png", i + 1);
@@ -546,7 +546,7 @@ impl PhosphorApp {
                 continue;
             }
             if name == "head" {
-                // A moving head circling every 2 beats, colour from the centre of the picture, Art-Net to this Mac.
+                // A moving head circling every 2 beats, color from the center of the picture, Art-Net to this Mac.
                 let d = &mut self.state.comp.dmx;
                 d.enabled = true;
                 d.protocol = phosphor_engine::DmxProtocol::ArtNet;
@@ -676,7 +676,7 @@ impl PhosphorApp {
                 continue;
             }
             if name == "points" {
-                // Designer phase 4: a sphere of points, turned by an LFO, drawn as dots coloured by a plasma.
+                // Designer phase 4: a sphere of points, turned by an LFO, drawn as dots colored by a plasma.
                 use phosphor_engine::NodeKind;
                 let comp = &mut self.state.comp;
                 let cid = comp.add_comp("Points");

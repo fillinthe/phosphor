@@ -200,7 +200,7 @@ pub struct SyphonClient {
 }
 
 impl SyphonClient {
-    /// Connects to the source labelled `label` (see `ServerInfo::label`).
+    /// Connects to the source labeled `label` (see `ServerInfo::label`).
     pub fn connect(label: &str, device: &wgpu::Device) -> Result<Self, String> {
         if !load() {
             return Err("Syphon isn't available".into());

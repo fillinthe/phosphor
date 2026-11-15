@@ -160,7 +160,7 @@ impl Composition {
         self.layers = layers;
     }
 
-    /// A layer's neighbour at stack position `j` is in the same comp (stacking moves stop at a comp's edge).
+    /// A layer's neighbor at stack position `j` is in the same comp (stacking moves stop at a comp's edge).
     pub(crate) fn same_comp(&self, i: usize, j: usize) -> bool {
         match (self.layers.get(i), self.layers.get(j)) {
             (Some(a), Some(b)) => self.comp_of(a) == self.comp_of(b),

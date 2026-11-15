@@ -33,8 +33,8 @@ fn bezier_handle(ui: &mut egui::Ui, id: egui::Id, at: egui::Pos2, frame: egui::R
 }
 
 /// The selected slice's (or mask's) transform box: the box round it, a handle outside each side (drag that side, the other stays),
-/// one outside each corner (scale evenly from the opposite corner; Alt: from the centre) and one above the top (turn
-/// it round its centre). Its own corner / mesh points still move one at a time. Returns true when it changed it.
+/// one outside each corner (scale evenly from the opposite corner; Alt: from the center) and one above the top (turn
+/// it round its center). Its own corner / mesh points still move one at a time. Returns true when it changed it.
 fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut impl phosphor_engine::mapping::CanvasShape, color: Color32) -> bool {
     let (lo, hi) = s.bounds();
     let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
@@ -76,7 +76,7 @@ fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut imp
         }
         r.on_hover_text("Drag this side (the opposite side stays) · Alt: both sides");
     }
-    // Corners: scale evenly, from the opposite corner (or the centre with Alt).
+    // Corners: scale evenly, from the opposite corner (or the center with Alt).
     let corners = [(rect.left_top(), [-1.0f32, -1.0f32]), (rect.right_top(), [1.0, -1.0]), (rect.right_bottom(), [1.0, 1.0]), (rect.left_bottom(), [-1.0, 1.0])];
     for (k, (at, dir)) in corners.into_iter().enumerate() {
         // (Inside, further in: clear of the slice's own corner handle.)
@@ -868,7 +868,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
-/// A slice's settings: what it shows, shape, opacity, soft edge, colour, mesh warp, input region
+/// A slice's settings: what it shows, shape, opacity, soft edge, color, mesh warp, input region
 /// (Mapping panel cards and the Mapping Studio).
 /// Temp-data key: a surface asked for its 3D model file (the app opens the dialog).
 pub(crate) const PICK_MODEL: &str = "phosphor_pick_model";
@@ -1303,11 +1303,11 @@ pub(crate) fn shape_transform_editor(ui: &mut egui::Ui, t: &mut phosphor_engine:
     }
 }
 
-/// Venues: save every output's setup (surfaces, mesh, masks, size, colour) under a name and recall it at the next gig.
+/// Venues: save every output's setup (surfaces, mesh, masks, size, color) under a name and recall it at the next gig.
 /// What a surface shows: the mix or one layer; for a layer, whether it also stays in the mix.
 /// `outputs`: the other outputs (id, name), whose finished picture a slice can show.
 /// Whole pictures a slice can show besides layers and groups: comps (with two or more) and the other outputs,
-/// labelled ("Comp: Side wall", "Output: Left").
+/// labeled ("Comp: Side wall", "Output: Left").
 pub(crate) fn picture_sources(comp: &phosphor_engine::Composition, except_output: u64) -> Vec<(u64, String)> {
     let comps = comp.comps.iter().filter(|_| comp.comps.len() > 1).map(|c| (c.id, format!("Comp: {}", c.name)));
     comps.chain(comp.outputs.iter().filter(|o| o.id != except_output).map(|o| (o.id, format!("Output: {}", o.name)))).collect()

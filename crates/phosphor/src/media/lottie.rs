@@ -65,7 +65,7 @@ fn paint(brush: &fixed::Brush) -> Option<sk::Paint<'static>> {
             let shader = match g.kind {
                 peniko::GradientKind::Linear(l) => sk::LinearGradient::new(pt(l.start), pt(l.end), stops, mode, sk::Transform::identity()),
                 peniko::GradientKind::Radial(r) => sk::RadialGradient::new(pt(r.start_center), pt(r.end_center), r.end_radius, stops, mode, sk::Transform::identity()),
-                // tiny-skia has no sweep gradient: its first colour.
+                // tiny-skia has no sweep gradient: its first color.
                 peniko::GradientKind::Sweep(_) => None,
             };
             match (shader, first) {

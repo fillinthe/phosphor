@@ -920,7 +920,7 @@ fn midi_timecode_goes_out() {
     assert!((tc - 3600.6).abs() < 0.3, "the time came through: {tc}");
 }
 
-/// Learning a colour's red from OSC maps green and blue to the same message's next values; a colour message sets all
+/// Learning a color's red from OSC maps green and blue to the same message's next values; a color message sets all
 /// three.
 #[test]
 fn a_colour_comes_from_one_osc_message() {
@@ -1031,7 +1031,7 @@ fn soft_edges_mask_switches_and_colour_are_controls() {
     assert!((m.feather - 0.1).abs() < 1e-6 && m.invert && !m.enabled, "{m:?}");
     assert_eq!(comp.slice(sid).unwrap().feather, phosphor_engine::mapping::SLICE_FEATHER_MAX);
     assert_eq!(get_target(&comp, &ControlTarget::MaskFeather(mid)), Some(0.5));
-    // Colour of the output and of the slice: brightness centred, gamma on a log scale.
+    // Color of the output and of the slice: brightness centered, gamma on a log scale.
     let bright = ControlTarget::Color { owner: out, part: 0 };
     let gamma = ControlTarget::Color { owner: sid, part: 2 };
     assert_eq!(get_target(&comp, &bright), Some(0.5));

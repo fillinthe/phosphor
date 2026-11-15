@@ -1,5 +1,5 @@
 //! A clean-room stand-in for MadMapper's `MadSDF.glsl` include: 2-D signed-distance shapes, operators and
-//! the fill / stroke / glow colouring its Materials call, with the signatures those calls use. Distances are
+//! the fill / stroke / glow coloring its Materials call, with the signatures those calls use. Distances are
 //! in the shader's own coordinate units (texture coordinates, 0..1); negative = inside. Anti-aliasing is a
 //! fixed width of pixels chosen by the shader's `SDF_ANTIALIASING_*` define (none / medium / high), measured
 //! against the output size, so no derivatives are needed (they're not allowed in every branch).

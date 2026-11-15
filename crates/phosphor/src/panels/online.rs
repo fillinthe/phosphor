@@ -443,7 +443,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     }
     if go && !o.query.trim().is_empty() {
         let sources: Vec<Source> = Source::ALL.into_iter().filter(|s| !o.off.contains(s)).collect();
-        // (X posts have no licence to filter by.)
+        // (X posts have no license to filter by.)
         let commercial = o.commercial && o.want != Want::XGifs;
         o.search = Some(Search::start(&o.query, &sources, o.want.kinds(), commercial, Some(ui.ctx().clone())));
     }
@@ -537,7 +537,7 @@ pub(crate) fn online_panel(ui: &mut egui::Ui, st: &mut State) {
     }
 }
 
-/// One result: its picture, kind and licence; a bar while it downloads, a tick once it's here. Returns what was asked.
+/// One result: its picture, kind and license; a bar while it downloads, a tick once it's here. Returns what was asked.
 fn result_tile(ui: &mut egui::Ui, item: &Item, w: f32, thumbs: &mut crate::thumbs::Thumbs, local: Option<&str>, progress: Option<f32>, selected: Option<u64>) -> Option<Then> {
     let h = w * 9.0 / 16.0;
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h + 18.0), Sense::click_and_drag());

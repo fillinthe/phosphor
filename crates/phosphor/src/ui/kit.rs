@@ -93,7 +93,7 @@ pub(crate) fn eye_toggle(ui: &mut egui::Ui, shown: &mut bool) -> egui::Response 
     r
 }
 
-/// A bar's row of buttons (the top bar): as tall as its tallest button from the start, every item centred on the
+/// A bar's row of buttons (the top bar): as tall as its tallest button from the start, every item centered on the
 /// same line. (`ui.horizontal` starts one button high and grows when a taller one comes, leaving the earlier items
 /// high.)
 pub(crate) fn bar_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
@@ -133,8 +133,8 @@ pub(crate) fn pick_item(ui: &mut egui::Ui, picked: bool, text: impl Into<egui::W
     ui.add(egui::Button::selectable(picked, text).min_size(egui::vec2(w + ui.spacing().button_padding.x * 2.0 + 2.0, 0.0)))
 }
 
-/// A section of the app (Show, Outputs, Control, Designer) in its colour: the one you're in is filled with the
-/// colour and its words are black; hovering another tints it. One size whatever its state.
+/// A section of the app (Show, Outputs, Control, Designer) in its color: the one you're in is filled with the
+/// color and its words are black; hovering another tints it. One size whatever its state.
 pub(crate) fn section_tab(ui: &mut egui::Ui, active: bool, text: &str, colour: Color32) -> egui::Response {
     let font = egui::TextStyle::Button.resolve(ui.style());
     let galley = ui.painter().layout_no_wrap(text.to_string(), font, colour);
@@ -205,7 +205,7 @@ fn words(atoms: &egui::Atoms<'_>) -> String {
     atoms.text().map(|t| t.into_owned()).unwrap_or_default()
 }
 
-/// A command that can't be used right now (nothing to save, nothing selected): greyed out until it can.
+/// A command that can't be used right now (nothing to save, nothing selected): grayed out until it can.
 pub(crate) fn command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
     let atoms = text.into_atoms();
     let label = words(&atoms);
@@ -220,7 +220,7 @@ pub(crate) fn small_command<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a
     small_command_if(ui, true, text)
 }
 
-/// `small_command`, greyed out until it can be used.
+/// `small_command`, grayed out until it can be used.
 pub(crate) fn small_command_if<'a>(ui: &mut egui::Ui, enabled: bool, text: impl egui::IntoAtoms<'a>) -> egui::Response {
     // Tighter padding just for this button (set and put back on the row itself: a nested container would hide the
     // button's size from a wrapping row, which then couldn't move it to the next line). Never wraps its words.
@@ -252,7 +252,7 @@ pub(crate) fn wide_button<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>,
     r
 }
 
-/// Something asking for attention (Donate, an update is out, take back control): solid colour, dark bold text.
+/// Something asking for attention (Donate, an update is out, take back control): solid color, dark bold text.
 pub(crate) fn callout_button(ui: &mut egui::Ui, text: impl Into<String>, fill: Color32) -> egui::Response {
     ui.add(callout(text, fill))
 }
@@ -269,7 +269,7 @@ pub(crate) fn mode_button(ui: &mut egui::Ui, on: bool, text: impl Into<String>) 
     ui.add(egui::Button::new(t).selected(on).fill(if on { accent() } else { Color32::TRANSPARENT }))
 }
 
-/// A menu entry with its keyboard shortcut on the right (greyed out when it can't be used).
+/// A menu entry with its keyboard shortcut on the right (grayed out when it can't be used).
 pub(crate) fn menu_item(ui: &mut egui::Ui, enabled: bool, text: impl Into<String>, shortcut: impl Into<String>) -> egui::Response {
     ui.add_enabled(enabled, egui::Button::new(text.into()).shortcut_text(shortcut.into()))
 }
@@ -661,10 +661,10 @@ fn name_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, init
 }
 
 
-/// What an action button does: its colour.
+/// What an action button does: its color.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Act {
-    /// Play / trigger / go (the accent colour).
+    /// Play / trigger / go (the accent color).
     Go,
     /// Record (red).
     Record,
@@ -948,7 +948,7 @@ pub(crate) fn dialog<'a>(ctx: &egui::Context, title: impl Into<egui::WidgetText>
     egui::Window::new(title).collapsible(false).pivot(egui::Align2::CENTER_CENTER).default_pos(ctx.content_rect().center())
 }
 
-/// Counts as small grey words side by side ("1 output", "75 slices"): `(n, one, many)` with `{0}` where the number
+/// Counts as small gray words side by side ("1 output", "75 slices"): `(n, one, many)` with `{0}` where the number
 /// goes; counts of 0 are left out. Each is its own label, so each translates.
 pub(crate) fn counts(ui: &mut egui::Ui, items: &[(usize, &str, &str)]) {
     ui.horizontal_wrapped(|ui| {

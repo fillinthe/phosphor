@@ -32,7 +32,7 @@ pub struct AudiencePlay {
     pub qr_caption: bool,
 }
 
-/// The code's colours on the output: a card, or just the modules over the visuals.
+/// The code's colors on the output: a card, or just the modules over the visuals.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QrStyle {
     #[default]

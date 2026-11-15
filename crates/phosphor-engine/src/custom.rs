@@ -336,9 +336,9 @@ fn main(in: VOut) -> @location(0) vec4f {
 
 @fragment
 fn main(in: VOut) -> @location(0) vec4f {
-    let p = centered(in.uv) * 2.0;                       // from the centre: -1..1 top to bottom, wider across
-    var a = atan2(p.y, p.x) + u.time * P(1u);            // angle around the centre
-    let r = length(p) / P(2u);                           // distance from the centre (Zoom shrinks it)
+    let p = centered(in.uv) * 2.0;                       // from the center: -1..1 top to bottom, wider across
+    var a = atan2(p.y, p.x) + u.time * P(1u);            // angle around the center
+    let r = length(p) / P(2u);                           // distance from the center (Zoom shrinks it)
     let slice = 6.2831853 / max(P(0u), 1.0);
     a = abs((a % slice + slice) % slice - slice * 0.5);  // fold every slice onto the first, mirrored
     let q = vec2f(cos(a), sin(a)) * r;
@@ -359,7 +359,7 @@ fn main(in: VOut) -> @location(0) vec4f {
 @fragment
 fn main(in: VOut) -> @location(0) vec4f {
     let c = src(in.uv);
-    let d = length(centered(in.uv)) * 2.0;               // 0 at the centre, 1 at the top and bottom edges
+    let d = length(centered(in.uv)) * 2.0;               // 0 at the center, 1 at the top and bottom edges
     var m = 1.0 - smoothstep(P(0u) - P(1u), P(0u) + P(1u), d); // 1 inside, 0 outside, soft between
     m = mix(m, 1.0 - m, P(2u));                          // Invert flips it
     return vec4f(c.rgb * m, c.a * m);                    // alpha 0 = layers below show through
@@ -409,13 +409,13 @@ fn main(in: VOut) -> @location(0) vec4f {
 @fragment
 fn main(in: VOut) -> @location(0) vec4f {
     let c = src(in.uv);
-    var p = centered(in.uv);                             // around the centre, square
+    var p = centered(in.uv);                             // around the center, square
     let a = P(2u);
     p = vec2f(p.x * cos(a) - p.y * sin(a), p.x * sin(a) + p.y * cos(a)) / P(1u); // turn and zoom
     let back = vec2f(p.x / aspect(), p.y) + 0.5;
     var prev = last(back);                               // last frame, from slightly further in
     var hsv = rgb2hsv(prev.rgb);
-    hsv.x = fract(hsv.x + P(3u));                        // colours drift as they fade
+    hsv.x = fract(hsv.x + P(3u));                        // colors drift as they fade
     prev = vec4f(hsv2rgb(hsv), prev.a) * P(0u);          // Trail: how much of it stays
     return max(c, prev);                                 // new picture over the fading trail
 }

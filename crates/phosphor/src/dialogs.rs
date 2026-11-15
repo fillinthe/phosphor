@@ -32,6 +32,8 @@ pub enum Purpose {
     ImportTouchOsc,
     ImportResolume,
     RelinkFolder,
+    /// Where the Convert window saves the new file.
+    ConvertFolder,
     /// A 3D model (OBJ) for this mapping surface.
     Model3d(u64),
     /// A 3D model (OBJ) whose vertices this layer shows as points.
@@ -61,7 +63,7 @@ pub enum Purpose {
     OutputBackground(u64),
     /// A patch list (CSV) of LED fixtures.
     ImportFixtures,
-    /// A reference picture: this layer's colours are matched to it.
+    /// A reference picture: this layer's colors are matched to it.
     MatchColour(u64),
     /// Save / open a DMX recording.
     SaveDmxTake,
@@ -134,7 +136,7 @@ impl Dialogs {
         self.run(purpose, async move { f.await.map(|h| vec![h.path().to_path_buf()]).unwrap_or_default() });
     }
 
-    /// Finished dialogs (cancelled ones come back with no paths).
+    /// Finished dialogs (canceled ones come back with no paths).
     pub fn poll(&mut self) -> Vec<(Purpose, Vec<PathBuf>)> {
         let done: Vec<_> = self.rx.try_iter().collect();
         if !done.is_empty() {

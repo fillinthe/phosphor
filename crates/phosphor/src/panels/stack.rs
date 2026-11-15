@@ -1,4 +1,4 @@
-//! The Stack: every layer with its controls and its clips side by side, in one list (VDMX's organisation). Groups are
+//! The Stack: every layer with its controls and its clips side by side, in one list (VDMX's organization). Groups are
 //! foldable bands around their layers with their own on/off, opacity, blend and effects; a comp is a group with its
 //! own size (and outputs), shown the same way. Nothing hides behind tabs. The tempo bar, column headers and clip
 //! cells are the Clips panel's components (`clip_grid`); the old Clips and Layers panels still exist.
@@ -391,7 +391,7 @@ fn layer_strip(ui: &mut egui::Ui, layer: &mut LayerState, s: &Strip, out: &mut R
     if hovering {
         ui.painter().rect_stroke(resp.rect, 4.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
-    // What the layer plays: a stripe down the strip's left edge in that kind's colour (as on its clips).
+    // What the layer plays: a stripe down the strip's left edge in that kind's color (as on its clips).
     if let Some(h) = crate::theme::Hue::of_source(&layer.source) {
         let r = resp.rect;
         let stripe = egui::Rect::from_min_max(r.left_top() + egui::vec2(s.indent, 6.0), egui::pos2(r.left() + s.indent + 3.0, r.bottom() - 6.0));
@@ -625,7 +625,7 @@ pub(crate) fn comp_band(ui: &mut egui::Ui, c: &mut Comp, thumb: Option<egui::Tex
     (select, action, stop)
 }
 
-/// A band across the stack (group / comp): a coloured line down its left edge, lightly filled when selected.
+/// A band across the stack (group / comp): a colored line down its left edge, lightly filled when selected.
 fn band_frame(ui: &mut egui::Ui, is_selected: bool, indent: f32, color: Color32, add: impl FnOnce(&mut egui::Ui)) -> egui::Response {
     let fill = if is_selected { crate::theme::tint(ui.visuals().panel_fill, 0.1) } else { crate::theme::tint(ui.visuals().panel_fill, 0.04) };
     let r = egui::Frame::new().inner_margin(egui::Margin { left: indent as i8 + 8, right: 6, top: 3, bottom: 3 }).corner_radius(4.0).fill(fill).show(ui, |ui| {

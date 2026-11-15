@@ -22,9 +22,9 @@ pub(crate) enum LayerAction {
     Launch(SourceSpec),
     /// Into another comp.
     MoveToComp(u64),
-    /// Colours like a reference picture (a Colour Match effect).
+    /// Colors like a reference picture (a Color Match effect).
     MatchColour,
-    /// A Palette effect with this layer's own main colours.
+    /// A Palette effect with this layer's own main colors.
     Palette,
 }
 
@@ -529,7 +529,7 @@ pub(crate) fn layer_card(
     if hovering {
         ui.painter().rect_stroke(frame.response.rect, 6.0, Stroke::new(2.0, accent()), StrokeKind::Outside);
     }
-    // What the layer plays: a stripe down the card's left edge in that kind's colour (as on its clips).
+    // What the layer plays: a stripe down the card's left edge in that kind's color (as on its clips).
     if let Some(h) = crate::theme::Hue::of_source(&layer.source) {
         let r = frame.response.rect;
         let stripe = egui::Rect::from_min_max(r.left_top() + egui::vec2(1.0, 8.0), egui::pos2(r.left() + 4.0, r.bottom() - 8.0));

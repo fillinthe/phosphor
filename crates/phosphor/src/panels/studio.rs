@@ -29,7 +29,7 @@ struct ViewState {
     drawing: bool,
     /// Drag on the canvas to draw a line slice by hand.
     drawing_line: bool,
-    /// Centre the view on this output point next frame (Zoom to slice; the pan needs the canvas size).
+    /// Center the view on this output point next frame (Zoom to slice; the pan needs the canvas size).
     zoom_to: Option<[f32; 2]>,
 }
 
@@ -40,7 +40,7 @@ pub(crate) const STUDIO_DROP: &str = "phosphor_studio_drop";
 
 enum TreeAction {
     AddSlice(u64),
-    /// A slice centred where the canvas was right-clicked (output space 0..1).
+    /// A slice centered where the canvas was right-clicked (output space 0..1).
     AddSliceAt(u64, [f32; 2]),
     AddMask(u64, MaskShape),
     /// A mask drawn by hand on output `.0` (output space points).
@@ -68,7 +68,7 @@ pub(crate) fn studio(ui: &mut egui::Ui, st: &mut State) {
     output_strip(ui, st, 64.0);
     ui.separator();
     let layout = egui::Layout::top_down(egui::Align::Min);
-    // Each part in its own clipped area, so nothing spills into its neighbour.
+    // Each part in its own clipped area, so nothing spills into its neighbor.
     let part = |ui: &mut egui::Ui, rect: egui::Rect| {
         let mut child = ui.new_child(UiBuilder::new().max_rect(rect).layout(layout));
         child.set_clip_rect(rect.intersect(ui.clip_rect()));
@@ -772,7 +772,7 @@ fn input_view(
         if !is_sel {
             continue;
         }
-        // Corners resize (keeping the opposite corner), the centre moves.
+        // Corners resize (keeping the opposite corner), the center moves.
         let [x0, y0, w, h] = s.input;
         let corners = [(x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h)];
         for (i, (cx, cy)) in corners.iter().enumerate() {

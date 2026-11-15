@@ -1,4 +1,4 @@
-//! Outputs: projectors/screens, colour correction, NDI.
+//! Outputs: projectors/screens, color correction, NDI.
 
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,7 @@ impl Default for NdiSettings {
     }
 }
 
-/// Colour correction for an output or a mapping surface, so projectors, screens and materials can be matched.
+/// Color correction for an output or a mapping surface, so projectors, screens and materials can be matched.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ColorGrade {
@@ -112,7 +112,7 @@ pub struct OutputConfig {
     pub mapping: Mapping,
     /// Also publish this output (after mapping) as its own Syphon source.
     pub syphon: bool,
-    /// Colour correction for this output.
+    /// Color correction for this output.
     pub color: ColorGrade,
     /// The screen/projector this output goes to (`screens::screen_key`), "" = not chosen. Saved with the project.
     pub screen: String,
@@ -169,7 +169,7 @@ pub struct Projector {
     pub password: String,
 }
 
-/// A test grid over an output: cells across, a centre crosshair and circle, in one colour.
+/// A test grid over an output: cells across, a center crosshair and circle, in one color.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GridOverlay {
@@ -190,10 +190,10 @@ pub enum TestPattern {
     /// Grid lines, crosshair and border over the show (see-through).
     #[default]
     Grid,
-    /// Grid, colour bars, a grey ramp and coloured corners (red top left, green top right, blue bottom right,
+    /// Grid, color bars, a gray ramp and colored corners (red top left, green top right, blue bottom right,
     /// yellow bottom left) so a flipped or rotated projector is obvious.
     Card,
-    /// Seven colour bars.
+    /// Seven color bars.
     Bars,
     /// All white: brightness and overlap checks.
     White,
@@ -225,7 +225,7 @@ impl Default for GridOverlay {
 }
 
 impl GridOverlay {
-    /// What the `fs_grid` pass needs: p[0] = cells, line width, crosshair, pattern; p[1] = colour.
+    /// What the `fs_grid` pass needs: p[0] = cells, line width, crosshair, pattern; p[1] = color.
     pub fn uniforms(&self) -> [[f32; 4]; 2] {
         [[self.cells.max(1) as f32, self.width.max(0.5), if self.crosshair { 1.0 } else { 0.0 }, self.pattern as u32 as f32], [self.color[0] as f32 / 255.0, self.color[1] as f32 / 255.0, self.color[2] as f32 / 255.0, 1.0]]
     }

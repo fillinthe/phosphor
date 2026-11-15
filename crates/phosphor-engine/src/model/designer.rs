@@ -441,7 +441,7 @@ impl Composition {
     }
 
     /// Every input of box `node`: its picture inputs (a Group's: one per Input box inside; a points effect's take
-    /// points, a render's second one a picture for the colours), then one number input per setting it has (an
+    /// points, a render's second one a picture for the colors), then one number input per setting it has (an
     /// effect's or generator's parameters, a Mix's opacity, a Number's chain).
     pub fn node_inputs(&self, node: &Node) -> Vec<(String, PortKind)> {
         let own = if node.kind == NodeKind::Number { PortKind::Number } else { PortKind::Picture };
@@ -641,7 +641,7 @@ impl Composition {
                     let inputs = self.node_inputs(&net.nodes[i]);
                     // A light has no picture in.
                     let s = if inputs.first().is_some_and(|(_, k)| *k == PortKind::Number) { SourceSpec::None } else { feed_from(&pictures, net, id, 0) };
-                    // A render's second input: the picture its points take their colour from; its last: the light.
+                    // A render's second input: the picture its points take their color from; its last: the light.
                     let colour = net.source_of(id, 1).and_then(|from| pictures.get(&from).copied()).unwrap_or(0);
                     let light = inputs.iter().position(|(_, k)| *k == PortKind::Light).and_then(|k| net.source_of(id, k)).and_then(|from| pictures.get(&from).copied()).unwrap_or(0);
                     // A render fed (through Move / Particles) by a Model reads its points in order, three a triangle.
@@ -1041,7 +1041,7 @@ mod tests {
     }
 
     /// Points boxes: a Picture box with a Points: Shape puts out points, a render takes points and a picture for
-    /// the colours (its `other`), and a picture can't go where points are wanted (or the other way round).
+    /// the colors (its `other`), and a picture can't go where points are wanted (or the other way round).
     #[test]
     fn points_boxes_carry_points_and_a_render_takes_a_colour_picture() {
         let mut comp = Composition::default();
@@ -1089,7 +1089,7 @@ mod tests {
         comp.layer_mut(part(shape)).unwrap().set_generator("pts_shape");
         comp.sync_network(cid);
         assert_eq!(comp.layer(part(render)).unwrap().effects[0].values[13], 0.0, "as a grid");
-        // Unwire the colour: the render forgets it.
+        // Unwire the color: the render forgets it.
         let mut net = comp.comp(cid).unwrap().network.clone().unwrap();
         net.disconnect(render, 1);
         comp.comp_mut(cid).unwrap().network = Some(net);

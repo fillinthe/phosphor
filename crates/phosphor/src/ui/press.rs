@@ -48,7 +48,7 @@ pub(crate) fn take_slide(ctx: &egui::Context, key: u64) -> Option<f32> {
     ctx.data_mut(|d| d.get_temp_mut_or_default::<HashMap<u64, (f32, f64)>>(egui::Id::new(SLID)).remove(&key)).map(|(v, _)| v)
 }
 
-/// The stable key and shown name of the next control of `kind` labelled `label` in the panel being drawn (counted per
+/// The stable key and shown name of the next control of `kind` labeled `label` in the panel being drawn (counted per
 /// frame, so the second "Amount" in a panel is "#2"). Buttons and sliders share it.
 pub(crate) fn slot(ui: &egui::Ui, kind: &str, label: &str) -> (u64, String) {
     let ctx = ui.ctx();
@@ -70,7 +70,7 @@ pub(crate) fn press(ctx: &egui::Context, key: u64, now: f64) {
     ctx.request_repaint();
 }
 
-/// The stable key of the `n`th button labelled `label` in `panel`.
+/// The stable key of the `n`th button labeled `label` in `panel`.
 pub(crate) fn key_of(panel: &str, label: &str, n: u32) -> u64 {
     // (Saved in projects: a hash that never changes.)
     phosphor_engine::stable_hash(&[panel.as_bytes(), label.as_bytes(), &n.to_le_bytes()])

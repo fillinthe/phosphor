@@ -48,7 +48,7 @@ impl ControlSource {
     }
 }
 
-/// What a controller drives. Values arrive normalised 0..1.
+/// What a controller drives. Values arrive normalized 0..1.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ControlTarget {
     MasterFade,
@@ -137,7 +137,7 @@ pub enum ControlTarget {
     Layout(u64),
     /// Stop what a layer is playing (a press; `MASTER_ID` = every layer).
     StopLayer(u64),
-    /// An output's or a slice's colour: `part` indexes `ColorGrade::PARTS` (brightness, contrast, gamma…).
+    /// An output's or a slice's color: `part` indexes `ColorGrade::PARTS` (brightness, contrast, gamma…).
     Color { owner: u64, part: u8 },
     /// Any slider on screen without a control of its own (a setting), by its stable key (panel, label, which one) and
     /// the name shown for it: limits, lock, snaps and mappings for every slider.

@@ -1,5 +1,5 @@
-//! Colour match: make one picture's colours look like a reference's (per channel: the same average and spread,
-//! Reinhard-style). The result is a Colour Match effect's gain and offset per channel.
+//! Color match: make one picture's colors look like a reference's (per channel: the same average and spread,
+//! Reinhard-style). The result is a Color Match effect's gain and offset per channel.
 
 use super::*;
 
@@ -21,7 +21,7 @@ pub fn color_stats(rgba: &[u8]) -> [(f32, f32); 3] {
     })
 }
 
-/// The Colour Match settings that turn a picture with stats `from` into one like `to`: gain R, G, B then offset R, G, B
+/// The Color Match settings that turn a picture with stats `from` into one like `to`: gain R, G, B then offset R, G, B
 /// (new = old × gain + offset), kept to the effect's ranges.
 pub fn match_values(from: [(f32, f32); 3], to: [(f32, f32); 3]) -> Vec<f32> {
     let gains: [f32; 3] = [0, 1, 2].map(|k| if from[k].1 > 0.004 { (to[k].1 / from[k].1).clamp(0.0, 4.0) } else { 1.0 });
@@ -29,7 +29,7 @@ pub fn match_values(from: [(f32, f32); 3], to: [(f32, f32); 3]) -> Vec<f32> {
     gains.into_iter().chain(offsets).collect()
 }
 
-/// The picture's `k` main colours (k-means over its pixels, 0..1 RGB), darkest first. A few passes over a small
+/// The picture's `k` main colors (k-means over its pixels, 0..1 RGB), darkest first. A few passes over a small
 /// picture: call it on a thumbnail.
 pub fn palette_of(rgba: &[u8], k: usize) -> Vec<[f32; 3]> {
     let px: Vec<[f32; 3]> = rgba.chunks_exact(4).map(|p| [p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0]).collect();
@@ -62,7 +62,7 @@ pub fn palette_of(rgba: &[u8], k: usize) -> Vec<[f32; 3]> {
 }
 
 impl Composition {
-    /// Adds a Palette effect to `owner`'s chain with these colours (up to six): every pixel takes the nearest one.
+    /// Adds a Palette effect to `owner`'s chain with these colors (up to six): every pixel takes the nearest one.
     pub fn add_palette(&mut self, owner: u64, colours: &[[f32; 3]]) -> Option<u64> {
         let desc = crate::shaders::effect("palette")?;
         let mut values = desc.defaults();
@@ -77,7 +77,7 @@ impl Composition {
         Some(id)
     }
 
-    /// Adds a Colour Match effect to `owner`'s chain that turns pictures like `from` into pictures like `to`.
+    /// Adds a Color Match effect to `owner`'s chain that turns pictures like `from` into pictures like `to`.
     pub fn add_color_match(&mut self, owner: u64, from: [(f32, f32); 3], to: [(f32, f32); 3]) -> Option<u64> {
         let desc = crate::shaders::effect("color_match")?;
         let id = self.new_id();
@@ -115,7 +115,7 @@ mod tests {
         // The dull picture's dark and light come out where the bright one's are.
         let apply = |x: f32| x * v[0] + v[3];
         assert!((apply(0.4) - 0.3).abs() < 0.02 && (apply(0.6) - 0.7).abs() < 0.02, "{v:?}");
-        // Flat colour can't be stretched: gain stays 1.
+        // Flat color can't be stretched: gain stays 1.
         assert_eq!(match_values([(0.5, 0.0); 3], bright)[0], 1.0);
     }
 }

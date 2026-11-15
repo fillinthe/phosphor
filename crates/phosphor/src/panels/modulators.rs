@@ -38,7 +38,7 @@ pub(crate) fn modulators(ui: &mut egui::Ui, st: &mut State) {
     let earlier: Vec<(u64, String)> = st.comp.modulators.iter().map(|m| (m.id, m.name.clone())).collect();
     // What gate tracks can fire (only worked out when there's a gate track to show).
     let targets = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.gate)) { crate::control::all_targets(&st.comp) } else { Vec::new() };
-    // Colour tracks paint colour settings: every colour's red (its green and blue follow).
+    // Color tracks paint color settings: every color's red (its green and blue follow).
     let colour_reds: Vec<(phosphor_engine::ControlTarget, String)> = if st.comp.modulators.iter().any(|m| m.sequence.as_ref().is_some_and(|t| t.is_colour())) {
         let all = if targets.is_empty() { crate::control::all_targets(&st.comp) } else { targets.clone() };
         all.into_iter()

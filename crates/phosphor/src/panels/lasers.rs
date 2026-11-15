@@ -1,4 +1,4 @@
-//! Lasers panel: arm / stop, projectors (which controller box, which look, size, colour balance, safety floor)
+//! Lasers panel: arm / stop, projectors (which controller box, which look, size, color balance, safety floor)
 //! and the Laser Designer (looks made of shapes, drawn on a canvas the way the laser draws them: the traced path,
 //! glowing). Output: `crate::lasers`; geometry: `phosphor_engine::laser`.
 
@@ -14,7 +14,7 @@ struct Dev {
     kind: String,
 }
 
-/// A look's colour wherever looks are listed over time or in a grid (the Timeline's laser lanes, the clip grid).
+/// A look's color wherever looks are listed over time or in a grid (the Timeline's laser lanes, the clip grid).
 pub(crate) fn look_colour(looks: &[(u64, String)], look: u64) -> Color32 {
     let i = looks.iter().position(|(id, _)| *id == look).unwrap_or(0);
     let [r, g, b] = phosphor_engine::laser::hue(i as f32 * 0.17 + 0.5).map(|c| (c * 255.0) as u8);
@@ -303,7 +303,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         let tint = egui::Color32::WHITE.gamma_multiply(look.onion_opacity.clamp(0.0, 1.0));
         p.image(tex, egui::Rect::from_center_size(rect.center(), half * 2.0), egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), tint);
     }
-    // Grid: centre lines and the scan area's edge.
+    // Grid: center lines and the scan area's edge.
     let grid = egui::Stroke::new(1.0, crate::theme::PICTURE_GRID);
     p.line_segment([to_screen(-1.0, 0.0), to_screen(1.0, 0.0)], grid);
     p.line_segment([to_screen(0.0, -1.0), to_screen(0.0, 1.0)], grid);
@@ -325,7 +325,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
         }
         let c = w[1].rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0) as u8);
         let (a, b) = (to_screen(w[0].x, w[0].y), to_screen(w[1].x, w[1].y));
-        // Below the projector's floor the laser stays dark: shown grey.
+        // Below the projector's floor the laser stays dark: shown gray.
         let cut = w[0].y.min(w[1].y) < floor;
         let colour = if cut { crate::theme::PICTURE_GRID } else { egui::Color32::from_rgb(c[0], c[1], c[2]) };
         if (a - b).length() < 0.5 {
@@ -356,7 +356,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
                 super::laser_box::BoxChange::Move(x, y) => (m.x, m.y) = (x, y),
             }
         }
-        // Fill area: centred, sized so its farthest part reaches the area's edge.
+        // Fill area: centered, sized so its farthest part reaches the area's edge.
         fill = super::laser_box::local_bounds(s, &lines, turn_now(s)).map(|(lo, hi)| (s.id, s.size / lo.into_iter().chain(hi).map(f32::abs).fold(0.01, f32::max)));
     }
     // A drawing: its corners as handles; a click adds one. (Corners are kept before the shape's place, size and
@@ -394,7 +394,7 @@ fn canvas(ui: &mut egui::Ui, look: &LaserLook, t: f64, mods: &phosphor_engine::M
     } else if let Some(pos) = resp.interact_pointer_pos() {
         let (x, y) = from_screen(pos);
         if resp.drag_started() || resp.clicked() {
-            // The nearest shape centre within reach.
+            // The nearest shape center within reach.
             picked.shape = look.shapes.iter().map(|s| (s.id, (s.x - x).powi(2) + (s.y - y).powi(2))).filter(|(_, d)| *d < 0.04).min_by(|a, b| a.1.total_cmp(&b.1)).map(|(id, _)| id).or(picked.shape);
         }
         if resp.dragged()
@@ -463,7 +463,7 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
     let id = s.id;
     let field = |i: u8| ControlTarget::LaserShape { shape: id, field: i };
     let w = ui.available_width().min(260.0);
-    // Colour as sliders too: each can be mapped, cued or keyed on the timeline (right-click).
+    // Color as sliders too: each can be mapped, cued or keyed on the timeline (right-click).
     for (i, name) in ["Red", "Green", "Blue"].iter().enumerate() {
         Level::percent(&mut s.color[i], *name).default(1.0).width(w).target(field(9 + i as u8)).show(ui);
     }
@@ -475,7 +475,7 @@ fn shape_list(ui: &mut egui::Ui, st: &mut State, picked: &mut Picked) {
         LaserShapeKind::Text => {
             ui.add(egui::TextEdit::multiline(&mut s.text).desired_rows(2).desired_width(w).hint_text("Words (a new line for each line)"));
             choice_combo(ui, ("laser_font", s.id), &mut s.font, 120.0, false);
-            // (The fonts' licence asks for this to go with them.)
+            // (The fonts' license asks for this to go with them.)
             help(ui, "Letters: the Hershey fonts, made by Dr. A. V. Hershey at the U.S. National Bureau of Standards; their data format by James Hurt, Cognition, Inc.");
         }
         LaserShapeKind::File => {

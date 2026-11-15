@@ -1,5 +1,5 @@
 //! Step tracks that fire things: each lit step of a gate track sets its `fires` targets as it starts (clip plays,
-//! column fires…) and lets them go as it ends (`StepTrack::edges`); colour tracks paint their colour settings. Runs
+//! column fires…) and lets them go as it ends (`StepTrack::edges`); color tracks paint their color settings. Runs
 //! once per frame on the leading machine.
 
 use super::*;
@@ -25,7 +25,7 @@ impl State {
             }
             self.step_fired.insert(m.id, track.step_at(beats));
         }
-        // Colour tracks: the step's colour into each colour setting (its red; green and blue follow), on a change.
+        // Color tracks: the step's color into each color setting (its red; green and blue follow), on a change.
         for m in &self.comp.modulators {
             let Some(track) = m.sequence.as_ref().filter(|t| t.is_colour() && !t.paint.is_empty() && m.signal.source == phosphor_engine::ModSource::Steps) else {
                 self.step_painted.remove(&m.id);

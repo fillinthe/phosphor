@@ -796,7 +796,7 @@ mod native {
     }
 
     /// Viewer microphone: first a text message `rate:<hz>`, then binary little-endian f32 mono
-    /// chunks. Resampled to 48 kHz and queued for the audio analyser.
+    /// chunks. Resampled to 48 kHz and queued for the audio analyzer.
     fn audio_socket(stream: crate::net_tls::Replay, tcp: TcpStream, running: Arc<AtomicBool>, peers: Arc<AtomicUsize>, ring: Arc<Mutex<VecDeque<f32>>>, seat: super::Seat) {
         let _ = &tcp;
         let Ok(mut ws) = tungstenite::accept(stream) else { return };

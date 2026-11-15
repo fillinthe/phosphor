@@ -30,7 +30,7 @@ fn middle(engine: &mut Engine, comp: &Composition) -> [u8; 4] {
     [px[i], px[i + 1], px[i + 2], px[i + 3]]
 }
 
-/// Hap Q Alpha is straight alpha like every other source: grey 80% at alpha 50% over black = 40% grey (it was
+/// Hap Q Alpha is straight alpha like every other source: gray 80% at alpha 50% over black = 40% gray (it was
 /// multiplied by alpha twice: 20%).
 #[test]
 fn hap_q_alpha_composites_like_straight_alpha() {
@@ -43,7 +43,7 @@ fn hap_q_alpha_composites_like_straight_alpha() {
     black.generator_values = vec![0.0, 0.0, 0.0];
     comp.layers.push(black);
     comp.layers.push(LayerState { id: 2, source: SourceSpec::Movie { name: "q".into(), path: Some("q.mov".into()) }, ..Default::default() });
-    // One DXT5 block per 4x4: alpha part = Y (204 = 0.8) everywhere; colour part = Co, Cg at 128 (no tint), scale 1.
+    // One DXT5 block per 4x4: alpha part = Y (204 = 0.8) everywhere; color part = Co, Cg at 128 (no tint), scale 1.
     let colour = (16u16 << 11) | (32 << 5);
     let mut block = vec![204u8, 204, 0, 0, 0, 0, 0, 0];
     block.extend_from_slice(&colour.to_le_bytes());
@@ -57,7 +57,7 @@ fn hap_q_alpha_composites_like_straight_alpha() {
     assert!((px[1] as i32 - 102).abs() <= 6, "40% gray expected, got {px:?}");
 }
 
-/// A zero-copy AYUV frame (ProRes 4444): TV-range white at alpha 50% over black = 50% grey.
+/// A zero-copy AYUV frame (ProRes 4444): TV-range white at alpha 50% over black = 50% gray.
 #[test]
 fn ayuv_frames_convert_with_their_alpha() {
     let Some(mut engine) = test_engine() else { return };
@@ -90,7 +90,7 @@ fn ayuv_frames_convert_with_their_alpha() {
     }
 }
 
-/// Every blend mode against its formula: 50% grey over 25% grey (mattes cut the 25% by the top layer's luma/alpha).
+/// Every blend mode against its formula: 50% gray over 25% gray (mattes cut the 25% by the top layer's luma/alpha).
 #[test]
 fn blend_modes_match_their_formulas() {
     use crate::BlendMode as B;
@@ -121,7 +121,7 @@ fn blend_modes_match_their_formulas() {
         (B::ColorBurn, 0.0),
         (B::ColorDodge, 0.5),
         (B::Divide, 0.5),
-        // Greys: hue / saturation / colour keep the grey below; luminosity takes the layer's.
+        // Grays: hue / saturation / color keep the gray below; luminosity takes the layer's.
         (B::Hue, 0.25),
         (B::Saturation, 0.25),
         (B::Color, 0.25),
@@ -159,7 +159,7 @@ fn blend_modes_match_their_formulas() {
             wrong.push(format!("{mode:?} at 75%: {got:.3}, expected {want}"));
         }
     }
-    // Colour: red over 50% grey = red at the grey's brightness (1.0, 0.286, 0.286).
+    // Color: red over 50% gray = red at the gray's brightness (1.0, 0.286, 0.286).
     let mut comp = Composition { width: 16, height: 16, ..Default::default() };
     comp.layers.push(solid(1, 0.5, B::Normal));
     let mut red = solid(2, 0.0, B::Color);
@@ -181,7 +181,7 @@ fn layer_and_group_opacity() {
         l.generator_values = rgb.to_vec();
         l
     };
-    // White at 25% over black: 25% grey.
+    // White at 25% over black: 25% gray.
     let mut comp = Composition { width: 16, height: 16, next_id: 100, ..Default::default() };
     comp.layers.push(solid(1, [0.0, 0.0, 0.0]));
     let mut white = solid(2, [1.0, 1.0, 1.0]);
@@ -189,7 +189,7 @@ fn layer_and_group_opacity() {
     comp.layers.push(white);
     let px = middle(&mut engine, &comp);
     assert!((px[0] as i32 - 64).abs() <= 3, "25% white over black: {px:?}");
-    // The same white, fully opaque inside a group at 50%: 50% grey.
+    // The same white, fully opaque inside a group at 50%: 50% gray.
     comp.layers[1].opacity = 1.0;
     let g = comp.create_group(&[2]).expect("group");
     comp.groups.iter_mut().find(|x| x.id == g).unwrap().opacity = 0.5;
@@ -272,7 +272,7 @@ fn feeds_before_and_after_effects() {
     assert!((before - 0.2).abs() < 0.03, "before the invert: {before}");
 }
 
-/// An effect with a blend mode lands on its own input that way: grey 25% inverted (75%), multiplied = 18.75%.
+/// An effect with a blend mode lands on its own input that way: gray 25% inverted (75%), multiplied = 18.75%.
 #[test]
 fn effects_blend_onto_their_input() {
     let Some(mut engine) = test_engine() else { return };
@@ -430,14 +430,14 @@ fn particles_draw_a_fountain() {
 }
 
 /// Points (points.wgsl): a sphere of points, moved and turned, drawn as dots, lines and a mesh, through a layer
-/// feed (16-bit float, so the places survive the trip) and coloured from another layer. Each render lights some
+/// feed (16-bit float, so the places survive the trip) and colored from another layer. Each render lights some
 /// of the picture and leaves most of it dark; particles born from the sphere draw too.
 #[test]
 fn points_shapes_travel_as_feeds_and_render() {
     let Some(mut engine) = test_engine() else { return };
     let mut comp = Composition { width: 160, height: 90, next_id: 100, ..Default::default() };
     let shape = crate::shaders::generator("pts_shape").expect("built in");
-    // 1 = the sphere, 2 = a colour, 3 = Move on a feed of 1, 4 = the render on a feed of 3 coloured by 2.
+    // 1 = the sphere, 2 = a color, 3 = Move on a feed of 1, 4 = the render on a feed of 3 colored by 2.
     comp.layers.push(LayerState { id: 1, source: SourceSpec::Generator("pts_shape".into()), generator_values: shape.defaults(), in_mix: false, ..Default::default() });
     comp.layers.push(LayerState { id: 2, source: SourceSpec::Generator("solid".into()), generator_values: vec![1.0, 0.2, 0.2], in_mix: false, ..Default::default() });
     let mv = comp.new_effect("pts_move").unwrap();
@@ -672,7 +672,7 @@ fn a_user_blend_mode_blends() {
 }
 
 /// 360 View: a panorama whose middle half (in front) is green and the rest red: looking ahead shows green, turned
-/// half way round red, and tilted straight up the top row's colour.
+/// half way round red, and tilted straight up the top row's color.
 #[test]
 fn view_360_looks_around_a_panorama() {
     let Some(mut engine) = test_engine() else { return };
@@ -733,7 +733,7 @@ fn blur_background_keeps_the_person_sharp() {
     engine.set_matte(1, 32, 16, &mask);
     engine.render(&comp, 0.0, &ModInputs::default());
     let (w, h, px) = engine.read_output().expect("output");
-    // How far each half's pixels are from mid-grey: sharp squares are far, blur pulls them in.
+    // How far each half's pixels are from mid-gray: sharp squares are far, blur pulls them in.
     let spread = |x0: u32, x1: u32| {
         let mut sum = 0.0;
         let mut n = 0.0;
@@ -750,7 +750,7 @@ fn blur_background_keeps_the_person_sharp() {
     assert!(background < person - 0.15, "blurred: {background} vs {person}");
 }
 
-/// Palette: a dark grey with only black and white to choose from becomes black; a light one white.
+/// Palette: a dark gray with only black and white to choose from becomes black; a light one white.
 #[test]
 fn palette_snaps_to_the_nearest_colour() {
     let Some(mut engine) = test_engine() else { return };
@@ -793,7 +793,7 @@ fn smooth_outputs_soften_slice_edges() {
     assert_eq!((w, h), (64, 64), "the output keeps its size");
 }
 
-/// LED pixels that average their cell: 9 samples each go to the GPU and come back, and every pixel gets its colour.
+/// LED pixels that average their cell: 9 samples each go to the GPU and come back, and every pixel gets its color.
 #[test]
 fn averaged_led_pixels_sample_on_the_gpu() {
     let Some(mut engine) = test_engine() else { return };
@@ -857,8 +857,8 @@ fn mesh_handles_bend_the_output() {
     assert_eq!(lit(&mut engine, &comp), flat, "straightened: as before");
 }
 
-/// Deep colour keeps detail 8 bits lose: white under black at 99.8% leaves 0.2% (8-bit rounds that up to 1/255),
-/// then three gain effects multiply it 64 times. Deep colour shows about 13%, 8-bit about 25%.
+/// Deep color keeps detail 8 bits lose: white under black at 99.8% leaves 0.2% (8-bit rounds that up to 1/255),
+/// then three gain effects multiply it 64 times. Deep color shows about 13%, 8-bit about 25%.
 #[test]
 fn deep_colour_keeps_fine_detail() {
     let Some(mut engine) = test_engine() else { return };
@@ -877,7 +877,7 @@ fn deep_colour_keeps_fine_detail() {
     assert!(shallow > 55 && deep < 45 && deep > 20, "8-bit {shallow}, deep {deep}");
 }
 
-/// Deep colour changes no look: every saved test project renders the same at the same moment with it on and off
+/// Deep color changes no look: every saved test project renders the same at the same moment with it on and off
 /// (only rounding differs).
 #[test]
 fn deep_colour_keeps_every_look() {
@@ -906,7 +906,7 @@ fn deep_colour_keeps_every_look() {
     }
 }
 
-/// A 3D model's light and edges reach the output: shaded, its grey faces come out at different brightnesses;
+/// A 3D model's light and edges reach the output: shaded, its gray faces come out at different brightnesses;
 /// with edges, bright lines appear.
 #[test]
 fn model_light_and_edges_draw() {
@@ -1063,7 +1063,7 @@ fn a_slice_transform_moves_its_picture() {
     assert!(green_at(&mut engine, &comp, 0.25) < 30 && green_at(&mut engine, &comp, 0.75) > 200, "moved right");
 }
 
-/// The Explorer's picked tile, centre stage: a `Stage` preview comes at `STAGE_WIDTH` (a tile's at `PREVIEW_WIDTH`),
+/// The Explorer's picked tile, center stage: a `Stage` preview comes at `STAGE_WIDTH` (a tile's at `PREVIEW_WIDTH`),
 /// for the mix and for a selected layer (whose full picture is kept that frame), and a tile beside it keeps its size.
 #[test]
 fn a_stage_preview_is_drawn_big() {
@@ -1092,7 +1092,7 @@ fn a_stage_preview_is_drawn_big() {
 
 /// The alignment grid mirrors itself round the middle of the output: on a 16:9 output the rows of square cells
 /// leave the same part row at the top and the bottom (they started at the top: a part row at the bottom only, and
-/// the grid looked off centre on the projector).
+/// the grid looked off center on the projector).
 #[test]
 fn the_grid_is_centred() {
     let Some(mut engine) = test_engine() else { return };
@@ -1107,7 +1107,7 @@ fn the_grid_is_centred() {
     engine.render(&comp, 0.0, &ModInputs::default());
     let (ow, oh, px) = engine.read_output_of(oid).expect("output");
     assert_eq!((ow, oh), (w, h));
-    // Down a column between two vertical lines (x = 30: lines every 20 px from the centre at 80): the rows lit.
+    // Down a column between two vertical lines (x = 30: lines every 20 px from the center at 80): the rows lit.
     let lit = |y: u32| px[((y * ow + 30) * 4) as usize] > 60;
     let rows: Vec<u32> = (3..oh - 3).filter(|y| lit(*y) && !lit(*y - 1)).collect();
     // Cells of 20 px from the middle (45): lines at 5, 25, 45, 65, 85 → the ones inside the border band.

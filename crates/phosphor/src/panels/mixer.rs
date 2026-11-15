@@ -27,7 +27,7 @@ fn short(name: &str) -> String {
     if name.chars().count() > 11 { format!("{}…", name.chars().take(10).collect::<String>()) } else { name.to_string() }
 }
 
-/// "3 fx" under a strip's fader (lit when running, grey when bypassed; nothing with no effects).
+/// "3 fx" under a strip's fader (lit when running, gray when bypassed; nothing with no effects).
 fn fx_count(ui: &mut egui::Ui, effects: &[phosphor_engine::EffectState], bypass: &mut bool, target: ControlTarget) {
     if let Some(r) = super::groups::fx_badge(ui, effects, bypass) {
         map_menu(ui, &r, target);
@@ -130,7 +130,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     });
 }
 
-/// The A ↔ B crossfader across the top of the Mixer (double-click centres it), and Auto-fade: one press glides it to
+/// The A ↔ B crossfader across the top of the Mixer (double-click centers it), and Auto-fade: one press glides it to
 /// the other side over the time beside it.
 fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.input(|i| i.time);
@@ -143,7 +143,7 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     // (A toolbar: in a narrow Mixer, Auto, its time, the curve and Speed wrap under the crossfader instead of being cut off.)
     crate::ui::toolbar(ui, |ui| {
         crate::ui::heading(ui, "A");
-        // (Double-click centres it: its default.)
+        // (Double-click centers it: its default.)
         let width = (ui.available_width() - 360.0).clamp(120.0, 520.0);
         let r = Level::percent(&mut comp.crossfader, "Crossfader").default(0.5).target(target.clone()).width(width).show(ui);
         let r = r.on_hover_text(if used { "Crossfader: left = A layers, right = B layers, center = both · double-click to center" } else { "Crossfader: set layers to A or B below" });

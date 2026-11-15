@@ -1,5 +1,5 @@
 //! The Laser Designer's transform box: a frame round the picked shape (turned with it), corner handles that size it
-//! evenly from its centre, a round handle above that turns it, and its middle dragged to move it. Laser shapes are a
+//! evenly from its center, a round handle above that turns it, and its middle dragged to move it. Laser shapes are a
 //! place, a size and a turn (not points), so this sets those; `panels::mapping` has the point-shape box.
 
 use phosphor_engine::LaserShape;
@@ -43,7 +43,7 @@ pub(crate) fn shape_box(ui: &mut egui::Ui, frame: egui::Rect, s: &LaserShape, pa
             change = Some(BoxChange::Move((s.x + x - bx).clamp(-1.0, 1.0), (s.y + y - by).clamp(-1.0, 1.0)));
         }
     }
-    // Corners: size evenly from the centre (how much farther from it the pointer got).
+    // Corners: size evenly from the center (how much farther from it the pointer got).
     for (k, at) in corners.iter().enumerate() {
         let mut d = [0.0; 2];
         let r = crate::panels::mapping::point_handle(ui, id.with(("corner", k)), *at, frame, colour, true, &mut d);
@@ -78,7 +78,7 @@ pub(crate) fn shape_box(ui: &mut egui::Ui, frame: egui::Rect, s: &LaserShape, pa
     change
 }
 
-/// The shape's lines measured from its centre, unturned: (lowest corner, highest corner). None when it draws nothing.
+/// The shape's lines measured from its center, unturned: (lowest corner, highest corner). None when it draws nothing.
 pub(crate) fn local_bounds(s: &LaserShape, paths: &[Path], turn: f32) -> Option<([f32; 2], [f32; 2])> {
     let (sin, cos) = turn.sin_cos();
     let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);

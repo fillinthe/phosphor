@@ -1,4 +1,4 @@
-//! Video trace: a small picture → outlines a laser can draw. Brightness is each pixel's strongest colour; the
+//! Video trace: a small picture → outlines a laser can draw. Brightness is each pixel's strongest color; the
 //! picture is blurred a little (video noise makes
 //! outlines crawl), then marching squares finds where its brightness crosses a level: the edges of bright shapes.
 //! The outlines are joined into lines, simplified (Douglas–Peucker) and the longest kept.
@@ -19,13 +19,13 @@ const TOLERANCE: f32 = 0.7;
 const SHORTEST: f32 = 6.0;
 
 /// The `most` longest outlines where `pic`'s brightness crosses `level` (0..1), fitted to -1..1 across (the
-/// picture's longer side); `own_colors`: each point takes the picture's colour there (made bright), else none.
+/// picture's longer side); `own_colors`: each point takes the picture's color there (made bright), else none.
 pub(super) fn outlines(pic: &Picture, level: f32, most: usize, own_colors: bool) -> Vec<Unit> {
     let (w, h) = (pic.width, pic.height);
     if w < 2 || h < 2 || pic.rgba.len() < w * h * 4 {
         return Vec::new();
     }
-    // Brightness = the strongest colour (a pure blue logo on black is as bright as a white one, for a laser).
+    // Brightness = the strongest color (a pure blue logo on black is as bright as a white one, for a laser).
     let luma: Vec<f32> = pic.rgba.chunks_exact(4).take(w * h).map(|c| c[0].max(c[1]).max(c[2]) as f32 / 255.0).collect();
     let lum = blur(&luma, w, h);
     let at = |x: usize, y: usize| lum[y * w + x];
@@ -153,8 +153,8 @@ fn blur(v: &[f32], w: usize, h: usize) -> Vec<f32> {
     out
 }
 
-/// The colour on the bright side of an outline point (the brightest pixel within a step of it), at full brightness so the
-/// laser shows it; white where the picture is grey or dark.
+/// The color on the bright side of an outline point (the brightest pixel within a step of it), at full brightness so the
+/// laser shows it; white where the picture is gray or dark.
 fn bright_colour(pic: &Picture, luma: &[f32], p: [f32; 2]) -> [f32; 3] {
     let (w, h) = (pic.width, pic.height);
     let (x0, y0) = (p[0].floor().max(0.0) as usize, p[1].floor().max(0.0) as usize);
@@ -228,7 +228,7 @@ pub(crate) mod tests {
         Picture { width: w, height: h, rgba }
     }
 
-    /// A disc → one closed round outline about its size, in its colour (made bright); a flat picture → nothing;
+    /// A disc → one closed round outline about its size, in its color (made bright); a flat picture → nothing;
     /// a bright half → one open line along the split.
     #[test]
     fn traces_bright_shapes() {

@@ -67,7 +67,7 @@ pub struct Decoded {
     pub coverage: f32,
 }
 
-/// Decodes the frames (one luma image per pattern, in `patterns` order; `white_rgba` = the white frame in colour)
+/// Decodes the frames (one luma image per pattern, in `patterns` order; `white_rgba` = the white frame in color)
 /// into projector coordinates, and redraws the camera's picture in projector space at `photo_size`.
 pub fn decode(patterns: &[Pattern], frames: &[Vec<u8>], white_rgba: &[u8], cam: (u32, u32), projector: (u32, u32), photo_size: (u32, u32)) -> Decoded {
     let n = (cam.0 * cam.1) as usize;
@@ -129,7 +129,7 @@ pub fn decode(patterns: &[Pattern], frames: &[Vec<u8>], white_rgba: &[u8], cam: 
 }
 
 /// The camera's picture moved into projector space: each lit camera pixel lands where it was lit from (averaged),
-/// and the small gaps between are filled from their neighbours. Unlit areas stay black.
+/// and the small gaps between are filled from their neighbors. Unlit areas stay black.
 fn redraw(map: &[Option<(u32, u32)>], rgba: &[u8], projector: (u32, u32), (pw, ph): (u32, u32)) -> image::RgbaImage {
     let (pw, ph) = (pw.max(1), ph.max(1));
     let mut sum = vec![[0u32; 4]; (pw * ph) as usize];
@@ -142,7 +142,7 @@ fn redraw(map: &[Option<(u32, u32)>], rgba: &[u8], projector: (u32, u32), (pw, p
         }
         s[3] += 1;
     }
-    // Fill holes a few pixels wide from lit neighbours (camera pixels are sparser than the photo's in places).
+    // Fill holes a few pixels wide from lit neighbors (camera pixels are sparser than the photo's in places).
     for _ in 0..3 {
         let before = sum.clone();
         for y in 0..ph as i32 {

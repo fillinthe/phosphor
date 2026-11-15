@@ -21,7 +21,7 @@ fn shapes(mapping: &Mapping) -> Shapes {
     }
 }
 
-/// A PDF of `mapping` at `w` × `h` points (one per output pixel): black page, masks filled grey, slices outlined
+/// A PDF of `mapping` at `w` × `h` points (one per output pixel): black page, masks filled gray, slices outlined
 /// with their names. Vector, so it prints and scales sharp.
 pub fn export_pdf(mapping: &Mapping, w: u32, h: u32) -> Vec<u8> {
     let (fw, fh) = (w.max(1) as f32, h.max(1) as f32);
@@ -47,7 +47,7 @@ pub fn export_pdf(mapping: &Mapping, w: u32, h: u32) -> Vec<u8> {
     }
     c += "1 1 1 rg\n";
     for (_, name, _, mid) in &sh.slices {
-        // Centred by eye: Helvetica letters are about half as wide as they are tall.
+        // Centered by eye: Helvetica letters are about half as wide as they are tall.
         let size = 14.0;
         let width = name.chars().count() as f32 * size * 0.5;
         c += &format!("BT /F1 {size} Tf {:.2} {:.2} Td ({}) Tj ET\n", mid[0] * fw - width / 2.0, (1.0 - mid[1]) * fh - size / 3.0, text(name));
@@ -74,7 +74,7 @@ pub fn export_pdf(mapping: &Mapping, w: u32, h: u32) -> Vec<u8> {
     out
 }
 
-/// An SVG drawing of `mapping` at `w` × `h`: slices as outlined shapes with their names, masks filled grey.
+/// An SVG drawing of `mapping` at `w` × `h`: slices as outlined shapes with their names, masks filled gray.
 pub fn export(mapping: &Mapping, w: u32, h: u32) -> String {
     let (fw, fh) = (w as f32, h as f32);
     let path = |pts: &[[f32; 2]]| {

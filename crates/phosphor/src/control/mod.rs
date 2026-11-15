@@ -64,11 +64,11 @@ const FEEDBACK_SENDER_TTL: u64 = 600;
 #[derive(Clone, Debug)]
 pub struct Incoming {
     pub source: ControlSource,
-    /// Normalised 0..1.
+    /// Normalized 0..1.
     pub value: f32,
 }
 
-/// For a colour's red setting (an effect's or generator's "… R" with "… G", "… B" after it): its green and blue.
+/// For a color's red setting (an effect's or generator's "… R" with "… G", "… B" after it): its green and blue.
 pub fn colour_siblings(comp: &Composition, target: &ControlTarget) -> Option<[ControlTarget; 2]> {
     let (desc, index, make): (&phosphor_engine::shaders::ShaderDesc, usize, Box<dyn Fn(usize) -> ControlTarget>) = match *target {
         ControlTarget::EffectParam { effect, index } => {
@@ -81,7 +81,7 @@ pub fn colour_siblings(comp: &Composition, target: &ControlTarget) -> Option<[Co
         }
         _ => return None,
     };
-    // "Tint R, Tint G, Tint B" (ISF colours) or "Red, Green, Blue" (with any name in front).
+    // "Tint R, Tint G, Tint B" (ISF colors) or "Red, Green, Blue" (with any name in front).
     let p = &desc.params;
     let name = p.get(index)?.name;
     let next = |k: usize, want: String| p.get(index + k).is_some_and(|q| q.name == want);
@@ -197,7 +197,7 @@ pub struct ControlHub {
     /// Soft takeover glides the value to the fader instead of waiting for the fader to reach it.
     pub takeover_glide: bool,
     /// Pads mapped to clips light up: the note velocity for an empty slot, a loaded clip and a playing one (grid
-    /// controllers pick a colour by velocity).
+    /// controllers pick a color by velocity).
     pub clip_lights: [u8; 3],
     /// MIDI clock goes out to this MIDI output ("" = none).
     pub clock_out_port: String,
@@ -302,7 +302,7 @@ struct Glide {
 /// Messages the MIDI / OSC monitor keeps.
 pub(crate) const MONITOR_LEN: usize = 200;
 
-/// Ready-made clip pad colours (empty, loaded, playing velocities) for common grid controllers.
+/// Ready-made clip pad colors (empty, loaded, playing velocities) for common grid controllers.
 pub(crate) const CLIP_LIGHTS: [(&str, [u8; 3]); 2] = [("Launchpad / APC mini mk2", [0, 13, 21]), ("APC mini (first)", [0, 5, 1])];
 
 /// Within this of the current value (0..1), a fader counts as caught (the default; `pickup_near`).
@@ -676,7 +676,7 @@ impl ControlHub {
             self.listen_source = false;
             self.heard = Some(msg.source.clone());
         } else if let Some(target) = self.learning.take() {
-            // A colour's red learned from OSC: green and blue come from the same message's next values (`/1`, `/2`).
+            // A color's red learned from OSC: green and blue come from the same message's next values (`/1`, `/2`).
             let siblings = match &msg.source {
                 ControlSource::Osc { address } => colour_siblings(comp, &target).map(|gb| (address.clone(), gb)),
                 _ => None,
@@ -840,7 +840,7 @@ impl ControlHub {
                 if matches!(map.source, ControlSource::Key { .. }) {
                     continue;
                 }
-                // A pad on a clip: lit by the clip's state (the velocity picks the pad's colour).
+                // A pad on a clip: lit by the clip's state (the velocity picks the pad's color).
                 if let (ControlTarget::TriggerClip { layer, slot }, ControlSource::MidiNote { .. }) = (&map.target, &map.source) {
                     if let Some(vel) = clip_light(comp, *layer, *slot, self.clip_lights) {
                         out.push((map.source.clone(), vel as f32 / 127.0 + CLIP_LIGHT));
@@ -1006,7 +1006,7 @@ impl ControlHub {
                 })
                 .collect();
             for (address, v) in osc {
-                // Addresses use American spelling since 0.5.6 ("colour", "centre", "grey" before): an old controller setup still lands.
+                // Addresses use American spelling since 0.5.6 ("color", "center", "gray" before): an old controller setup still lands.
                 let address = address.replace("colour", "color").replace("Colour", "Color").replace("centre", "center").replace("grey", "gray");
                 let lower = address.to_lowercase();
                 let pattern = is_osc_pattern(&address);

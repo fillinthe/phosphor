@@ -1,6 +1,6 @@
 //! BC7 (BPTC) blocks for Hap R, Hap's best quality. Only mode 6 is written: one RGBA line per 4×4 block with 7-bit
 //! endpoints plus a shared low bit each, and 16 steps between them. That's one mode out of BC7's eight, but it's
-//! the one that suits video (smooth colour, any alpha) and it's quick to search. Spec: Khronos Data Format, BPTC.
+//! the one that suits video (smooth color, any alpha) and it's quick to search. Spec: Khronos Data Format, BPTC.
 
 /// One 4×4 block of RGBA pixels.
 pub type Block = [[u8; 4]; 16];
@@ -12,7 +12,7 @@ fn mix(a: u8, b: u8, w: i32) -> i32 {
     ((64 - w) * a as i32 + w * b as i32 + 32) >> 6
 }
 
-/// The 16 colours between two endpoints.
+/// The 16 colors between two endpoints.
 fn palette(a: [u8; 4], b: [u8; 4]) -> [[i32; 4]; 16] {
     std::array::from_fn(|k| std::array::from_fn(|c| mix(a[c], b[c], WEIGHTS[k])))
 }
@@ -21,7 +21,7 @@ fn dist(p: [u8; 4], q: [i32; 4]) -> i32 {
     (0..4).map(|c| (p[c] as i32 - q[c]).pow(2)).sum()
 }
 
-/// Each pixel's nearest step (found from where it falls along the line, then checked against its neighbours) and
+/// Each pixel's nearest step (found from where it falls along the line, then checked against its neighbors) and
 /// the block's total squared error.
 fn pick(px: &Block, a: [u8; 4], b: [u8; 4]) -> ([u8; 16], i32) {
     let pal = palette(a, b);
@@ -83,7 +83,7 @@ fn refit(px: &Block, idx: &[u8; 16]) -> Option<([f32; 4], [f32; 4])> {
     Some((e0, e1))
 }
 
-/// The line the block's colours run along: the mean and the main direction (power iteration on the covariance).
+/// The line the block's colors run along: the mean and the main direction (power iteration on the covariance).
 fn line(px: &Block) -> ([f32; 4], [f32; 4], f32, f32) {
     let mut mean = [0f32; 4];
     for p in px {

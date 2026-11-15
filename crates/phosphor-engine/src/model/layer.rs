@@ -19,7 +19,7 @@ pub struct EffectState {
     /// How the effect's result lands on what went into it (Normal = the plain dry / wet mix).
     #[serde(default)]
     pub blend: BlendMode,
-    /// Another layer whose picture the effect uses as well (a points render's colours), by id; 0 = none.
+    /// Another layer whose picture the effect uses as well (a points render's colors), by id; 0 = none.
     #[serde(default)]
     pub other: u64,
     /// The layer holding the Points: Light that lights this render (Designer: the Light wire); 0 = the default light.
@@ -263,7 +263,7 @@ pub struct LayerState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LayerTransform {
-    /// Offset from the centre as a fraction of the composition (x right, y up).
+    /// Offset from the center as a fraction of the composition (x right, y up).
     pub x: f32,
     pub y: f32,
     pub scale: f32,
@@ -365,7 +365,7 @@ impl LayerTransform {
         let (c, s) = (rotation.to_radians().cos(), rotation.to_radians().sin());
         let (tx, ty) = (self.tilt_x.to_radians(), self.tilt_y.to_radians());
         [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]].map(|p: [f32; 2]| {
-            // As the composite places it (in canvas heights, centred, y down)…
+            // As the composite places it (in canvas heights, centered, y down)…
             let (qx, qy) = ((p[0] - 0.5) * sx * aspect, (p[1] - 0.5) * sy);
             let (qx, qy) = (c * qx - s * qy, s * qx + c * qy);
             // …then tilted and pushed back, and seen in perspective.

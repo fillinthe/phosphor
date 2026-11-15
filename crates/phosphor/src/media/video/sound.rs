@@ -92,7 +92,7 @@ impl Tap {
     }
 }
 
-/// The mix, stereo interleaved, for the audio analyser while "Clip sound" is its source.
+/// The mix, stereo interleaved, for the audio analyzer while "Clip sound" is its source.
 static TAP: Tap = Tap::new(2 * 48_000);
 /// The mix, stereo, for streams and recordings ("Movie sound" in the Stream panel).
 static PROGRAM: Tap = Tap::new(2 * 48_000);
@@ -109,7 +109,7 @@ pub fn take_ndi() -> Vec<f32> {
     NDI_TAP.take()
 }
 
-/// Keep (or stop keeping) the mix for the analyser.
+/// Keep (or stop keeping) the mix for the analyzer.
 pub fn set_tap(on: bool) {
     TAP.set(on);
 }
@@ -137,7 +137,7 @@ pub fn output_devices() -> Vec<String> {
     cpal::default_host().output_devices().map(|ds| ds.filter_map(|d| d.description().ok().map(|n| n.name().to_string())).collect()).unwrap_or_default()
 }
 
-/// Play the mix on this Mac (on) or only feed it to streams and the analyser (off, silent here).
+/// Play the mix on this Mac (on) or only feed it to streams and the analyzer (off, silent here).
 pub fn set_local(on: bool) {
     LOCAL.store(on, Ordering::Relaxed);
 }
@@ -873,7 +873,7 @@ fn run_output() -> Result<bool, String> {
         for (block, eq) in blocks.chunks_mut(frames * 2).zip(&mut eqs) {
             eq.process(block, db, rate as f32);
         }
-        // Streams, recordings, NDI and the analyser hear everything.
+        // Streams, recordings, NDI and the analyzer hear everything.
         sum.clear();
         sum.resize(frames * 2, 0.0);
         for block in blocks.chunks(frames * 2) {

@@ -26,7 +26,7 @@ pub enum BlendMode {
     ColorBurn,
     ColorDodge,
     Divide,
-    /// The layer's hue / saturation / colour / brightness with the rest from below.
+    /// The layer's hue / saturation / color / brightness with the rest from below.
     Hue,
     Saturation,
     Color,
@@ -146,7 +146,7 @@ pub enum FitMode {
     #[default]
     Fill,
     Stretch,
-    /// Pixel for pixel: the picture's own size, centred (cropped or bordered, never scaled).
+    /// Pixel for pixel: the picture's own size, centered (cropped or bordered, never scaled).
     Copy,
 }
 
@@ -163,7 +163,7 @@ impl FitMode {
     }
 }
 
-/// Crossfader side of a layer: A is full with the fader left, B with it right; both are full at the centre.
+/// Crossfader side of a layer: A is full with the fader left, B with it right; both are full at the center.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CrossGroup {
     #[default]
@@ -204,14 +204,14 @@ impl CrossGroup {
 /// How the crossfader shares out A and B.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FaderCurve {
-    /// Both full at the centre; each fades over its far half.
+    /// Both full at the center; each fades over its far half.
     #[default]
     FullInMiddle,
     /// Each fades the whole way across (both at half in the middle: a dip).
     Straight,
     /// Equal power: no dip in the middle (cos / sin).
     Smooth,
-    /// A hard switch at the centre.
+    /// A hard switch at the center.
     Cut,
 }
 

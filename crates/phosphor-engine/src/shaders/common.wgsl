@@ -52,12 +52,12 @@ fn vs_fullscreen(@builtin(vertex_index) vi: u32) -> VOut {
 
 const TAU: f32 = 6.283185307;
 
-/// Output colour correction from u.p[5] / u.p[6] (all zero = unchanged; see `ColorGrade`).
+/// Output color correction from u.p[5] / u.p[6] (all zero = unchanged; see `ColorGrade`).
 fn grade(c: vec3f) -> vec3f {
     return grade_with(c, u.p[5], u.p[6]);
 }
 
-/// Colour correction from a `ColorGrade::uniforms()` pair (all zero = unchanged).
+/// Color correction from a `ColorGrade::uniforms()` pair (all zero = unchanged).
 fn grade_with(c: vec3f, g: vec4f, gains: vec4f) -> vec3f {
     var x = (c - 0.5) * (1.0 + g.y) + 0.5 + g.x;
     let luma = dot(x, vec3f(0.2126, 0.7152, 0.0722));

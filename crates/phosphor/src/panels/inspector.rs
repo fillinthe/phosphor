@@ -824,14 +824,14 @@ pub(crate) fn zone_requests(ctx: &egui::Context, st: &mut State) {
     }
 }
 
-/// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, colour,
+/// Edits a text layer: the words, font (searchable list of built-in and installed fonts), size, color,
 /// alignment, outline and line spacing. Changes redraw the layer in the background.
 /// Returns true when "From a file…" was pressed (the caller opens the file dialog).
 pub(crate) fn text_editor(ui: &mut egui::Ui, style: &mut phosphor_engine::TextStyle, id: u64) -> bool {
     let mut from_file = false;
     use phosphor_engine::TextAlign;
     ui.add(egui::TextEdit::multiline(&mut style.text).desired_rows(3).desired_width(f32::INFINITY).hint_text("Type your text (Enter for a new line)"));
-    // (Font, colour and alignment wrap in a narrow Inspector.)
+    // (Font, color and alignment wrap in a narrow Inspector.)
     crate::ui::toolbar(ui, |ui| {
         let search_id = egui::Id::new(("font_search", id));
         let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();

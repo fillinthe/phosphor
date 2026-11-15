@@ -128,7 +128,7 @@ impl Source {
             }
             Source::Archive => {
                 // Films: the Prelinger Archives (public domain); music: netlabel releases (Creative Commons).
-                // (Music: only releases with a Creative Commons licence and MP3s to play.)
+                // (Music: only releases with a Creative Commons license and MP3s to play.)
                 let only = if kind == Kind::Music {
                     "mediatype:audio AND collection:netlabels AND licenseurl:*creativecommons* AND format:\"VBR MP3\""
                 } else {
@@ -399,7 +399,7 @@ fn scaled(thumb: &str, width: u64) -> Option<String> {
     px.chars().all(|c| c.is_ascii_digit()).then(|| format!("{dir}/{width}px-{name}"))
 }
 
-/// A Creative Commons address as a licence name: ".../licenses/by-nc-sa/3.0/" → "CC BY-NC-SA 3.0".
+/// A Creative Commons address as a license name: ".../licenses/by-nc-sa/3.0/" → "CC BY-NC-SA 3.0".
 pub fn cc_name(url: &str) -> String {
     let parts: Vec<&str> = url.split('/').filter(|p| !p.is_empty()).collect();
     if let Some(i) = parts.iter().position(|p| *p == "licenses") {
@@ -598,7 +598,7 @@ fn poly_haven(v: &Value, kind: Kind, query: &str, page: usize) -> Vec<Item> {
 /// Shaders per page of the ISF editor's search.
 const ISF_PAGE: usize = 18;
 
-/// isf.video's shaders (public ones). Their licences aren't stated, so they count as not for paid work.
+/// isf.video's shaders (public ones). Their licenses aren't stated, so they count as not for paid work.
 fn isf_online(v: &Value) -> Vec<Item> {
     v["shaders"]
         .as_array()
@@ -824,7 +824,7 @@ pub fn pick_file(item: &Item, list: &[u8]) -> Result<(String, Option<u64>), Stri
             if url.is_empty() { Err("Poly Haven has no picture of this panorama".into()) } else { Ok((url, f["size"].as_u64())) }
         }
         Source::PolyHaven => {
-            // The colour picture at 2K (a few MB; 4K and up are for close-ups).
+            // The color picture at 2K (a few MB; 4K and up are for close-ups).
             let diffuse = &v["Diffuse"];
             ["2k", "1k", "4k"]
                 .iter()

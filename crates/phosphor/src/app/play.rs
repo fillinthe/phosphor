@@ -351,7 +351,7 @@ impl State {
     }
 }
 
-/// The picture for the output: the code with the title and the address under it, in the chosen colours
+/// The picture for the output: the code with the title and the address under it, in the chosen colors
 /// (a card, or just the modules and words over the visuals), 16:9 safe.
 #[cfg(not(target_arch = "wasm32"))]
 fn qr_card(url: &str, title: &str, style: phosphor_engine::QrStyle, caption: bool) -> Option<Vec<u8>> {
@@ -367,7 +367,7 @@ fn qr_card(url: &str, title: &str, style: phosphor_engine::QrStyle, caption: boo
     // Short address for people to type if the camera won't: drop the scheme.
     let short = url.trim_start_matches("http://").trim_end_matches('/');
     let text = if title.trim().is_empty() { short.to_string() } else { format!("{}\n{short}", title.trim()) };
-    // Words in the module colour; over the visuals (no card) white words get a dark edge to stay readable.
+    // Words in the module color; over the visuals (no card) white words get a dark edge to stay readable.
     let outline = if bg.is_none() && fg[0] > 128 { 0.06 } else { 0.0 };
     let style = phosphor_engine::TextStyle { text, size: 0.3, color: fg, outline, line_spacing: 1.1, ..crate::text::default_style() };
     if caption && let Ok(caption) = crate::text::render(&style, w, cap_h) {

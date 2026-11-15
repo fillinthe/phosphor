@@ -21,7 +21,7 @@ pub struct StepTrack {
     /// Gate tracks: what each lit step sets to its range's top as it starts, and back as it ends (clips play and
     /// let go, columns fire, anything else switches on and off with the steps).
     pub fires: Vec<super::Binding>,
-    /// Colour track: each step's colour (empty = not a colour track), and the colours it sets (each one a colour's
+    /// Color track: each step's color (empty = not a color track), and the colors it sets (each one a color's
     /// red setting; its green and blue follow). Its own value is the step's brightness.
     pub colours: Vec<[f32; 3]>,
     pub paint: Vec<super::ControlTarget>,
@@ -74,7 +74,7 @@ impl StepTrack {
         !self.colours.is_empty()
     }
 
-    /// Makes it a colour track: a rainbow across its steps (or plain levels again).
+    /// Makes it a color track: a rainbow across its steps (or plain levels again).
     pub fn set_colour(&mut self, on: bool) {
         self.colours = if on { (0..self.len()).map(|i| hue(i as f32 / self.len() as f32)).collect() } else { Vec::new() };
         if on {
@@ -83,7 +83,7 @@ impl StepTrack {
         }
     }
 
-    /// A colour track's colour at this beat (red, green, blue 0..1); gliding into the next step's.
+    /// A color track's color at this beat (red, green, blue 0..1); gliding into the next step's.
     pub fn colour_at(&self, beats: f32) -> [f32; 3] {
         if self.colours.is_empty() {
             return [0.0; 3];
@@ -159,14 +159,14 @@ impl StepTrack {
             let r = (x >> 40) as f32 / (1u64 << 24) as f32;
             *s = if self.gate { (r < 0.4) as u8 as f32 } else { r };
         }
-        // Colour tracks: a random hue on each step.
+        // Color tracks: a random hue on each step.
         for (c, s) in self.colours.iter_mut().zip(&self.steps) {
             *c = hue(*s);
         }
     }
 }
 
-/// A fully saturated colour around the colour wheel (0..1).
+/// A fully saturated color around the color wheel (0..1).
 fn hue(h: f32) -> [f32; 3] {
     let h = h.rem_euclid(1.0) * 6.0;
     let f = |n: f32| {

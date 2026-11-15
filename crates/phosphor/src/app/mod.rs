@@ -260,7 +260,7 @@ pub struct State {
     pub(crate) autopilot: HashMap<u64, autopilot::AutoRun>,
     /// The step each firing step track was on last frame (`run_step_fires`).
     pub(crate) step_fired: HashMap<u64, usize>,
-    /// Colour tracks: the colour each last painted (only a change is sent).
+    /// Color tracks: the color each last painted (only a change is sent).
     pub(crate) step_painted: HashMap<u64, [f32; 3]>,
     pub(crate) render_state: Option<egui_wgpu::RenderState>,
     pub texture: Option<egui::TextureId>,
@@ -410,7 +410,7 @@ pub struct State {
     /// LTC out (timecode audio), while it's switched on.
     #[cfg(not(target_arch = "wasm32"))]
     pub ltc_out: Option<timecode_out::LtcOut>,
-    /// A reference picture's colours, worked out on a worker thread (layer, average and spread per channel).
+    /// A reference picture's colors, worked out on a worker thread (layer, average and spread per channel).
     #[cfg(not(target_arch = "wasm32"))]
     pub color_ref: Option<std::sync::mpsc::Receiver<(u64, Result<[(f32, f32); 3], String>)>>,
     /// Mappings copied from a control's menu (their target is replaced on paste).

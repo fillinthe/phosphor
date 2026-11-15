@@ -45,11 +45,11 @@ impl Tracking {
     }
 }
 
-/// Face: the biggest face's centre and size (share of the picture height); Found = 1 while one is seen.
+/// Face: the biggest face's center and size (share of the picture height); Found = 1 while one is seen.
 pub const FACE: [&str; 4] = ["Track Face X", "Track Face Y", "Track Face Size", "Track Face Found"];
 /// Hand: the index fingertip of the first hand, and how far the thumb and index tips are apart (a pinch = 0).
 pub const HAND: [&str; 4] = ["Track Hand X", "Track Hand Y", "Track Pinch", "Track Hand Found"];
-/// Body: the hips' centre and both wrists' height.
+/// Body: the hips' center and both wrists' height.
 pub const BODY: [&str; 5] = ["Track Body X", "Track Body Y", "Track Left Wrist Y", "Track Right Wrist Y", "Track Body Found"];
 
 impl super::Composition {
@@ -66,7 +66,7 @@ impl super::Composition {
             links.push(m.id);
         }
         let Some(l) = self.layer_mut(layer) else { return false };
-        // Range mode over each control's range: X / Y = face − 0.5 (offsets from the centre), scale ≈ 1.3 × the
+        // Range mode over each control's range: X / Y = face − 0.5 (offsets from the center), scale ≈ 1.3 × the
         // face's height (scale runs 0.01 to 8).
         let follow = |link: u64, min: f32, max: f32| Some(super::Modulation { link, range: true, min, max, amount: 1.0, ..Default::default() });
         l.transform.x_mod = follow(links[0], 0.25, 0.75);

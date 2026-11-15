@@ -32,7 +32,7 @@ impl TriggerMode {
     }
 }
 
-/// Where a layer's clips play: on the layer itself, or shared out over its neighbours (the layers in the same
+/// Where a layer's clips play: on the layer itself, or shared out over its neighbors (the layers in the same
 /// group and comp), like voices on a synth.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VoiceMode {

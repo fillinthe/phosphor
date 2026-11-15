@@ -2,7 +2,7 @@
 // The source is sampled in the vertex stage: a grid of points displaced by brightness (or by
 // RGB as XYZ), rotated in 3D, drawn as additive lines or points so overlaps glow like a CRT beam.
 //   P(0) scanlines  P(1) points per line  P(2) extrude  P(3) rotate X  P(4) rotate Y
-//   P(5) zoom  P(6) line width (handled by target size)  P(7) brightness  P(8) source colour
+//   P(5) zoom  P(6) line width (handled by target size)  P(7) brightness  P(8) source color
 //   P(9) perspective  P(10) draw: 0 scanlines, 1 mesh, 2 triangle mesh, 3 vertical lines
 //   P(11) displace: 0 luminance, 1 RGB -> XYZ   P(12) displace from another layer (tex2) when > 0.5
 //   P(13) lighting: shade the relief with a directional light (v002 'normals' look)
@@ -37,7 +37,7 @@ fn rutt_vertex(row: u32, col: u32, rows: u32, cols: u32) -> RuttOut {
     p = vec3f(p.x * cy + p.z * sy, p.y, -p.x * sy + p.z * cy);
     let k = P(5u) / max(1.0 - p.z * P(9u) * 0.5, 0.2);
 
-    // Height-field normal from neighbouring samples, lit from the upper left.
+    // Height-field normal from neighboring samples, lit from the upper left.
     let du = vec2f(1.0 / f32(max(cols, 2u) - 1u), 0.0);
     let dv = vec2f(0.0, 1.0 / f32(max(rows, 2u) - 1u));
     var dsx = textureSampleLevel(tex0, samp, uv + du, 0.0);

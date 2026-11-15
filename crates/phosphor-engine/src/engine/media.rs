@@ -55,7 +55,7 @@ impl Engine {
 
     /// This frame's audio for ISF `audio` / `audioFFT` inputs. `wave`: (left, right) samples (-1..1), drawn two rows
     /// tall (row 0 left, row 1 right, the ISF way; each pixel = this side, the other side, the middle, so shaders
-    /// that read two colour channels of one row get both sides too). `fft`: magnitudes (0..1), one row. Cheap: tiny uploads.
+    /// that read two color channels of one row get both sides too). `fft`: magnitudes (0..1), one row. Cheap: tiny uploads.
     pub fn set_audio(&mut self, wave: &[[f32; 2]], fft: &[f32]) {
         let device = &self.gpu.device;
         let queue = &self.gpu.queue;

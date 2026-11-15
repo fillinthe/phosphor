@@ -1,4 +1,4 @@
-//! Colour-grading LUTs (`.cube` files, as cameras and grading apps export them) as effects: each file in a LUT folder
+//! Color-grading LUTs (`.cube` files, as cameras and grading apps export them) as effects: each file in a LUT folder
 //! becomes an effect with an Amount. The 3D table is packed into a picture (N² wide, N high: red across a slice,
 //! blue picks the slice, green down) that the effect's shader reads with trilinear blending between slices.
 
@@ -45,7 +45,7 @@ fn three<'a>(mut w: impl Iterator<Item = &'a str>) -> Option<[f32; 3]> {
 }
 
 impl Lut {
-    /// The colour this table gives `c` (0..1 RGB), blending between its entries (trilinear).
+    /// The color this table gives `c` (0..1 RGB), blending between its entries (trilinear).
     pub fn sample(&self, c: [f32; 3]) -> [f32; 3] {
         let n = self.size;
         let f = c.map(|v| v.clamp(0.0, 1.0) * (n - 1) as f32);
@@ -119,7 +119,7 @@ pub fn pack_all(luts: &[Lut]) -> (u32, u32, Vec<u8>) {
 
 /// The LUT mixer's shader: LUT A (P(0)) and LUT B (P(1)) from the stacked picture, blended by Mix (P(2)), mixed
 /// into the picture by Amount (P(3)). With `split`, the blend is per pixel instead: P(2) = what decides (0 brightness,
-/// 1 left to right, 2 top to bottom, 3 distance from the centre), P(3) = where it changes, P(4) = how softly,
+/// 1 left to right, 2 top to bottom, 3 distance from the center), P(3) = where it changes, P(4) = how softly,
 /// P(5) = Amount.
 pub fn wgsl_mix(entry: &str, count: usize, split: bool) -> String {
     let blend = if split {
@@ -164,7 +164,7 @@ fn {entry}(in: VOut) -> @location(0) vec4f {{
     )
 }
 
-/// The effect's shader: the layer's colour looked up in the packed table (buf0), mixed in by Amount (P(0)).
+/// The effect's shader: the layer's color looked up in the packed table (buf0), mixed in by Amount (P(0)).
 pub fn wgsl(entry: &str, size: usize) -> String {
     format!(
         "@fragment
