@@ -113,10 +113,14 @@ source, or a proxy on your server.
 
 ## Planned
 
-- [ ] **3D fly-through with the audience playing** (asked 2026-11-14): load a 3D model (glTF / GLB first) and fly a
-      camera through it; audience phones get a game pad (up / down / left / right, A, B) on the Play page that steers
-      it. A world built in Unreal / Unity: either exported as glTF, or run in its own engine and sent in over
-      NDI / Spout / Syphon with the pad forwarded to it as OSC. Plan: docs/design/game-pad.md (build week of 2026-11-16).
+- [~] **3D fly-through with the audience playing** (asked 2026-11-14; plan `docs/design/game-pad.md`). **Built
+      2026-11-15** (tests + a fake phone and a UDP listener; not yet on a real phone, and the Unity / Unreal scripts
+      are not compiled here: no Unity or Unreal on this Mac): Session › Audience play › Game pad: a D-pad, A and B on
+      the play page, held like a real pad; each press is a control (Learn, then press on the phone: `/pad/1/up`…)
+      and OSC out to "Send pad to" (`/pad/<player>/<button> 1|0`, `/pad/<player>/stick x y`); a silent held button
+      lets go by itself; Kit for 3D artists… writes Documents/Phosphor Pad Kit (README, Unity `PhosphorPad.cs`,
+      Unreal `PhosphorPadComponent`; A = boost, B = trigger). Bench `--quick pad` (+ `PHOSPHOR_PAD_PORT`).
+      Left: glTF models inside Phosphor (step 3 of the plan), several players each with their own camera.
 - [ ] **Import Morpholio Trace files** (.morpholiotrace, owner 2026-11-14; sample in `_local/samples/`, not in git): a
       zip of `data-books.plist` (the layers in order: title, hidden, opacity, blend, a 4×4 transform, `drawingToken`),
       one 4096×4096 transparent PNG per layer (`<token>_original.png`), and a SQLite file with each layer's pen

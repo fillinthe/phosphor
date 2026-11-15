@@ -182,6 +182,7 @@ impl PhosphorApp {
                 net: NetSession::new(),
                 net_audio: Vec::new(),
                 jam: Default::default(),
+                pad: Default::default(),
                 auto_run: Default::default(),
                 bug: crate::support::BugReport::new(stored(KEY_SEND_CRASHES).is_some_and(|v| v == "1")),
                 #[cfg(not(target_arch = "wasm32"))]

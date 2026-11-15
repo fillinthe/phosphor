@@ -333,6 +333,7 @@ pub struct State {
     net_audio: Vec<f32>,
     /// Audience play: whose turn it is.
     pub jam: play::Jam,
+    pub pad: play::Pad,
     /// Auto show runtime (bar counter, level average).
     pub auto_run: auto_show::AutoShowRun,
     pub bug: crate::support::BugReport,

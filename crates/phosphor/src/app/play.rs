@@ -24,6 +24,67 @@ pub struct Jam {
     rested: std::collections::HashMap<String, f64>,
 }
 
+/// The audience game pad's buttons held right now.
+#[derive(Default)]
+pub struct Pad {
+    /// (player, button index in `PAD_BUTTONS`) → when it was last pressed or repeated.
+    held: std::collections::HashMap<(u32, usize), f64>,
+    /// Each phone's player number when it last pressed (so its let-go still lands after the turn ends).
+    seats: std::collections::HashMap<u64, u32>,
+}
+
+impl Pad {
+    /// A button pressed (or repeated while held) or let go: true when that changed whether it's held.
+    fn press(&mut self, player: u32, b: usize, down: bool, now: f64) -> bool {
+        if down { self.held.insert((player, b), now).is_none() } else { self.held.remove(&(player, b)).is_some() }
+    }
+
+    /// Lets go of the buttons that stopped repeating; returns them.
+    fn let_go_silent(&mut self, now: f64) -> Vec<(u32, usize)> {
+        if self.held.is_empty() {
+            return Vec::new();
+        }
+        let silent: Vec<(u32, usize)> = self.held.iter().filter(|(_, at)| now - **at > PAD_SILENCE).map(|(k, _)| *k).collect();
+        for k in &silent {
+            self.held.remove(k);
+        }
+        silent
+    }
+
+    /// The four arrows as a direction: x (right - left), y (up - down).
+    fn stick(&self, player: u32) -> [f32; 2] {
+        let held = |k: usize| self.held.contains_key(&(player, k)) as i32 as f32;
+        [held(3) - held(2), held(0) - held(1)]
+    }
+}
+
+#[cfg(test)]
+mod pad_tests {
+    use super::*;
+
+    /// A held button changes once however often the phone repeats it; the arrows make a direction; a button that
+    /// falls silent (the turn ended, the phone dropped off) is let go by itself, a repeated one isn't.
+    #[test]
+    fn held_buttons_repeat_and_time_out() {
+        let mut pad = Pad::default();
+        assert!(pad.press(1, 0, true, 0.0), "up goes down");
+        assert!(!pad.press(1, 0, true, 0.4), "a repeat changes nothing");
+        assert!(pad.press(1, 3, true, 0.5));
+        assert_eq!(pad.stick(1), [1.0, 1.0]);
+        assert_eq!(pad.stick(2), [0.0, 0.0], "another player's arrows are their own");
+        assert!(!pad.press(1, 3, true, 1.6), "right repeats");
+        // Up last repeated at 0.4: silent for over 1.5 s at 2.0; right repeated at 1.6: still held.
+        assert_eq!(pad.let_go_silent(2.0), vec![(1, 0)]);
+        assert_eq!(pad.stick(1), [1.0, 0.0]);
+        assert!(pad.press(1, 3, false, 2.1), "let go");
+        assert!(!pad.press(1, 3, false, 2.2), "letting go twice changes nothing");
+        assert!(pad.let_go_silent(9.0).is_empty());
+    }
+}
+
+/// A held button that hasn't repeated for this long is let go (seconds; the phone repeats every 0.4 s).
+const PAD_SILENCE: f64 = 1.5;
+
 /// One person at the controls.
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -287,6 +348,7 @@ impl State {
             "page": p.surface_page,
             "columns": if p.columns { self.comp.clip_columns } else { 0 },
             "surprise": p.surprise,
+            "pad": p.pad.on,
         })
     }
 
@@ -305,6 +367,7 @@ impl State {
         match cmd.get("t").and_then(Value::as_str).unwrap_or("") {
             "column" => p.columns,
             "surprise" => p.surprise,
+            "pad" => p.pad.on,
             "set" => {
                 let Some(t) = cmd.get("target").and_then(|t| serde_json::from_value::<ControlTarget>(t.clone()).ok()) else { return false };
                 let widget = match t {
@@ -314,6 +377,58 @@ impl State {
                 self.comp.surface.widgets.iter().any(|w| w.id == widget && w.guests && page.is_none_or(|pg| w.page == pg))
             }
             _ => false,
+        }
+    }
+
+    /// A game pad button from a phone (`from` = its seat; None = the VJ's own remote, as player 1). A press counts
+    /// only on that guest's turn; a let-go always does. While held the phone repeats the press (`run_pad` lets go of
+    /// a button that falls silent: a turn that ended, a phone that dropped off).
+    pub fn pad_press(&mut self, from: Option<u64>, cmd: &Value, now: f64) {
+        let Some(b) = cmd.get("b").and_then(Value::as_str).and_then(|b| phosphor_engine::PAD_BUTTONS.iter().position(|x| *x == b)) else { return };
+        let down = cmd.get("down").and_then(Value::as_bool).unwrap_or(false);
+        if !self.comp.play.pad.on {
+            return;
+        }
+        let player = match from {
+            None => 1,
+            Some(seat) if down => {
+                if !self.guest_may(seat, cmd, now) {
+                    return;
+                }
+                let guests = self.guests(now);
+                let slot = guests.iter().find(|g| g.seat == seat).and_then(|g| self.jam.current.iter().find(|p| p.who == g.who)).map_or(0, |p| p.slot);
+                let player = slot as u32 + 1;
+                self.pad.seats.insert(seat, player);
+                player
+            }
+            Some(seat) => match self.pad.seats.get(&seat) {
+                Some(p) => *p,
+                None => return,
+            },
+        };
+        if self.pad.press(player, b, down, now) {
+            self.pad_send(player, b, down);
+        }
+    }
+
+    /// Lets go of pad buttons that stopped repeating. Call once a frame (nothing to do while none is held).
+    pub fn run_pad(&mut self, now: f64) {
+        for (player, b) in self.pad.let_go_silent(now) {
+            self.pad_send(player, b, false);
+        }
+    }
+
+    /// One button going down or up: a control inside Phosphor (map it like an OSC address: Learn, then press on
+    /// the phone) and OSC out to the 3D project, with the D-pad as a direction too.
+    fn pad_send(&mut self, player: u32, b: usize, down: bool) {
+        let v = if down { 1.0 } else { 0.0 };
+        let address = format!("/pad/{player}/{}", phosphor_engine::PAD_BUTTONS[b]);
+        self.control.inject(&mut self.comp, crate::control::Incoming { source: phosphor_engine::ControlSource::Osc { address: address.clone() }, value: v });
+        let (host, port) = (self.comp.play.pad.host.clone(), self.comp.play.pad.port);
+        self.control.send_out(&host, port, &address, &[v]);
+        if b < 4 {
+            let [x, y] = self.pad.stick(player);
+            self.control.send_out(&host, port, &format!("/pad/{player}/stick"), &[x, y]);
         }
     }
 
