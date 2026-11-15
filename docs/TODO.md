@@ -2,6 +2,20 @@
 
 Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (moved there 2026-11-14).
 
+## Owner's answers (2026-11-15, after the show)
+
+- **Release 0.5.7:** wait (MacBook only until tested more).
+- **Designer:** boxes use real layers: a Layer box picks an existing layer; boxes stop making hidden layers.
+- **Clips / Layers / Mixer:** skip for now.
+- **Outputs:** full MadMapper-style: slices listed like layers (order, show/hide, opacity, solo, drag), masks on
+  slices, per-slice blend modes, feathered masks, mask groups, a separate input / output view.
+- **Tidy the project folders:** do it (nothing deleted).
+- **Clip grid column buttons:** grayed out while there are no layers.
+- **Review leftovers:** fix all six (Windows waits to update until no outputs are open first).
+- **Next up, all four:** OSC / linking like VDMX, audience game pad + 3D, code audit + code health, Morpholio import.
+- **Game pad:** scripts for both Unreal and Unity; one pad, players take turns; A = boost, B = trigger (fires
+  something in their world).
+
 ## Needs your decision
 
 - [ ] **Designer needs work** (owner, 2026-11-14): every box quietly makes layers of its own (Picture = a layer,
