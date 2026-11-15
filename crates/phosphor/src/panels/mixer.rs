@@ -145,9 +145,11 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     // (A toolbar: in a narrow Mixer, Auto, its time, the curve and Speed wrap under the crossfader instead of being cut off.)
     crate::ui::toolbar(ui, |ui| {
         // A and B are buttons: glide all the way to that side over the Auto-fade time, with its easing.
-        if crate::ui::command(ui, RichText::new("A").strong()).on_hover_text("Glide to A (the A layers) over the fade time; right-click to map it").clicked() {
+        let a = crate::ui::command(ui, RichText::new("A").strong()).on_hover_text("Glide to A (the A layers) over the fade time; right-click to map it");
+        if a.clicked() {
             side = Some(false);
         }
+        map_menu(ui, &a, ControlTarget::App(phosphor_engine::AppControl::FadeToA));
         // (Double-click centers it: its default.)
         let width = (ui.available_width() - 360.0).clamp(120.0, 520.0);
         let r = Level::percent(&mut comp.crossfader, "Crossfader").default(0.5).target(target.clone()).width(width).show(ui);
@@ -157,9 +159,11 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
             x if x > 0.99 => "B".to_string(),
             x => format!("A {:.0}% · B {:.0}%", phosphor_engine::CrossGroup::A.gain(x, comp.fader_curve) * 100.0, phosphor_engine::CrossGroup::B.gain(x, comp.fader_curve) * 100.0),
         });
-        if crate::ui::command(ui, RichText::new("B").strong()).on_hover_text("Glide to B (the B layers) over the fade time; right-click to map it").clicked() {
+        let b = crate::ui::command(ui, RichText::new("B").strong()).on_hover_text("Glide to B (the B layers) over the fade time; right-click to map it");
+        if b.clicked() {
             side = Some(true);
         }
+        map_menu(ui, &b, ControlTarget::App(phosphor_engine::AppControl::FadeToB));
         let towards = if comp.crossfader < 0.5 { "B" } else { "A" };
         let auto = action_button(ui, Act::Go, label(if gliding { icon::HOURGLASS } else { icon::ARROWS_LEFT_RIGHT }, "Auto"))
             .on_hover_text(format!("Glide to {towards} over the time beside it (press again on the way to turn back)"));

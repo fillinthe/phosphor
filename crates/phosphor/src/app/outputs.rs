@@ -64,9 +64,14 @@ impl PhosphorApp {
         for step in steps {
             self.state.undo_step(step);
         }
-        let (can_undo, can_redo) = (self.state.history.can_undo(&self.state.comp), self.state.history.can_redo());
-        for out in self.state.output.lock().unwrap().values_mut() {
-            (out.can_undo, out.can_redo) = (can_undo, can_redo);
+        // Only for output windows being edited: with nothing to undo yet the check compares the whole project, and
+        // it ran every frame with no window open (review 2026-11-15).
+        let mut map = self.state.output.lock().unwrap();
+        if map.values().any(|o| o.open && o.edit_mapping) {
+            let (can_undo, can_redo) = (self.state.history.can_undo(&self.state.comp), self.state.history.can_redo());
+            for out in map.values_mut() {
+                (out.can_undo, out.can_redo) = (can_undo, can_redo);
+            }
         }
     }
 

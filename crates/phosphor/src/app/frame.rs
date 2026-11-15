@@ -29,6 +29,7 @@ impl PhosphorApp {
         self.state.comp.sync_media_bin();
         self.state.thumbs.poll(&ctx);
         self.account_events(&ctx);
+        self.state.updater.in_show = self.state.output.lock().is_ok_and(|m| m.values().any(|o| o.open));
         self.state.updater.tick(&ctx, now);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(engine) = self.state.engine.as_mut() {

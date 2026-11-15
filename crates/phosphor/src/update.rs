@@ -77,11 +77,16 @@ pub struct Updater {
     pub test: bool,
     /// Download and install new versions by themselves (setting; on by default).
     pub auto: bool,
+    /// A show is on (an output window is open): nothing installs by itself and no window pops up over the controls
+    /// until it's over (review 2026-11-15: an update could arrive a minute into a set). Set each frame by the app.
+    pub in_show: bool,
+    /// The update window is owed once the show is over.
+    window_later: bool,
 }
 
 impl Default for Updater {
     fn default() -> Self {
-        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 2.0, check_rx: None, install_rx: None, progress: Default::default(), test: false, auto: true }
+        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 2.0, check_rx: None, install_rx: None, progress: Default::default(), test: false, auto: true, in_show: false, window_later: false }
     }
 }
 
@@ -184,6 +189,15 @@ impl Updater {
         });
     }
 
+    /// Opens the update window, or after the show when one is on.
+    fn pop_window(&mut self) {
+        if self.in_show {
+            self.window_later = true;
+        } else {
+            self.window = true;
+        }
+    }
+
     /// Call every frame: the daily check, and results coming back from the threads.
     pub fn tick(&mut self, ctx: &egui::Context, now: f64) {
         if now >= self.next_check && !cfg!(target_arch = "wasm32") {
@@ -208,11 +222,16 @@ impl Updater {
                 Ok(_) => Status::UpToDate,
                 Err(e) => Status::Failed(e),
             };
-            if let Status::Available(r) = &self.status
-                && (self.test || (self.installs_by_itself() && r.version != self.skipped))
-            {
-                self.install();
-            }
+        }
+        // A new version installs by itself, but never during a show: it waits here until the outputs are closed.
+        if let Status::Available(r) = &self.status
+            && self.install_rx.is_none()
+            && (self.test || (self.installs_by_itself() && r.version != self.skipped && !self.in_show))
+        {
+            self.install();
+        }
+        if self.window_later && !self.in_show {
+            (self.window, self.window_later) = (true, false);
         }
         if let Some(rx) = &self.install_rx
             && let Ok(res) = rx.try_recv()
@@ -226,14 +245,14 @@ impl Updater {
                 // Installed: say so (the window offers to relaunch; otherwise it opens next time).
                 (Ok((path, true)), _) => {
                     if !self.test {
-                        self.window = true;
+                        self.pop_window();
                     }
                     Status::Ready(path)
                 }
                 (Ok((path, false)), _) => Status::Downloaded(path),
                 // Keep the release: the top bar still offers it and the window links its download.
                 (Err(e), Some(r)) => {
-                    self.window = true;
+                    self.pop_window();
                     Status::InstallFailed(r, e)
                 }
                 (Err(e), None) => Status::Failed(e),
