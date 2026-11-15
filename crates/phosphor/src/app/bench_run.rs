@@ -192,6 +192,7 @@ impl PhosphorApp {
         let causes: Vec<String> = ctx.repaint_causes().iter().map(|c| c.to_string()).collect();
         println!("UI_FPS {:.1} repaint causes: {}", self.ui_frames as f64 / run.cfg.seconds.max(1.0), causes.join(" | "));
         println!("LAYERS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.enabled, l.opacity, l.source.label())).collect::<Vec<_>>());
+        println!("LOOPS {:?}", self.state.comp.layers.iter().map(|l| (l.name.clone(), l.loop_in, l.loop_out)).collect::<Vec<_>>());
         for (layer, e) in &self.state.media.errors {
             println!("LAYER_ERROR {layer}: {e}");
         }

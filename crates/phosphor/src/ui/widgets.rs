@@ -26,7 +26,10 @@ impl RightMenu for egui::Response {
 
 fn right_popup(r: &egui::Response) -> egui::Popup<'_> {
     use egui::SetOpenCommand;
-    let released = r.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && r.contains_pointer();
+    // `hovered`, not `contains_pointer`: only the thing on top under the pointer opens its menu. A card behind a
+    // slider used to open its own menu over the slider's (owner, 2026-11-14: a layer card's Opacity showed the card's
+    // menu, the Inspector's the slider's).
+    let released = r.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && r.hovered();
     let cmd = if r.secondary_clicked() || released {
         Some(SetOpenCommand::Bool(true))
     } else if r.clicked() {
@@ -252,7 +255,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
         for (i, v) in [&mut **lo, &mut **hi].into_iter().enumerate() {
             let x = on_bar(x_of(*v));
             let grab = egui::Rect::from_center_size(egui::pos2(x, rect.center().y), egui::vec2(10.0, rect.height() + 6.0));
-            let h = ui.interact(grab, ui.id().with(("loop_edge", i)), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+            let h = ui.interact(grab, resp.id.with(("loop_edge", i)), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
             if h.dragged_by(egui::PointerButton::Primary)
                 && let Some(at) = h.interact_pointer_pos()
             {
