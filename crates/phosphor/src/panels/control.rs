@@ -74,7 +74,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             });
         });
     });
-    crate::ui::field(ui, "Send every change", |ui| {
+    crate::ui::field(ui, "Send all to", |ui| {
         text_field(ui, &mut control.send_all, "host:port (off)", Some(170.0)).on_hover_text("Every control that changes goes out as OSC on its built-in address (/phosphor/layer/3/opacity 0–1) to this computer: lighting, another app, a second Phosphor. Empty = off. No port = 9000. For just a few controls, right-click one › Send out instead.");
     });
     // Tempo and time for other gear.
