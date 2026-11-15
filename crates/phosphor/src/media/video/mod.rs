@@ -749,7 +749,9 @@ impl VideoPlayer {
         // (A sound-only clip has no picture to wait for: its jumps go straight away; they waited 300 ms each.)
         self.scrub = Scrub { waiting: (!self.audio_only).then(std::time::Instant::now), next: None };
         let t = match self.duration {
-            Some(d) if d > 0.0 => t.clamp(0.0, (d - 1e-3).max(0.0)),
+            // (A hundredth short of the end: at the very end the first frame of the next loop is due within the
+            // player's tolerance, so the jump showed the last frame and at once the first one.)
+            Some(d) if d > 0.0 => t.clamp(0.0, (d - 0.01).max(0.0)),
             _ => t.max(0.0),
         };
         self.generation += 1;
