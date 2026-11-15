@@ -232,3 +232,38 @@ fn chapters_are_read() {
     assert_eq!(ch[1].1, "Drop");
     assert!((ch[1].0 - 1.0).abs() < 0.05, "{ch:?}");
 }
+
+/// Dragging along the timeline (a jump asked for every frame) shows pictures on the way and ends where the drag
+/// stopped: each jump used to cancel the one before it had a picture, so nothing showed until the drag stopped.
+#[test]
+fn a_drag_along_the_timeline_shows_pictures() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../media/test/h264.mp4");
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
+    let mut p = VideoPlayer::open(path).unwrap();
+    p.poll_frame(0.0);
+    let mut shown = 0;
+    let start = std::time::Instant::now();
+    // 60 frames (about a second) of dragging from 0.2 s to 2.0 s.
+    for k in 0..60 {
+        p.seek(0.2 + 1.8 * k as f64 / 59.0);
+        let now = start.elapsed().as_secs_f64();
+        if let Some(f) = p.poll_frame(now) {
+            shown += 1;
+            p.recycle(f);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
+    assert!(shown >= 3, "pictures while dragging: {shown}");
+    // Let go: it settles on the last place asked for.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while std::time::Instant::now() < deadline {
+        if let Some(f) = p.poll_frame(start.elapsed().as_secs_f64()) {
+            p.recycle(f);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    p.set_playing(false);
+    assert!(p.position() > 1.8, "ends where the drag stopped (and plays on): {}", p.position());
+}

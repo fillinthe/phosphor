@@ -389,6 +389,11 @@ impl<'a> Level<'a> {
             } else {
                 typed_value(ui, typed_id, value, min, max, percent);
             }
+            // How every slider takes a click (the same switch as in the brightness menu).
+            let mut jump = super::sliders_jump();
+            if super::toggle(ui, &mut jump, "Click jumps to the spot").on_hover_text("On: the value goes where you click. Off: drag from where the value is (a click alone leaves it). For every slider").changed() {
+                super::set_sliders_jump(jump);
+            }
             if let Some(t) = &target {
                 snap_items(ui, t, unit_now, &shown_unit);
                 super::locks::limit_items(ui, t, unit_now, &shown_unit);

@@ -18,7 +18,8 @@ impl PhosphorApp {
         // (i) icons unless you chose words (the brightness menu): the room goes to the controls.
         let help_icons = stored(KEY_HELP_ICONS).is_none_or(|v| v == "1") || std::env::var_os("PHOSPHOR_HELP_ICONS").is_some();
         let tooltips_off = stored(KEY_TOOLTIPS).is_some_and(|v| v == "0");
-        let sliders_jump = stored(KEY_SLIDERS_JUMP).is_none_or(|v| v == "1");
+        // (PHOSPHOR_SLIDERS_DRAG=1: drag-from-value in a bench.)
+        let sliders_jump = stored(KEY_SLIDERS_JUMP).is_none_or(|v| v == "1") && std::env::var_os("PHOSPHOR_SLIDERS_DRAG").is_none();
         // The interface language: as chosen, else the computer's (PHOSPHOR_LANG=de for a bench).
         let lang = std::env::var("PHOSPHOR_LANG").ok().or_else(|| stored(KEY_LANGUAGE)).map_or(crate::i18n::Lang::Auto, |c| crate::i18n::Lang::from_code(&c));
         crate::i18n::set_language(&cc.egui_ctx, lang);
