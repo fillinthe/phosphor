@@ -696,6 +696,27 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
 }
 
 /// The OSC address every control answers to without a mapping (values 0..1; 1 = press for triggers).
+/// An address by place, as the address by id it means, so one controller page works on any project:
+/// - `/phosphor/layers/2/opacity` = the second layer from the bottom of the open comp (`/phosphor/layer/<id>/opacity`);
+/// - `/phosphor/selected/layer/opacity` = the selected layer;
+/// - after either, `fx/1/mix` = that layer's first effect (`/phosphor/fx/<id>/mix`).
+/// None for any other address, or a place with nothing in it.
+pub fn placed_address(comp: &Composition, selected: Option<u64>, address: &str) -> Option<String> {
+    let (layer, rest) = if let Some(rest) = address.strip_prefix("/phosphor/selected/layer/") {
+        (comp.layer(selected?)?, rest)
+    } else {
+        let (n, rest) = address.strip_prefix("/phosphor/layers/")?.split_once('/')?;
+        let n: usize = n.parse().ok().filter(|n| *n >= 1)?;
+        (comp.layers.iter().filter(|l| comp.in_open_comp(l)).nth(n - 1)?, rest)
+    };
+    if let Some(fx) = rest.strip_prefix("fx/") {
+        let (k, tail) = fx.split_once('/')?;
+        let k: usize = k.parse().ok().filter(|k| *k >= 1)?;
+        return Some(format!("/phosphor/fx/{}/{tail}", layer.effects.get(k - 1)?.id));
+    }
+    Some(format!("/phosphor/layer/{}/{rest}", layer.id))
+}
+
 pub fn default_osc_address(target: &ControlTarget) -> String {
     match target {
         ControlTarget::MasterFade => "/phosphor/master".into(),
@@ -777,4 +798,31 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
 
 pub fn target_label(comp: &Composition, target: &ControlTarget) -> String {
     all_targets(comp).into_iter().find(|(t, _)| t == target).map(|(_, n)| n).unwrap_or_else(|| "(removed)".into())
+}
+
+#[cfg(test)]
+mod placed_tests {
+    use super::*;
+
+    /// Addresses by place become the addresses by id: the Nth layer of the open comp, the selected layer, and
+    /// their effects by place; anything else, or an empty place, is left alone.
+    #[test]
+    fn addresses_by_place_reach_the_right_layer() {
+        let mut comp = Composition::default();
+        let a = comp.add_layer().id;
+        let b = comp.add_layer().id;
+        let fx = comp.new_effect("mirror").unwrap();
+        let fx_id = fx.id;
+        comp.layer_mut(b).unwrap().effects.push(fx);
+        assert_eq!(placed_address(&comp, None, "/phosphor/layers/1/opacity"), Some(format!("/phosphor/layer/{a}/opacity")));
+        assert_eq!(placed_address(&comp, None, "/phosphor/layers/2/clip/3"), Some(format!("/phosphor/layer/{b}/clip/3")));
+        assert_eq!(placed_address(&comp, Some(b), "/phosphor/selected/layer/opacity"), Some(format!("/phosphor/layer/{b}/opacity")));
+        assert_eq!(placed_address(&comp, Some(b), "/phosphor/selected/layer/fx/1/mix"), Some(format!("/phosphor/fx/{fx_id}/mix")));
+        assert_eq!(placed_address(&comp, None, "/phosphor/layers/2/fx/1/on"), Some(format!("/phosphor/fx/{fx_id}/on")));
+        assert_eq!(placed_address(&comp, None, "/phosphor/layers/3/opacity"), None, "no third layer");
+        assert_eq!(placed_address(&comp, None, "/phosphor/layers/0/opacity"), None);
+        assert_eq!(placed_address(&comp, None, "/phosphor/selected/layer/opacity"), None, "nothing selected");
+        assert_eq!(placed_address(&comp, Some(a), "/phosphor/selected/layer/fx/1/mix"), None, "no effect there");
+        assert_eq!(placed_address(&comp, None, &format!("/phosphor/layer/{a}/opacity")), None, "by id: left as it is");
+    }
 }

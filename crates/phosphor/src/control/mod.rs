@@ -181,6 +181,8 @@ pub struct ControlHub {
     pub learning: Option<ControlTarget>,
     /// Said once after a Learn whose input already moved something else (taken by the app for its notice).
     pub learn_clash: Option<String>,
+    /// The layer selected in the app (set each frame): what `/phosphor/selected/layer/…` addresses reach.
+    pub selected_layer: Option<u64>,
     /// Controls on screen last frame (for mappings that only work while theirs is showing).
     pub shown: Option<std::collections::HashSet<ControlTarget>>,
     /// Listen: catch the next input (any knob, pad, key or OSC message) into `heard`.
@@ -470,6 +472,7 @@ impl ControlHub {
             last: None,
             learning: None,
             learn_clash: None,
+            selected_layer: None,
             shown: None,
             listen_source: false,
             heard: None,
@@ -1006,7 +1009,8 @@ impl ControlHub {
             .fresh
             .iter()
             .filter_map(|(s, v)| match s {
-                ControlSource::Osc { address } if address.starts_with("/phosphor/") => Some((address.clone(), *v)),
+                // (By place first: /phosphor/layers/2/…, /phosphor/selected/layer/… become the address by id.)
+                ControlSource::Osc { address } if address.starts_with("/phosphor/") => Some((placed_address(comp, self.selected_layer, address).unwrap_or_else(|| address.clone()), *v)),
                 _ => None,
             })
             .collect();
