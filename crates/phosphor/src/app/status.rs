@@ -153,7 +153,11 @@ impl PhosphorApp {
                 }
                 // Right: the side-column toggles (areas), then frame rate and load.
                 let s = self.state.stats.latest;
-                let perf = format!("{:.0} fps · engine {:.1} ms · CPU {:.0}% · {:.0} MB", s.fps, s.render_ms, s.cpu_percent, s.memory_mb);
+                // CPU as a share of the whole computer (Activity Monitor's figure counts one core as 100%, so 78% on a
+                // 10-core Mac is about 8%: it read as if the Mac was nearly full; owner, 2026-11-14).
+                let cores = crate::panels::cores() as f64;
+                let whole = s.cpu_percent / cores;
+                let perf = format!("{:.0} fps · engine {:.1} ms · {:.0} MB", s.fps, s.render_ms, s.memory_mb);
                 let slow = s.fps > 0.0 && s.fps < 50.0;
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let open = super::areas::library_open(&self.dock);
@@ -161,8 +165,11 @@ impl PhosphorApp {
                         self.toggle_library();
                     }
                     ui.separator();
+                    let cpu_color = if whole >= 70.0 { theme::DANGER } else if whole >= 40.0 { theme::WARN } else { Color32::GRAY };
+                    ui.add_sized([70.0, 16.0], egui::Label::new(RichText::new(format!("CPU {whole:>3.0}%")).small().monospace().color(cpu_color)))
+                        .on_hover_text(format!("Phosphor's share of the whole computer ({cores:.0} cores). Counted per core, as Activity Monitor does: {:.0}%", s.cpu_percent));
                     ui.label(RichText::new(perf).small().monospace().color(if slow { theme::WARN } else { Color32::GRAY }))
-                        .on_hover_text("Frame rate, the engine's time per frame, Phosphor's CPU (of one core) and memory");
+                        .on_hover_text("Frame rate, the engine's time per frame, memory");
                 });
             });
         });

@@ -367,12 +367,40 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 }
 
-/// Temp-data key: layers whose video is decoded on the CPU (layer id → codec and size), refreshed once a second.
+/// Temp-data key: each movie layer's CPU share (of one core) for its decoding, refreshed once a second.
 pub(crate) const CPU_LAYERS: &str = "phosphor_cpu_layers";
 
-/// A layer decoding its video on the CPU: its codec and size (cards and clip rows warn).
-pub(crate) fn cpu_heavy(ctx: &egui::Context, layer: u64) -> Option<String> {
-    ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, String>>)>(egui::Id::new(CPU_LAYERS))).and_then(|(_, m)| m.get(&layer).cloned())
+/// A movie layer's decoding as a share of one CPU core (0..1+), when it's measured.
+pub(crate) fn cpu_share(ctx: &egui::Context, layer: u64) -> Option<f32> {
+    ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, f32>>)>(egui::Id::new(CPU_LAYERS))).and_then(|(_, m)| m.get(&layer).copied())
+}
+
+/// The color for a CPU share (of one core): gray while light, amber from 30%, red from 70%.
+pub(crate) fn cpu_color(share: f32) -> Color32 {
+    if share >= 0.7 {
+        crate::theme::DANGER
+    } else if share >= 0.3 {
+        WARN
+    } else {
+        Color32::GRAY
+    }
+}
+
+/// A layer's CPU: "CPU 34%" in its color, one width whatever the number (the row never shifts), the advice on hover.
+pub(crate) fn cpu_chip(ui: &mut egui::Ui, share: f32) {
+    let pct = (share * 100.0).round() as u32;
+    let text = RichText::new(format!("CPU {pct:>3}%")).small().monospace().color(cpu_color(share));
+    let tip = if share >= 0.3 {
+        format!("Decoding this movie takes {pct}% of one CPU core (this Mac has {} cores). Hap plays on the graphics card instead: Media › right-click the file › Convert… › Hap", cores())
+    } else {
+        format!("Decoding this movie takes {pct}% of one CPU core (this Mac has {} cores)", cores())
+    };
+    ui.add_sized([62.0, crate::ui::CONTROL_H], egui::Label::new(text).selectable(false)).on_hover_text(tip);
+}
+
+/// This computer's CPU cores.
+pub(crate) fn cores() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 
 /// Draws one panel (the dock and the areas both use this).

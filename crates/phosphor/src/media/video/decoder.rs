@@ -238,6 +238,7 @@ impl Decoder {
                 }
                 continue;
             }
+            let busy = std::time::Instant::now();
             let more = match self.next_frame() {
                 Ok(more) => more,
                 Err(e) if self.hw && self.origin.is_none() => {
@@ -246,6 +247,7 @@ impl Decoder {
                 }
                 Err(e) => return Err(e),
             };
+            sh.busy_ns.fetch_add(busy.elapsed().as_nanos() as u64, Ordering::Relaxed);
             if !more && self.live {
                 return Err("the input stopped (unplugged or closed?)".into());
             }
@@ -302,7 +304,9 @@ impl Decoder {
                     self.live_start = Some((rel, std::time::Instant::now()));
                 }
             }
+            let busy_pic = std::time::Instant::now();
             let out = self.picture(sh)?;
+            sh.busy_ns.fetch_add(busy_pic.elapsed().as_nanos() as u64, Ordering::Relaxed);
             // Keep the frames just shown (only ones that are cheap to keep): about a second, so a switch to reverse
             // starts at once; ping-pong keeps the end of the forward pass for its turn.
             let pingpong_end = mode.direction == PlayDirection::PingPong && hi.is_finite() && rel >= hi - (self.rev_cap(sh) as f64 + 1.0) * dur.max(1e-3);
@@ -484,7 +488,10 @@ impl Decoder {
             if job.done {
                 return Ok(());
             }
-            if !self.next_frame()? {
+            let busy = std::time::Instant::now();
+            let more = self.next_frame()?;
+            sh.busy_ns.fetch_add(busy.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            if !more {
                 self.rev_job = Some(RevJob { done: true, ..job });
                 return Ok(());
             }
@@ -508,7 +515,9 @@ impl Decoder {
             if rel + 1e-6 < keep_from {
                 continue;
             }
+            let busy_pic = std::time::Instant::now();
             let out = self.picture(sh)?;
+            sh.busy_ns.fetch_add(busy_pic.elapsed().as_nanos() as u64, Ordering::Relaxed);
             self.rev_next.push((rel, dur, out));
         }
         Ok(())

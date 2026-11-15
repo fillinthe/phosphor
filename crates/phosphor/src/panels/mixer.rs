@@ -24,7 +24,7 @@ fn strip(ui: &mut egui::Ui, id: u64, is_sel: bool, thumb: Option<egui::TextureId
 }
 
 fn short(name: &str) -> String {
-    if name.chars().count() > 11 { format!("{}…", name.chars().take(10).collect::<String>()) } else { name.to_string() }
+    if name.chars().count() > 13 { format!("{}…", name.chars().take(12).collect::<String>()) } else { name.to_string() }
 }
 
 /// "3 fx" under a strip's fader (lit when running, gray when bypassed; nothing with no effects).
@@ -61,7 +61,8 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 }
                 let layer = &mut layers[i];
                 let muted = any_solo && !layer.solo;
-                let name = RichText::new(short(&layer.name)).small().strong();
+                // (Full size, not small: the names were hard to see; owner, 2026-11-14.)
+                let name = RichText::new(short(&layer.name)).strong();
                 let lit = layer.enabled && !muted;
                 if strip(ui, layer.id, *selected == Some(layer.id), tex(layer.id), aspect, lit, name, |ui| {
                     // Opacity and (movies) Speed side by side, both upright: what's played with most live.

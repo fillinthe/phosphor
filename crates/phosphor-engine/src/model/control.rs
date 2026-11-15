@@ -137,6 +137,9 @@ pub enum ControlTarget {
     Layout(u64),
     /// Stop what a layer is playing (a press; `MASTER_ID` = every layer).
     StopLayer(u64),
+    /// Make a layer the selected one (a press): where clicked clips and files go, what the Inspector shows. For a
+    /// button on a phone / TouchOSC (owner, 2026-11-14).
+    SelectLayer(u64),
     /// An output's or a slice's color: `part` indexes `ColorGrade::PARTS` (brightness, contrast, gamma…).
     Color { owner: u64, part: u8 },
     /// Any slider on screen without a control of its own (a setting), by its stable key (panel, label, which one) and

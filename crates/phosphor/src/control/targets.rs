@@ -47,6 +47,8 @@ pub fn get_target(comp: &Composition, target: &ControlTarget) -> Option<f32> {
         },
         ControlTarget::Layout(id) => comp.slice_group(*id).map(|g| on(g.enabled && g.opacity > 0.5))?,
         ControlTarget::StopLayer(_) => 0.0,
+        // A press with no value of its own (nothing to read back or send to a controller).
+        ControlTarget::SelectLayer(_) => return None,
         ControlTarget::MaskTransform { mask, part } => comp.mask(*mask)?.transform.unit(*part as usize),
         ControlTarget::SliceTransform { slice, part } => comp.slice(*slice)?.transform.unit(*part as usize),
         ControlTarget::MaskFeather(id) => comp.mask(*id)?.feather / phosphor_engine::mapping::MASK_FEATHER_MAX,
@@ -464,6 +466,11 @@ fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out:
                 out.push(Deferred::Stop(*id));
             }
         }
+        ControlTarget::SelectLayer(id) => {
+            if v > 0.5 {
+                out.push(Deferred::Select(*id));
+            }
+        }
         ControlTarget::SliceEnabled(id) if comp.slice_group(*id).is_some() => {
             if let Some(g) = comp.slice_group_mut(*id) {
                 g.enabled = toggled(g.enabled, v);
@@ -597,6 +604,7 @@ pub fn all_targets(comp: &Composition) -> Vec<(ControlTarget, String)> {
     for l in &comp.layers {
         out.push((ControlTarget::LayerOpacity(l.id), format!("{} · opacity", l.name)));
         out.push((ControlTarget::LayerEnabled(l.id), format!("{} · on/off", l.name)));
+        out.push((ControlTarget::SelectLayer(l.id), format!("{} · select", l.name)));
         out.push((ControlTarget::LayerSpeed(l.id), format!("{} · speed", l.name)));
         out.push((ControlTarget::LayerFxBypass(l.id), format!("{} · effects bypass", l.name)));
         out.push((ControlTarget::LayerX(l.id), format!("{} · position X", l.name)));
@@ -708,6 +716,7 @@ pub fn default_osc_address(target: &ControlTarget) -> String {
         ControlTarget::Layout(id) => format!("/phosphor/layout/{id}"),
         ControlTarget::StopLayer(id) if *id == phosphor_engine::MASTER_ID => "/phosphor/stop".into(),
         ControlTarget::StopLayer(id) => format!("/phosphor/layer/{id}/stop"),
+        ControlTarget::SelectLayer(id) => format!("/phosphor/layer/{id}/select"),
         ControlTarget::LaserShape { shape, field } => {
             format!("/phosphor/laser/shape/{shape}/{}", phosphor_engine::LASER_FIELDS.get(*field as usize).map_or("part", |f| f.0))
         }

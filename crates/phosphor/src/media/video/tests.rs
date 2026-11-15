@@ -271,3 +271,15 @@ fn a_drag_along_the_timeline_shows_pictures() {
     }
     assert!((p.position() - 2.0).abs() < 0.05, "ends where the drag stopped: {}", p.position());
 }
+
+/// The decoder counts its working time (the CPU share a layer card shows): it grows while a movie plays.
+#[test]
+fn decoding_time_is_counted() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../media/test/h264.mp4");
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
+    let mut p = VideoPlayer::open(path).unwrap();
+    assert!(play(&mut p, 0.0, 1.0).is_some(), "frames");
+    assert!(p.busy_ns() > 0, "the decoder's work is counted");
+}

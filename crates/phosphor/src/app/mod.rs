@@ -671,6 +671,12 @@ impl State {
             crate::control::Deferred::Slider(key, v) => self.slider_values.push((key, v)),
             crate::control::Deferred::Layout(id) => self.switch_layout(id, now),
             crate::control::Deferred::Stop(id) => self.stop_clips(id, now),
+            crate::control::Deferred::Select(id) => {
+                if self.comp.layer(id).is_some() {
+                    self.selected = Some(id);
+                    self.also_selected.clear();
+                }
+            }
             crate::control::Deferred::Menu(key) => self.menu_requests.extend(crate::menu::action_for(&key)),
             crate::control::Deferred::Scrub(layer, v) => {
                 if let Some((_, dur)) = self.media.position(layer) {

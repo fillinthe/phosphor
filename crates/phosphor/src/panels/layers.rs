@@ -235,11 +235,6 @@ pub(crate) struct CardOut {
 
 /// What's changed on a layer as (badge, what it means): the clip's effects, speed / direction, trim, moved,
 /// animated. The layer's own effects are the "N fx" toggle.
-/// What a layer's card says when its video is decoded on the CPU (`panels::cpu_heavy`).
-pub(crate) fn cpu_words(codec: &str) -> String {
-    format!("{} {codec} is decoded on the CPU: the Mac works hard (Media › right-click the file › Convert… › Hap plays it on the GPU)", icon::CPU)
-}
-
 pub(crate) fn mark_list(m: &phosphor_engine::LayerMarks) -> Vec<(String, &'static str)> {
     let mut out = Vec::new();
     if m.clip_fx > 0 {
@@ -433,6 +428,10 @@ pub(crate) fn layer_card(
                         }
                     }
                     choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
+                    // How much CPU its movie takes (measured; was a long warning line).
+                    if let Some(share) = super::cpu_share(ui.ctx(), layer.id) {
+                        super::cpu_chip(ui, share);
+                    }
                     // Its crossfader side, right here (it was only in the Mixer; owner, 2026-11-14).
                     for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
                         let on = layer.group == g;
@@ -448,9 +447,6 @@ pub(crate) fn layer_card(
                 });
             });
         });
-        if let Some(codec) = super::cpu_heavy(ui.ctx(), layer.id) {
-            ui.colored_label(WARN, cpu_words(&codec));
-        }
         if let Some(err) = err {
             ui.colored_label(WARN, err);
         }
@@ -461,6 +457,11 @@ pub(crate) fn layer_card(
         select = true;
     }
     resp.right_menu(|ui| {
+        // A button on a phone / TouchOSC / MIDI that makes this the selected layer (where clips and files go).
+        ui.menu_button(label(icon::CURSOR_CLICK, "Map \"select this layer\"…"), |ui| {
+            learn_items(ui, &ControlTarget::SelectLayer(layer.id));
+        });
+        ui.separator();
         if crate::ui::command(ui, label(icon::SPARKLE, "Browse sources…")).clicked() {
             action = Some(LayerAction::BrowseSources);
             ui.close();

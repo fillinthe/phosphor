@@ -210,6 +210,8 @@ struct Shared {
     clock: AtomicU64,
     hardware: AtomicBool,
     decoded: AtomicU64,
+    /// Time the decoder spent working (reading, decoding, converting; not waiting), in nanoseconds: its CPU share.
+    busy_ns: AtomicU64,
     skipped: AtomicU64,
     /// Frames handed on to be shown (decoded counts re-decodes too, e.g. for reverse play).
     shown: AtomicU64,
@@ -351,6 +353,7 @@ impl VideoPlayer {
             clock: AtomicU64::new(0f64.to_bits()),
             hardware: AtomicBool::new(false),
             decoded: AtomicU64::new(0),
+            busy_ns: AtomicU64::new(0),
             skipped: AtomicU64::new(0),
             shown: AtomicU64::new(0),
             reverse_slow: AtomicBool::new(false),
@@ -420,6 +423,7 @@ impl VideoPlayer {
             clock: AtomicU64::new(0f64.to_bits()),
             hardware: AtomicBool::new(false),
             decoded: AtomicU64::new(0),
+            busy_ns: AtomicU64::new(0),
             skipped: AtomicU64::new(0),
             shown: AtomicU64::new(0),
             reverse_slow: AtomicBool::new(false),
@@ -802,6 +806,12 @@ impl VideoPlayer {
     /// Frame rate, bit rate, pixel format, color space and sound of the file ("" for sound-only clips).
     pub fn about(&self) -> &str {
         &self.about
+    }
+
+    /// Nanoseconds the decoder has spent working so far (sample it twice: the difference over the time between is
+    /// how much of one CPU core this movie takes).
+    pub fn busy_ns(&self) -> u64 {
+        self.shared.busy_ns.load(Ordering::Relaxed)
     }
 
     pub fn stats(&self) -> VideoStats {

@@ -171,6 +171,9 @@ pub struct MediaManager {
     pub errors: HashMap<u64, String>,
     #[cfg(not(target_arch = "wasm32"))]
     players: HashMap<u64, video::VideoPlayer>,
+    /// Each movie's decoder work at the last CPU sample (when, nanoseconds busy): `cpu_shares`.
+    #[cfg(not(target_arch = "wasm32"))]
+    cpu_samples: HashMap<u64, (std::time::Instant, u64)>,
     /// Images decoding on background threads: (layer, source, result).
     #[cfg(not(target_arch = "wasm32"))]
     decoded: Option<(std::sync::mpsc::Sender<Decoded>, std::sync::mpsc::Receiver<Decoded>)>,
@@ -810,23 +813,32 @@ impl MediaManager {
         }
     }
 
-    /// A movie layer whose picture is decoded on the CPU and big enough to cost (720p and up, not Hap, which goes
-    /// to the GPU as it is): its codec and size, for a warning on its card. None for anything cheap.
-    pub fn cpu_heavy(&self, layer: u64) -> Option<String> {
+    /// How much of one CPU core each movie layer's decoding took over the last second or so (0..1+), sampled when
+    /// called (call about once a second). Replaces the long "decoded on the CPU" warning with a number (owner,
+    /// 2026-11-14).
+    pub fn cpu_shares(&mut self) -> std::collections::HashMap<u64, f32> {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let p = self.players.get(&layer)?;
-            let s = p.stats();
-            let (w, h) = p.size();
-            let codec = s.codec.to_lowercase();
-            let cheap = s.hardware || codec.starts_with("hap") || p.is_live() || (w as u64) * (h as u64) < 1280 * 720 || s.frames_decoded < 10;
-            return (!cheap).then(|| format!("{} {w}×{h}", s.codec.to_uppercase()));
+            let now = std::time::Instant::now();
+            let mut out = std::collections::HashMap::new();
+            for (id, p) in &self.players {
+                if p.is_live() {
+                    continue;
+                }
+                let busy = p.busy_ns();
+                if let Some((t, b)) = self.cpu_samples.get(id) {
+                    let dt = now.duration_since(*t).as_secs_f64();
+                    if dt > 0.2 {
+                        out.insert(*id, (busy.saturating_sub(*b) as f64 / 1e9 / dt) as f32);
+                    }
+                }
+                self.cpu_samples.insert(*id, (now, busy));
+            }
+            self.cpu_samples.retain(|id, _| self.players.contains_key(id));
+            return out;
         }
         #[cfg(target_arch = "wasm32")]
-        {
-            let _ = layer;
-            None
-        }
+        std::collections::HashMap::new()
     }
 
     /// Codec and decoder details for a movie layer, for the Inspector.
