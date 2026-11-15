@@ -100,16 +100,6 @@ source, or a proxy on your server.
 
 ## Planned
 
-- [ ] **After the 2026-11-15 show, first** (owner asked during the set): fix the code review's findings
-      (`_local/code-review-2026-11-15.md`: Add-blend on the logo / QR layers, card right-click menus, patch setting
-      names, the CPU chip shifting the row, sound-only scrubbing, Stack offering a comp to itself…), then:
-      - **Favorite what's playing:** a ★ beside the file name in the Inspector and in the layer card's right-click
-        menu (Random plays a file without a clip cell, so the clip menu's Favorite isn't there).
-      - **See where a file plays at a glance:** each Media tile shows the layer(s) it's on now (a small label, not
-        only the outline and the hover text).
-      - **Skip a file:** right-click a media file › Skip: it stays in Media (dimmed) but Random, Shuffle, autopilot
-        and collections never play it (fades past it if it's next).
-
 - [ ] **3D fly-through with the audience playing** (asked 2026-11-14): load a 3D model (glTF / GLB first) and fly a
       camera through it; audience phones get a game pad (up / down / left / right, A, B) on the Play page that steers
       it. A world built in Unreal / Unity: either exported as glTF, or run in its own engine and sent in over

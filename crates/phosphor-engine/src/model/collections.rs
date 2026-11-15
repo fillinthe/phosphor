@@ -106,7 +106,8 @@ impl Composition {
     /// The file a layer playing a collection shows after `current` (a path): the next by name, the previous, or
     /// a random other one (`pick` 0..1). The first one when `current` isn't in it.
     pub fn collection_next(&self, name: &str, current: Option<&str>, step: CollectionStep, pick: f32) -> Option<usize> {
-        let items = self.collection_items(name);
+        // (Skipped files stay in the collection but aren't played.)
+        let items: Vec<usize> = self.collection_items(name).into_iter().filter(|&i| !self.media_bin[i].skip).collect();
         if items.is_empty() {
             return None;
         }

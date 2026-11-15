@@ -201,6 +201,7 @@ impl State {
             None => {
                 let layer = self.comp.add_layer();
                 layer.name = NOW_PLAYING_LAYER.into();
+                layer.blend = phosphor_engine::BlendMode::Normal;
                 layer.source = phosphor_engine::SourceSpec::Text(style);
                 // Along the bottom edge, out of the way of the picture.
                 layer.transform.y = -0.42;
@@ -343,6 +344,8 @@ impl State {
         }
         let layer = self.comp.add_layer();
         layer.name = QR_LAYER.into();
+        // Normal: on Add a QR code over a bright picture lost its contrast and phones couldn't read it.
+        layer.blend = phosphor_engine::BlendMode::Normal;
         layer.fit = phosphor_engine::FitMode::Fit;
         let id = layer.id;
         let spec = phosphor_engine::SourceSpec::Image { name: QR_LAYER.into(), path: Some(path.to_string_lossy().to_string()) };

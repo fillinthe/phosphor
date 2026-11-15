@@ -65,6 +65,8 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         let bpm = st.comp.bpm;
         let st_chapters = st.media.chapters(sel);
         let inherited = st.comp.inherited_effects(sel);
+        let favorite = st.comp.layer(sel).is_some_and(|l| super::clips::is_favorite(st, &l.source));
+        let mut star = false;
         let mut seek_to: Option<f64> = None;
         let mut quick = None;
         let mut match_beat: Option<u64> = None;
@@ -137,12 +139,13 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
                 ui.horizontal(|ui| hint(ui, format!("Editing {} layers", also + 1)).on_hover_text("Changes here go to all of them (names, sources, clips and effects stay each layer's own). Click a layer without Shift / Cmd to edit just one."));
             }
             ui.separator();
-            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true };
+            let media = LayerMedia { info: info.as_deref(), position, has_sound, beat_pending, beat, bpm, chapters: st_chapters, reload: Default::default(), text_file: Default::default(), match_beat: Default::default(), inherited, speed_above: true, favorite: Some(favorite), star: Default::default() };
             let (fx, seek) = layer_editor(ui, layer, &media, clipboard_len, clip_slot);
             #[cfg(not(target_arch = "wasm32"))]
             if media.text_file.get() {
                 text_file = true;
             }
+            star = media.star.get();
             if media.reload.get() {
                 if let SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } = &layer.source {
                     reload = Some(p.clone());
@@ -175,6 +178,9 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(not(target_arch = "wasm32"))]
         if text_file {
             st.dialogs.pick_file(crate::dialogs::Purpose::TextFile(sel), Some(("Text", &["txt", "md", "srt", "lrc", "csv"])));
+        }
+        if star && let Some(source) = st.comp.layer(sel).map(|l| l.source.clone()) {
+            super::clips::favorite_file(st, &source, None);
         }
         if let Some(path) = reload {
             st.media.reload(&st.comp, &path);
@@ -221,6 +227,10 @@ pub(crate) struct LayerMedia<'a> {
     pub inherited: Vec<(String, String, bool)>,
     /// The playhead and speed are already shown under the picture (Inspector): Playback doesn't repeat them.
     pub speed_above: bool,
+    /// Its file is a favorite in Media (None: no star shown here).
+    pub favorite: Option<bool>,
+    /// Set when the star by the file name is clicked (the caller stars or unstars the file).
+    pub star: std::cell::Cell<bool>,
 }
 
 /// Everything about one layer below its name: generator / text settings, fade style, movie playback, transform
@@ -231,7 +241,7 @@ pub(crate) struct LayerMedia<'a> {
 pub(crate) fn layer_editor(ui: &mut egui::Ui, layer: &mut LayerState, media: &LayerMedia, clipboard_len: usize, clip: Option<usize>) -> (Option<(u64, FxAction)>, Option<f64>) {
     let (info, position, has_sound) = (media.info, media.position, media.has_sound);
     let mut seek_to: Option<f64> = None;
-    source_line(ui, layer);
+    source_line(ui, layer, media);
 
         if let SourceSpec::Generator(id) = &layer.source
             && let Some(desc) = shaders::generator(id)
@@ -580,7 +590,7 @@ fn reveal_if_asked(ui: &mut egui::Ui, top: egui::Pos2) {
 
 /// What the layer is showing and where it comes from: generated, a file on disk (its path, Show in Finder, and a
 /// warning when it's missing), a live input, another layer, text; and the clip slot it was triggered from.
-pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
+pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState, media: &LayerMedia) {
     let (glyph, kind, detail): (&str, &str, Option<String>) = match &layer.source {
         SourceSpec::None => (icon::PROHIBIT, "No source", None),
         // (Its name is the heading of its settings just below.)
@@ -625,6 +635,18 @@ pub(crate) fn source_line(ui: &mut egui::Ui, layer: &LayerState) {
             }
             #[cfg(target_arch = "wasm32")]
             let _ = is_file;
+            // Star the file (Media › Favorites) right here: after Random, what's playing is easy to keep.
+            if is_file && let Some(fav) = media.favorite {
+                let star = if fav {
+                    RichText::new(icon::STAR).font(crate::theme::filled_icons(14.0)).color(crate::theme::FAVOURITE)
+                } else {
+                    RichText::new(icon::STAR)
+                };
+                let tip = if fav { "A favorite (Media › Favorites): click to unstar" } else { "Make this file a favorite (Media › Favorites)" };
+                if crate::ui::small_command(ui, star).on_hover_text(tip).clicked() {
+                    media.star.set(true);
+                }
+            }
             // The file's name (the whole path on hover): readable in a narrow column, and on the folder button's row.
             let shown = if is_file { std::path::Path::new(&d).file_name().map_or_else(|| d.clone(), |n| n.to_string_lossy().into_owned()) } else { d.clone() };
             let path = ui.add(egui::Label::new(RichText::new(shown).small().color(Color32::GRAY)).truncate().sense(Sense::click())).on_hover_text(format!("{d}\nRight-click: copy the name or the path"));

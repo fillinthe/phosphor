@@ -16,6 +16,9 @@ pub struct MediaItem {
     pub folder: String,
     #[serde(default)]
     pub favorite: bool,
+    /// Skipped: it stays in Media (dimmed) but Random, Shuffle, autopilot and collections never play it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip: bool,
     /// Your collections this item belongs to.
     #[serde(default)]
     pub collections: Vec<String>,
@@ -225,6 +228,8 @@ impl Composition {
         // Black letters on the moving colors (the owner's choice), no outline.
         top.source = SourceSpec::Text(TextStyle { text: "PHOSPHOR".into(), font: "builtin:logo".into(), size: 0.22, color: [0, 0, 0, 255], outline: 0.0, ..Default::default() });
         top.opacity = 1.0;
+        // Normal, not new layers' Add: black letters add nothing and the logo vanished (review 2026-11-15).
+        top.blend = BlendMode::Normal;
         comp
     }
 
@@ -639,6 +644,14 @@ impl Composition {
     }
 
     /// Adds a file to the media bin (no duplicates). Returns true if it was new.
+    /// A file the media bin says to skip (right-click › Skip): Random, Shuffle, autopilot and collections pass it by.
+    pub fn is_skipped(&self, source: &SourceSpec) -> bool {
+        match source {
+            SourceSpec::Movie { path: Some(p), .. } | SourceSpec::Image { path: Some(p), .. } => self.media_bin.iter().any(|m| m.skip && &m.path == p),
+            _ => false,
+        }
+    }
+
     pub fn add_media(&mut self, name: &str, path: &str) -> bool {
         if self.media_bin.iter().any(|m| m.path == path) {
             return false;
@@ -737,6 +750,7 @@ mod voice_tests {
             SourceSpec::Text(t) => assert_eq!((t.text.as_str(), t.font.as_str()), ("PHOSPHOR", "builtin:logo")),
             other => panic!("{other:?}"),
         }
+        assert_eq!(c.layers[1].blend, BlendMode::Normal, "black letters vanish on Add");
         assert_eq!(Composition::from_json(&c.to_json()).unwrap(), c);
     }
 

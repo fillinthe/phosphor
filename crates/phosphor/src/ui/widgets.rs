@@ -24,20 +24,43 @@ impl RightMenu for egui::Response {
     }
 }
 
+/// The id of a widget's right-click menu. Not egui's default (`id.with("popup")`): a dropdown's own list uses that,
+/// so a dropdown with a right-click menu (an effect's Draw / Mode menus, Map / Learn) closed its list the moment a
+/// left click opened it, and the dropdowns looked dead (owner, 2026-11-15).
+pub(crate) fn right_menu_id(r: &egui::Response) -> egui::Id {
+    r.id.with("right_menu")
+}
+
+/// This frame's right click was taken by a widget with a menu of its own (a slider, a mapped button…): a card
+/// behind it doesn't open its menu too.
+pub(crate) fn claim_right_click(ctx: &egui::Context) {
+    let frame = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("phosphor_right_claimed"), frame));
+}
+
+fn right_click_claimed(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<u64>(egui::Id::new("phosphor_right_claimed"))) == Some(ctx.cumulative_pass_nr())
+}
+
 fn right_popup(r: &egui::Response) -> egui::Popup<'_> {
     use egui::SetOpenCommand;
-    // `hovered`, not `contains_pointer`: only the thing on top under the pointer opens its menu. A card behind a
-    // slider used to open its own menu over the slider's (owner, 2026-11-14: a layer card's Opacity showed the card's
-    // menu, the Inspector's the slider's).
-    let released = r.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && r.hovered();
-    let cmd = if r.secondary_clicked() || released {
+    // The thing on top under the pointer opens its menu; a card behind it opens its own only when nothing on top
+    // claimed the click. A card behind a slider used to open its menu over the slider's (owner, 2026-11-14), and
+    // with "on top only" a card's name and picture (plain clickable widgets) showed no menu at all (review 2026-11-15).
+    // Widgets inside a card draw (and claim) before the card's menu is attached.
+    let released = r.ctx.input(|i| i.pointer.button_released(egui::PointerButton::Secondary)) && r.contains_pointer();
+    let open = r.secondary_clicked() || (released && (r.hovered() || !right_click_claimed(&r.ctx)));
+    if open {
+        claim_right_click(&r.ctx);
+    }
+    let cmd = if open {
         Some(SetOpenCommand::Bool(true))
     } else if r.clicked() {
         Some(SetOpenCommand::Bool(false))
     } else {
         None
     };
-    egui::Popup::menu(r).open_memory(cmd).at_pointer_fixed()
+    egui::Popup::menu(r).id(right_menu_id(r)).open_memory(cmd).at_pointer_fixed()
 }
 
 /// Adds a slider or drag value, but undoes any change made with the right or middle mouse button,

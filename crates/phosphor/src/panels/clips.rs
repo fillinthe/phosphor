@@ -155,17 +155,8 @@ pub(crate) fn apply_clip_act(st: &mut State, layer: u64, c: usize, act: ClipAct,
         }
         ClipAct::Thumbnail => st.clip_thumb_request = Some((layer, c)),
         ClipAct::Favorite => {
-            let Some((name, path)) = st.comp.layer(layer).and_then(|l| l.clips.get(c)).and_then(|k| match &k.source {
-                SourceSpec::Movie { name, path: Some(p) } | SourceSpec::Image { name, path: Some(p) } => Some((name.clone(), p.clone())),
-                _ => None,
-            }) else {
-                return;
-            };
-            // (In the media list first if it isn't yet.)
-            st.comp.add_media(&name, &path);
-            if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
-                m.favorite = !m.favorite;
-                st.notice = Some(if m.favorite { format!("{name} is a favorite (Media › Favorites)") } else { format!("{name} is no longer a favorite") });
+            if let Some(source) = st.comp.layer(layer).and_then(|l| l.clips.get(c)).map(|k| k.source.clone()) {
+                favorite_file(st, &source, None);
             }
         }
         ClipAct::Clear => {
@@ -407,5 +398,27 @@ fn row_header(ui: &mut egui::Ui, layer: &mut phosphor_engine::LayerState, thumb:
     (fill, beat_all, row_midi, stop)
 }
 
+/// The file a source plays: (name, path), for movies and pictures.
+pub(crate) fn file_of(source: &SourceSpec) -> Option<(&str, &str)> {
+    match source {
+        SourceSpec::Movie { name, path: Some(p) } | SourceSpec::Image { name, path: Some(p) } => Some((name, p)),
+        _ => None,
+    }
+}
 
+/// Is this source's file a favorite in Media?
+pub(crate) fn is_favorite(st: &State, source: &SourceSpec) -> bool {
+    file_of(source).is_some_and(|(_, p)| st.comp.media_bin.iter().any(|m| m.favorite && m.path == p))
+}
 
+/// Star (or unstar) a source's file in Media: `set` = Some(on), None = the other way. One path for the clip menu,
+/// the layer card's menu and the Inspector's star (owner, 2026-11-15: find what Random picked).
+pub(crate) fn favorite_file(st: &mut State, source: &SourceSpec, set: Option<bool>) {
+    let Some((name, path)) = file_of(source).map(|(n, p)| (n.to_string(), p.to_string())) else { return };
+    // (In the media list first if it isn't yet.)
+    st.comp.add_media(&name, &path);
+    if let Some(m) = st.comp.media_bin.iter_mut().find(|m| m.path == path) {
+        m.favorite = set.unwrap_or(!m.favorite);
+        st.notice = Some(if m.favorite { format!("{name} is a favorite (Media › Favorites)") } else { format!("{name} is no longer a favorite") });
+    }
+}

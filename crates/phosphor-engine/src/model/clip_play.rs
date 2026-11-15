@@ -215,7 +215,12 @@ impl LayerState {
 
     /// The slot autopilot plays after the current one (`pick` in 0..1 chooses the random one), or None.
     pub fn autopilot_next(&self, pick: f32) -> Option<usize> {
-        let filled: Vec<usize> = self.clips.iter().enumerate().filter(|(_, c)| !c.is_empty()).map(|(i, _)| i).collect();
+        self.autopilot_next_but(pick, |_| false)
+    }
+
+    /// `autopilot_next` passing by the clips `skip` says (files marked Skip in Media).
+    pub fn autopilot_next_but(&self, pick: f32, skip: impl Fn(&Clip) -> bool) -> Option<usize> {
+        let filled: Vec<usize> = self.clips.iter().enumerate().filter(|(_, c)| !c.is_empty() && !skip(c)).map(|(i, _)| i).collect();
         if filled.is_empty() {
             return None;
         }

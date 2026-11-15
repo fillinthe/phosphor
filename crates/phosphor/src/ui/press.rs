@@ -98,8 +98,9 @@ pub(crate) fn mappable(ui: &egui::Ui, resp: &mut egui::Response, label: &str) {
     let target = ControlTarget::Button { key, name };
     crate::ui::mapped_badge(ui, resp, &target);
     if resp.secondary_clicked() {
+        crate::ui::widgets::claim_right_click(ctx);
         let at = resp.interact_pointer_pos().unwrap_or(resp.rect.left_bottom());
-        let menu: LearnMenu = (egui::Popup::default_response_id(resp), target, at, resp.layer_id);
+        let menu: LearnMenu = (crate::ui::widgets::right_menu_id(resp), target, at, resp.layer_id);
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(LEARN_MENU), Some(menu)));
     }
 }

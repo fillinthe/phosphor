@@ -11,9 +11,22 @@ impl Composition {
         if old.len() == new.len() && old.iter().zip(new).all(|(a, (b, _))| a == b) {
             return;
         }
-        // Old index → new index.
-        let to: Vec<Option<usize>> = old.iter().map(|n| new.iter().position(|(m, _)| m == n)).collect();
-        let values = |v: &[f32]| -> Vec<f32> { new.iter().map(|(n, d)| old.iter().position(|o| o == n).and_then(|i| v.get(i)).copied().unwrap_or(*d)).collect() };
+        // Old index → new index: the same name, else the same name in American spelling (patch settings are named
+        // after their blocks, and "Colour split Amount" became "Color split Amount": an old patch edited after the
+        // update kept its settings only by this).
+        let to: Vec<Option<usize>> = old
+            .iter()
+            .map(|n| new.iter().position(|(m, _)| m == n).or_else(|| new.iter().position(|(m, _)| *m == american(n))))
+            .collect();
+        let values = |v: &[f32]| -> Vec<f32> {
+            let mut out: Vec<f32> = new.iter().map(|(_, d)| *d).collect();
+            for (i, j) in to.iter().enumerate() {
+                if let (Some(j), Some(x)) = (j, v.get(i)) {
+                    out[*j] = *x;
+                }
+            }
+            out
+        };
         let mods = |m: &mut Vec<ParamMod>| {
             m.retain_mut(|p| match to.get(p.index).copied().flatten() {
                 Some(j) => {
@@ -77,5 +90,31 @@ mod tests {
         assert_eq!(e.mods.iter().map(|m| m.index).collect::<Vec<_>>(), vec![1], "Hue Spin's modulation moved, Blur Size's went");
         assert_eq!(c.control_maps.len(), 1);
         assert_eq!(c.control_maps[0].target, ControlTarget::EffectParam { effect: 50, index: 1 });
+    }
+}
+
+/// A setting name in American spelling (colour → color, centre → center, grey → gray), any case.
+fn american(name: &str) -> String {
+    let mut s = name.to_string();
+    for (gb, us) in [("colour", "color"), ("Colour", "Color"), ("COLOUR", "COLOR"), ("centre", "center"), ("Centre", "Center"), ("grey", "gray"), ("Grey", "Gray")] {
+        s = s.replace(gb, us);
+    }
+    s
+}
+
+#[cfg(test)]
+mod spelling_tests {
+    use super::*;
+
+    /// An old patch's "Colour split Amount" keeps its value, modulation and mapping when it's recompiled as "Color split Amount".
+    #[test]
+    fn renamed_settings_keep_their_values() {
+        let mut c = Composition::default();
+        let l = c.add_layer();
+        l.set_generator("user:p");
+        l.generator_values = vec![0.3, 0.7];
+        let id = l.id;
+        c.remap_params("user:p", &["Speed", "Colour split Amount"], &[("Speed", 0.0), ("Color split Amount", 0.0)]);
+        assert_eq!(c.layer(id).unwrap().generator_values, vec![0.3, 0.7]);
     }
 }
