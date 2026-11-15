@@ -154,6 +154,20 @@ impl super::Composition {
         out
     }
 
+    /// Adds saved modulators (a template: one, or a set chained together) with fresh ids, their chains kept
+    /// among themselves. Returns how many were added (fewer than asked once the list is full).
+    pub fn add_modulators(&mut self, saved: Vec<Modulator>) -> usize {
+        let room = crate::control::MAX_SHARED.saturating_sub(self.modulators.len());
+        let ids: Vec<(u64, u64)> = saved.iter().take(room).map(|m| (m.id, self.new_id())).collect();
+        for (mut m, (_, id)) in saved.into_iter().zip(&ids) {
+            m.id = *id;
+            m.designer = false;
+            m.chain = m.chain.and_then(|c| ids.iter().find(|(old, _)| *old == c.from && *old != 0).map(|(_, new)| ModChain { from: *new, ..c }));
+            self.modulators.push(m);
+        }
+        ids.len()
+    }
+
     /// The value of the Hand modulator called `name`, if there is one.
     pub fn hand(&self, name: &str) -> Option<f32> {
         self.modulators.iter().find(|m| m.name == name).map(|m| m.value)
@@ -235,6 +249,18 @@ pub struct ModPhases {
     phases: Vec<(u64, f64)>,
     last_time: Option<f32>,
     last_beats: Option<f32>,
+}
+
+impl ModPhases {
+    /// Where modulator `id` is in its cycle now (0..1), for drawing its playhead. None before its first frame.
+    pub fn cycle_of(&self, id: u64) -> Option<f32> {
+        self.phases.iter().find(|(i, _)| *i == id).map(|(_, p)| p.rem_euclid(1.0) as f32)
+    }
+}
+
+/// One cycle of a signal's shape for drawing: its value at `x` (0..1 of a cycle; its phase offset applies).
+pub fn wave_at(m: &Modulation, x: f32) -> f32 {
+    source_value(&Modulation { sync: false, rate: 1.0, link: 0, ..*m }, &ModInputs { time: x, ..Default::default() })
 }
 
 /// Every modulator's value now (0..1), in list order: each one may follow (chain) any earlier one. Phases advance

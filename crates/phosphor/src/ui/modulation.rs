@@ -100,6 +100,37 @@ pub(crate) fn mod_inputs(ui: &egui::Ui) -> phosphor_engine::ModInputs {
     ui.ctx().data(|d| d.get_temp(egui::Id::new("phosphor_mod_inputs"))).unwrap_or_default()
 }
 
+/// Temp-data key: the running position (0..1 of a cycle) of the shared modulator whose signal is drawn next.
+pub(crate) const MOD_CYCLE: &str = "phosphor_mod_cycle";
+
+/// One cycle of a signal's shape, with a playhead at `at` (0..1 of the cycle) and a dot at its value there.
+pub(crate) fn wave_view(ui: &mut egui::Ui, m: &Modulation, at: Option<f32>, height: f32) -> egui::Response {
+    const POINTS: usize = 96;
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(360.0), height), Sense::hover());
+    if !ui.is_rect_visible(rect) {
+        return resp;
+    }
+    let p = ui.painter();
+    p.rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
+    let inner = rect.shrink2(egui::vec2(0.0, 3.0));
+    let y = |v: f32| inner.bottom() - v.clamp(0.0, 1.0) * inner.height();
+    let pts: Vec<egui::Pos2> = (0..=POINTS)
+        .map(|i| {
+            // (Just short of the end, so the last point is the end of this cycle, not the start of the next.)
+            let x = (i as f32 / POINTS as f32).min(0.9999);
+            egui::pos2(inner.left() + inner.width() * i as f32 / POINTS as f32, y(phosphor_engine::wave_at(m, x)))
+        })
+        .collect();
+    p.add(egui::Shape::line(pts, Stroke::new(1.5, accent())));
+    if let Some(at) = at {
+        let x = inner.left() + inner.width() * at.rem_euclid(1.0);
+        p.vline(x, rect.y_range(), Stroke::new(1.0, ui.visuals().strong_text_color()));
+        p.circle_filled(egui::pos2(x, y(phosphor_engine::wave_at(m, at.rem_euclid(1.0)))), 3.0, ui.visuals().strong_text_color());
+        ui.ctx().request_repaint();
+    }
+    resp
+}
+
 pub(crate) const SYNC_CHOICES: &[(f32, &str)] =
     &[(0.25, "1/4 beat"), (0.5, "1/2 beat"), (1.0, "1 beat"), (2.0, "2 beats"), (4.0, "1 bar"), (8.0, "2 bars"), (16.0, "4 bars"), (32.0, "8 bars")];
 
@@ -175,6 +206,20 @@ fn signal_editor(ui: &mut egui::Ui, m: &mut Option<Modulation>, signal_only: boo
                 });
             }
         });
+    }
+    if mm.link == 0 && mm.source.is_lfo() {
+        ui.horizontal(|ui| {
+            Level::percent(&mut mm.phase, "Phase").default(0.0).show(ui).on_hover_text("Where in its cycle it starts: two LFOs at the same speed, one at 50%, move against each other");
+        });
+        if matches!(mm.source, ModSource::LfoSquare | ModSource::Exp) {
+            ui.horizontal(|ui| {
+                Level::percent(&mut mm.width, if mm.source == ModSource::LfoSquare { "Pulse width" } else { "Sharpness" }).default(0.5).show(ui).on_hover_text(if mm.source == ModSource::LfoSquare { "How much of each cycle it's on (10% = a short flash)" } else { "Lower = it waits longer, then rushes up harder" });
+            });
+        }
+        // The wave itself, one cycle, with where it is now. (A shared modulator hands its own running position in.)
+        let cycles = if mm.sync { inputs.beats / mm.rate.max(1.0 / 16.0) } else { inputs.time * mm.rate };
+        let at = ui.ctx().data_mut(|d| d.remove_temp::<f32>(egui::Id::new(MOD_CYCLE))).unwrap_or(cycles.rem_euclid(1.0));
+        wave_view(ui, mm, Some(at), if signal_only { 64.0 } else { 40.0 });
     }
     if mm.link == 0 && matches!(mm.source, ModSource::Steps | ModSource::Drawn) {
         let what = if mm.source == ModSource::Drawn { "Wave (drag to draw; a smooth loop through the points)" } else { "Steps (drag to set)" };

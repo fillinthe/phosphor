@@ -164,6 +164,8 @@ impl PhosphorApp {
                 mapping_presets: PresetStore::mappings(),
                 surface_preset_name: String::new(),
                 mapping_preset_name: String::new(),
+                modulator_presets: PresetStore::modulators(),
+                modulator_preset_name: String::new(),
                 layer_preset_name: String::new(),
                 chain_preset_name: String::new(),
                 venue_name: String::new(),

@@ -300,6 +300,9 @@ pub struct State {
     /// Name typed for the next Control Surface / mappings save.
     pub surface_preset_name: String,
     pub mapping_preset_name: String,
+    /// Saved modulators (Modulators panel › Saved).
+    pub modulator_presets: PresetStore,
+    pub modulator_preset_name: String,
     pub layer_preset_name: String,
     pub chain_preset_name: String,
     pub venue_name: String,
@@ -1212,7 +1215,7 @@ impl PhosphorApp {
                 crate::account::Event::Saves(text) => {
                     let added = crate::presets::merge_from_account(&text);
                     if added > 0 {
-                        for store in [&mut st.presets, &mut st.layer_presets, &mut st.chain_presets, &mut st.box_presets, &mut st.venues, &mut st.surface_presets, &mut st.mapping_presets] {
+                        for store in [&mut st.presets, &mut st.layer_presets, &mut st.chain_presets, &mut st.box_presets, &mut st.venues, &mut st.surface_presets, &mut st.mapping_presets, &mut st.modulator_presets] {
                             store.refresh();
                         }
                         st.notice = Some(crate::ui::plural(added, "1 saved look, venue, surface or mapping set came from your account", "{0} saved looks, venues, surfaces or mapping sets came from your account"));

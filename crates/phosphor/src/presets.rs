@@ -11,6 +11,14 @@ pub struct Preset {
 
 pub const BUILTIN_LOOKS: &[(&str, &str)] = &[("Neon Kaleido", include_str!("../presets/Neon Kaleido.phosphor"))];
 
+/// Starter modulators: each a list of `phosphor_engine::Modulator` (fields left out take their defaults).
+pub const BUILTIN_MODULATORS: &[(&str, &str)] = &[
+    ("Beat pumper", r#"[{"name":"Beat pumper","signal":{"source":"RampDown","sync":true,"rate":1.0}}]"#),
+    ("Slow drift", r#"[{"name":"Slow drift","signal":{"source":"Noise","sync":false,"rate":0.05}}]"#),
+    ("Strobe on 1/16", r#"[{"name":"Strobe 1/16","signal":{"source":"LfoSquare","sync":true,"rate":0.25,"width":0.5}}]"#),
+    ("Sway, two against each other", r#"[{"name":"Sway A","signal":{"source":"LfoSine","sync":true,"rate":8.0}},{"name":"Sway B","signal":{"source":"LfoSine","sync":true,"rate":8.0,"phase":0.5}}]"#),
+];
+
 pub struct PresetStore {
     pub user: Vec<Preset>,
     loaded: bool,
@@ -54,8 +62,13 @@ impl PresetStore {
         Self { user: Vec::new(), loaded: false, folder: "mappings", ext: "mappings", builtin: &[] }
     }
 
+    /// Shared modulators (one, or a set that chains together) to add to any project (Modulators panel).
+    pub fn modulators() -> Self {
+        Self { user: Vec::new(), loaded: false, folder: "modulators", ext: "modulators", builtin: BUILTIN_MODULATORS }
+    }
+
     /// Every kind of named save, by the key used in the account copy.
-    pub fn all_kinds() -> [(&'static str, PresetStore); 7] {
+    pub fn all_kinds() -> [(&'static str, PresetStore); 8] {
         [
             ("looks", Self::looks()),
             ("layers", Self::layers()),
@@ -64,6 +77,7 @@ impl PresetStore {
             ("venues", Self::venues()),
             ("surfaces", Self::surfaces()),
             ("mappings", Self::mappings()),
+            ("modulators", Self::modulators()),
         ]
     }
 
@@ -196,5 +210,29 @@ mod tests {
         got.sort();
         assert_eq!(got, vec![("mappings".into(), "APC40".into(), "[]".into()), ("venues".into(), "Barn".into(), "{}".into())]);
         assert!(super::missing_from("not json", &have).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod modulator_tests {
+    /// Every starter opens, and a chained set keeps its chain among its own (new) ids.
+    #[test]
+    fn starter_modulators_open_and_chains_follow_the_new_ids() {
+        use phosphor_engine::{ChainMode, Composition, ModChain, Modulator};
+        for (name, json) in super::BUILTIN_MODULATORS {
+            let saved: Vec<Modulator> = serde_json::from_str(json).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(!saved.is_empty(), "{name}");
+            let mut comp = Composition::default();
+            assert_eq!(comp.add_modulators(saved.clone()), saved.len());
+            assert!(comp.modulators.iter().all(|m| m.id != 0), "{name}: fresh ids");
+        }
+        let a = Modulator { id: 7, name: "a".into(), ..Default::default() };
+        let b = Modulator { id: 9, name: "b".into(), chain: Some(ModChain { from: 7, mode: ChainMode::Multiply, amount: 1.0 }), ..Default::default() };
+        let mut comp = Composition::default();
+        comp.add_layer();
+        comp.add_modulators(vec![a, b]);
+        let (a, b) = (&comp.modulators[0], &comp.modulators[1]);
+        assert_ne!(a.id, 7);
+        assert_eq!(b.chain.map(|c| c.from), Some(a.id));
     }
 }
