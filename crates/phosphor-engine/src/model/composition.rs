@@ -599,9 +599,9 @@ impl Composition {
             l.generator_values = values;
             l.generator_mods.clear();
             l.active_clip = None;
-            if !name.is_empty() {
-                l.name = name;
-            }
+            // A layer keeps its name whatever it plays (it took each file's name, so names kept changing and long file
+            // names widened the panels: owner, 2026-11-14). The file's name is in its source picker.
+            let _ = name;
             l.playing = true;
         }
     }

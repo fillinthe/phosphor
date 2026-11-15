@@ -515,9 +515,7 @@ impl LayerState {
         self.source = clip.source;
         self.generator_values = clip.generator_values;
         self.generator_mods = clip.mods;
-        if !clip.name.is_empty() {
-            self.name = clip.name;
-        }
+        // (The layer keeps its own name: see `Composition::set_layer_source`.)
         self.active_clip = Some(clip.id);
         self.playing = true;
         true

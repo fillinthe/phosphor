@@ -30,6 +30,8 @@ pub enum Deferred {
     Layout(u64),
     /// Stop a layer's clip (`MASTER_ID` = every layer's).
     Stop(u64),
+    /// Make a layer the selected one.
+    Select(u64),
 }
 
 /// Sent instead of a value when a pad or key press should flip an on/off control.

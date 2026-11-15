@@ -194,7 +194,6 @@ impl LayerState {
                     self.source = back.source;
                     self.generator_values = back.generator_values;
                     self.generator_mods = back.mods;
-                    self.name = back.name;
                     self.active_clip = (back.id != 0).then_some(back.id);
                     self.playing = true;
                 }

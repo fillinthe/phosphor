@@ -130,12 +130,12 @@ impl PhosphorApp {
         self.state.run_timeline_sound(now);
         self.state.run_computed(now);
         self.state.run_surface_motion(now);
-        // Layers decoding their video on the CPU (their cards warn), looked at once a second.
+        // How much CPU each movie layer's decoding takes (its card shows it), measured once a second.
         let cpu_id = egui::Id::new(crate::panels::CPU_LAYERS);
-        let due = ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, String>>)>(cpu_id)).is_none_or(|(t, _)| now - t > 1.0);
+        let due = ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, f32>>)>(cpu_id)).is_none_or(|(t, _)| now - t > 1.0);
         if due {
-            let heavy: std::collections::HashMap<u64, String> = self.state.comp.layers.iter().filter(|l| l.enabled).filter_map(|l| self.state.media.cpu_heavy(l.id).map(|c| (l.id, c))).collect();
-            ctx.data_mut(|d| d.insert_temp(cpu_id, (now, std::sync::Arc::new(heavy))));
+            let shares = self.state.media.cpu_shares();
+            ctx.data_mut(|d| d.insert_temp(cpu_id, (now, std::sync::Arc::new(shares))));
         }
         // Layer names for settings that pick a layer (mask layers), rebuilt only when they change.
         let id = egui::Id::new(crate::ui::LAYER_NAMES);
