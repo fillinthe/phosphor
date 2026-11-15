@@ -4,6 +4,42 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.6 (2026-11-14)
+
+**Outputs and mapping**
+- Undo and Redo work in the output window (Cmd+Z / Ctrl+Z, Shift for Redo), with Undo / Redo buttons while its
+  mapping handles are out. One drag is one step.
+- A new slice leaves the output as it was: the first one covers the whole output, later ones show the part of the
+  picture under them. Each new slice gets a name of its own.
+- Slices and masks are listed as layer rows: eye, name and opacity on each, Solo and Lock on a slice, Invert on a
+  mask. Drag a row onto a layout, a group or another row to move it there. Double-click a row to rename it.
+- Rename opens a small window in the middle of the screen everywhere (it was a field tucked in a menu).
+- Link X and Y scale on slices and masks: one Scale slider that keeps the proportions.
+- The alignment grid is centred on the output: its lines mirror round the middle.
+
+**Layers**
+- New layers blend Add, so you can see them mix with what's below.
+- A layer with depth or tilt keeps its Fill / Fit / Stretch (a touch of depth squashed the picture).
+- Layers whose video is decoded on the CPU say so, with how to convert the file to Hap (plays on the GPU).
+- The layer card's playhead and Speed line up with Opacity, with a play / pause button.
+- Dragging along a movie's timeline shows the pictures as you go and plays on from where you let go.
+- The loop marks sit right at the ends of the timeline and can be dragged on every layer card.
+
+**Sliders**
+- Right-clicking a slider on a layer card opens the slider's own menu (type a value, Modulate, Learn, Reset), the
+  same as everywhere else.
+- Choose how sliders take a click: Jump (the value goes where you click) or Drag (it moves from where it is). In
+  any slider's right-click menu, or the brightness menu.
+- A long setting name is cut short instead of disappearing.
+
+**Following accounts**
+- Refresh brings in new posts for the account you're looking at.
+- Videos too: an X account can bring in its videos as well as its animated GIFs.
+- Sign in to X / Instagram opens the sign-in page in the browser Phosphor reads from.
+
+**Windows and Linux**
+- Updating from inside Phosphor also brings the new and fixed shaders, colour looks and transitions.
+
 ## 0.5.5 (2026-11-14)
 
 **Inspector**
