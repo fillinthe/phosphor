@@ -49,7 +49,7 @@ pub(crate) fn is_mapped(ui: &egui::Ui, target: &ControlTarget) -> bool {
     ui.ctx().data(|d| d.get_temp::<MappedList>(egui::Id::new(MAPPED_TARGETS))).is_some_and(|v| v.iter().any(|(t, _)| t == target))
 }
 
-/// The colour that says "mapped to a controller" (outline and tint on the control, Map mode, the menu).
+/// The color that says "mapped to a controller" (outline and tint on the control, Map mode, the menu).
 pub(crate) const MAPPED: Color32 = crate::theme::MAPPED;
 
 /// Typed-in mapping drafts, remembered per control while the menu is open.

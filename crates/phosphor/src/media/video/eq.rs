@@ -1,7 +1,7 @@
 //! Sound EQ on the movie sound mix: low shelf (250 Hz), mid peak (1 kHz), high shelf (4 kHz), each ±dB. RBJ
 //! cookbook biquads, stereo. Does nothing while every band is at 0 dB.
 
-/// Band centres (Hz): low shelf, mid peak, high shelf.
+/// Band centers (Hz): low shelf, mid peak, high shelf.
 const BANDS: [f32; 3] = [250.0, 1000.0, 4000.0];
 
 #[derive(Clone, Copy, Default)]

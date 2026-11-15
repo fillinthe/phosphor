@@ -268,7 +268,7 @@ fn layer_row(ui: &mut egui::Ui, indent: f32, picked: bool, glyph: &str, name: &s
     let rect = egui::Rect::from_min_max(outer.min + egui::vec2(indent, 0.0), outer.max).shrink2(egui::vec2(0.0, 1.0));
     let fill = if picked { ui.visuals().selection.bg_fill } else if row.hovered() { ui.visuals().widgets.hovered.weak_bg_fill } else { ui.visuals().faint_bg_color };
     ui.painter().rect_filled(rect, 0.0, fill);
-    // Its kind down the left edge (a mask is the mask colour).
+    // Its kind down the left edge (a mask is the mask color).
     let edge = colour.unwrap_or_else(accent);
     ui.painter().rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(3.0, rect.height())), 0.0, if *shown { edge } else { edge.gamma_multiply(0.35) });
     let words = if !*shown { ui.visuals().weak_text_color() } else { colour.unwrap_or_else(|| ui.visuals().strong_text_color()) };

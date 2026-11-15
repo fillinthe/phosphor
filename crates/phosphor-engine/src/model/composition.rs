@@ -28,7 +28,7 @@ pub struct MediaItem {
     /// The file's own effects: they come with it wherever it plays (before the layer's effects).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<EffectState>,
-    /// Where it came from and its licence, for files brought in from online libraries (the show's Credits list).
+    /// Where it came from and its license, for files brought in from online libraries (the show's Credits list).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credit: Option<Credit>,
     /// How long a movie is (seconds), once looked at (View › Sort by Length asks).
@@ -43,7 +43,7 @@ pub struct Credit {
     pub title: String,
     /// The maker (empty when the source doesn't say).
     pub author: String,
-    /// Short licence name ("CC BY 4.0", "Public domain", "CC0").
+    /// Short license name ("CC BY 4.0", "Public domain", "CC0").
     pub licence: String,
     pub licence_url: String,
     /// The file's page on the site it came from.
@@ -53,12 +53,12 @@ pub struct Credit {
 }
 
 impl Credit {
-    /// The licence allows use in paid work (no "NC" = non-commercial clause).
+    /// The license allows use in paid work (no "NC" = non-commercial clause).
     pub fn commercial(&self) -> bool {
         licence_commercial(&self.licence)
     }
 
-    /// One line for a credits list: "Title" by Author (Licence), Source: page.
+    /// One line for a credits list: "Title" by Author (License), Source: page.
     pub fn line(&self) -> String {
         let by = if self.author.is_empty() { String::new() } else { format!(" by {}", self.author) };
         let page = if self.page.is_empty() { String::new() } else { format!(": {}", self.page) };
@@ -66,10 +66,10 @@ impl Credit {
     }
 }
 
-/// A licence name allows commercial use: anything without a non-commercial clause.
+/// A license name allows commercial use: anything without a non-commercial clause.
 pub fn licence_commercial(licence: &str) -> bool {
     let l = licence.to_ascii_uppercase().replace(['-', '_'], " ");
-    // No licence stated: not safe for paid work.
+    // No license stated: not safe for paid work.
     if l.starts_with("UNKNOWN") {
         return false;
     }
@@ -148,7 +148,7 @@ pub struct Composition {
     /// Folders whose files belong to a collection (see `model::collections`).
     pub collection_folders: Vec<CollectionFolder>,
     /// Mixer crossfader: 0 = only A layers, 0.5 = both, 1 = only B (layers without a side ignore it).
-    /// Deep colour: layers are mixed and effects worked out at 16 bits a channel instead of 8 (no banding in dark
+    /// Deep color: layers are mixed and effects worked out at 16 bits a channel instead of 8 (no banding in dark
     /// gradients, feedback and long effect chains; more GPU memory). Outputs stay 8-bit.
     pub deep_color: bool,
     pub crossfader: f32,
@@ -219,7 +219,7 @@ impl Composition {
         base.name = "Rainbow".into();
         let top = comp.add_layer();
         top.name = "PHOSPHOR".into();
-        // Black letters on the moving colours (the owner's choice), no outline.
+        // Black letters on the moving colors (the owner's choice), no outline.
         top.source = SourceSpec::Text(TextStyle { text: "PHOSPHOR".into(), font: "builtin:logo".into(), size: 0.22, color: [0, 0, 0, 255], outline: 0.0, ..Default::default() });
         top.opacity = 1.0;
         comp
@@ -435,7 +435,7 @@ impl Composition {
         }
     }
 
-    /// A venue: every output with its mapping (surfaces, mesh, masks), size and colour, as JSON to save by name.
+    /// A venue: every output with its mapping (surfaces, mesh, masks), size and color, as JSON to save by name.
     pub fn venue_json(&self) -> String {
         serde_json::to_string_pretty(&self.outputs).unwrap_or_default()
     }

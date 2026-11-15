@@ -1,4 +1,4 @@
-//! Layer groups: neighbouring layers mixed together first, then treated like one layer (opacity, blend, effects).
+//! Layer groups: neighboring layers mixed together first, then treated like one layer (opacity, blend, effects).
 //! All stack rules live here so the Layers panel, drag and drop and controllers share them.
 
 use std::collections::HashSet;

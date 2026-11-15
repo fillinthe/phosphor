@@ -9,14 +9,14 @@ use crate::shaders;
 /// Format for every intermediate and output texture.
 pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-/// The graphics card can draw into 16-bit textures (deep colour); the app says so when it makes the device (see
+/// The graphics card can draw into 16-bit textures (deep color); the app says so when it makes the device (see
 /// `deep_colour_usable`).
 static DEEP_COLOUR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// What deep colour draws into: 16 bits a channel, still 0..1 like 8-bit (looks stay the same, only finer).
+/// What deep color draws into: 16 bits a channel, still 0..1 like 8-bit (looks stay the same, only finer).
 pub const DEEP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Unorm;
 
-/// What point pictures are kept in (points.wgsl): 16-bit float, so places aren't rounded to colour steps.
+/// What point pictures are kept in (points.wgsl): 16-bit float, so places aren't rounded to color steps.
 pub const DATA_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 /// A 32-bit float as a 16-bit one (round to nearest; too big = infinity), for `DATA_FORMAT` texels: model points, tests.
@@ -49,12 +49,12 @@ pub fn deep_colour_usable(adapter: &wgpu::Adapter) -> bool {
     adapter.features().contains(needed) && adapter.get_texture_format_features(DEEP_FORMAT).allowed_usages.contains(usages)
 }
 
-/// The device features deep colour needs (when `deep_colour_usable`).
+/// The device features deep color needs (when `deep_colour_usable`).
 pub fn deep_colour_features() -> wgpu::Features {
     wgpu::Features::TEXTURE_FORMAT_16BIT_NORM | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
 }
 
-/// Tells the engine the device was made with deep colour's features.
+/// Tells the engine the device was made with deep color's features.
 pub fn set_deep_colour(on: bool) {
     DEEP_COLOUR.store(on, std::sync::atomic::Ordering::Relaxed);
 }
@@ -258,7 +258,7 @@ pub(crate) fn build_pipeline(device: &wgpu::Device, pipeline_layout: &wgpu::Pipe
     let surface = entry.starts_with("fs_surface");
     // Mesh-warped surfaces and masks draw triangles from a vertex buffer (x, y, s, t).
     let mesh = entry.starts_with("fs_mesh") || entry == "fs_mask";
-    // Slice blend modes (`SliceBlend::entry`), all on premultiplied colour.
+    // Slice blend modes (`SliceBlend::entry`), all on premultiplied color.
     let slice_blend = |src_factor, dst_factor| {
         let c = wgpu::BlendComponent { src_factor, dst_factor, operation: wgpu::BlendOperation::Add };
         let a = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha, operation: wgpu::BlendOperation::Add };

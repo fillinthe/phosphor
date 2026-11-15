@@ -52,7 +52,7 @@ pub fn render_svg_sized(data: &[u8], longest: f32) -> Result<image::RgbaImage, S
     let (w, h) = (((size.width() * scale).round() as u32).max(1), ((size.height() * scale).round() as u32).max(1));
     let mut pixmap = tiny_skia::Pixmap::new(w, h).ok_or("the drawing is empty")?;
     resvg::render(&tree, tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
-    // tiny-skia keeps premultiplied colour; pictures here are straight.
+    // tiny-skia keeps premultiplied color; pictures here are straight.
     let rgba: Vec<u8> = pixmap.pixels().iter().flat_map(|p| {
         let c = p.demultiply();
         [c.red(), c.green(), c.blue(), c.alpha()]
@@ -775,7 +775,7 @@ impl MediaManager {
     }
 
     /// The layer's movie has a sound track.
-    /// Any movie playing with an audio track (the analyser can listen to the clips).
+    /// Any movie playing with an audio track (the analyzer can listen to the clips).
     pub fn any_sound(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
         {

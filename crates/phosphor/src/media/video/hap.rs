@@ -35,7 +35,7 @@ fn texture(ty: u8) -> Result<CompressedFormat, String> {
 const MULTIPLE_IMAGES: u8 = 0x0D;
 
 /// Decodes one Hap packet into DXT blocks in `out` (reused between frames); a Hap Q Alpha frame also fills
-/// `alpha` with its RGTC1 (BC4) blocks (empty otherwise). Returns the colour block format and whether there is alpha.
+/// `alpha` with its RGTC1 (BC4) blocks (empty otherwise). Returns the color block format and whether there is alpha.
 pub fn decode(packet: &[u8], out: &mut Vec<u8>, alpha: &mut Vec<u8>) -> Result<(CompressedFormat, bool), String> {
     let (head, size, ty) = section(packet)?;
     let body = packet.get(head..head + size).ok_or("truncated Hap frame")?;

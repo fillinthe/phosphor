@@ -12,7 +12,7 @@ mod presets;
 
 pub use presets::PRESETS;
 
-/// What the music is doing, normalised so that "usual" is about 1.0
+/// What the music is doing, normalized so that "usual" is about 1.0
 /// (MilkDrop's convention).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Features {
@@ -98,7 +98,7 @@ pub struct Params {
     pub sx: f32,
     pub sy: f32,
     pub decay: f32,
-    /// Per-channel multiplier in the feedback (colour drift).
+    /// Per-channel multiplier in the feedback (color drift).
     pub tint: [f32; 3],
     pub wave_mode: u8,
     pub wave: [f32; 3],
@@ -107,7 +107,7 @@ pub struct Params {
     pub wave_x: f32,
     pub wave_y: f32,
     pub wave_thick: bool,
-    /// Outer border drawn each frame: size (0..0.1) and colour.
+    /// Outer border drawn each frame: size (0..0.1) and color.
     pub border: f32,
     pub border_color: [f32; 3],
     pub gamma: f32,
@@ -150,7 +150,7 @@ impl Default for Params {
     }
 }
 
-/// Per mesh point overrides (x, y in 0..1, rad from centre, ang).
+/// Per mesh point overrides (x, y in 0..1, rad from center, ang).
 #[derive(Clone, Copy, Debug)]
 pub struct Point {
     pub zoom: f32,
@@ -284,7 +284,7 @@ impl GDrop {
         p
     }
 
-    /// Where each mesh point pulls its colour from, for preset `pi`.
+    /// Where each mesh point pulls its color from, for preset `pi`.
     fn mesh(&self, pi: usize, f: &Features, p: &Params, out: &mut [(f32, f32)]) {
         let aspect = self.w as f32 / self.h as f32;
         let t = f.time * p.warp_speed;
@@ -467,7 +467,7 @@ impl GDrop {
                 .collect(),
             // A horizontal oscilloscope.
             1 => (0..n).map(|i| (i as f32 / (n - 1) as f32 * w, cy + samp(i) * h * 0.3)).collect(),
-            // Spectrum mirrored from the centre line.
+            // Spectrum mirrored from the center line.
             2 => {
                 let m = spectrum.len().min(n).max(1);
                 let mut v: Vec<(f32, f32)> = (0..m).map(|i| (cx + i as f32 / m as f32 * w * 0.5, cy - spectrum[i].sqrt() * h * 0.9 * p.wave_scale)).collect();

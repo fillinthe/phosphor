@@ -79,7 +79,7 @@ pub struct BenchConfig {
     /// Trigger clip column N (1-based) at `trigger_at` seconds, to exercise transitions.
     pub trigger_column: Option<usize>,
     pub trigger_at: f64,
-    /// Host a network session and analyse viewer audio.
+    /// Host a network session and analyze viewer audio.
     pub net: bool,
     /// Follow the Phosphor at this address (a FOLLOW line at the end).
     pub follow: Option<String>,

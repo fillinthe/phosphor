@@ -39,7 +39,7 @@ pub enum PixelOrder {
     Brg,
     Rgbw,
     Grbw,
-    /// One channel: brightness (dimmers, single-colour strips).
+    /// One channel: brightness (dimmers, single-color strips).
     Mono,
 }
 
@@ -65,7 +65,7 @@ impl PixelOrder {
         }
     }
 
-    /// The pixel's channel values for a colour (white = the common part of R, G and B).
+    /// The pixel's channel values for a color (white = the common part of R, G and B).
     fn write(self, [r, g, b]: [u8; 3], out: &mut [u8]) {
         let w = r.min(g).min(b);
         match self {
@@ -86,9 +86,9 @@ pub enum FixtureShape {
     Strip,
     /// `cols × rows` pixels over the quad `points` (TL, TR, BR, BL), wired row by row.
     Grid,
-    /// A moving head: colour from the picture at `points[0]`, pan / tilt from its own position and movement.
+    /// A moving head: color from the picture at `points[0]`, pan / tilt from its own position and movement.
     MovingHead,
-    /// `cols` pixels round a circle: centre `points[0]`, the first pixel at `points[1]`.
+    /// `cols` pixels round a circle: center `points[0]`, the first pixel at `points[1]`.
     Ring,
     /// `cols` pixels along a curve: a Bézier from `points[0]` to `points[3]`, bent towards `points[1]` and `points[2]`.
     Curve,
@@ -155,7 +155,7 @@ pub enum Role {
     Tilt,
     TiltFine,
     Dimmer,
-    /// Colour from the picture (white = the part all three share; cyan / magenta / yellow mix by taking away).
+    /// Color from the picture (white = the part all three share; cyan / magenta / yellow mix by taking away).
     Red,
     Green,
     Blue,
@@ -221,7 +221,7 @@ impl HeadMotion {
         }
     }
 
-    /// Offset from the centre (−1..1 on each axis) at phase `t` (0..1 = one cycle).
+    /// Offset from the center (−1..1 on each axis) at phase `t` (0..1 = one cycle).
     fn offset(self, t: f64) -> (f64, f64) {
         let a = t * std::f64::consts::TAU;
         match self {
@@ -280,7 +280,7 @@ pub struct Fixture {
     /// Moving heads: channels after the layout's, in order (gobo, prism, zoom…), each a control of its own.
     pub extra: Vec<ExtraChannel>,
     /// Each pixel takes the average of its own patch of the picture (9 samples across its cell) instead of the one
-    /// point at its centre: steadier on detailed or moving pictures.
+    /// point at its center: steadier on detailed or moving pictures.
     pub average: bool,
     /// `Scanned`: where each pixel is (0..1, y down), in wiring order.
     pub positions: Vec<[f32; 2]>,
@@ -379,7 +379,7 @@ impl Fixture {
         }
     }
 
-    /// A moving head's pan and tilt (0..1) at `beats`: its centre plus its movement.
+    /// A moving head's pan and tilt (0..1) at `beats`: its center plus its movement.
     pub fn head_position(&self, beats: f64) -> (f32, f32) {
         let t = if self.motion_beats > 0.0 { (beats / self.motion_beats as f64).rem_euclid(1.0) } else { 0.0 };
         let (dx, dy) = self.motion.offset(t);
@@ -391,7 +391,7 @@ impl Fixture {
     pub fn sample_points(&self) -> Vec<[f32; 2]> {
         let p = &self.points;
         let lerp = |a: [f32; 2], b: [f32; 2], t: f32| [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-        // Pixel centres: n pixels split the line into n equal cells.
+        // Pixel centers: n pixels split the line into n equal cells.
         let centre = |i: u32, n: u32| if n <= 1 { 0.5 } else { (i as f32 + 0.5) / n as f32 };
         match self.shape {
             FixtureShape::MovingHead => vec![p[0]],
@@ -449,7 +449,7 @@ impl Fixture {
     }
 
     /// Every point the picture is sampled at, in wiring order: `taps()` per pixel, together. Averaging spreads a
-    /// pixel's 3 × 3 samples across its cell (the step to its neighbours along the line, and as much across; a
+    /// pixel's 3 × 3 samples across its cell (the step to its neighbors along the line, and as much across; a
     /// grid's column and row steps).
     pub fn sample_taps(&self) -> Vec<[f32; 2]> {
         let centres = self.sample_points();
@@ -533,7 +533,7 @@ impl Fixture {
         }
     }
 
-    /// A `Custom` light's channel values: colour from the picture (a light with no colour channels shows the
+    /// A `Custom` light's channel values: color from the picture (a light with no color channels shows the
     /// picture's brightness on its dimmer), position, dimmer and its own settings.
     fn custom_channels(&self, [r, g, b]: [u8; 3], dim: u8, pan: u16, tilt: u16) -> Vec<u8> {
         let has_white = self.roles.contains(&Role::White);
@@ -610,7 +610,7 @@ pub struct DmxSettings {
     pub target: String,
     pub fps: f32,
     pub fixtures: Vec<Fixture>,
-    /// LED / DMX master: every fixture's colour (and moving heads' dimmers) scaled by this (0..1).
+    /// LED / DMX master: every fixture's color (and moving heads' dimmers) scaled by this (0..1).
     pub master: f32,
 }
 
@@ -708,7 +708,7 @@ impl DmxSettings {
         Ok(n)
     }
 
-    /// Turns sampled colours (in `sample_points` order) into DMX universes; `beats` (the show clock) times the
+    /// Turns sampled colors (in `sample_points` order) into DMX universes; `beats` (the show clock) times the
     /// moving heads' movements.
     pub fn universes(&self, colors: &[[u8; 4]], beats: f64) -> BTreeMap<u16, [u8; 512]> {
         let mut out = BTreeMap::new();
@@ -800,7 +800,7 @@ mod tests {
         let u = d.universes(&[[200, 100, 50, 255]], 0.0);
         assert_eq!(&u[&0][..11], &[255, 150, 50, 0, 50, 10, 255, 255, 0, 0, 0], "white takes the shared part; ten channels, no more");
         assert_eq!(head.span(), "U0 ch 1 – U0 ch 10");
-        // A plain dimmer (no colour channels) shows how bright the picture is.
+        // A plain dimmer (no color channels) shows how bright the picture is.
         let dimmer = Fixture { roles: vec![Role::Dimmer], extra: Vec::new(), ..head };
         let d = DmxSettings { fixtures: vec![dimmer], ..Default::default() };
         assert_eq!(d.universes(&[[100, 60, 20, 255]], 0.0)[&0][0], 100);
@@ -882,7 +882,7 @@ mod tests {
         // pan 0.5 → 32768 (0x8000), tilt 0.25 → 16384 (0x4000), shutter open, dimmer 128, RGBW.
         assert_eq!(d, &[0x80, 0x00, 0x40, 0x00, 255, 128, 150, 50, 0, 50]);
         assert_eq!(f.next_free(), (1, 21));
-        // A circle moves the head around its centre over `motion_beats`.
+        // A circle moves the head around its center over `motion_beats`.
         let c = Fixture { motion: HeadMotion::Circle, motion_size: 0.4, motion_beats: 4.0, ..f.clone() };
         let (p0, _) = c.head_position(0.0);
         let (_, t1) = c.head_position(1.0);

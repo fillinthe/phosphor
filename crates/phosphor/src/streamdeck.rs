@@ -89,7 +89,7 @@ pub fn input(update: &elgato_streamdeck::DeviceStateUpdate, dials: &mut HashMap<
     })
 }
 
-/// A key's picture: its control's name on a dark key, on the accent colour while on.
+/// A key's picture: its control's name on a dark key, on the accent color while on.
 pub fn picture(look: &Look, size: u32) -> image::RgbaImage {
     let [r, g, b, _] = crate::theme::accent().to_array();
     let bg = if look.on { format!("rgb({r},{g},{b})") } else { "rgb(28,28,30)".to_string() };
@@ -235,7 +235,7 @@ mod tests {
         assert!(ControlSource::StreamDeck { key: 3 }.is_momentary() && !ControlSource::StreamDeckDial { dial: 0 }.is_momentary());
     }
 
-    /// Key pictures: the name in light text on a dark key; lit = the accent colour.
+    /// Key pictures: the name in light text on a dark key; lit = the accent color.
     #[test]
     fn a_key_shows_its_control() {
         let off = picture(&Look { label: "Layer 1 opacity".into(), on: false }, 72);

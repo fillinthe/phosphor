@@ -80,7 +80,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
         let uv = [(p.x - frame.left()) / frame.width(), (p.y - frame.top()) / frame.height()];
         mouse_into_shaders(st, uv, ui.input(|i| i.pointer.primary_down()));
     }
-    // Eyedropper: a colour button is waiting for a click on the picture.
+    // Eyedropper: a color button is waiting for a click on the picture.
     if crate::ui::eyedropper::armed(ui.ctx()).is_some() {
         ui.painter().text(frame.left_top() + egui::vec2(8.0, 8.0), egui::Align2::LEFT_TOP, "Click the picture to pick a color · Esc stops", egui::FontId::proportional(12.0), Color32::WHITE);
         if resp.hovered() {

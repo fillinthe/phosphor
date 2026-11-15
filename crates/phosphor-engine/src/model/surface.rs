@@ -20,7 +20,7 @@ pub enum WidgetKind {
     XyPad,
     /// Just text.
     Label,
-    /// A colour (hue across, saturation up, brightness strip); drives red, green and blue targets.
+    /// A color (hue across, saturation up, brightness strip); drives red, green and blue targets.
     Color,
     /// A row of named buttons, one picked at a time (a blend mode, a clip, a direction): its value is the middle of
     /// the picked one's slice of 0..1, the way pick-one controls read it.
@@ -86,12 +86,12 @@ pub struct SurfaceWidget {
     pub label: String,
     pub color: [u8; 3],
     pub bindings: Vec<Binding>,
-    /// XY pad: what the vertical axis drives. Colour: green (and `bindings` red, `bindings_z` blue).
+    /// XY pad: what the vertical axis drives. Color: green (and `bindings` red, `bindings_z` blue).
     pub bindings_y: Vec<Binding>,
     pub bindings_z: Vec<Binding>,
     pub value: f32,
     pub value_y: f32,
-    /// Colour: brightness (hue = `value`, saturation = `value_y`).
+    /// Color: brightness (hue = `value`, saturation = `value_y`).
     pub value_z: f32,
     /// Which page of the surface it's on (index into `ControlSurface::pages`).
     pub page: usize,
@@ -199,7 +199,7 @@ impl SurfaceWidget {
         crate::pick_unit(i, self.choice_count())
     }
 
-    /// A colour widget's colour, red / green / blue 0..1 (hue, saturation, brightness → RGB).
+    /// A color widget's color, red / green / blue 0..1 (hue, saturation, brightness → RGB).
     pub fn rgb(&self) -> [f32; 3] {
         let (h, s, v) = (self.value.rem_euclid(1.0) * 6.0, self.value_y.clamp(0.0, 1.0), self.value_z.clamp(0.0, 1.0));
         let f = |n: f32| {
@@ -251,7 +251,7 @@ impl Default for ControlSurface {
 }
 
 impl ControlSurface {
-    /// What widgets with an OSC address send: (widget id, address, values). XY pads send x y, colours r g b.
+    /// What widgets with an OSC address send: (widget id, address, values). XY pads send x y, colors r g b.
     pub fn osc_messages(&self) -> Vec<(u64, String, Vec<f32>)> {
         if self.osc_host.trim().is_empty() {
             return Vec::new();

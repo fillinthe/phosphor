@@ -2,8 +2,8 @@
 //! blocks on every core → Snappy → Hap frame header → a QuickTime .mov muxed in-process by the FFmpeg libraries
 //! Phosphor already links. Plays in Phosphor, VDMX, Resolume, MadMapper and any Hap player.
 //!
-//! Hap = DXT1, Hap Alpha = DXT5, Hap Q = scaled YCoCg in DXT5 (better colour, twice the size), Hap Q Alpha = Hap Q
-//! plus an RGTC1 (BC4) alpha image, Hap R = BC7 (`bc7`: best colour and alpha, same size as Hap Q, slower to encode). Format: github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md.
+//! Hap = DXT1, Hap Alpha = DXT5, Hap Q = scaled YCoCg in DXT5 (better color, twice the size), Hap Q Alpha = Hap Q
+//! plus an RGTC1 (BC4) alpha image, Hap R = BC7 (`bc7`: best color and alpha, same size as Hap Q, slower to encode). Format: github.com/Vidvox/hap/blob/master/documentation/HapVideoDRAFT.md.
 
 use ff::ffi;
 use ffmpeg_next as ff;
@@ -45,8 +45,8 @@ fn unpack565(c: u16) -> [i32; 3] {
     [((r << 3) | (r >> 2)) as i32, ((g << 2) | (g >> 4)) as i32, ((b << 3) | (b >> 2)) as i32]
 }
 
-/// DXT1 colour block: endpoints from the colour bounding box (diagonal picked by the colours' spread,
-/// inset a little), four-colour mode, nearest palette entry per pixel.
+/// DXT1 color block: endpoints from the color bounding box (diagonal picked by the colors' spread,
+/// inset a little), four-color mode, nearest palette entry per pixel.
 fn bc1(px: &Block) -> [u8; 8] {
     let mut lo = [255f32; 3];
     let mut hi = [0f32; 3];
@@ -59,7 +59,7 @@ fn bc1(px: &Block) -> [u8; 8] {
             mean[c] += v / 16.0;
         }
     }
-    // Which way the colours run between red/green and blue/green decides the bounding-box diagonal.
+    // Which way the colors run between red/green and blue/green decides the bounding-box diagonal.
     let (mut crg, mut cbg) = (0f32, 0f32);
     for p in px {
         let d = [p[0] as f32 - mean[0], p[1] as f32 - mean[1], p[2] as f32 - mean[2]];
@@ -130,7 +130,7 @@ fn bc4(v: [u8; 16]) -> [u8; 8] {
     out
 }
 
-/// DXT5: the alpha block, then the colour block.
+/// DXT5: the alpha block, then the color block.
 fn bc3(px: &Block) -> [u8; 16] {
     let mut out = [0u8; 16];
     out[..8].copy_from_slice(&bc4(std::array::from_fn(|i| px[i][3])));
@@ -348,7 +348,7 @@ mod tests {
 }
 
 /// Writes sample movies to the folder $PHOSPHOR_HAP_OUT, one per Hap flavour, for checking with other players: a
-/// subtle dark ramp across (where DXT1's 5-6-5 colour bands) and alpha rising from top (clear) to bottom (solid).
+/// subtle dark ramp across (where DXT1's 5-6-5 color bands) and alpha rising from top (clear) to bottom (solid).
 #[cfg(test)]
 #[test]
 fn write_sample_hap() {

@@ -243,7 +243,15 @@ pub const NO_BROWSER: &str = "Pick the browser you're signed in with (X and Inst
 /// gallery-dl's listing (JSON) of `count` media of `url` (from the start, or from `cursor`: where an earlier listing
 /// got to), using `browser`'s sign-in, and the page cursors it reported on the way (`resume_from` picks one). At most
 /// two minutes.
+/// gallery-dl couldn't see the browser's cookies at all: macOS keeps other apps' data from Phosphor (and the tools it
+/// runs) until it has Full Disk Access. X then answers "sign in" though you are (owner, 2026-11-14).
+static BLOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What to say when the browser's sign-in couldn't be read.
+pub const NEEDS_DISK_ACCESS: &str = "macOS won't let Phosphor read your browser's sign-in: allow Full Disk Access for Phosphor (button below), then quit and reopen Phosphor and Refresh";
+
 pub fn gallery_list(url: &str, count: usize, browser: &str, cursor: Option<&str>) -> Result<(Vec<u8>, Vec<String>), String> {
+    BLOCKED.store(false, std::sync::atomic::Ordering::Relaxed);
     let tool = crate::web_media::find_gallery_dl().ok_or(NO_TOOL)?;
     let mut cmd = crate::os::command(tool);
     // -v: gallery-dl says "Cursor: …" for each page it asks for (debug lines, on stderr).
@@ -269,6 +277,9 @@ pub fn gallery_list(url: &str, count: usize, browser: &str, cursor: Option<&str>
                     cursors.push(c.trim().to_string());
                 }
             } else if l.contains("[error]") || l.contains("[warning]") || (l.contains("[cookies]") && !l.contains("[debug]")) {
+                if l.contains("Unable to find") && l.contains("cookies database") {
+                    BLOCKED.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 // What gallery-dl said (sign-in, cookies, the site's answer): in the session log, for "why not?".
                 log::warn!("gallery-dl: {l}");
             }
@@ -330,6 +341,9 @@ pub fn parse(account: &Account, body: &[u8]) -> Result<Vec<Item>, String> {
             log::warn!("gallery-dl stopped on {}: {}", account.label(), e[1]);
             let msg = e[1]["message"].as_str().unwrap_or("");
             let err = e[1]["error"].as_str().unwrap_or("");
+            if BLOCKED.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err(NEEDS_DISK_ACCESS.into());
+            }
             return Err(if err == "AuthRequired" || msg.contains("cookies") || msg.contains("login") {
                 format!("{site} wants you signed in: sign in to {site} in the browser picked here, then refresh")
             } else if msg.is_empty() {

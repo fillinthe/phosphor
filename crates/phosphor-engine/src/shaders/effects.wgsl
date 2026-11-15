@@ -458,7 +458,7 @@ fn fx_cutout_blur(in: VOut) -> @location(0) vec4f {
     return mix(sum / 49.0, c, m);
 }
 
-// Palette: each pixel takes the nearest of P(18) colours (P(0..17) = RGB each); P(19) = how much.
+// Palette: each pixel takes the nearest of P(18) colors (P(0..17) = RGB each); P(19) = how much.
 @fragment
 fn fx_palette(in: VOut) -> @location(0) vec4f {
     let c = src(in.uv);
@@ -476,7 +476,7 @@ fn fx_palette(in: VOut) -> @location(0) vec4f {
     return vec4f(mix(c.rgb, best, P(19u)), c.a);
 }
 
-// Colour Match: each channel × its gain + its offset (set from a reference picture's colours).
+// Color Match: each channel × its gain + its offset (set from a reference picture's colors).
 @fragment
 fn fx_color_match(in: VOut) -> @location(0) vec4f {
     let c = src(in.uv);
@@ -512,7 +512,7 @@ fn fx_slitscan(in: VOut) -> @location(0) vec4f {
     return select(cur, prev, coord < P(0u));
 }
 
-// Edge glow = coloured edges -> blur -> add. P(0) radius, P(1) edge strength, P(2) intensity.
+// Edge glow = colored edges -> blur -> add. P(0) radius, P(1) edge strength, P(2) intensity.
 @fragment
 fn fx_edges_only(in: VOut) -> @location(0) vec4f {
     let t = 1.0 / u.resolution;

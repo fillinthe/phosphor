@@ -155,7 +155,7 @@ fn unsupported_features_are_reported_not_errors() {
     let s = import("bufs", &too_many_bufs, None).unwrap();
     assert!(s.unsupported.as_deref().unwrap_or("").contains("buffers"), "{:?}", s.unsupported);
 
-    // One more colour (4 floats each) than fits.
+    // One more color (4 floats each) than fits.
     let many: String = (0..crate::MAX_PARAMS / 4 + 1).map(|i| format!("{{ \"NAME\": \"c{i}\", \"TYPE\": \"color\" }},")).collect();
     let too_many = GENERATOR.replace("\"INPUTS\": [", &format!("\"INPUTS\": [{many}"));
     let s = import("big", &too_many, None).unwrap();

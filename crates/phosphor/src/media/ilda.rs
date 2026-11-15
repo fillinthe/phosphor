@@ -1,6 +1,6 @@
 //! Laser shows in ILDA files (.ild, the laser world's interchange format) as clips: each frame's points become
 //! glowing lines, drawn once into a cached Hap Alpha movie, which then plays like any other clip (loop, speed,
-//! scrub, cues). Formats 0, 1 (indexed colour, 3D / 2D), 2 (a palette), 4 and 5 (true colour, 3D / 2D).
+//! scrub, cues). Formats 0, 1 (indexed color, 3D / 2D), 2 (a palette), 4 and 5 (true color, 3D / 2D).
 
 use resvg::tiny_skia;
 
@@ -82,7 +82,7 @@ mod tests {
         r
     }
 
-    /// A square in true colour (format 5), then the end section.
+    /// A square in true color (format 5), then the end section.
     pub fn square_file() -> Vec<u8> {
         let c = 20000;
         let pts = [
@@ -135,7 +135,7 @@ mod tests {
         assert!(parse(&f).unwrap_err().contains("cut short"));
     }
 
-    /// Lines are drawn in the points' colours; the beam's blanked move and the empty area stay transparent.
+    /// Lines are drawn in the points' colors; the beam's blanked move and the empty area stay transparent.
     #[test]
     fn draws_lit_lines_only() {
         let frames = parse(&square_file()).unwrap();

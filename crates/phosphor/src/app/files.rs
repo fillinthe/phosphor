@@ -42,7 +42,7 @@ impl PhosphorApp {
         if let Some(id) = self.state.snapshot_output.take() {
             self.save_output_snapshot(id);
         }
-        // A reference picture's colours are ready: match the layer's (its picture now) to them.
+        // A reference picture's colors are ready: match the layer's (its picture now) to them.
         if let Some((layer, found)) = self.state.color_ref.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.state.color_ref = None;
             let now_px = self.state.engine.as_ref().and_then(|e| e.read_layer_thumbnail(layer));
@@ -273,6 +273,11 @@ impl PhosphorApp {
                             Ok(mesh) => format!("{}: {} triangles", name_of(p), mesh.tris.len()),
                             Err(e) => format!("Couldn't read {}: {e}", name_of(p)),
                         });
+                    }
+                }
+                Purpose::ConvertFolder => {
+                    if let Some(p) = paths.first() {
+                        st.convert.dest = p.to_string_lossy().into_owned();
                     }
                 }
                 Purpose::RelinkFolder => {

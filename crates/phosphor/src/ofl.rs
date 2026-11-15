@@ -1,6 +1,6 @@
 //! Real lights by name, from the Open Fixture Library (open-fixture-library.org, MIT; its files on GitHub): search
 //! the library, pick a light and one of its DMX modes, and it becomes a fixture with that mode's channels in order
-//! (`HeadLayout::Custom` + `Role`s). Colour, dimmer, pan and tilt follow Phosphor; every other channel (gobo, strobe,
+//! (`HeadLayout::Custom` + `Role`s). Color, dimmer, pan and tilt follow Phosphor; every other channel (gobo, strobe,
 //! prism, macros…) becomes a setting of its own, starting where the light is plain and open.
 
 use std::sync::mpsc::{Receiver, channel};

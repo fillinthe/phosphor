@@ -27,6 +27,11 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       names its path), `phosphor-private`, `phosphor-private-docs`, two history backup bundles, two instruction
       backups. Proposal: move them under `phosphor/_local/` (git-ignored) and fix the paths in scripts, memory notes
       and the permission rule in one go; ask before doing it.
+- [ ] **Designer needs work** (owner, 2026-11-14): every box quietly makes layers of its own (Picture = a layer,
+      Effect = a layer, Mix = two), so layers keep appearing while you work. Owner: "I should be able to make layers
+      and then attach them to something". Proposal: hide the Designer's own layers from Layers / Clips / Mixer, and a
+      "Layer" box that brings an existing layer into the network. Also: a box's bottom buttons (source picker, folder,
+      camera) are hard to click and sit off; picking "From: Comp" stopped all video (nothing in the log; reproduce).
 - [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
       same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
       add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.

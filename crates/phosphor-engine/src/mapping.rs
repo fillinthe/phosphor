@@ -34,7 +34,7 @@ pub struct Surface {
     /// Mesh warp: a grid of points to bend the surface onto curved or uneven objects. `None` = the
     /// plain four-corner pin (exact perspective).
     pub mesh: Option<Mesh>,
-    /// This surface's own colour correction (applied before the output's), e.g. two slices on different materials.
+    /// This surface's own color correction (applied before the output's), e.g. two slices on different materials.
     pub color: crate::ColorGrade,
     /// Cut to an ellipse or triangle inside the quad (follows perspective and mesh warp).
     pub shape: SliceShape,
@@ -47,7 +47,7 @@ pub struct Surface {
     #[serde(default)]
     pub model: Option<Model3d>,
     /// Soft edge per side (left, right, top, bottom; fractions of the surface) instead of `feather` on all four:
-    /// for a projector that overlaps its neighbour on one side only.
+    /// for a projector that overlaps its neighbor on one side only.
     #[serde(default)]
     pub edges: Option<[f32; 4]>,
     /// Locked: its points can't be dragged or nudged (nothing moves by accident once it's lined up).
@@ -94,7 +94,7 @@ pub struct Model3d {
     pub distance: f32,
     /// Vertical field of view of the projector lens, degrees.
     pub fov: f32,
-    /// Where the model's centre lands on the output (0..1), and its size.
+    /// Where the model's center lands on the output (0..1), and its size.
     pub center: [f32; 2],
     pub scale: f32,
     /// Hide triangles facing away from the projector.
@@ -169,7 +169,7 @@ impl Default for Model3d {
     }
 }
 
-/// A loaded model: triangles of (position, uv), centred and scaled into a unit cube.
+/// A loaded model: triangles of (position, uv), centered and scaled into a unit cube.
 pub struct ObjMesh {
     pub tris: Vec<[([f32; 3], [f32; 2]); 3]>,
     /// Every distinct vertex position (unit-cube space): the points calibration can pin.
@@ -239,7 +239,7 @@ pub fn parse_obj(text: &str) -> Result<ObjMesh, String> {
     if faces.is_empty() {
         return Err("no faces in the model".into());
     }
-    // Centre and fit into a unit cube.
+    // Center and fit into a unit cube.
     let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
     for p in &v {
         for k in 0..3 {
@@ -301,7 +301,7 @@ impl Model3d {
         Some(([self.center[0] + px * 0.5, self.center[1] - py * 0.5], depth))
     }
 
-    /// Solves the virtual projector (turn, tilt, roll, distance, centre, and the lens from 6 pins up) so every pin's
+    /// Solves the virtual projector (turn, tilt, roll, distance, center, and the lens from 6 pins up) so every pin's
     /// model point lands where it was pinned: damped least squares (Levenberg–Marquardt) from the current
     /// settings. Needs 4 pins; returns the remaining error in output fractions (RMS), or None if not solvable.
     pub fn solve(&mut self, aspect: f32) -> Option<f32> {
@@ -585,7 +585,7 @@ impl Model3d {
                 let corners = tri.map(|p| self.view(p));
                 let centre = [0, 1, 2].map(|k| (corners[0][k] + corners[1][k] + corners[2][k]) / 3.0);
                 for (p, c) in flat.iter().zip(corners) {
-                    // Start a hair inside the face and off its surface, so the face and its neighbours don't count.
+                    // Start a hair inside the face and off its surface, so the face and its neighbors don't count.
                     let start = [0, 1, 2].map(|k| c[k] + (centre[k] - c[k]) * 0.02 + n[k] * 1e-4);
                     let dark = o.shadowed(start);
                     out.push([p[0], p[1], if dark { v * (1.0 - shadows) } else { v }, 0.5]);
@@ -1066,11 +1066,11 @@ pub struct Mask {
     pub points: Vec<[f32; 2]>,
     /// Black out everything *outside* the shape instead.
     pub invert: bool,
-    /// Soft edge width in output space (0 = hard edge); the fade is centred on the outline.
+    /// Soft edge width in output space (0 = hard edge); the fade is centered on the outline.
     pub feather: f32,
     /// The outline is a smooth curve through the points (Catmull-Rom) instead of straight lines.
     pub smooth: bool,
-    /// Per point: a sharp corner in a smooth outline (the curve heads straight at its neighbours). Missing = smooth.
+    /// Per point: a sharp corner in a smooth outline (the curve heads straight at its neighbors). Missing = smooth.
     pub corners: Vec<bool>,
     /// Attached to this slice: the points are in the slice's own square (0..1) and follow it when it moves or warps.
     #[serde(default)]
@@ -1079,7 +1079,7 @@ pub struct Mask {
     /// mirror image). Missing = automatic (straight sides, or smooth with Smooth on).
     #[serde(default)]
     pub handles: Vec<Option<[f32; 2]>>,
-    /// Where the soft edge sits: centred on the outline, all inside it, or all outside it.
+    /// Where the soft edge sits: centered on the outline, all inside it, or all outside it.
     #[serde(default)]
     pub edge: MaskEdge,
     /// Moved, stretched and turned on top of its points; animatable (`ControlTarget::MaskTransform`).
@@ -1162,7 +1162,7 @@ impl MaskShape {
         }
     }
 
-    /// Outline points (output space 0..1) centred, about a fifth of the output tall.
+    /// Outline points (output space 0..1) centered, about a fifth of the output tall.
     pub fn points(self, aspect: f32) -> Vec<[f32; 2]> {
         let (r, rx) = (0.2, 0.2 / aspect.max(0.1));
         match self {
@@ -1309,7 +1309,7 @@ impl Mask {
         }
         const STEPS: usize = 12;
         let p = |i: usize| self.points[i % n];
-        // A corner's phantom neighbour is its real neighbour mirrored through it, so the curve leaves it heading
+        // A corner's phantom neighbor is its real neighbor mirrored through it, so the curve leaves it heading
         // straight at the next point (two corners in a row = a straight side).
         let mirror = |a: [f32; 2], b: [f32; 2]| [2.0 * a[0] - b[0], 2.0 * a[1] - b[1]];
         let mut out = Vec::with_capacity(n * STEPS);
@@ -1330,7 +1330,7 @@ impl Mask {
     }
 
     /// The outline as cubic bezier sides: a point with a handle pulls by it; others pull like the smooth curve
-    /// (Smooth on, not a corner) or straight at their neighbours.
+    /// (Smooth on, not a corner) or straight at their neighbors.
     fn bezier_outline(&self) -> Vec<[f32; 2]> {
         const STEPS: usize = 12;
         let n = self.points.len();
@@ -1627,7 +1627,7 @@ impl Surface {
         }
     }
 
-    /// Takes `other`'s look (opacity, soft edges, edge curve, colour, blend, shape), not its place or source.
+    /// Takes `other`'s look (opacity, soft edges, edge curve, color, blend, shape), not its place or source.
     pub fn copy_look_from(&mut self, other: &Surface) {
         self.opacity = other.opacity;
         self.feather = other.feather;
@@ -1930,7 +1930,7 @@ impl Mapping {
 
 impl CanvasShape for Surface {
     /// Every point of the slice (corners, mesh, line) through `f`: the whole slice moved, scaled or turned. (Not 3D
-    /// model slices: they're placed by their own centre and size.)
+    /// model slices: they're placed by their own center and size.)
     fn map_points(&mut self, f: impl Fn([f32; 2]) -> [f32; 2]) {
         if self.model.is_some() {
             return;
@@ -2128,7 +2128,7 @@ mod shape_tests {
     fn a_slice_takes_its_pictures_shape() {
         let mut s = Surface { id: 1, ..Default::default() };
         s.corners = [[0.1, 0.2], [0.9, 0.2], [0.9, 0.6], [0.1, 0.6]];
-        // 16:9 picture on a 16:9 output: a slice 40% of the output high is 40% wide, centred where it was.
+        // 16:9 picture on a 16:9 output: a slice 40% of the output high is 40% wide, centered where it was.
         s.match_picture_shape((1920, 1080), (1920, 1080));
         let w = s.corners[1][0] - s.corners[0][0];
         assert!((w - 0.4).abs() < 1e-5 && (s.corners[0][0] + w / 2.0 - 0.5).abs() < 1e-5, "{:?}", s.corners);
@@ -2351,7 +2351,7 @@ mod line_tests {
         // s runs 0 → 1 along the line, t is 0 or 1 across it.
         assert!(t.iter().all(|v| (0.0..=1.0).contains(&v[2]) && (v[3] == 0.0 || v[3] == 1.0)));
         assert!(t.iter().any(|v| v[2] == 0.0) && t.iter().any(|v| (v[2] - 1.0).abs() < 1e-6));
-        // The strip is the width tall, centred on the line.
+        // The strip is the width tall, centered on the line.
         let ys: Vec<f32> = t.iter().map(|v| v[1]).collect();
         let (lo, hi) = (ys.iter().cloned().fold(1.0, f32::min), ys.iter().cloned().fold(0.0, f32::max));
         assert!((lo - 0.45).abs() < 1e-5 && (hi - 0.55).abs() < 1e-5, "{lo} {hi}");
@@ -2463,13 +2463,13 @@ f 1 2 3 4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12\nf 9 10
     fn a_cube_parses_and_projects_its_front_faces() {
         let mesh = parse_obj(CUBE).unwrap();
         assert_eq!(mesh.tris.len(), 12, "six quads make twelve triangles");
-        // Unit cube, centred.
+        // Unit cube, centered.
         assert!(mesh.tris.iter().flatten().all(|(p, _)| p.iter().all(|c| c.abs() <= 0.5 + 1e-6)));
         let path = std::env::temp_dir().join("phosphor-test-cube.obj");
         std::fs::write(&path, CUBE).unwrap();
         let p = path.to_string_lossy().to_string();
         forget_obj(&p);
-        // Straight on: only the front face shows, centred on the output (split into small triangles).
+        // Straight on: only the front face shows, centered on the output (split into small triangles).
         let m = Model3d { path: p.clone(), yaw: 0.0, pitch: 0.0, ..Default::default() };
         let t = m.triangles(16.0 / 9.0);
         assert!(!t.is_empty() && t.len() % 3 == 0);

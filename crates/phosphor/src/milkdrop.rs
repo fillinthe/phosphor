@@ -1,4 +1,4 @@
-//! MilkDrop presets (.milk / .milk2, Winamp's visualiser, projectM's preset packs) as layers: a layer whose source is
+//! MilkDrop presets (.milk / .milk2, Winamp's visualizer, projectM's preset packs) as layers: a layer whose source is
 //! `Live { format: "milkdrop", url: preset path }` is drawn by lactea (a MilkDrop engine on wgpu) into a texture on
 //! Phosphor's own GPU device every frame, fed with the sound Phosphor is listening to, and shown as the layer's
 //! picture (`Engine::set_layer_texture`). Only layers that are on are drawn.

@@ -199,11 +199,31 @@ fn h264_bits(q: Quality) -> f64 {
     }
 }
 
-/// Where the converted file goes: next to the original ("clip (Hap).mov"), never over an existing file.
+/// Where the converted file goes by default: next to the original ("clip (Hap).mov"), never over an existing file.
+#[cfg(test)]
 pub fn output_path(src: &str, format: Format) -> String {
+    let dir = std::path::Path::new(src).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+    output_path_in(&dir, src, format)
+}
+
+/// The folder a converted file goes in unless you pick another: next to the original, except for files in
+/// Phosphor's own folders (downloads from followed accounts and links): those go to your library folder, where you
+/// can find them and they stay yours (owner, 2026-11-14).
+pub fn default_dir(src: &str) -> String {
+    let p = std::path::Path::new(src);
+    let ours = crate::show::storage_dir().is_some_and(|d| p.starts_with(d));
+    let library = crate::online::following::Following::load().library_dir();
+    match (ours, library) {
+        (true, Some(lib)) => lib.to_string_lossy().into_owned(),
+        _ => p.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
+    }
+}
+
+/// The new file's path in `dir` ("clip (Hap).mov"), never over an existing file.
+pub fn output_path_in(dir: &str, src: &str, format: Format) -> String {
     let p = std::path::Path::new(src);
     let stem = p.file_stem().map_or_else(|| "clip".into(), |s| s.to_string_lossy().into_owned());
-    let dir = p.parent().map(|d| d.to_path_buf()).unwrap_or_default();
+    let dir = std::path::PathBuf::from(dir);
     let mut n = 1;
     loop {
         let name = if n == 1 { format!("{stem} ({}).{}", format.suffix(), format.extension()) } else { format!("{stem} ({} {n}).{}", format.suffix(), format.extension()) };
@@ -251,6 +271,8 @@ pub type Shared = Arc<Mutex<Progress>>;
 #[derive(Clone, Debug)]
 pub struct Job {
     pub src: String,
+    /// The folder the new file goes in.
+    pub dir: String,
     pub format: Format,
     pub quality: Quality,
     pub size: Size,
@@ -259,7 +281,8 @@ pub struct Job {
 
 /// Starts converting on a background thread.
 pub fn start(job: Job) -> Shared {
-    let shared: Shared = Arc::new(Mutex::new(Progress { output: output_path(&job.src, job.format), ..Default::default() }));
+    let _ = std::fs::create_dir_all(&job.dir);
+    let shared: Shared = Arc::new(Mutex::new(Progress { output: output_path_in(&job.dir, &job.src, job.format), ..Default::default() }));
     let s = shared.clone();
     std::thread::Builder::new()
         .name("phosphor-convert".into())
@@ -401,7 +424,7 @@ mod real_tests {
         let probe = probe(&copy).unwrap();
         for format in [Format::Hap, Format::H264Keyframes, Format::ProRes] {
             let t = std::time::Instant::now();
-            let job = Job { src: copy.clone(), format, quality: Quality::Balanced, size: Size::Original, probe: probe.clone() };
+            let job = Job { src: copy.clone(), dir: default_dir(&copy), format, quality: Quality::Balanced, size: Size::Original, probe: probe.clone() };
             let est = estimate(&probe, format, job.quality, job.size);
             let p = start(job);
             loop {

@@ -1,5 +1,5 @@
 //! Scopes (VDMX's Scopes plugin): waveform, RGB parade, vectorscope and histogram of the mix or any layer, for
-//! matching colours between cameras, clips and projectors. A small copy of the picture is read back a few times a
+//! matching colors between cameras, clips and projectors. A small copy of the picture is read back a few times a
 //! second, only while the Scopes panel is on screen or a scope layer shows one (`layer_source`); the scope picture
 //! is drawn on the CPU (a few thousand pixels).
 

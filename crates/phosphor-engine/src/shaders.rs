@@ -706,7 +706,7 @@ pub fn instances(entry: &str) -> Option<Instances> {
 /// The live-source format of a layer that shows a 3D model's vertices as points (the app uploads them).
 pub const MODEL_POINTS: &str = "model";
 
-/// A points shader (`pts_…`): its layer's pictures hold points, not colours, and run 16-bit float (see points.wgsl).
+/// A points shader (`pts_…`): its layer's pictures hold points, not colors, and run 16-bit float (see points.wgsl).
 pub fn is_points(id: &str) -> bool {
     id.starts_with("pts_")
 }
@@ -721,7 +721,7 @@ pub fn points_in(id: &str) -> bool {
     matches!(id, "pts_move" | "pts_particles" | "pts_dots" | "pts_lines" | "pts_mesh")
 }
 
-/// A render (points in, a picture out): takes a second picture (`EffectState::other`) for the points' colours.
+/// A render (points in, a picture out): takes a second picture (`EffectState::other`) for the points' colors.
 pub fn points_render(entry: &str) -> bool {
     entry.starts_with("fs_pts_")
 }

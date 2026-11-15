@@ -1,4 +1,4 @@
-//! Media bin: favourites, collections, search, sort, thumbnails.
+//! Media bin: favorites, collections, search, sort, thumbnails.
 
 use super::*;
 
@@ -75,7 +75,7 @@ pub(crate) fn plays_on_picker(ui: &mut egui::Ui, st: &mut State) {
 /// How the Media panel is filtered and laid out (per session).
 pub struct MediaView {
     pub search: String,
-    /// Favourites / a collection (the classic view's filter; kept in step with `source`), or Videos / Pictures.
+    /// Favorites / a collection (the classic view's filter; kept in step with `source`), or Videos / Pictures.
     pub filter: MediaFilter,
     pub sort: MediaSort,
     pub by_folder: bool,
@@ -588,8 +588,8 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
     }
 }
 
-/// One media thumbnail: click to launch, star to favourite, drag onto layers or clip slots,
-/// right-click to organise.
+/// One media thumbnail: click to launch, star to favorite, drag onto layers or clip slots,
+/// right-click to organize.
 /// The layers a media file can be played on, and the one a click plays it on (None = a new layer).
 pub(crate) struct MediaTargets<'a> {
     pub layers: &'a [(u64, String)],
@@ -654,7 +654,7 @@ pub(crate) fn media_tile(
     // Star (registered after the tile so it gets the click).
     let star_rect = egui::Rect::from_min_size(thumb_rect.right_top() + egui::vec2(-22.0, 2.0), egui::vec2(20.0, 20.0));
     let star = ui.interact(star_rect, ui.id().with(("star", &item.path)), Sense::click());
-    // A favourite: a solid gold star. Not one yet: an outline only while the mouse is over the tile (so the picture
+    // A favorite: a solid gold star. Not one yet: an outline only while the mouse is over the tile (so the picture
     // stays clear), brighter over the star itself.
     let hover = resp.hovered() || star.hovered();
     if item.favorite || hover {

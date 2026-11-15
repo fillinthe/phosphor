@@ -271,7 +271,7 @@ impl PhosphorApp {
                         other => (icon::LAYOUT, other, ""),
                     };
                     let tip = format!("{tip}. Drag any panel to rearrange this area; it remembers. View > Reset Layout restores it.");
-                    // Each area in its colour: the show in the accent, outputs and controllers in theirs (their panels' tabs match).
+                    // Each area in its color: the show in the accent, outputs and controllers in theirs (their panels' tabs match).
                     let color = match *name {
                         "Outputs" => theme::Hue::Output.color(),
                         "Control" => theme::Hue::Control.color(),

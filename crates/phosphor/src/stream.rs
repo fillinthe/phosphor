@@ -47,11 +47,11 @@ pub enum FileFormat {
     Hap,
     /// Hap Alpha (DXT5): keeps transparency.
     HapAlpha,
-    /// Hap Q (YCoCg DXT5): better colour than Hap, twice the size.
+    /// Hap Q (YCoCg DXT5): better color than Hap, twice the size.
     HapQ,
     /// Hap Q with a separate alpha image.
     HapQAlpha,
-    /// Hap R (BC7): Hap's best colour, with transparency; the size of Hap Q, slower to record.
+    /// Hap R (BC7): Hap's best color, with transparency; the size of Hap Q, slower to record.
     HapR,
     /// HEVC (H.265) through the Mac's encoder: about half the size of H.264 at the same quality.
     Hevc,

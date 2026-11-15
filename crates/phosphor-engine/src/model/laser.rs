@@ -132,7 +132,7 @@ pub struct LaserShape {
     /// Turns a second.
     pub spin: f32,
     pub color: [f32; 3],
-    /// Colours running along the shape: 0 = one colour, 1 = a whole rainbow around it.
+    /// Colors running along the shape: 0 = one color, 1 = a whole rainbow around it.
     pub rainbow: f32,
     /// Sides, points, waves… (`LaserShapeKind::count_name`).
     pub count: f32,
@@ -149,7 +149,7 @@ pub struct LaserShape {
     /// Laser file shapes: the .ild file.
     pub file: String,
     /// Video trace shapes: the layer, group or comp traced (0 = the whole mix), and whether the lines take the
-    /// picture's colours (off: the shape's colour).
+    /// picture's colors (off: the shape's color).
     pub source: u64,
     pub picture_colors: bool,
     /// Video trace shapes: an image file traced instead of `source` (empty = trace `source`).
@@ -215,7 +215,7 @@ pub const LASER_FIELDS: [(&str, f32, f32); 13] = [
     ("red", 0.0, 1.0),
     ("green", 0.0, 1.0),
     ("blue", 0.0, 1.0),
-    // Round the colour wheel (0..1), keeping the colour's brightness.
+    // Round the color wheel (0..1), keeping the color's brightness.
     ("hue", 0.0, 1.0),
 ];
 
@@ -268,7 +268,7 @@ impl LaserShape {
     }
 }
 
-/// Where a colour is on the colour wheel (0..1; grey = 0).
+/// Where a color is on the color wheel (0..1; gray = 0).
 pub fn hue_of([r, g, b]: [f32; 3]) -> f32 {
     let (hi, lo) = (r.max(g).max(b), r.min(g).min(b));
     let d = hi - lo;
@@ -327,7 +327,7 @@ pub struct LaserProjector {
     pub rotate: f32,
     pub flip_x: bool,
     pub flip_y: bool,
-    /// Colour balance: how strong red, green and blue are (lasers' colours differ in power).
+    /// Color balance: how strong red, green and blue are (lasers' colors differ in power).
     pub color: [f32; 3],
     /// Audience safety: nothing is drawn below this height (-1 = the bottom of the scan area, no limit).
     pub floor: f32,
@@ -517,7 +517,7 @@ mod tests {
         assert_eq!(lasers.projectors[0].look, 8, "past the row's end");
     }
 
-    /// Colour as settings: red / green / blue, and hue round the wheel keeping the brightness.
+    /// Color as settings: red / green / blue, and hue round the wheel keeping the brightness.
     #[test]
     fn colour_is_a_setting() {
         let mut s = LaserShape { color: [0.5, 0.0, 0.0], ..Default::default() };

@@ -1,6 +1,6 @@
 //! The one slider for levels and parameters: a plain filled bar with its name and value written inside.
 //! Click or drag anywhere on it to set the value, double-click to reset, `.switch()` = an on/off button at its left
-//! (off hides the thing fully and greys the bar; the value stays put), hold Shift to land on snap points (the
+//! (off hides the thing fully and grays the bar; the value stays put), hold Shift to land on snap points (the
 //! ends, the default, 100% and your own); right-click to type a value, Lock, add snap points, Learn, Modulate,
 //! Stop the motion and Reset. When a modulation moves it, a bright line shows where it
 //! really is and a lit `~` opens the modulation. Used for opacity, volume, master fade, the Mixer faders and

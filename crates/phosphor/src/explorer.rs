@@ -38,7 +38,7 @@ pub struct ExplorerState {
     /// Recently added effects (most recent first).
     pub recent: Vec<String>,
     pub search: String,
-    /// "" = all, "★" = favourites, "hidden" = the hidden ones, otherwise a category name.
+    /// "" = all, "★" = favorites, "hidden" = the hidden ones, otherwise a category name.
     pub category: String,
     /// Show generators (sources) instead of effects.
     pub sources: bool,
@@ -76,7 +76,7 @@ fn stage_key(desc: &shaders::ShaderDesc) -> String {
     format!("stage:{}", desc.id)
 }
 
-/// The picked tile, centre stage: a big live picture of it as it's set up (on the selected layer's picture, or the
+/// The picked tile, center stage: a big live picture of it as it's set up (on the selected layer's picture, or the
 /// mix) beside every control of the effect / source and (for an effect) its mix, before it goes on anything. Side by
 /// side in a wide panel, the picture above the controls in a narrow one.
 fn picked_setup(ui: &mut egui::Ui, st: &mut State, desc: &'static shaders::ShaderDesc, aspect: f32) {

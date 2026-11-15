@@ -186,7 +186,7 @@ pub fn displays() -> Vec<Display> {
     Vec::new()
 }
 
-/// The display containing a global point (points, top-left origin), e.g. a window's centre.
+/// The display containing a global point (points, top-left origin), e.g. a window's center.
 pub fn display_at(x: f32, y: f32) -> Option<Display> {
     let all = displays();
     all.iter().find(|d| x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h).cloned().or_else(|| all.into_iter().next())

@@ -17,7 +17,7 @@ enum Media {
     Nv12 { luma: Target, chroma: Target, full_range: bool },
     /// 4:4:4 with alpha in one 16-bit RGBA texture holding A, Y, Cb, Cr (VideoToolbox 'y416': ProRes 4444).
     Ayuv(Target),
-    /// Block-compressed frame straight from a Hap movie (BC1/BC3); `ycocg` = Hap Q colour.
+    /// Block-compressed frame straight from a Hap movie (BC1/BC3); `ycocg` = Hap Q color.
     Compressed { target: Target, alpha: Option<Target>, format: CompressedFormat },
 }
 
@@ -261,7 +261,7 @@ pub struct Engine {
     layers: HashMap<u64, LayerResources>,
     /// Mixing targets, ping-ponged: 0–1 the main stack, 2–3 the layer group being mixed (only while groups exist).
     accum: [Option<Target>; 4],
-    /// What the mix and effect chains draw into: 8-bit, or 16-bit with deep colour.
+    /// What the mix and effect chains draw into: 8-bit, or 16-bit with deep color.
     mix_format: wgpu::TextureFormat,
     /// The size of the comp being mixed (what a points render draws at).
     canvas: (u32, u32),
@@ -348,7 +348,7 @@ impl Engine {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
         let mut gpu = Gpu::new(device, queue);
         gpu.prewarm();
-        // Built-in audio visualisers read the live audio pictures at texture slot 1.
+        // Built-in audio visualizers read the live audio pictures at texture slot 1.
         crate::shaders::set_audio_slots("gen_spectrum", vec![(1, crate::shaders::AudioTexture::Fft)]);
         crate::shaders::set_audio_slots("gen_waveform", vec![(1, crate::shaders::AudioTexture::Wave)]);
         let compiled = std::sync::mpsc::channel();
@@ -685,7 +685,7 @@ impl Engine {
         let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).chain(comp.comps.iter().map(|c| c.id)).chain(slice_fx).collect();
         self.layers.retain(|id, _| *id >= RESERVED_IDS || live.contains(id));
 
-        // Deep colour: mixing and effects at 16 bits a channel, still 0..1 like 8-bit (so every look stays the same,
+        // Deep color: mixing and effects at 16 bits a channel, still 0..1 like 8-bit (so every look stays the same,
         // just finer). On graphics cards that can't draw into those it stays 8-bit.
         self.mix_format = if comp.deep_color && crate::gpu::deep_colour() { crate::gpu::DEEP_FORMAT } else { crate::gpu::FORMAT };
         let mix_format = self.mix_format;

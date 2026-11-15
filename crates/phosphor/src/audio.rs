@@ -116,7 +116,7 @@ impl BeatTracker {
     }
 }
 
-/// How loud the sound is between `lo` and `hi` Hz (0..1), from the analyser's log-spaced bins (30 Hz–16 kHz).
+/// How loud the sound is between `lo` and `hi` Hz (0..1), from the analyzer's log-spaced bins (30 Hz–16 kHz).
 pub fn band_level(bins: &[f32], lo: f32, hi: f32) -> f32 {
     if bins.is_empty() {
         return 0.0;
@@ -184,9 +184,9 @@ mod native {
         /// Fine spectrum for shaders (ISF `audioFFT`): log-spaced bins 30 Hz–16 kHz, 0..1.
         bins: Vec<f32>,
         last_update: Option<web_time::Instant>,
-        /// Analyse samples pushed from the network session instead of a device.
+        /// Analyze samples pushed from the network session instead of a device.
         network: bool,
-        /// Analysing the sound Phosphor plays (movie clips) instead of an input device.
+        /// Analyzing the sound Phosphor plays (movie clips) instead of an input device.
         clips: bool,
         /// This Mac's sound (other apps), from ScreenCaptureKit.
         #[cfg(target_os = "macos")]
@@ -315,7 +315,7 @@ mod native {
             self.clips
         }
 
-        /// Feeds the clip mix (stereo interleaved at `rate` Hz) into the analyser.
+        /// Feeds the clip mix (stereo interleaved at `rate` Hz) into the analyzer.
         pub fn push_clips(&mut self, samples: &[f32], rate: u32) {
             if !self.clips || samples.is_empty() {
                 return;
@@ -331,7 +331,7 @@ mod native {
             }
         }
 
-        /// Feeds viewer audio (mono, 48 kHz) into the analyser.
+        /// Feeds viewer audio (mono, 48 kHz) into the analyzer.
         pub fn push_external(&mut self, samples: &[f32]) {
             if !self.network {
                 return;
@@ -363,7 +363,7 @@ mod native {
         }
 
         /// The newest `frames` stereo samples, interleaved (gain applied), and their sample rate: what came in during
-        /// the last frame or so, for visualisers that do their own analysis (MilkDrop).
+        /// the last frame or so, for visualizers that do their own analysis (MilkDrop).
         pub fn recent(&self, frames: usize) -> (Vec<f32>, u32) {
             let g = self.gain;
             let n = frames.min(FFT_SIZE);
@@ -503,7 +503,7 @@ mod native {
             None
         }
 
-        /// Something to analyse: a device, the session, the clips or this Mac's sound.
+        /// Something to analyze: a device, the session, the clips or this Mac's sound.
         fn live(&self) -> bool {
             #[cfg(target_os = "macos")]
             if self.system.is_some() {
@@ -534,7 +534,7 @@ mod native {
             self.beats.reset();
         }
 
-        /// Where a sound source's frames go (on its own thread): the analyser's ring, and play-through while it's on.
+        /// Where a sound source's frames go (on its own thread): the analyzer's ring, and play-through while it's on.
         fn feeder(&self) -> impl Fn(&[[f32; 2]]) + Send + Sync + 'static {
             let ring = self.ring.clone();
             let (fresh, through_on) = (self.fresh.clone(), self.through_on.clone());
@@ -552,7 +552,7 @@ mod native {
             }
         }
 
-        /// Analyses the newest samples; call once per frame.
+        /// Analyzes the newest samples; call once per frame.
         pub fn update(&mut self) -> AudioAnalysis {
             if !self.live() {
                 return AudioAnalysis::default();

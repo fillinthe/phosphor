@@ -40,7 +40,7 @@ impl Composition {
         Some(id)
     }
 
-    /// A new slice on `output` showing a file, centred at `at` (0..1 of the output, y down), a third of the output high
+    /// A new slice on `output` showing a file, centered at `at` (0..1 of the output, y down), a third of the output high
     /// and as wide as the picture's shape (`aspect` = its width / height) needs. Returns the slice id.
     pub fn add_slice_with_file(&mut self, output: u64, at: [f32; 2], aspect: f32, name: &str, source: SourceSpec) -> Option<u64> {
         let canvas = (self.width, self.height);
@@ -276,7 +276,7 @@ mod file_on_slice_tests {
 }
 
 impl Composition {
-    /// The colour settings of an output or a slice (`ControlTarget::Color`).
+    /// The color settings of an output or a slice (`ControlTarget::Color`).
     pub fn color(&self, owner: u64) -> Option<&crate::ColorGrade> {
         self.outputs.iter().find(|o| o.id == owner).map(|o| &o.color).or_else(|| self.slice(owner).map(|s| &s.color))
     }

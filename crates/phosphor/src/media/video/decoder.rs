@@ -18,7 +18,7 @@ pub(super) struct Decoder {
     default_dur: f64,
     pub(super) duration: Option<f64>,
     pub(super) codec: String,
-    /// Frame rate, bit rate, pixel format, colour space, sound: for the Inspector (`describe`).
+    /// Frame rate, bit rate, pixel format, color space, sound: for the Inspector (`describe`).
     pub(super) about: String,
     /// Chapters stored in the file: (start, seconds into the movie; title).
     pub(super) chapters: Vec<(f64, String)>,

@@ -62,7 +62,7 @@ pub(crate) enum ClipAct {
     /// The layer's picture now becomes the clip's picture in the grid.
     Thumbnail,
     Clear,
-    /// The clip's file is a favourite in Media (or isn't any more).
+    /// The clip's file is a favorite in Media (or isn't any more).
     Favorite,
 }
 

@@ -1,5 +1,5 @@
 //! The Media panel's sources: a list down the left (a drop-down when the panel is narrow) and one grid for the source
-//! picked. Favourites, Recently added, All; This Mac (files added one by one, each watched folder); Network (watched
+//! picked. Favorites, Recently added, All; This Mac (files added one by one, each watched folder); Network (watched
 //! folders on a network drive, marked when missing); Online (library search, followed X / Instagram accounts);
 //! Collections. In a folder its subfolders are tiles to go into, with a path to step back out.
 
@@ -593,7 +593,7 @@ pub(crate) enum FollowAct {
     PickLibrary,
 }
 
-/// "Load more" (the next older clips): under a followed account's tiles. Greyed out while a fetch runs.
+/// "Load more" (the next older clips): under a followed account's tiles. Grayed out while a fetch runs.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn load_more(ui: &mut egui::Ui, view: &MediaView) -> bool {
     let running = view.refresh.as_ref().and_then(|p| p.lock().ok().map(|p| p.running)).unwrap_or(false);
@@ -640,7 +640,12 @@ pub(crate) fn account_header(ui: &mut egui::Ui, view: &mut MediaView, account_di
             })
         });
         if let Some(l) = line {
+            let blocked = l == crate::online::following::NEEDS_DISK_ACCESS;
             hint(ui, l);
+            // The page where macOS lets Phosphor read other apps' data (the browser's sign-in).
+            if blocked && cfg!(target_os = "macos") && crate::ui::small_command(ui, crate::ui::label(icon::SHIELD_CHECK, "Full Disk Access…")).on_hover_text("Opens System Settings: turn Phosphor on in the list, then quit and reopen Phosphor").clicked() {
+                crate::os::open("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
+            }
         }
     });
     // X accounts: GIFs only, or their videos too (the next Refresh brings them in).

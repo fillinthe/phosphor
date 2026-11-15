@@ -518,7 +518,7 @@ impl Drop for NdiReceiver {
 }
 
 /// One NDI source's sound only (no picture is sent over the network), on its own thread: each block arrives as
-/// stereo (left, right) frames and their sample rate. For the audio analyser (sound input "NDI · name").
+/// stereo (left, right) frames and their sample rate. For the audio analyzer (sound input "NDI · name").
 pub struct NdiSound {
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,

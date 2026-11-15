@@ -91,11 +91,12 @@ impl Updater {
         Self { skipped, auto, ..Default::default() }
     }
 
-    /// Installs updates by itself here: the setting is on, Phosphor runs from an app bundle that isn't a test
-    /// build, and it isn't a bench.
+    /// Installs updates by itself here: the setting is on, it isn't a bench, and Phosphor runs from an app bundle that
+    /// isn't a test build (Mac) or from the folder its installer made (Windows: the uninstaller sits beside it; a
+    /// folder you unzipped or a build folder still asks first). Windows asked for a click before (owner, 2026-11-14).
     fn installs_by_itself(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
-        return self.auto && current_bundle().is_some_and(|b| test_build(&b).is_none()) && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err();
+        return self.auto && std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err() && (current_bundle().is_some_and(|b| test_build(&b).is_none()) || installed_by_setup());
         #[cfg(target_arch = "wasm32")]
         false
     }
@@ -307,6 +308,11 @@ impl Updater {
 }
 
 /// The current app bundle, when running from one (…/Phosphor.app/Contents/MacOS/phosphor).
+/// Windows: Phosphor runs from the folder its installer made (the uninstaller is beside Phosphor.exe).
+fn installed_by_setup() -> bool {
+    cfg!(windows) && std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("unins000.exe").exists())).unwrap_or(false)
+}
+
 fn current_bundle() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let bundle = exe.parent()?.parent()?.parent()?;

@@ -2,7 +2,7 @@
 //! path matters. `look_paths` makes each shape's lines; `trace` orders them, travels between them with the beam
 //! off (and waits for the mirrors to arrive before lighting up), lingers at corners so they come out sharp, and
 //! spaces the points so a whole frame fits the laser's points-a-second budget. `project` places the picture in a
-//! projector's scan area, applies its colour balance and brightness, and blanks anything below its safety floor.
+//! projector's scan area, applies its color balance and brightness, and blanks anything below its safety floor.
 //! `test_pattern` lines a laser up; `outline` traces pictures (Video trace shapes).
 
 mod outline;
@@ -18,7 +18,7 @@ use crate::ilda;
 use crate::model::{LaserFont, LaserLook, LaserProjector, LaserShape, LaserShapeKind, LaserZone, Lasers};
 use crate::ModInputs;
 
-/// One point the laser draws: -1..1 across and up, colour 0..1 (all 0 = beam off).
+/// One point the laser draws: -1..1 across and up, color 0..1 (all 0 = beam off).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LaserPoint {
     pub x: f32,
@@ -32,7 +32,7 @@ impl LaserPoint {
     }
 }
 
-/// A line to draw: its corners and their colours.
+/// A line to draw: its corners and their colors.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Path {
     pub points: Vec<([f32; 2], [f32; 3])>,
@@ -113,7 +113,7 @@ pub fn in_zone(paths: Vec<Path>, z: &LaserZone) -> Vec<Path> {
 }
 
 /// Lining a laser up: the scan area's edge, a circle, a cross in the middle, an arrow pointing up, and a corner
-/// in each colour (red top left, green top right, blue bottom right, white bottom left) to check flips and colours.
+/// in each color (red top left, green top right, blue bottom right, white bottom left) to check flips and colors.
 pub fn test_pattern() -> Vec<Path> {
     const WHITE: [f32; 3] = [1.0; 3];
     let line = |pts: &[[f32; 2]], rgb: [f32; 3], closed: bool| Path { points: pts.iter().map(|p| (*p, rgb)).collect(), closed, dots: false };
@@ -132,7 +132,7 @@ pub fn test_pattern() -> Vec<Path> {
     ]
 }
 
-/// A shape's lines before they're placed: around (0, 0), about -1..1 big, with their own colours when they have them.
+/// A shape's lines before they're placed: around (0, 0), about -1..1 big, with their own colors when they have them.
 struct Unit {
     points: Vec<[f32; 2]>,
     colors: Option<Vec<[f32; 3]>>,
@@ -192,7 +192,7 @@ pub fn shape_paths(s: &LaserShape, t: f64, mods: &ModInputs, inputs: &LaserInput
     paths
 }
 
-/// Words as single strokes (Hershey's fonts: each stroke drawn once, no outlines), lines stacked, centred and
+/// Words as single strokes (Hershey's fonts: each stroke drawn once, no outlines), lines stacked, centered and
 /// fitted to -1..1 across.
 fn text_strokes(text: &str, font: LaserFont) -> Vec<Unit> {
     use vector_text_core::Renderer;
@@ -240,7 +240,7 @@ fn text_strokes(text: &str, font: LaserFont) -> Vec<Unit> {
 }
 
 /// The frame of a laser file showing at `t` seconds (`fps` frames a second, looping), as lit lines with the file's
-/// colours; a point lit on its own is a beam.
+/// colors; a point lit on its own is a beam.
 fn file_frame(frames: &[Vec<ilda::Point>], t: f64, fps: f32) -> Vec<Unit> {
     if frames.is_empty() {
         return Vec::new();
@@ -561,7 +561,7 @@ fn sharp(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> bool {
     lu > 1e-6 && lv > 1e-6 && (u[0] * v[0] + u[1] * v[1]) / (lu * lv) < 0.7
 }
 
-/// The frame as projector `p` draws it: placed (size, position, turn, flips), colour-balanced and dimmed by its
+/// The frame as projector `p` draws it: placed (size, position, turn, flips), color-balanced and dimmed by its
 /// brightness × `master`, kept inside the scan area, and dark below its safety floor and in its dark areas.
 pub fn project(points: &[LaserPoint], p: &LaserProjector, master: f32) -> Vec<LaserPoint> {
     let (sin, cos) = p.rotate.to_radians().sin_cos();
@@ -600,7 +600,7 @@ fn blend(a: [f32; 3], b: [f32; 3], f: f32) -> [f32; 3] {
     lerp3(a, b, f.clamp(0.0, 1.0))
 }
 
-/// A fully saturated colour at hue `h` (0..1 round the wheel).
+/// A fully saturated color at hue `h` (0..1 round the wheel).
 pub fn hue(h: f32) -> [f32; 3] {
     let h = h.rem_euclid(1.0) * 6.0;
     let f = |n: f32| (((n + h) % 6.0 - 3.0).abs() - 1.0).clamp(0.0, 1.0);
@@ -630,7 +630,7 @@ mod tests {
         LaserInputs { files, pictures, ..Default::default() }
     }
 
-    /// The test pattern fits a frame, keeps its corners' colours and reaches the scan area's corners.
+    /// The test pattern fits a frame, keeps its corners' colors and reaches the scan area's corners.
     #[test]
     fn test_pattern_fits_and_shows_colours() {
         let frame = trace(&test_pattern(), 30_000 / FPS as usize);
@@ -660,7 +660,7 @@ mod tests {
         assert!(shape_paths(&LaserShape { points: Vec::new(), ..d }, 0.0, &ModInputs::default(), &inputs).is_empty());
     }
 
-    /// Text: one stroke a path, fitted to the shape's size and centred; lines stack; nothing for empty words.
+    /// Text: one stroke a path, fitted to the shape's size and centered; lines stack; nothing for empty words.
     #[test]
     fn text_draws_single_strokes() {
         let s = LaserShape { kind: LaserShapeKind::Text, text: "HI".into(), size: 0.5, ..Default::default() };
@@ -683,7 +683,7 @@ mod tests {
         }
     }
 
-    /// A laser file plays its frames in time (looping), lit runs as lines in the file's colours, a lone lit point
+    /// A laser file plays its frames in time (looping), lit runs as lines in the file's colors, a lone lit point
     /// as a beam, dark moves left dark; a file not read yet draws nothing.
     #[test]
     fn laser_files_play_their_frames() {
@@ -785,7 +785,7 @@ mod tests {
         assert!(!out[0].lit() && out[1].lit(), "dark inside the dark area only");
     }
 
-    /// Projection: placed, flipped, dimmed, colour-balanced; the floor and the scan area's edge blank the beam.
+    /// Projection: placed, flipped, dimmed, color-balanced; the floor and the scan area's edge blank the beam.
     #[test]
     fn projector_places_dims_and_keeps_the_floor() {
         let pts = [LaserPoint { x: 0.5, y: 0.5, rgb: [1.0; 3] }, LaserPoint { x: 0.5, y: -0.5, rgb: [1.0; 3] }, LaserPoint { x: 0.9, y: 0.0, rgb: [1.0; 3] }];

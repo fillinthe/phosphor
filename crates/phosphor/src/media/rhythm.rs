@@ -107,7 +107,7 @@ pub fn settings_for(r: &Rhythm, loop_out: f32, music_bpm: f32) -> (f32, f32) {
     (phase / r.duration.max(0.01), (hits * beats_per_hit(r, music_bpm)).round().max(1.0))
 }
 
-/// Decodes the movie small and grey, measuring how much each frame differs from the last.
+/// Decodes the movie small and gray, measuring how much each frame differs from the last.
 /// Returns the motion series and its frame rate.
 fn motion(path: &str, max_secs: f32) -> Result<(Vec<f32>, f32, f32), String> {
     let mut input = crate::media::video::open_input(path).map_err(|e| format!("can't open ({e})"))?;
@@ -232,7 +232,7 @@ pub fn rhythm_of(series: &[f32], fps: f32, duration: f32) -> Option<Rhythm> {
         }
     }
     let confidence = (corr(lag) / c0).clamp(0.0, 1.0);
-    // Refine the lag between frames with the neighbours (parabolic).
+    // Refine the lag between frames with the neighbors (parabolic).
     let (cm, cp) = (corr(lag - 1) / c0, corr(lag + 1) / c0);
     let denom = cm - 2.0 * (peak) + cp;
     let shift = if denom.abs() > 1e-6 { 0.5 * (cm - cp) / denom } else { 0.0 };

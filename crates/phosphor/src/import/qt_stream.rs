@@ -15,7 +15,7 @@ pub enum Qv {
     Bytes(Vec<u8>),
     /// A point, size or rectangle (2 or 4 numbers).
     Nums(Vec<f64>),
-    /// Anything kept only so the read can go on (pictures, matrices, colours…).
+    /// Anything kept only so the read can go on (pictures, matrices, colors…).
     Other,
 }
 
@@ -200,7 +200,7 @@ impl Reader<'_> {
             20 => Qv::Nums(self.nums(4)?),
             21 | 25 => Qv::Nums((0..2).map(|_| self.i32().map(f64::from)).collect::<Result<_, _>>()?),
             22 | 26 => Qv::Nums(self.nums(2)?),
-            // A colour: its spec, then alpha, red, green, blue and padding (16 bits each).
+            // A color: its spec, then alpha, red, green, blue and padding (16 bits each).
             67 => {
                 self.take(11)?;
                 Qv::Other
@@ -239,7 +239,7 @@ impl Reader<'_> {
 
     fn user(&mut self, name: &str) -> Result<Qv, String> {
         Ok(match name {
-            // A colour space name and four numbers (red, green, blue, alpha).
+            // A color space name and four numbers (red, green, blue, alpha).
             "MadColor" => {
                 self.string()?;
                 Qv::Nums(self.nums(4)?)

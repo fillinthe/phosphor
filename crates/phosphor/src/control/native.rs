@@ -170,7 +170,7 @@ fn deliver(packet: rosc::OscPacket, tx: &mpsc::Sender<Incoming>, text_tx: &mpsc:
                 rosc::OscType::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
                 _ => None,
             });
-            // Several numbers (or an OSC colour): each also on `<address>/<k>`, so one message can set a colour.
+            // Several numbers (or an OSC color): each also on `<address>/<k>`, so one message can set a color.
             let values: Vec<f32> = m
                 .args
                 .iter()

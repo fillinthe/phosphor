@@ -413,7 +413,7 @@ mod tests {
     use super::super::qt_stream::write as w;
     use super::*;
 
-    /// A made-up project in MadMapper's layout: one 16:9 output showing the stage rectangle centred at (1, -1),
+    /// A made-up project in MadMapper's layout: one 16:9 output showing the stage rectangle centered at (1, -1),
     /// 3.2 × 1.8; a full-screen quad showing a Syphon picture, a circle in a group showing a movie, a triangle, a
     /// two-line Lines surface, an inverted mask and an LED fixture.
     fn sample() -> Vec<u8> {

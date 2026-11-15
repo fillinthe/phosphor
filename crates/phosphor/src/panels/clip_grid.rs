@@ -213,7 +213,7 @@ pub(crate) fn column_headers(ui: &mut egui::Ui, grid: &Grid, head_w: f32, out: &
         for c in 0..grid.cols {
             let keyed = c / CLIP_PAGE_SIZE == grid.bank;
             let tip = if keyed { format!("Trigger this column on every layer (key {}) · right-click to Learn", c % CLIP_PAGE_SIZE + 1) } else { "Trigger this column on every layer · right-click to Learn".to_string() };
-            // Triggers are actions: solid buttons (the columns on the number keys in full colour); a column with no
+            // Triggers are actions: solid buttons (the columns on the number keys in full color); a column with no
             // clip in it has nothing to trigger, so its header stays plain.
             let head = if keyed && grid.filled.get(c).copied().unwrap_or(false) {
                 action_button_sized(ui, Act::Go, format!("{} {}", icon::PLAY, c + 1), egui::vec2(grid.cell.x, CONTROL_H))
@@ -316,7 +316,7 @@ pub(crate) fn clip_cells(ui: &mut egui::Ui, grid: &Grid, cx: &mut CellCtx, layer
             ui.visuals().widgets.noninteractive.bg_stroke
         };
         p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
-        // What kind of clip it is: a stripe down its left edge in that kind's colour.
+        // What kind of clip it is: a stripe down its left edge in that kind's color.
         if let Some(h) = clip.and_then(|k| crate::theme::Hue::of_source(&k.source)) {
             let stripe = egui::Rect::from_min_max(rect.left_top() + egui::vec2(1.0, 4.0), egui::pos2(rect.left() + 4.0, rect.bottom() - 4.0));
             p.rect_filled(stripe, 1.5, h.color());

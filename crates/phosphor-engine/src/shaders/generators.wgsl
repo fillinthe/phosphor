@@ -172,7 +172,7 @@ fn gen_lines(in: VOut) -> @location(0) vec4f {
     return vec4f(clamp(col, vec3f(0.0), vec3f(1.0)), 1.0);
 }
 
-// Audio visualisers: tex1 is the live spectrum (one row of magnitudes 0..1, low to high) for the bars and the
+// Audio visualizers: tex1 is the live spectrum (one row of magnitudes 0..1, low to high) for the bars and the
 // live waveform (one row, 0.5 = silence) for the oscilloscope; the app refreshes them every frame.
 @fragment
 fn gen_spectrum(in: VOut) -> @location(0) vec4f {

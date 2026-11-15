@@ -2,7 +2,7 @@
 
 fn sample_source(st: vec2f) -> vec4f {
     if (u.yuv == 1u || u.yuv == 3u) {
-        // BT.709; 1 = TV range (16–235), 3 = full range (0–255). 10-bit planes normalise the same way.
+        // BT.709; 1 = TV range (16–235), 3 = full range (0–255). 10-bit planes normalize the same way.
         var y = textureSampleLevel(tex0, samp, st, 0.0).r;
         var c = textureSampleLevel(tex2, samp, st, 0.0).rg - vec2f(128.0 / 255.0);
         if (u.yuv == 1u) {
@@ -45,7 +45,7 @@ fn sample_source(st: vec2f) -> vec4f {
     return textureSampleLevel(tex0, samp, st, 0.0);
 }
 
-// Brightness and saturation as the Hue / Saturation / Colour / Luminosity modes use them (W3C compositing spec).
+// Brightness and saturation as the Hue / Saturation / Color / Luminosity modes use them (W3C compositing spec).
 fn blend_lum(c: vec3f) -> f32 { return dot(c, vec3f(0.3, 0.59, 0.11)); }
 fn blend_set_lum(c: vec3f, l: f32) -> vec3f {
     let d = c + vec3f(l - blend_lum(c));

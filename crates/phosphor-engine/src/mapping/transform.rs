@@ -40,10 +40,10 @@ pub struct ShapeTransform {
     /// Moved across / down (output widths / heights, -1..1).
     pub x: f32,
     pub y: f32,
-    /// Stretched across / down round the shape's centre (1 = as drawn).
+    /// Stretched across / down round the shape's center (1 = as drawn).
     pub scale_x: f32,
     pub scale_y: f32,
-    /// Turned round the shape's centre (degrees, clockwise).
+    /// Turned round the shape's center (degrees, clockwise).
     pub rotation: f32,
     pub x_mod: Option<Modulation>,
     pub y_mod: Option<Modulation>,
@@ -172,7 +172,7 @@ impl ShapeTransform {
         *self == Self { scale_linked: self.scale_linked, ..Self::default() }
     }
 
-    /// `shape` moved, stretched and turned by this transform at `mods`, round its own centre (`aspect` = output width
+    /// `shape` moved, stretched and turned by this transform at `mods`, round its own center (`aspect` = output width
     /// per height, so turning doesn't squash it).
     pub fn apply<S: CanvasShape>(&self, shape: &mut S, mods: &ModInputs, aspect: f32) {
         if self.is_identity() {

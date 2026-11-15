@@ -76,7 +76,7 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
     back_to_signal
 }
 
-/// A colour track's steps: a colour button each (the playing one outlined).
+/// A color track's steps: a color button each (the playing one outlined).
 fn colour_steps(ui: &mut egui::Ui, colours: &mut [[f32; 3]], playing: usize) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
@@ -94,8 +94,8 @@ pub(crate) fn new_track() -> StepTrack {
     StepTrack { gate: true, steps: [1.0, 0.0, 0.0, 0.0].repeat(4), ..Default::default() }
 }
 
-/// The colour settings a colour track paints: each picked one with a remove button, and a picker to add one.
-/// `reds` = every colour setting (its red), named.
+/// The color settings a color track paints: each picked one with a remove button, and a picker to add one.
+/// `reds` = every color setting (its red), named.
 pub(crate) fn colour_targets(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug + Copy, reds: &[(ControlTarget, String)], paint: &mut Vec<ControlTarget>) {
     let mut remove = None;
     for (i, t) in paint.iter().enumerate() {

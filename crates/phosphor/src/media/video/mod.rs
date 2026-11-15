@@ -172,7 +172,7 @@ pub struct VideoPlayer {
     passes: u64,
     /// Random frames: when the next jump is due, and whether the last jump's frame is still on its way.
     jumps: Jumps,
-    /// What the file is (frame rate, bit rate, format, colour space, sound), from when it opened.
+    /// What the file is (frame rate, bit rate, format, color space, sound), from when it opened.
     about: String,
     /// Chapters stored in the file (start in seconds, title).
     chapters: Vec<(f64, String)>,
@@ -400,7 +400,7 @@ impl VideoPlayer {
     }
 
     /// A file with sound but no picture (mp3, wav, …): plays as a clip (loop, in/out, speed, beat sync, the
-    /// scrub bar) whose picture is empty; its sound drives the "Clip sound" analyser like any movie's.
+    /// scrub bar) whose picture is empty; its sound drives the "Clip sound" analyzer like any movie's.
     fn open_audio_only(path: &str, name: &str) -> Result<Self, String> {
         let input = open_input(path).map_err(|e| format!("{name}: can't open ({e})"))?;
         let st = input.streams().best(ff::media::Type::Audio).ok_or_else(|| format!("{name}: no video or audio stream"))?;
@@ -799,7 +799,7 @@ impl VideoPlayer {
         &self.chapters
     }
 
-    /// Frame rate, bit rate, pixel format, colour space and sound of the file ("" for sound-only clips).
+    /// Frame rate, bit rate, pixel format, color space and sound of the file ("" for sound-only clips).
     pub fn about(&self) -> &str {
         &self.about
     }

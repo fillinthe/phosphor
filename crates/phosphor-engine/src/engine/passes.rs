@@ -440,7 +440,7 @@ impl Engine {
                         (u.p[0][0], u.p[0][1]) = (rows, cols);
                     }
                     let target = if shaders::points_render(entry) {
-                        // A points render: the grid it reads (or every texel in order), its colours from another
+                        // A points render: the grid it reads (or every texel in order), its colors from another
                         // layer's picture, drawn at the canvas size (lines at a reduced size: their width).
                         let listed = params.get(13).copied().unwrap_or(0.0) > 0.5;
                         let (cols, rows) = if listed { (w, (h * w).min(shaders::POINTS_BUDGET) / w.max(1)) } else { shaders::points_grid(params.first().copied().unwrap_or(1000.0), w as f32 / h.max(1) as f32) };

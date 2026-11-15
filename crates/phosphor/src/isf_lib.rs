@@ -158,7 +158,7 @@ fn lut_mix_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
     lut_mixer(luts, false)
 }
 
-/// LUT A in one part of the picture, LUT B in another: shadows and highlights, left and right, centre and edges.
+/// LUT A in one part of the picture, LUT B in another: shadows and highlights, left and right, center and edges.
 fn lut_split_effect(luts: &[(String, crate::lut::Lut)]) -> Loaded {
     lut_mixer(luts, true)
 }
@@ -208,7 +208,7 @@ pub fn folders() -> Vec<std::path::PathBuf> {
     }
     if let Some(d) = crate::show::storage_dir() {
         dirs.push(d.join("isf"));
-        // Colour-grading LUTs (.cube) you add.
+        // Color-grading LUTs (.cube) you add.
         dirs.push(d.join("luts"));
     }
     // The looks Phosphor ships (scripts/make-luts.py); yours of the same name win.
@@ -426,7 +426,7 @@ impl IsfLibrary {
                     seen.insert(slug.clone());
                     seen_loose.insert(loose);
                     watched.push((path.clone(), stem.clone(), slug.clone(), modified(&path)));
-                    // A colour-grading LUT (.cube): an effect of its own.
+                    // A color-grading LUT (.cube): an effect of its own.
                     let found = if path.extension().is_some_and(|e| e == "cube") {
                         match crate::lut::parse_cube(&fs) {
                             Ok(lut) => {
@@ -536,7 +536,7 @@ impl IsfLibrary {
 /// Contact sheets for choosing shaders from a big pack: every effect in a folder drawn over a picture at three
 /// moments (no feedback: single frames), one PNG each (`<slug>_<n>.png`), plus `sheet.tsv`: slug, name, error, then
 /// numbers for sorting (0–255 scale): spread (blank ≈ 0), change from the picture (untouched ≈ 0), motion between
-/// the first and last moment, flicker (brightness jump from one frame to the next), colourfulness, and a 12×6
+/// the first and last moment, flicker (brightness jump from one frame to the next), colorfulness, and a 12×6
 /// thumbnail as hex (for finding near-duplicates). With `PHOSPHOR_ISF_SHEET_COST=1`, a last column: milliseconds per
 /// 1920×1080 frame (render and read back, so an upper bound). Run with
 /// `PHOSPHOR_ISF_SHEET="<shader folder>:<out folder>[:<picture>]" cargo test -p phosphor --release isf_sheet`.
@@ -755,7 +755,7 @@ fn lut_split_follows_a_mask_layer() {
     };
     let mut comp = Composition { width: 16, height: 16, ..Default::default() };
     let mut middle = |engine: &mut Engine, mask: f32| {
-        // The mask (layer 1, underneath) and a 20% grey on top graded by LUT Split › Mask layer = layer 1.
+        // The mask (layer 1, underneath) and a 20% gray on top graded by LUT Split › Mask layer = layer 1.
         let mut top = solid(2, 0.2);
         // LUT A, LUT B, Split by (4 = Mask layer), Point, Softness, Amount, Mask layer #.
         top.effects.push(EffectState { id: 3, effect: id.clone(), enabled: true, values: vec![0.0, 1.0, 4.0, 0.5, 0.05, 1.0, 1.0], mix: 1.0, mods: Vec::new(), blend: Default::default(), other: 0, light: 0 });
@@ -828,7 +828,7 @@ fn a_preview_slot_forgets_the_effect_before() {
     let isf = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/isf");
     let Some(adapter) = pollster::block_on(wgpu::Instance::default().request_adapter(&Default::default())).ok() else { return };
     let (w, h) = (160u32, 90u32);
-    // Busy: coloured noise (JPEG corruption shows on detail).
+    // Busy: colored noise (JPEG corruption shows on detail).
     let picture: Vec<u8> = (0..w * h).flat_map(|i| {
         let n = (i.wrapping_mul(2_654_435_761) >> 7) as u8;
         [n, n.wrapping_mul(3), n.wrapping_add(90), 255]

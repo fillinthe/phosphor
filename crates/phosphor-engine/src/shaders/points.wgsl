@@ -100,7 +100,7 @@ fn gen_pts_shape(in: VOut) -> @location(0) vec4f {
 }
 
 // ---- Relief: a picture as points, raised by brightness ----------------------------------------------------
-//   P(0) depth  P(1) threshold (darker points vanish)  P(2) colour as place (rgb -> xyz)
+//   P(0) depth  P(1) threshold (darker points vanish)  P(2) color as place (rgb -> xyz)
 
 @fragment
 fn fx_pts_relief(in: VOut) -> @location(0) vec4f {
@@ -161,7 +161,7 @@ fn fx_pts_particles(in: VOut) -> @location(0) vec4f {
 // ---- The renders: dots, lines and a mesh, through a camera, with a light ------------------------------------
 //   P(0) points  P(1) size  P(2) brightness  P(3) distance  P(4) lens  P(5..7) turn x y z  P(8) from the picture
 //   P(9) tint  P(10) shade  P(11) fog  P(12) (each its own)  P(13) listed
-//   tex0 = the points, tex2 = a picture the points take their colour from (sampled where each point is in the grid).
+//   tex0 = the points, tex2 = a picture the points take their color from (sampled where each point is in the grid).
 
 struct PtOut {
     @builtin(position) pos: vec4f,
@@ -190,7 +190,7 @@ fn pt_load(c: u32, r: u32) -> vec4f {
     return textureLoad(tex0, pt_texel(c, r), 0);
 }
 
-// Where (c, r) sits in the grid, 0..1 edge to edge like `pt_texel` (for the picture's colour).
+// Where (c, r) sits in the grid, 0..1 edge to edge like `pt_texel` (for the picture's color).
 fn pt_uv(c: u32, r: u32) -> vec2f {
     let g = max(vec2f(pt_grid()) - 1.0, vec2f(1.0));
     return vec2f(f32(c) / g.x, f32(r) / g.y);
@@ -209,7 +209,7 @@ fn pt_clip(v: vec3f) -> vec4f {
     return vec4f(v.x * f / aspect(), v.y * f, z * depth, depth);
 }
 
-// A point's colour: its brightness, the tint or the picture, lit by the surface it's on, fading into the fog.
+// A point's color: its brightness, the tint or the picture, lit by the surface it's on, fading into the fog.
 fn pt_colour(d: vec4f, v: vec3f, n: vec3f, uv: vec2f) -> vec4f {
     var c = vec3f(1.0);
     if (P(9u) > 0.0) {
@@ -217,7 +217,7 @@ fn pt_colour(d: vec4f, v: vec3f, n: vec3f, uv: vec2f) -> vec4f {
     }
     let pic = textureSampleLevel(tex2, samp, uv, 0.0);
     c = mix(c, pic.rgb, P(8u));
-    // The light (P(14..19), from a Points: Light or its defaults): where from, colour, strength, ambient.
+    // The light (P(14..19), from a Points: Light or its defaults): where from, color, strength, ambient.
     // (Toward the light, in the picture's directions: the view flips x and y.)
     let light = normalize(vec3f(-P(14u), -P(15u), 0.65));
     let tint = mix(vec3f(1.0), hsv2rgb(vec3f(P(16u), 1.0, 1.0)), P(17u));
@@ -228,7 +228,7 @@ fn pt_colour(d: vec4f, v: vec3f, n: vec3f, uv: vec2f) -> vec4f {
     return vec4f(c * P(2u) * shade * fog * max(d.a, 0.0), 1.0);
 }
 
-// The surface's direction at grid point (c, r): from its neighbours across and down (listed: its triangle).
+// The surface's direction at grid point (c, r): from its neighbors across and down (listed: its triangle).
 fn pt_normal(c: u32, r: u32, v: vec3f) -> vec3f {
     let g = pt_grid();
     var b: vec3f;
@@ -291,7 +291,7 @@ fn fs_pts_dots(in: PtOut) -> @location(0) vec4f {
     return vec4f(in.color.rgb * a, a);
 }
 
-// Segment `seg`'s end `e` (0 or 1): between neighbours across the grid, down it, or both (P(12)); listed: pairs
+// Segment `seg`'s end `e` (0 or 1): between neighbors across the grid, down it, or both (P(12)); listed: pairs
 // in order.
 fn pt_segment_end(seg: u32, e: u32) -> PtOut {
     let g = pt_grid();

@@ -341,8 +341,8 @@ pub(crate) fn drop_payload<T: std::any::Any + Send + Sync>(r: &egui::Response) -
     r.dnd_release_payload::<T>()
 }
 
-/// Grey help text. In a row it shrinks to the space left (full text on hover) instead of
-/// overlapping its neighbours; on its own line it wraps.
+/// Gray help text. In a row it shrinks to the space left (full text on hover) instead of
+/// overlapping its neighbors; on its own line it wraps.
 static HELP_ICONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 /// Help sentences shown as a small (i) instead of words (the brightness menu's "Help as (i) icons").
@@ -366,7 +366,7 @@ pub(crate) fn set_help_icons(on: bool) {
     HELP_ICONS.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// A help sentence: grey words like `hint`, or with "Help as (i) icons" on, a small (i) that shows it (hover, or
+/// A help sentence: gray words like `hint`, or with "Help as (i) icons" on, a small (i) that shows it (hover, or
 /// click: that works with tooltips off too). Use `hint` for status words that must stay visible.
 pub(crate) fn help(ui: &mut egui::Ui, text: &str) -> egui::Response {
     if !help_icons() {
@@ -514,13 +514,13 @@ pub(crate) fn step_bars(ui: &mut egui::Ui, steps: &mut [f32], playing: Option<us
     changed
 }
 
-/// Saved colours, shared by every colour control (kept between launches in egui's saved memory).
+/// Saved colors, shared by every color control (kept between launches in egui's saved memory).
 fn swatches_id() -> egui::Id {
     egui::Id::new("phosphor_swatches")
 }
 
-/// A colour button (`rgb` = 3 floats 0..1, more are left alone) with the saved swatches beside it: click one to use
-/// it, or save the colour now. Returns true when the colour changed.
+/// A color button (`rgb` = 3 floats 0..1, more are left alone) with the saved swatches beside it: click one to use
+/// it, or save the color now. Returns true when the color changed.
 pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
     if rgb.len() < 3 {
         return false;

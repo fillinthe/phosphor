@@ -218,7 +218,7 @@ impl Tab {
         Tab::Designer,
     ];
 
-    /// The kind of panel, shown by its tab's colour (`theme::Hue`); None = the show itself (preview, layers, clips…).
+    /// The kind of panel, shown by its tab's color (`theme::Hue`); None = the show itself (preview, layers, clips…).
     pub fn hue(self) -> Option<crate::theme::Hue> {
         use crate::theme::Hue;
         Some(match self {
@@ -290,7 +290,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     fn title(&mut self, tab: &mut Tab) -> egui::WidgetText {
-        // (No colour here: `tab_style_override` colours it, full for the open tab, dimmed for the others.)
+        // (No color here: `tab_style_override` colors it, full for the open tab, dimmed for the others.)
         match tab {
             Tab::Monitor(n) => format!("{} {}", icon::MONITOR, monitor_source_name(self.st, *n)).into(),
             Tab::MyPanel(n) => {
@@ -301,7 +301,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
         }
     }
 
-    /// The open tab of each group in its panel's colour (what kind of panel it is) with an outline of it; the
+    /// The open tab of each group in its panel's color (what kind of panel it is) with an outline of it; the
     /// panel last clicked gets a faint wash of it too (owner, 2026-11-04: a solid fill was too loud); the others
     /// dimmed, so which one is open (and which one you're in) shows without shouting.
     fn tab_style_override(&self, tab: &Tab, global: &egui_dock::TabStyle) -> Option<egui_dock::TabStyle> {
@@ -312,12 +312,12 @@ impl egui_dock::TabViewer for Viewer<'_> {
         let full = hue.map_or(crate::theme::ON_PICTURE, |h| h.color());
         let dim = hue.map_or(crate::theme::faint(), |h| h.color().gamma_multiply(0.6));
         let mut style = global.clone();
-        // No outline on the open tab (owner, 2026-11-04): the colour of the words says which one is open.
+        // No outline on the open tab (owner, 2026-11-04): the color of the words says which one is open.
         for s in [&mut style.active, &mut style.active_with_kb_focus] {
             s.text_color = full;
             s.outline_color = Color32::TRANSPARENT;
         }
-        // The panel last clicked (where keys and clicks go): a faint wash of its colour under the words.
+        // The panel last clicked (where keys and clicks go): a faint wash of its color under the words.
         for s in [&mut style.focused, &mut style.focused_with_kb_focus] {
             s.bg_fill = full.gamma_multiply(0.18);
             s.text_color = full;
@@ -326,7 +326,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
         for s in [&mut style.inactive, &mut style.inactive_with_kb_focus] {
             s.text_color = dim;
         }
-        // Rolling over a closed tab: a wash of its colour, no outline.
+        // Rolling over a closed tab: a wash of its color, no outline.
         style.hovered.text_color = full;
         style.hovered.bg_fill = full.gamma_multiply(0.12);
         style.hovered.outline_color = Color32::TRANSPARENT;

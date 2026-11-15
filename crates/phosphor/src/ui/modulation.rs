@@ -46,7 +46,7 @@ pub(crate) fn param_slider(ui: &mut egui::Ui, values: &mut Vec<f32>, mods: &mut 
         });
         return;
     }
-    // A colour (an ISF colour input: "Name R", "G", "B"…): a colour button and swatches above its sliders.
+    // A color (an ISF color input: "Name R", "G", "B"…): a color button and swatches above its sliders.
     if let Some(name) = p.name.strip_suffix(" R")
         && p.min == 0.0
         && p.max == 1.0

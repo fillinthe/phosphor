@@ -553,7 +553,7 @@ impl PhosphorApp {
                 keep
             });
             // Explorer / editor previews: texture slot i is preview i (a slot not ready yet keeps its place, so the tiles
-            // after it don't show their neighbour's picture), and only shows once it holds what was asked for.
+            // after it don't show their neighbor's picture), and only shows once it holds what was asked for.
             if preview_textures.len() < keys.len() {
                 preview_textures.resize(keys.len(), None);
             }

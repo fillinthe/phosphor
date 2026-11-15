@@ -163,7 +163,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
     let mut sets: Vec<(ControlTarget, f32)> = Vec::new();
     let mut grab: Option<Grab> = ctx.data(|d| d.get_temp(grab_id)).flatten();
     let mut open_editor: Option<u64> = None;
-    // A colour widget's brightness strip was dragged: (widget, brightness).
+    // A color widget's brightness strip was dragged: (widget, brightness).
     let mut brightness: Option<(u64, f32)> = None;
 
     ui.horizontal_top(|ui| {
@@ -533,7 +533,7 @@ fn surface_page(ui: &mut egui::Ui, st: &mut State, only: Option<usize>) {
         && let Some(w) = st.comp.surface.widget_mut(id)
     {
         w.value_z = b;
-        // Re-send the colour at the new brightness.
+        // Re-send the color at the new brightness.
         sets.push((ControlTarget::Surface(id), w.value));
     }
     for (t, v) in sets {
@@ -1054,21 +1054,21 @@ pub(crate) fn remove_page(ctx: &egui::Context, sf: &mut phosphor_engine::Control
     }
 }
 
-/// A colour widget's hue / saturation square (above the brightness strip).
+/// A color widget's hue / saturation square (above the brightness strip).
 fn color_square(rect: egui::Rect) -> egui::Rect {
     let mut r = rect.shrink(3.0);
     r.set_bottom(r.bottom() - (rect.height() * 0.16).clamp(10.0, 22.0) - 3.0);
     r
 }
 
-/// A colour widget's brightness strip along the bottom.
+/// A color widget's brightness strip along the bottom.
 fn color_strip(rect: egui::Rect) -> egui::Rect {
     let r = rect.shrink(3.0);
     egui::Rect::from_min_max(egui::pos2(r.left(), r.bottom() - (rect.height() * 0.16).clamp(10.0, 22.0)), r.max)
 }
 
 /// A button per laser look for every laser projector, wired to switch to it (`ControlTarget::LaserLook`), in the
-/// look's colour (as in the clip grid and the Timeline).
+/// look's color (as in the clip grid and the Timeline).
 pub(crate) fn add_laser_buttons(comp: &mut phosphor_engine::Composition) {
     let looks: Vec<(u64, String)> = comp.lasers.looks.iter().map(|l| (l.id, l.name.clone())).collect();
     let many = comp.lasers.projectors.len() > 1;
