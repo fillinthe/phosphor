@@ -722,6 +722,8 @@ impl State {
             A::CueBack if press => self.cue_back(now),
             A::CueRandom if press => self.cue_random(now),
             A::AutoFade if press => self.auto_fade(now),
+            A::FadeToA if press => self.fade_to_side(false, now),
+            A::FadeToB if press => self.fade_to_side(true, now),
             #[cfg(not(target_arch = "wasm32"))]
             A::ProjectorsOn if press => self.projectors.ask_all(&self.comp.outputs, crate::pjlink::Ask::PowerOn),
             #[cfg(not(target_arch = "wasm32"))]

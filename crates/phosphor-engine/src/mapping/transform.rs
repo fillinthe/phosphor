@@ -139,8 +139,14 @@ impl ShapeTransform {
     pub fn set_scale_linked(&mut self, part: usize, v: f32) {
         let (min, max) = (Self::PARTS[2].min, Self::PARTS[2].max);
         let (from, other) = if part == 2 { (self.scale_x, self.scale_y) } else { (self.scale_y, self.scale_x) };
-        let k = if from.abs() > 1e-6 { v / from } else { 1.0 };
-        let other = (other * k).clamp(min, max);
+        let mut k = if from.abs() > 1e-6 { v / from } else { 1.0 };
+        // The follower stops at its limit and holds the leader there too: clamping only the follower changed the
+        // proportions for good.
+        let followed = other * k;
+        if followed.abs() > 1e-6 && (followed < min || followed > max) {
+            k *= followed.clamp(min, max) / followed;
+        }
+        let (v, other) = if from.abs() > 1e-6 { (from * k, other * k) } else { (v, other) };
         if part == 2 {
             (self.scale_x, self.scale_y) = (v, other);
         } else {
@@ -155,8 +161,10 @@ impl ShapeTransform {
             modulate(v, Self::PARTS[i].min, Self::PARTS[i].max, m, mods)
         });
         // Linked: Y follows X's movement (its own proportion to X kept).
+        // (A modulation on Y still moves it: its own movement on top of X's.)
         if self.scale_linked && self.scale_x.abs() > 1e-6 {
-            out[3] = out[2] * self.scale_y / self.scale_x;
+            let own = if self.scale_y.abs() > 1e-6 { out[3] / self.scale_y } else { 1.0 };
+            out[3] = out[2] * self.scale_y / self.scale_x * own;
         }
         out
     }

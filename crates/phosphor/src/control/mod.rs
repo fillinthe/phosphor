@@ -986,6 +986,9 @@ impl ControlHub {
                 self.glides.insert(format!("{:?}", map.target), Glide { target: map.target.clone(), from, to: v, start: now, secs, ease: phosphor_engine::FadeEase::EaseOut });
                 continue;
             }
+            // A value set directly ends a glide on the same control (a fader moved during an A / B / Auto fade used
+            // to be pulled back by the fade until it finished).
+            self.glides.remove(&format!("{:?}", map.target));
             set_target(comp, &map.target, v, &mut self.triggers);
         }
         // Built-in addresses work without any mapping: /phosphor/master, /phosphor/layer/3/opacity…
@@ -1010,11 +1013,17 @@ impl ControlHub {
                 .collect();
             for (address, v) in osc {
                 // Addresses use American spelling since 0.5.6 ("color", "center", "gray" before): an old controller setup still lands.
-                let address = address.replace("colour", "color").replace("Colour", "Color").replace("centre", "center").replace("grey", "gray");
+                // (The address as sent is tried too: a layer really named "greyscale" keeps its by-name address.)
+                let raw_lower = address.to_lowercase();
+                let address = address.replace("colour", "color").replace("Colour", "Color").replace("centre", "center").replace("Centre", "Center").replace("grey", "gray").replace("Grey", "Gray");
                 let lower = address.to_lowercase();
                 let pattern = is_osc_pattern(&address);
                 for (t, by_id, by_name) in &targets {
-                    let hit = if pattern { osc_match(&lower, &by_id.to_lowercase()) || osc_match(&lower, by_name) } else { *by_id == address || *by_name == lower };
+                    let hit = if pattern {
+                        osc_match(&lower, &by_id.to_lowercase()) || osc_match(&lower, by_name) || osc_match(&raw_lower, by_name)
+                    } else {
+                        *by_id == address || *by_name == lower || *by_name == raw_lower
+                    };
                     if hit {
                         set_target(comp, t, v, &mut self.triggers);
                         if !pattern {

@@ -540,7 +540,7 @@ vec2 phosphor_flip(vec2 v) { return vec2(v.x, 1.0 - v.y); }\n\
     for input in inputs {
         let (ty, expr) = match (&input.kind, input.offset, input.texture) {
             (IsfInputKind::Float { .. }, Some(o), _) => ("float", param_expr(o, 1)),
-            (IsfInputKind::Bool { .. } | IsfInputKind::Event, Some(o), _) => ("bool", format!("({} != 0.0)", param_expr(o, 1))),
+            (IsfInputKind::Bool { .. } | IsfInputKind::Event, Some(o), _) => ("bool", format!("({} > 0.5)", param_expr(o, 1))),
             (IsfInputKind::Long { .. } | IsfInputKind::Int { .. }, Some(o), _) => ("int", format!("int({})", param_expr(o, 1))),
             (IsfInputKind::Color { .. }, Some(o), _) => ("vec4", param_expr(o, 4)),
             (IsfInputKind::Curve { .. }, Some(o), _) => {
@@ -865,7 +865,7 @@ void isf_vertShaderInit() {\n\
     for input in inputs {
         let (ty, expr) = match (&input.kind, input.offset) {
             (IsfInputKind::Float { .. }, Some(o)) => ("float", param_expr(o, 1)),
-            (IsfInputKind::Bool { .. } | IsfInputKind::Event, Some(o)) => ("bool", format!("({} != 0.0)", param_expr(o, 1))),
+            (IsfInputKind::Bool { .. } | IsfInputKind::Event, Some(o)) => ("bool", format!("({} > 0.5)", param_expr(o, 1))),
             (IsfInputKind::Long { .. } | IsfInputKind::Int { .. }, Some(o)) => ("int", format!("int({})", param_expr(o, 1))),
             (IsfInputKind::Color { .. }, Some(o)) => ("vec4", param_expr(o, 4)),
             (IsfInputKind::Point2D { .. }, Some(o)) if input.pixels => ("vec2", format!("({} * phosphor_u.resolution)", param_expr(o, 2))),

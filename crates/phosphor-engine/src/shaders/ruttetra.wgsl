@@ -64,7 +64,8 @@ fn rutt_vertex(row: u32, col: u32, rows: u32, cols: u32) -> RuttOut {
 fn vs_rutt(@builtin(vertex_index) vi: u32) -> RuttOut {
     let rows = max(u32(P(0u)), 2u);
     let cols = max(u32(P(1u)), 2u);
-    let mode = u32(P(10u));
+    // (Rounded, like the Draw menu's name for the value: a fader at 1.6 said Triangles and drew Mesh.)
+    let mode = u32(P(10u) + 0.5);
     let h_count = select(rows * (cols - 1u), 0u, mode == 3u);
     let v_count = select(0u, cols * (rows - 1u), mode >= 1u);
     let seg = vi / 2u;

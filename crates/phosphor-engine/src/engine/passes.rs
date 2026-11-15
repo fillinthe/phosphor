@@ -433,7 +433,7 @@ impl Engine {
                     let mut next_idx: Option<usize> = None;
                     // Rutt-Etra draws a vertex per line end: a budget keeps four layers of it from freezing the show.
                     if entry == "fs_rutt" {
-                        let (rows, cols) = rutt_grid(u.p[0][0], u.p[0][1], u.p[2][2] as u32);
+                        let (rows, cols) = rutt_grid(u.p[0][0], u.p[0][1], u.p[2][2].round() as u32);
                         (u.p[0][0], u.p[0][1]) = (rows, cols);
                     } else if entry == "fs_rutt_points" {
                         let (rows, cols) = rutt_grid(u.p[0][0], u.p[0][1], 3);

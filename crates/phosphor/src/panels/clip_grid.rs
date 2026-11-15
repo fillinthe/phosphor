@@ -20,6 +20,8 @@ pub(crate) struct Grid {
     pub pressed: bool,
     /// Which columns have a clip in them on some layer (the others' headers have nothing to trigger).
     pub filled: Vec<bool>,
+    /// The open comp has layers (none: the column buttons have nothing to trigger and are grayed out).
+    pub has_layers: bool,
 }
 
 impl Grid {
@@ -50,6 +52,7 @@ impl Grid {
             held_id,
             pressed,
             filled: (0..cols).map(|c| st.comp.layers.iter().any(|l| l.clips.get(c).is_some_and(|k| !k.is_empty()))).collect(),
+            has_layers: st.comp.layers.iter().any(|l| st.comp.in_open_comp(l)),
         };
         (grid, out)
     }
@@ -199,8 +202,11 @@ pub(crate) fn transport_bar(ui: &mut egui::Ui, st: &mut State) {
 
 /// The column headers: each triggers its whole column (`head_w` = the width of the layer strips before them).
 pub(crate) fn column_headers(ui: &mut egui::Ui, grid: &Grid, head_w: f32, out: &mut RowOut) {
-    // Column headers trigger whole columns.
+    // Column headers trigger whole columns. Without layers there's nothing to trigger: grayed out (owner, 2026-11-15).
     ui.horizontal(|ui| {
+        if !grid.has_layers {
+            ui.disable();
+        }
         // Stop every layer (Resolume's clear-all): the space over the layer strips.
         let all = ControlTarget::StopLayer(phosphor_engine::MASTER_ID);
         let stop = command_sized(ui, label(icon::STOP, "Stop all"), egui::vec2((head_w - ui.spacing().item_spacing.x).max(40.0), CONTROL_H))

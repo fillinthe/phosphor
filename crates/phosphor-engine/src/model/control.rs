@@ -191,6 +191,9 @@ pub enum AppControl {
     ProjectorsShutter,
     /// The crossfader glides to the other side (A ↔ B) over the auto-fade time.
     AutoFade,
+    /// The crossfader glides all the way to A / to B over the auto-fade time (the Mixer's A and B buttons).
+    FadeToA,
+    FadeToB,
     /// Every output holds its picture (on) / goes live again (off).
     FreezeOutputs,
     /// Cue list: a random cue (not the one on now).
@@ -204,7 +207,7 @@ pub enum AppControl {
 }
 
 impl AppControl {
-    pub const ALL: [AppControl; 34] = [
+    pub const ALL: [AppControl; 36] = [
         AppControl::Tempo,
         AppControl::TapTempo,
         AppControl::Resync,
@@ -234,6 +237,8 @@ impl AppControl {
         AppControl::ProjectorsOff,
         AppControl::ProjectorsShutter,
         AppControl::AutoFade,
+        AppControl::FadeToA,
+        AppControl::FadeToB,
         AppControl::FreezeOutputs,
         AppControl::CueRandom,
         AppControl::DmxMaster,
@@ -272,6 +277,8 @@ impl AppControl {
             AppControl::ProjectorsOff => "Projectors: switch off (PJLink)",
             AppControl::ProjectorsShutter => "Projectors: shutter closed/open (PJLink)",
             AppControl::AutoFade => "Crossfader: auto-fade to the other side",
+            AppControl::FadeToA => "Crossfader: glide to A",
+            AppControl::FadeToB => "Crossfader: glide to B",
             AppControl::FreezeOutputs => "Freeze outputs (hold the picture)",
             AppControl::CueRandom => "Cue list: a random cue",
             AppControl::DmxMaster => "LED / DMX master",
@@ -312,6 +319,8 @@ impl AppControl {
             AppControl::ProjectorsOff => "projectors/off",
             AppControl::ProjectorsShutter => "projectors/shutter",
             AppControl::AutoFade => "crossfader/auto",
+            AppControl::FadeToA => "crossfader/a",
+            AppControl::FadeToB => "crossfader/b",
             AppControl::FreezeOutputs => "outputs/freeze",
             AppControl::CueRandom => "cue/random",
             AppControl::DmxMaster => "dmx/master",

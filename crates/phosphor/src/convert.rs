@@ -239,7 +239,9 @@ pub fn output_path_in(dir: &str, src: &str, format: Format) -> String {
 pub fn free_space(path: &str) -> Option<u64> {
     #[cfg(unix)]
     {
-        let dir = std::path::Path::new(path).parent()?;
+        // The folder itself, else the nearest one above that exists (it took the folder above: a disk's top folder
+        // gave the startup disk's space; review 2026-11-15).
+        let dir = std::path::Path::new(path).ancestors().find(|d| d.is_dir())?;
         let c = std::ffi::CString::new(dir.to_string_lossy().as_bytes()).ok()?;
         let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
         // SAFETY: statvfs fills the struct for an existing path.
