@@ -120,6 +120,15 @@ impl VideoFrame {
     }
 }
 
+/// Jumps asked for faster than pictures come (a drag along the timeline asks every frame): while one hasn't shown its
+/// picture, newer ones wait, only the latest kept. Each jump used to cancel the one before it had a picture, so the
+/// movie froze until the drag stopped and looked paused (owner, 2026-11-14).
+#[derive(Default)]
+struct Scrub {
+    waiting: Option<std::time::Instant>,
+    next: Option<f64>,
+}
+
 /// Diagnostics for a player.
 #[derive(Clone, Debug, Default)]
 pub struct VideoStats {
@@ -152,6 +161,9 @@ pub struct VideoPlayer {
     live: bool,
     /// Seek generation: frames decoded before the latest seek carry an older number and are dropped.
     generation: u64,
+    /// Dragging along the timeline: the jump still on its way (and when it was asked), and the newest one asked for
+    /// meanwhile (`seek`).
+    scrub: Scrub,
     mode: PlayMode,
     /// Media time (seconds into the movie) of the frame on screen, and its presentation time.
     shown: f64,
@@ -373,6 +385,7 @@ impl VideoPlayer {
             size,
             live,
             generation: 0,
+            scrub: Scrub::default(),
             mode: PlayMode::default(),
             shown: 0.0,
             shown_pts: 0.0,
@@ -429,6 +442,7 @@ impl VideoPlayer {
             size: (0, 0),
             live: false,
             generation: 0,
+            scrub: Scrub::default(),
             mode: PlayMode::default(),
             shown: 0.0,
             shown_pts: 0.0,
@@ -492,6 +506,13 @@ impl VideoPlayer {
         if self.live {
             return self.poll_live();
         }
+        // A jump waiting behind one that has now shown its picture (or given up on).
+        if self.scrub.next.is_some() && self.scrub.waiting.is_none_or(|at| at.elapsed() >= std::time::Duration::from_millis(300)) {
+            self.scrub.waiting = None;
+            if let Some(t) = self.scrub.next.take() {
+                self.seek(t);
+            }
+        }
         // Clamp large gaps (window hidden, debugger) so playback resumes instead of skipping ahead.
         let dt = self
             .last_now
@@ -521,6 +542,8 @@ impl VideoPlayer {
                     }
                     Ok(Msg::Frame(_, pts, media, frame)) => {
                         self.end = None;
+                        // The jump's picture is here: the next jump can go (on the next call, after this one shows).
+                        self.scrub.waiting = None;
                         self.pending = Some((pts, media, frame));
                     }
                     Ok(Msg::End(at)) => {
@@ -714,6 +737,12 @@ impl VideoPlayer {
         if self.live {
             return;
         }
+        // The last jump hasn't shown its picture yet: this one waits for it (a stuck one is let go after a moment).
+        if self.scrub.waiting.is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(300)) {
+            self.scrub.next = Some(t);
+            return;
+        }
+        self.scrub = Scrub { waiting: Some(std::time::Instant::now()), next: None };
         let t = match self.duration {
             Some(d) if d > 0.0 => t.clamp(0.0, (d - 1e-3).max(0.0)),
             _ => t.max(0.0),
