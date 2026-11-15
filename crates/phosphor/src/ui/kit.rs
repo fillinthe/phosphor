@@ -67,6 +67,15 @@ pub(crate) fn icon_toggle(ui: &mut egui::Ui, on: &mut bool, text: impl Into<egui
 }
 
 /// Show / hide: an eye, crossed out in orange when hidden. Marks the response changed.
+/// A number as written ("-0.00", "-0", "-0%") without the minus a value just below zero picks up when rounded:
+/// zero is never negative on screen (owner, 2026-11-14).
+pub(crate) fn no_minus_zero(s: String) -> String {
+    match s.strip_prefix('-') {
+        Some(rest) if !rest.chars().any(|c| c.is_ascii_digit() && c != '0') => rest.to_string(),
+        _ => s,
+    }
+}
+
 /// A menu entry's words: lit in the accent color with what it's set to when that thing is on ("Modulate: LFO",
 /// "Mapped: MIDI CC 12"), plain otherwise, so what's active on a control shows in its right-click menu without
 /// opening anything (owner, 2026-11-14).
@@ -463,7 +472,9 @@ pub(crate) fn make_room(ui: &mut egui::Ui, need: f32) {
 /// A drop-down `width` wide (plus its arrow) that moves to the next line of a wrapping row when it won't fit.
 pub(crate) fn dropdown(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, width: f32) -> egui::ComboBox {
     make_room(ui, width + ui.spacing().icon_width + ui.spacing().button_padding.x * 2.0);
-    egui::ComboBox::from_id_salt(id).width(width)
+    // Cut short at its width: a long choice (a layer named after a long file) made the drop-down, then the whole
+    // panel, wider, so a grid beside it jumped between 3 and 4 columns (owner, 2026-11-14: interfaces must not shift).
+    egui::ComboBox::from_id_salt(id).width(width).truncate()
 }
 
 /// A one-line text field: `hint` shows while it's empty; `width` None = the room there is.

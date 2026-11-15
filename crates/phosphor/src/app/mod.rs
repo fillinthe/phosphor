@@ -763,7 +763,15 @@ impl State {
             None if from < 0.5 => 1.0,
             None => 0.0,
         };
-        self.control.glide_to(target, from, to, now as f32, self.comp.auto_fade_secs);
+        self.control.glide_eased(target, from, to, now as f32, self.comp.auto_fade_secs, self.comp.fade_ease);
+    }
+
+    /// The crossfader to one side (A = 0, B = 1) over the Auto-fade time with its easing (instantly at 0 s): the A
+    /// and B buttons, like VDMX's (owner, 2026-11-14).
+    pub fn fade_to_side(&mut self, b: bool, now: f64) {
+        let target = phosphor_engine::ControlTarget::App(phosphor_engine::AppControl::Crossfader);
+        let from = self.comp.crossfader;
+        self.control.glide_eased(target, from, if b { 1.0 } else { 0.0 }, now as f32, self.comp.auto_fade_secs, self.comp.fade_ease);
     }
 
     /// Stops what layer `id` plays (`MASTER_ID`: every layer in the open comp) with the launch fade; a collection

@@ -622,6 +622,34 @@ pub(crate) fn account_header(ui: &mut egui::Ui, view: &mut MediaView, account_di
         if load_more(ui, view) {
             refresh = Some(FollowAct::More);
         }
+        // The account's settings in one menu (they were four rows of buttons above the clips: owner, 2026-11-14).
+        let mut act = None;
+        crate::ui::field_menu(ui, label(icon::GEAR, "Account"), |ui| {
+            ui.set_min_width(300.0);
+            // X accounts: GIFs only, or their videos too (the next Refresh brings them in).
+            if let Some(a) = view.following.accounts.iter_mut().find(|a| a.site == crate::online::following::Site::X && a.feed == crate::online::following::Feed::Posts && a.dir().is_some_and(|d| d.to_string_lossy() == account_dir))
+                && crate::ui::toggle(ui, &mut a.videos, label(icon::FILM_STRIP, "Videos too")).on_hover_text("Bring in this account's videos as well as its animated GIFs (Refresh to get them)").changed()
+            {
+                view.following.save();
+            }
+            ui.separator();
+            let lib = view.following.library_dir().map_or_else(|| "?".into(), |p| p.display().to_string().replace(&std::env::var("HOME").unwrap_or_default(), "~"));
+            if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Keep all")).on_hover_text("Copy this account's clips (with their credits) into your library folder, to hold onto them").clicked() {
+                act = Some(FollowAct::KeepAll);
+                ui.close();
+            }
+            if crate::ui::command(ui, label(icon::FOLDER_OPEN, &format!("Library folder: {lib}…"))).on_hover_text("Where Keep all copies clips (click to pick another folder)").clicked() {
+                act = Some(FollowAct::PickLibrary);
+                ui.close();
+            }
+            ui.separator();
+            browser_pick(ui, view);
+        })
+        .response
+        .on_hover_text("Videos too, keeping clips, your library folder, the browser you're signed in with");
+        if act.is_some() {
+            refresh = act;
+        }
         if running {
             ui.spinner();
         }
@@ -648,28 +676,6 @@ pub(crate) fn account_header(ui: &mut egui::Ui, view: &mut MediaView, account_di
             }
         }
     });
-    // X accounts: GIFs only, or their videos too (the next Refresh brings them in).
-    if let Some(a) = view.following.accounts.iter_mut().find(|a| a.site == crate::online::following::Site::X && a.feed == crate::online::following::Feed::Posts && a.dir().is_some_and(|d| d.to_string_lossy() == account_dir)) {
-        if crate::ui::toggle(ui, &mut a.videos, label(icon::FILM_STRIP, "Videos too")).on_hover_text("Bring in this account's videos as well as its animated GIFs (Refresh to get them)").changed() {
-            view.following.save();
-        }
-    }
-    crate::ui::toolbar(ui, |ui| {
-        if crate::ui::command(ui, label(icon::DOWNLOAD_SIMPLE, "Keep all"))
-            .on_hover_text("Copy this account's clips (with their credits) into your library folder, to hold onto them")
-            .clicked()
-        {
-            refresh = Some(FollowAct::KeepAll);
-        }
-        let lib = view.following.library_dir().map_or_else(|| "?".into(), |p| p.file_name().map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned()));
-        if crate::ui::small_command(ui, format!("in {lib}"))
-            .on_hover_text(format!("Kept clips go to {} (click to pick another folder)", view.following.library_dir().map_or_else(String::new, |p| p.display().to_string())))
-            .clicked()
-        {
-            refresh = Some(FollowAct::PickLibrary);
-        }
-    });
-    browser_pick(ui, view);
     refresh
 }
 

@@ -62,7 +62,7 @@ pub(crate) fn layers(ui: &mut egui::Ui, st: &mut State) {
     let mut comp_action: Option<(u64, super::stack::CompBandAct)> = None;
     let mut comp_stop: Vec<u64> = Vec::new();
     crate::ui::column_scroll(ui).auto_shrink(false).show(ui, |ui| {
-        let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass);
+        let (pick, dropped) = master_card(ui, output_tex, aspect, *selected == Some(MASTER_ID), &comp.master_effects, &mut comp.master_fx_bypass, &mut comp.master_fade, &mut comp.master_fade_mod);
         if pick {
             *selected = Some(MASTER_ID);
         }
@@ -299,6 +299,8 @@ pub(crate) fn master_card(
     is_selected: bool,
     effects: &[EffectState],
     bypass: &mut bool,
+    fade: &mut f32,
+    fade_mod: &mut Option<phosphor_engine::Modulation>,
 ) -> (bool, Option<crate::explorer::PaletteDrag>) {
     let mut select = false;
     let card_id = egui::Id::new("master_card");
@@ -313,6 +315,9 @@ pub(crate) fn master_card(
                 if crate::ui::pick_item(ui, is_selected, RichText::new("MASTER").strong().size(12.5).color(accent())).clicked() {
                     select = true;
                 }
+                // The whole mix's fade, like a layer's Opacity (the same control as under the Preview and in the
+                // Mixer; owner, 2026-11-14: "why doesn't master have opacity there?").
+                Level::percent(fade, "Fade").default(1.0).modulation(fade_mod).target(ControlTarget::MasterFade).tip("The whole mix: 0% = black").show(ui);
                 help(ui, "Effects here run over all layers");
                 if let Some(r) = super::groups::fx_badge(ui, effects, bypass) {
                     map_menu(ui, &r.on_hover_text("Click to bypass the master effects · right-click to map"), ControlTarget::App(phosphor_engine::AppControl::MasterFxBypass));
@@ -428,6 +433,13 @@ pub(crate) fn layer_card(
                         }
                     }
                     choice_combo(ui, ("fit", layer.id), &mut layer.fit, 74.0, false);
+                    // Its crossfader side, right here (it was only in the Mixer; owner, 2026-11-14).
+                    for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
+                        let on = layer.group == g;
+                        if crate::ui::pick_item(ui, on, RichText::new(g.name()).strong()).on_hover_text("Crossfader side: A or B (click again for none). The crossfader is in the Mixer").clicked() {
+                            layer.group = if on { phosphor_engine::CrossGroup::None } else { g };
+                        }
+                    }
                     let marks = layer.marks();
                     if let Some(r) = super::groups::fx_count_badge(ui, marks.clip_fx + marks.fx, &mut layer.fx_bypass) {
                         map_menu(ui, &r, ControlTarget::LayerFxBypass(layer.id));
