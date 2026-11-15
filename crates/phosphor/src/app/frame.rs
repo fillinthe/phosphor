@@ -175,6 +175,7 @@ impl PhosphorApp {
         }
         self.remember_output_screens();
         crate::panels::follow_selection_comp(&mut self.state.comp, self.state.selected);
+        self.state.control.selected_layer = self.state.selected;
         {
             #[cfg(not(target_arch = "wasm32"))]
             let State { control, comp, clock, cue_run, ltc_out, notice, .. } = &mut self.state;

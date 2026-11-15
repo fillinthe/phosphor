@@ -48,7 +48,10 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
 
 ## OSC
 
-- [ ] **Position-based addresses and "selected" addresses** (R): `/phosphor/layer/1/opacity` = the first layer in the
+- [~] **Position-based addresses and "selected" addresses** (R) (**built 2026-11-15**, tested: `/phosphor/layers/N/…`
+  = the Nth layer from the bottom of the open comp, `/phosphor/selected/layer/…`, and `fx/K/…` after either;
+  `control::placed_address`. Left: clips by column under a placed layer already work (`clip/3`); groups, slices and
+  "selected clip" by place): `/phosphor/layer/1/opacity` = the first layer in the
   stack, `/phosphor/selected/layer/opacity`, and `/phosphor/layer/1/clip/3/play`. A TouchOSC page then works on any
   project, and a single "selected layer" strip works on whatever is clicked. Today addresses use internal ids or
   names (`default_osc_address`, `named_address` in `control/targets.rs`). Size M.
