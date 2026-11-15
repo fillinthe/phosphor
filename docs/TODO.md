@@ -7,8 +7,9 @@ Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (mo
 - [ ] **Designer needs work** (owner, 2026-11-14): every box quietly makes layers of its own (Picture = a layer,
       Effect = a layer, Mix = two), so layers keep appearing while you work. Owner: "I should be able to make layers
       and then attach them to something". Proposal: hide the Designer's own layers from Layers / Clips / Mixer, and a
-      "Layer" box that brings an existing layer into the network. Also: a box's bottom buttons (source picker, folder,
-      camera) are hard to click and sit off; picking "From: Comp" stopped all video (nothing in the log; reproduce).
+      "Layer" box that brings an existing layer into the network. Fixed 2026-11-14 (not released, not seen on screen yet): a box's
+      source row no longer runs past the box's edge (the icon buttons were measured short), and a comp is no longer
+      offered as a source inside itself (a comp fed into itself drew nothing and its movies stopped).
 - [~] **Designer** (the TouchDesigner-style section, owner's name). Plan in `docs/design/nodes.md`. **Phase 1 done
       2026-10-29** (not installed): Designer area (⌘4), Picture / Effect / Mix / Output boxes on the node canvas, each
       backed by hidden layers; `--quick designer`. Checked on a screenshot + engine test; not yet with a real mouse.

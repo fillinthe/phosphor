@@ -543,7 +543,9 @@ pub(crate) fn layer_card(
 /// What a layer can show another's picture from: (id, name, is a layer (has a "before its effects" picture too)).
 pub(crate) fn feed_choices(comp: &phosphor_engine::Composition) -> Vec<(u64, String, bool)> {
     std::iter::once((MASTER_ID, "Program (feedback)".to_string(), false))
-        .chain(comp.comps.iter().filter(|_| comp.comps.len() > 1).map(|c| (c.id, format!("Comp: {}", c.name), false)))
+        // Every comp but the one being edited: a comp fed into itself drew nothing, and the movies in it stopped
+        // (owner, 2026-11-14: "it stopped all video when I mapped to a comp").
+        .chain(comp.comps.iter().filter(|c| comp.comps.len() > 1 && comp.open_comp() != Some(c.id)).map(|c| (c.id, format!("Comp: {}", c.name), false)))
         .chain(comp.groups.iter().map(|g| (g.id, g.name.clone(), false)))
         .chain(comp.layers.iter().rev().map(|l| (l.id, l.name.clone(), true)))
         .collect()
@@ -555,7 +557,12 @@ pub(crate) fn source_picker(ui: &mut egui::Ui, layer: &mut LayerState, feeds: &[
         // Too little room for the list and its three icon buttons (a Stack strip in a narrow panel): the list and one
         // "more" button holding Browse, Open and the live inputs. The icons used to run off the strip and over the
         // layer's name.
-        let slot = ui.spacing().interact_size.y + 2.0 * ui.spacing().item_spacing.x;
+        // An icon button's real width: the icon, its padding both sides, the gap after it. (Guessed from the row's
+        // height, it came out short: the row ran past a Designer box's edge, where clicks on the last buttons missed;
+        // owner, 2026-11-14.)
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let glyph = ui.painter().layout_no_wrap(icon::FOLDER_OPEN.to_string(), font, Color32::WHITE).size().x;
+        let slot = (glyph + 2.0 * ui.spacing().button_padding.x + 2.0).max(ui.spacing().interact_size.y) + ui.spacing().item_spacing.x;
         let tight = ui.available_width() < 60.0 + 3.0 * slot;
         if !tight && crate::ui::command(ui, icon::SPARKLE).on_hover_text("Browse sources with previews").clicked() {
             action = Some(LayerAction::BrowseSources);
