@@ -387,22 +387,29 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
         ),
         _ => "Shuffle".to_string(),
     };
-    ui.horizontal_wrapped(|ui| {
-        if !in_collection {
-            let tip = "A new layer with every file shown here (after search and sort) as its clips, the first one playing";
-            if crate::ui::command_if(ui, !shown.is_empty(), label(icon::SQUARES_FOUR, &format!("Clip layer ({})", shown.len()))).on_hover_text(tip).clicked() {
-                acts.push(MediaAct::ShownToLayer(shown.clone()));
-            }
-        }
+    // What to do with the files shown: Random (used most) and one menu for the rest (they were a row of four).
+    crate::ui::toolbar(ui, |ui| {
         if crate::ui::command_if(ui, !shown.is_empty(), label(icon::DICE_FIVE, "Random")).on_hover_text("Play one of the files shown here, at random, on the selected layer (click again for another)").clicked() {
             acts.push(MediaAct::RandomOne(shown.clone()));
         }
-        if !in_collection && crate::ui::command_if(ui, shown.len() > 1, label(icon::SHUFFLE, "Shuffle layer")).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
-            acts.push(MediaAct::ShuffleLayer(shown.clone(), title.clone()));
-        }
-        if st.selected.is_some() && crate::ui::command_if(ui, !shown.is_empty(), label(icon::ARROW_DOWN, "Fill selected layer")).on_hover_text("Puts the files shown here into the selected layer's clip slots, in order").clicked() {
-            acts.push(MediaAct::FillFolder(shown.clone()));
-        }
+        ui.add_enabled_ui(!shown.is_empty(), |ui| {
+            ui.menu_button(label(icon::SQUARES_FOUR, &format!("Use these {}", shown.len())), |ui| {
+                if !in_collection && crate::ui::command(ui, label(icon::SQUARES_FOUR, "A new layer with them as clips")).on_hover_text("Every file shown here (after search and sort) as its clips, the first one playing").clicked() {
+                    acts.push(MediaAct::ShownToLayer(shown.clone()));
+                    ui.close();
+                }
+                if !in_collection && crate::ui::command_if(ui, shown.len() > 1, label(icon::SHUFFLE, "A new layer shuffling them")).on_hover_text("Plays them in random order by itself (autopilot)").clicked() {
+                    acts.push(MediaAct::ShuffleLayer(shown.clone(), title.clone()));
+                    ui.close();
+                }
+                if crate::ui::command_if(ui, st.selected.is_some(), label(icon::ARROW_DOWN, "Fill the selected layer")).on_hover_text("Puts them into the selected layer's clip slots, in order").clicked() {
+                    acts.push(MediaAct::FillFolder(shown.clone()));
+                    ui.close();
+                }
+            })
+            .response
+            .on_hover_text("Make a layer of the files shown, shuffle them, or fill the selected layer");
+        });
     });
 
     // Where a click plays (the selected layer, else a new one) and every layer for "Play on".

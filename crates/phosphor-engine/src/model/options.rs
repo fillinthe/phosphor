@@ -229,6 +229,44 @@ impl FaderCurve {
     }
 }
 
+/// How a glide (the crossfader's A / B / Auto fades) moves over its time.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FadeEase {
+    /// Fast at first, settling at the end (as it always was).
+    #[default]
+    EaseOut,
+    /// The same speed all the way.
+    Linear,
+    /// Slow to start, fast at the end.
+    EaseIn,
+    /// Slow at both ends.
+    EaseInOut,
+}
+
+impl FadeEase {
+    pub const ALL: [FadeEase; 4] = [FadeEase::EaseOut, FadeEase::Linear, FadeEase::EaseIn, FadeEase::EaseInOut];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            FadeEase::EaseOut => "Ease out",
+            FadeEase::Linear => "Linear",
+            FadeEase::EaseIn => "Ease in",
+            FadeEase::EaseInOut => "Ease in and out",
+        }
+    }
+
+    /// How far along (0..1) at `t` (0..1) of the time.
+    pub fn apply(self, t: f32) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        match self {
+            FadeEase::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
+            FadeEase::Linear => t,
+            FadeEase::EaseIn => t * t,
+            FadeEase::EaseInOut => t * t * (3.0 - 2.0 * t),
+        }
+    }
+}
+
 /// Which way a movie plays.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayDirection {
@@ -497,5 +535,20 @@ pub struct AutoShow {
 impl Default for AutoShow {
     fn default() -> Self {
         Self { enabled: false, bars: 8, columns: true, surprise_on_drops: true, react: true }
+    }
+}
+
+#[cfg(test)]
+mod fade_ease_tests {
+    use super::FadeEase;
+
+    #[test]
+    fn every_easing_starts_at_0_and_ends_at_1() {
+        for e in FadeEase::ALL {
+            assert_eq!(e.apply(0.0), 0.0, "{e:?}");
+            assert_eq!(e.apply(1.0), 1.0, "{e:?}");
+        }
+        assert!(FadeEase::EaseOut.apply(0.25) > 0.25 && FadeEase::EaseIn.apply(0.25) < 0.25);
+        assert!((FadeEase::Linear.apply(0.3) - 0.3).abs() < 1e-6 && (FadeEase::EaseInOut.apply(0.5) - 0.5).abs() < 1e-6);
     }
 }

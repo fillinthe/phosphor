@@ -137,12 +137,16 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
     let auto_target = ControlTarget::App(phosphor_engine::AppControl::AutoFade);
     let gliding = st.control.glide_target(&ControlTarget::App(phosphor_engine::AppControl::Crossfader)).is_some();
     let mut fade = false;
+    let mut side: Option<bool> = None;
     let comp = &mut st.comp;
     let target = ControlTarget::App(phosphor_engine::AppControl::Crossfader);
     let used = comp.layers.iter().any(|l| l.group != phosphor_engine::CrossGroup::None);
     // (A toolbar: in a narrow Mixer, Auto, its time, the curve and Speed wrap under the crossfader instead of being cut off.)
     crate::ui::toolbar(ui, |ui| {
-        crate::ui::heading(ui, "A");
+        // A and B are buttons: glide all the way to that side over the Auto-fade time, with its easing.
+        if crate::ui::command(ui, RichText::new("A").strong()).on_hover_text("Glide to A (the A layers) over the fade time; right-click to map it").clicked() {
+            side = Some(false);
+        }
         // (Double-click centers it: its default.)
         let width = (ui.available_width() - 360.0).clamp(120.0, 520.0);
         let r = Level::percent(&mut comp.crossfader, "Crossfader").default(0.5).target(target.clone()).width(width).show(ui);
@@ -152,17 +156,23 @@ fn crossfader(ui: &mut egui::Ui, st: &mut State) {
             x if x > 0.99 => "B".to_string(),
             x => format!("A {:.0}% · B {:.0}%", phosphor_engine::CrossGroup::A.gain(x, comp.fader_curve) * 100.0, phosphor_engine::CrossGroup::B.gain(x, comp.fader_curve) * 100.0),
         });
-        crate::ui::heading(ui, "B");
+        if crate::ui::command(ui, RichText::new("B").strong()).on_hover_text("Glide to B (the B layers) over the fade time; right-click to map it").clicked() {
+            side = Some(true);
+        }
         let towards = if comp.crossfader < 0.5 { "B" } else { "A" };
         let auto = action_button(ui, Act::Go, label(if gliding { icon::HOURGLASS } else { icon::ARROWS_LEFT_RIGHT }, "Auto"))
             .on_hover_text(format!("Glide to {towards} over the time beside it (press again on the way to turn back)"));
         fade = auto.clicked();
         map_menu(ui, &auto, auto_target);
-        guarded!(ui, comp.auto_fade_secs, egui::DragValue::new(&mut comp.auto_fade_secs).range(0.0..=60.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Auto-fade time");
+        guarded!(ui, comp.auto_fade_secs, egui::DragValue::new(&mut comp.auto_fade_secs).range(0.0..=60.0).speed(0.05).suffix(" s").max_decimals(1)).on_hover_text("Fade time for A, B and Auto (0 = cut)");
+        choice_combo(ui, "fade_ease", &mut comp.fade_ease, 120.0, false).on_hover_text("How A, B and Auto move: Ease out = fast then settling, Linear = steady, Ease in = slow then fast, Ease in and out = slow at both ends");
         choice_combo(ui, "fader_curve", &mut comp.fader_curve, 150.0, false).on_hover_text("How the crossfader shares out A and B. Full in middle: both full at the center, each fades over its far half. Smooth: no dip in the middle. Straight: each fades the whole way (a dip in the middle). Hard cut: switches at the center.");
         crate::ui::Level::range(&mut comp.master_speed, 0.25, 4.0, "Speed").log().default(1.0).width(130.0).target(ControlTarget::App(phosphor_engine::AppControl::MasterSpeed)).tip("Every movie plays this much faster or slower").show(ui);
     });
     if fade {
         st.auto_fade(now);
+    }
+    if let Some(b) = side {
+        st.fade_to_side(b, now);
     }
 }

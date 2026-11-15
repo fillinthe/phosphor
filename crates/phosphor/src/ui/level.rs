@@ -467,18 +467,28 @@ fn parse_typed(text: &str, min: f32, max: f32, percent: bool) -> Option<f32> {
 
 /// How a level shows its value: a percentage, a whole number for wide ranges, else two decimals.
 fn format_value(v: f32, min: f32, max: f32, percent: bool) -> String {
-    if percent {
+    let s = if percent {
         format!("{:.0}%", v * 100.0)
     } else if max - min >= 20.0 {
         format!("{v:.0}")
     } else {
         format!("{v:.2}")
-    }
+    };
+    super::no_minus_zero(s)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zero_never_has_a_minus() {
+        assert_eq!(format_value(-0.001, -1.0, 1.0, false), "0.00");
+        assert_eq!(format_value(-0.0, -1.0, 1.0, false), "0.00");
+        assert_eq!(format_value(-0.3, -180.0, 180.0, false), "0");
+        assert_eq!(format_value(-0.001, 0.0, 1.0, true), "0%");
+        assert_eq!(format_value(-0.5, -1.0, 1.0, false), "-0.50", "real negatives keep their sign");
+    }
 
     #[test]
     fn typed_values() {

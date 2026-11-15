@@ -552,6 +552,11 @@ impl Widget for DragValue<'_> {
                 .number_formatter
                 .format(value, auto_decimals..=max_decimals),
         };
+        // PHOSPHOR PATCH: zero is never written "-0" / "-0.00" (a value just below zero, rounded; owner, 2026-11-14).
+        let value_text = match value_text.strip_prefix('-') {
+            Some(rest) if !rest.chars().any(|c| c.is_ascii_digit() && c != '0') => rest.to_string(),
+            _ => value_text,
+        };
 
         let text_style = ui.style().drag_value_text_style.clone();
 

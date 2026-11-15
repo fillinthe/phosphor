@@ -297,6 +297,7 @@ struct Glide {
     to: f32,
     start: f32,
     secs: f32,
+    ease: phosphor_engine::FadeEase,
 }
 
 /// Messages the MIDI / OSC monitor keeps.
@@ -968,7 +969,7 @@ impl ControlHub {
                 if v < from {
                     // Keep a fall that's already on its way down to this value (each message would restart it).
                     if self.glides.get(&key).is_none_or(|g| (g.to - v).abs() > 1e-6) {
-                        self.glides.insert(key, Glide { target: map.target.clone(), from, to: v, start: now, secs: fall });
+                        self.glides.insert(key, Glide { target: map.target.clone(), from, to: v, start: now, secs: fall, ease: phosphor_engine::FadeEase::EaseOut });
                     }
                 } else {
                     self.glides.remove(&key);
@@ -980,7 +981,7 @@ impl ControlHub {
             if secs > 0.0 && v != FLIP {
                 // Glide there over `secs` (from where it is now), frame by frame in `glide`.
                 let from = get_target(comp, &map.target).unwrap_or(v);
-                self.glides.insert(format!("{:?}", map.target), Glide { target: map.target.clone(), from, to: v, start: now, secs });
+                self.glides.insert(format!("{:?}", map.target), Glide { target: map.target.clone(), from, to: v, start: now, secs, ease: phosphor_engine::FadeEase::EaseOut });
                 continue;
             }
             set_target(comp, &map.target, v, &mut self.triggers);
@@ -1045,7 +1046,12 @@ impl ControlHub {
 
     /// Glides `target` from `from` to `to` over `secs` (eased; replaces a glide already moving it).
     pub fn glide_to(&mut self, target: ControlTarget, from: f32, to: f32, now: f32, secs: f32) {
-        self.glides.insert(format!("{target:?}"), Glide { target, from, to, start: now, secs: secs.max(0.0) });
+        self.glide_eased(target, from, to, now, secs, phosphor_engine::FadeEase::EaseOut);
+    }
+
+    /// `glide_to` with a chosen easing (the crossfader's A / B / Auto fades).
+    pub fn glide_eased(&mut self, target: ControlTarget, from: f32, to: f32, now: f32, secs: f32, ease: phosphor_engine::FadeEase) {
+        self.glides.insert(format!("{target:?}"), Glide { target, from, to, start: now, secs: secs.max(0.0), ease });
     }
 
     /// Where `target` is gliding to, while it is.
@@ -1061,7 +1067,7 @@ impl ControlHub {
         let mut done = Vec::new();
         for (key, g) in &self.glides {
             let t = ((now - g.start) / g.secs.max(1e-3)).clamp(0.0, 1.0);
-            let eased = 1.0 - (1.0 - t) * (1.0 - t);
+            let eased = g.ease.apply(t);
             set_target(comp, &g.target, g.from + (g.to - g.from) * eased, &mut self.triggers);
             if t >= 1.0 {
                 done.push(key.clone());
