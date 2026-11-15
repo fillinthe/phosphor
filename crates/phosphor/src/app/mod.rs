@@ -1067,6 +1067,12 @@ fn bench_drag(run: &mut BenchRun, ctx: &egui::Context, raw: &mut egui::RawInput)
         _ => {
             run.cfg.drag = None;
             println!("DRAG done {from} -> {to}");
+            // PHOSPHOR_HOVER_AFTER=x,y: then the pointer moves there (a menu opened by the click, then hovering the
+            // next title).
+            if let Some(p) = std::env::var("PHOSPHOR_HOVER_AFTER").ok().and_then(|s| point(&s)) {
+                raw.events.push(egui::Event::PointerMoved(p));
+                println!("HOVER {p:?}");
+            }
         }
     }
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("bench_drag_step"), step + 1));
