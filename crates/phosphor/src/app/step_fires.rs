@@ -17,10 +17,10 @@ impl State {
             let (ended, started) = track.edges(last, beats);
             for b in &track.fires {
                 if ended {
-                    out.push((b.target.clone(), b.range.apply(0.0)));
+                    out.push((b.target.clone(), b.value(0.0)));
                 }
                 if started {
-                    out.push((b.target.clone(), b.range.apply(1.0)));
+                    out.push((b.target.clone(), b.value(1.0)));
                 }
             }
             self.step_fired.insert(m.id, track.step_at(beats));

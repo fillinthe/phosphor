@@ -1078,7 +1078,7 @@ pub(crate) fn add_laser_buttons(comp: &mut phosphor_engine::Composition) {
             if let Some(w) = comp.surface.widget_mut(id) {
                 w.label = if many { format!("{} · {name}", p.name) } else { name.clone() };
                 w.color = super::lasers::look_colour(&looks, *look).to_array()[..3].try_into().unwrap_or([0, 200, 190]);
-                w.bindings = vec![phosphor_engine::Binding { target: ControlTarget::LaserLook { projector: p.id, look: *look }, range: Default::default() }];
+                w.bindings = vec![phosphor_engine::Binding::new(ControlTarget::LaserLook { projector: p.id, look: *look })];
             }
         }
     }

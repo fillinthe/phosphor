@@ -60,8 +60,8 @@ fn surface_widgets_drive_bindings() {
     // A fader driving two layers: one straight 0.2–0.8, one inverted.
     let fader = comp.surface.add(WidgetKind::Fader);
     let w = comp.surface.widget_mut(fader).unwrap();
-    w.bindings.push(Binding { target: ControlTarget::LayerOpacity(a), range: ValueRange { min: 0.2, max: 0.8, invert: false } });
-    w.bindings.push(Binding { target: ControlTarget::LayerOpacity(b), range: ValueRange { min: 0.0, max: 1.0, invert: true } });
+    w.bindings.push(Binding { target: ControlTarget::LayerOpacity(a), range: ValueRange { min: 0.2, max: 0.8, invert: false }, ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
+    w.bindings.push(Binding { target: ControlTarget::LayerOpacity(b), range: ValueRange { min: 0.0, max: 1.0, invert: true }, ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
     // A MIDI knob mapped to the fader.
     let cc = ControlSource::MidiCc { channel: 0, cc: 7 };
     comp.control_maps.push(ControlMap::new(cc.clone(), ControlTarget::Surface(fader)));
@@ -75,7 +75,7 @@ fn surface_widgets_drive_bindings() {
 
     // A key flips a surface toggle, which switches a layer.
     let tog = comp.surface.add(WidgetKind::Toggle);
-    comp.surface.widget_mut(tog).unwrap().bindings.push(Binding { target: ControlTarget::LayerEnabled(a), range: phosphor_engine::ValueRange::default() });
+    comp.surface.widget_mut(tog).unwrap().bindings.push(Binding { target: ControlTarget::LayerEnabled(a), range: phosphor_engine::ValueRange::default(), ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
     let key = ControlSource::Key { key: "T".into() };
     comp.control_maps.push(ControlMap::new(key.clone(), ControlTarget::Surface(tog)));
     send(&mut hub, &mut comp, key.clone(), 1.0);
@@ -88,8 +88,8 @@ fn surface_widgets_drive_bindings() {
     // Two widgets driving each other don't loop forever.
     let x = comp.surface.add(WidgetKind::Slider);
     let y = comp.surface.add(WidgetKind::Slider);
-    comp.surface.widget_mut(x).unwrap().bindings.push(Binding { target: ControlTarget::Surface(y), range: phosphor_engine::ValueRange::default() });
-    comp.surface.widget_mut(y).unwrap().bindings.push(Binding { target: ControlTarget::Surface(x), range: phosphor_engine::ValueRange::default() });
+    comp.surface.widget_mut(x).unwrap().bindings.push(Binding { target: ControlTarget::Surface(y), range: phosphor_engine::ValueRange::default(), ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
+    comp.surface.widget_mut(y).unwrap().bindings.push(Binding { target: ControlTarget::Surface(x), range: phosphor_engine::ValueRange::default(), ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
     let mut out = Vec::new();
     set_target(&mut comp, &ControlTarget::Surface(x), 0.3, &mut out);
     assert!((comp.surface.widget(y).unwrap().value - 0.3).abs() < 1e-3);
@@ -118,7 +118,7 @@ fn get_target_reads_back_what_set_target_wrote() {
             set_target(&mut comp, &t, v, &mut out);
             let back = get_target(&comp, &t).unwrap();
             let toggle = is_toggle(&comp, &t);
-            let choice = matches!(t, ControlTarget::App(AppControl::LaunchTiming | AppControl::LaunchStyle | AppControl::SurfacePage) | ControlTarget::LayerDirection(_));
+            let choice = matches!(t, ControlTarget::App(AppControl::LaunchTiming | AppControl::LaunchStyle | AppControl::SurfacePage) | ControlTarget::LayerDirection(_) | ControlTarget::LayerBlend(_));
             let want = if toggle { if v > 0.5 { 1.0 } else { 0.0 } } else { v };
             if choice {
                 let mut again = Vec::new();
@@ -252,8 +252,8 @@ fn colour_widget_sends_red_green_blue() {
     let b = comp.add_layer().id;
     let id = comp.surface.add(phosphor_engine::WidgetKind::Color);
     let w = comp.surface.widget_mut(id).unwrap();
-    w.bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(a), range: phosphor_engine::ValueRange::default() });
-    w.bindings_y.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(b), range: phosphor_engine::ValueRange::default() });
+    w.bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(a), range: phosphor_engine::ValueRange::default(), ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
+    w.bindings_y.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(b), range: phosphor_engine::ValueRange::default(), ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
     let mut out = Vec::new();
     set_target(&mut comp, &ControlTarget::SurfaceY(id), 1.0, &mut out);
     // Hue 0, full saturation and brightness = pure red.
@@ -767,7 +767,7 @@ fn choices_widgets_pick_options() {
     let id = comp.surface.add(phosphor_engine::WidgetKind::Choices);
     let w = comp.surface.widget_mut(id).unwrap();
     w.items = ["Fwd", "Rev", "Ping", "Rnd"].map(String::from).to_vec();
-    w.bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerDirection(layer), range: phosphor_engine::ValueRange::default() });
+    w.bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerDirection(layer), range: phosphor_engine::ValueRange::default(), ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
     let pick = w.choice_value(3);
     let mut out = Vec::new();
     set_target(&mut comp, &ControlTarget::Surface(id), pick, &mut out);
@@ -790,7 +790,7 @@ fn multi_slider_bars_drive_their_own_targets() {
     w.set_bar_count(2);
     assert_eq!((w.bar_at(0.2), w.bar_at(0.7), w.bar_at(1.0)), (0, 1, 1));
     for (bar, layer) in [(0, a), (1, b)] {
-        w.bars[bar].bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(layer), range: phosphor_engine::ValueRange::default() });
+        w.bars[bar].bindings.push(phosphor_engine::Binding { target: ControlTarget::LayerOpacity(layer), range: phosphor_engine::ValueRange::default(), ..phosphor_engine::Binding::new(ControlTarget::MasterFade) });
     }
     let opacity = |comp: &Composition, id| comp.layers.iter().find(|l| l.id == id).unwrap().opacity;
     let mut out = Vec::new();
@@ -1100,4 +1100,145 @@ fn one_setting_keeps_the_others() {
     let mut long = vec![0.1, 0.2, 0.3, 0.4];
     targets::fit_to_defaults(&mut long, vec![0.5, 0.5]);
     assert_eq!(long, vec![0.1, 0.2, 0.3, 0.4], "extra values are left alone");
+}
+
+/// Resolume-style messages on a built-in address: "?" is answered, "+" / "-" nudge, a whole number or a name
+/// picks a menu item, and a plain float still sets the value.
+#[test]
+fn osc_asks_query_nudge_and_pick() {
+    use std::net::UdpSocket;
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_791, feedback: false, feedback_port: 18_792, soft_takeover: false, dmx_in: false, ..Default::default() });
+    let device = UdpSocket::bind("127.0.0.1:18792").unwrap();
+    device.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
+    let mut comp = Composition::default();
+    let id = comp.add_layer().id;
+    comp.layer_mut(id).unwrap().opacity = 0.5;
+    let blend = format!("/phosphor/layer/{id}/blend");
+    let send = |addr: &str, args: Vec<rosc::OscType>| {
+        let msg = rosc::encoder::encode(&rosc::OscPacket::Message(rosc::OscMessage { addr: addr.into(), args })).unwrap();
+        device.send_to(&msg, "127.0.0.1:18791").unwrap();
+    };
+    let text = |s: &str| rosc::OscType::String(s.into());
+    // Everything sent lands within a few frames (UDP on this machine); `done` says when.
+    let mut settle = |hub: &mut ControlHub, comp: &mut Composition, done: &dyn Fn(&Composition) -> bool| {
+        for _ in 0..100 {
+            hub.poll(comp);
+            hub.apply(comp, 0.0);
+            if done(comp) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        panic!("the message never landed");
+    };
+    use phosphor_engine::BlendMode;
+    // By name, whatever the case.
+    send(&blend, vec![text("add")]);
+    settle(&mut hub, &mut comp, &|c| c.layer(id).unwrap().blend == BlendMode::Add);
+    // By number: item 0 is the first in the menu.
+    send(&blend, vec![rosc::OscType::Int(0)]);
+    settle(&mut hub, &mut comp, &|c| c.layer(id).unwrap().blend == <BlendMode as phosphor_engine::Choice>::OPTIONS[0]);
+    // "+" on a menu = the next item.
+    send(&blend, vec![text("+")]);
+    settle(&mut hub, &mut comp, &|c| c.layer(id).unwrap().blend == <BlendMode as phosphor_engine::Choice>::OPTIONS[1]);
+    // Nudges on a slider, by place too.
+    send("/phosphor/layers/1/opacity", vec![text("+"), rosc::OscType::Float(0.2)]);
+    settle(&mut hub, &mut comp, &|c| (c.layer(id).unwrap().opacity - 0.7).abs() < 1e-4);
+    send(&format!("/phosphor/layer/{id}/opacity"), vec![text("*"), rosc::OscType::Float(0.5)]);
+    settle(&mut hub, &mut comp, &|c| (c.layer(id).unwrap().opacity - 0.35).abs() < 1e-4);
+    // A plain float still sets it; a whole number on a slider is just its value.
+    send(&format!("/phosphor/layer/{id}/opacity"), vec![rosc::OscType::Int(1)]);
+    settle(&mut hub, &mut comp, &|c| (c.layer(id).unwrap().opacity - 1.0).abs() < 1e-4);
+    // "?" changes nothing and is answered on the address asked, on the feedback port; a menu adds its item's name.
+    let mut buf = [0u8; 2048];
+    let mut ask = |addr: &str, hub: &mut ControlHub, comp: &mut Composition| {
+        send(addr, vec![text("?")]);
+        for _ in 0..100 {
+            hub.poll(comp);
+            hub.apply(comp, 0.0);
+            if let Ok(n) = device.recv(&mut buf) {
+                let (_, packet) = rosc::decoder::decode_udp(&buf[..n]).unwrap();
+                let rosc::OscPacket::Message(m) = packet else { panic!("bundle") };
+                return m;
+            }
+        }
+        panic!("no answer");
+    };
+    let m = ask("/phosphor/layers/1/opacity", &mut hub, &mut comp);
+    assert_eq!(m.addr, "/phosphor/layers/1/opacity");
+    assert_eq!(m.args, vec![rosc::OscType::Float(1.0)]);
+    let m = ask(&blend, &mut hub, &mut comp);
+    assert_eq!(m.args.get(1), Some(&rosc::OscType::String(<BlendMode as phosphor_engine::Choice>::OPTIONS[1].label().into())));
+    assert!((comp.layer(id).unwrap().opacity - 1.0).abs() < 1e-4, "asking changes nothing");
+}
+
+#[test]
+fn asks_are_told_from_plain_values() {
+    use ask::{Arg, AskKind, parse};
+    let t = |s: &str| Arg::Text(s.into());
+    assert_eq!(parse("/phosphor/master", &[t("?")]), Some((AskKind::Query, true)));
+    assert_eq!(parse("/phosphor/master", &[t("-"), Arg::Number(0.1)]), Some((AskKind::Nudge('-', Some(0.1)), true)));
+    assert_eq!(parse("/phosphor/master", &[Arg::Number(0.4)]), None, "a float is just a value");
+    assert_eq!(parse("/phosphor/master", &[Arg::Whole(2)]), Some((AskKind::Whole(2), false)), "also counts as a value");
+    assert_eq!(parse("/phosphor/layer/3/text", &[t("?")]), None, "a text layer's words are words");
+    assert_eq!(parse("/my/fader", &[t("?")]), None, "only built-in addresses");
+    assert_eq!(parse("/phosphor/layer/3/blend", &[t("Screen")]), Some((AskKind::Name("Screen".into()), true)));
+}
+
+/// "Send every change": everything once, then only what changed, on built-in addresses.
+#[test]
+fn every_change_goes_out_when_asked() {
+    use std::net::UdpSocket;
+    let app = UdpSocket::bind("127.0.0.1:18793").unwrap();
+    app.set_read_timeout(Some(std::time::Duration::from_millis(300))).unwrap();
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_794, feedback: false, feedback_port: 18_795, soft_takeover: false, dmx_in: false, send_all: "127.0.0.1:18793".into(), ..Default::default() });
+    let mut comp = Composition::default();
+    comp.add_layer();
+    hub.send_all_changes(&comp, 1.0);
+    let mut buf = [0u8; 2048];
+    let mut first = 0;
+    while app.recv(&mut buf).is_ok() {
+        first += 1;
+    }
+    assert!(first > 3, "everything once: {first}");
+    hub.send_all_changes(&comp, 2.0);
+    assert!(app.recv(&mut buf).is_err(), "nothing changed: nothing sent");
+    comp.master_fade = 0.3;
+    hub.send_all_changes(&comp, 3.0);
+    let n = app.recv(&mut buf).expect("the master fade");
+    let (_, packet) = rosc::decoder::decode_udp(&buf[..n]).unwrap();
+    let rosc::OscPacket::Message(m) = packet else { panic!("bundle") };
+    assert_eq!((m.addr.as_str(), m.args), ("/phosphor/master", vec![rosc::OscType::Float(0.3)]));
+    assert_eq!(host_port("10.0.0.5", 9000), Some(("10.0.0.5".into(), 9000)));
+    assert_eq!(host_port("  ", 9000), None);
+}
+
+/// One control follows another: only when the source moves, through the follower's own part, effects and range;
+/// between moves the follower stays wherever it was put by hand.
+#[test]
+fn a_control_follows_another_control() {
+    let mut comp = Composition::default();
+    let a = comp.add_layer().id;
+    let b = comp.add_layer().id;
+    let mut to = phosphor_engine::Binding::new(ControlTarget::LayerOpacity(b));
+    to.range.invert = true;
+    to.part = phosphor_engine::FaderPart { from: 0.0, to: 0.5 };
+    comp.follows.push(phosphor_engine::Follow { source: ControlTarget::LayerOpacity(a), to });
+    let mut seen = HashMap::new();
+    let mut out = Vec::new();
+    comp.layer_mut(b).unwrap().opacity = 0.9;
+    assert!(follow_sends(&comp, &mut seen).is_empty(), "first sight (project just opened): nothing pushed");
+    assert!(follow_sends(&comp, &mut seen).is_empty(), "nothing moved");
+    set_target(&mut comp, &ControlTarget::LayerOpacity(a), 0.25, &mut out);
+    let sends = follow_sends(&comp, &mut seen);
+    assert_eq!(sends.len(), 1);
+    assert_eq!(sends[0].0, ControlTarget::LayerOpacity(b));
+    assert!((sends[0].1 - 0.5).abs() < 1e-5, "a quarter = half of its part, inverted: {}", sends[0].1);
+    set_target(&mut comp, &sends[0].0, sends[0].1, &mut out);
+    comp.layer_mut(b).unwrap().opacity = 0.1; // moved by hand
+    assert!(follow_sends(&comp, &mut seen).is_empty(), "the source didn't move: the follower keeps the hand's value");
+    // Saved with the project, and a project from before follows existed still opens.
+    let text = serde_json::to_string(&comp).unwrap();
+    assert_eq!(serde_json::from_str::<Composition>(&text).unwrap().follows, comp.follows);
+    assert!(!serde_json::to_string(&Composition::default()).unwrap().contains("follows"));
 }

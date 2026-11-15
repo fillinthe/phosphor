@@ -91,6 +91,24 @@ impl PhosphorApp {
         }
         let sends = std::sync::Arc::new(st.comp.control_sends.clone());
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::SENDS), sends));
+        // Follows: the same, and every control by name while a Follow menu is open (it asks each frame).
+        type FollowAsk = (phosphor_engine::ControlTarget, phosphor_engine::ControlTarget, bool);
+        if let Some((target, source, add)) = ctx.data_mut(|d| {
+            let id = egui::Id::new(panels::FOLLOW_REQUEST);
+            let r = d.get_temp::<FollowAsk>(id);
+            d.remove::<FollowAsk>(id);
+            r
+        }) {
+            if add {
+                st.add_follow(source, target, ctx.input(|i| i.time));
+            } else {
+                st.comp.follows.retain(|f| !(f.source == source && f.to.target == target));
+            }
+        }
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::FOLLOWS), std::sync::Arc::new(st.comp.follows.clone())));
+        if ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new(panels::WANT_TARGETS))).unwrap_or(false) {
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new(panels::ALL_TARGETS), std::sync::Arc::new(crate::control::all_targets(&st.comp))));
+        }
         // Keys act as controller buttons (ignored while typing in a text field).
         if ctx.memory(|m| m.focused().is_some()) {
             return;

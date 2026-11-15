@@ -74,6 +74,9 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             });
         });
     });
+    crate::ui::field(ui, "Send every change", |ui| {
+        text_field(ui, &mut control.send_all, "host:port (off)", Some(170.0)).on_hover_text("Every control that changes goes out as OSC on its built-in address (/phosphor/layer/3/opacity 0–1) to this computer: lighting, another app, a second Phosphor. Empty = off. No port = 9000. For just a few controls, right-click one › Send out instead.");
+    });
     // Tempo and time for other gear.
     #[cfg(not(target_arch = "wasm32"))]
     crate::ui::toolbar(ui, |ui| {
@@ -179,6 +182,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     }
+    super::links::links(ui, st);
     monitor(ui, st);
     ui.separator();
 
@@ -243,12 +247,12 @@ fn clash_text(comp: &phosphor_engine::Composition, targets: &[(ControlTarget, St
 
 /// Where a mapped control lives: the panel to open, the layer / group / comp to select (MASTER_ID = master), the
 /// slice to select. None when it's gone.
-fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Option<(Tab, Option<u64>, Option<u64>)> {
+pub(super) fn where_is(comp: &phosphor_engine::Composition, target: &ControlTarget) -> Option<(Tab, Option<u64>, Option<u64>)> {
     use ControlTarget as T;
     let item = |id: u64| Some((Tab::Inspector, Some(id), None));
     match target {
         T::MasterFade => item(phosphor_engine::MASTER_ID),
-        T::LayerOpacity(id) | T::LayerEnabled(id) | T::LayerSpeed(id) | T::LayerFxBypass(id) | T::LayerLoopIn(id) | T::LayerLoopOut(id) | T::LayerDirection(id) | T::LayerScrub(id) | T::LayerVolume(id) | T::LayerX(id) | T::LayerY(id) | T::LayerScale(id) | T::LayerRotation(id) => item(*id),
+        T::LayerOpacity(id) | T::LayerEnabled(id) | T::LayerSpeed(id) | T::LayerFxBypass(id) | T::LayerLoopIn(id) | T::LayerLoopOut(id) | T::LayerDirection(id) | T::LayerBlend(id) | T::LayerScrub(id) | T::LayerVolume(id) | T::LayerX(id) | T::LayerY(id) | T::LayerScale(id) | T::LayerRotation(id) => item(*id),
         T::GeneratorParam { layer, .. } | T::LayerJump { layer, .. } | T::LayerCorner { layer, .. } | T::LayerTransform { layer, .. } | T::TextPart { layer, .. } | T::TransitionParam { layer, .. } | T::MixerParam { layer, .. } => item(*layer),
         T::LayerText(id) | T::LayerTextStep { layer: id, .. } => item(*id),
         T::TriggerClip { layer, .. } | T::LayerClipPick(layer) | T::LayerRandomClip(layer) => Some((Tab::Clips, Some(*layer), None)),
@@ -410,7 +414,7 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
                 });
                 crate::ui::toolbar(ui, |ui| {
                     range_editor(ui, &mut m.range);
-                    value_fx_menu(ui, ("map_fx", i), &mut m.fx);
+                    value_fx_menu(ui, &mut m.fx, true);
                 });
                 if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete").clicked() {
                     remove = Some(i);
@@ -432,98 +436,6 @@ fn mappings_editor(ui: &mut egui::Ui, st: &mut State) {
         }
         *open_tab = Some(tab);
     }
-}
-
-/// The ~ menu on a mapping: effects its value goes through (smooth, steps, curve, formula), in order.
-fn value_fx_menu(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, fx: &mut Vec<phosphor_engine::ValueFx>) {
-    use phosphor_engine::ValueFx;
-    let text = if fx.is_empty() { RichText::new(icon::WAVE_SINE) } else { RichText::new(format!("{} {}", icon::WAVE_SINE, fx.len())).color(accent()) };
-    crate::ui::field_menu(ui, text, |ui| {
-        ui.set_min_width(260.0);
-        crate::ui::heading_help(ui, "On the way in", "The controller's value goes through these, top to bottom, before its range.");
-        let mut remove = None;
-        for (k, f) in fx.iter_mut().enumerate() {
-            ui.horizontal(|ui| {
-                crate::ui::heading(ui, f.name());
-                match f {
-                    ValueFx::Smooth(s) => {
-                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=10.0).speed(0.01).suffix(" s")).on_hover_text("Glide to each new value over this long");
-                    }
-                    ValueFx::Steps(n) => {
-                        guarded!(ui, *n, egui::DragValue::new(n).range(2..=64)).on_hover_text("Snap to this many steps");
-                    }
-                    ValueFx::Curve(c) => {
-                        guarded!(ui, *c, egui::DragValue::new(c).range(0.1..=8.0).speed(0.02)).on_hover_text("Above 1: slow then fast; below 1: fast then slow");
-                    }
-                    ValueFx::Formula(f) => {
-                        text_field(ui, f, "1 - $VAL", Some(140.0)).on_hover_text("$VAL is the value (0..1); + - * / %, pow, sin, cos (a turn per 1.0), abs, min, max, clamp, mix, fract, floor…");
-                    }
-                    ValueFx::Delay(s) => {
-                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=30.0).speed(0.01).suffix(" s")).on_hover_text("Each move lands this much later");
-                    }
-                    ValueFx::Threshold(t) => {
-                        guarded!(ui, *t, egui::DragValue::new(t).range(0.0..=1.0).speed(0.005).max_decimals(2)).on_hover_text("On (full) at or above this, off below: a fader becomes a switch");
-                    }
-                    ValueFx::Clamp(lo, hi) => {
-                        guarded!(ui, *lo, egui::DragValue::new(lo).range(0.0..=1.0).speed(0.005).max_decimals(2).prefix("from ")).on_hover_text("Lowest value it can send");
-                        guarded!(ui, *hi, egui::DragValue::new(hi).range(0.0..=1.0).speed(0.005).max_decimals(2).prefix("to ")).on_hover_text("Highest value it can send");
-                    }
-                    ValueFx::Repeat(n) => {
-                        guarded!(ui, *n, egui::DragValue::new(n).range(1..=32).suffix("×")).on_hover_text("The range repeats this many times along the fader");
-                    }
-                    ValueFx::Randomize(a) => {
-                        guarded!(ui, *a, egui::DragValue::new(a).range(0.0..=1.0).speed(0.005).max_decimals(2)).on_hover_text("Up to this much random wobble on each value");
-                    }
-                    ValueFx::Fall(s) => {
-                        guarded!(ui, *s, egui::DragValue::new(s).range(0.02..=10.0).speed(0.01).suffix(" s")).on_hover_text("Rises land at once; drops glide down over this long (peak hold)");
-                    }
-                    ValueFx::Endless(s) => {
-                        guarded!(ui, *s, egui::DragValue::new(s).range(0.001..=0.25).speed(0.0005).max_decimals(3).prefix("per click ")).on_hover_text("For knobs that turn forever (relative MIDI: 1–63 up, 65–127 down): how far one click moves the value (0.01 = 1%)");
-                    }
-                    ValueFx::DeadBand(d) => {
-                        guarded!(ui, *d, egui::DragValue::new(d).range(0.001..=0.25).speed(0.0005).max_decimals(3)).on_hover_text("Changes smaller than this are ignored (a jittery fader or sensor)");
-                    }
-                    ValueFx::Lookup(points) => {
-                        // Draw the output: left = fader at 0, right = fader at full.
-                        crate::ui::step_bars(ui, points, None, false, 40.0);
-                    }
-                }
-                if crate::ui::small_command(ui, icon::X).clicked() {
-                    remove = Some(k);
-                }
-            });
-        }
-        if let Some(k) = remove {
-            fx.remove(k);
-        }
-        ui.separator();
-        ui.horizontal_wrapped(|ui| {
-            let fresh = [
-                ValueFx::Smooth(0.3),
-                ValueFx::Steps(4),
-                ValueFx::Curve(2.0),
-                ValueFx::Formula("1 - $VAL".into()),
-                ValueFx::Delay(0.5),
-                ValueFx::Threshold(0.5),
-                ValueFx::Clamp(0.0, 1.0),
-                ValueFx::Repeat(2),
-                ValueFx::Randomize(0.1),
-                ValueFx::Fall(0.5),
-                ValueFx::Lookup((0..9).map(|i| i as f32 / 8.0).collect()),
-                ValueFx::Endless(0.01),
-                ValueFx::DeadBand(0.02),
-            ];
-            for f in fresh {
-                let name = f.name();
-                if crate::ui::small_command(ui, label(icon::PLUS, name)).clicked() {
-                    fx.push(f);
-                }
-            }
-        });
-    })
-    .response
-    .on_hover_text("Smooth, steps, curve or a formula on this mapping's value");
-    let _ = id;
 }
 
 /// AI assistants (any app that speaks MCP) drive Phosphor through `Phosphor --mcp` (mcp.rs): copy its setup.

@@ -153,6 +153,9 @@ pub struct ControlHub {
     /// OSC messages that carry text: (address, the words), for text layers.
     text_rx: mpsc::Receiver<(String, String)>,
     text_tx: mpsc::Sender<(String, String)>,
+    /// Queries, nudges and menu picks on built-in OSC addresses (`ask`).
+    ask_rx: mpsc::Receiver<ask::OscAsk>,
+    ask_tx: mpsc::Sender<ask::OscAsk>,
     /// Incoming MIDI clock (tempo and beat position); the app's clock follows it.
     pub midi_clock: crate::clock::MidiClock,
     /// MIDI timecode in (cue list).
@@ -194,6 +197,10 @@ pub struct ControlHub {
     /// outputs of the same devices) so faders, encoders and LEDs follow changes made anywhere else.
     pub feedback: bool,
     pub feedback_port: u16,
+    /// "Send every change": the "host:port" every control's changes go to on their built-in addresses ("" = off).
+    pub send_all: String,
+    all_sent: HashMap<String, f32>,
+    next_send_all: f64,
     /// Faders and knobs only change a value once they reach it (no jump when the hardware is elsewhere).
     pub soft_takeover: bool,
     /// How close (0..1 of the range) a fader must come to count as having reached the value.
@@ -276,11 +283,13 @@ pub struct ControlSettings {
     pub arduino_port: String,
     /// Use an Elgato Stream Deck (keys as input, key pictures as feedback).
     pub stream_deck: bool,
+    /// Every control's changes go out as OSC to this "host:port" on their built-in addresses ("" = off).
+    pub send_all: String,
 }
 
 impl Default for ControlSettings {
     fn default() -> Self {
-        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false, arduino_port: String::new(), stream_deck: false }
+        Self { osc_port: DEFAULT_OSC_PORT, osc_extra_ports: Vec::new(), feedback: true, feedback_port: DEFAULT_FEEDBACK_PORT, soft_takeover: true, pickup_near: PICKUP_NEAR, takeover_glide: false, clip_lights: CLIP_LIGHTS[0].1, clock_out_port: String::new(), mtc_out_port: String::new(), mtc_time_of_day: false, ltc_out_pair: None, dmx_in: false, arduino_port: String::new(), stream_deck: false, send_all: String::new() }
     }
 }
 
@@ -332,6 +341,7 @@ impl ControlHub {
         hub.mtc_out_port = s.mtc_out_port;
         hub.mtc_time_of_day = s.mtc_time_of_day;
         hub.ltc_out_pair = s.ltc_out_pair;
+        hub.send_all = s.send_all;
         hub.reconnect();
         hub.set_dmx_in(s.dmx_in);
         hub.set_arduino(&s.arduino_port);
@@ -340,7 +350,7 @@ impl ControlHub {
     }
 
     pub fn settings(&self) -> ControlSettings {
-        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in(), arduino_port: self.arduino_port(), stream_deck: self.stream_deck_on() }
+        ControlSettings { osc_port: self.osc_port, osc_extra_ports: self.osc_extra_ports.clone(), feedback: self.feedback, feedback_port: self.feedback_port, soft_takeover: self.soft_takeover, pickup_near: self.pickup_near, takeover_glide: self.takeover_glide, clip_lights: self.clip_lights, clock_out_port: self.clock_out_port.clone(), mtc_out_port: self.mtc_out_port.clone(), mtc_time_of_day: self.mtc_time_of_day, ltc_out_pair: self.ltc_out_pair, dmx_in: self.dmx_in(), arduino_port: self.arduino_port(), stream_deck: self.stream_deck_on(), send_all: self.send_all.clone() }
     }
 
     /// Connects to an Arduino board on this USB port ("" = none); its pins become controller input.
@@ -448,6 +458,7 @@ impl ControlHub {
         let (tx, rx) = mpsc::channel();
         let (clock_tx, clock_rx) = mpsc::channel();
         let (text_tx, text_rx) = mpsc::channel();
+        let (ask_tx, ask_rx) = mpsc::channel();
         Self {
             rx,
             tx,
@@ -455,6 +466,8 @@ impl ControlHub {
             clock_tx,
             text_rx,
             text_tx,
+            ask_rx,
+            ask_tx,
             midi_clock: Default::default(),
             mtc: Default::default(),
             midi_ports: Vec::new(),
@@ -479,6 +492,9 @@ impl ControlHub {
             triggers: Vec::new(),
             feedback: true,
             feedback_port: DEFAULT_FEEDBACK_PORT,
+            send_all: String::new(),
+            all_sent: HashMap::new(),
+            next_send_all: 0.0,
             soft_takeover: true,
             pickup_near: PICKUP_NEAR,
             takeover_glide: false,
@@ -540,7 +556,7 @@ impl ControlHub {
             self.midi_all = all;
             self.midi_ports = open;
             self.local_ip = local_ip();
-            self.osc_status = match self.backend.open_osc(self.osc_port, &self.osc_extra_ports, self.tx.clone(), self.text_tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
+            self.osc_status = match self.backend.open_osc(self.osc_port, &self.osc_extra_ports, self.tx.clone(), self.text_tx.clone(), self.ask_tx.clone(), self.local_ip.as_deref(), self.activity.clone()) {
                 Ok(failed) => {
                     let also: Vec<String> = self.osc_extra_ports.iter().filter(|p| **p != self.osc_port).map(|p| p.to_string()).collect();
                     // Pieces joined by " · " (each one translates by itself).
@@ -893,6 +909,34 @@ impl ControlHub {
         let _ = comp;
     }
 
+    /// "Send every change" (Resolume's output-all): every control whose value changed goes out on its built-in
+    /// address to `send_all`. The first pass sends everything once. Does nothing while it's off.
+    pub fn send_all_changes(&mut self, comp: &Composition, now: f64) {
+        let Some((host, port)) = host_port(&self.send_all, DEFAULT_FEEDBACK_PORT) else {
+            self.all_sent.clear();
+            return;
+        };
+        if now < self.next_send_all {
+            return;
+        }
+        self.next_send_all = now + FEEDBACK_EVERY;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let to = [host];
+            for (t, _) in all_targets(comp) {
+                let Some(v) = get_target(comp, &t) else { continue };
+                let address = default_osc_address(&t);
+                if self.all_sent.get(&address).is_some_and(|old| (old - v).abs() < 0.002) {
+                    continue;
+                }
+                self.backend.send_osc(&to, port, &address, v);
+                self.all_sent.insert(address, v);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (comp, host, port);
+    }
+
     /// Stream Deck keys show what they're mapped to: the control's name, lit while it's on (a clip key while its clip
     /// plays).
     #[cfg(not(target_arch = "wasm32"))]
@@ -915,6 +959,7 @@ impl ControlHub {
         self.glide(comp, now);
         self.land_delayed(comp, now);
         if self.fresh.is_empty() {
+            self.apply_asks(comp);
             return;
         }
         for map in comp.control_maps.clone() {
@@ -1016,38 +1061,17 @@ impl ControlHub {
             .collect();
         if !osc.is_empty() {
             // By id (/phosphor/layer/3/opacity) or by name (/phosphor/layer/intro/opacity); wildcards reach many.
-            let names = osc_names(comp);
-            let targets: Vec<(ControlTarget, String, String)> = all_targets(comp)
-                .into_iter()
-                .map(|(t, _)| {
-                    let by_id = default_osc_address(&t);
-                    let by_name = named_address(&by_id, &names);
-                    (t, by_id, by_name)
-                })
-                .collect();
+            let builtin = ask::Builtin::new(comp);
             for (address, v) in osc {
-                // Addresses use American spelling since 0.5.6 ("color", "center", "gray" before): an old controller setup still lands.
-                // (The address as sent is tried too: a layer really named "greyscale" keeps its by-name address.)
-                let raw_lower = address.to_lowercase();
-                let address = address.replace("colour", "color").replace("Colour", "Color").replace("centre", "center").replace("Centre", "Center").replace("grey", "gray").replace("Grey", "Gray");
-                let lower = address.to_lowercase();
-                let pattern = is_osc_pattern(&address);
-                for (t, by_id, by_name) in &targets {
-                    let hit = if pattern {
-                        osc_match(&lower, &by_id.to_lowercase()) || osc_match(&lower, by_name) || osc_match(&raw_lower, by_name)
-                    } else {
-                        *by_id == address || *by_name == lower || *by_name == raw_lower
-                    };
-                    if hit {
-                        set_target(comp, t, v, &mut self.triggers);
-                        if !pattern {
-                            break;
-                        }
-                    }
+                let hits: Vec<ControlTarget> = builtin.hits(&address).into_iter().map(|(t, _)| t.clone()).collect();
+                for t in hits {
+                    set_target(comp, &t, v, &mut self.triggers);
                 }
             }
         }
         self.fresh.clear();
+        // (After the plain values: a whole number on a menu picks that item, not "full".)
+        self.apply_asks(comp);
     }
 }
 
@@ -1156,6 +1180,16 @@ impl ControlHub {
 /// Added to a clip light's 0..1 velocity in the feedback list, so it's sent as that velocity (not on / off).
 const CLIP_LIGHT: f32 = 10.0;
 
+/// "host:port" (or just a host, on `default_port`) taken apart; None when there's no host.
+pub(crate) fn host_port(text: &str, default_port: u16) -> Option<(String, u16)> {
+    let text = text.trim();
+    let (host, port) = match text.rsplit_once(':') {
+        Some((h, p)) => (h.trim(), p.trim().parse().ok()?),
+        None => (text, default_port),
+    };
+    (!host.is_empty()).then(|| (host.to_string(), port))
+}
+
 /// The note velocity that shows a clip slot's state: empty, loaded, or playing now. None for a missing layer.
 pub(crate) fn clip_light(comp: &Composition, layer: u64, slot: usize, lights: [u8; 3]) -> Option<u8> {
     let l = comp.layers.iter().find(|l| l.id == layer)?;
@@ -1251,7 +1285,9 @@ pub fn local_ip() -> Option<String> {
 }
 
 mod targets;
+pub mod ask;
 pub use targets::*;
+pub use ask::follow_sends;
 #[cfg(not(target_arch = "wasm32"))]
 mod native;
 #[cfg(not(target_arch = "wasm32"))]

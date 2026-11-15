@@ -20,6 +20,12 @@ pub const MAPS_COPIED: &str = "phosphor_maps_copied";
 /// The project's sends (`Composition::control_sends`), published each frame; and add / remove requests.
 pub const SENDS: &str = "phosphor_sends";
 pub const SEND_REQUEST: &str = "phosphor_send_request";
+/// Controls that follow other controls (`Composition::follows`), published each frame; add / remove requests
+/// (follower, source, add); and every control by name, published only while a menu asks for it (`WANT_TARGETS`).
+pub const FOLLOWS: &str = "phosphor_follows";
+pub const FOLLOW_REQUEST: &str = "phosphor_follow_request";
+pub const ALL_TARGETS: &str = "phosphor_all_targets";
+pub const WANT_TARGETS: &str = "phosphor_want_targets";
 /// Mapped controls drawn this frame (`mapped_look`), for "only while on screen" mappings.
 pub const SHOWN_TARGETS: &str = "phosphor_shown_targets";
 /// Controls whose mappings work only while they're on screen (published by the app), and the request to change it.
@@ -120,7 +126,47 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
         request(ui, PASTE_MAPS_REQUEST, target.clone());
         ui.close();
     }
+    follow_items(ui, target);
     send_items(ui, target);
+}
+
+/// "Follow…": this control takes another control's value whenever that one changes (VDMX: any control is a source).
+fn follow_items(ui: &mut egui::Ui, target: &ControlTarget) {
+    // (Presses and words have no value of their own to hand on or take.)
+    if matches!(target, ControlTarget::Button { .. } | ControlTarget::Menu(_) | ControlTarget::LayerText(_)) {
+        return;
+    }
+    let all: std::sync::Arc<Vec<phosphor_engine::Follow>> = ui.ctx().data(|d| d.get_temp(egui::Id::new(FOLLOWS))).unwrap_or_default();
+    let mine: Vec<&phosphor_engine::Follow> = all.iter().filter(|f| f.to.target == *target).collect();
+    let title = if mine.is_empty() { "Follow another control…".to_string() } else { format!("Follows ({})", mine.len()) };
+    ui.menu_button(label(icon::LINK, &title), |ui| {
+        ui.set_min_width(300.0);
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(WANT_TARGETS), true));
+        let targets: std::sync::Arc<Vec<(ControlTarget, String)>> = ui.ctx().data(|d| d.get_temp(egui::Id::new(ALL_TARGETS))).unwrap_or_default();
+        let name = |t: &ControlTarget| targets.iter().find(|(x, _)| x == t).map_or_else(|| "(removed)".to_string(), |(_, n)| n.clone());
+        help(ui, "Whenever the control you pick changes, this one goes with it. Set its part of the fader, curve and range in MIDI / OSC › Links.");
+        for f in &mine {
+            ui.horizontal(|ui| {
+                ui.label(name(&f.source));
+                if crate::ui::small_command(ui, icon::X).on_hover_text("Stop following").clicked() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(FOLLOW_REQUEST), (target.clone(), f.source.clone(), false)));
+                }
+            });
+        }
+        let search_id = egui::Id::new("follow_search");
+        let mut search: String = ui.ctx().data(|d| d.get_temp(search_id)).unwrap_or_default();
+        text_field(ui, &mut search, &format!("search {} controls", targets.len()), Some(280.0));
+        let q = search.to_lowercase();
+        crate::ui::column_scroll(ui).max_height(240.0).show(ui, |ui| {
+            for (t, n) in targets.iter().filter(|(t, n)| t != target && (q.is_empty() || n.to_lowercase().contains(&q))).take(60) {
+                if crate::ui::command(ui, n).clicked() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(FOLLOW_REQUEST), (target.clone(), t.clone(), true)));
+                    ui.close();
+                }
+            }
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(search_id, search));
+    });
 }
 
 /// "Send out…": this control's value goes out as OSC or MIDI whenever it changes (lights, another app, a synth).

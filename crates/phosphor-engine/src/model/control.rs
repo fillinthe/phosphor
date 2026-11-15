@@ -108,6 +108,8 @@ pub enum ControlTarget {
     /// A mapping slice's opacity and on/off (MadMapper-style surface control; ids are unique across outputs).
     SliceOpacity(u64),
     SliceEnabled(u64),
+    /// A layer's or group's blend mode (0..1 picks one; OSC can also send its name or its number).
+    LayerBlend(u64),
     /// A light (LED / DMX fixture): `param` indexes `Fixture::PARAMS` (pan, tilt, dimmer, motion size, brightness).
     Fixture { fixture: u64, param: u8 },
     /// Plays one of a layer's clips at random (not the one playing): a button, a pad, or a timer (Autopilot).
@@ -375,6 +377,57 @@ pub struct Binding {
     pub target: ControlTarget,
     #[serde(default)]
     pub range: ValueRange,
+    /// The part of the fader this target listens to (Resolume's dial range): 0.0–0.33 = it runs its whole range
+    /// over the first third and stays there; one knob can play several things one after another.
+    #[serde(default, skip_serializing_if = "FaderPart::is_whole")]
+    pub part: FaderPart,
+    /// This target's own curve, steps or formula (the instant value effects), after the fader part.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fx: Vec<ValueFx>,
+}
+
+impl Binding {
+    pub fn new(target: ControlTarget) -> Self {
+        Self { target, range: ValueRange::default(), part: FaderPart::default(), fx: Vec::new() }
+    }
+
+    /// What the target gets for the control's value `v` (0..1): its part of the fader, its value effects, its range.
+    pub fn value(&self, v: f32) -> f32 {
+        self.range.apply(self.fx.iter().fold(self.part.apply(v), |v, fx| fx.apply(v)))
+    }
+}
+
+/// A part of a fader's travel, spread back out to 0..1 (below it = 0, above it = 1).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FaderPart {
+    pub from: f32,
+    pub to: f32,
+}
+
+impl Default for FaderPart {
+    fn default() -> Self {
+        Self { from: 0.0, to: 1.0 }
+    }
+}
+
+impl FaderPart {
+    pub fn is_whole(&self) -> bool {
+        *self == Self::default()
+    }
+
+    pub fn apply(&self, v: f32) -> f32 {
+        let (lo, hi) = (self.from.min(self.to), self.from.max(self.to));
+        if hi - lo < 1e-6 { if v >= hi { 1.0 } else { 0.0 } } else { ((v - lo) / (hi - lo)).clamp(0.0, 1.0) }
+    }
+}
+
+/// One control following another (VDMX: every control is a data source): whenever `source` changes, the target
+/// gets its value through the binding's fader part, value effects and range.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Follow {
+    pub source: ControlTarget,
+    pub to: Binding,
 }
 
 fn yes() -> bool {
@@ -628,6 +681,24 @@ fn jitter() -> f32 {
 #[cfg(test)]
 mod value_fx_tests {
     use super::*;
+
+    #[test]
+    fn a_target_can_listen_to_part_of_the_fader() {
+        let mut b = Binding::new(ControlTarget::MasterFade);
+        b.part = FaderPart { from: 0.5, to: 1.0 };
+        b.range = ValueRange { min: 0.2, max: 1.0, invert: false };
+        assert!((b.value(0.25) - 0.2).abs() < 1e-6, "below its part: the bottom of its range");
+        assert!((b.value(0.75) - 0.6).abs() < 1e-6, "halfway through its part");
+        assert!((b.value(1.0) - 1.0).abs() < 1e-6);
+        b.fx.push(ValueFx::Steps(2));
+        assert!((b.value(0.7) - 0.2).abs() < 1e-6, "its own steps: under half is off");
+        // Saved the short way when nothing is set, and old saves (no part, no fx) still open.
+        let plain = Binding::new(ControlTarget::MasterFade);
+        let text = serde_json::to_string(&plain).unwrap();
+        assert!(!text.contains("part") && !text.contains("fx"), "{text}");
+        let old: Binding = serde_json::from_str(r#"{"target":"MasterFade","range":{"min":0.0,"max":1.0,"invert":false}}"#).unwrap();
+        assert_eq!(old, plain);
+    }
 
     #[test]
     fn clip_rows_map_to_runs_of_notes() {

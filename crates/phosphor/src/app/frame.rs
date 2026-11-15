@@ -131,6 +131,7 @@ impl PhosphorApp {
         self.state.run_timeline_sound(now);
         self.state.run_computed(now);
         self.state.run_surface_motion(now);
+        self.state.run_follows(now);
         // How much CPU each movie layer's decoding takes (its card shows it), measured once a second.
         let cpu_id = egui::Id::new(crate::panels::CPU_LAYERS);
         let due = ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, f32>>)>(cpu_id)).is_none_or(|(t, _)| now - t > 1.0);
@@ -212,6 +213,7 @@ impl PhosphorApp {
             }
             control.apply(comp, now as f32);
             control.feedback(comp, now);
+            control.send_all_changes(comp, now);
             control.surface_osc(comp);
             control.sends(comp);
             control.publish_query(comp, now);
