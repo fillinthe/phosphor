@@ -124,6 +124,13 @@ source, or a proxy on your server.
 
 ## Ideas
 
+- [ ] **Play to another Phosphor over the internet** (owner, 2026-11-15, later): Follow already works on the same
+      network (`follow::{Link, Leader}`, the `/follow` socket); reach a Phosphor somewhere else (relay or invite
+      link through the G Workshop account, NAT traversal, latency and media that isn't on the other machine).
+- [ ] **Hand a show over to another computer** (owner, 2026-11-15, later): move the project and its media to another
+      Phosphor so someone can take over when you leave, ideally live (state sync, then the other one takes the
+      outputs). Today: File › Export show (a folder with the media) and Follow on the same network.
+
 - [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
       colors to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
       system, to see what it accepts.

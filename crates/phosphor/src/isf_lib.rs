@@ -247,8 +247,9 @@ fn params_for(shader: &phosphor_isf::IsfShader) -> Vec<Param> {
         let name = if input.label.is_empty() { input.name.clone() } else { input.label.clone() };
         match &input.kind {
             K::Float { min, max, default } => put(&mut slots, o, name, *min, *max, *default, &[]),
-            K::Bool { default } => put(&mut slots, o, name, 0.0, 1.0, *default as i32 as f32, &[]),
-            K::Event => put(&mut slots, o, name, 0.0, 1.0, 0.0, &[]),
+            // On / off as a two-choice menu, not a 0..1 slider (owner, 2026-11-15: "field types missing").
+            K::Bool { default } => put(&mut slots, o, name, 0.0, 1.0, *default as i32 as f32, &["Off", "On"]),
+            K::Event => put(&mut slots, o, name, 0.0, 1.0, 0.0, &["Off", "Fire"]),
             K::Long { values, labels, default } => {
                 let lo = values.iter().copied().min().unwrap_or(0);
                 let hi = values.iter().copied().max().unwrap_or(1).max(lo + 1);
