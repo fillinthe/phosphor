@@ -4,29 +4,85 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
-## 0.5.7 (2026-11-14)
+## 0.5.7 (2026-11-15)
+
+**OSC**
+- One controller page for any project: `/phosphor/layers/2/opacity` is the second layer from the bottom,
+  `/phosphor/selected/layer/…` is the selected layer, `/phosphor/groups/2/…` the second group, and `fx/1/…` after
+  a layer is its first effect.
+- Ask for a value: send `"?"` to an address and the value comes back (a menu also sends its item's name).
+- Nudge a value with `"+" 0.1`, `"-" 0.1` or `"*" 0.5`. On a menu, `"+"` is the next item.
+- Pick a menu item by number or by name: `/phosphor/layer/3/blend "Add"`. Blend mode can be controlled and mapped.
+  (A whole number sent to a menu now picks that item, counted from 0; it used to mean the last item.)
+- Send all to (MIDI / OSC panel): every control that changes goes out as OSC to another computer.
+
+**Linking controls**
+- Any control can follow another: right-click it › Follow another control.
+- Each thing a Control Surface fader drives can listen to just a part of the fader, with its own steps, curve or
+  formula. One knob can play several things one after another.
+- Links (MIDI / OSC panel): one list of what drives what.
+
+**LFOs & Modulators**
+- Phase and pulse width, and four more shapes: ramp down, exponential, smooth random, noise.
+- Each LFO draws its wave with a playhead, and says what follows it.
+- A project holds 32 modulators (was 16).
+- Saved: keep your modulators as a named set. Four starters come with it.
+
+**Audience play**
+- Game pad: people at your show get a D-pad, A and B on their phones, in turns. Each press can be mapped in
+  Phosphor and goes out as OSC to a 3D project. "Kit for 3D artists…" writes a Unity script, an Unreal component
+  and the steps. (New: the Unity and Unreal files haven't been tried in those apps yet.)
+
+**Outputs and mapping**
+- A mask on a slice: right-click a slice › Add a mask on it. It cuts only that slice and moves with it.
+- Two more slice blends: Lighten and Subtract.
+
+**Designer**
+- Layer box: bring one of your own layers into the network.
+- A box's source row fits inside the box, so its buttons can be clicked.
+- A comp can't be picked as its own source any more (it drew nothing and its movies stopped).
+
+**Media**
+- Files dragged onto the Media panel go into your media only: no layer or clips are made and nothing starts
+  playing. With a collection showing, they go into it.
+- Each tile shows the layers it's playing on.
+- Skip: right-click a file › Skip. It stays in Media, but Random, Shuffle, autopilot and collections pass it by.
+- Favorite what's playing: a star by the file name in the Inspector, and in a layer's menu.
+- Long names in dropdowns are cut short (a long layer name made the grid jump between 3 and 4 columns).
 
 **Effects**
 - Transform: move, scale, rotate and flip the picture. Put it on MASTER to move the whole output.
+- Effect menus open again (they closed as they opened).
+- Every setting that picks one of a few things is a menu, not a number slider: Rutt-Etra Draw and Displace by,
+  Mirror, Trails Mode, Slit-scan Slit and others. Saved projects keep their values.
+
+**Layers and mixer**
+- Layers keep their names when they load a file or clip.
+- Each movie layer shows how much CPU it takes; the status bar's CPU is the whole computer's share.
+- Crossfader: A and B buttons glide to that side over the fade time, with the easing you pick. They can be mapped.
+  Moving the crossfader during a fade takes over.
+- Layer cards pick their crossfader side (A / B).
+- Controllers can select a layer.
+- Scrubbing to the very end of a movie shows its last frame, not its first few.
 
 **Sliders**
 - A slider that something moves (an LFO, the sound, a modulator) shows it: a wave by its name and a thin outline.
 - The right-click menu lights up what's on: what modulates it, what it's mapped to, Locked, snap points, limits.
 
+**Menus**
+- With one menu open, moving onto the next title opens it. No second click.
+
 **Converting files**
 - The Convert window keeps its size whatever you pick, and shows where the new file goes, with Change… to pick
   another folder. Clips from followed accounts convert into your library folder.
-
-**Designer**
-- A box's source row fits inside the box, so its buttons can be clicked.
-- A comp can't be picked as its own source any more (it drew nothing and its movies stopped).
 
 **Following accounts**
 - When macOS keeps Phosphor from reading your browser's sign-in, it says so, with a button to the Full Disk Access
   settings.
 
-**Windows**
-- Phosphor installs updates by itself, like on the Mac (from the next update after this one).
+**Updates**
+- Updates never install or pop up while an output window is open: they wait until the show is over.
+- Windows: Phosphor installs updates by itself, like on the Mac (from the next update after this one).
 
 ## 0.5.6 (2026-11-14)
 
