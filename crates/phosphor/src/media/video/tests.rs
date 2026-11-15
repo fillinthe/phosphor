@@ -256,14 +256,18 @@ fn a_drag_along_the_timeline_shows_pictures() {
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
     assert!(shown >= 3, "pictures while dragging: {shown}");
-    // Let go: it settles on the last place asked for.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    // Let go: it settles on the last place asked for (the clock held still, so it doesn't play past the 2.5 s clip's
+    // end and loop while a busy machine catches up).
+    let held = start.elapsed().as_secs_f64();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while std::time::Instant::now() < deadline {
-        if let Some(f) = p.poll_frame(start.elapsed().as_secs_f64()) {
+        if let Some(f) = p.poll_frame(held) {
             p.recycle(f);
+        }
+        if (p.position() - 2.0).abs() < 0.05 {
+            break;
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    p.set_playing(false);
-    assert!(p.position() > 1.8, "ends where the drag stopped (and plays on): {}", p.position());
+    assert!((p.position() - 2.0).abs() < 0.05, "ends where the drag stopped: {}", p.position());
 }
