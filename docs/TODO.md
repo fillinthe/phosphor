@@ -111,6 +111,11 @@ source, or a proxy on your server.
       drawing layer → a Phosphor layer (name, on / off, opacity, placed by its transform), PNGs copied beside the
       project; later the strokes as lines that draw themselves on (and for lasers).
 - [~] *(Stack is no longer in the default layout)* **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
+- [ ] **Code audit** (owner, 2026-11-15, after the show): correctness, leaks, threads and locks, dead code, duplication,
+      the design-system rules, and the graphify map's loosely knit areas below. Report first, then fix in small steps.
+- [ ] **OSC and linking like VDMX / Resolume** (owner, 2026-11-15): one control driving many things with their own
+      ranges, user-built control windows, a proper LFO window (the LFOs & Modulators panel exists; make it the
+      place to build them, not right-click menus), "programmable". Researched list to come from the docs.
 - [ ] **Code health** (graphify map, 2026-11-14: 14,953 nodes, 501 communities): `ui/kit.rs` (cohesion 0.05) and
       Mapping + Studio (0.11) are loosely knit: split them by job. British spellings left only in internal names
       (`colour_button`, `theme::FAVOURITE`, `colour_budget.txt`; serde field names stay for old saves).
