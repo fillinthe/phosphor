@@ -649,7 +649,7 @@ mod tests {
         let s = LaserShape { kind: LaserShapeKind::Trace, image: "logo.png".into(), size: 1.0, count: 5.0, shape: 0.5, ..Default::default() };
         let paths = shape_paths(&s, 0.0, &ModInputs::default(), &inputs);
         assert_eq!(paths.len(), 1);
-        assert_eq!(paths[0].points[0].1, [0.0, 0.0, 1.0], "the image's colour, not the mix's");
+        assert_eq!(paths[0].points[0].1, [0.0, 0.0, 1.0], "the image's color, not the mix's");
         assert!(shape_paths(&LaserShape { image: "not read.png".into(), ..s }, 0.0, &ModInputs::default(), &inputs).is_empty());
         let d = LaserShape { kind: LaserShapeKind::Drawing, points: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], closed: true, x: 0.5, size: 0.5, ..Default::default() };
         let paths = shape_paths(&d, 0.0, &ModInputs::default(), &inputs);
@@ -668,7 +668,7 @@ mod tests {
         assert!(paths.len() >= 4, "H is 3 strokes, I one: {}", paths.len());
         let xs: Vec<f32> = paths.iter().flat_map(|p| p.points.iter().map(|q| q.0[0])).collect();
         let (lo, hi) = (xs.iter().copied().fold(f32::MAX, f32::min), xs.iter().copied().fold(f32::MIN, f32::max));
-        assert!((hi - lo - 1.0).abs() < 0.05 && (hi + lo).abs() < 0.05, "1 wide (size 0.5) and centred: {lo}..{hi}");
+        assert!((hi - lo - 1.0).abs() < 0.05 && (hi + lo).abs() < 0.05, "1 wide (size 0.5) and centered: {lo}..{hi}");
         let two = LaserShape { text: "HI\nHI".into(), ..s.clone() };
         let ys: Vec<f32> = shape_paths(&two, 0.0, &ModInputs::default(), &files()).iter().flat_map(|p| p.points.iter().map(|q| q.0[1])).collect();
         assert!(ys.iter().copied().fold(f32::MIN, f32::max) > 0.1 && ys.iter().copied().fold(f32::MAX, f32::min) < -0.1, "two lines, one above the other");
@@ -691,7 +691,7 @@ mod tests {
         let first = shape_paths(&s, 0.0, &ModInputs::default(), &files());
         assert_eq!(first.len(), 1);
         assert_eq!(first[0].points.len(), 5, "the square, from where the dark move ended");
-        assert_eq!(first[0].points[0].1, [1.0, 0.0, 0.0], "the file's colour");
+        assert_eq!(first[0].points[0].1, [1.0, 0.0, 0.0], "the file's color");
         let second = shape_paths(&s, 0.15, &ModInputs::default(), &files());
         assert_eq!(second.len(), 2, "a line and a beam");
         assert!(second.iter().any(|p| p.dots && p.points.len() == 1));

@@ -370,7 +370,7 @@ mod brightness_tests {
         assert_eq!(super::palette(0.35).panel, 21, "the default is Phosphor's usual panel");
         assert!(super::palette(0.0).panel < super::palette(0.2).panel);
         assert!(super::palette(0.9).panel > super::palette(0.6).panel);
-        assert!(super::palette(0.5).panel < 60 && super::palette(0.51).panel > 190, "no mid-grey");
+        assert!(super::palette(0.5).panel < 60 && super::palette(0.51).panel > 190, "no mid-gray");
         assert_eq!(super::palette(1.0).extreme, 255);
         assert_eq!(super::palette(-3.0).panel, super::palette(0.0).panel);
     }

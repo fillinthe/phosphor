@@ -61,7 +61,7 @@ pub(crate) fn control(ui: &mut egui::Ui, st: &mut State) {
         });
         crate::ui::field_menu(ui, label(icon::SQUARES_FOUR, "Clip pad lights"), |ui| {
             ui.set_min_width(260.0);
-            help(ui, "Pads mapped to clips light up: one colour for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the colour by note velocity.");
+            help(ui, "Pads mapped to clips light up: one color for an empty slot, one for a loaded clip, one for the clip playing. Grid controllers pick the color by note velocity.");
             for (name, lights) in crate::control::CLIP_LIGHTS {
                 if crate::ui::pick_item(ui, control.clip_lights == lights, name).clicked() {
                     control.clip_lights = lights;

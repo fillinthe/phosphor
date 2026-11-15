@@ -560,7 +560,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
         crate::ui::heading(ui, &s.name);
         if !others.is_empty() {
             ui.menu_button(label(icon::COPY, "Copy its look to"), |ui| {
-                help(ui, "Opacity, soft edges, colour, blend and shape; not where it sits or what it shows");
+                help(ui, "Opacity, soft edges, color, blend and shape; not where it sits or what it shows");
                 if crate::ui::command(ui, "Every other slice here").clicked() {
                     copy_to = others.iter().map(|(id, _)| *id).collect();
                     ui.close();

@@ -93,7 +93,7 @@ fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut imp
             s.scale_about(anchor, k, k);
             changed = true;
         }
-        r.on_hover_text("Drag to scale evenly (the opposite corner stays) · Alt: from the centre");
+        r.on_hover_text("Drag to scale evenly (the opposite corner stays) · Alt: from the center");
     }
     // Turn: a round handle above the top, joined to it.
     let above = rect.center_top() - egui::vec2(0.0, OUT + 22.0);
@@ -115,7 +115,7 @@ fn transform_box(ui: &mut egui::Ui, id: egui::Id, frame: egui::Rect, s: &mut imp
             changed = true;
         }
     }
-    r.on_hover_text("Drag to turn the slice round its centre");
+    r.on_hover_text("Drag to turn the slice round its center");
     changed
 }
 
@@ -691,7 +691,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
     }
 }
 
-const CANVAS_HELP: &str = "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the centre to move it. Overlap soft edges to blend projectors. Orange shapes are masks.";
+const CANVAS_HELP: &str = "Drag corners to pin a surface onto the real object (or turn on Mesh warp for curved ones). Drag the center to move it. Overlap soft edges to blend projectors. Orange shapes are masks.";
 
 pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
     st.comp.ensure_outputs();
@@ -1257,7 +1257,7 @@ pub(crate) fn mask_settings(ui: &mut egui::Ui, m: &mut phosphor_engine::mapping:
     if m.feather > 0.0 {
         crate::ui::field(ui, "Fade", |ui| {
             choice_buttons(ui, &mut m.edge, |_, r| {
-                r.clone().on_hover_text("Where the fade sits: centred on the outline, all inside the shape, or all outside it");
+                r.clone().on_hover_text("Where the fade sits: centered on the outline, all inside the shape, or all outside it");
             });
         });
     }
@@ -1372,7 +1372,7 @@ pub(crate) fn svg_menu(ui: &mut egui::Ui, st: &mut State) {
 
 pub(crate) fn venue_menu(ui: &mut egui::Ui, st: &mut State) {
     let State { venues, venue_name, comp, .. } = &mut *st;
-    let action = saves_menu(ui, &label(icon::MAP_PIN, "Venues"), "Your whole projection setup: every output, its surfaces, warps, masks and colour.", venues, venue_name, "venue", || comp.venue_json());
+    let action = saves_menu(ui, &label(icon::MAP_PIN, "Venues"), "Your whole projection setup: every output, its surfaces, warps, masks and color.", venues, venue_name, "venue", || comp.venue_json());
     match action {
         Some(SaveAction::Load(json)) => match st.comp.apply_venue(&json) {
             Ok(()) => {

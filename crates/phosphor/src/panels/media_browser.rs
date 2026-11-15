@@ -376,7 +376,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
     // What to do with the files shown.
     let in_collection = matches!(source, MediaSource::Collection(_));
     let title = match &source {
-        MediaSource::Favorites => "Favourites".to_string(),
+        MediaSource::Favorites => "Favorites".to_string(),
         MediaSource::Folder(_) => dir.as_deref().map_or_else(
             || "Folder".into(),
             |d| {
@@ -526,7 +526,7 @@ fn empty_text(source: &MediaSource, bin_empty: bool, searching: bool) -> &'stati
         _ if bin_empty && *source == MediaSource::All => {
             "Empty. Import files, watch a folder, or drop files onto the window."
         }
-        MediaSource::Favorites => "No favourites yet: click the star on a tile.",
+        MediaSource::Favorites => "No favorites yet: click the star on a tile.",
         MediaSource::Added => {
             "Files you add one by one show here: Import…, or drop files onto the window."
         }

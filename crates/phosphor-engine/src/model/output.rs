@@ -210,10 +210,10 @@ impl TestPattern {
         match self {
             TestPattern::Grid => "Grid",
             TestPattern::Card => "Test card",
-            TestPattern::Bars => "Colour bars",
+            TestPattern::Bars => "Color bars",
             TestPattern::White => "White",
             TestPattern::Checker => "Checkerboard",
-            TestPattern::Ramp => "Grey ramp",
+            TestPattern::Ramp => "Gray ramp",
         }
     }
 }

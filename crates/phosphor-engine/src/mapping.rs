@@ -1114,7 +1114,7 @@ impl MaskEdge {
 
     pub fn name(self) -> &'static str {
         match self {
-            MaskEdge::Centre => "Centred",
+            MaskEdge::Centre => "Centered",
             MaskEdge::Inside => "Inside",
             MaskEdge::Outside => "Outside",
         }
@@ -2454,7 +2454,7 @@ f 1 2 3 4\nf 5 6 7 8\nf 10 9 12 11\nf 9 5 8 12\nf 6 10 11 7\nf 8 7 11 12\nf 9 10
         // The dark part sits where the box is seen from above: near the floor's middle.
         let (sx, sy) = shaded.iter().filter(|v| v[2] == 0.0).fold((0.0, 0.0), |a, v| (a.0 + v[0], a.1 + v[1]));
         let (cx, cy) = (sx / dark as f32, sy / dark as f32);
-        assert!((cx - 0.5).abs() < 0.15 && (cy - 0.5).abs() < 0.25, "shadow centre {cx}, {cy}");
+        assert!((cx - 0.5).abs() < 0.15 && (cy - 0.5).abs() < 0.25, "shadow center {cx}, {cy}");
         assert!(Model3d { shadows: 0.0, ..m }.shade_triangles(1.0).iter().all(|v| v[2] == 1.0));
         let _ = std::fs::remove_file(&path);
     }

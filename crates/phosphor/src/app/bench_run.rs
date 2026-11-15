@@ -525,7 +525,7 @@ impl PhosphorApp {
                         }
                         m.calibrating = true;
                         let err = m.solve(aspect);
-                        println!("QUICK calibrate: {} pins, rms {:?}; solved yaw {:.3} pitch {:.3} roll {:.3} dist {:.2} fov {:.1} centre {:.3},{:.3} (truth -0.070 0.100 0.020 4.00 28.0 0.420,0.550)", m.pins.len(), err, m.yaw, m.pitch, m.roll, m.distance, m.fov, m.center[0], m.center[1]);
+                        println!("QUICK calibrate: {} pins, rms {:?}; solved yaw {:.3} pitch {:.3} roll {:.3} dist {:.2} fov {:.1} center {:.3},{:.3} (truth -0.070 0.100 0.020 4.00 28.0 0.420,0.550)", m.pins.len(), err, m.yaw, m.pitch, m.roll, m.distance, m.fov, m.center[0], m.center[1]);
                     }
                 }
                 continue;
@@ -806,7 +806,7 @@ impl PhosphorApp {
             }
             if name == "clipsound" {
                 self.state.audio.use_clips();
-                println!("QUICK clipsound: analysing the clip mix");
+                println!("QUICK clipsound: analyzing the clip mix");
                 continue;
             }
             if name == "transfx" {

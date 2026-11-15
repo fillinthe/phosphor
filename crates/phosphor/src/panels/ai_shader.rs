@@ -79,7 +79,7 @@ pub(crate) fn ai_shader_window(ctx: &egui::Context, st: &mut State) {
         segmented(ui, &mut make, &options, |_, _, _| {});
         a.make = Some(make);
         let example = match make {
-            Make::Effect => "e.g. a VHS look: wobbly lines, colour bleeding sideways, a little noise",
+            Make::Effect => "e.g. a VHS look: wobbly lines, color bleeding sideways, a little noise",
             Make::Generator => "e.g. slow neon tunnels that pulse, purple and teal",
             Make::Change => "e.g. make it react faster and add a hue shift slider",
         };

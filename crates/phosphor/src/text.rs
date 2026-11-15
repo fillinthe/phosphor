@@ -270,7 +270,7 @@ mod tests {
         assert!(lit.len() > 500, "red text pixels: {}", lit.len());
         let cx = lit.iter().map(|p| p.0 as f64).sum::<f64>() / lit.len() as f64;
         let cy = lit.iter().map(|p| p.1 as f64).sum::<f64>() / lit.len() as f64;
-        assert!((cx - 320.0).abs() < 40.0 && (cy - 180.0).abs() < 40.0, "centred: {cx},{cy}");
+        assert!((cx - 320.0).abs() < 40.0 && (cy - 180.0).abs() < 40.0, "centered: {cx},{cy}");
         let dark = img.pixels().filter(|p| p[3] > 200 && p[0] < 40).count();
         assert!(dark > 200, "outline pixels: {dark}");
     }

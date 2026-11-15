@@ -307,7 +307,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         ui.separator();
         let shown = match st.explorer.category.as_str() {
             "" => "All categories".to_string(),
-            "★" => format!("{} Favourites", icon::STAR),
+            "★" => format!("{} Favorites", icon::STAR),
             "hidden" => format!("{} Hidden ({hidden})", icon::EYE_SLASH),
             c => c.to_string(),
         };
@@ -324,7 +324,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
         let packs = String::new();
         let menu = crate::ui::dropdown(ui, "explorer_category", 130.0).selected_text(shown).show_ui(ui, |ui| {
             crate::ui::pick_value(ui, &mut st.explorer.category, String::new(), "All categories");
-            crate::ui::pick_value(ui, &mut st.explorer.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+            crate::ui::pick_value(ui, &mut st.explorer.category, "★".to_string(), format!("{} Favorites", icon::STAR));
             if hidden > 0 {
                 crate::ui::pick_value(ui, &mut st.explorer.category, "hidden".to_string(), label(icon::EYE_SLASH, &format!("Hidden ({hidden})")));
             }
@@ -532,7 +532,7 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
                     if let Some(to) = send_to_menu(ui, st, st.explorer.sources) {
                         action = Some(TileAction::Send(desc.id, to));
                     }
-                    let text = if fav { label(icon::STAR, "Remove from favourites") } else { label(icon::STAR, "Add to favourites") };
+                    let text = if fav { label(icon::STAR, "Remove from favorites") } else { label(icon::STAR, "Add to favorites") };
                     if crate::ui::command(ui, text).clicked() {
                         action = Some(TileAction::Favorite(desc.id.to_string()));
                         ui.close();
@@ -804,7 +804,7 @@ fn shadertoy_window(ctx: &egui::Context, st: &mut State) {
     let mut open = true;
     let mut done: Option<String> = None;
     crate::ui::dialog(ctx, label(icon::DOWNLOAD_SIMPLE, "Import from Shadertoy")).open(&mut open).default_width(560.0).show(ctx, |ui| {
-        crate::ui::help(ui, "Open a shader on shadertoy.com, copy all the code in its Image tab and paste it here. Shaders that read iChannel0 become effects on a layer's picture; the rest are sources. Check its licence before you share a show with it.");
+        crate::ui::help(ui, "Open a shader on shadertoy.com, copy all the code in its Image tab and paste it here. Shaders that read iChannel0 become effects on a layer's picture; the rest are sources. Check its license before you share a show with it.");
         ui.horizontal(|ui| {
             ui.label("Name");
             ui.add(egui::TextEdit::singleline(&mut imp.name).hint_text("e.g. Star Nest").desired_width(180.0));
@@ -1009,7 +1009,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
                 }
             })
             .response
-            .on_hover_text("Build an effect from blocks wired together (blur, warp, colour, mix, trails): no code");
+            .on_hover_text("Build an effect from blocks wired together (blur, warp, color, mix, trails): no code");
         });
         #[cfg(not(target_arch = "wasm32"))]
         if crate::ui::command(ui, label(icon::MAGIC_WAND, "Describe it…")).on_hover_text("Say what it should look like and the AI writes the shader (your own Anthropic API key)").clicked() {
@@ -1029,7 +1029,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             }
         })
         .response
-        .on_hover_text("Starters that each do one thing (colour, warp, pixelate, mirror, mask, glow, rings, clouds), every line explained");
+        .on_hover_text("Starters that each do one thing (color, warp, pixelate, mirror, mask, glow, rings, clouds), every line explained");
         ui.menu_button(label(icon::COPY, "Copy a built-in…"), |ui| {
             crate::ui::column_scroll(ui).max_height(360.0).show(ui, |ui| {
                 for d in shaders::EFFECTS.iter().chain(shaders::GENERATORS) {
@@ -1492,7 +1492,7 @@ pub fn fx_browser_window(ctx: &egui::Context, st: &mut State) {
             if !b.sources {
                 crate::ui::pick_value(ui, &mut b.category, "recent".to_string(), format!("{} Recent", icon::CLOCK_COUNTER_CLOCKWISE));
             }
-            crate::ui::pick_value(ui, &mut b.category, "★".to_string(), format!("{} Favourites", icon::STAR));
+            crate::ui::pick_value(ui, &mut b.category, "★".to_string(), format!("{} Favorites", icon::STAR));
             for cat in CATEGORY_ORDER {
                 if list.iter().any(|d| shaders::info(d.id).0 == *cat) {
                     crate::ui::pick_value(ui, &mut b.category, cat.to_string(), *cat);

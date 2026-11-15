@@ -103,7 +103,7 @@ WGSL. The header is comment lines:
 - `// @name Name` (short, title case)
 - `// @kind effect` (processes a layer's picture) or `// @kind generator` (makes its own picture)
 - `// @param Name min max default`, one per slider, at most 12; read them with P(0u), P(1u), … in order.
-  Give every visible quantity a slider (amount, speed, size, colour…) with sensible ranges, and make the default look good.
+  Give every visible quantity a slider (amount, speed, size, color…) with sensible ranges, and make the default look good.
 - optional `// @feedback`: last(uv) returns this shader's own previous frame (trails, echoes, smears).
 - optional `// @pass name [scale]` lines: passes drawn before main, each `fn name(in: VOut) -> vec4f` (no attributes),
   read by later passes and main with read_name(uv). scale 0.05..1 (0.5 = half size, cheaper for blurs).
@@ -125,7 +125,7 @@ fn main(in: VOut) -> @location(0) vec4f { … }
 - Valid WGSL for naga/wgpu: f32 literals need a decimal point or suffix (1.0, not 1); no implicit int/float mixing;
   `var` for anything reassigned; vec3f/vec4f shorthand; loops need fixed bounds (at most 64 steps); no recursion;
   sample only with textureSampleLevel (no textureSample, no derivatives in loops).
-- Return colour 0..1 with alpha. Generators usually return alpha 1.
+- Return color 0..1 with alpha. Generators usually return alpha 1.
 - It runs every frame at full resolution: keep it cheap (no more than ~40 texture reads per pixel).
 - Animate with u.time scaled by a Speed slider so a slider at 0 freezes it.
 - Write helper functions above main with unique names (not main, src, P, luma, palette, hash21, value_noise, centered).

@@ -546,7 +546,7 @@ pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
         ui.horizontal_wrapped(|ui| {
             for (k, s) in saved.iter().enumerate() {
                 let fill = egui::Color32::from_rgb((s[0] * 255.0) as u8, (s[1] * 255.0) as u8, (s[2] * 255.0) as u8);
-                let r = ui.add(egui::Button::new("").fill(fill).min_size(egui::vec2(22.0, 22.0))).on_hover_text("Use this colour · right-click to remove");
+                let r = ui.add(egui::Button::new("").fill(fill).min_size(egui::vec2(22.0, 22.0))).on_hover_text("Use this color · right-click to remove");
                 if r.clicked() {
                     c = *s;
                     changed = true;
@@ -568,13 +568,13 @@ pub(crate) fn colour_button(ui: &mut egui::Ui, rgb: &mut [f32]) -> bool {
             super::eyedropper::arm(ui.ctx(), Some(button.id));
             ui.close();
         }
-        if crate::ui::command(ui, label(icon::PLUS, "Save this colour")).clicked() {
+        if crate::ui::command(ui, label(icon::PLUS, "Save this color")).clicked() {
             save = true;
             ui.close();
         }
     })
     .response
-    .on_hover_text("Saved colours");
+    .on_hover_text("Saved colors");
     if save && !saved.contains(&c) {
         saved.push(c);
         ui.ctx().data_mut(|d| d.insert_persisted(swatches_id(), saved));

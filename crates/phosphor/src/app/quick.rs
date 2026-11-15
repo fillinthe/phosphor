@@ -55,7 +55,7 @@ impl Quick {
             Quick::Surprise => "A random look on every layer: generators, effects, blends and motion that follows the music",
             Quick::SurpriseLayer => "A random look on the selected layer (movies and cameras keep playing, their effects change)",
             Quick::Shuffle => "New settings for the selected layer's generator and effects, near where they are",
-            Quick::React => "Make the selected layer move with the music: kick pumps, beat-synced sweeps, colour drift",
+            Quick::React => "Make the selected layer move with the music: kick pumps, beat-synced sweeps, color drift",
             Quick::Fill => "Fill the selected layer's empty clip slots with generator variations",
             Quick::InstantSet => "Three layers of clips ready to play, column 1 launched. Outputs and mapping stay. Undo brings your layers back",
             Quick::Still => "Keep the look but take off all the motion (music-following and sweeps) on every layer",

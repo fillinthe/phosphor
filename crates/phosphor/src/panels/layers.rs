@@ -503,11 +503,11 @@ pub(crate) fn layer_card(
             ui.close();
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if crate::ui::command(ui, label(icon::PALETTE, "Match colour to a picture…")).on_hover_text("Adds a Colour Match effect so this layer's colours look like a picture you choose (another camera, a grade, a still)").clicked() {
+        if crate::ui::command(ui, label(icon::PALETTE, "Match color to a picture…")).on_hover_text("Adds a Color Match effect so this layer's colors look like a picture you choose (another camera, a grade, a still)").clicked() {
             action = Some(LayerAction::MatchColour);
             ui.close();
         }
-        if crate::ui::command(ui, label(icon::SWATCHES, "Palette from this picture")).on_hover_text("Adds a Palette effect: every pixel becomes one of this layer's six main colours (change them in the effect)").clicked() {
+        if crate::ui::command(ui, label(icon::SWATCHES, "Palette from this picture")).on_hover_text("Adds a Palette effect: every pixel becomes one of this layer's six main colors (change them in the effect)").clicked() {
             action = Some(LayerAction::Palette);
             ui.close();
         }
@@ -795,8 +795,8 @@ pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, n
             // The layer's small thumbnail now (a one-off readback).
             let px = st.engine.as_ref().and_then(|e| e.read_layer_thumbnail(id));
             st.notice = Some(match px.map(|(_, _, px)| phosphor_engine::palette_of(&px, 6)) {
-                Some(pal) if !pal.is_empty() && st.comp.add_palette(id, &pal).is_some() => "Palette added with this layer's six main colours".into(),
-                _ => "The layer has no picture to take colours from (is it on?)".into(),
+                Some(pal) if !pal.is_empty() && st.comp.add_palette(id, &pal).is_some() => "Palette added with this layer's six main colors".into(),
+                _ => "The layer has no picture to take colors from (is it on?)".into(),
             });
         }
         LayerAction::MatchColour => {

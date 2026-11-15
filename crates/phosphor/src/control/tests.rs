@@ -929,7 +929,7 @@ fn a_colour_comes_from_one_osc_message() {
     let mut comp = Composition::starter();
     let layer = comp.add_layer().id;
     let desc = phosphor_engine::shaders::generator("solid").expect("solid");
-    assert_eq!(desc.params[0].name, "Red", "solid has a colour");
+    assert_eq!(desc.params[0].name, "Red", "solid has a color");
     let l = comp.layer_mut(layer).unwrap();
     l.source = phosphor_engine::SourceSpec::Generator("solid".into());
     l.generator_values = desc.defaults();
@@ -1039,7 +1039,7 @@ fn soft_edges_mask_switches_and_colour_are_controls() {
     set_target(&mut comp, &gamma, 1.0, &mut deferred);
     assert_eq!(comp.outputs.iter().find(|o| o.id == out).unwrap().color.brightness, 1.0);
     assert_eq!(comp.slice(sid).unwrap().color.gamma, 3.0);
-    assert_eq!(default_osc_address(&bright), format!("/phosphor/colour/{out}/brightness"));
+    assert_eq!(default_osc_address(&bright), format!("/phosphor/color/{out}/brightness"));
     let names = all_targets(&comp);
     for t in [ControlTarget::MaskFeather(mid), ControlTarget::MaskInvert(mid), ControlTarget::SliceFeather(sid), gamma] {
         assert!(names.iter().any(|(x, _)| *x == t), "{t:?} is in the list");

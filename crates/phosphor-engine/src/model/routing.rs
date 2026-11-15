@@ -233,7 +233,7 @@ mod tests {
         let s = c.slice(sid).unwrap();
         let (w, h) = (s.corners[1][0] - s.corners[0][0], s.corners[2][1] - s.corners[1][1]);
         assert!((w * 1920.0 / (h * 1080.0) - 16.0 / 9.0).abs() < 1e-3, "16:9 on the output");
-        assert!((s.corners[0][0] + w / 2.0 - 0.5).abs() < 1e-5, "centred where dropped");
+        assert!((s.corners[0][0] + w / 2.0 - 0.5).abs() < 1e-5, "centered where dropped");
         let layer = s.layer.expect("shows its own layer");
         assert_eq!(c.layers.iter().find(|l| l.id == layer).map(|l| (&l.source, l.in_mix)), Some((&movie, false)));
     }

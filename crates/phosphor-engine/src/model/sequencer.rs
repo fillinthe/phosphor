@@ -193,7 +193,7 @@ mod tests {
         t.colours[2] = [1.0, 1.0, 1.0];
         assert_eq!(t.colour_at(1.5), [0.5, 0.5, 1.0], "halfway to the next step");
         t.resize(8);
-        assert_eq!((t.colours.len(), t.colours[5]), (8, [0.0, 0.0, 1.0]), "a longer track repeats its colours");
+        assert_eq!((t.colours.len(), t.colours[5]), (8, [0.0, 0.0, 1.0]), "a longer track repeats its colors");
         t.shift(1);
         assert_eq!(t.colours[2], [0.0, 0.0, 1.0]);
         t.set_colour(false);

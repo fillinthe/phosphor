@@ -44,7 +44,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
             ui.label(RichText::new("MASTER").strong().small());
             let w = (ui.available_width() - 140.0).max(80.0);
             Level::percent(&mut st.comp.master_fade, "Fade").modulation(&mut st.comp.master_fade_mod).target(ControlTarget::MasterFade).width(w - 26.0).tip("Master fade: everything that goes out").show(ui);
-            crate::ui::icon_toggle(ui, &mut st.mouse_to_shaders, icon::CURSOR_CLICK).on_hover_text("Mouse into shaders: drag in the preview to move the selected layer's points (ISF point settings: centres, positions)");
+            crate::ui::icon_toggle(ui, &mut st.mouse_to_shaders, icon::CURSOR_CLICK).on_hover_text("Mouse into shaders: drag in the preview to move the selected layer's points (ISF point settings: centers, positions)");
             let r = super::inspector::mute_button(ui, &mut st.comp.sound_muted, "all sound");
             map_menu(ui, &r, ControlTarget::App(phosphor_engine::AppControl::MuteSound));
             if crate::ui::command(ui, icon::PLUS).on_hover_text("New preview window: the mix, a layer, a group or one output, as many as you like").clicked() {
@@ -82,7 +82,7 @@ pub(crate) fn preview(ui: &mut egui::Ui, st: &mut State) {
     }
     // Eyedropper: a colour button is waiting for a click on the picture.
     if crate::ui::eyedropper::armed(ui.ctx()).is_some() {
-        ui.painter().text(frame.left_top() + egui::vec2(8.0, 8.0), egui::Align2::LEFT_TOP, "Click the picture to pick a colour · Esc stops", egui::FontId::proportional(12.0), Color32::WHITE);
+        ui.painter().text(frame.left_top() + egui::vec2(8.0, 8.0), egui::Align2::LEFT_TOP, "Click the picture to pick a color · Esc stops", egui::FontId::proportional(12.0), Color32::WHITE);
         if resp.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
         }

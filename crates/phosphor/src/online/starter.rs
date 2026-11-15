@@ -33,11 +33,11 @@ const fn row(layer: &'static str, source: Source, kind: Kind, query: &'static st
 pub const STARTERS: [Starter; 5] = [
     Starter {
         name: "Space",
-        about: "NASA's nebulas and Earth from orbit, with a MilkDrop visualiser on top",
+        about: "NASA's nebulas and Earth from orbit, with a MilkDrop visualizer on top",
         rows: [
             row("Nebulas", Source::Nasa, Kind::Video, "nebula", BlendMode::Normal, 1.0),
             row("Earth", Source::Nasa, Kind::Video, "earth timelapse", BlendMode::Screen, 0.6),
-            row("Visualiser", Source::MilkDrop, Kind::Visualizer, "space", BlendMode::Add, 0.5),
+            row("Visualizer", Source::MilkDrop, Kind::Visualizer, "space", BlendMode::Add, 0.5),
         ],
     },
     Starter {
@@ -60,7 +60,7 @@ pub const STARTERS: [Starter; 5] = [
     },
     Starter {
         name: "Club",
-        about: "MilkDrop visualisers that move to the music: dancers, fractals and tunnels",
+        about: "MilkDrop visualizers that move to the music: dancers, fractals and tunnels",
         rows: [
             row("Dancers", Source::MilkDrop, Kind::Visualizer, "dancer", BlendMode::Normal, 1.0),
             row("Fractals", Source::MilkDrop, Kind::Visualizer, "fractal", BlendMode::Screen, 0.7),

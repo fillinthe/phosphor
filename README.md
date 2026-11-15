@@ -52,10 +52,10 @@ scripts/bundle-mac.sh   # builds, signs, installs /Applications/Phosphor.app
   (325 of the 327 in the ISF collection and most MadMapper materials import: multi-pass, feedback, imported pictures,
   live `audio` / `audioFFT` inputs), a shader editor with live preview.
 - **Control:** MIDI, OSC (with OSC Query and feedback), keyboard, Learn on any control; LFO / audio / step / envelope
-  modulation on any value; control surfaces you build (pages, XY pads, colour); TouchOSC layout export; presets.
+  modulation on any value; control surfaces you build (pages, XY pads, color); TouchOSC layout export; presets.
 - **Phones:** a remote page (scan the QR code or type phosphor.local: mixer, clips, your surface, layer pictures, Auto show) and **Audience play** (a
   second code, also as a layer on the output: guests line up and take timed turns at the controls you allow).
-- **Mapping:** drag corners on the projector, mesh warp, line slices, 3D models (OBJ), masks with soft edges, edge blending, per-output colour, many
+- **Mapping:** drag corners on the projector, mesh warp, line slices, 3D models (OBJ), masks with soft edges, edge blending, per-output color, many
   outputs each on its own screen, venue presets, Art-Net / sACN LED pixel mapping; render at 60 fps (default), 30, or the display's rate.
 - **Lasers:** a Laser Designer (shapes, waves, Lissajous figures, beams, words, ILDA files, live video or images traced into outlines, lines drawn by hand over an onion skin, animated and mappable) sent to Ether Dream,
   Helios, LaserCube and IDN lasers, with zones (corner-pinned areas with their own looks), dark areas, arming, a safety floor per projector, a test pattern for lining up, and Blackout.
@@ -108,7 +108,7 @@ cargo test   # includes WGSL validation of every shader, no GPU needed
 
 GPL-3.0-or-later (see `LICENSE`). Phosphor links GPL libraries (FFmpeg's GPL build, Ableton Link), so the app is GPL too:
 use it, change it, share it, and share your changes under the same terms. `vendor/eframe` keeps its MIT/Apache-2.0
-licence; Syphon's licence is in `vendor/Syphon-LICENSE.txt`.
+license; Syphon's license is in `vendor/Syphon-LICENSE.txt`.
 
 Laser text uses the Hershey fonts (via the `vector-text-hershey` crate). The Hershey Fonts were originally created by
 Dr. A. V. Hershey while working at the U. S. National Bureau of Standards. The format of the font data in that

@@ -46,7 +46,7 @@ impl WidgetKind {
             WidgetKind::Slider => "Slider",
             WidgetKind::XyPad => "XY Pad",
             WidgetKind::Label => "Label",
-            WidgetKind::Color => "Colour",
+            WidgetKind::Color => "Color",
             WidgetKind::Choices => "Choices",
             WidgetKind::Text => "Text field",
             WidgetKind::Multi => "Multi-slider",
