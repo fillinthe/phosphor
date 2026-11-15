@@ -233,10 +233,12 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
     let width = ui.available_width().max(60.0);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click_and_drag());
     let frac = if dur > 0.0 { (pos / dur).clamp(0.0, 1.0) as f32 } else { 0.0 };
-    // The marks sit inside the bar (a mark at either end can still be grabbed).
-    let inner = rect.shrink2(egui::vec2(5.0, 0.0));
-    let x_of = |f: f32| inner.left() + inner.width() * f.clamp(0.0, 1.0);
-    let f_of = |x: f32| ((x - inner.left()) / inner.width()).clamp(0.0, 1.0);
+    // 0 and 1 are the bar's very ends (they sat 5 points inside, so a loop starting at 0 looked like it didn't:
+    // owner, 2026-11-14); a mark's grab area reaches past the end, so one there can still be taken.
+    let x_of = |f: f32| rect.left() + rect.width() * f.clamp(0.0, 1.0);
+    let f_of = |x: f32| ((x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+    // Lines drawn at an end stay whole inside the bar.
+    let on_bar = |x: f32| x.clamp(rect.left() + 1.0, rect.right() - 1.0);
     let p = ui.painter().clone();
     p.rect_filled(rect, 0.0, Color32::from_gray(32));
     let done = egui::Rect::from_x_y_ranges(rect.left()..=x_of(frac), rect.y_range());
@@ -248,7 +250,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
             p.rect_filled(r, 0.0, crate::theme::mapped_fill(0.16));
         }
         for (i, v) in [&mut **lo, &mut **hi].into_iter().enumerate() {
-            let x = x_of(*v);
+            let x = on_bar(x_of(*v));
             let grab = egui::Rect::from_center_size(egui::pos2(x, rect.center().y), egui::vec2(10.0, rect.height() + 6.0));
             let h = ui.interact(grab, ui.id().with(("loop_edge", i)), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
             if h.dragged_by(egui::PointerButton::Primary)
@@ -263,7 +265,7 @@ pub(crate) fn scrub_bar(ui: &mut egui::Ui, pos: f64, dur: f64, mut region: Optio
             edges.push(h.on_hover_text(if i == 0 { "Loop start: drag · right-click for more" } else { "Loop end: drag · right-click for more" }));
         }
     }
-    let x = x_of(frac);
+    let x = on_bar(x_of(frac));
     p.line_segment([egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())], Stroke::new(2.0, Color32::WHITE));
     let fmt = |t: f64| format!("{}:{:04.1}", (t / 60.0) as u32, t % 60.0);
     // (A slim bar has no room for the times: they're in its tooltip.)
