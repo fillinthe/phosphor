@@ -83,7 +83,9 @@ pub(crate) fn learn_items(ui: &mut egui::Ui, target: &ControlTarget) {
             ui.ctx().copy_text(address.clone());
         }
     });
-    ui.menu_button(label(icon::PLUG, "Map to…"), |ui| {
+    let sources = mapped_sources(ui, target);
+    let mapped = (!sources.is_empty()).then(|| sources.join(", "));
+    ui.menu_button(crate::ui::menu_label(icon::PLUG, if mapped.is_some() { "Mapped" } else { "Map to…" }, mapped), |ui| {
         ui.set_min_width(300.0);
         hint(ui, "Type an input by hand (or use Listen above):");
         let id = egui::Id::new(("map_draft", format!("{target:?}")));
@@ -317,7 +319,9 @@ pub(crate) fn control_menu_with(resp: &egui::Response, target: Option<&ControlTa
         }
         let moving = m.as_ref().is_some_and(|m| m.is_some());
         if let Some(m) = m {
-            ui.menu_button(label(icon::WAVE_SINE, "Modulate…"), |ui| modulation_editor(ui, &mut *m));
+            let what = m.as_ref().map(|m| m.source.name().to_string());
+            let text = if what.is_some() { "Modulated" } else { "Modulate…" };
+            ui.menu_button(crate::ui::menu_label(icon::WAVE_SINE, text, what), |ui| modulation_editor(ui, &mut *m));
             if moving && crate::ui::command(ui, label(icon::PAUSE, "Stop the motion")).on_hover_text("Keeps the value where it is set, without the modulation").clicked() {
                 *m = None;
                 ui.close();
