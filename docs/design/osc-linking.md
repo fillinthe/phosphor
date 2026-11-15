@@ -1,6 +1,6 @@
 # Draft to-do: OSC, linking and programmable controls (VDMX / Resolume style)
 
-Draft for the owner, 2026-11-15. Nothing here is built or changed yet.
+For the owner. Started 2026-11-15: [x] = built, [~] = partly (what's left is in the note), [ ] = not started.
 
 **Where Phosphor is today.** More of this already exists than it may seem. There are shared modulators
 (`model/modulators.rs`, the "LFOs & Modulators" panel in `panels/modulators.rs`). Controller mappings carry a
@@ -20,22 +20,22 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
 
 ## Linking & programmable controls
 
-- [ ] **Per-target input slice ("dial range")** (V, R): each target of a multi-target control listens to only part
+- [x] **Per-target input slice ("dial range")** (**built 2026-11-15, tested: each target's "part of the fader" in the Control Surface target list and in Links**) (V, R): each target of a multi-target control listens to only part
   of the fader, such as 0-33% drives blur and 33-100% drives zoom, so one knob plays a staged look. Today a
   `Binding` (`model/control.rs`) has only an output `ValueRange` (min / max / invert). The input side isn't there for
   surface widgets, and `ValueFx::Clamp` only exists per controller mapping. Size S.
-- [ ] **Per-target curves and value effects on every link** (V): give `Binding` the same `fx: Vec<ValueFx>` that
+- [~] **Per-target curves and value effects on every link** (**built 2026-11-15, tested: the instant ones (steps, curve, formula, threshold, limit, repeat, randomize, drawn curve); smooth / delay / fall stay on controller mappings**) (V): give `Binding` the same `fx: Vec<ValueFx>` that
   `ControlMap` has, so each target of a surface fader or modulator can have its own curve, steps, delay or formula.
   Reuse `value_fx_menu` (`panels/control.rs`) as a shared component. Size M.
 - [ ] **Link from the source: drag onto any control** (V): drag a modulator, surface widget or knob from the
   MIDI/OSC monitor onto any slider to link it. VDMX does this with a right-click drag from LFO, Clock, Step
   Sequencer, Control Surface and Data Looper. Today you always go the other way: right-click the slider, then
   Modulate or Learn. Use `ui::drop_payload`. Size M.
-- [ ] **"Links" view: one source, every target** (V: Data Source Mappings window): a single list grouped by source
+- [~] **"Links" view: one source, every target** (**built 2026-11-15: MIDI / OSC › Links; follows and surface targets edited in place, controller inputs and modulator followers listed. Seen on screen empty only**) (V: Data Source Mappings window): a single list grouped by source
   (a MIDI knob, an OSC address, a modulator, a surface widget). It shows every target with its range and curve,
   editable in place, with "jump to" links. Today `mappings_editor` (`panels/control.rs`) lists one row per pairing,
   and modulator followers are listed nowhere. Size M.
-- [ ] **Any control can follow any other control** (V: every UI item is a data source): for example, layer 2's
+- [x] **Any control can follow any other control** (**built 2026-11-15, tested: right-click › Follow another control; `Composition::follows`, `control::follow_sends`. The menu itself was not seen on screen**) (V: every UI item is a data source): for example, layer 2's
   opacity follows layer 1's speed, inverted. Add a `ModSource` / `link` to a `ControlTarget`, read with
   `control::get_target`. Today only shared modulators and surface widgets can be sources; the Computed widget reads
   controls but only on a surface. Size M.
@@ -43,7 +43,7 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
   clip or MASTER. Drag any parameter onto a dial, and each link gets an in/out slice and invert. Today this needs a
   Control Surface page. This is a light, scoped version that's saved with the layer or clip and travels in presets.
   Size M.
-- [ ] **Copy / paste a control's links** (V: Copy / Paste Local): copy a slider's mappings, modulation and value
+- [~] **Copy / paste a control's links** (**was already there: Copy / Paste mappings in the right-click menu, Copy / Paste the motion. Not yet: onto all of a layer's sliders at once**) (V: Copy / Paste Local): copy a slider's mappings, modulation and value
   effects onto another control, or onto all of a layer's sliders at once. Size S.
 
 ## OSC
@@ -55,19 +55,19 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
   stack, `/phosphor/selected/layer/opacity`, and `/phosphor/layer/1/clip/3/play`. A TouchOSC page then works on any
   project, and a single "selected layer" strip works on whatever is clicked. Today addresses use internal ids or
   names (`default_osc_address`, `named_address` in `control/targets.rs`). Size M.
-- [ ] **Query, relative and typed values** (R): sending `"?"` returns the current value. `"+" 0.1`, `"-"` and `"*"`
+- [~] **Query, relative and typed values** (**built 2026-11-15, tested over a real socket: "?" answered on the feedback port, "+" "-" "*", whole number = menu item, name = menu item, blend mode is a control (`control::ask`). Not yet: colors as the `r` type on built-in addresses**) (R): sending `"?"` returns the current value. `"+" 0.1`, `"-"` and `"*"`
   nudge it. Ints pick menu items, strings pick by name (blend "Add"), and colors use the `r` type. Today a value is a
   0..1 float only (`(String, f32)` in `control/mod.rs`), except for text. Size M.
-- [ ] **OSC output: send every change, or only the controls you pick** (R, V: senders on every control): the "Output
+- [~] **OSC output: send every change, or only the controls you pick** (**built 2026-11-15, tested: "Send all to" host:port in MIDI / OSC; per-control Send out with its own address and host was already there. Not yet: Bonjour list, bundles**) (R, V: senders on every control): the "Output
   all" mode and a per-control "send OSC" switch (right-click). Each choice has a custom address, a destination
   (Bonjour list / IP) and optional bundles. Today feedback only goes back to devices that sent to us
   (`ControlHub::feedback`), and only surface widgets have an `osc_out` address, all to a single `osc_host`.
   Size M.
-- [ ] **Show the OSC address on any control** (R: Shortcuts › Edit OSC): an "OSC mode" that labels every slider with
+- [~] **Show the OSC address on any control** (**was already there: the address with a Copy button is in every control's right-click menu. Not yet: an "OSC mode" that labels every slider**) (R: Shortcuts › Edit OSC): an "OSC mode" that labels every slider with
   its address, plus a right-click "Copy OSC address" command. Today you find it in OSC Query or the code. Size S.
 - [ ] **Detect range: map a whole row at once** (V): send the first and last note or address, and a clip row or eight
   faders map in one go. Today each control is learned one at a time. Size S.
-- [ ] **String and list receivers** (V): an OSC string sets text (exists for text layers), picks a menu item by name,
+- [x] **String and list receivers** (**built 2026-11-15: a name picks a menu item; text layers and `<address>/<k>` list items were already there**) (V): an OSC string sets text (exists for text layers), picks a menu item by name,
   or one item of an OSC list feeds a control. Size S.
 - [ ] **Per-surface OSC Query publishing and a browser remote per surface** (V): each surface or page is published on
   its own and served as its own web page. Today the session server and the remote pages exist (`net.rs`, `remote`)
@@ -75,22 +75,22 @@ Legend: V = VDMX has it, R = Resolume has it. Size: S = a day or two, M = about 
 
 ## LFO / modulator window
 
-- [ ] **A real LFO editor window** (V: LFO plugin): its own window (or tab) for each modulator. It shows a big live
+- [~] **A real LFO editor window** (**partly, 2026-11-15: each modulator draws its wave with a playhead and lists what follows it. Not yet: its own window, scrub / pause / reverse / retrigger, per-target amount in the list**) (V: LFO plugin): its own window (or tab) for each modulator. It shows a big live
   waveform with a playhead, transport (rate, scrub, pause, reverse, retrigger), length in seconds or bars, and a
   "followed by" list of every control using it, with per-target amount. Today `panels/modulators.rs` is a compact
   form inside a list and the wave isn't drawn. The owner's ask: "an LFO window, not in a right-click menu". Size M.
-- [ ] **More wave shapes and wave settings** (V): phase offset (so several LFOs can be out of step), pulse width,
+- [~] **More wave shapes and wave settings** (**built 2026-11-15, tested: phase offset, pulse width, ramp down, exponential, smooth random, noise. Not yet: several waves in one LFO**) (V): phase offset (so several LFOs can be out of step), pulse width,
   ramp down, smooth random, noise, exponential; several waves per LFO, each its own source (multiphase). Today there
   are sine / triangle / saw / square / random / drawn (8 points) and no phase field (`ModSource`, `Modulation` in
   `model/layer.rs`). Size M.
 - [ ] **Curve-editor waves and record-a-wave** (V): draw the wave with points and handles (more than 8 steps), mix
   shapes in one cycle, and record a wave from a knob or any source. The Data Looper (`Looper`) and `ValueFx::Lookup`
   are the parts to build on. Size M.
-- [ ] **Lift the 16-modulator limit and the "earlier only" chain** (V): `MAX_SHARED = 16`
+- [~] **Lift the 16-modulator limit and the "earlier only" chain** (**partly, 2026-11-15: 32 a project. Not yet: grow on demand, several inputs**) (V): `MAX_SHARED = 16`
   (`phosphor-engine/src/control.rs`) caps a show. Chains can only take from modulators above them in the list, with
   one input each. Allow more (or grow on demand) and let a modulator mix two or more inputs. The Designer's Number
   boxes already do the many-input case. Size M.
-- [ ] **LFO templates** (V): save a modulator (or a set) by name and add it again in any project, alongside the
+- [x] **LFO templates** (**built 2026-11-15, tested: Modulators › Saved, four starters**) (V): save a modulator (or a set) by name and add it again in any project, alongside the
   built-in starters (beat pumper, slow drift, strobe on 1/16). Use `presets::PresetStore` (`named_saves`). Size S.
 
 ## Custom control windows
