@@ -209,7 +209,9 @@ pub(crate) const MEDIA_DROP: &str = "phosphor_media_drop";
 
 pub(crate) fn media(ui: &mut egui::Ui, st: &mut State) {
     let area = ui.max_rect();
-    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(MEDIA_DROP), (ui.ctx().cumulative_pass_nr(), area)));
+    // (The pass number is read first: asking the context for anything inside `data_mut` freezes.)
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(MEDIA_DROP), (pass, area)));
     // Files held over the panel: say what letting go does here.
     if crate::app::file_drag_point(ui.ctx()).is_some_and(|p| area.contains(p)) {
         let into = match &st.media_view.source {

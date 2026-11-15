@@ -435,8 +435,15 @@ impl PhosphorApp {
             .response
             .on_hover_text("Menu: File, Edit, Quick, View, Output, Help");
         } else {
+            // Like any menu bar: once one menu is open, moving onto the next title opens that one (no second click).
+            let mut bar: Vec<(egui::Id, bool)> = Vec::new();
             for (title, entries) in MENUS {
-                ui.menu_button(*title, |ui| self.menu_entries(ui, entries, &mut clicked));
+                let r = ui.menu_button(*title, |ui| self.menu_entries(ui, entries, &mut clicked)).response;
+                bar.push((egui::Popup::default_response_id(&r), r.contains_pointer()));
+            }
+            if let Some(next) = hover_switch(&bar, |id| egui::Popup::is_id_open(ui.ctx(), id)) {
+                egui::Popup::open_id(ui.ctx(), next);
+                ui.ctx().request_repaint();
             }
         }
         clicked
@@ -558,6 +565,28 @@ impl PhosphorApp {
 }
 
 /// Short label for the launch settings, e.g. "Fade 0.5 s · On beat".
+/// A menu bar's titles as (menu id, pointer on the title): the menu to open because the pointer moved onto its
+/// title while another of the bar's menus is open. None while no menu is open, or the pointer is on the open one.
+fn hover_switch(bar: &[(egui::Id, bool)], is_open: impl Fn(egui::Id) -> bool) -> Option<egui::Id> {
+    let open = bar.iter().map(|(id, _)| *id).find(|id| is_open(*id))?;
+    bar.iter().find(|(id, hovered)| *hovered && *id != open).map(|(id, _)| *id)
+}
+
+#[cfg(test)]
+mod menu_bar_tests {
+    use eframe::egui;
+
+    #[test]
+    fn hovering_another_title_switches_only_while_a_menu_is_open() {
+        let (file, edit, view) = (egui::Id::new("file"), egui::Id::new("edit"), egui::Id::new("view"));
+        let bar = |hovered: egui::Id| vec![(file, hovered == file), (edit, hovered == edit), (view, hovered == view)];
+        assert_eq!(super::hover_switch(&bar(edit), |_| false), None, "nothing open: hovering does nothing");
+        assert_eq!(super::hover_switch(&bar(edit), |id| id == file), Some(edit), "File open, pointer on Edit");
+        assert_eq!(super::hover_switch(&bar(file), |id| id == file), None, "pointer still on File");
+        assert_eq!(super::hover_switch(&[(file, false), (edit, false)], |id| id == file), None, "pointer in the menu itself");
+    }
+}
+
 pub(crate) fn launch_summary(comp: &Composition) -> String {
     let how = match (comp.launch.fade, comp.launch.style) {
         (false, _) => "Cut".to_string(),
