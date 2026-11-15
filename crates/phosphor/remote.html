@@ -106,6 +106,15 @@
   #playcols { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   #playcols button, #playsurprise { flex:1; min-width:64px; padding:16px 0; font-size:16px; font-weight:600; }
   #playsurprise { width:100%; background:#2b1d3a; border-color:#b78cff; color:#d9c3ff; }
+  /* Game pad: a D-pad on the left, A and B on the right. Buttons are held, not tapped. */
+  #pad { display:none; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; touch-action:none; user-select:none; -webkit-user-select:none; }
+  #pad.on { display:flex; }
+  #dpad { display:grid; grid-template-columns:repeat(3, 64px); grid-template-rows:repeat(3, 64px); gap:4px; }
+  #pad button { font-size:22px; font-weight:700; border-radius:14px; touch-action:none; -webkit-touch-callout:none; }
+  #pad button.held { background:var(--accent, #5cf2a0); color:#000; }
+  #padab { display:flex; gap:14px; align-items:center; }
+  #padab button { width:78px; height:78px; border-radius:50%; }
+  #padab button[data-pad=a] { margin-top:34px; }
   #namerow { margin-top:10px; } #playname { flex:1; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; }
 </style>
 </head>
@@ -132,7 +141,13 @@
   <div class="row"><span class="label">MASTER</span><div id="master"></div><span class="val" id="masterv"></span></div>
 </div>
 <div class="page" id="p-surface"><div class="section"><div id="surftabs"></div><div id="surface"></div><p class="hint" id="surfhint"></p></div></div>
-<div id="playbtns"><div class="section"><div id="playcols"></div><button id="playsurprise">Surprise me</button></div></div>
+<div id="playbtns"><div class="section">
+  <div id="pad"><div id="dpad">
+    <span></span><button data-pad="up" aria-label="Up">&#9650;</button><span></span>
+    <button data-pad="left" aria-label="Left">&#9664;</button><span></span><button data-pad="right" aria-label="Right">&#9654;</button>
+    <span></span><button data-pad="down" aria-label="Down">&#9660;</button><span></span>
+  </div><div id="padab"><button data-pad="a">A</button><button data-pad="b">B</button></div></div>
+  <div id="playcols"></div><button id="playsurprise">Surprise me</button></div></div>
 <div class="page on" id="p-mixer"><div class="section"><div id="strips"></div></div></div>
 <div class="page" id="p-clips"><div class="section"><div id="clips"></div><p class="hint">Tap a cell to trigger · tap a number to trigger the whole column</p></div></div>
 <div class="page" id="p-ctrl"><div class="section"><img id="selth" alt=""><div id="params"></div></div></div>
@@ -283,7 +298,35 @@ function renderPlay() {
     for (let c = 0; c < n; c++) { const b = document.createElement('button'); b.dataset.col = c; b.textContent = c + 1; cols.appendChild(b); }
   }
   $('#playsurprise').style.display = p.surprise ? '' : 'none';
+  $('#pad').classList.toggle('on', !!p.pad);
+  if (!mine) padReleaseAll();
 }
+// Game pad: a button is down while a finger is on it. While held it repeats every 0.4 s, so the Mac lets go by
+// itself if this phone drops off or the turn ends.
+const padHeld = {};
+function padSet(b, down) {
+  const el = document.querySelector(`#pad button[data-pad="${b}"]`);
+  if (down) {
+    if (padHeld[b]) return;
+    send({ t: 'pad', b, down: true });
+    padHeld[b] = setInterval(() => send({ t: 'pad', b, down: true }), 400);
+    if (navigator.vibrate) navigator.vibrate(12);
+  } else {
+    if (!padHeld[b]) return;
+    clearInterval(padHeld[b]); delete padHeld[b];
+    send({ t: 'pad', b, down: false });
+  }
+  if (el) el.classList.toggle('held', down);
+}
+function padReleaseAll() { Object.keys(padHeld).forEach(b => padSet(b, false)); }
+document.querySelectorAll('#pad button').forEach(el => {
+  const b = el.dataset.pad;
+  el.addEventListener('pointerdown', e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} padSet(b, true); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => el.addEventListener(n, () => padSet(b, false)));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+});
+window.addEventListener('blur', padReleaseAll);
+document.addEventListener('visibilitychange', () => { if (document.hidden) padReleaseAll(); });
 // Control Surface: the widgets you built on the Mac, on the same grid. Every move goes back as
 // {t:'set', target, v} through the same path as the Mac's own controls.
 function setTarget(target, v) { queue(JSON.stringify(target), { t: 'set', target, v }); }

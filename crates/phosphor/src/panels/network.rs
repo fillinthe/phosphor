@@ -120,6 +120,24 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         crate::ui::toggle(ui, &mut play.columns, "Clip columns");
         crate::ui::toggle(ui, &mut play.surprise, "Surprise button");
     });
+    // The game pad: presses are controls here (Learn, then press on the phone) and OSC to a 3D project.
+    crate::ui::toggle(ui, &mut play.pad.on, "Game pad").on_hover_text("Up / down / left / right, A and B on the play page, held like a real pad. Map a button to anything: right-click a control › Learn, then press it on the phone. Each press also goes out as OSC (/pad/1/up 1 or 0, /pad/1/stick x y) to fly a camera in Unreal or Unity");
+    if play.pad.on {
+        crate::ui::field(ui, "Send pad to", |ui| {
+            crate::ui::text_field(ui, &mut play.pad.host, "the 3D computer's address", Some(150.0)).on_hover_text("The computer running the Unreal / Unity project (127.0.0.1 = this one). Empty = nowhere");
+            guarded!(ui, play.pad.port, egui::DragValue::new(&mut play.pad.port).range(1..=65535)).on_hover_text("The OSC port the project listens on (the kit's scripts use 9100)");
+            #[cfg(not(target_arch = "wasm32"))]
+            if crate::ui::command(ui, label(icon::EXPORT, "Kit for 3D artists…")).on_hover_text("A folder to send whoever built the 3D world: a Unity script, an Unreal component and a page of steps. Their project keeps its lighting and look; the script only moves the camera").clicked() {
+                st.notice = Some(match crate::pad_kit::export(play.pad.port) {
+                    Ok(dir) => {
+                        crate::os::reveal(&dir);
+                        format!("Kit saved: {}", dir.display())
+                    }
+                    Err(e) => format!("Couldn't save the kit: {e}"),
+                });
+            }
+        });
+    }
     crate::ui::toggle(ui, &mut play.show_names, "Show the players' names on the output").on_hover_text("A \"Now playing: …\" text layer along the bottom; guests type their name on the play page");
     crate::ui::field(ui, "Surface page", |ui| {
         let pages = &st.comp.surface.pages;
@@ -171,7 +189,7 @@ fn audience_play(ui: &mut egui::Ui, st: &mut State) {
         ui.vertical(|ui| {
             ui.monospace(&url);
             crate::ui::toolbar(ui, |ui| {
-                if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link").clicked() {
+                if crate::ui::command(ui, icon::COPY).on_hover_text("Copy link (also what to write on an NFC tag: a tap opens the play page). The link holds this computer's Wi-Fi address: give it a fixed address on the venue's router, or the tags need writing again").clicked() {
                     ui.ctx().copy_text(url.clone());
                 }
                 let (off, on) = (label(icon::QR_CODE, "Take the code off the output"), label(icon::QR_CODE, "Show the code on the output"));

@@ -705,6 +705,16 @@ impl ControlHub {
         self.last = Some(msg);
     }
 
+    /// One OSC message to `host:port` (the audience game pad's presses to a 3D project); never blocks.
+    pub fn send_out(&mut self, host: &str, port: u16, address: &str, values: &[f32]) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if !host.trim().is_empty() {
+            self.backend.send_osc_args(&[host.trim().to_string()], port, address, values);
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (host, port, address, values);
+    }
+
     /// Control Surface widgets with an OSC address send their value to the surface's OSC host when it changes
     /// (whoever moved it: the Mac, a phone, MIDI, a modulator).
     pub fn surface_osc(&mut self, comp: &Composition) {

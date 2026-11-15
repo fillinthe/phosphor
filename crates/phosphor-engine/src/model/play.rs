@@ -30,7 +30,30 @@ pub struct AudiencePlay {
     pub qr_style: QrStyle,
     /// Title and address under the code.
     pub qr_caption: bool,
+    /// A game pad on the play page (up / down / left / right, A, B): each press is a control you can map, and
+    /// goes out as OSC to a 3D project (Unreal, Unity) flying a camera.
+    pub pad: PadSettings,
 }
+
+/// The audience game pad: on or off, and where its presses go as OSC (`/pad/<player>/<button> 1|0`,
+/// `/pad/<player>/stick x y`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PadSettings {
+    pub on: bool,
+    /// The computer running the 3D project (empty = nowhere; presses still work as controls in Phosphor).
+    pub host: String,
+    pub port: u16,
+}
+
+impl Default for PadSettings {
+    fn default() -> Self {
+        Self { on: false, host: "127.0.0.1".into(), port: 9100 }
+    }
+}
+
+/// The pad's buttons, in the order the app keeps them.
+pub const PAD_BUTTONS: [&str; 6] = ["up", "down", "left", "right", "a", "b"];
 
 /// The code's colors on the output: a card, or just the modules over the visuals.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +92,6 @@ impl QrStyle {
 
 impl Default for AudiencePlay {
     fn default() -> Self {
-        Self { enabled: false, turn_secs: 60, rest_secs: 0, players: 1, surface_page: None, place_pages: Vec::new(), columns: true, surprise: true, title: "Take the controls".into(), show_names: false, qr_style: QrStyle::default(), qr_caption: true }
+        Self { enabled: false, turn_secs: 60, rest_secs: 0, players: 1, surface_page: None, place_pages: Vec::new(), columns: true, surprise: true, title: "Take the controls".into(), show_names: false, qr_style: QrStyle::default(), qr_caption: true, pad: PadSettings::default() }
     }
 }

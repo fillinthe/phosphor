@@ -89,6 +89,11 @@ fn round(v: f32) -> f64 {
 /// Applies one command from a remote. Guests (audience play) carry `_from`; they only get through
 /// on their turn and for the controls the show allows (`State::guest_may`).
 pub fn apply(st: &mut State, cmd: &Value, now: f64) {
+    // The game pad checks turns itself (a let-go lands even after the turn ended).
+    if cmd.get("t").and_then(Value::as_str) == Some("pad") {
+        st.pad_press(cmd.get("_from").and_then(Value::as_u64), cmd, now);
+        return;
+    }
     if let Some(from) = cmd.get("_from").and_then(Value::as_u64)
         && !st.guest_may(from, cmd, now)
     {

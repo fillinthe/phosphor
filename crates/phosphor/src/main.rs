@@ -80,6 +80,8 @@ mod stream_audio;
 #[cfg(not(target_arch = "wasm32"))]
 mod show;
 #[cfg(not(target_arch = "wasm32"))]
+mod pad_kit;
+#[cfg(not(target_arch = "wasm32"))]
 mod export;
 #[cfg(not(target_arch = "wasm32"))]
 mod import;

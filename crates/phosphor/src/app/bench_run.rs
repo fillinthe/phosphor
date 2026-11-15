@@ -842,6 +842,16 @@ impl PhosphorApp {
                 println!("QUICK trans: {id}");
                 continue;
             }
+            if name == "pad" {
+                // The audience game pad on, sending to this computer (PHOSPHOR_PAD_PORT, else 9100): press it from a
+                // WebSocket client on /control (player 1) or /guest and listen on that UDP port.
+                let pad = &mut self.state.comp.play.pad;
+                pad.on = true;
+                pad.host = "127.0.0.1".into();
+                pad.port = std::env::var("PHOSPHOR_PAD_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(9100);
+                println!("QUICK pad: on, OSC to 127.0.0.1:{}", pad.port);
+                continue;
+            }
             if name == "play" {
                 // Audience play on with short turns and a rest, for checking the play page in a browser.
                 self.state.comp.play.enabled = true;
