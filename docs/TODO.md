@@ -115,7 +115,8 @@ source, or a proxy on your server.
       the design-system rules, and the graphify map's loosely knit areas below. Report first, then fix in small steps.
 - [ ] **OSC and linking like VDMX / Resolume** (owner, 2026-11-15): one control driving many things with their own
       ranges, user-built control windows, a proper LFO window (the LFOs & Modulators panel exists; make it the
-      place to build them, not right-click menus), "programmable". Researched list to come from the docs.
+      place to build them, not right-click menus), "programmable". The researched list (26 items, VDMX / Resolume
+      docs vs the code): `docs/design/osc-linking.md`.
 - [ ] **Code health** (graphify map, 2026-11-14: 14,953 nodes, 501 communities): `ui/kit.rs` (cohesion 0.05) and
       Mapping + Studio (0.11) are loosely knit: split them by job. British spellings left only in internal names
       (`colour_button`, `theme::FAVOURITE`, `colour_budget.txt`; serde field names stay for old saves).
