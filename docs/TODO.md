@@ -1,75 +1,14 @@
-# To do
+# Phosphor: to do
 
-Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` done (with what was checked).
+Open work only, by what it's waiting on. Finished items: `docs/TODO-done.md` (moved there 2026-11-14).
 
-## Open from 2026-10-30 (see NOTES "Everything still open")
+## Needs your decision
 
-- [x] **Name**: shown as **Phosphor VJ** (2026-10-30); internal names, settings, saves, permissions and the names
-      other apps connect by are unchanged.
-- [x] **Web app faster start** (web hub note): loading screen from the first paint (2026-10-30, live). Measured
-      2026-11-13 on phosphorfx.com/app/: download done 0.41 s, first sign-in request 0.53 s (was 6.1 s). Not needed now:
-      fetching sign-in during the download, splitting the browser build.
-- [ ] **Real-hardware checks** (2026-11-13): Windows fullscreen output on a real second screen / mixed scaling (0.5.4,
-      reporter #41); the Windows #28 freeze on a PC with a real graphics card (the VMs have none); 0.5.5's Inspector
-      and ISF-folder fixes (reporter #42). Owner will use a real PC later.
-- [ ] **3D fly-through with the audience playing** (asked 2026-11-14): load a 3D model (glTF / GLB first) and fly a
-      camera through it; audience phones get a game pad (up / down / left / right, A, B) on the Play page that steers
-      it. A world built in Unreal / Unity: either exported as glTF, or run in its own engine and sent in over
-      NDI / Spout / Syphon with the pad forwarded to it as OSC. Plan: docs/design/game-pad.md (build week of 2026-11-16).
-- [ ] **Import Morpholio Trace files** (.morpholiotrace, owner 2026-11-14; sample in `_local/samples/`, not in git): a
-      zip of `data-books.plist` (the layers in order: title, hidden, opacity, blend, a 4×4 transform, `drawingToken`),
-      one 4096×4096 transparent PNG per layer (`<token>_original.png`), and a SQLite file with each layer's pen
-      strokes (`stroke_<token>`: NSKeyedArchiver blobs, readable with `import::keyed::unarchive`) and tiles. Plan: each
-      drawing layer → a Phosphor layer (name, on / off, opacity, placed by its transform), PNGs copied beside the
-      project; later the strokes as lines that draw themselves on (and for lasers).
-- [ ] **Tidy the project folders** (owner 2026-11-14): everything Phosphor in one folder. Now beside
-      it: `phosphor-next` (the work tree every build uses), `phosphor-web-archive` (deploy script; a permission rule
-      names its path), `phosphor-private`, `phosphor-private-docs`, two history backup bundles, two instruction
-      backups. Proposal: move them under `phosphor/_local/` (git-ignored) and fix the paths in scripts, memory notes
-      and the permission rule in one go; ask before doing it.
 - [ ] **Designer needs work** (owner, 2026-11-14): every box quietly makes layers of its own (Picture = a layer,
       Effect = a layer, Mix = two), so layers keep appearing while you work. Owner: "I should be able to make layers
       and then attach them to something". Proposal: hide the Designer's own layers from Layers / Clips / Mixer, and a
       "Layer" box that brings an existing layer into the network. Also: a box's bottom buttons (source picker, folder,
       camera) are hard to click and sit off; picking "From: Comp" stopped all video (nothing in the log; reproduce).
-- [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
-      same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
-      add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.
-- [ ] **Outputs: layering and masking like MadMapper** (owner, 2026-11-14): done so far: undo in the output window,
-      new slices in place, drag rows between layouts / groups / onto another row, rename pop-up. Still to design
-      with the owner: what else should move like MadMapper (masks attached to a slice, layer order across layouts…).
-- [ ] **Clip grid column buttons** grayed out while there are no layers? (owner to say)
-- [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
-- [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.
-- [ ] **Phone test** (2026-11-04): MIDI / OSC › Phone or tablet › Get it on the phone: scan the QR code with the iPad,
-      open the downloaded Phosphor.tosc in TouchOSC, point TouchOSC at the Mac (Browse list), move a control: step 3
-      should say "Hearing from…". Owner to try with the real device.
-- [x] **Control Surface designer, more** (owner, 2026-11-04 "needs more work"): snap on/off, right-click
-      add/edit/duplicate/copy/paste/front/back/delete, keys (698); multi-select (Shift/Cmd-click, band, Cmd+A), group
-      moves, Arrange (align / spread / same size), exact X/Y/W/H fields (699). Left: undo per designer step (project
-      Undo covers it now); lock a widget in place.
-
-## From the owner, 2026-10-28
-
-- [x] **IN / OUT activity lights** in the status bar (media, live, NDI, Syphon, sound, MIDI, OSC, DMX in; NDI,
-      Syphon, DMX out); click one to open its panel. *(installed in 643/646; checked on a screenshot)*
-- [x] **Blackout** (top bar; fade time in Outputs › Master; mappable; OSC /phosphor/blackout). *(GPU test; 646)*
-- [x] **G-Drop visualizers from Gamp** as layers (25 presets + Changing). *(checked drawing at 60 fps; 646. Not tried
-      with real music.)*
-- [x] **Can't move the loop / limit marks in the Inspector while its scroll bar shows; can't right-click the movie
-      bar.** Scroll bars keep their own room now; the movie bar has a right-click menu (loop starts / ends here, whole
-      movie, back to the start). *(646)*
-- [x] **Clip timeline, speed and opacity on the layer card** (the three most important): Clips and Layers cards now
-      show the movie's playhead (slim, with loop marks) and Speed beside Opacity. *(screenshot checked; not installed)*
-      Speed and Volume share one row on the Clips card, so their names are cut short ("Spe…", "V…"): say if that bothers you.
-- [x] **Loop points, ping-pong / reverse should stay with the clip, not the layer.** This existed but was hidden
-      (clip right-click › Keeps its own settings). Now also Inspector › Playback › **Keep these with the clip**.
-      *(not installed)* Off by default (owner, 2026-10-30); says what's kept and what changed when switched.
-- [x] **Setting points on the Timeline from a right-click in the Inspector.** Scale X / Y, depth, tilts and crop had
-      no control of their own, so "Key on the timeline" did nothing there. They're real controls now (mappable,
-      keyable, OSC). "Key on the timeline" is no longer offered where it can't work. *(test; not installed)*
-- [x] **Mapping opacity in the Mixer should show in the Inspector** (it did, as a thin outline only): a mapped slider's
-      whole bar is gold now, everywhere. *(screenshot of Mixer + Inspector; not installed)*
 - [~] **Designer** (the TouchDesigner-style section, owner's name). Plan in `docs/design/nodes.md`. **Phase 1 done
       2026-10-29** (not installed): Designer area (⌘4), Picture / Effect / Mix / Output boxes on the node canvas, each
       backed by hidden layers; `--quick designer`. Checked on a screenshot + engine test; not yet with a real mouse.
@@ -100,320 +39,38 @@ Updated as each one moves. `[ ]` not started · `[~]` working on it · `[x]` don
       Learn). Multi-select done 2026-10-30: Shift-click titles, drag moves them together, right-click › Wrap N boxes.
       **2026-10-30 (later):** boxes size to what their settings drew (`ui::nodes` measures each body), Event boxes
       send OSC / MIDI / Arduino out (`Trigger.send`).
-- [x] Give text size / outline / line spacing, fade-style settings and mixer-plugin settings controls of their own
-      (then they're keyable and mappable like the rest). *(2026-10-30, test; not installed)* OSC: /phosphor/layer/N/text_size,
-      …/fade/K, …/mixer/K. A text layer redraws one picture at a time while its size moves (no pile-up of threads).
+- [ ] **Designer**: one Number box driving several Text templates; web data box reading a list over time (owner to say).
+- [ ] **Clips / Layers / Mixer are confusing** (owner, 2026-11-14: "not sure what is best to use"): three views of the
+      same layers. Idea put to the owner, not loved yet: Clips as the clear home (blend, solo, reorder, right-click
+      add / group / delete on each row), Layers and Mixer out of the main tab row, a one-line purpose per panel.
+- [ ] **Outputs: layering and masking like MadMapper** (owner, 2026-11-14): done so far: undo in the output window,
+      new slices in place, drag rows between layouts / groups / onto another row, rename pop-up. Still to design
+      with the owner: what else should move like MadMapper (masks attached to a slice, layer order across layouts…).
+- [ ] **Clip grid column buttons** grayed out while there are no layers? (owner to say)
+- [ ] **Tidy the project folders** (owner 2026-11-14): everything Phosphor in one folder. Now beside
+      it: `phosphor-next` (the work tree every build uses), `phosphor-web-archive` (deploy script; a permission rule
+      names its path), `phosphor-private`, `phosphor-private-docs`, two history backup bundles, two instruction
+      backups. Proposal: move them under `phosphor/_local/` (git-ignored) and fix the paths in scripts, memory notes
+      and the permission rule in one go; ask before doing it.
 
-- [x] **AI control** (owner, 2026-10-30: "a way for ai to control the app"): `Phosphor --mcp` is an MCP server
-      (any AI app that speaks MCP). Tools: list_controls (search), set_controls (several at once,
-      names and * wildcards), trigger (buttons), look (a picture of the output while the Session is on). It drives
-      the open Phosphor over OSC / OSC Query on this Mac (ports in ai-link.json in the settings folder), so locks
-      and everything else work as for TouchOSC. MIDI / OSC panel › AI assistants copies the settings. *(test + checked
-      against a running Phosphor: list, set, wildcards, picture; not yet tried from an AI app itself)*
-      Next: load a project, launch clips by name, add layers / effects (needs commands beyond controls).
+## Needs real hardware or a device
 
-## Importers (owner, 2026-10-30: "do all file importers", from the old shows on this Mac)
-
-- [x] **MadMapper (.mad)**: outputs, slices (quads, circles, triangles, lines), groups, masks, flips, opacity, and a
-      layer per picture shown (files, Syphon from VDMX / Resolume, cameras, generators as the nearest built-in one).
-      Open as a new project or add to the open one. All 24 old .mad files read. *(tests; renders checked by snapshot;
-      not installed)* Left out: cues, MIDI / OSC mappings, LED fixtures, MadMapper's effects, a slice's own masks.
-- [x] **VDMX deeper**: the first preset's layers (names, opacity, blend, fit) and effect chains, the main output's
-      effects as MASTER effects, the canvas size. ISF effects come as the same shader with their settings; Quartz
-      Composer and Core Image ones as the nearest built-in (the message names them; crops are left out). All 40 layers
-      in the old .vdmx5 files read. *(tests; real show imported by bench; not installed)* **Needs you:** layer order
-      (read as bottom first, like Resolume). Left out: VDMX data sources, controller mappings, layer sources (VDMX
-      layers play what's triggered from the media bin: the clips go on the first layer).
-- [x] **Resolume deeper**: layers' opacity, blend and effects, the composition's effects (master), generator clips
-      (nearest built-in; text generators as text clips with their words), empty cells no longer counted as left out,
-      and the Advanced Output Resolume used last (a toggle in the import window): each screen an output with its
-      slices (warped corners, input rectangle, the layer they take) and masks (outline, invert). *(tests; your
-      composition and screen setup rendered: 10 outputs, 27 slices, 8 masks; not installed)* Left out: Bezier
-      warps past the four corners, Resolume sources that aren't files or generators, effect settings (built-ins
-      start at their defaults; dry / wet kept).
-
-## From show testing (2026-10-25)
-
-### Breaks a show or loses work: first
-- [x] *(dropped by the owner, 2026-10-27)* **Saving removes the clip on the active layer.** *(No cause found in code or the log of 12 saves: need what disappears and when.)* Save with a clip playing on the selected layer: the clip is
-      gone afterwards. Data loss: find and fix before anything else.
-- [x] **A removed effect keeps running** *(it was the comp's own copy: the Inspector now lists group / comp / MASTER effects on each layer; clips no longer bring removed effects back)* on the layer (it's gone from the list but still changes the picture).
-- [x] *(an inverting mask named 'Rectangle 1'; masks are now named and labeled)* **Moving an output's rectangle in Mapping makes the clip disappear.** Videos must keep playing while a
-      surface is moved.
-- [x] *(vertex budget 400,000 per pass; GPU errors caught)* **Rutt-Etra went wrong:** other clips started loading by themselves. Reproduce with Rutt-Etra on a layer.
-- [x] *(copied to this Mac on first open, thumbnail cache, no per-frame file check, lighter folder scans, load log)* **Clips from an external drive** (WD Black SSD over USB-C, sometimes through a hub): loading jitters the show,
-      clicking a clip lags, and a disconnected drive would make playing videos vanish. Load off the show's thread,
-      keep playing clips in memory (they keep playing if the drive goes), cache clips likely to be played, and
-      measure it (log how long each load takes and from where). Test with a USB-C drive and a hub.
-- [x] *(continues from the page cursor)* **X "Load more" stops** after a while for an account (no more posts come in).
-
-- [x] *(devices checked every 2 s, reopened, logged)* **MIDI controllers don't come back after a disconnect.** MIDI ports are opened at start and on the Reconnect
-      button only: if the hub drops the controller (shared with the SSD on one USB-C hub), it stays dead until
-      Reconnect, which looks like lost mappings. (The mappings are saved: all 8 of the owner's are intact.) Fix: watch
-      for MIDI devices coming and going and reopen them by themselves; log connects / disconnects; show the
-      controller's state in the status bar.
-
-### Fix soon
-- [x] **Japanese / Chinese in the browser app showed boxes** (no font there): those languages are left out of the
-      menu where no font draws them, and a saved choice falls back to English. *(2026-10-27)*
-- [x] **Can't rename a collection:** clicking the name field in the Rename pop-up closes it.
-- [~] *(Stack is no longer in the default layout)* **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
-- [x] *(tooltips wait a second)* **Tooltip covers "Add a file"** while the mouse is on it: move tooltips so they never sit on their button.
-- [x] **Some MIDI mappings** misbehave *(owner: just show clashes. Done 2026-10-27: warnings in MIDI / OSC › Mappings, notice on Learn)*.
-- [x] **Copy a media file's name** (tile / Inspector right-click) to report problems.
-
-### Wanted
-- [x] **Map any button:** every button, toggle, menu item and slider gets the same right-click Learn / map menu
-      (the kit's buttons gain it once, so nothing is missed). *Menu items done 2026-10-25 (all in the target list);
-      right-click Learn on any kit button without its own menu done 2026-10-27, tested.*
-- [x] *(comps as bands in Layers; Clips + Layers is the Show layout again)* **Organize in the Layers panel, not the Stack** (owner, 2026-10-25: likes Layers and the Mixer; the Stack is
-      confusing). Bring groups and comps into Layers as foldable cards (comp = a group with its own size), with the
-      quick buttons (eye, solo, mute, stop, fx count, rename), keep Clips as the grid; then retire the Stack or keep it
-      as an option. Ask the owner before changing the default layout again.
-- [x] **A log of what you did, for reports:** every action (clip triggered, effect added / removed, layer changed,
-      save, output moved) with the time, and how long each clip took to load and from which drive, written to the
-      session log so it can be read back when something goes wrong. Report a Bug attaches the last few minutes.
-- [x] **Scale X / Y / Z and Z position** in Transform. *(2026-10-25: Scale X/Y, Z depth, Tilt X/Y in perspective.)*
-- [x] **Speed next to the clip's preview** in the Inspector, so you can see the speed while changing it.
-- [x] **Speed in the Mixer strips** (speed and opacity are what matter most live).
-- [x] **A clip's in / out points saved with the media file**, so a clip cut once stays cut wherever it's used.
-- [x] **Favorite a clip from a layer** (and see favorites later in Media).
-- [x] **Map the Random clip button**, and run it on a timer or the beat (load a new random clip every N bars).
-- [x] **Sort media by length** (View › Sort by: Name / Newest / Type / Length; needs each movie's duration, read
-      off the show's thread and kept with the media item).
-- [x] *(Mixer strips, Layers cards)* **Effect count at a glance on every layer:** the fx badge on Stack strips, Layers cards and Mixer strips
-      shows the number ("3 fx"), lit when on, dim when bypassed; groups and comps too. (The badge exists on the
-      Layers cards: check it shows everywhere and reads at a glance.)
-- [x] **Mapping rectangles: Photoshop-style transform:** drag a whole side, scale and rotate the shape, not only
-      its corner points.
-
-- [x] *(PREVIEW · not live + Go live)* **Preview before live, ignoring the fader.** Media / Library: click a clip or effect and see it in a preview of
-      its own before it goes on a layer. A layer's preview shows its picture at full opacity even when its fader is
-      at 0 (what you're about to play), with a Go to send it live. Size: M (half a day).
-- [x] *(3 builds at a time, 6 drawn per frame, retakes at 0.5 / 1.5 / 4 s, each tile its own)* **Effect previews load slowly or blank** when a lot are asked for at once (the Effects list tiles, and the
-      preview when one is picked). Needs a look at how many previews the engine renders per frame and in what order
-      (visible tiles first, then the rest). Size: S to M. Need an example: which list, how many tiles, what shows.
-- [x] **"Plays on" picker at the top of Media** *(done without "next free clip cell")* so a click shows which layer it lands on, with "next free clip
-      cell" as an option. Size: S.
-
-## VDMX + MadMapper parity (researched 2026-10-22), easiest first
-
-Every feature of VDMX6 (about 430) and MadMapper 6 (about 490) was listed from their manuals and release notes
-(`docs/research/vdmx-features-full.md`, `docs/research/madmapper-features-full.md`), then each one Phosphor might
-lack was looked for in the code. This is what's missing or only partly there. **V** = VDMX has it, **M** = MadMapper.
-Sizes are my estimate: **S** = an hour or two, **M** = half a day to two days, **L** = several days or more.
-Hardware items can be built but not tested here without the device.
-
-Items 1–22: in **0.3.0**; 23–35 in **0.3.1**. Medium items ticked below are done and tested but not released yet.
-
-### Small
-- [x] 1. **Copy size mode** for layers: 1:1 pixels, no scaling (V). Has Fit / Fill / Stretch.
-      Checked: unit test (a half-size picture fills the middle).
-- [x] 2. **Cut to black** when a clip ends (V). Has loop, hold last frame, ping-pong.
-      Shown next to Loop when Loop is off. Checked: player test (finished at the end, not after seeking back).
-- [x] 3. **Random frames** play mode (M).
-      A fourth direction, "Random frames". Checked: player test (jumps all over the loop region, never leaves it); 1280×720 H.264 jumps ~75 times a second.
-- [x] 4. **Jump back / forward** buttons: N seconds or N beats (V).
-      Jump row in Playback: back / forward, step in beats (at the layer's speed) or seconds; both mappable. Checked: unit test of the step.
-- [x] 5. **Reload a media file** from disk after you've edited it (M).
-      Media bin right-click › Reload, and a Reload button in Playback; keeps the place in a movie. Not tried with a file edited while playing.
-- [x] 6. **Media info**: fps, bit rate, color space, sound; **used by** count (which layers/clips use a file) (M). Has codec, size, length.
-      Playback line now shows fps, bit rate, pixel format, color space (when the file says) and sound; media tiles say how many layers and clips use the file. Checked: unit test + screenshot.
-- [x] 7. **More blend modes**: Soft/Hard/Vivid/Linear/Pin Light, Hard Mix, Color Burn/Dodge, Divide, Hue, Saturation, Color, Luminosity (V). Has 10 + 3 masks.
-      13 more (Soft / Hard / Vivid / Linear / Pin Light, Hard Mix, Color Burn / Dodge, Divide, Hue, Saturation, Color, Luminosity). Checked: GPU test of every mode's formula.
-- [x] 8. **Crossfader curve** (V). Fixed straight line now.
-      Mixer: Both full in the middle (as before) / Smooth (no dip) / Straight / Cut. Checked: unit test + screenshot.
-- [x] 9. **Soft takeover settings**: pickup distance, and "glide to the controller" (V). Has pickup at a fixed distance.
-      Control panel: Glide (the value comes to the fader) and the pickup distance. Checked: tests of both.
-- [x] 10. **More mapping value effects**: threshold, randomize, clamp, wrap, peak-hold (fall), average, drawn lookup curve (V). Has smooth, steps, curve, formula, delay.
-      Threshold, Limit, Repeat, Jitter, Fall (peak hold), Drawn curve. Average left out (Smooth does that job). Checked: tests.
-- [x] 11. **Dead-band and endless encoders** (relative MIDI knobs) on mappings (V).
-      Value effects "Endless knob" (relative MIDI, two's complement) and "Dead band". Checked: tests.
-- [x] 12. **Controller inputs**: turn single MIDI devices on/off, several OSC ports, wildcard OSC addresses (V, M).
-      MIDI devices could already be switched off one by one (Devices). New: more OSC ports ("also on ports…"), and wildcard OSC addresses on mappings (`*`, `?`, `[1-4]`, `{a,b}`). Checked: matching test + a real UDP message on the extra port.
-- [x] 13. **Mappings list: jump to the control** it drives (V). The list itself exists.
-      Crosshair button on each mapping: selects its layer / group / slice and opens its panel. Checked: test.
-- [x] 14. **Search in the layer source menu** (V). Explorer and ⌘K already search.
-      A search field at the top of the layer source menu finds any generator (built-in and imported). Not checked on screen.
-- [x] 15. **Copy / paste a control's mappings and modulation** onto another control (V, M).
-      Right-click any control › Map: Copy (its mappings) and Paste mappings here. Sliders with modulation also get Copy / Paste the motion. Checked: test of the paste.
-- [x] 16. **Project notes** panel (V, M).
-      A Notes panel (View › Panels), saved in the project file. Checked: panel check.
-- [x] 17. **Freeze outputs**: hold the picture while you change things behind it (M).
-      FREEZE on each output (Output panel), and a mappable "Freeze outputs" for all of them. Not saved: a show opens live. Checked: GPU test.
-- [x] 18. **Flip an output** horizontally / vertically, for rear projection (V, M).
-      Flip left-right / top-bottom on each output (Output panel). Checked: GPU test. The output window's edit mode doesn't mirror its handles yet: map before flipping.
-- [x] 19. **Output delay** in frames, to line up mixed projectors and LED processors (M).
-      Delay 0–10 frames per output. Checked: GPU test (2 frames late shows the frame from 2 frames before).
-- [x] 20. **Snapshot** any output, layer or comp to a picture file (V, M). Has a snapshot of the mix.
-      Partly: a camera button on each output saves a picture of it after mapping (the mix snapshot already existed). Layers, groups and comps: right-click › Save a picture….
-- [x] 21. **Hide effects** you never use from the menus (V). Favorites exist.
-      Right-click an effect or source › Hide from the lists; they show under "Hidden" (to bring back) and still work where used. Kept between launches.
-- [x] 22. **Slice: match the media's size / shape** (M).
-      Mapping Studio: "Match the picture's shape" (keeps the height and center, sets the width). Checked: test.
-- [x] 23. **Cue list extras**: random cue, countdown to the next cue, CSV import/export, cue groups (V).
-      Random cue (button + mappable), a countdown to the next cue that fires by itself, CSV out and in (names and timings; the looks stay recorded). Cue groups: not done. Checked: CSV test, bench run (countdown right, random never repeats), screenshot.
-- [x] 24. **Permissions panel** (Mac): camera, microphone, screen recording, network at a glance (V).
-      Devices panel: camera, microphone and screen recording, each with a System Settings button. Checked: screenshot (all three read right here).
-- [x] 25. **Choose the graphics card** on machines with more than one (V).
-      Output panel › Graphics card (shown when there's more than one, or one was chosen); used from the next start. Checked: test of the choice. Not tried on a Mac with two GPUs (none here).
-- [x] 26. **Step sequencer color and index tracks** (V). Has value and gate tracks.
-      Index tracks: "Choices" on a level track, each step picks one of N (a clip, blend mode, direction). Color tracks: a color on each step (rainbow to start; Glide fades between them), painted into any color settings (pick the color; its red, green and blue all follow). Checked: tests; the real app (a white solid layer painted blue by a track).
-- [x] 27. **DMX monitor**: live view of the channels being sent (M).
-      LED / DMX panel › Monitor: one universe's 512 channels as a grid, value on hover; copied only while it's open. Checked: test.
-- [x] 28. **Color swatches** saved and usable on every color control (M).
-      A color button with saved swatches: on text color and on every shader color input (ISF colors). Kept between launches. Not checked on screen.
-- [x] 29. **More picture formats**: EXR and HDR (float), PSD, HEIC as a layer (M). Has PNG, JPEG, WebP, BMP, TIFF, GIF.
-      EXR, HDR, TGA, QOI through the image library, PSD and HEIC through FFmpeg. Also fixed: BMP and TIFF were offered but couldn't open. Checked: test making each format with macOS's sips / FFmpeg.
-- [x] 30. **Look fade time**: a saved look fades in instead of cutting (V).
-      Moved to medium: a look replaces the whole project, so a fade means holding the old picture over the new one.
-- [x] 31. **Autosave interval and backups**: keep the last few versions on every save (M). Crash recovery exists.
-      Every save first copies the old file into "<name> Backups" (last 10 kept); File › Autosave On / Off (every 5 minutes when changed), File › Show Backups. Checked: tests.
-- [x] 32. **ISF files reload when edited** on disk (V). Loaded once at start now.
-      Shader files are watched (every 2 s): a saved edit replaces the shader on screen. Checked: GPU test (black → red after the edit) and a bench run with a file edited mid-run.
-- [x] 33. **LUT mask mixer** (two LUTs mixed by a mask) and a few **built-in LUT looks** (V). LUT Mix exists.
-      8 looks ship (Warm, Cool, Teal and Orange, Bleach Bypass, Mono Contrast, Cross Process, Faded Film, Night; made by scripts/make-luts.py), and LUT Split: two LUTs by brightness, left/right, top/bottom or from the center. LUT Split › Split by › Mask layer: another layer's brightness picks LUT B (bright) or LUT A (dark). Checked: tests; GPU test (a black mask gives LUT A, a white one LUT B).
-- [x] 34. **Saved "show only these" slice sets** while mapping (M).
-      Mapping Studio › Sets: save the selected slices as a named set, pick it to select them and show only them. Saved with the project.
-- [x] 35. **Slider limits** (use only part of a slider's range) and **"ignore the controller while this control is hidden"** for one knob across pages (V).
-      Slider limits (right-click › Limits…): the mouse stays inside, a controller's whole travel covers just that part, outside is shaded. "Ignore while hidden": not done. Checked: tests.
-
-### Medium
-- [x] 36. **A layer's picture before its effects** as another layer's source (V). After effects exists.
-      Source menu › From another layer › "(before effects)". Checked: GPU test (0.2 before an invert, 0.8 after).
-- [x] 37. **Blend mode per effect**: how an effect's output mixes back with its input (V). Dry/wet exists.
-      A blend menu beside each effect's Mix. Checked: GPU test (Invert with Multiply).
-- [x] 38. **Wipe blend modes** driven by opacity (radial, star, blocks…) (V). Wipes exist as clip transitions only.
-      Six blend modes: Wipe left to right, top down, from the center, diamond, blocks, and Dissolve; opacity = how far it's come in. Checked: GPU tests.
-- [x] 39. **Your own blend modes** written as shaders (V).
-- [x] 40. **Generator size per layer / clip** (V). Generators render at the comp's size.
-      Inspector › Render size 100 / 75 / 50 / 25% for generators (effects run at that size too). Checked: GPU test.
-- [x] 41. **Frame rate per layer / comp**, to save GPU (V).
-      Inspector › Frame rate: every frame / 30 / 15 / 10 / 5, the picture held between. Checked: GPU test.
-- [x] 42. **Before / after preview of one effect** in a chain (V).
-- [x] 43. **Mouse into shaders**: click and drag in a preview drives the shader (iMouse, point inputs) (V). Works today only by mapping the preview's XY.
-      Preview bar: a mouse button; dragging moves the selected layer's point settings (ISF point2D). Shadertoy shaders that read iMouse get a Mouse point and a Mouse down button: dragging in the preview moves it and holds the button. Checked: test of the point mapping; GPU test (the mouse's place and button reach the shader).
-- [x] 44. **Previews**: drag to scrub the movie, frame-rate cap (V).
-- [x] 45. **Eyedropper**: pick a color from a preview (V).
-- [x] 46. **Endless scratch** control for movies (V).
-      Playback › Scratch strip (drag; wraps at the ends).
-- [x] 47. **Movie chapter markers**: jump to chapters stored in the file (V).
-      Playback › Chapters menu when the file has chapters. Checked: test with a movie made with two chapters.
-- [x] 48. **Text from a file**, shown word / line / sentence at a time with next / previous; **animated text styles** (beat, scrolling, fade); **text set by OSC** (V).
-      Text › Parts: from a file or by splitting, by lines / sentences / words / paragraphs; next / previous (mappable). Animated text styles: not yet. Checked: tests.
-- [x] 49. **Strings and colors from controllers** (OSC text and color values) (V).
-      OSC words into text layers (`/phosphor/layer/<id>/text`, or any mapped address). Colors from controllers: not done. Checked: test.
-- [x] 50. **Any control sends MIDI / OSC / DMX** when it changes (V). Feedback to its own controller exists.
-      Right-click any control › Send out: OSC to the Control Surface's OSC-out host, MIDI CC or note. Checked: real UDP test.
-- [x] 51. **Control Surface widgets**: text field, multi-slider, button grid, pop-up menu, color wheel, computed values (V).
-      Control Surface: a Choices widget (named buttons, one picked; also on the phone remote and in the TouchOSC export). Text field (onto a text layer; Mac and phone). A button grid or pop-up menu = Choices (+ "pick a clip by value"); the color wheel = the Color widget. Multi-slider (bars with their own targets; draw across them; Mac, phone, TouchOSC export). Computed value: a formula of other controls (a, b, c…, time, beat) that drives its targets. Checked: tests.
-- [x] 52. **Import TouchOSC layouts** (V). Export exists.
-      MIDI / OSC panel › Import TouchOSC layout: pages, controls in place, OSC addresses mapped. Checked: round-trip test with the export.
-- [x] 53. **Clip grid lights on Launchpad / APC**: pad colors for empty / loaded / playing / queued (V, M).
-      MIDI / OSC panel › Clip pad lights (presets for Launchpad / APC mini mk2 and the first APC mini). Checked: test of the states; not tried on a real Launchpad.
-- [x] 54. **Map a whole row of clips at once** (first and last note), bank / transpose the mapping, pick a clip by index or value (V).
-      Clip row name menu › MIDI notes: map the row from a note, shift by ±1 / ±8; "Pick a clip by value" (mappable). Checked: tests.
-- [x] 55. **Export / import a bank of clips** with settings; **set a clip's thumbnail** from the current frame (V).
-- [x] 56. **Recorder**: record any layer, comp or camera (not only an output), start/stop on the beat, several recorders at once (V). Done: record a layer / group / comp, start and stop on the bar, and up to 8 more recorders at once (Stream panel › More recorders: each its own source, file, format and frame rate). Checked: bench (main + 2 more recorders at once: 177 frames each).
-- [x] 57. **Scopes as a layer source** (V).
-- [x] 58. **Drawn LFO shapes** (V). Has six fixed shapes.
-      "Drawn wave" modulation source (a smooth loop through eight points). Checked: test.
-- [x] 59. **Audio**: your own named frequency bands as modulation sources, sound play-through, capture another app's sound with no loopback driver (V).
-- [x] 60. **Sound routing**: per-layer output device and channels, multichannel outputs (V, M). Everything mixes to one stereo output now. Done: each layer on a pair of channels of the sound output, and a different sound device per layer (Inspector › Sound device: its own output, mixing only those layers). Checked: tests (routing, stretching to the device's rate). Not heard: tests stay silent.
-- [x] 61. **Masters**: separate video, sound and DMX masters, master speed, sound EQ (M). Has a master fade. Done: DMX master, master movie speed, sound EQ (master volume was already there).
-- [x] 62. **Send timecode and clock**: MIDI clock out, MTC and LTC out, time of day as timecode (V, M). Receiving exists.
-      MIDI / OSC panel › Clock out to a chosen MIDI output (24 a beat, Start / Stop, locked to the beat). MTC out (MIDI) and LTC out (audio on a chosen pair), from the show clock or time of day. Checked: test with a virtual MIDI destination (24 pulses in half a second at 120).
-- [x] 63. **Cues that store only chosen settings** while media keeps playing (M). Cues store everything now.
-- [x] 64. **Schedules**: calendar (.ics) events trigger cues, an idle cue after N minutes of nothing, a startup cue (M). Daily times exist.
-- [x] 65. **Combine controls**: mix several sources into one (max, add, multiply…) (M).
-- [x] 66. **Readable OSC addresses** by name (`/layer/Intro/opacity`) and wildcards (M). Addresses use ids now.
-- [x] 67. **Merge another project** into this one (M).
-- [x] 68. **New project from a template** (simple player, mixer, 4 projectors…) (V, M).
-- [x] 69. **Background picture on an output** (M).
-- [x] 70. **Mapping**: drop a file on the stage to make a slice at its shape; draw a line slice freehand (M).
-- [x] 71. **Automatic soft edges** from overlapping slices (M). Set by hand now.
-- [x] 72. **One canvas across several displays** (2×2 etc.) and **one output shown on several displays** (V, M).
-- [x] 73. **LED fixtures**: circle and curve shapes, sampling (center / average), brightness curve, CSV import, video-wall template, more wiring patterns, custom channels (M). Done: ring, curve, column wiring, CSV import, master, Average (each light averages its own patch: 9 samples), Video wall… (tiles across × down covering the picture, each patched on fresh universes). Checked: tests (CPU and GPU).
-- [x] 74. **Vision effects**: blur / pixelate faces, picture over faces, color match to a reference, palette (k-means), QR overlay, different blur for person and background (V). Remove Background exists.
-- [x] 75. **Generators**: countdown, stopwatch, GPU particles (M).
-- [x] 76. **NDI sound** in and out (V). Out: with the picture. In: Audio › input list has every NDI source ("NDI · name"); its sound drives the meters, beat and modulators (audio-only receiver, no picture over the network). Checked: loopback test (our own NDI sender's tone comes back at 48 kHz, right level).
-- [x] 77. **Edit several clips / layers at once** (M). Slices already multi-select.
-- [x] 78. **Stream Deck** buttons for cues, clips and settings (M). Keys + Stream Deck + dials as input, key pictures; not tried with a real deck.
-- [x] 79. **OSC Query client**: control another app from Phosphor by browsing its settings (V).
-- [x] 80. **SVG**: export the mapping as SVG / PNG / PDF; import / export masks and lines as SVG (M). Done: SVG, PNG and PDF export (Save as › .pdf: a vector page the output's size), masks and lines from SVG. Checked: tests; the PDF passes qpdf's check and was looked at.
-- [x] 81. **SVG and Lottie** (After Effects) animations as clips (M). SVG; Lottie .json (not yet .lottie zips).
-- [x] 82. **Lock the panel layout** only (not the whole player mode) (V).
-      View › Lock Panels On / Off.
-- [x] 83. **Interface color themes** (V). Has a brightness slider.
-- [x] 84. **Picture depth**: 32-bit float buffers, anti-aliasing per output (M). Done: smooth edges (anti-aliasing) per output; Deep color (Output panel): layers mixed and effects worked out at 16 bits a channel, same looks, no banding (on cards that can draw into 16-bit textures). Checked: GPU tests (fine detail kept: 33 vs 8-bit's 64 for a true 33; every saved test project looks the same with it on).
-- [x] 85. **Several clip grids aimed at different layers**, and voice modes: next layer each time, or next free layer (V).
-
-### Large
-- [x] 86. **Keyframe timelines** (MadMapper 6's Conductor): keyframe any setting, record by moving controls, hold / linear / curve, markers (pause, loop, go to), sound track with waveform, OSC / MIDI tracks, a clip edit track with crossfades (M). The biggest one. Done: tracks for any control, keys (hold / line / smooth), markers (pause, loop back), Timeline panel. Record by moving controls: done. Events (play a clip, fire a column or cue, set anything, send OSC / MIDI as the playhead passes; through loops): done, which also covers OSC / MIDI and clip tracks (crossfades = the layer's transition). Sound track with its waveform: done (Timeline › Sound…; drag to place it, right-click for volume). Checked: tests; bench (the sound stays with the playhead).
-- [x] 87. **Render a show to a movie** offline, with the sound mix (M). Needs 86.
-      Timeline › Render…: file, format (H.264, ProRes, Hap, HEVC), fps, length; the show's clock steps a frame at a time and every movie waits for its picture, so nothing drops or repeats. No faster than real time. Sound: the timeline's sound track goes in, in step (movies' own sound doesn't; Hap renders have none). Checked: bench `--render` with a counting movie (1080p H.264 and 4K ProRes: all 60 frames, in order, 5 runs out of 5).
-- [x] 88. **Record DMX** output and play it back (M).
-- [x] 89. **3D models**: lights, shadows, wireframe, UV editing (M). OBJ + calibration, Light, glowing Edges, Shadows, picture wrapping (UV mode + move / size / turn).
-      Done: Light (faces shaded by a light you place: the object looks solid) and Edges (glowing lines along its corners and outline, any width: the wireframe look). Left: shadows, UV editing. Checked: tests (a turned cube: three faces, three brightnesses, nine edges) and a GPU test (looked at the render).
-- [x] 90. **Curved mesh warp** with handles on every point; separate input and output meshes (M). Grid mesh and curved edges exist. Done: separate input mesh (Studio input view); handles on each mesh point (select a point: drag its tips across and down; right-click › Straighten). Checked: tests (no handles = the same surface as before; GPU: a handle moves the picture, straightening restores it).
-- [x] 91. **Read text and QR codes** from video into data (V).
-- [x] 92. **LED scanner**: a camera finds each LED and places the fixtures (M). Built; not tried with real lights and a camera yet.
-- [x] 93. **MilkDrop visualizer** (projectM) (V). .milk / .milk2 presets as layers (lactea, on our wgpu device). Presets not bundled (O10).
-- [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
-- [x] 95. **USB DMX** interfaces (Enttec Pro / Open DMX) (M). Both built; not tried on real hardware yet.
-      Done: Enttec DMX USB Pro and compatibles (LEDs panel › USB (Enttec Pro) › its port; one universe). Checked: tests (packet; a pseudo-terminal gets the bytes unchanged). Not tried with the real box. Open DMX (the cheap kind without its own timing): not done.
+- [ ] **Real-hardware checks** (2026-11-13): Windows fullscreen output on a real second screen / mixed scaling (0.5.4,
+      reporter #41); the Windows #28 freeze on a PC with a real graphics card (the VMs have none); 0.5.5's Inspector
+      and ISF-folder fixes (reporter #42). Owner will use a real PC later.
+- [ ] **Mouse checks** of the Designer items and the focused tab's X; **a real laser** for everything laser.
+- [ ] **Phone test** (2026-11-04): MIDI / OSC › Phone or tablet › Get it on the phone: scan the QR code with the iPad,
+      open the downloaded Phosphor.tosc in TouchOSC, point TouchOSC at the Mac (Browse list), move a control: step 3
+      should say "Hearing from…". Owner to try with the real device.
 - [ ] 96. **Blackmagic** capture and SDI / HDMI output (V, M). Hardware + SDK.
-- [x] 97. **Arduino** (Firmata): sensors in, LEDs / servos out (M). Hardware.
-      MIDI / OSC panel › Arduino › its port (StandardFirmata): analog inputs and digital pins map like MIDI (Learn works); Send out › Arduino drives PWM pins. Checked: tests (Firmata in and out; a pretend board on a pseudo-terminal). Not tried with a real board.
 - [ ] 98. **Depth cameras** (Kinect v2, RealSense) (M). Hardware.
-- [x] 99. **Lasers** (2026-10-30, owner: "build what is needed for lasers … a laser designer section"). Lasers panel
-      (Designer area): projectors (controller box found by itself: Ether Dream, IDN, LaserCube network / USB, Helios,
-      via the laser-dac crate, MIT), the Laser Designer (looks of shapes: line, circle, polygon, star, wave, Lissajous,
-      spiral, beams; spin, draw-on, rainbow, motion, LFO / sound modulation; canvas draws the traced path within the
-      projector's points a second), arming (never saved), Blackout, a floor per projector, color balance, flips;
-      ControlTarget::LaserShape / LaserBrightness (MIDI, OSC /phosphor/laser/…, cues, AI). ILDA files still play as
-      video clips. *(engine tests for tracing / budget / safety; screenshots; bench --quick lasers prints LASER.
-      **Not tried on a real laser**: needs you with one.)* **ILDA files and text as laser looks done 2026-10-30**
-      (Text shape: Hershey single-stroke fonts, 6 styles, several lines; Laser file shape: .ild frames at their own
-      speed, read off the UI thread; busy frames wait less at jumps and corners to stay in budget). **Test pattern and video
-      trace done 2026-10-30** (projector Test pattern switch; Video trace shape: a layer / the mix read back small
-      (128 wide, 25 a second, only while used), marching squares + Douglas–Peucker, longest outlines kept; crowded
-      frames drop the shortest lines and the Designer says so). **Zones done 2026-10-30** (LaserProjector.zones: look,
-      brightness (mappable), place / size / turn, four corners through a homography; dark areas blank the beam; area
-      editor with handles). **Image trace, drawings, onion skin done 2026-10-30** (Trace `image`; Drawing shape
-      `points` drawn on the canvas; `LaserLook.onion` + opacity behind the canvas; brightness = strongest color). **Transform box, color as settings done 2026-10-30** (`panels::laser_box`;
-      LASER_FIELDS red / green / blue / hue, `LaserShape::set_field`, `hue_of`; all keyable on the timeline). **Laser looks on the Timeline done 2026-10-30** (`Timeline.laser_looks`
-      `LookChange` by look id, `look_at` / `set_look`; lanes in `panels::timeline_lasers`; applied in `run_timeline`). **Laser cues done 2026-10-30** (`Cue.{lasers, laser_master, sets_lasers}`, `CueLaser`;
-      look switches at GO, brightness glides; never arms; cue row laser menu). **Laser looks in the clip grid done 2026-10-30** (`LaserProjector.clips`,
-      `Lasers::trigger_column` from `Composition::trigger_column`; `panels::clip_lasers`). **Laser looks on the Control Surface done 2026-10-30** (`ControlTarget::LaserLook`;
-      surface Add › Laser look buttons).
-- [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
-      colors to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
-      system, to see what it accepts.
 
-### Not planned (say if you want any)
-Quartz Composer / Vuo / TouchDesigner hosting (QC is dead, the others need their own apps), Core Image filters,
-Wiimote, Leap Motion, Makey Makey, weather data, Canon / Sony DSLR inputs, MiniMad hardware export, licenses / demo mode.
+## Needs an account, a key or a server
 
-Already in Phosphor and not listed: everything else in the two research files at headline level (see `docs/PARITY.md`).
-
-## Online media: start a show with no media of your own (planned 2026-10-23, after the parity list)
-
-Goal: someone with nothing on their computer can open Phosphor and fill a show from free, openly licensed sources
-online. One **Online** panel in the Library searches every source at once: thumbnails, preview on hover, drag onto a
-clip cell or layer. Files download into the project's media folder (so the show works offline and in exports), each
-with its license and credit saved next to it (a Credits list for the show; "only ones I can use commercially"
-filter). Sources that need an API key: a key field per source (like the AI key), or later through a phosphorfx.com
-proxy (**needs you**: the server).
-
-**Done 2026-10-23 (no keys needed):** Library › Online searches videos, pictures, icons, textures, MilkDrop
-visualizers, fonts, music and ISF shaders (NASA, Wikimedia Commons, Internet Archive, Openverse, Art Institute of
-Chicago, Iconify, Poly Haven, projectM's pack, Google Fonts, netlabels, isf.video); credits kept with the project;
-Start a show (5 moods); live data modulators and live text (weather, ISS, earthquakes, city clocks, headlines); real
-lights from the Open Fixture Library.
-**Left, needs you:** sources with API keys (Pexels, Pixabay, Unsplash, Freesound, Jamendo, Shadertoy, Giphy): a key
-field per source, or a proxy on your server. 3D models from Poly Haven / Kenney are glTF: needs a glTF reader (a new
-library: your OK). Public webcams need a hand-picked list that's kept up to date.
+Online media (Library › Online) already searches NASA, Wikimedia Commons, Internet Archive, Openverse, the Art
+Institute of Chicago, Iconify, Poly Haven, projectM, Google Fonts, netlabels and isf.video with no keys. Left: the
+sources that need an API key (Pexels, Pixabay, Unsplash, Freesound, Jamendo, Shadertoy, Giphy): a key field per
+source, or a proxy on your server.
 
 - [~] O1. **Stock video and pictures** (NASA, Internet Archive, Wikimedia Commons done; Pexels, Pixabay, Coverr need keys): Pexels and Pixabay (free API keys; free to use, no credit needed), Coverr,
   NASA Image and Video Library (public domain, no key), Internet Archive (public-domain films, no key), Wikimedia
@@ -423,60 +80,17 @@ library: your OK). Public webcams need a hand-picked list that's kept up to date
 - [~] O3. **Shaders** (Online › Shaders (ISF): isf.video's shared shaders, checked and loaded; Vidvox's ISF-Files ship with Phosphor; Shadertoy needs a key): the ISF online library (isf.video) and Vidvox's ISF-Files on GitHub (straight into the
   effects / generators list), glslsandbox; Shadertoy (API key; most shaders are non-commercial CC BY-NC-SA: label
   them). Overlaps #94.
-- [x] O4. **Lottie animations**: Online › Animations (Lottie): LottieFiles' free animations (no key, Lottie Simple License: free, also commercially), downloaded as .json and played as Lottie clips. Checked: parse test + a live search and download onto a layer (2026-10-27).
 - [~] O5. **Icons and vector shapes** (Iconify done: every open icon set, white SVG; emoji sets come with it): Iconify (200,000+ open-license SVG icons, one API, no key), Phosphor icons,
   OpenMoji / Twemoji (emoji as SVG): as SVG clips or text-layer symbols.
 - [~] O6. **3D models, textures, HDRIs** (Poly Haven textures and 360 panoramas (+ the 360 View effect) done; models next; ambientCG skipped 2026-10-27: its previews are spheres and its textures come only as zips): Poly Haven and ambientCG (CC0, public APIs), Kenney (CC0 packs), NASA 3D
   models, Smithsonian 3D: for 3D-model slices and textures.
 - [~] O7. **Music and sound** (Online › Music: Internet Archive netlabel releases, Creative Commons; Freesound / Jamendo need keys): Freesound (CC, key), Jamendo (CC music, key), Free Music Archive, Internet Archive
   audio, Pixabay music: clip sound, timeline sound tracks, and something for the beat detection to follow.
-- [x] O8. **Fonts** (Online › Fonts: Google Fonts families, regular + bold into Phosphor's fonts folder): Google Fonts (open licenses; the GitHub repo or the API) for text layers.
-- [x] O9. **DMX fixture definitions** (LED / DMX › A real light…: any Open Fixture Library light and mode): Open Fixture Library (MIT, JSON for thousands of lights): pick a real moving
-  head / LED bar by name instead of typing channels.
-- [x] O10. **MilkDrop presets** (Online › Visualizers: the whole Cream of the Crop pack, searchable): projectM's preset packs ("cream of the crop") once #93 lands.
-- [x] O11. **Live data that moves visuals** (weather, ISS, earthquakes as modulators; news headlines and a city clock on text layers) (as modulators): weather (Open-Meteo, no key), earthquakes (USGS), the ISS
-  position, RSS / news headlines into text layers, a clock in any city.
 - [~] O12. **Live pictures** (2026-10-27: Inputs › Live from the internet: NASA ISS, Sen 4K ISS, Florida rocket pads, a volcano; any YouTube / Twitch live page pasted in Network stream; the page is saved and its stream looked up each start. Left: Giphy / Tenor (keys)): public webcams and space feeds (NASA / ISS live streams) as live layers; GIFs from
   Giphy / Tenor (keys). The "From a link" yt-dlp route already covers pasted video links.
-- [x] O13. **Starter shows** (Online › Start a show: Space, Nature, Retro, Club, Gallery): one click makes a ready show from these sources (a few clip banks, effects, a sound
-  track), by mood ("club", "ambient", "corporate").
-
-## Next round (2026-10-21, "keep going on the large stuff"), quickest first
-
-Released in **0.2.97** (Mac, Windows zip + installer, Linux ARM; installed here): the first three items below.
-Hap R is in **0.2.98**, lostjared's effects in **0.2.99** (both published). This round is done.
-
-- [x] **Mapped controls stand out** (asked mid-way): gold outline and tint on every mapped control. Checked on a screenshot.
-- [x] **Stereo audio pictures**: row 0 left, row 1 right, both sides in each pixel's colors; newest 512 samples in
-      a row. Checked with test tones, left only and then 2:3 stereo. Curve Ink Scope (px-stream) ships and draws the
-      Lissajous figure; X.1–X.5 need a picture drawn by their Max patch, not sound.
-- [x] **Instanced vertex shaders**: a shader can draw its quad many times (`gl_InstanceID`, MadMapper
-      `INSTANCE_COUNT`, a fixed number or a setting), and its vertex stage can hand its own values to the pixel stage
-      (`out`/`varying`). MadMapper's **Transform Particles** now works (checked: copies of the test card fly out and
-      blend over each other). The 406-shader corpus went from 396 to 397. MadMapper's "3D Particles" and
-      "instancing" generators still don't: they draw their own 3D meshes (vertex attributes), which Phosphor's quad can't stand in for.
-- [x] **Hand-picked lostjared effects**: 53 shipped (0.2.99). 1,330 of the collection compiled; drawn over a photo,
-      557 dropped automatically (blank, untouched, hard flashing, near-duplicates), the other 773 looked at on contact
-      sheets. Not checked moving in the app with real music.
-- [x] **Hap R recording** (BC7: Hap's best quality), and with it a real check of Hap R playback. Record and Convert
-      both offer it. Playback didn't work before: FFmpeg doesn't know the Hap R tag, so files opened as an unknown codec
-      (fixed). Checked: 1080p recording kept up at 30 fps, and the recording played back with the right picture. Not
-      tried in other VJ apps.
-
-## First round (asked 2026-10-21)
-
 - [~] **Crash reports sent automatically** (#5): the app side is done (below); **needs you:** a private endpoint
       on your server. Spec: accept `POST` with JSON `{"version", "os", "arch", "report"}` (all strings), answer
       2xx, keep it private. Then put its address in `ENDPOINT` (crates/phosphor/src/crash_report.rs), or tell me.
-- [?] **Render thread** (#6): **measured first, and the reasons for it don't show up.** Holding off unless you
-      see a stall in real use (tell me when and what you were doing).
-      - Menus: a new bench test (`--quick menutest`) opens a real macOS menu. Rendering went on at ~57 fps the
-        whole time it was open, so menus don't freeze the outputs.
-      - File dialogs are already non-blocking.
-      - The idle cost (26% of a core) is mostly the system's GPU work; Phosphor's own code is a few percent of it.
-      - Doing it means moving the engine (346 call sites) and the output windows off egui: the biggest, riskiest
-        change in the app, for no measured gain today.
-
 - [~] **Virtual camera** (#2): **built; needs your Apple Developer account to switch on.**
       - Output › Virtual camera turns it on: the composition as a camera called "Phosphor" (1920×1080, 30 fps).
       - The camera is a Core Media I/O camera extension (`macos/PhosphorCamera`, built by
@@ -487,51 +101,28 @@ Hap R is in **0.2.98**, lostjared's effects in **0.2.99** (both published). This
         the step only your account can pass.
       - **Needs you:** the steps at the top of `scripts/build-camera-extension.sh` (team ID, two App IDs, two
         Developer ID provisioning profiles, sign, notarize). The frame sending can't be tried until then.
+- [ ] 94. **Online shader library**: browse, install, publish (M). **Needs you**: a server.
 
-## Done
+## Planned
 
-- [x] **Windows installer** (#7): `Phosphor-windows-setup.exe` (Inno Setup), built on GitHub with every push and
-      attached to releases next to the zip. Installs for the current user (no admin prompt), Start menu shortcut,
-      optional desktop shortcut, `.phosphor` projects open in Phosphor (and Phosphor now opens a project given
-      on its command line), uninstaller; the built-in updater keeps working. Checked on GitHub's Windows machine:
-      silent install, files and file association present, the installed copy ran the test project, uninstall
-      removed it. **Not tried on a real PC by hand.**
+- [ ] **3D fly-through with the audience playing** (asked 2026-11-14): load a 3D model (glTF / GLB first) and fly a
+      camera through it; audience phones get a game pad (up / down / left / right, A, B) on the Play page that steers
+      it. A world built in Unreal / Unity: either exported as glTF, or run in its own engine and sent in over
+      NDI / Spout / Syphon with the pad forwarded to it as OSC. Plan: docs/design/game-pad.md (build week of 2026-11-16).
+- [ ] **Import Morpholio Trace files** (.morpholiotrace, owner 2026-11-14; sample in `_local/samples/`, not in git): a
+      zip of `data-books.plist` (the layers in order: title, hidden, opacity, blend, a 4×4 transform, `drawingToken`),
+      one 4096×4096 transparent PNG per layer (`<token>_original.png`), and a SQLite file with each layer's pen
+      strokes (`stroke_<token>`: NSKeyedArchiver blobs, readable with `import::keyed::unarchive`) and tiles. Plan: each
+      drawing layer → a Phosphor layer (name, on / off, opacity, placed by its transform), PNGs copied beside the
+      project; later the strokes as lines that draw themselves on (and for lasers).
+- [~] *(Stack is no longer in the default layout)* **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
+- [ ] **Code health** (graphify map, 2026-11-14: 14,953 nodes, 501 communities): `ui/kit.rs` (cohesion 0.05) and
+      Mapping + Studio (0.11) are loosely knit: split them by job. British spellings left only in internal names
+      (`colour_button`, `theme::FAVOURITE`, `colour_budget.txt`; serde field names stay for old saves).
+- [ ] **Windows installs updates by itself** (2026-11-14, built, not released): check on the owner's Win11 PC.
 
-- [x] **Phosphor for Raspberry Pi / Linux ARM** (#9): built on GitHub's ARM Linux machines with every push
-      (`.github/workflows/linux.yml`), packaged as `Phosphor-linux-arm64.tar.gz` (program, FFmpeg libraries,
-      shaders, a start script and a README), attached to releases when it built. It's the full app; as a player it
-      uses Session › Follow another Phosphor › "Every time Phosphor starts (a player)". Checked on GitHub: engine
-      tests pass on ARM Linux, and the packaged app opened the test project on a virtual display (software Vulkan,
-      8.5 fps on the CPU-only renderer; a Pi 5's GPU is far faster). **Not run on a real Pi** (none here). Media
-      must be at the same paths as on the Mac.
+## Ideas
 
-- [x] **Crash reports, app side** (#5): Report a Bug › "Send crash reports by themselves" (off unless chosen;
-      grayed until the server exists). After a crash, the same diagnostics the bug window shows (version,
-      system, project shape as counts, end of crash.log; no project content, no file names) are posted once,
-      and the recovery banner says whether it went. Checked: a local server received the JSON POST (test).
-
-- [x] **Older macOS** (#9): Phosphor now runs from **macOS 13 Ventura** (was 14), the same floor as VDMX. One
-      setting (`scripts/min-macos`) for FFmpeg, Syphon and the app; FFmpeg and Syphon rebuilt for it; a test
-      bundle has every binary marked 13.0, its "too new" check and the panel check pass, and the linker gave
-      no "built for newer macOS" warnings. 11–12 aren't possible: the screen-capture library calls macOS 13
-      functions (it would mean a build without screen and window capture). **Not run on a real macOS 13 Mac** (none
-      here).
-
-- [x] **Masters** (#5): an output can show a whole comp as its program (Outputs list and Studio › output:
-      "Shows: Main mix / Comp …"). Make one comp per master, switch its "In the master mix" off, and pick it on the
-      output: each output then has its own mix. Checked: two comps (red, green), output 2 showing the green one,
-      main output red, output 2 green; with the green comp still in the master mix, the picker says so.
-
-- [x] **Shader packs** (#5), as far as is sensible:
-      - daitomanabe's 11 (MIT) were already in; **px-stream**: of darosh's own shaders (MIT), Glitch Wave ships.
-        His XY scopes convert but need stereo audio pictures (Phosphor's is mono), so they'd only draw a diagonal.
-      - The converter now renames words that newer GLSL reserves (`sample`, `filter`, `input`…), which older ISF
-        shaders use as names. That fixed 3 of these, and helps anything you import. No change across the 406-shader
-        corpus.
-      - **lostjared/shaders** (MIT, 2,700 effects): checked, not shipped. No categories or ratings to pick from, and
-        converting 2,700 at every launch would cost tens of seconds of CPU. Worth a hand-picked set if you want one.
-
-- [x] **One Inspector** (#8): the Inspector shows whatever you selected last: a layer (with its clip, and its
-      effects as before), a mapping slice or mask, or a Control Surface widget. A Layer / Slice / Widget switch on
-      top when more than one is selected. Checked: a click on a slice in the Studio turned the Inspector to that
-      slice's settings (screenshot). Widgets use the same path; not seen on screen yet.
+- [ ] **Lights on drones** (owner, 2026-10-30). Drone shows are flown by their own show software; Phosphor could send
+      colors to it (DMX / Art-Net out, as for LED fixtures, or that software's own protocol). **Needs you**: which drone
+      system, to see what it accepts.
