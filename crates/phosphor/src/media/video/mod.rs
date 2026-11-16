@@ -844,8 +844,36 @@ impl Drop for VideoPlayer {
         // Dropping the receiver unblocks a decoder waiting on a full queue.
         self.rx = None;
         if let Some(t) = self.thread.take() {
-            let _ = t.join();
+            join_briefly(t);
         }
+    }
+}
+
+/// Waits for a clip's worker thread to finish, but only for a moment: one stuck reading a pulled drive or a stalled
+/// network share is left to end by itself (it has been told to quit), where waiting for it froze the whole app
+/// the next time a layer changed.
+pub(crate) fn join_briefly(thread: std::thread::JoinHandle<()>) {
+    let until = std::time::Instant::now() + std::time::Duration::from_millis(60);
+    while !thread.is_finished() && std::time::Instant::now() < until {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    if thread.is_finished() {
+        let _ = thread.join();
+    }
+}
+
+#[cfg(test)]
+mod join_tests {
+    #[test]
+    fn a_stuck_worker_doesnt_hold_up_closing() {
+        let started = std::time::Instant::now();
+        super::join_briefly(std::thread::spawn(|| std::thread::sleep(std::time::Duration::from_secs(3))));
+        assert!(started.elapsed() < std::time::Duration::from_millis(500), "{:?}", started.elapsed());
+        // One that ends at once is waited for as before.
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let d = done.clone();
+        super::join_briefly(std::thread::spawn(move || d.store(true, std::sync::atomic::Ordering::Relaxed)));
+        assert!(done.load(std::sync::atomic::Ordering::Relaxed));
     }
 }
 
