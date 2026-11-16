@@ -512,7 +512,10 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
         // it resizes from the middle).
         let snap_id = key.with("snap_drag");
         let (dragging, free) = ui.input(|i| (i.pointer.primary_down(), i.modifiers.command));
-        super::mapping_points::snap_drag(ui.ctx(), snap_id, &mut o.mapping, (*selected_surface).filter(|_| vs.snap && dragging), [8.0 / frame.width(), 8.0 / frame.height()], 64.0, free);
+        // (Several slices dragged together aren't snapped: only the first would land on the grid and the set
+        // would come apart by a hair.)
+        let alone = super::mapping_points::selected_slices(ui.ctx(), *selected_surface).len() <= 1;
+        super::mapping_points::snap_drag(ui.ctx(), snap_id, &mut o.mapping, (*selected_surface).filter(|_| vs.snap && dragging && alone), [8.0 / frame.width(), 8.0 / frame.height()], 64.0, free);
         let _ = touched;
         // Right-click: what can be done here. The slice under the pointer becomes the selected one.
         let menu_key = key.with("menu_at");

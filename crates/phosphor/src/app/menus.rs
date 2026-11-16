@@ -500,7 +500,7 @@ impl PhosphorApp {
                             for p in self.state.recent.clone() {
                                 let name = std::path::Path::new(&p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
                                 if crate::ui::command(ui, name).on_hover_text(&p).clicked() {
-                                    self.state.open_project_file(&p);
+                                    let _ = self.state.open_project_file(&p);
                                     ui.close();
                                 }
                             }

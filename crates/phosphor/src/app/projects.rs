@@ -350,11 +350,8 @@ impl PhosphorApp {
         }
         match pick {
             Some(Pick::File(path)) => {
-                let before = st.notice.clone();
-                st.open_project_file(&path);
                 // (The window stays up when it couldn't be opened, so another one can be picked.)
-                let failed = st.notice != before && st.notice.as_deref().is_some_and(crate::ui::notice::is_problem);
-                st.projects.open = failed;
+                st.projects.open = !st.open_project_file(&path);
             }
             Some(Pick::Cloud(id)) => {
                 st.account.open(ctx, &id);

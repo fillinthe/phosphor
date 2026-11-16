@@ -160,11 +160,13 @@ pub fn import(text: &str) -> Result<Drawing, String> {
 /// A drawing file's shapes, whichever kind it is: SVG, or EPS / an Illustrator file saved the PostScript way.
 pub fn import_file(bytes: &[u8]) -> Result<Drawing, String> {
     let text = String::from_utf8_lossy(bytes);
-    let head = &text[..text.len().min(2048)];
-    if head.contains("%!PS") || head.contains("%%BoundingBox") {
-        import_eps(&text)
-    } else if head.starts_with("%PDF") || head.contains("%PDF-") {
+    // (The start as bytes: cutting the text at a byte count can land inside a character.)
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(2048)]);
+    // A PDF first: a newer Illustrator file is one, with PostScript comments in it too.
+    if head.contains("%PDF-") {
         Err("this file is a PDF inside (a newer Illustrator file): save it as SVG or EPS and bring that in".into())
+    } else if head.contains("%!PS") || head.contains("%%BoundingBox") {
+        import_eps(&text)
     } else {
         import(&text)
     }
@@ -177,7 +179,8 @@ pub fn import_eps(text: &str) -> Result<Drawing, String> {
     let nums = |s: &str| s.split_whitespace().filter_map(|t| t.parse::<f32>().ok()).collect::<Vec<_>>();
     let bbox = ["%%HiResBoundingBox:", "%%BoundingBox:"]
         .iter()
-        .find_map(|key| text.lines().find_map(|l| l.trim().strip_prefix(key)).map(nums).filter(|v| v.len() == 4 && v[2] > v[0] && v[3] > v[1]))
+        // (The first line that gives four numbers: a file may say "(atend)" up top and give them at its end.)
+        .find_map(|key| text.lines().filter_map(|l| l.trim().strip_prefix(key)).map(nums).find(|v| v.len() == 4 && v[2] > v[0] && v[3] > v[1]))
         .ok_or("the drawing doesn't say how big it is (no bounding box)")?;
     let (w, h) = (bbox[2] - bbox[0], bbox[3] - bbox[1]);
     // (PostScript's y runs up the page.)
@@ -254,8 +257,10 @@ pub fn import_eps(text: &str) -> Result<Drawing, String> {
                     at = start;
                 }
                 // Painting words end the outline (the closing ones close it first).
-                "s" | "b" | "b*" | "f" | "F" | "f*" | "B" | "B*" | "fill" | "eofill" => finish(&mut path, true, &mut out),
-                "S" | "n" | "N" | "stroke" | "newpath" => finish(&mut path, false, &mut out),
+                // (Illustrator's small letters close the outline, n included: a closed outline that isn't painted,
+                // as clipping shapes are; the capitals leave it open.)
+                "s" | "b" | "b*" | "f" | "F" | "f*" | "B" | "B*" | "n" | "fill" | "eofill" => finish(&mut path, true, &mut out),
+                "S" | "N" | "stroke" | "newpath" => finish(&mut path, false, &mut out),
                 _ => {}
             }
             stack.clear();
@@ -379,6 +384,10 @@ mod tests {
         // Not a drawing, or one with nothing to cut along: said plainly.
         assert!(import_file(b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 10 10\n(hello) show\n").is_err());
         assert!(import_file(b"%PDF-1.5 ...").unwrap_err().contains("SVG or EPS"));
+        assert!(import_file(b"%PDF-1.6\n%!PS-Adobe-3.0\n%%BoundingBox: 0 0 10 10\n").unwrap_err().contains("SVG or EPS"), "an .ai that is a PDF");
+        // The size given at the end, and letters that aren't plain ASCII right where the start is cut: read, no crash.
+        let late = format!("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: (atend)\n%%Title: {}\n0 0 m 10 0 l 10 10 l h f\n%%Trailer\n%%BoundingBox: 0 0 10 10\n", "é".repeat(1100));
+        assert_eq!(import_file(late.as_bytes()).unwrap().shapes.len(), 1);
         assert!(import_file(b"<svg viewBox=\"0 0 10 10\"><rect x=\"1\" y=\"1\" width=\"5\" height=\"5\"/></svg>").is_ok(), "an SVG still reads");
     }
 

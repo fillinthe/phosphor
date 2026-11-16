@@ -583,7 +583,8 @@ impl State {
         }
     }
 
-    pub fn open_project_file(&mut self, path: &str) {
+    /// Opens the project at `path`; false when it couldn't be (said in the notice).
+    pub fn open_project_file(&mut self, path: &str) -> bool {
         // A drive that came back under another name ("_FOOTAGE 1"): the project is opened from where it is now.
         #[cfg(not(target_arch = "wasm32"))]
         let moved = crate::project_files::relocated(path);
@@ -599,7 +600,7 @@ impl State {
             // Recent for when the drive is back. (It used to be dropped from Recent on the first failed click.)
             let name = std::path::Path::new(asked).file_stem().map_or(asked.to_string(), |n| n.to_string_lossy().into_owned());
             self.notice = Some(format!("Couldn't open \"{name}\": its file isn't there right now ({asked}). Plug in its drive and click it again, or use Open a file… to find it."));
-            return;
+            return false;
         }
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
             Ok(comp) => {
@@ -609,12 +610,13 @@ impl State {
                 self.saved_hash = hash_text(&self.comp.to_json());
                 if newer {
                     self.notice = Some("This project was saved by a newer Phosphor: some of its settings may be missing here. Update Phosphor (Help > Check for Updates) before saving over it.".into());
-                }
+                }                true
             }
             Err(e) => {
                 // (It stays in Recent: right-click › Forget takes it out. A file that can't be read today may be fine
                 // once its drive has finished mounting.)
                 self.notice = Some(format!("Open failed: {e}"));
+                false
             }
         }
     }
@@ -715,7 +717,9 @@ impl State {
             crate::control::Deferred::Jump(id, forward) => {
                 if let (Some((pos, dur)), Some(l)) = (self.media.position(id), self.comp.layers.iter().find(|l| l.id == id)) {
                     let step = l.jump_secs(Some(dur), self.comp.bpm);
-                    self.media.scrub(id, if forward { pos + step } else { pos - step });
+                    // (A plain jump, not a scrub: a scrub holds the movie still for a moment, and a jump button
+                    // pressed on the beat must land on the beat.)
+                    self.media.seek(id, if forward { pos + step } else { pos - step });
                 }
             }
         }

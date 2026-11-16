@@ -677,6 +677,7 @@ impl Decoder {
                     Err(e) if !matches!(e, ff::Error::Eof) && read_errors < 8 => {
                         read_errors += 1;
                         log::debug!("{}: read error ({e})", self.path);
+                        std::thread::sleep(std::time::Duration::from_millis(10));
                     }
                     Err(_) => {
                         let _ = self.dec.send_eof();

@@ -16,6 +16,7 @@ pub mod live;
 pub mod preload;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod health;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod present;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod clip_cache;
@@ -742,7 +743,6 @@ impl MediaManager {
         }
     }
 
-    /// Jumps a layer's video to `t` seconds (or remembers it until the video has opened).
     /// A jump made by hand (see `VideoPlayer::scrub`): the playhead dragged in a panel, a scrub knob.
     pub fn scrub(&mut self, layer: u64, t: f64) {
         #[cfg(not(target_arch = "wasm32"))]
@@ -756,6 +756,7 @@ impl MediaManager {
         let _ = (layer, t);
     }
 
+    /// Jumps a layer's video to `t` seconds (or remembers it until the video has opened).
     pub fn seek(&mut self, layer: u64, t: f64) {
         #[cfg(not(target_arch = "wasm32"))]
         match self.players.get_mut(&layer) {
