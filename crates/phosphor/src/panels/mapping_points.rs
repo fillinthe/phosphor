@@ -195,6 +195,28 @@ pub(crate) fn snap_step(state: &mut Option<SnapDrag>, id: u64, cur: &[[f32; 2]],
     out
 }
 
+/// Snap for the thing being dragged, kept from frame to frame under `key`: call every frame after the handles have
+/// moved it, with `dragged` = the slice or mask being dragged with Snap on (None otherwise: the drag is over and
+/// what was kept is let go). It lands on another slice's point within `radius` (output units), else on a 1/`grid` grid.
+pub(crate) fn snap_drag(ctx: &egui::Context, key: egui::Id, mapping: &mut Mapping, dragged: Option<u64>, radius: [f32; 2], grid: f32, free: bool) {
+    let Some(id) = dragged else {
+        ctx.data_mut(|d| d.remove::<SnapDrag>(key));
+        return;
+    };
+    // (Kept as the drag itself, not wrapped in an Option: read back as a different type it was never found, and
+    // every frame began a new drag, so nothing snapped at all. Owner, 2026-11-16.)
+    let mut state: Option<SnapDrag> = ctx.data(|d| d.get_temp::<SnapDrag>(key));
+    let others: Vec<[f32; 2]> = mapping.surfaces.iter_mut().filter(|s| s.id != id).flat_map(|s| points_mut(s).into_iter().map(|p| *p).collect::<Vec<_>>()).collect();
+    let cur: Vec<[f32; 2]> = shape_points(mapping, id).into_iter().map(|p| *p).collect();
+    let placed = snap_step(&mut state, id, &cur, &others, radius, grid, free);
+    for (p, q) in shape_points(mapping, id).into_iter().zip(placed) {
+        *p = q;
+    }
+    if let Some(state) = state {
+        ctx.data_mut(|d| d.insert_temp(key, state));
+    }
+}
+
 /// The points of slice or mask `id` (a slice's corners / mesh / line points; a mask's outline).
 pub(crate) fn shape_points(mapping: &mut Mapping, id: u64) -> Vec<&mut [f32; 2]> {
     if let Some(i) = mapping.surfaces.iter().position(|s| s.id == id) {
@@ -230,6 +252,27 @@ mod tests {
         assert_eq!(m.surfaces[2].corners[0], before[2], "locked");
         click_slice(&ctx, &mut primary, 2, false);
         assert_eq!(selected_slices(&ctx, primary), vec![2], "a plain click selects only that one");
+    }
+
+    /// The whole path the Studio takes, frame after frame: a corner dragged a little at a time ends up on the grid
+    /// (the drag is remembered between frames), and letting go forgets it.
+    #[test]
+    fn a_drag_in_the_studio_snaps() {
+        let ctx = egui::Context::default();
+        let key = egui::Id::new("snap_test");
+        let mut m = Mapping::default();
+        m.add_surface(1);
+        let start = m.surfaces[0].corners[0];
+        for _ in 0..40 {
+            m.surfaces[0].corners[0][0] += 0.0011;
+            snap_drag(&ctx, key, &mut m, Some(1), [0.004, 0.004], 64.0, false);
+        }
+        let x = m.surfaces[0].corners[0][0];
+        assert!(((x * 64.0).round() / 64.0 - x).abs() < 1e-6, "on the grid: {x}");
+        assert!((x - (start[0] + 0.044)).abs() <= 0.5 / 64.0 + 1e-4, "where the mouse took it: {x}");
+        assert!(ctx.data(|d| d.get_temp::<SnapDrag>(key)).is_some(), "remembered while dragging");
+        snap_drag(&ctx, key, &mut m, None, [0.004, 0.004], 64.0, false);
+        assert!(ctx.data(|d| d.get_temp::<SnapDrag>(key)).is_none(), "forgotten when the drag ends");
     }
 
     /// A slow drag with Snap on follows the mouse: after 60 small moves the point is within half a grid cell of
