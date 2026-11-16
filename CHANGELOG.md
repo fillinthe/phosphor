@@ -36,6 +36,11 @@ What changed in each Phosphor release, newest first. Downloads are on the
 - Designer: a right-click anywhere on a box opens that box's menu, with Delete.
 - Effects: choose the picture the tiles are shown on: the selected layer, the whole mix, or one layer that stays put.
 
+**Movies that will stutter say so**
+- A warning sign on a layer's card while its movie drops frames, takes most of a CPU core, waits when played
+  backwards, or plays from a network share. Hover for what to do.
+- File info › How it will play: what to know about any movie, the conversion that suits it, and Convert a click away.
+
 **Mapping Studio**
 - Snap follows the mouse exactly (it stuck, lagged and jumped). A dragged slice or mask moves as one. Hold Alt
   to place freely.

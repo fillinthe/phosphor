@@ -220,7 +220,8 @@ mod relocated_tests {
         std::fs::write(root.join("_FOOTAGE 1/shows/a.phosphor"), "{}").unwrap();
         let saved = root.join("_FOOTAGE/shows/a.phosphor").to_string_lossy().into_owned();
         let found = super::relocated_in(&root, &saved).unwrap();
-        assert!(found.ends_with("_FOOTAGE 1/shows/a.phosphor"), "{found}");
+        // (Compared as paths: Windows writes the separators its own way.)
+        assert_eq!(std::path::Path::new(&found), root.join("_FOOTAGE 1").join("shows").join("a.phosphor"));
         // A file that's where it says, one on no drive at all, one on a drive that isn't there: nothing to change.
         assert_eq!(super::relocated_in(&root, &found), None);
         assert_eq!(super::relocated_in(&root, "/somewhere/else/a.phosphor"), None);
