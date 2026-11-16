@@ -166,7 +166,8 @@ pub fn set_target(comp: &mut Composition, target: &ControlTarget, v: f32, out: &
 /// Surface widgets can drive other widgets; `depth` stops loops (A drives B drives A).
 fn set_target_depth(comp: &mut Composition, target: &ControlTarget, v: f32, out: &mut Vec<Deferred>, depth: u8) {
     // Locked controls don't move, whoever sends (controllers, OSC, phones, surface widgets).
-    if depth > 6 || comp.control_locked(target) {
+    // Nor does a value that isn't a number (an OSC `nan` would stick in the control and in the save).
+    if depth > 6 || !v.is_finite() || comp.control_locked(target) {
         return;
     }
     match target {

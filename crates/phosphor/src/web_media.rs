@@ -62,6 +62,20 @@ pub enum Status {
     Failed(String),
 }
 
+/// A web address safe to hand to a download tool: http or https only ("x.com/a" gets https:// put in front).
+/// Anything else (another scheme, or words starting with a dash that a tool would read as an option, which a
+/// project file from someone else could carry) is refused.
+pub fn web_link(url: &str) -> Option<String> {
+    let u = url.trim();
+    let lower = u.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        return Some(u.to_string());
+    }
+    (!u.is_empty() && !u.starts_with('-') && !u.contains("://") && !u.contains(char::is_whitespace)).then(|| format!("https://{u}"))
+}
+
+const NOT_A_LINK: &str = "that isn't a web link (it should start with https://)";
+
 /// The arguments for a download: best MP4 video with its sound (merged by `ffmpeg`), every video in the post, the
 /// file named after the account and post, each finished file's path printed on its own line.
 pub fn download_args(url: &str, dir: &str, browser: Option<&str>, ffmpeg: Option<&str>) -> Vec<String> {
@@ -86,7 +100,8 @@ pub fn download_args(url: &str, dir: &str, browser: Option<&str>, ffmpeg: Option
     if let Some(b) = browser {
         a.extend(["--cookies-from-browser".into(), b.to_string()]);
     }
-    a.push(url.to_string());
+    // (`--`: whatever follows is the link, never an option.)
+    a.extend(["--".into(), url.to_string()]);
     a
 }
 
@@ -125,6 +140,10 @@ impl Job {
             let send = |s| {
                 let _ = tx.send(s);
             };
+            let Some(u) = web_link(&u) else {
+                send(Status::Failed(NOT_A_LINK.into()));
+                return;
+            };
             let (Some(tool), Some(dir)) = (find_ytdlp(), downloads_dir()) else {
                 send(Status::Failed("yt-dlp isn't installed (see the hint below)".into()));
                 return;
@@ -137,7 +156,7 @@ impl Job {
             if is_direct_file(&u) {
                 let dest = dir.join(direct_name(&u));
                 send(Status::Working("downloading the file…".into()));
-                let ok = crate::os::command("curl").args(["-fsSL", "--max-time", "120", "-o"]).arg(&dest).arg(&u).status().is_ok_and(|s| s.success());
+                let ok = crate::os::command("curl").args(["-fsSL", "--proto", "=http,https", "--max-time", "120", "-o"]).arg(&dest).arg("--").arg(&u).status().is_ok_and(|s| s.success());
                 send(if ok && dest.exists() { Status::Downloaded(vec![dest.to_string_lossy().to_string()]) } else { Status::Failed("couldn't download that file".into()) });
                 return;
             }
@@ -181,7 +200,7 @@ impl Job {
                     cmd.args(["--cookies-from-browser", b]);
                 }
                 let before: Vec<PathBuf> = std::fs::read_dir(&dir).map(|d| d.flatten().map(|e| e.path()).collect()).unwrap_or_default();
-                if cmd.arg(&u).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success()) {
+                if cmd.arg("--").arg(&u).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success()) {
                     // What's new in the folder.
                     let mut new: Vec<String> = std::fs::read_dir(&dir).map(|d| d.flatten().map(|e| e.path()).filter(|p| !before.contains(p)).map(|p| p.to_string_lossy().to_string()).collect()).unwrap_or_default();
                     new.sort();
@@ -199,6 +218,10 @@ impl Job {
         let (tx, rx) = mpsc::channel();
         let (u, b) = (url.trim().to_string(), browser.map(str::to_string));
         std::thread::spawn(move || {
+            let Some(u) = web_link(&u) else {
+                let _ = tx.send(Status::Failed(NOT_A_LINK.into()));
+                return;
+            };
             let Some(tool) = find_ytdlp() else {
                 let _ = tx.send(Status::Failed("yt-dlp isn't installed (see the hint below)".into()));
                 return;
@@ -207,7 +230,7 @@ impl Job {
             if let Some(b) = b {
                 args.extend(["--cookies-from-browser".into(), b]);
             }
-            args.push(u);
+            args.extend(["--".into(), u]);
             let out = crate::os::command(tool).args(args).output();
             let status = match out {
                 Ok(o) if o.status.success() => {
@@ -241,8 +264,9 @@ impl Job {
 /// at most 1080p (a 4K stream costs a lot to decode).
 /// Blocking: call off the UI thread.
 pub fn live_url(page: &str) -> Result<String, String> {
+    let page = web_link(page).ok_or(NOT_A_LINK)?;
     let tool = find_ytdlp().ok_or("needs yt-dlp (free): brew install yt-dlp")?;
-    let out = crate::os::command(tool).args(["-f", "bv[height<=1080]/b[height<=1080]/bv/b", "--print", "%(url)s", page.trim()]).output().map_err(|_| "couldn't start yt-dlp".to_string())?;
+    let out = crate::os::command(tool).args(["-f", "bv[height<=1080]/b[height<=1080]/bv/b", "--print", "%(url)s", "--", page.as_str()]).output().map_err(|_| "couldn't start yt-dlp".to_string())?;
     if !out.status.success() {
         return Err(reason(&String::from_utf8_lossy(&out.stderr)));
     }
@@ -259,8 +283,19 @@ mod tests {
         assert!(a.windows(2).any(|w| w[0] == "--cookies-from-browser" && w[1] == "safari"));
         assert!(a.windows(2).any(|w| w[0] == "--ffmpeg-location" && w[1] == "/x/ffmpeg"));
         assert!(a.windows(2).any(|w| w[0] == "--print" && w[1] == "after_move:filepath"));
-        assert_eq!(a.last().unwrap(), "https://x.com/a/status/1");
+        assert_eq!(a[a.len() - 2..], ["--", "https://x.com/a/status/1"], "the link can't be read as an option");
         assert!(!download_args("u", "/d", None, None).iter().any(|x| x == "--cookies-from-browser"), "no sign-in unless asked");
+    }
+
+    #[test]
+    fn only_web_links_reach_the_tools() {
+        assert_eq!(web_link(" https://x.com/a "), Some("https://x.com/a".into()));
+        assert_eq!(web_link("x.com/a/status/1"), Some("https://x.com/a/status/1".into()));
+        for bad in ["--exec=open /Applications/Calculator.app", "-o/tmp/x", "file:///etc/passwd", "", "two words"] {
+            assert_eq!(web_link(bad), None, "{bad}");
+        }
+        assert!(live_url("--exec=touch /tmp/phosphor-should-not-exist").is_err());
+        assert!(!std::path::Path::new("/tmp/phosphor-should-not-exist").exists());
     }
 
     #[test]

@@ -77,7 +77,7 @@ impl DataFeed {
     /// A raw number as the modulator's value.
     pub fn unit(&self, raw: f64) -> f32 {
         let (lo, hi) = (self.min as f64, self.max as f64);
-        if (hi - lo).abs() < 1e-9 {
+        if (hi - lo).abs() < 1e-9 || !raw.is_finite() {
             return 0.0;
         }
         ((raw - lo) / (hi - lo)).clamp(0.0, 1.0) as f32
@@ -123,7 +123,8 @@ pub fn json_path(v: &serde_json::Value, path: &str) -> Option<f64> {
     }
     match cur {
         serde_json::Value::Number(n) => n.as_f64(),
-        serde_json::Value::String(s) => s.trim().parse().ok(),
+        // ("NaN" and "inf" parse as numbers: they aren't readings.)
+        serde_json::Value::String(s) => s.trim().parse().ok().filter(|n: &f64| n.is_finite()),
         serde_json::Value::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
         _ => None,
     }

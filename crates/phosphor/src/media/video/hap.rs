@@ -77,6 +77,11 @@ fn unpack(ty: u8, body: &[u8], out: &mut Vec<u8>) -> Result<(), String> {
 
 fn snappy(src: &[u8], out: &mut Vec<u8>) -> Result<(), String> {
     let len = snap::raw::decompress_len(src).map_err(|e| e.to_string())?;
+    // (The length is the file's own word for it. Snappy can't grow data much past 21 times, so a damaged frame
+    // claiming gigabytes is refused before any memory is asked for.)
+    if len > src.len().saturating_mul(32).saturating_add(64) {
+        return Err("damaged Hap frame (impossible size)".into());
+    }
     let start = out.len();
     out.resize(start + len, 0);
     snap::raw::Decoder::new().decompress(src, &mut out[start..]).map_err(|e| e.to_string())?;
@@ -132,6 +137,14 @@ mod tests {
 
     fn blocks() -> Vec<u8> {
         (0..4096u32).flat_map(|i| (i.wrapping_mul(2654435761) >> 7).to_le_bytes()).collect()
+    }
+
+    #[test]
+    fn a_damaged_frame_claiming_gigabytes_is_refused() {
+        // A snappy stream whose length header says 4 GB, with nothing behind it.
+        let mut out = Vec::new();
+        assert!(super::snappy(&[0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x00], &mut out).is_err());
+        assert!(out.capacity() < 1 << 20);
     }
 
     #[test]

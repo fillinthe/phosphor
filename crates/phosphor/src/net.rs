@@ -104,6 +104,24 @@ impl Drop for Seat {
     }
 }
 
+/// The sample rate a phone says its microphone sends, kept to rates a microphone has (a zero or a wild number
+/// would make the resampler ask for endless sound).
+fn audio_rate(text: &str) -> f32 {
+    text.trim().parse::<f32>().ok().filter(|r| r.is_finite()).map_or(48_000.0, |r| r.clamp(8_000.0, 192_000.0))
+}
+
+#[cfg(test)]
+mod audio_rate_tests {
+    #[test]
+    fn a_phone_cant_send_an_impossible_sample_rate() {
+        assert_eq!(super::audio_rate(" 44100 "), 44_100.0);
+        for bad in ["0", "-5", "1", "nan", "inf", "words", "1e30"] {
+            let r = super::audio_rate(bad);
+            assert!((8_000.0..=192_000.0).contains(&r), "{bad} gives {r}");
+        }
+    }
+}
+
 /// "iPhone · Safari" style label from a User-Agent header.
 fn device_label(request: &str) -> String {
     let ua = request.lines().find_map(|l| l.strip_prefix("User-Agent:").or_else(|| l.strip_prefix("user-agent:"))).unwrap_or("").trim();
@@ -810,7 +828,7 @@ mod native {
             match msg {
                 tungstenite::Message::Text(t) => {
                     if let Some(r) = t.as_str().strip_prefix("rate:") {
-                        rate = r.trim().parse().unwrap_or(48_000.0);
+                        rate = super::audio_rate(r);
                     }
                 }
                 tungstenite::Message::Binary(b) => {
@@ -819,7 +837,8 @@ mod native {
                         seat.set_level((samples.iter().map(|v| v * v).sum::<f32>() / samples.len() as f32).sqrt());
                     }
                     let ratio = rate / 48_000.0;
-                    let out_len = (samples.len() as f32 / ratio) as usize;
+                    // (Never more than the second of sound the ring keeps.)
+                    let out_len = ((samples.len() as f32 / ratio) as usize).min(48_000);
                     let mut q = ring.lock().unwrap();
                     for i in 0..out_len {
                         let pos = i as f32 * ratio;

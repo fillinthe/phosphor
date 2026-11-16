@@ -4,11 +4,19 @@
 //! `fract clamp mix`.
 
 pub fn eval(src: &str, var: &dyn Fn(&str) -> Option<f64>) -> Option<f64> {
+    // (Brackets nest as deep as the text is long: a limit on the length keeps a pasted monster off the stack.)
+    if src.len() > MAX_LEN {
+        return None;
+    }
     let mut p = Parser { s: src.as_bytes(), i: 0, var };
     let v = p.cmp()?;
     p.ws();
-    (p.i == p.s.len()).then_some(v)
+    // (Not a number, or infinite: no answer, rather than a value that poisons whatever uses it.)
+    (p.i == p.s.len() && v.is_finite()).then_some(v)
 }
+
+/// The longest formula read.
+const MAX_LEN: usize = 1024;
 
 struct Parser<'a> {
     s: &'a [u8],
@@ -133,7 +141,8 @@ impl Parser<'_> {
                     "sin" => a(0).map(|v| (v * std::f64::consts::TAU).sin() * 0.5 + 0.5),
                     "cos" => a(0).map(|v| (v * std::f64::consts::TAU).cos() * 0.5 + 0.5),
                     "fract" => a(0).map(|v| v.rem_euclid(1.0)),
-                    "clamp" => Some(a(0)?.clamp(a(1)?, a(2)?.max(a(1)?))),
+                    // (`f64::clamp` panics on a limit that isn't a number.)
+                    "clamp" => Some(a(0)?.max(a(1)?).min(a(2)?.max(a(1)?))),
                     "mix" => Some(a(0)? + (a(1)? - a(0)?) * a(2)?),
                     _ => None,
                 };
@@ -159,5 +168,11 @@ mod tests {
         assert_eq!(super::eval("max(1.0, -2 * 3)", &v), Some(1.0));
         assert_eq!(super::eval("$WIDTH > 1000", &v), Some(1.0));
         assert_eq!(super::eval("nonsense(", &v), None);
+        // A limit that isn't a number, an endless answer, a monster of brackets: no answer and no crash.
+        assert_eq!(super::eval("clamp(2, pow(-1, 0.5), 1)", &v), Some(1.0));
+        assert_eq!(super::eval("clamp(5, 0, 1)", &v), Some(1.0));
+        assert_eq!(super::eval("clamp(-5, 0, 1)", &v), Some(0.0));
+        assert_eq!(super::eval("pow(-1, 0.5)", &v), None);
+        assert_eq!(super::eval(&format!("{}1{}", "(".repeat(100_000), ")".repeat(100_000)), &v), None);
     }
 }

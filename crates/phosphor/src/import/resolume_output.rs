@@ -151,7 +151,7 @@ pub fn add_to(comp: &mut Composition, setup: &ScreenSetup, layers: &[u64]) -> (u
         let out = comp.output_mut(id).unwrap();
         out.name = s.name.clone();
         out.enabled = s.enabled;
-        (out.width, out.height) = (s.size.0 as u32, s.size.1 as u32);
+        (out.width, out.height) = (super::side(s.size.0 as f64), super::side(s.size.1 as f64));
         out.mapping.enabled = true;
         slices += list.len();
         masks += mask_list.len();

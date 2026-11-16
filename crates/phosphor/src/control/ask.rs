@@ -187,12 +187,6 @@ impl ControlHub {
         #[cfg(target_arch = "wasm32")]
         let _ = (to, address, v, name);
     }
-
-    /// An ask as if it came in over OSC (tests).
-    #[cfg(test)]
-    pub(crate) fn inject_ask(&self, address: &str, kind: AskKind) {
-        let _ = self.ask_tx.send(OscAsk { address: address.into(), from: "127.0.0.1".into(), kind });
-    }
 }
 
 /// Followed controls whose value changed since `seen` was last filled: what each follower gets now. A control seen

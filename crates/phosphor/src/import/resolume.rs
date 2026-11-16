@@ -108,8 +108,9 @@ pub fn parse(text: &str) -> Result<AvcFile, String> {
                 .children()
                 .filter(|c| c.has_tag_name("Clip"))
                 .filter_map(|c| {
-                    let layer = c.attribute("layerIndex")?.parse().ok()?;
-                    let column = c.attribute("columnIndex")?.parse().ok()?;
+                    // (A damaged file's wild numbers would ask for billions of layers or clip columns: such a clip is skipped.)
+                    let layer = c.attribute("layerIndex")?.parse().ok().filter(|l: &usize| *l < super::MAX_LAYERS)?;
+                    let column = c.attribute("columnIndex")?.parse().ok().filter(|c: &usize| *c < super::MAX_COLUMNS)?;
                     let path = c
                         .descendants()
                         .find(|n| n.has_tag_name("VideoFile"))
@@ -176,7 +177,7 @@ fn clip_name(c: &AvcClip) -> String {
 /// The chosen decks as a Phosphor project: decks side by side (one after another in the clip columns).
 /// Returns the project and how many clips were left out (generators, audio, Resolume-only sources).
 pub fn to_composition(file: &AvcFile, decks: &[usize]) -> (Composition, usize) {
-    let mut comp = Composition { width: file.width.max(16), height: file.height.max(16), ..Default::default() };
+    let mut comp = Composition { width: super::side(file.width as f64), height: super::side(file.height as f64), ..Default::default() };
     if let Some(bpm) = file.bpm {
         comp.bpm = bpm.clamp(20.0, 300.0);
     }

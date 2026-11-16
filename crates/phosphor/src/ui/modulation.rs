@@ -88,7 +88,8 @@ fn fitted_combo(ui: &egui::Ui, id: impl std::hash::Hash + std::fmt::Debug) -> eg
 /// The `~` button next to a control: opens the modulation editor; lit when a signal is attached.
 pub(crate) fn mod_button(ui: &mut egui::Ui, m: &mut Option<Modulation>) {
     let color = if m.is_some() { accent() } else { ui.visuals().weak_text_color() };
-    ui.menu_button(RichText::new(icon::WAVE_SINE).color(color), |ui| modulation_editor(ui, m))
+    // (A menu with sliders and switches in it: `field_menu`, or the first click inside would close it.)
+    crate::ui::field_menu(ui, RichText::new(icon::WAVE_SINE).color(color), |ui| modulation_editor(ui, m))
         .response
         .on_hover_text("Drive this with audio or an LFO");
 }

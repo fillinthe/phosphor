@@ -147,6 +147,23 @@ const HELD_MONITOR: u64 = u64::MAX - 2;
 /// Resource slots at or above this id belong to the engine (master chain, explorer previews).
 const RESERVED_IDS: u64 = u64::MAX - 100_000;
 
+/// Whether the GPU pictures kept under `id` still belong to something in the project: a live layer / group / comp /
+/// slice, one of the engine's own (reserved) ids, or a live layer's transition copies.
+fn keeps_resources(id: u64, live: &HashSet<u64>) -> bool {
+    id >= RESERVED_IDS || live.contains(&id) || [TRANSITION_IN, TRANSITION_OUT].iter().any(|bit| id & bit != 0 && live.contains(&(id ^ bit)))
+}
+
+#[cfg(test)]
+mod resource_tests {
+    #[test]
+    fn a_layers_transition_pictures_live_as_long_as_the_layer() {
+        let live: std::collections::HashSet<u64> = [7].into_iter().collect();
+        assert!(super::keeps_resources(7, &live) && super::keeps_resources(7 ^ super::TRANSITION_IN, &live) && super::keeps_resources(7 ^ super::TRANSITION_OUT, &live));
+        assert!(!super::keeps_resources(8, &live) && !super::keeps_resources(8 ^ super::TRANSITION_IN, &live));
+        assert!(super::keeps_resources(super::RESERVED_IDS + 3, &live));
+    }
+}
+
 /// Width of explorer preview tiles; height follows the canvas aspect.
 pub const PREVIEW_WIDTH: u32 = 192;
 /// Width of a `PreviewItem::Stage` picture: the picked effect / source shown big while it's set up.
@@ -682,10 +699,17 @@ impl Engine {
         }
 
         // Drop GPU resources for layers that no longer exist.
-        // (Slices with effects keep theirs too.)
-        let slice_fx = comp.outputs.iter().flat_map(|o| o.mapping.surfaces.iter()).filter(|s| s.effects.iter().any(|e| e.enabled)).map(|s| s.id);
+        // (Slices with effects keep theirs too, and slices cut by a mask of their own; so do a live layer's
+        // "through an effect" fades, kept under the layer's id with a transition bit set. Dropped here, their
+        // full-size pictures were made again every frame.)
+        let slice_fx = comp
+            .outputs
+            .iter()
+            .flat_map(|o| o.mapping.surfaces.iter().map(move |s| (o, s)))
+            .filter(|(o, s)| s.effects.iter().any(|e| e.enabled) || o.mapping.masks.iter().any(|m| m.enabled && m.attached == Some(s.id)))
+            .map(|(_, s)| s.id);
         let live: HashSet<u64> = comp.layers.iter().map(|l| l.id).chain(comp.groups.iter().map(|g| g.id)).chain(comp.comps.iter().map(|c| c.id)).chain(slice_fx).collect();
-        self.layers.retain(|id, _| *id >= RESERVED_IDS || live.contains(id));
+        self.layers.retain(|id, _| keeps_resources(*id, &live));
 
         // Deep color: mixing and effects at 16 bits a channel, still 0..1 like 8-bit (so every look stays the same,
         // just finer). On graphics cards that can't draw into those it stays 8-bit.
@@ -991,6 +1015,8 @@ impl Engine {
         self.finish_outputs(comp, &device, &mut passes);
         self.output_targets.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
         self.output_extra.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id && o.enabled));
+        // (A deleted output's background picture goes with it; a switched-off output keeps its own.)
+        self.output_backgrounds.retain(|id, _| comp.outputs.iter().any(|o| o.id == *id));
         // Preview windows showing one output (after its mapping).
         for (i, &(src, mw, mh)) in monitors.iter().enumerate() {
             if let Some(view) = self.output_targets.get(&src).and_then(|t| t.as_ref()).map(|t| t.view.clone()) {
