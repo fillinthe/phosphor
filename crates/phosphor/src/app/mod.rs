@@ -121,6 +121,8 @@ const KEY_HELP_ICONS: &str = "help_icons_chosen";
 const KEY_SLIDERS_JUMP: &str = "sliders_jump";
 /// Ask "are you sure?" before removing things ("0": the user ticked Don't ask again).
 const KEY_CONFIRM_REMOVES: &str = "confirm_removes";
+/// Clip launches are undo steps ("1": the user switched it on).
+const KEY_UNDO_PLAYBACK: &str = "undo_playback";
 /// The Donate button in the top bar ("0": the user hid it).
 const KEY_DONATE_SHOWN: &str = "donate_button";
 /// The interface language (`i18n::Lang::code`).

@@ -50,6 +50,7 @@ impl PhosphorApp {
         storage.set_string(KEY_HELP_ICONS, if crate::ui::help_icons() { "1" } else { "0" }.into());
         storage.set_string(KEY_SLIDERS_JUMP, if crate::ui::sliders_jump() { "1" } else { "0" }.into());
         storage.set_string(KEY_DONATE_SHOWN, if crate::support::donate_shown() { "1" } else { "0" }.into());
+        storage.set_string(KEY_UNDO_PLAYBACK, if crate::history::undo_playback() { "1" } else { "0" }.into());
         storage.set_string(KEY_CONFIRM_REMOVES, if crate::ui::confirm_removes() { "1" } else { "0" }.into());
         storage.set_string(KEY_LANGUAGE, crate::i18n::chosen().code().into());
         storage.set_string(KEY_TOOLTIPS, if crate::theme::tooltips_on() { "1" } else { "0" }.into());
