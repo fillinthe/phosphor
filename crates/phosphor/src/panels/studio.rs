@@ -112,6 +112,8 @@ fn tree(ui: &mut egui::Ui, st: &mut State) {
     ui.horizontal_wrapped(|ui| {
         venue_menu(ui, st);
         super::mapping::svg_menu(ui, st);
+        #[cfg(not(target_arch = "wasm32"))]
+        super::mapping::import_mask_button(ui, st);
         outputs_actions(ui, st);
     });
     ui.separator();
