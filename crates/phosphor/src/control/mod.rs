@@ -694,6 +694,10 @@ impl ControlHub {
     }
 
     fn handle(&mut self, comp: &mut Composition, msg: Incoming) {
+        // (A value that isn't a number, from OSC or a broken device: dropped before it reaches pickup, glides or a control.)
+        if !msg.value.is_finite() {
+            return;
+        }
         if self.listen_source {
             self.listen_source = false;
             self.heard = Some(msg.source.clone());
@@ -1239,14 +1243,27 @@ pub(crate) fn is_osc_pattern(address: &str) -> bool {
 /// `{one,two}` one of the words. Parts (between `/`) match one by one.
 pub(crate) fn osc_match(pattern: &str, address: &str) -> bool {
     let (p, a): (Vec<&str>, Vec<&str>) = (pattern.split('/').collect(), address.split('/').collect());
-    p.len() == a.len() && p.iter().zip(&a).all(|(p, a)| part_match(p.as_bytes(), a.as_bytes()))
+    // (A budget of steps per match: a pattern full of stars from the network must not tie the app up.)
+    let mut steps = MATCH_STEPS;
+    p.len() == a.len() && p.iter().zip(&a).all(|(p, a)| part_match(p.as_bytes(), a.as_bytes(), &mut steps))
 }
 
-fn part_match(p: &[u8], a: &[u8]) -> bool {
+/// How much work one address match may take before it counts as "no match".
+const MATCH_STEPS: u32 = 4096;
+
+fn part_match(p: &[u8], a: &[u8], steps: &mut u32) -> bool {
+    if *steps == 0 {
+        return false;
+    }
+    *steps -= 1;
     match p.first() {
         None => a.is_empty(),
-        Some(b'*') => (0..=a.len()).any(|k| part_match(&p[1..], &a[k..])),
-        Some(b'?') => !a.is_empty() && part_match(&p[1..], &a[1..]),
+        Some(b'*') => {
+            // (A run of stars means the same as one.)
+            let rest = &p[p.iter().position(|c| *c != b'*').unwrap_or(p.len())..];
+            rest.is_empty() || (0..=a.len()).any(|k| part_match(rest, &a[k..], steps))
+        }
+        Some(b'?') => !a.is_empty() && part_match(&p[1..], &a[1..], steps),
         Some(b'[') => {
             let Some(end) = p.iter().position(|c| *c == b']') else { return false };
             let Some(&c) = a.first() else { return false };
@@ -1263,13 +1280,13 @@ fn part_match(p: &[u8], a: &[u8]) -> bool {
                     i += 1;
                 }
             }
-            hit != negate && part_match(&p[end + 1..], &a[1..])
+            hit != negate && part_match(&p[end + 1..], &a[1..], steps)
         }
         Some(b'{') => {
             let Some(end) = p.iter().position(|c| *c == b'}') else { return false };
-            p[1..end].split(|c| *c == b',').any(|w| a.starts_with(w) && part_match(&p[end + 1..], &a[w.len()..]))
+            p[1..end].split(|c| *c == b',').any(|w| a.starts_with(w) && part_match(&p[end + 1..], &a[w.len()..], steps))
         }
-        Some(c) => a.first() == Some(c) && part_match(&p[1..], &a[1..]),
+        Some(c) => a.first() == Some(c) && part_match(&p[1..], &a[1..], steps),
     }
 }
 

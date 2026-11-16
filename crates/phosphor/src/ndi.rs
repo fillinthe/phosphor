@@ -334,7 +334,10 @@ impl Ndi {
                         }
                         continue;
                     }
-                    Err(_) => continue,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                    // (Nobody holds the other end: the output was let go, perhaps while this was still starting.
+                    // Looping on here would spin a core for the rest of the show.)
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                 };
                 let frame = VideoFrameV2 {
                     xres: f.width as c_int,

@@ -128,7 +128,7 @@ source, or a proxy on your server.
       drawing layer → a Phosphor layer (name, on / off, opacity, placed by its transform), PNGs copied beside the
       project; later the strokes as lines that draw themselves on (and for lasers).
 - [~] *(Stack is no longer in the default layout)* **Stack panel shifts around** (find what moves: hover, values changing width, rows wrapping).
-- [ ] **Code audit** (owner, 2026-11-15, after the show): correctness, leaks, threads and locks, dead code, duplication,
+- [~] *(report written 2026-11-16: 61 findings in docs/NOTES.md; fixes under way)* **Code audit** (owner, 2026-11-15, after the show): correctness, leaks, threads and locks, dead code, duplication,
       the design-system rules, and the graphify map's loosely knit areas below. Report first, then fix in small steps.
 - [ ] **OSC and linking like VDMX / Resolume** (owner, 2026-11-15): one control driving many things with their own
       ranges, user-built control windows, a proper LFO window (the LFOs & Modulators panel exists; make it the

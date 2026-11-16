@@ -785,7 +785,7 @@ impl Graph for View<'_> {
             ui.close();
         }
         let mut saved = false;
-        ui.menu_button(label(icon::FLOPPY_DISK, "Save as a box…"), |ui| {
+        crate::ui::field_menu(ui, label(icon::FLOPPY_DISK, "Save as a box…"), |ui| {
             if let Some(name) = crate::ui::new_name_menu(ui, ("save_box", id), "Name this box", "Save") {
                 self.store();
                 let path = self.path.clone();

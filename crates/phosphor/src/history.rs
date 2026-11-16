@@ -22,6 +22,16 @@ pub struct History {
 fn settle_volatile(from: &Composition, into: &mut Composition) {
     into.bpm = from.bpm;
     keep_lasers_live(from, into);
+    // A modulator's knob position, its data reading and its looper take move by themselves (sound bands, tracking,
+    // live data, a recording looper): with those counted as edits, Undo filled with a copy of the project twice a
+    // second while music played and the real edits fell off the end.
+    for m in &mut into.modulators {
+        if let Some(src) = from.modulators.iter().find(|s| s.id == m.id) {
+            m.value = src.value;
+            m.live.clone_from(&src.live);
+            m.looper.clone_from(&src.looper);
+        }
+    }
     for l in &mut into.layers {
         if let Some(src) = from.layers.iter().find(|s| s.id == l.id) {
             l.transition = src.transition.clone();
@@ -118,6 +128,28 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_modulator_moving_by_itself_is_not_an_edit() {
+        let mut h = History::default();
+        let mut comp = Composition::default();
+        comp.set_hand("Bass", 0.0);
+        h.track(&comp, 0.0, false);
+        // A sound band (or tracking, or live data) moves the knob every frame for a minute.
+        for k in 1..600 {
+            comp.modulators[0].value = (k as f32 * 0.37).fract();
+            h.track(&comp, k as f64 * 0.1, false);
+        }
+        assert!(!h.can_undo(&comp), "nothing was edited");
+        // A real edit in the middle of that is still one step, and Undo brings it back.
+        comp.master_fade = 0.5;
+        for k in 600..640 {
+            comp.modulators[0].value = (k as f32 * 0.37).fract();
+            h.track(&comp, k as f64 * 0.1, false);
+        }
+        assert_eq!(h.undo.len(), 1);
+        assert_eq!(h.undo(&comp).unwrap().master_fade, 1.0);
+    }
 
     #[test]
     fn opening_a_project_leaves_nothing_to_undo() {

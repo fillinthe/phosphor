@@ -125,7 +125,7 @@ pub fn parse(bytes: &[u8], name: &str) -> Result<MadFile, String> {
         for o in outs.list() {
             let centre = o.get("position").map(Qv::nums).filter(|n| n.len() == 2).map_or([0.0, 0.0], |n| [n[0], n[1]]);
             let size = o.get("stageSize").map(Qv::nums).filter(|n| n.len() == 2).map_or([2.0, 2.0], |n| [n[0], n[1]]);
-            let pixels = o.get("geometry").map(Qv::nums).filter(|n| n.len() == 4).map(|r| ((r[2] - r[0] + 1.0).max(16.0) as u32, (r[3] - r[1] + 1.0).max(16.0) as u32));
+            let pixels = o.get("geometry").map(Qv::nums).filter(|n| n.len() == 4).map(|r| (super::side(r[2] - r[0] + 1.0), super::side(r[3] - r[1] + 1.0)));
             file.outputs.push(MadOutput { name: text(o, "name"), centre, size, pixels });
         }
     }

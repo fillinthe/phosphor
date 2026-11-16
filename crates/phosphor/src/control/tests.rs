@@ -674,6 +674,27 @@ fn osc_wildcards_match_like_the_spec() {
     assert!(m("/btn/[1-4]", "/btn/2") && !m("/btn/[1-4]", "/btn/5") && m("/btn/[!1-4]", "/btn/5"));
     assert!(m("/{deck,mixer}/x", "/mixer/x") && !m("/{deck,mixer}/x", "/fx/x"));
     assert!(m("/a*z", "/abcz") && m("/a*z", "/az") && !m("/a*z", "/abc"));
+    assert!(m("/a**z", "/abcz") && m("/*", "/anything") && m("/*a*b*", "/xxaxxbxx"));
+    // A pattern made to take forever gives up quickly (it counts as no match).
+    let started = std::time::Instant::now();
+    assert!(!m(&format!("/{}z", "*a".repeat(24)), &format!("/{}", "a".repeat(60))));
+    assert!(started.elapsed() < std::time::Duration::from_millis(50), "{:?}", started.elapsed());
+}
+
+/// A value that isn't a number never lands in a control.
+#[test]
+fn not_a_number_is_dropped() {
+    let mut hub = ControlHub::with_settings(ControlSettings { osc_port: 18_796, feedback: false, soft_takeover: false, ..Default::default() });
+    let mut comp = Composition::starter();
+    comp.master_fade = 0.6;
+    comp.control_maps.push(phosphor_engine::ControlMap::new(ControlSource::Osc { address: "/m".into() }, ControlTarget::MasterFade));
+    for v in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        hub.inject(&mut comp, Incoming { source: ControlSource::Osc { address: "/m".into() }, value: v });
+        hub.apply(&mut comp, 0.0);
+        let mut out = Vec::new();
+        crate::control::set_target(&mut comp, &ControlTarget::MasterFade, v, &mut out);
+        assert_eq!(comp.master_fade, 0.6, "{v}");
+    }
 }
 
 /// A mapping with a wildcard address catches matching messages; a second OSC port also listens.
@@ -1120,7 +1141,7 @@ fn osc_asks_query_nudge_and_pick() {
     };
     let text = |s: &str| rosc::OscType::String(s.into());
     // Everything sent lands within a few frames (UDP on this machine); `done` says when.
-    let mut settle = |hub: &mut ControlHub, comp: &mut Composition, done: &dyn Fn(&Composition) -> bool| {
+    let settle = |hub: &mut ControlHub, comp: &mut Composition, done: &dyn Fn(&Composition) -> bool| {
         for _ in 0..100 {
             hub.poll(comp);
             hub.apply(comp, 0.0);

@@ -719,6 +719,10 @@ impl Resampler {
     fn run(&mut self, f: &ff::frame::Audio) -> Option<Vec<f32>> {
         let stereo = to_stereo(f)?;
         let n = stereo.len() / 2;
+        // (A frame with no samples in it, from a damaged file: nothing to convert.)
+        if n == 0 {
+            return Some(Vec::new());
+        }
         let src_rate = self.src.1.max(1) as f64;
         let step = src_rate / self.dst_rate.max(1) as f64;
         if (step - 1.0).abs() < 1e-6 {
