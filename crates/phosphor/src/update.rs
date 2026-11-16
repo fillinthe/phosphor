@@ -82,11 +82,13 @@ pub struct Updater {
     pub in_show: bool,
     /// The update window is owed once the show is over.
     window_later: bool,
+    /// `in_show` for the install thread: a download that began before the show waits here before it swaps the app.
+    show: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for Updater {
     fn default() -> Self {
-        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 2.0, check_rx: None, install_rx: None, progress: Default::default(), test: false, auto: true, in_show: false, window_later: false }
+        Self { status: Status::Idle, window: false, detached: false, skipped: String::new(), next_check: 2.0, check_rx: None, install_rx: None, progress: Default::default(), test: false, auto: true, in_show: false, window_later: false, show: Default::default() }
     }
 }
 
@@ -200,6 +202,7 @@ impl Updater {
 
     /// Call every frame: the daily check, and results coming back from the threads.
     pub fn tick(&mut self, ctx: &egui::Context, now: f64) {
+        self.show.store(self.in_show, std::sync::atomic::Ordering::Relaxed);
         if now >= self.next_check && !cfg!(target_arch = "wasm32") {
             self.next_check = now + CHECK_EVERY;
             if std::env::var("PHOSPHOR_NO_UPDATE_CHECK").is_err() && matches!(self.status, Status::Idle | Status::UpToDate | Status::Failed(_)) {
@@ -289,11 +292,13 @@ impl Updater {
         let (tx, rx) = channel();
         self.install_rx = Some(rx);
         let progress = self.progress.clone();
+        // (The bench's update test has nothing to wait for.)
+        let show = if self.test { Default::default() } else { self.show.clone() };
         *progress.lock().unwrap() = "Downloading…".into();
         std::thread::Builder::new()
             .name("phosphor-update".into())
             .spawn(move || {
-                let _ = tx.send(download_and_install(&zip, &progress));
+                let _ = tx.send(download_and_install(&zip, &progress, &show));
             })
             .ok();
     }
@@ -352,13 +357,16 @@ fn test_build_in(plist: &str) -> Option<String> {
 
 /// curl → unzip → swap the bundle. Returns (path, installed?).
 #[cfg(not(target_arch = "wasm32"))]
-fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<(PathBuf, bool), String> {
+fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>, show: &std::sync::atomic::AtomicBool) -> Result<(PathBuf, bool), String> {
     let work = std::env::temp_dir().join(format!("phosphor-update-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let zip = work.join("Phosphor.zip");
     // curl ships with macOS and with Windows 10 and later.
-    let out = crate::os::command("curl").args(["-L", "-f", "-s", "-S", "-o"]).arg(&zip).arg(zip_url).output().map_err(|e| format!("curl: {e}"))?;
+    // Secure addresses only, redirects included (a test server set by PHOSPHOR_UPDATE_URL may be plain http); `--`:
+    // the address is never read as an option.
+    let protocols = if std::env::var("PHOSPHOR_UPDATE_URL").is_ok() { "=http,https" } else { "=https" };
+    let out = crate::os::command("curl").args(["-L", "-f", "-s", "-S", "--proto", protocols, "--proto-redir", protocols, "-o"]).arg(&zip).arg("--").arg(zip_url).output().map_err(|e| format!("curl: {e}"))?;
     if !out.status.success() {
         return Err(format!("Download failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
@@ -374,6 +382,13 @@ fn download_and_install(zip_url: &str, progress: &Arc<Mutex<String>>) -> Result<
     .map_err(|e| format!("unpack: {e}"))?;
     if !out.status.success() {
         return Err(format!("Unpack failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    // A show that began while this was downloading: the app is not swapped under it. It waits for the outputs to close.
+    if show.load(std::sync::atomic::Ordering::Relaxed) {
+        *progress.lock().unwrap() = "Waiting for the show to end…".into();
+        while show.load(std::sync::atomic::Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
     }
     *progress.lock().unwrap() = "Installing…".into();
     let installed = if cfg!(target_os = "macos") {
@@ -394,6 +409,7 @@ fn install_mac(unpacked: &std::path::Path) -> Result<(PathBuf, bool), String> {
     let Some(dest) = current_bundle() else {
         return Ok((new_app, false));
     };
+    same_signer(&dest, &new_app)?;
     let old = dest.with_extension("old.app");
     let _ = std::fs::remove_dir_all(&old);
     std::fs::rename(&dest, &old).map_err(|e| format!("Couldn't replace {}: {e}", dest.display()))?;
@@ -406,6 +422,32 @@ fn install_mac(unpacked: &std::path::Path) -> Result<(PathBuf, bool), String> {
     let _ = crate::os::command("xattr").args(["-dr", "com.apple.quarantine"]).arg(&dest).output();
     let _ = std::fs::remove_dir_all(&old);
     Ok((dest, true))
+}
+
+/// Mac: the download must be signed, unbroken, and from the same developer team as the app that's running, or it is
+/// not installed (the quarantine mark is taken off below, so nothing else would check it). An app with no team
+/// (a build made on this Mac without a certificate) has nothing to compare and installs as before.
+fn same_signer(running: &std::path::Path, new_app: &std::path::Path) -> Result<(), String> {
+    let Some(ours) = signing_team(running) else { return Ok(()) };
+    let checked = crate::os::command("codesign").args(["--verify", "--deep", "--strict"]).arg(new_app).output().map_err(|e| format!("codesign: {e}"))?;
+    if !checked.status.success() {
+        return Err("The download's signature is broken: not installed".into());
+    }
+    match signing_team(new_app) {
+        Some(theirs) if theirs == ours => Ok(()),
+        _ => Err("The download isn't signed by Phosphor's developer: not installed".into()),
+    }
+}
+
+/// The developer team an app is signed by (None: unsigned, or signed without a certificate).
+fn signing_team(app: &std::path::Path) -> Option<String> {
+    let out = crate::os::command("codesign").args(["-dv"]).arg(app).output().ok()?;
+    team_in(&String::from_utf8_lossy(&out.stderr))
+}
+
+fn team_in(codesign_words: &str) -> Option<String> {
+    let team = codesign_words.lines().find_map(|l| l.strip_prefix("TeamIdentifier="))?.trim();
+    (!team.is_empty() && team != "not set").then(|| team.to_string())
 }
 
 /// Windows (and other folder installs): copy the new files over the folder Phosphor.exe runs from. Files in use
@@ -642,6 +684,38 @@ mod tests {
     fn test_builds_are_marked() {
         assert_eq!(test_build_in("<dict>\n  <key>PhosphorTestBuild</key><string>next</string>\n</dict>").as_deref(), Some("next"));
         assert_eq!(test_build_in("<dict>\n  <key>CFBundleName</key><string>Phosphor</string>\n</dict>"), None);
+    }
+
+    #[test]
+    fn the_signing_team_is_read_from_codesign() {
+        assert_eq!(team_in("Identifier=app.x\nTeamIdentifier=ABCDE12345\nSealed Resources version=2").as_deref(), Some("ABCDE12345"));
+        assert_eq!(team_in("Identifier=app.x\nTeamIdentifier=not set\n"), None);
+        assert_eq!(team_in("code object is not signed at all"), None);
+    }
+
+    /// The app this Mac runs is signed; a copy with one byte changed, or signed by nobody, must be refused.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_download_signed_by_someone_else_or_broken_is_refused() {
+        let installed = std::path::Path::new("/Applications/Phosphor.app");
+        if signing_team(installed).is_none() {
+            return;
+        }
+        let root = std::env::temp_dir().join(format!("phosphor-signer-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let copy = root.join("Phosphor.app");
+        assert!(crate::os::command("ditto").arg(installed).arg(&copy).status().unwrap().success());
+        assert_eq!(same_signer(installed, &copy), Ok(()), "an untouched copy passes");
+        // One file inside changed: the seal is broken.
+        std::fs::write(copy.join("Contents/Info.plist"), "changed").unwrap();
+        assert!(same_signer(installed, &copy).is_err(), "a changed app is refused");
+        // A fresh copy signed again, by nobody.
+        let _ = std::fs::remove_dir_all(&copy);
+        assert!(crate::os::command("ditto").arg(installed).arg(&copy).status().unwrap().success());
+        assert!(crate::os::command("codesign").args(["--force", "--deep", "-s", "-"]).arg(&copy).output().unwrap().status.success());
+        assert!(same_signer(installed, &copy).is_err(), "another signer is refused");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
