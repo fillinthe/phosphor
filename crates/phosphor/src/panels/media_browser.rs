@@ -411,6 +411,7 @@ fn browse(ui: &mut egui::Ui, st: &mut State, acts: &mut Vec<MediaAct>) {
             .response
             .on_hover_text("Make a layer of the files shown, shuffle them, or fill the selected layer");
         });
+        super::media::unskip_button(ui, st, &shown, acts);
     });
 
     // Where a click plays (the selected layer, else a new one) and every layer for "Play on".

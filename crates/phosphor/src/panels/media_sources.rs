@@ -325,14 +325,34 @@ pub(crate) fn source_list(ui: &mut egui::Ui, st: &State, entries: &[Entry]) -> O
         .auto_shrink(false)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 1.0;
-            for e in entries {
+            // Headings fold: a click on THIS MAC / ONLINE / COLLECTIONS hides its rows (kept between runs). A folded
+            // part still shows the row that's picked, so you can see where you are.
+            let folded_id = egui::Id::new("phosphor_media_sources_folded");
+            let mut folded: Vec<String> = ui.ctx().data_mut(|d| d.get_persisted(folded_id)).unwrap_or_default();
+            let mut hide = false;
+            for (k, e) in entries.iter().enumerate() {
                 if let Some(h) = e.heading {
                     ui.add_space(8.0);
-                    ui.label(
-                        RichText::new(h)
-                            .small()
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    hide = folded.iter().any(|f| f == h);
+                    let rows = entries[k..].iter().enumerate().take_while(|(j, x)| *j == 0 || x.heading.is_none()).count();
+                    let caret = if hide { icon::CARET_RIGHT } else { icon::CARET_DOWN };
+                    let words = if hide { format!("{caret} {h}  ({rows})") } else { format!("{caret} {h}") };
+                    let r = ui
+                        .add(egui::Label::new(RichText::new(words).small().color(ui.visuals().weak_text_color())).selectable(false).sense(egui::Sense::click()))
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(if hide { "Show these again" } else { "Fold these away to save room" });
+                    if r.clicked() {
+                        if hide {
+                            folded.retain(|f| f != h);
+                        } else {
+                            folded.push(h.to_string());
+                        }
+                        hide = !hide;
+                        ui.ctx().data_mut(|d| d.insert_persisted(folded_id, folded.clone()));
+                    }
+                }
+                if hide && !e.picked(&st.media_view) {
+                    continue;
                 }
                 let r =
                     crate::ui::list_row(ui, e.picked(&st.media_view), &e.label, &e.right, e.badge);

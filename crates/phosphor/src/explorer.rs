@@ -51,6 +51,9 @@ pub struct ExplorerState {
     pub picked_values: Vec<f32>,
     pub picked_mods: Vec<ParamMod>,
     pub picked_mix: f32,
+    /// The picture the effect tiles are shown on: None = the selected layer (it follows you), MASTER = the whole mix,
+    /// else one layer whichever is selected.
+    pub preview_on: Option<u64>,
 }
 
 impl ExplorerState {
@@ -351,6 +354,28 @@ pub fn explorer(ui: &mut egui::Ui, st: &mut State) {
             menu.response.on_hover_text(packs);
         }
         ui.separator();
+        // Whose picture the effect tiles are drawn on (sources make their own picture).
+        if !st.explorer.sources {
+            // (A layer that's gone: back to following the selection.)
+            if st.explorer.preview_on.is_some_and(|id| id != MASTER_ID && st.comp.layer(id).is_none()) {
+                st.explorer.preview_on = None;
+            }
+            let now = match st.explorer.preview_on {
+                None => "On: selected layer".to_string(),
+                Some(MASTER_ID) => "On: the whole mix".to_string(),
+                Some(id) => format!("On: {}", crate::ui::short_name(&crate::ui::layer_name(&st.comp.layers, id), 16)),
+            };
+            crate::ui::dropdown(ui, "explorer_preview_on", 150.0)
+                .selected_text(now)
+                .show_ui(ui, |ui| {
+                    crate::ui::pick_value(ui, &mut st.explorer.preview_on, None, "The selected layer (follows you)");
+                    crate::ui::pick_value(ui, &mut st.explorer.preview_on, Some(MASTER_ID), "The whole mix");
+                    ui.separator();
+                    crate::ui::layer_items(ui, &st.comp.layers, &mut st.explorer.preview_on, Some);
+                })
+                .response
+                .on_hover_text("Which picture the effect tiles are shown on: the layer you have selected, the whole mix, or one layer that stays put while you click around");
+        }
         ui.label(RichText::new("Previews").small().color(Color32::GRAY));
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Hover, "Hover").on_hover_text("Animate the tile under the mouse and the picked one; the others keep one still (lightest)");
         crate::ui::pick_value(ui, &mut st.explorer.preview_mode, PreviewMode::Live, "Live").on_hover_text("Animate every visible tile");
