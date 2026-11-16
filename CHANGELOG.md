@@ -4,6 +4,55 @@ What changed in each Phosphor release, newest first. Downloads are on the
 [releases page](https://github.com/fillinthe/phosphor/releases); Phosphor also finds and installs updates itself
 (Help › Check for Updates…).
 
+## 0.5.8 (2026-11-16)
+
+**Undo**
+- Undo works again. A project left playing made an undo step about twice a second by itself, so Undo stepped
+  through copies that looked the same and your real edits fell off the end.
+- Launching a clip or changing what's on a layer is not an undo step: Undo leaves the show playing and steps back
+  through settings, effects and values. (Brightness menu › Undo includes clip launches, if you want them in.)
+- Undo never moves the view: the open comp, what's folded and the screen an output fills stay as they are.
+- Designer: Undo and Redo are the app's own. A deleted box comes back whole, and a changed setting is a step.
+- The first Cmd-Z no longer does nothing.
+
+**Media**
+- Skip (don't play): a skipped file stays in Media, dimmed, and can't go live from there. A click shows what it
+  is. Unskip beside Random brings back every skipped file on show.
+- Files from a watched folder offer Skip instead of Remove (the folder brought them straight back).
+- Taking away a watched folder or a collection asks first, with Don't ask again.
+- The source list's headings (This Mac, Online, Collections) fold away with a click.
+- Holding the playhead at the very end of a movie that's playing shows its last frame the whole time (the first
+  frame flashed up).
+
+**Looks and feel**
+- Every command that removes something is red.
+- Messages (Saved, Undone…) are a small note above the status line. They no longer shift the window.
+- A layer's long file name is cut with an ellipsis, so its buttons stay on the card.
+- Each slider can have its own click way (Jump or Drag); one button uses it for every slider.
+- The Donate button can be put away: right-click it › Hide this button.
+
+**Mixer, Designer, Effects**
+- Mixer strips have a right-click menu: Duplicate, Move, Clear source, Delete.
+- Designer: a right-click anywhere on a box opens that box's menu, with Delete.
+- Effects: choose the picture the tiles are shown on: the selected layer, the whole mix, or one layer that stays put.
+
+**Mapping Studio**
+- Snap follows the mouse exactly (it stuck, lagged and jumped). A dragged slice or mask moves as one. Hold Alt
+  to place freely.
+- Masks from an EPS drawing as well as an SVG: Import mask… in the toolbar, and in every Add mask menu.
+
+**Safer**
+- Updates are only installed when they are signed by Phosphor's developer and unbroken (Mac), and wait for a show
+  to end.
+- Messages from the network can no longer freeze the app or stick a broken value in a control, and a project
+  file from someone else can no longer start another program.
+- Damaged files from other apps (Resolume, MadMapper) and damaged movies are refused instead of crashing.
+
+**Fixed**
+- Effect-style launch fades and masked slices no longer rebuild their pictures every frame.
+- Closing a clip on a pulled drive or a stalled share no longer freezes the app.
+- Control Surface "Moves by itself" and Designer "Save as a box…" stay open while you use them.
+
 ## 0.5.7 (2026-11-15)
 
 **OSC**
