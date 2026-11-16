@@ -40,6 +40,30 @@ pub struct Facts {
     pub canvas: (u32, u32),
 }
 
+/// A movie's frame counts over the last few looks (one a second): how many were decoded and how many came too
+/// late in that time, so the advice is about how it's playing now.
+#[derive(Clone, Debug, Default)]
+pub struct Recent(std::collections::VecDeque<(u64, u64)>);
+
+impl Recent {
+    /// How many looks are kept (seconds, at one a second).
+    const LOOKS: usize = 8;
+
+    /// Takes the counts since the movie started; gives (decoded, skipped) over the looks kept.
+    pub fn add(&mut self, decoded: u64, skipped: u64) -> (u64, u64) {
+        // (Smaller than before: another movie on this layer. Start over.)
+        if self.0.back().is_some_and(|(d, s)| decoded < *d || skipped < *s) {
+            self.0.clear();
+        }
+        self.0.push_back((decoded, skipped));
+        while self.0.len() > Self::LOOKS {
+            self.0.pop_front();
+        }
+        let (d0, s0) = self.0.front().copied().unwrap_or((decoded, skipped));
+        (decoded - d0, skipped - s0)
+    }
+}
+
 /// One thing worth knowing about a movie.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Advice {
@@ -91,6 +115,7 @@ pub fn advise(f: &Facts) -> Vec<Advice> {
     if f.decoded >= 90 && f.skipped as f64 > f.decoded as f64 * 0.04 {
         let share = (f.skipped as f64 / f.decoded as f64 * 100.0).round();
         let what = format!("It's dropping frames: {} of the last {} came too late to show ({share:.0}%), so it stutters.", f.skipped, f.decoded);
+        // (Counted over the last few seconds: see `Recent`.)
         let try_this = match f.place {
             Place::Network => format!("It plays from a network share, which is the likeliest cause: {LOCAL}. If it still stutters, {convert}"),
             _ if f.hardware == Some(false) || f.cpu.is_some_and(|c| c >= 0.5) => convert.clone(),
@@ -256,6 +281,22 @@ mod tests {
         // A few late frames at the start are not a stutter.
         assert!(advise(&Facts { skipped: 3, ..movie() }).iter().all(|x| !x.serious));
         assert!(advise(&Facts { decoded: 20, skipped: 10, ..movie() }).iter().all(|x| !x.serious), "too soon to say");
+    }
+
+    /// The counts are over the last few seconds: a bad first second stops counting against a movie that then plays
+    /// well, and a new movie on the layer starts from nothing.
+    #[test]
+    fn frames_are_counted_over_the_last_seconds() {
+        let mut r = Recent::default();
+        assert_eq!(r.add(30, 25), (0, 0), "the first look has nothing to compare with");
+        assert_eq!(r.add(60, 26), (30, 1));
+        let mut last = (0, 0);
+        for k in 3..20u64 {
+            last = r.add(30 * k, 26);
+        }
+        assert_eq!(last, (210, 0), "eight looks: seven seconds of frames, none late any more");
+        assert!(advise(&Facts { decoded: last.0, skipped: last.1, ..movie() }).iter().all(|a| !a.serious));
+        assert_eq!(r.add(10, 0), (0, 0), "another movie: start over");
     }
 
     #[test]

@@ -143,6 +143,9 @@ impl PhosphorApp {
             {
                 use crate::media::health;
                 let canvas = (self.state.comp.width, self.state.comp.height);
+                let recent_id = egui::Id::new("phosphor_play_recent");
+                let mut recent: std::collections::HashMap<u64, health::Recent> = ctx.data(|d| d.get_temp(recent_id)).unwrap_or_default();
+                recent.retain(|id, _| self.state.comp.layers.iter().any(|l| l.id == *id));
                 let advice: std::collections::HashMap<u64, (String, std::sync::Arc<Vec<health::Advice>>)> = self
                     .state
                     .comp
@@ -152,9 +155,14 @@ impl PhosphorApp {
                         let path = phosphor_engine::file_of(&l.source)?;
                         let mut f = self.state.media.health_facts(l.id)?;
                         (f.cpu, f.place, f.canvas) = (shares.get(&l.id).copied(), health::place_of(path), canvas);
+                        // Frames over the last few seconds, not since the movie started: a rough first second
+                        // left the warning up for minutes. And "slow backwards" only while it plays that way.
+                        (f.decoded, f.skipped) = recent.entry(l.id).or_default().add(f.decoded, f.skipped);
+                        f.reverse_slow &= l.direction != phosphor_engine::PlayDirection::Forward;
                         Some((l.id, (path.to_string(), std::sync::Arc::new(health::advise(&f)))))
                     })
                     .collect();
+                ctx.data_mut(|d| d.insert_temp(recent_id, recent));
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new(crate::panels::PLAY_HEALTH), std::sync::Arc::new(advice)));
             }
             ctx.data_mut(|d| d.insert_temp(cpu_id, (now, std::sync::Arc::new(shares))));
