@@ -434,6 +434,7 @@ pub(crate) fn layer_card(
                     // Its place is always kept (empty until measured, and for pictures that aren't movies): the
                     // chip appearing a second after a movie loaded pushed the A / B buttons along (review 2026-11-15).
                     super::cpu_chip(ui, super::cpu_share(ui.ctx(), layer.id));
+                    super::health_chip(ui, layer.id);
                     // Its crossfader side, right here (it was only in the Mixer; owner, 2026-11-14).
                     for g in [phosphor_engine::CrossGroup::A, phosphor_engine::CrossGroup::B] {
                         let on = layer.group == g;

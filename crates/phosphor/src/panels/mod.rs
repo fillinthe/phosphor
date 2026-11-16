@@ -387,6 +387,39 @@ pub(crate) fn cpu_color(share: f32) -> Color32 {
     }
 }
 
+/// What to know about each playing movie, by layer: its file and the advice (`media::health`), set once a second.
+pub(crate) const PLAY_HEALTH: &str = "phosphor_play_health";
+/// A file whose File info was asked for from a card (taken in by the File info window).
+pub(crate) const FILE_INFO_REQUEST: &str = "phosphor_file_info_request";
+
+#[cfg(not(target_arch = "wasm32"))]
+type PlayHealth = std::sync::Arc<std::collections::HashMap<u64, (String, std::sync::Arc<Vec<crate::media::health::Advice>>)>>;
+
+/// The advice for the movie on `layer`, with its file.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn play_health(ctx: &egui::Context, layer: u64) -> Option<(String, std::sync::Arc<Vec<crate::media::health::Advice>>)> {
+    ctx.data(|d| d.get_temp::<PlayHealth>(egui::Id::new(PLAY_HEALTH))).and_then(|m| m.get(&layer).cloned())
+}
+
+/// A warning sign beside a layer's CPU figure while its movie stutters or is likely to (dropping frames, a heavy
+/// decode, a network share): hover for what's wrong and what to do, click for File info, where it's all listed.
+/// Its place is always kept, so the row never shifts when the sign comes and goes.
+pub(crate) fn health_chip(ui: &mut egui::Ui, layer: u64) {
+    let slot = egui::vec2(18.0, crate::ui::CONTROL_H);
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some((path, advice)) = play_health(ui.ctx(), layer).filter(|(_, a)| a.iter().any(|x| x.serious)) {
+        let serious: Vec<crate::media::health::Advice> = advice.iter().filter(|x| x.serious).cloned().collect();
+        let sign = egui::Label::new(RichText::new(icon::WARNING).color(WARN)).selectable(false).sense(egui::Sense::click());
+        let r = ui.add_sized(slot, sign).on_hover_text(format!("{}\n\nClick for the whole list (File info)", crate::media::health::as_text(&serious)));
+        if r.clicked() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(FILE_INFO_REQUEST), path));
+        }
+        return;
+    }
+    let _ = layer;
+    ui.add_space(slot.x);
+}
+
 /// A layer's CPU: "CPU 34%" in its color, one width whatever the number (the row never shifts), the advice on hover.
 pub(crate) fn cpu_chip(ui: &mut egui::Ui, share: Option<f32>) {
     let Some(share) = share else {

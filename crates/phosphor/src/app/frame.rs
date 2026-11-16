@@ -137,6 +137,26 @@ impl PhosphorApp {
         let due = ctx.data(|d| d.get_temp::<(f64, std::sync::Arc<std::collections::HashMap<u64, f32>>)>(cpu_id)).is_none_or(|(t, _)| now - t > 1.0);
         if due {
             let shares = self.state.media.cpu_shares();
+            // And what to know about each movie that's playing (the card's warning sign, File info), from the
+            // same once-a-second look: dropped frames, a heavy decode, a file on a network share.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                use crate::media::health;
+                let canvas = (self.state.comp.width, self.state.comp.height);
+                let advice: std::collections::HashMap<u64, (String, std::sync::Arc<Vec<health::Advice>>)> = self
+                    .state
+                    .comp
+                    .layers
+                    .iter()
+                    .filter_map(|l| {
+                        let path = phosphor_engine::file_of(&l.source)?;
+                        let mut f = self.state.media.health_facts(l.id)?;
+                        (f.cpu, f.place, f.canvas) = (shares.get(&l.id).copied(), health::place_of(path), canvas);
+                        Some((l.id, (path.to_string(), std::sync::Arc::new(health::advise(&f)))))
+                    })
+                    .collect();
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(crate::panels::PLAY_HEALTH), std::sync::Arc::new(advice)));
+            }
             ctx.data_mut(|d| d.insert_temp(cpu_id, (now, std::sync::Arc::new(shares))));
         }
         // Layer names for settings that pick a layer (mask layers), rebuilt only when they change.
