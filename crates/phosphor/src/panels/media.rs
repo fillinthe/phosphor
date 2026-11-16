@@ -525,7 +525,7 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
             MediaAct::Skip(i) => {
                 if let Some(m) = st.comp.media_bin.get_mut(i) {
                     m.skip = !m.skip;
-                    st.notice = Some(if m.skip { format!("{} is skipped: Random, Shuffle and autopilot pass it by", m.name) } else { format!("{} plays again", m.name) });
+                    st.notice = Some(if m.skip { format!("{} is skipped: it can't go live from Media, and Random, Shuffle and autopilot pass it by", m.name) } else { format!("{} plays again", m.name) });
                 }
             }
             MediaAct::ForgetEffects(i) => {
@@ -684,7 +684,10 @@ pub(crate) fn media_tile(
     if !ui.is_rect_visible(rect) {
         return;
     }
-    resp.dnd_set_drag_payload(MediaDrag(i));
+    // A skipped file can't go live from here by a slip of the hand: no drag, and a click only shows what it is.
+    if !item.skip {
+        resp.dnd_set_drag_payload(MediaDrag(i));
+    }
     if let Some(name) = crate::ui::renamed(ui.ctx(), ("media", &item.path)) {
         acts.push(MediaAct::Rename(i, name));
     }
@@ -753,11 +756,12 @@ pub(crate) fn media_tile(
         acts.push(MediaAct::Favorite(i));
     }
     if resp.clicked() {
-        acts.push(MediaAct::Assign(i));
+        acts.push(if item.skip { MediaAct::Info(i) } else { MediaAct::Assign(i) });
     }
-    let click = match targets.click {
-        Some(name) => format!("Click: play on \"{name}\" · drag onto any layer or clip slot · right-click: Play on…"),
-        None => "Click: play on a new layer · drag onto any layer or clip slot · right-click: Play on…".to_string(),
+    let click = match (item.skip, targets.click) {
+        (true, _) => "Skipped: it stays here but doesn't play. Click: see what it is · right-click › Play it again".to_string(),
+        (false, Some(name)) => format!("Click: play on \"{name}\" · drag onto any layer or clip slot · right-click: Play on…"),
+        (false, None) => "Click: play on a new layer · drag onto any layer or clip slot · right-click: Play on…".to_string(),
     };
     let showing = on.map_or(String::new(), |ls| format!("\nOn screen now: {}", ls.join(", ")));
     let used = match targets.uses.get(&item.path).copied().unwrap_or(0) {
@@ -767,18 +771,21 @@ pub(crate) fn media_tile(
     };
     let credit = item.credit.as_ref().map_or(String::new(), |c| format!("\nCredit: {}", c.line()));
     resp.on_hover_text(format!("{}{credit}{comes_with}{showing}{used}\n{click}", item.path)).right_field_menu(|ui| {
-        ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
-            for (id, name) in targets.layers {
-                if crate::ui::command(ui, name).clicked() {
-                    acts.push(MediaAct::PlayOn(i, *id));
+        // (Skipped: nothing here plays it; "Play it again" below brings these back.)
+        if !item.skip {
+            ui.menu_button(label(icon::PLAY, "Play on"), |ui| {
+                for (id, name) in targets.layers {
+                    if crate::ui::command(ui, name).clicked() {
+                        acts.push(MediaAct::PlayOn(i, *id));
+                        ui.close();
+                    }
+                }
+                if crate::ui::command(ui, label(icon::PLUS, "A new layer")).clicked() {
+                    acts.push(MediaAct::NewLayer(i));
                     ui.close();
                 }
-            }
-            if crate::ui::command(ui, label(icon::PLUS, "A new layer")).clicked() {
-                acts.push(MediaAct::NewLayer(i));
-                ui.close();
-            }
-        });
+            });
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if crate::ui::command(ui, label(icon::INFO, "File info…")).on_hover_text("Everything about this file, and its effects, to read or copy").clicked() {
             acts.push(MediaAct::Info(i));
@@ -793,7 +800,7 @@ pub(crate) fn media_tile(
         let (skip_icon, skip_text, skip_tip) = if item.skip {
             (icon::PLAY, "Play it again", "Random, Shuffle, autopilot and collections play it again")
         } else {
-            (icon::PROHIBIT, "Skip", "Keep it in Media but never play it from Random, Shuffle, autopilot or a collection (you can still play it yourself)")
+            (icon::PROHIBIT, "Skip (don't play)", "It stays in Media, dimmed, and can't go live: a click only shows what it is, it can't be dragged to a layer, and Random, Shuffle, autopilot and collections pass it by. Right-click › Play it again undoes this")
         };
         if crate::ui::command(ui, label(skip_icon, skip_text)).on_hover_text(skip_tip).clicked() {
             acts.push(MediaAct::Skip(i));
@@ -852,9 +859,15 @@ pub(crate) fn media_tile(
             ui.ctx().copy_text(item.path.clone());
             ui.close();
         }
-        if crate::ui::danger_button(ui, label(icon::TRASH, "Remove from bin")).clicked() {
-            acts.push(MediaAct::Remove(i));
-            ui.close();
+        // (A file from a watched folder can't be removed: the folder would bring it back in a few seconds. Skip is
+        // how to keep it out of the show; Stop watching takes the whole folder away.)
+        if item.folder.is_empty() {
+            if crate::ui::danger_button(ui, label(icon::TRASH, "Remove from bin")).on_hover_text("Takes it out of Media (the file stays on disk)").clicked() {
+                acts.push(MediaAct::Remove(i));
+                ui.close();
+            }
+        } else {
+            crate::ui::hint(ui, "From a watched folder: Skip it to keep it out of the show");
         }
     });
 }
