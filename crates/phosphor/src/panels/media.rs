@@ -180,6 +180,8 @@ pub(crate) enum MediaAct {
     Favorite(usize),
     /// Skip it (or play it again): it stays in Media but Random, Shuffle, autopilot and collections pass it by.
     Skip(usize),
+    /// Every skipped file among these plays again (the files on show: All media, a folder, a collection, an account).
+    UnskipAll(Vec<usize>),
     /// Drop the file's own effects.
     ForgetEffects(usize),
     Toggle(usize, String),
@@ -364,6 +366,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
         if crate::ui::command_if(ui, !shown.is_empty(), label(icon::DICE_FIVE, "Random")).on_hover_text("Play one of the files shown here, at random, on the selected layer (click again for another)").clicked() {
             acts.push(MediaAct::RandomOne(shown.clone()));
         }
+        unskip_button(ui, st, &shown, &mut acts);
         if !in_collection {
             let name = if st.media_view.filter == MediaFilter::Favorites { "Favorites" } else { "Shuffle" }.to_string();
             if crate::ui::command_if(ui, shown.len() > 1, label(icon::SHUFFLE, "Shuffle layer")).on_hover_text("A new layer with the files shown here as clips, playing them in random order by itself (autopilot)").clicked() {
@@ -445,6 +448,19 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     let acts = confirm_removes(ui.ctx(), st, acts);
     apply_acts(st, acts, now);
+}
+
+/// "Unskip 12" beside Random, only while files shown here are skipped: one click and they all play again. It
+/// covers what's on show (All media, a watched folder, a collection, a followed account, a search).
+pub(crate) fn unskip_button(ui: &mut egui::Ui, st: &State, shown: &[usize], acts: &mut Vec<MediaAct>) {
+    let skipped = shown.iter().filter(|&&i| st.comp.media_bin.get(i).is_some_and(|m| m.skip)).count();
+    if skipped > 0
+        && crate::ui::command(ui, label(icon::PROHIBIT, &format!("Unskip {skipped}")))
+            .on_hover_text(if skipped == 1 { "1 file shown here is skipped: let it play again".to_string() } else { format!("{skipped} of the files shown here are skipped: let them all play again (Undo brings the skips back)") })
+            .clicked()
+    {
+        acts.push(MediaAct::UnskipAll(shown.to_vec()));
+    }
 }
 
 /// Removes wait for an "are you sure?" (`ui::ask_confirm`): the one asked about is kept in `MediaView::removing`
@@ -534,6 +550,16 @@ pub(crate) fn apply_acts(st: &mut State, acts: Vec<MediaAct>, now: f64) {
                     m.skip = !m.skip;
                     st.notice = Some(if m.skip { format!("{} is skipped: it can't go live from Media, and Random, Shuffle and autopilot pass it by", m.name) } else { format!("{} plays again", m.name) });
                 }
+            }
+            MediaAct::UnskipAll(shown) => {
+                let mut n = 0;
+                for i in shown {
+                    if let Some(m) = st.comp.media_bin.get_mut(i).filter(|m| m.skip) {
+                        m.skip = false;
+                        n += 1;
+                    }
+                }
+                st.notice = Some(if n == 1 { "1 file plays again".to_string() } else { format!("{n} files play again") });
             }
             MediaAct::ForgetEffects(i) => {
                 if let Some(path) = st.comp.media_bin.get(i).map(|m| m.path.clone()) {

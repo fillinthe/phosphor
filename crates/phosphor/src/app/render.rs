@@ -47,6 +47,7 @@ impl PhosphorApp {
             net,
             net_audio,
             preview_wants,
+            explorer,
             preview_keys,
             preview_textures,
             preview_stills,
@@ -161,7 +162,8 @@ impl PhosphorApp {
         tracker.apply(comp);
         mod_inputs.shared = phosphor_engine::evaluate(&comp.modulators, mod_inputs, mod_phases);
         let wants = std::mem::take(preview_wants);
-        let source = selected.filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
+        // (The Effects panel can pin the tiles to one layer or the mix: `ExplorerState::preview_on`.)
+        let source = explorer.preview_on.or(*selected).filter(|id| *id == phosphor_engine::MASTER_ID || comp.layers.iter().any(|l| l.id == *id)).unwrap_or(phosphor_engine::MASTER_ID);
         let keys: Vec<String> = wants.iter().map(|(k, _, _)| k.clone()).collect();
         if !wants.is_empty() {
             // Each tile renders a still; hovered / live tiles keep updating, and stills are taken again only when the
