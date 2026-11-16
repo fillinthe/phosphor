@@ -261,12 +261,38 @@ pub(crate) fn wide_button<'a>(ui: &mut egui::Ui, text: impl egui::IntoAtoms<'a>,
     r
 }
 
-/// Something asking for attention (Donate, an update is out, take back control): solid color, dark bold text.
-pub(crate) fn callout_button(ui: &mut egui::Ui, text: impl Into<String>, fill: Color32) -> egui::Response {
-    ui.add(callout(text, fill))
+/// A callout that can be put away: one solid button with a small x at its right end (two halves drawn flush, the x
+/// on the right whichever way the row is laid out). Returns the callout's response and whether the x was clicked.
+/// `tip` and `close_tip` are their hover words.
+pub(crate) fn callout_closable(ui: &mut egui::Ui, text: impl Into<String>, fill: Color32, tip: &str, close_tip: &str) -> (egui::Response, bool) {
+    let round = ui.visuals().widgets.inactive.corner_radius.nw;
+    let left = egui::CornerRadius { nw: round, sw: round, ne: 0, se: 0 };
+    let right = egui::CornerRadius { nw: 0, sw: 0, ne: round, se: round };
+    let text = text.into();
+    let close = |ui: &mut egui::Ui| {
+        let pad = ui.spacing().button_padding;
+        ui.spacing_mut().button_padding.x = 5.0;
+        let r = ui.add(egui::Button::new(RichText::new(icon::X).small().color(Color32::from_gray(16))).fill(fill).corner_radius(right)).on_hover_text(close_tip);
+        ui.spacing_mut().button_padding = pad;
+        r.clicked()
+    };
+    let main = |ui: &mut egui::Ui| ui.add(callout(text.clone(), fill).corner_radius(left)).on_hover_text(tip);
+    let gap = ui.spacing().item_spacing.x;
+    ui.spacing_mut().item_spacing.x = 0.0;
+    let out = if ui.layout().main_dir() == egui::Direction::RightToLeft {
+        let closed = close(ui);
+        (main(ui), closed)
+    } else {
+        let r = main(ui);
+        (r, close(ui))
+    };
+    ui.spacing_mut().item_spacing.x = gap;
+    ui.add_space(gap);
+    out
 }
 
-/// The `callout_button` widget, to place somewhere exact (`ui.put`).
+/// Something asking for attention (Donate, an update is out, take back control): solid color, dark bold text.
+/// Add it with `ui.add`, or place it somewhere exact with `ui.put`.
 pub(crate) fn callout(text: impl Into<String>, fill: Color32) -> egui::Button<'static> {
     egui::Button::new(RichText::new(text.into()).strong().color(Color32::from_gray(16))).fill(fill)
 }
