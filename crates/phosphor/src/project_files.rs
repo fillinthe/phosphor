@@ -186,3 +186,45 @@ pub fn save_picture(project: &str, w: u32, h: u32, rgba: Vec<u8>) {
         }
     });
 }
+
+/// Where a file on an external drive is now, when it isn't where its path says: macOS mounts a drive under another
+/// name when the old name is still taken ("_FOOTAGE" comes back as "_FOOTAGE 1"), and the path saved in Recent
+/// then points at nothing though the drive is plugged in. Looks through the drives for one whose name starts the
+/// same and holds the rest of the path. None when the path is fine or nothing fits.
+pub fn relocated(path: &str) -> Option<String> {
+    relocated_in(std::path::Path::new("/Volumes"), path)
+}
+
+fn relocated_in(volumes: &std::path::Path, path: &str) -> Option<String> {
+    let p = std::path::Path::new(path);
+    if p.exists() {
+        return None;
+    }
+    let rest = p.strip_prefix(volumes).ok()?;
+    let mut parts = rest.components();
+    let drive = parts.next()?.as_os_str().to_string_lossy().into_owned();
+    let inside = parts.as_path();
+    let mut names: Vec<String> = std::fs::read_dir(volumes).ok()?.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| *n != drive && n.starts_with(&drive)).collect();
+    names.sort();
+    names.into_iter().map(|n| volumes.join(n).join(inside)).find(|c| c.exists()).map(|c| c.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod relocated_tests {
+    #[test]
+    fn a_drive_mounted_under_another_name_is_found() {
+        let root = std::env::temp_dir().join(format!("phosphor-volumes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("_FOOTAGE 1/shows")).unwrap();
+        std::fs::create_dir_all(root.join("Other")).unwrap();
+        std::fs::write(root.join("_FOOTAGE 1/shows/a.phosphor"), "{}").unwrap();
+        let saved = root.join("_FOOTAGE/shows/a.phosphor").to_string_lossy().into_owned();
+        let found = super::relocated_in(&root, &saved).unwrap();
+        assert!(found.ends_with("_FOOTAGE 1/shows/a.phosphor"), "{found}");
+        // A file that's where it says, one on no drive at all, one on a drive that isn't there: nothing to change.
+        assert_eq!(super::relocated_in(&root, &found), None);
+        assert_eq!(super::relocated_in(&root, "/somewhere/else/a.phosphor"), None);
+        assert_eq!(super::relocated_in(&root, &root.join("Gone/a.phosphor").to_string_lossy()), None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

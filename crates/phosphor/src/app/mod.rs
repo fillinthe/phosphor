@@ -584,6 +584,23 @@ impl State {
     }
 
     pub fn open_project_file(&mut self, path: &str) {
+        // A drive that came back under another name ("_FOOTAGE 1"): the project is opened from where it is now.
+        #[cfg(not(target_arch = "wasm32"))]
+        let moved = crate::project_files::relocated(path);
+        #[cfg(target_arch = "wasm32")]
+        let moved: Option<String> = None;
+        if moved.is_some() {
+            self.recent.retain(|p| p != path);
+        }
+        let asked = path;
+        let path = moved.as_deref().unwrap_or(path);
+        if !cfg!(target_arch = "wasm32") && !std::path::Path::new(path).exists() {
+            // Not there right now (its drive unplugged, a share not connected): said plainly, and it stays in
+            // Recent for when the drive is back. (It used to be dropped from Recent on the first failed click.)
+            let name = std::path::Path::new(asked).file_stem().map_or(asked.to_string(), |n| n.to_string_lossy().into_owned());
+            self.notice = Some(format!("Couldn't open \"{name}\": its file isn't there right now ({asked}). Plug in its drive and click it again, or use Open a file… to find it."));
+            return;
+        }
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|j| Composition::from_json(&j).map_err(|e| e.to_string())) {
             Ok(comp) => {
                 let newer = comp.made_by_newer();
@@ -595,8 +612,9 @@ impl State {
                 }
             }
             Err(e) => {
+                // (It stays in Recent: right-click › Forget takes it out. A file that can't be read today may be fine
+                // once its drive has finished mounting.)
                 self.notice = Some(format!("Open failed: {e}"));
-                self.recent.retain(|p| p != path);
             }
         }
     }
