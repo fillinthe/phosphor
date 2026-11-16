@@ -72,15 +72,17 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     let now = ui.ctx().input(|i| i.time);
     // Event boxes pick a target: the list once per frame, only while one exists.
     let targets = if st.comp.modulators.iter().any(|m| m.designer && m.event.is_some()) { crate::control::all_targets(&st.comp) } else { Vec::new() };
-    let State { comp, layer_textures, box_presets, notice, designer_undo, .. } = st;
+    // Undo and Redo here are the app's own (Edit menu, Cmd-Z): one history for everything, so a deleted box comes
+    // back with its picture and settings, and a changed setting is a step too. (The Designer used to keep its own
+    // list of boxes and wires only: a box came back empty and settings weren't steps at all.)
+    let (can_undo, can_redo) = (st.history.can_undo(&st.comp), st.history.can_redo());
+    let State { comp, layer_textures, box_presets, notice, .. } = st;
     let net = comp.comp(cid).and_then(|c| c.network.clone()).unwrap_or_default();
-    let before = net.clone();
-    let undo_now = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z) && !i.modifiers.shift);
     if net.at(&path).is_none() {
         path.clear();
     }
     let name = comp.comp(cid).map_or(String::new(), |c| c.name.clone());
-    let mut undo_box_change = false;
+    let mut step: Option<i8> = None;
     crate::ui::toolbar(ui, |ui| {
         let top = format!("{} {name}", icon::GRAPH);
         if path.is_empty() {
@@ -98,9 +100,11 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
                 path.truncate(i + 1);
             }
         }
-        let steps = designer_undo.get(&cid).map_or(0, Vec::len);
-        if crate::ui::command_if(ui, steps > 0, label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text("The boxes and wires as they were before the last change (Cmd-Z on the canvas)").clicked() {
-            undo_box_change = true;
+        if crate::ui::command_if(ui, can_undo, label(icon::ARROW_COUNTER_CLOCKWISE, "Undo")).on_hover_text("Takes back the last change: a box, a wire, a setting, anything (Cmd-Z, the same Undo as the Edit menu)").clicked() {
+            step = Some(-1);
+        }
+        if crate::ui::command_if(ui, can_redo, label(icon::ARROW_CLOCKWISE, "Redo")).on_hover_text("Puts back what Undo took away (Shift-Cmd-Z)").clicked() {
+            step = Some(1);
         }
         crate::ui::nodes::zoom_controls(ui, &format!("designer:{cid}:{path:?}"));
         help(ui, "Right-click the canvas to add a box · drag a box's right dot to another's left dot · the box wired into Output is what shows · a Number box wires into any setting (the blue dots) · double-click a box of boxes to build inside it");
@@ -111,25 +115,13 @@ pub(crate) fn designer_panel(ui: &mut egui::Ui, st: &mut State) {
     let canvas_changed = node_canvas(ui, &mut view, &format!("designer:{cid}:{path:?}"));
     view.hovered = ui.ui_contains_pointer();
     let View { net, resync, go, error, preset, action, restart, pick_table, hovered, .. } = view;
-    // Undo: the network as it was before the last change (kept per comp, 50 deep).
-    if (undo_box_change || (undo_now && hovered))
-        && let Some(prev) = designer_undo.get_mut(&cid).and_then(Vec::pop)
-    {
-        if let Some(c) = comp.comp_mut(cid) {
-            c.network = Some(prev);
-        }
-        comp.sync_network(cid);
+    if let Some(step) = step {
         ui.ctx().data_mut(|d| d.insert_temp(path_id, path.clone()));
+        st.undo_step(step);
         return;
     }
+    let _ = hovered;
     let changed = canvas_changed;
-    if changed || resync {
-        let stack = designer_undo.entry(cid).or_default();
-        stack.push(before);
-        if stack.len() > 50 {
-            stack.remove(0);
-        }
-    }
     #[cfg(target_arch = "wasm32")]
     let _ = (restart, pick_table);
     #[cfg(not(target_arch = "wasm32"))]

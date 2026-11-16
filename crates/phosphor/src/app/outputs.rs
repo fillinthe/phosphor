@@ -286,6 +286,20 @@ impl State {
         if let Some(c) = got {
             self.comp = c;
             self.comp.ensure_outputs();
+            // What was selected may not be in this step (a layer made after it, a clip slot since removed):
+            // a selection pointing at nothing is let go, so no panel edits the wrong thing.
+            let has_layer = |c: &phosphor_engine::Composition, id: u64| id == phosphor_engine::MASTER_ID || c.layers.iter().any(|l| l.id == id) || c.groups.iter().any(|g| g.id == id) || c.comps.iter().any(|k| k.id == id);
+            let has_clip = |c: &phosphor_engine::Composition, (l, slot): (u64, usize)| c.layer(l).is_some_and(|l| slot < l.clips.len());
+            if self.selected.is_some_and(|id| !has_layer(&self.comp, id)) {
+                self.selected = self.comp.layers.last().map(|l| l.id);
+            }
+            self.also_selected.retain(|id| has_layer(&self.comp, *id));
+            if self.selected_clip.is_some_and(|k| !has_clip(&self.comp, k)) {
+                self.selected_clip = None;
+            }
+            self.also_clips.retain(|k| has_clip(&self.comp, *k));
+            self.pending_triggers.clear();
+            self.notice = Some(if step < 0 { "Undone".into() } else { "Redone".into() });
         }
     }
 }

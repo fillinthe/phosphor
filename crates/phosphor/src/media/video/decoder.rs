@@ -626,6 +626,12 @@ impl Decoder {
         if self.hap.is_some() {
             return self.next_hap_frame();
         }
+        // (While the decoder empties itself after the last packet, only its own "end" ends the file. One "not yet"
+        // or one bad frame used to end it there, losing the frames still inside: on a busy Mac a jump to the end
+        // then took a frame from early in the movie for its last one. A decoder that never says "end" is let go
+        // after a few dozen tries.)
+        let mut drain_tries = 0;
+        let mut read_errors = 0;
         loop {
             match self.dec.receive_frame(&mut self.frame) {
                 Ok(()) => {
@@ -644,7 +650,12 @@ impl Decoder {
                 }
             }
             if self.eof_sent {
-                return Ok(false);
+                drain_tries += 1;
+                if drain_tries > 48 {
+                    return Ok(false);
+                }
+                std::thread::yield_now();
+                continue;
             }
             loop {
                 let mut pkt = ff::Packet::empty();
@@ -661,6 +672,12 @@ impl Decoder {
                     }
                     Ok(()) => {}
                     Err(ff::Error::Other { errno }) if errno == libc::EAGAIN => {}
+                    // (A read that fails for another reason than the end is tried again a few times: a hiccup on
+                    // a busy disk is not the end of the movie.)
+                    Err(e) if !matches!(e, ff::Error::Eof) && read_errors < 8 => {
+                        read_errors += 1;
+                        log::debug!("{}: read error ({e})", self.path);
+                    }
                     Err(_) => {
                         let _ = self.dec.send_eof();
                         self.eof_sent = true;

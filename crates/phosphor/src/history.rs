@@ -18,10 +18,46 @@ pub struct History {
     checked_at: f64,
 }
 
+/// Where two saved projects differ, as paths ("layers.0.opacity: 1.0 -> 0.5"), at most a handful.
+fn differences(path: &str, a: &serde_json::Value, b: &serde_json::Value, out: &mut Vec<String>) {
+    use serde_json::Value::{Array, Object};
+    if a == b || out.len() >= 6 {
+        return;
+    }
+    match (a, b) {
+        (Object(x), Object(y)) => {
+            for k in x.keys().chain(y.keys().filter(|k| !x.contains_key(*k))) {
+                differences(&format!("{path}.{k}"), x.get(k).unwrap_or(&serde_json::Value::Null), y.get(k).unwrap_or(&serde_json::Value::Null), out);
+            }
+        }
+        (Array(x), Array(y)) if x.len() == y.len() => {
+            for (i, (p, q)) in x.iter().zip(y).enumerate() {
+                differences(&format!("{path}.{i}"), p, q, out);
+            }
+        }
+        _ => {
+            let short = |v: &serde_json::Value| v.to_string().chars().take(40).collect::<String>();
+            out.push(format!("{}: {} -> {}", path.trim_start_matches('.'), short(a), short(b)));
+        }
+    }
+}
+
 /// Fields that change on their own (tempo following, transitions in flight, live text) aren't edits.
 fn settle_volatile(from: &Composition, into: &mut Composition) {
     into.bpm = from.bpm;
     keep_lasers_live(from, into);
+    // Blackout is a live switch with a clock that ticks every frame, what tracking last read comes from the camera,
+    // and a moving fader's position moves by itself: none of them is an edit. (The blackout clock alone made a new
+    // undo step twice a second in every project, so Undo stepped through copies that looked the same and the
+    // real edits fell off the end: owner, 2026-11-16, "undo not working".)
+    (into.blackout_on, into.blackout, into.blackout_clock) = (from.blackout_on, from.blackout, from.blackout_clock);
+    into.seen_code.clone_from(&from.seen_code);
+    into.seen_text.clone_from(&from.seen_text);
+    for w in &mut into.surface.widgets {
+        if let Some(src) = from.surface.widgets.iter().find(|s| s.id == w.id) {
+            w.live = src.live;
+        }
+    }
     // A modulator's knob position, its data reading and its looper take move by themselves (sound bands, tracking,
     // live data, a recording looper): with those counted as edits, Undo filled with a copy of the project twice a
     // second while music played and the real edits fell off the end.
@@ -35,6 +71,7 @@ fn settle_volatile(from: &Composition, into: &mut Composition) {
     for l in &mut into.layers {
         if let Some(src) = from.layers.iter().find(|s| s.id == l.id) {
             l.transition = src.transition.clone();
+            l.voice_turn = src.voice_turn;
             // Live text (a clock, a countdown) changes its words by itself.
             if let (phosphor_engine::SourceSpec::Text(t), phosphor_engine::SourceSpec::Text(st)) = (&mut l.source, &src.source)
                 && st.live != phosphor_engine::LiveText::Off
@@ -79,6 +116,14 @@ impl History {
             return;
         }
         let prev = std::mem::replace(committed, comp.clone());
+        // PHOSPHOR_UNDO_DEBUG=1: say what changed in each step (finding values that move by themselves).
+        if std::env::var_os("PHOSPHOR_UNDO_DEBUG").is_some()
+            && let (Ok(a), Ok(b)) = (serde_json::to_value(&prev), serde_json::to_value(comp))
+        {
+            let mut out = Vec::new();
+            differences("", &a, &b, &mut out);
+            println!("UNDO_STEP {}", out.join(" | "));
+        }
         self.undo.push(prev);
         if self.undo.len() > LIMIT {
             self.undo.remove(0);
@@ -123,6 +168,11 @@ impl History {
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
+
+    /// How many steps back there are (the bench prints it: a project left alone must not grow any).
+    pub fn steps(&self) -> usize {
+        self.undo.len()
+    }
 }
 
 #[cfg(test)]
@@ -148,6 +198,32 @@ mod tests {
             h.track(&comp, k as f64 * 0.1, false);
         }
         assert_eq!(h.undo.len(), 1);
+        assert_eq!(h.undo(&comp).unwrap().master_fade, 1.0);
+    }
+
+    /// A project left to play makes no undo steps: the blackout clock ticks, tracking reads, a fader moves by
+    /// itself, and none of that is an edit. Then one real edit is one step.
+    #[test]
+    fn a_project_playing_by_itself_makes_no_undo_steps() {
+        let mut h = History::default();
+        let mut comp = Composition::starter();
+        h.track(&comp, 0.0, false);
+        for k in 1..600 {
+            let now = k as f64 * 0.1;
+            comp.step_blackout(now);
+            comp.seen_text = format!("frame {k}");
+            comp.seen_code = format!("code {k}");
+            h.track(&comp, now, false);
+        }
+        assert_eq!(h.steps(), 0, "nothing was edited");
+        assert!(!h.can_undo(&comp));
+        comp.master_fade = 0.3;
+        for k in 600..620 {
+            let now = k as f64 * 0.1;
+            comp.step_blackout(now);
+            h.track(&comp, now, false);
+        }
+        assert_eq!(h.steps(), 1);
         assert_eq!(h.undo(&comp).unwrap().master_fade, 1.0);
     }
 

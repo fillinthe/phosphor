@@ -85,6 +85,9 @@ impl PhosphorApp {
         };
         // CPU per frame (ms of one core) is steadier than the percentage when the frame rate varies.
         println!("SUMMARY {} cpu_ms_per_frame={:.2}", summary.to_json(), if summary.fps > 0.0 { summary.cpu_percent * 10.0 / summary.fps } else { 0.0 });
+        // Undo steps made during the run: only what the run itself did (a quick action) may count; a project
+        // playing by itself must make none, or Undo fills with noise and real edits fall off the end.
+        println!("UNDO_STEPS {}", self.state.history.steps());
         println!("AUDIO {}", self.state.audio.debug_line());
         #[cfg(target_os = "macos")]
         if self.state.vcam.on {

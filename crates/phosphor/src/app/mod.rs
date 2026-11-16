@@ -232,8 +232,6 @@ pub struct State {
     /// Data boxes (readings, web, timers, tables) and events (the desktop app: they read files, threads and the web).
     #[cfg(not(target_arch = "wasm32"))]
     pub data: crate::data::DataRun,
-    /// Designer undo: each comp's network as it was before each change (newest last).
-    pub designer_undo: HashMap<u64, Vec<phosphor_engine::Network>>,
     /// Video tracking (faces, hands, body → `Track …` modulators).
     #[cfg(not(target_arch = "wasm32"))]
     pub tracker: crate::tracking::Tracker,
@@ -616,7 +614,7 @@ impl State {
         self.also_clips.clear();
         self.selected_clip = None;
         self.pending_triggers.clear();
-        self.designer_undo.clear();
+
         self.history.start_over(&self.comp);
         self.cue_run.project_opened();
         #[cfg(not(target_arch = "wasm32"))]
