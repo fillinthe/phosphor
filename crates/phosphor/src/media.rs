@@ -742,6 +742,19 @@ impl MediaManager {
     }
 
     /// Jumps a layer's video to `t` seconds (or remembers it until the video has opened).
+    /// A jump made by hand (see `VideoPlayer::scrub`): the playhead dragged in a panel, a scrub knob.
+    pub fn scrub(&mut self, layer: u64, t: f64) {
+        #[cfg(not(target_arch = "wasm32"))]
+        match self.players.get_mut(&layer) {
+            Some(p) => p.scrub(t),
+            None => {
+                self.pending_seek.insert(layer, t);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (layer, t);
+    }
+
     pub fn seek(&mut self, layer: u64, t: f64) {
         #[cfg(not(target_arch = "wasm32"))]
         match self.players.get_mut(&layer) {

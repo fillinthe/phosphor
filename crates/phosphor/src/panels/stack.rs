@@ -438,7 +438,7 @@ fn layer_menu(ui: &mut egui::Ui, layer: &mut LayerState, others: &[(u64, String)
     if crate::ui::command(ui, label(icon::ARROW_DOWN, "Move down")).clicked() {
         act(ui, LayerAction::Down);
     }
-    if crate::ui::command(ui, "Clear source").clicked() {
+    if crate::ui::danger_button(ui, "Clear source").clicked() {
         act(ui, LayerAction::ClearSource);
     }
     if let Some(c) = move_to_comp_menu(ui, others) {

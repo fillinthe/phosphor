@@ -74,6 +74,8 @@ pub(crate) fn plays_on_picker(ui: &mut egui::Ui, st: &mut State) {
 
 /// How the Media panel is filtered and laid out (per session).
 pub struct MediaView {
+    /// A remove waiting for its "are you sure?" (`confirm_removes`).
+    pub(crate) removing: Option<MediaAct>,
     pub search: String,
     /// Favorites / a collection (the classic view's filter; kept in step with `source`), or Videos / Pictures.
     pub filter: MediaFilter,
@@ -111,6 +113,7 @@ pub struct MediaView {
 impl Default for MediaView {
     fn default() -> Self {
         Self {
+            removing: None,
             search: String::new(),
             filter: MediaFilter::All,
             sort: MediaSort::Name,
@@ -291,7 +294,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
                 let n = count(&|m| comp.in_collection(m, &c));
                 let r = crate::ui::pick_value(ui, &mut view.filter, MediaFilter::Collection(c.clone()), format!("{} {c} {n}", icon::BOOKMARKS_SIMPLE));
                 r.right_menu(|ui| {
-                    if crate::ui::command(ui, label(icon::TRASH, "Delete collection")).on_hover_text("The media stays in the bin").clicked() {
+                    if crate::ui::danger_button(ui, label(icon::TRASH, "Delete collection")).on_hover_text("The media stays in the bin").clicked() {
                         acts.push(MediaAct::DeleteCollection(c.clone()));
                         ui.close();
                     }
@@ -425,7 +428,7 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
                     ui.close();
                 }
                 if !group.is_empty() {
-                    if root == group && crate::ui::command(ui, label(icon::EYE_SLASH, "Stop watching")).clicked() {
+                    if root == group && crate::ui::danger_button(ui, label(icon::EYE_SLASH, "Stop watching")).clicked() {
                         acts.push(MediaAct::Unwatch(root.clone()));
                         ui.close();
                     }
@@ -440,7 +443,34 @@ fn media_classic(ui: &mut egui::Ui, st: &mut State) {
     });
 
     let now = ui.ctx().input(|i| i.time);
+    let acts = confirm_removes(ui.ctx(), st, acts);
     apply_acts(st, acts, now);
+}
+
+/// Removes wait for an "are you sure?" (`ui::ask_confirm`): the one asked about is kept in `MediaView::removing`
+/// and comes back as an act when the answer is yes. Everything else passes straight through.
+pub(crate) fn confirm_removes(ctx: &egui::Context, st: &mut State, acts: Vec<MediaAct>) -> Vec<MediaAct> {
+    let mut out = Vec::with_capacity(acts.len());
+    for act in acts {
+        let short = |path: &str| std::path::Path::new(path).file_name().map_or(path.to_string(), |n| n.to_string_lossy().into_owned());
+        let ask = match &act {
+            MediaAct::Unwatch(folder) => Some((format!("Stop watching \"{}\"?", short(folder)), "Its files leave the media bin. The folder and everything in it stay on disk.".to_string(), "Stop watching")),
+            MediaAct::RemoveCollectionFolder(name, folder) => Some((format!("Take \"{}\" out of \"{name}\"?", short(folder)), "Its files leave this collection. They stay in the media bin and on disk.".to_string(), "Take it out")),
+            MediaAct::DeleteCollection(name) => Some((format!("Delete the collection \"{name}\"?"), "Its files stay in the media bin and on disk.".to_string(), "Delete")),
+            _ => None,
+        };
+        match ask {
+            Some((title, body, yes)) => {
+                crate::ui::ask_confirm(ctx, "media_remove", &title, &body, yes);
+                st.media_view.removing = Some(act);
+            }
+            None => out.push(act),
+        }
+    }
+    if st.media_view.removing.is_some() && crate::ui::confirmed(ctx, "media_remove") {
+        out.extend(st.media_view.removing.take());
+    }
+    out
 }
 
 /// Does what the Media panel's tiles and buttons asked.
@@ -781,7 +811,7 @@ pub(crate) fn media_tile(
                 acts.push(MediaAct::NewCollection(name, Some(i)));
             }
         });
-        if !item.effects.is_empty() && crate::ui::command(ui, label(icon::X, "Forget its effects")).on_hover_text("Take this file's own effects off it (and off layers playing it now). Clips made from it keep theirs").clicked() {
+        if !item.effects.is_empty() && crate::ui::danger_button(ui, label(icon::X, "Forget its effects")).on_hover_text("Take this file's own effects off it (and off layers playing it now). Clips made from it keep theirs").clicked() {
             acts.push(MediaAct::ForgetEffects(i));
             ui.close();
         }
@@ -822,7 +852,7 @@ pub(crate) fn media_tile(
             ui.ctx().copy_text(item.path.clone());
             ui.close();
         }
-        if crate::ui::command(ui, label(icon::TRASH, "Remove from bin")).clicked() {
+        if crate::ui::danger_button(ui, label(icon::TRASH, "Remove from bin")).clicked() {
             acts.push(MediaAct::Remove(i));
             ui.close();
         }

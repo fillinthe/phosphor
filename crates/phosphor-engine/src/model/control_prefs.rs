@@ -14,9 +14,26 @@ pub struct ControlPrefs {
     /// Limits (0..1 of its range, low ≤ high): the mouse stays between them, and a controller's whole travel is
     /// spread over them (VDMX's slider envelope).
     pub limits: Vec<(ControlTarget, (f32, f32))>,
+    /// How this one slider takes a click, when it differs from the app's setting: true = the value jumps to the
+    /// click, false = it moves from where it is.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub clicks: Vec<(ControlTarget, bool)>,
 }
 
 impl ControlPrefs {
+    /// This slider's own click way (None: it follows the app's setting).
+    pub fn click_of(&self, target: &ControlTarget) -> Option<bool> {
+        self.clicks.iter().find(|(t, _)| t == target).map(|(_, jump)| *jump)
+    }
+
+    /// Sets (or with None clears) one slider's own click way.
+    pub fn set_click(&mut self, target: &ControlTarget, jump: Option<bool>) {
+        self.clicks.retain(|(t, _)| t != target);
+        if let Some(j) = jump {
+            self.clicks.push((target.clone(), j));
+        }
+    }
+
     pub fn is_locked(&self, target: &ControlTarget) -> bool {
         self.locked.contains(target)
     }

@@ -33,7 +33,7 @@ pub(crate) fn links(ui: &mut egui::Ui, st: &mut State) {
                         show = place;
                     }
                     binding_editor(ui, &mut f.to);
-                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Stop following").clicked() {
+                    if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Stop following").clicked() {
                         remove = Some(i);
                     }
                 });

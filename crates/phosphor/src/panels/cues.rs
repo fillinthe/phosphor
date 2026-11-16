@@ -243,7 +243,7 @@ pub(crate) fn cues(ui: &mut egui::Ui, st: &mut State) {
                     .response
                     .on_hover_text(holds);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete cue").clicked() {
+                        if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete cue").clicked() {
                             remove = Some(i);
                         }
                         if crate::ui::small_command(ui, icon::ARROWS_CLOCKWISE).on_hover_text("Re-record: save how everything looks now into this cue").clicked() {

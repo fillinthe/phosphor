@@ -44,7 +44,7 @@ pub(crate) fn projector_settings(ui: &mut egui::Ui, o: &mut OutputConfig, projec
         if let Some(s) = projectors.status.get(&o.id) {
             hint(ui, s.clone());
         }
-        if crate::ui::small_command(ui, label(icon::X, "Forget this projector")).clicked() {
+        if crate::ui::small_danger(ui, label(icon::X, "Forget this projector")).clicked() {
             o.projector = None;
         }
     });

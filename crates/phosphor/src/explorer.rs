@@ -1139,7 +1139,7 @@ pub fn shader_editor(ui: &mut egui::Ui, st: &mut State) {
             ui.monospace("aspect()  TAU");
         });
         ui.add_space(8.0);
-        if crate::ui::command(ui, label(icon::TRASH, "Delete shader")).clicked() {
+        if crate::ui::danger_button(ui, label(icon::TRASH, "Delete shader")).clicked() {
             delete = Some(idx);
         }
     });

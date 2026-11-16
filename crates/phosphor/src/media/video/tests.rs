@@ -284,6 +284,33 @@ fn decoding_time_is_counted() {
     assert!(p.busy_ns() > 0, "the decoder's work is counted");
 }
 
+/// Held at the very end of a movie that's playing, the playhead shows the end the whole time: between two jumps
+/// the movie used to play on into its next loop, and the first frame flashed up.
+#[test]
+fn holding_the_playhead_at_the_end_never_shows_the_start() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../media/test/h264.mp4");
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
+    let mut p = VideoPlayer::open(path).unwrap();
+    assert!(play(&mut p, 0.0, 0.5).is_some(), "frames");
+    let length = p.duration.unwrap();
+    // A drag held at the end for a second and a half: a jump every frame, the clock running as it does in the app.
+    let started = std::time::Instant::now();
+    let (mut seen, mut earliest) = (0, f64::MAX);
+    while started.elapsed() < std::time::Duration::from_millis(1500) {
+        p.scrub(length);
+        if let Some(f) = p.poll_frame(0.5 + started.elapsed().as_secs_f64()) {
+            seen += 1;
+            earliest = earliest.min(p.shown);
+            p.recycle(f);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(8));
+    }
+    assert!(seen > 0, "a picture while held");
+    assert!(earliest > length * 0.5, "held at the end ({length:.2} s) but a frame from {earliest:.2} s was shown");
+}
+
 /// Dragging the playhead to the very end shows the end of the clip, not its first frames: a file can say it's
 /// longer than its last picture (sound that runs on, a rounded-up length), and the jump then found nothing to show
 /// and looped round to the start.

@@ -173,7 +173,7 @@ pub(crate) fn inspector(ui: &mut egui::Ui, st: &mut State) {
         #[cfg(target_arch = "wasm32")]
         let _ = match_beat;
         if let Some(t) = seek_to {
-            st.media.seek(sel, t);
+            st.media.scrub(sel, t);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if text_file {

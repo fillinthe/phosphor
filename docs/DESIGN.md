@@ -62,7 +62,7 @@ Values at the default brightness (0.35, "Dark"); `tone(g)` = `(g-3, g-1, g)`, th
 | `widgets.active.bg_fill` | accent × 0.35 | A button pressed, a segment picked. |
 | `selection` | accent × 0.32 fill, accent stroke | Selected rows, cards, boxes. |
 | **accent** (`theme::accent`) | Green `#78FFAA` (dark) / `#108A4A` (light) | On, playing, selected, Go. The user may pick Cyan, Violet, Pink or Ice instead; code never assumes green. |
-| `theme::WARN` | `#FF8C5A` | Warnings, errors, Delete text. |
+| `theme::WARN` | `#FF8C5A` | Warnings, errors. |
 | `theme::RECORD` | `#E1463C` | Record, Arm, the LIVE dot. White ink. |
 | `theme::DANGER` · `danger_fill(k)` | `#FF503C` · see-through red | Danger in words and lines (LASERS ON, a laser's floor, a dark area); its zone over a picture. |
 | `theme::MAPPED` · `mapped_fill(k)` | `#FFC446` | Mapped to a controller, Learn, a beat (badge, stripe, dot). |
@@ -120,7 +120,7 @@ Every control is one of these. A panel never hand-rolls a button, slider, field,
 |---|---|---|---|
 | Makes something happen now | `action_button(Act::Go)` (accent, dark ink) · `Act::Record` (red, white ink) | `action_button_sized`, `steady_action_button` (width held while the label changes) | hover: white outline · disabled: `command_if` style gray · mapped: gold badge |
 | A command (opens, edits, adds) | `command` · `small_command` (tight row) · `command_sized` · `wide_button` · `callout_button` (Donate, an update) | `*_if(enabled)` grays it out until it can be used | hover: lifted fill + accent outline · pressed: accent fill · disabled: gray |
-| Delete / remove | `danger_button` (red words) | — | confirm only when a lot is lost |
+| Delete / remove / stop watching / clear | `danger_button` (red words, `theme::DANGER`) | `small_danger` (a red trash can or X in a row) | every command that takes something away is red; `ask_confirm` + `confirmed` ("are you sure?" with Don't ask again) when what goes is more than one thing or isn't brought back by Undo |
 | On / off | `toggle` (pill with a light) · `toggle_mapped` · `icon_toggle` (compact) · `eye_toggle` (show / hide) | `toggle_locked` | on: accent light and outline · off: hollow |
 | Pick one of a few | `segmented` · `choice_buttons` · `choice_mapped` · `segmented_list` | wraps in a narrow panel | picked: raised segment |
 | Pick one of many | `dropdown(ui, id, width)` (makes room so it never overflows) · `pick_item` / `pick_value` entries | — | picked entry framed |

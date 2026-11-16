@@ -384,7 +384,7 @@ pub(crate) fn layer_card(
                         select = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete layer").clicked() {
+                        if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete layer").clicked() {
                             action = Some(LayerAction::Remove);
                         }
                         if crate::ui::small_command(ui, icon::COPY).on_hover_text("Duplicate layer").clicked() {
@@ -494,21 +494,8 @@ pub(crate) fn layer_card(
             ui.close();
         }
         ui.separator();
-        if crate::ui::command(ui, label(icon::COPY, "Duplicate (⌘D)")).clicked() {
-            action = Some(LayerAction::Duplicate);
-            ui.close();
-        }
-        if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {
-            action = Some(LayerAction::Up);
-            ui.close();
-        }
-        if crate::ui::command(ui, label(icon::ARROW_DOWN, "Move down")).clicked() {
-            action = Some(LayerAction::Down);
-            ui.close();
-        }
-        if crate::ui::command(ui, "Clear source").clicked() {
-            action = Some(LayerAction::ClearSource);
-            ui.close();
+        if let Some(a) = arrange_items(ui) {
+            action = Some(a);
         }
         if let Some(c) = move_to_comp_menu(ui, other_comps) {
             action = Some(LayerAction::MoveToComp(c));
@@ -533,9 +520,8 @@ pub(crate) fn layer_card(
             ui.close();
         }
         ui.separator();
-        if crate::ui::command(ui, label(icon::TRASH, "Delete (Backspace)")).clicked() {
-            action = Some(LayerAction::Remove);
-            ui.close();
+        if let Some(a) = delete_item(ui) {
+            action = Some(a);
         }
     });
     // Drop target for a dragged layer or a media bin item.
@@ -815,6 +801,37 @@ fn live_items(ui: &mut egui::Ui, layer: u64) -> Option<SourceSpec> {
 }
 
 /// Carries out a layer card's action (Layers panel and Layer Windows).
+/// A layer's menu entries for its place in the stack: Duplicate, Move up / down, Clear source (the layer card and
+/// the Mixer strip).
+pub(crate) fn arrange_items(ui: &mut egui::Ui) -> Option<LayerAction> {
+    let mut action = None;
+    if crate::ui::command(ui, label(icon::COPY, "Duplicate (⌘D)")).clicked() {
+        action = Some(LayerAction::Duplicate);
+    }
+    if crate::ui::command(ui, label(icon::ARROW_UP, "Move up")).clicked() {
+        action = Some(LayerAction::Up);
+    }
+    if crate::ui::command(ui, label(icon::ARROW_DOWN, "Move down")).clicked() {
+        action = Some(LayerAction::Down);
+    }
+    if crate::ui::danger_button(ui, "Clear source").on_hover_text("Takes the picture off this layer").clicked() {
+        action = Some(LayerAction::ClearSource);
+    }
+    if action.is_some() {
+        ui.close();
+    }
+    action
+}
+
+/// A layer's "Delete" menu entry (Undo brings the layer back).
+pub(crate) fn delete_item(ui: &mut egui::Ui) -> Option<LayerAction> {
+    let clicked = crate::ui::danger_button(ui, label(icon::TRASH, "Delete (Backspace)")).on_hover_text("Removes the layer (Undo brings it back)").clicked();
+    if clicked {
+        ui.close();
+    }
+    clicked.then_some(LayerAction::Remove)
+}
+
 pub(crate) fn apply_layer_action(st: &mut State, id: u64, action: LayerAction, now: f64) {
     match action {
         LayerAction::Favorite => {

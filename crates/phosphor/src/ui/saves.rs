@@ -68,7 +68,7 @@ pub(crate) fn named_saves(ui: &mut egui::Ui, store: &mut PresetStore, name: &mut
             }
             ui.label(&p.name);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if crate::ui::small_command(ui, icon::TRASH).on_hover_text(format!("Delete this {what}")).clicked() {
+                if crate::ui::small_danger(ui, icon::TRASH).on_hover_text(format!("Delete this {what}")).clicked() {
                     delete = Some(p.name.clone());
                 }
             });

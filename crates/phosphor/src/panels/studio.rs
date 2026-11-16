@@ -355,7 +355,7 @@ fn canvases(ui: &mut egui::Ui, st: &mut State) {
                         super::mapping_points::select_slices(ui.ctx(), selected_surface, ids);
                         ui.close();
                     }
-                    if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete this set (the slices stay)").clicked() {
+                    if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete this set (the slices stay)").clicked() {
                         remove = Some(k);
                     }
                 });
@@ -667,7 +667,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             if crate::ui::toggle(ui, &mut m.calibrating, "Calibrate (pin points)").on_hover_text("Click model points, drag their pins onto the real object; 4+ pins solve the projector").changed() {
                 ui.close();
             }
-            if !m.pins.is_empty() && crate::ui::command(ui, "Clear calibration pins").clicked() {
+            if !m.pins.is_empty() && crate::ui::danger_button(ui, "Clear calibration pins").clicked() {
                 m.pins.clear();
                 ui.close();
             }
@@ -699,7 +699,7 @@ fn canvas_menu(ui: &mut egui::Ui, o: &mut phosphor_engine::OutputConfig, selecte
             *action = Some(TreeAction::Duplicate(id));
             ui.close();
         }
-        if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
+        if crate::ui::danger_button(ui, label(icon::TRASH, "Delete")).clicked() {
             *action = Some(TreeAction::Delete(oid, id));
             ui.close();
         }

@@ -119,6 +119,8 @@ const KEY_PROJECTS_AT_START: &str = "projects_at_start";
 // (A new name: builds before 621 saved "off" without being asked, so their setting is left behind.)
 const KEY_HELP_ICONS: &str = "help_icons_chosen";
 const KEY_SLIDERS_JUMP: &str = "sliders_jump";
+/// Ask "are you sure?" before removing things ("0": the user ticked Don't ask again).
+const KEY_CONFIRM_REMOVES: &str = "confirm_removes";
 /// The interface language (`i18n::Lang::code`).
 const KEY_LANGUAGE: &str = "language";
 const KEY_TOOLTIPS: &str = "tooltips";
@@ -687,13 +689,13 @@ impl State {
             crate::control::Deferred::Menu(key) => self.menu_requests.extend(crate::menu::action_for(&key)),
             crate::control::Deferred::Scrub(layer, v) => {
                 if let Some((_, dur)) = self.media.position(layer) {
-                    self.media.seek(layer, v as f64 * dur);
+                    self.media.scrub(layer, v as f64 * dur);
                 }
             }
             crate::control::Deferred::Jump(id, forward) => {
                 if let (Some((pos, dur)), Some(l)) = (self.media.position(id), self.comp.layers.iter().find(|l| l.id == id)) {
                     let step = l.jump_secs(Some(dur), self.comp.bpm);
-                    self.media.seek(id, if forward { pos + step } else { pos - step });
+                    self.media.scrub(id, if forward { pos + step } else { pos - step });
                 }
             }
         }

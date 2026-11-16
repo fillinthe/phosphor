@@ -127,7 +127,12 @@ impl VideoFrame {
 struct Scrub {
     waiting: Option<std::time::Instant>,
     next: Option<f64>,
+    /// When the playhead was last dragged (`VideoPlayer::scrub`): the movie stays put under the hand for a moment.
+    held: Option<std::time::Instant>,
 }
+
+/// How long after the last drag of the playhead a playing movie waits before it plays on.
+const SCRUB_HOLD: std::time::Duration = std::time::Duration::from_millis(150);
 
 /// Diagnostics for a player.
 #[derive(Clone, Debug, Default)]
@@ -522,7 +527,10 @@ impl VideoPlayer {
             .last_now
             .map_or(0.0, |last| (now - last).clamp(0.0, 0.25));
         self.last_now = Some(now);
-        if self.playing {
+        // (Not while the playhead is being dragged: held at the very end, a playing movie ran on into its next loop
+        // between two jumps and the first frame flashed up under the "end" label. Owner, 2026-11-16.)
+        let held = self.scrub.held.is_some_and(|at| at.elapsed() < SCRUB_HOLD);
+        if self.playing && !held {
             self.clock += dt * self.rate;
         }
         if let (Some(end), false) = (self.end, self.looping) {
@@ -735,6 +743,13 @@ impl VideoPlayer {
         out
     }
 
+    /// A jump made by hand (the playhead dragged, a controller's scrub knob): like `seek`, and the movie holds
+    /// still there for a moment instead of playing on between this jump and the next.
+    pub fn scrub(&mut self, t: f64) {
+        self.scrub.held = Some(std::time::Instant::now());
+        self.seek(t);
+    }
+
     /// Jumps to `t` seconds into the clip. The next frames shown are from there; anything decoded
     /// before the jump is dropped.
     pub fn seek(&mut self, t: f64) {
@@ -747,7 +762,7 @@ impl VideoPlayer {
             return;
         }
         // (A sound-only clip has no picture to wait for: its jumps go straight away; they waited 300 ms each.)
-        self.scrub = Scrub { waiting: (!self.audio_only).then(std::time::Instant::now), next: None };
+        self.scrub = Scrub { waiting: (!self.audio_only).then(std::time::Instant::now), next: None, held: self.scrub.held };
         let t = match self.duration {
             // (A hundredth short of the end: at the very end the first frame of the next loop is due within the
             // player's tolerance, so the jump showed the last frame and at once the first one.)

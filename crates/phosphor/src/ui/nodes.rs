@@ -344,6 +344,9 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
             (false, false) => graph.title(n),
         };
         painter.text(title.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, title_text, egui::FontId::proportional(13.0), if off { ui.visuals().weak_text_color() } else { ui.visuals().strong_text_color() });
+        // (Under the title and the settings: it only catches right-clicks for the box's menu, which used to fall
+        // through to the canvas and offer "Add a box" with no way to delete this one.)
+        let whole = ui.interact(r, id.with(("box", n)), Sense::click());
         let t = ui.interact(title, id.with(("title", n)), Sense::click_and_drag()).on_hover_text(graph.about(n));
         if t.clicked() && shift {
             if picked {
@@ -366,8 +369,35 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
         if t.double_clicked() {
             graph.open(n);
         }
+        // Input names, and their dots (drag a wired one away to unplug it). Ports beside the settings have no row.
+        for (i, (name, kind)) in graph.inputs(n).iter().enumerate().take(ins) {
+            let y = r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H;
+            let colour = if *kind == PortKind::Number { port_colour(*kind, false).gamma_multiply(0.8) } else { crate::theme::faint() };
+            painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), colour);
+        }
+        // The settings: drawn by the graph, clipped to the canvas (a box half off the canvas shows what fits).
+        let guess = shown_body(&measured, &*graph, n);
+        if guess > 0.0 || graph.body_height(n) > 0.0 {
+            let body = egui::Rect::from_min_size(egui::pos2(r.min.x + 6.0, r.min.y + TITLE_H + ins as f32 * INPUT_H + 2.0), egui::vec2(r.width() - 12.0, guess.max(1.0)));
+            if area.intersects(body) {
+                let inner = ui.scope_builder(egui::UiBuilder::new().max_rect(body).id_salt(("body", n)), |ui| {
+                    ui.set_clip_rect(area);
+                    ui.spacing_mut().item_spacing.y = 3.0;
+                    graph.body(ui, n)
+                });
+                changed |= inner.inner;
+                // What the settings really took: the box fits it from the next frame.
+                let took = inner.response.rect.height();
+                if (took - guess).abs() > 0.5 {
+                    measured.insert(n, took);
+                    ui.ctx().request_repaint();
+                }
+            }
+        }
+        // The box's menu, on a right-click anywhere on it (its title, its picture, the room between its settings).
+        // After the settings are drawn: one of them with a menu of its own (a slider) takes the click first.
         let removable = graph.removable(n);
-        t.context_menu(|ui| {
+        whole.right_menu(|ui| {
             if picked && selected.len() > 1 {
                 let ok = graph.can_wrap_many(&selected);
                 let tip = if ok { "Puts the selected boxes inside one new box of boxes, their wires kept" } else { "Only one of the selected boxes may feed boxes outside them: a box of boxes has one output" };
@@ -404,31 +434,6 @@ pub(crate) fn node_canvas(ui: &mut egui::Ui, graph: &mut dyn Graph, key: &str) -
                 ui.close();
             }
         });
-        // Input names, and their dots (drag a wired one away to unplug it). Ports beside the settings have no row.
-        for (i, (name, kind)) in graph.inputs(n).iter().enumerate().take(ins) {
-            let y = r.min.y + TITLE_H + (i as f32 + 0.5) * INPUT_H;
-            let colour = if *kind == PortKind::Number { port_colour(*kind, false).gamma_multiply(0.8) } else { crate::theme::faint() };
-            painter.text(egui::pos2(r.min.x + 12.0, y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), colour);
-        }
-        // The settings: drawn by the graph, clipped to the canvas (a box half off the canvas shows what fits).
-        let guess = shown_body(&measured, &*graph, n);
-        if guess > 0.0 || graph.body_height(n) > 0.0 {
-            let body = egui::Rect::from_min_size(egui::pos2(r.min.x + 6.0, r.min.y + TITLE_H + ins as f32 * INPUT_H + 2.0), egui::vec2(r.width() - 12.0, guess.max(1.0)));
-            if area.intersects(body) {
-                let inner = ui.scope_builder(egui::UiBuilder::new().max_rect(body).id_salt(("body", n)), |ui| {
-                    ui.set_clip_rect(area);
-                    ui.spacing_mut().item_spacing.y = 3.0;
-                    graph.body(ui, n)
-                });
-                changed |= inner.inner;
-                // What the settings really took: the box fits it from the next frame.
-                let took = inner.response.rect.height();
-                if (took - guess).abs() > 0.5 {
-                    measured.insert(n, took);
-                    ui.ctx().request_repaint();
-                }
-            }
-        }
     }
 
     // Ports go last, on top of the boxes, so they win the pointer.

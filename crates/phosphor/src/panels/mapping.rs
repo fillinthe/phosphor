@@ -496,7 +496,7 @@ pub fn mapping_handles(ui: &mut egui::Ui, frame: egui::Rect, mapping: &mut Mappi
                 if !smooth {
                     help(ui, "Turn on Smooth to curve the whole outline; points can then be sharp corners.");
                 }
-                if count > 3 && crate::ui::command(ui, label(icon::TRASH, "Delete point")).clicked() {
+                if count > 3 && crate::ui::danger_button(ui, label(icon::TRASH, "Delete point")).clicked() {
                     delete = Some(i);
                     ui.close();
                 }
@@ -647,7 +647,7 @@ pub(crate) fn output_strip(ui: &mut egui::Ui, st: &mut State, height: f32) {
                     }
                     crate::ui::toggle(ui, &mut o.enabled, "Output on");
                     crate::ui::toggle(ui, &mut o.mapping.enabled, "Mapping on");
-                    if count > 1 && crate::ui::command(ui, label(icon::TRASH, "Remove output")).clicked() {
+                    if count > 1 && crate::ui::danger_button(ui, label(icon::TRASH, "Remove output")).clicked() {
                         todo.push(Do::Remove(id));
                         ui.close();
                     }
@@ -800,7 +800,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     toggle_mapped(ui, &mut s.enabled, "ON", ControlTarget::SliceEnabled(s.id));
                     ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(140.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete surface").clicked() {
+                        if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete surface").clicked() {
                             remove = Some(i);
                         }
                         if crate::ui::small_command(ui, icon::CORNERS_OUT).on_hover_text("Reset corners to the full output").clicked() {
@@ -824,7 +824,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     duplicate = Some(i);
                     ui.close();
                 }
-                if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
+                if crate::ui::danger_button(ui, label(icon::TRASH, "Delete")).clicked() {
                     remove = Some(i);
                     ui.close();
                 }
@@ -842,7 +842,7 @@ pub(crate) fn mapping(ui: &mut egui::Ui, st: &mut State) {
                     ui.add(egui::TextEdit::singleline(&mut m.name).desired_width(120.0));
                     hint(ui, format!("{} points", m.points.len()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if crate::ui::small_command(ui, icon::TRASH).on_hover_text("Delete mask").clicked() {
+                        if crate::ui::small_danger(ui, icon::TRASH).on_hover_text("Delete mask").clicked() {
                             remove_mask = Some(i);
                         }
                     });
@@ -1169,7 +1169,7 @@ pub(crate) fn surface_settings(ui: &mut egui::Ui, s: &mut phosphor_engine::mappi
             if m.calibrating {
                 let n = m.pins.len();
                 hint(ui, if n < 4 { format!("{n} pinned, {} more to solve", 4 - n) } else if n < 6 { format!("{n} pinned: solving position (6 also solve the lens)") } else { format!("{n} pinned: solving position and lens") });
-                if n > 0 && crate::ui::small_command(ui, "Clear pins").clicked() {
+                if n > 0 && crate::ui::small_danger(ui, "Clear pins").clicked() {
                     m.pins.clear();
                 }
             }

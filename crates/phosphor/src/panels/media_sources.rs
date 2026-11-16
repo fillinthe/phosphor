@@ -415,7 +415,7 @@ fn entry_menu(r: &egui::Response, e: &Entry, st: &State) -> Option<SourceAct> {
                         act = Some(SourceAct::Unfollow(dir.clone()));
                         ui.close();
                     }
-                } else if crate::ui::command(ui, label(icon::EYE_SLASH, "Stop watching"))
+                } else if crate::ui::danger_button(ui, label(icon::EYE_SLASH, "Stop watching"))
                     .on_hover_text("Its files leave the bin; the folder stays on disk")
                     .clicked()
                 {

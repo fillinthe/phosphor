@@ -56,7 +56,7 @@ pub(crate) fn track_editor(ui: &mut egui::Ui, track: &mut StepTrack, beats: f32,
         if crate::ui::command(ui, label(icon::DICE_FIVE, "Random")).clicked() {
             track.randomize(seed);
         }
-        if crate::ui::command(ui, "Clear").clicked() {
+        if crate::ui::danger_button(ui, "Clear").clicked() {
             track.steps.iter_mut().for_each(|s| *s = 0.0);
         }
         if crate::ui::small_command(ui, "Plain signal").on_hover_text("Back to an ordinary signal (LFO, audio…)").clicked() {

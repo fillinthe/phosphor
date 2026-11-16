@@ -187,7 +187,7 @@ pub(crate) fn monitor(ui: &mut egui::Ui, st: &mut State, n: u8) {
         if (r.dragged() || r.clicked())
             && let Some(p) = r.interact_pointer_pos()
         {
-            st.media.seek(id, ((p.x - frame.left()) / frame.width()).clamp(0.0, 1.0) as f64 * dur);
+            st.media.scrub(id, ((p.x - frame.left()) / frame.width()).clamp(0.0, 1.0) as f64 * dur);
         }
         let x = frame.left() + frame.width() * (pos / dur).clamp(0.0, 1.0) as f32;
         let bar = egui::Rect::from_min_max(egui::pos2(frame.left(), frame.bottom() - 3.0), egui::pos2(x, frame.bottom()));

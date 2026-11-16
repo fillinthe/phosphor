@@ -8,8 +8,26 @@ pub(crate) fn fader(ui: &mut egui::Ui, value: &mut f32, m: &mut Option<Modulatio
 
 /// One Mixer strip: card, thumbnail (click selects) and name; `body` adds the controls. Returns true when clicked.
 fn strip(ui: &mut egui::Ui, id: u64, is_sel: bool, thumb: Option<egui::TextureId>, aspect: f32, lit: bool, name: RichText, body: impl FnOnce(&mut egui::Ui)) -> bool {
+    strip_with_menu(ui, id, is_sel, thumb, aspect, lit, name, None, body)
+}
+
+/// A strip whose right-click (on its picture, name or empty parts) opens a layer's Duplicate / Move / Delete menu,
+/// the same entries as the layer card's; what was picked lands in `menu`.
+#[allow(clippy::too_many_arguments)]
+fn strip_with_menu(ui: &mut egui::Ui, id: u64, is_sel: bool, thumb: Option<egui::TextureId>, aspect: f32, lit: bool, name: RichText, menu: Option<&mut Option<super::LayerAction>>, body: impl FnOnce(&mut egui::Ui)) -> bool {
     let card_id = egui::Id::new(("mixer_strip", id));
     let bg = card_background(ui, card_id);
+    if let (Some(bg), Some(menu)) = (&bg, menu) {
+        bg.right_menu(|ui| {
+            if let Some(a) = super::layers::arrange_items(ui) {
+                *menu = Some(a);
+            }
+            ui.separator();
+            if let Some(a) = super::layers::delete_item(ui) {
+                *menu = Some(a);
+            }
+        });
+    }
     let mut clicked = false;
     let frame = card_frame(ui, is_sel).inner_margin(egui::Margin::same(5)).show(ui, |ui| {
         ui.set_width(78.0);
@@ -51,6 +69,7 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
     let tex = |id: u64| layer_textures.get(&id).map(|(t, _)| *t);
     // The open comp's layers (and, with several comps, a strip per comp before MASTER).
     let shown: Vec<bool> = vec![true; comp.layers.len()];
+    let mut menu_act: Option<(u64, super::LayerAction)> = None;
     let phosphor_engine::Composition { layers, groups, comps, master_fade, master_fade_mod, master_effects, master_fx_bypass, .. } = comp;
     egui::ScrollArea::horizontal().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
@@ -64,7 +83,9 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                 // (Full size, not small: the names were hard to see; owner, 2026-11-14.)
                 let name = RichText::new(short(&layer.name)).strong();
                 let lit = layer.enabled && !muted;
-                if strip(ui, layer.id, *selected == Some(layer.id), tex(layer.id), aspect, lit, name, |ui| {
+                let mut picked = None;
+                let id = layer.id;
+                if strip_with_menu(ui, layer.id, *selected == Some(layer.id), tex(layer.id), aspect, lit, name, Some(&mut picked), |ui| {
                     // Opacity and (movies) Speed side by side, both upright: what's played with most live.
                     ui.horizontal_top(|ui| {
                         fader(ui, &mut layer.opacity, &mut layer.opacity_mod, ControlTarget::LayerOpacity(layer.id), height);
@@ -88,6 +109,9 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
                     fx_count(ui, &layer.effects, &mut layer.fx_bypass, ControlTarget::LayerFxBypass(layer.id));
                 }) {
                     *selected = Some(layer.id);
+                }
+                if let Some(a) = picked {
+                    menu_act = Some((id, a));
                 }
                 // A group's strip follows its last member, like a bus.
                 let parent = layers[i].parent;
@@ -129,6 +153,11 @@ pub(crate) fn mixer(ui: &mut egui::Ui, st: &mut State) {
             }
         });
     });
+    // What a strip's right-click menu asked (after the strips are drawn: it may remove or move a layer).
+    if let Some((id, a)) = menu_act {
+        let now = ui.input(|i| i.time);
+        super::layers::apply_layer_action(st, id, a, now);
+    }
 }
 
 /// The A ↔ B crossfader across the top of the Mixer (double-click centers it), and Auto-fade: one press glides it to

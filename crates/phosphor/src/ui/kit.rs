@@ -783,9 +783,15 @@ pub(crate) fn segmented<T: PartialEq + Clone>(ui: &mut egui::Ui, value: &mut T, 
     *value != before
 }
 
-/// A destructive command (Delete, Remove…): red text.
+/// A destructive command (Delete, Remove, Stop watching…): red words, so it's plain before the click that
+/// something goes away (owner, 2026-11-16: these can hurt a running show).
 pub(crate) fn danger_button(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
-    command(ui, RichText::new(text.into()).color(crate::theme::WARN))
+    command(ui, RichText::new(text.into()).color(crate::theme::DANGER))
+}
+
+/// `danger_button` for a tight row (a red trash can or X beside the thing it removes).
+pub(crate) fn small_danger(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
+    small_command(ui, RichText::new(text.into()).color(crate::theme::DANGER))
 }
 
 #[cfg(test)]

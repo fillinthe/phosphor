@@ -337,7 +337,7 @@ fn row_menu(r: &egui::Response, id: u64, name: &str, group: Option<u64>, picked:
             acts.push(SliceAct::Duplicate(id));
             ui.close();
         }
-        if crate::ui::command(ui, label(icon::TRASH, "Delete")).clicked() {
+        if crate::ui::danger_button(ui, label(icon::TRASH, "Delete")).clicked() {
             acts.push(SliceAct::Delete(these.clone()));
             ui.close();
         }
